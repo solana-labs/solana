@@ -13,4 +13,4 @@ updates:
     timezone: America/Los_Angeles
   #labels:
   #  - "automerge"
-  open-pull-requests-limit: 3
+  open-pull-requests-limit: 6

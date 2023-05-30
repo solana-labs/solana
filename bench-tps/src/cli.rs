@@ -1,7 +1,9 @@
 use {
-    crate::spl_convert::FromOtherSolana,
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
-    solana_clap_utils::input_validators::{is_keypair, is_url, is_url_or_moniker, is_within_range},
+    solana_clap_utils::{
+        hidden_unless_forced,
+        input_validators::{is_keypair, is_url, is_url_or_moniker, is_within_range},
+    },
     solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_sdk::{
         fee_calculator::FeeRateGovernor,
@@ -185,7 +187,7 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .long("faucet")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Deprecated. BenchTps no longer queries the faucet directly"),
         )
         .arg(
@@ -239,7 +241,8 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
         )
         .arg(
             Arg::with_name("tx_count")
-                .long("tx_count")
+                .long("tx-count")
+                .alias("tx_count")
                 .value_name("NUM")
                 .takes_value(true)
                 .help("Number of transactions to send per batch")
@@ -461,8 +464,8 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
             .to_string()
             .parse()
             .map_err(|_| "can't parse keypair-multiplier")?;
-        if args.keypair_multiplier >= 2 {
-            return Err("args.keypair_multiplier must be lower than 2");
+        if args.keypair_multiplier < 2 {
+            return Err("args.keypair_multiplier must be greater than or equal to 2");
         }
     }
 
@@ -526,7 +529,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         let program_id = matches
             .value_of("instruction_padding_program_id")
             .map(|target_str| target_str.parse().unwrap())
-            .unwrap_or_else(|| FromOtherSolana::from(spl_instruction_padding::ID));
+            .unwrap_or_else(|| spl_instruction_padding::ID);
         let data_size = data_size
             .parse()
             .map_err(|_| "Can't parse padded instruction data size")?;

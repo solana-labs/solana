@@ -6,7 +6,7 @@ use {
         cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
         spend_utils::SpendAmount,
         stake::StakeAuthorizationIndexed,
-        test_utils::{check_ready, wait_for_next_epoch},
+        test_utils::{check_ready, wait_for_next_epoch_plus_n_slots},
     },
     solana_cli_output::{parse_sign_only_reply_string, OutputFormat},
     solana_faucet::faucet::run_local_faucet,
@@ -152,13 +152,13 @@ fn test_stake_redelegation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
     // wait for new epoch
-    wait_for_next_epoch(&rpc_client);
+    wait_for_next_epoch_plus_n_slots(&rpc_client, 0);
 
     // `stake_keypair` should now be delegated to `vote_keypair` and fully activated
     let stake_account = rpc_client.get_account(&stake_keypair.pubkey()).unwrap();
@@ -200,7 +200,7 @@ fn test_stake_redelegation() {
     // wait for a new epoch to ensure the `Redelegate` happens as soon as possible in the epoch
     // to reduce the risk of a race condition when checking the stake account correctly enters the
     // deactivating state for the remainder of the current epoch
-    wait_for_next_epoch(&rpc_client);
+    wait_for_next_epoch_plus_n_slots(&rpc_client, 0);
 
     // Redelegate to `vote2_keypair` via `stake2_keypair
     config.signers = vec![&default_signer, &stake2_keypair];
@@ -216,7 +216,7 @@ fn test_stake_redelegation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: Some(stake2_keypair.pubkey()),
+        redelegation_stake_account: Some(1),
         compute_unit_price: None,
     };
     process_command(&config).unwrap();
@@ -251,7 +251,7 @@ fn test_stake_redelegation() {
     check_balance!(50_000_000_000, &rpc_client, &stake2_keypair.pubkey());
 
     // wait for new epoch
-    wait_for_next_epoch(&rpc_client);
+    wait_for_next_epoch_plus_n_slots(&rpc_client, 0);
 
     // `stake_keypair` should now be deactivated
     assert_eq!(
@@ -371,7 +371,7 @@ fn test_stake_delegation_force() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     process_command(&config).unwrap_err();
@@ -389,7 +389,7 @@ fn test_stake_delegation_force() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     process_command(&config).unwrap();
@@ -468,7 +468,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     process_command(&config_validator).unwrap();
@@ -560,7 +560,7 @@ fn test_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     process_command(&config_validator).unwrap();
@@ -676,7 +676,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
@@ -699,7 +699,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     process_command(&config_payer).unwrap();
@@ -837,7 +837,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     process_command(&config).unwrap();

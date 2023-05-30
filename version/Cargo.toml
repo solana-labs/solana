@@ -18,6 +18,9 @@ solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
 solana-sdk = { workspace = true }
 
+[features]
+dummy-for-ci-check = []
+
 [lib]
 name = "solana_version"
 

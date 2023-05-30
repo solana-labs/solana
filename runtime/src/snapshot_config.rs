@@ -1,7 +1,7 @@
 use {
     crate::snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
     solana_sdk::clock::Slot,
-    std::path::PathBuf,
+    std::{num::NonZeroUsize, path::PathBuf},
 };
 
 /// Snapshot configuration and runtime information
@@ -32,11 +32,11 @@ pub struct SnapshotConfig {
     pub snapshot_version: SnapshotVersion,
 
     /// Maximum number of full snapshot archives to retain
-    pub maximum_full_snapshot_archives_to_retain: usize,
+    pub maximum_full_snapshot_archives_to_retain: NonZeroUsize,
 
     /// Maximum number of incremental snapshot archives to retain
     /// NOTE: Incremental snapshots will only be kept for the latest full snapshot
-    pub maximum_incremental_snapshot_archives_to_retain: usize,
+    pub maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
 
     /// This is the `debug_verify` parameter to use when calling `update_accounts_hash()`
     pub accounts_hash_debug_verify: bool,

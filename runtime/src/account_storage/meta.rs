@@ -1,7 +1,7 @@
 use {
-    crate::storable_accounts::StorableAccounts,
+    crate::{append_vec::AppendVecStoredAccountMeta, storable_accounts::StorableAccounts},
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount},
+        account::{AccountSharedData, ReadableAccount},
         hash::Hash,
         pubkey::Pubkey,
         stake_history::Epoch,
@@ -103,95 +103,104 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
 /// References to account data stored elsewhere. Getting an `Account` requires cloning
 /// (see `StoredAccountMeta::clone_account()`).
 #[derive(PartialEq, Eq, Debug)]
-pub struct StoredAccountMeta<'a> {
-    pub(crate) meta: &'a StoredMeta,
-    /// account data
-    pub(crate) account_meta: &'a AccountMeta,
-    pub(crate) data: &'a [u8],
-    pub(crate) offset: usize,
-    pub(crate) stored_size: usize,
-    pub(crate) hash: &'a Hash,
+pub enum StoredAccountMeta<'a> {
+    AppendVec(AppendVecStoredAccountMeta<'a>),
 }
 
 impl<'a> StoredAccountMeta<'a> {
     /// Return a new Account by copying all the data referenced by the `StoredAccountMeta`.
     pub fn clone_account(&self) -> AccountSharedData {
-        AccountSharedData::from(Account {
-            lamports: self.account_meta.lamports,
-            owner: self.account_meta.owner,
-            executable: self.account_meta.executable,
-            rent_epoch: self.account_meta.rent_epoch,
-            data: self.data.to_vec(),
-        })
+        match self {
+            Self::AppendVec(av) => av.clone_account(),
+        }
     }
 
     pub fn pubkey(&self) -> &'a Pubkey {
-        &self.meta.pubkey
+        match self {
+            Self::AppendVec(av) => av.pubkey(),
+        }
     }
 
     pub fn hash(&self) -> &'a Hash {
-        self.hash
+        match self {
+            Self::AppendVec(av) => av.hash(),
+        }
     }
 
     pub fn stored_size(&self) -> usize {
-        self.stored_size
+        match self {
+            Self::AppendVec(av) => av.stored_size(),
+        }
     }
 
     pub fn offset(&self) -> usize {
-        self.offset
+        match self {
+            Self::AppendVec(av) => av.offset(),
+        }
     }
 
     pub fn data(&self) -> &'a [u8] {
-        self.data
+        match self {
+            Self::AppendVec(av) => av.data(),
+        }
     }
 
     pub fn data_len(&self) -> u64 {
-        self.meta.data_len
+        match self {
+            Self::AppendVec(av) => av.data_len(),
+        }
     }
 
     pub fn write_version(&self) -> StoredMetaWriteVersion {
-        self.meta.write_version_obsolete
+        match self {
+            Self::AppendVec(av) => av.write_version(),
+        }
+    }
+
+    pub fn meta(&self) -> &StoredMeta {
+        match self {
+            Self::AppendVec(av) => av.meta(),
+        }
+    }
+
+    pub fn set_meta(&mut self, meta: &'a StoredMeta) {
+        match self {
+            Self::AppendVec(av) => av.set_meta(meta),
+        }
     }
 
     pub(crate) fn sanitize(&self) -> bool {
-        self.sanitize_executable() && self.sanitize_lamports()
-    }
-
-    pub(crate) fn sanitize_executable(&self) -> bool {
-        // Sanitize executable to ensure higher 7-bits are cleared correctly.
-        self.ref_executable_byte() & !1 == 0
-    }
-
-    pub(crate) fn sanitize_lamports(&self) -> bool {
-        // Sanitize 0 lamports to ensure to be same as AccountSharedData::default()
-        self.account_meta.lamports != 0 || self.clone_account() == AccountSharedData::default()
-    }
-
-    pub(crate) fn ref_executable_byte(&self) -> &'a u8 {
-        // Use extra references to avoid value silently clamped to 1 (=true) and 0 (=false)
-        // Yes, this really happens; see test_new_from_file_crafted_executable
-        let executable_bool: &bool = &self.account_meta.executable;
-        // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
-        let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
-        executable_byte
+        match self {
+            Self::AppendVec(av) => av.sanitize(),
+        }
     }
 }
 
 impl<'a> ReadableAccount for StoredAccountMeta<'a> {
     fn lamports(&self) -> u64 {
-        self.account_meta.lamports
+        match self {
+            Self::AppendVec(av) => av.lamports(),
+        }
     }
     fn data(&self) -> &[u8] {
-        self.data()
+        match self {
+            Self::AppendVec(av) => av.data(),
+        }
     }
     fn owner(&self) -> &Pubkey {
-        &self.account_meta.owner
+        match self {
+            Self::AppendVec(av) => av.owner(),
+        }
     }
     fn executable(&self) -> bool {
-        self.account_meta.executable
+        match self {
+            Self::AppendVec(av) => av.executable(),
+        }
     }
     fn rent_epoch(&self) -> Epoch {
-        self.account_meta.rent_epoch
+        match self {
+            Self::AppendVec(av) => av.rent_epoch(),
+        }
     }
 }
 

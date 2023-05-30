@@ -182,9 +182,9 @@ where
                 }
             }
         }
-        // TODO: Add proper JSON RPC response/error handling...
-        Err(PubsubClientError::UnexpectedMessageError(format!(
-            "msg={message_text:?}"
+
+        Err(PubsubClientError::UnexpectedSubscriptionResponse(format!(
+            "msg={message_text}"
         )))
     }
 
@@ -228,21 +228,17 @@ where
         if let Ok(json_msg) = serde_json::from_str::<Map<String, Value>>(message_text) {
             if let Some(Object(version_map)) = json_msg.get("result") {
                 if let Some(node_version) = version_map.get("solana-core") {
-                    let node_version = semver::Version::parse(
-                        node_version.as_str().unwrap_or_default(),
-                    )
-                    .map_err(|e| {
-                        PubsubClientError::RequestError(format!(
-                            "failed to parse cluster version: {e}"
-                        ))
-                    })?;
-                    return Ok(node_version);
+                    if let Some(node_version) = node_version.as_str() {
+                        if let Ok(parsed) = semver::Version::parse(node_version) {
+                            return Ok(parsed);
+                        }
+                    }
                 }
             }
         }
-        // TODO: Add proper JSON RPC response/error handling...
-        Err(PubsubClientError::UnexpectedMessageError(format!(
-            "msg={message_text:?}"
+
+        Err(PubsubClientError::UnexpectedGetVersionResponse(format!(
+            "msg={message_text}"
         )))
     }
 
@@ -253,19 +249,19 @@ where
         if message.is_ping() {
             return Ok(None);
         }
-        let message_text = &message.into_text().unwrap();
+        let message_text = &message.into_text()?;
         if let Ok(json_msg) = serde_json::from_str::<Map<String, Value>>(message_text) {
             if let Some(Object(params)) = json_msg.get("params") {
                 if let Some(result) = params.get("result") {
-                    let x: T = serde_json::from_value::<T>(result.clone()).unwrap();
-                    return Ok(Some(x));
+                    if let Ok(x) = serde_json::from_value::<T>(result.clone()) {
+                        return Ok(Some(x));
+                    }
                 }
             }
         }
 
-        // TODO: Add proper JSON RPC response/error handling...
         Err(PubsubClientError::UnexpectedMessageError(format!(
-            "msg={message_text:?}"
+            "msg={message_text}"
         )))
     }
 

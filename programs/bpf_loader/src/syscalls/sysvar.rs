@@ -6,7 +6,7 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
     check_aligned: bool,
     memory_mapping: &mut MemoryMapping,
     invoke_context: &mut InvokeContext,
-) -> Result<u64, EbpfError> {
+) -> Result<u64, Error> {
     consume_compute_meter(
         invoke_context,
         invoke_context
@@ -16,7 +16,7 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
     )?;
     let var = translate_type_mut::<T>(memory_mapping, var_addr, check_aligned)?;
 
-    let sysvar: Arc<T> = sysvar.map_err(SyscallError::InstructionError)?;
+    let sysvar: Arc<T> = sysvar?;
     *var = T::clone(sysvar.as_ref());
 
     Ok(SUCCESS)
@@ -33,7 +33,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         get_sysvar(
             invoke_context.get_sysvar_cache().get_clock(),
             var_addr,
@@ -55,7 +55,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         get_sysvar(
             invoke_context.get_sysvar_cache().get_epoch_schedule(),
             var_addr,
@@ -77,7 +77,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         #[allow(deprecated)]
         {
             get_sysvar(
@@ -102,7 +102,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         get_sysvar(
             invoke_context.get_sysvar_cache().get_rent(),
             var_addr,

@@ -11,9 +11,11 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+bv = { workspace = true, features = ["serde"] }
 log = { workspace = true }
 memmap2 = { workspace = true }
 modular-bitfield = { workspace = true }
+num_enum = { workspace = true }
 rand = { workspace = true }
 solana-measure = { workspace = true }
 solana-sdk = { workspace = true }

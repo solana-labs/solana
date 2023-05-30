@@ -27,7 +27,10 @@ use {
     solana_measure::{measure, measure_us},
     solana_perf::{data_budget::DataBudget, packet::PACKETS_PER_BATCH},
     solana_poh::poh_recorder::PohRecorder,
-    solana_runtime::{bank_forks::BankForks, vote_sender_types::ReplayVoteSender},
+    solana_runtime::{
+        bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
+        vote_sender_types::ReplayVoteSender,
+    },
     solana_sdk::{feature_set::allow_votes_to_directly_update_vote_state, timing::AtomicInterval},
     std::{
         cmp, env,
@@ -45,6 +48,14 @@ pub mod consumer;
 mod decision_maker;
 mod forwarder;
 mod packet_receiver;
+
+#[allow(dead_code)]
+mod scheduler_messages;
+
+mod consume_worker;
+mod forward_worker;
+#[allow(dead_code)]
+mod thread_aware_account_locks;
 
 // Fixed thread size seems to be fastest on GCP setup
 pub const NUM_THREADS: u32 = 6;
@@ -64,6 +75,7 @@ pub struct BankingStageStats {
     receive_and_buffer_packets_count: AtomicUsize,
     dropped_packets_count: AtomicUsize,
     pub(crate) dropped_duplicated_packets_count: AtomicUsize,
+    dropped_forward_packets_count: AtomicUsize,
     newly_buffered_packets_count: AtomicUsize,
     current_buffered_packets_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
@@ -100,6 +112,7 @@ impl BankingStageStats {
             + self
                 .dropped_duplicated_packets_count
                 .load(Ordering::Relaxed) as u64
+            + self.dropped_forward_packets_count.load(Ordering::Relaxed) as u64
             + self.newly_buffered_packets_count.load(Ordering::Relaxed) as u64
             + self.current_buffered_packets_count.load(Ordering::Relaxed) as u64
             + self.rebuffered_packets_count.load(Ordering::Relaxed) as u64
@@ -141,6 +154,12 @@ impl BankingStageStats {
                 (
                     "dropped_duplicated_packets_count",
                     self.dropped_duplicated_packets_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "dropped_forward_packets_count",
+                    self.dropped_forward_packets_count
                         .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
@@ -272,6 +291,7 @@ pub struct FilterForwardingResults {
     pub(crate) total_forwardable_packets: usize,
     pub(crate) total_tracer_packets_in_buffer: usize,
     pub(crate) total_forwardable_tracer_packets: usize,
+    pub(crate) total_dropped_packets: usize,
     pub(crate) total_packet_conversion_us: u64,
     pub(crate) total_filter_packets_us: u64,
 }
@@ -290,6 +310,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -303,6 +324,7 @@ impl BankingStage {
             log_messages_bytes_limit,
             connection_cache,
             bank_forks,
+            prioritization_fee_cache,
         )
     }
 
@@ -319,6 +341,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
         assert!(num_threads >= MIN_TOTAL_THREADS);
         // Single thread to generate entries from many banks.
@@ -379,12 +402,14 @@ impl BankingStage {
                         ),
                     };
 
-                let mut packet_receiver = PacketReceiver::new(id, packet_receiver);
+                let mut packet_receiver =
+                    PacketReceiver::new(id, packet_receiver, bank_forks.clone());
                 let poh_recorder = poh_recorder.clone();
 
                 let committer = Committer::new(
                     transaction_status_sender.clone(),
                     replay_vote_sender.clone(),
+                    prioritization_fee_cache.clone(),
                 );
                 let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
                 let forwarder = Forwarder::new(
@@ -396,10 +421,9 @@ impl BankingStage {
                 );
                 let consumer = Consumer::new(
                     committer,
-                    poh_recorder.read().unwrap().recorder(),
+                    poh_recorder.read().unwrap().new_recorder(),
                     QosService::new(id),
                     log_messages_bytes_limit,
-                    None,
                 );
 
                 Builder::new()
@@ -433,8 +457,9 @@ impl BankingStage {
         if unprocessed_transaction_storage.should_not_process() {
             return;
         }
-        let ((metrics_action, decision), make_decision_time) =
-            measure!(decision_maker.make_consume_or_forward_decision(slot_metrics_tracker));
+        let (decision, make_decision_time) =
+            measure!(decision_maker.make_consume_or_forward_decision());
+        let metrics_action = slot_metrics_tracker.check_leader_slot_boundary(decision.bank_start());
         slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
 
         match decision {
@@ -587,6 +612,7 @@ mod tests {
             pubkey::Pubkey,
             signature::{Keypair, Signer},
             system_transaction,
+            transaction::{SanitizedTransaction, Transaction},
         },
         solana_streamer::socket::SocketAddrSpace,
         solana_vote_program::{
@@ -604,6 +630,12 @@ mod tests {
         let cluster_info =
             ClusterInfo::new(node.info.clone(), keypair, SocketAddrSpace::Unspecified);
         (node, cluster_info)
+    }
+
+    pub(crate) fn sanitize_transactions(txs: Vec<Transaction>) -> Vec<SanitizedTransaction> {
+        txs.into_iter()
+            .map(SanitizedTransaction::from_transaction_for_tests)
+            .collect()
     }
 
     #[test]
@@ -624,7 +656,7 @@ mod tests {
                     .expect("Expected to be able to open database ledger"),
             );
             let (exit, poh_recorder, poh_service, _entry_receiever) =
-                create_test_recorder(&bank, &blockstore, None, None);
+                create_test_recorder(&bank, blockstore, None, None);
             let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
@@ -638,8 +670,9 @@ mod tests {
                 None,
                 replay_vote_sender,
                 None,
-                Arc::new(ConnectionCache::default()),
+                Arc::new(ConnectionCache::new("connection_cache_test")),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
             drop(non_vote_sender);
             drop(tpu_vote_sender);
@@ -679,7 +712,7 @@ mod tests {
                 ..PohConfig::default()
             };
             let (exit, poh_recorder, poh_service, entry_receiver) =
-                create_test_recorder(&bank, &blockstore, Some(poh_config), None);
+                create_test_recorder(&bank, blockstore, Some(poh_config), None);
             let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
@@ -693,8 +726,9 @@ mod tests {
                 None,
                 replay_vote_sender,
                 None,
-                Arc::new(ConnectionCache::default()),
+                Arc::new(ConnectionCache::new("connection_cache_test")),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
             trace!("sending bank");
             drop(non_vote_sender);
@@ -759,7 +793,7 @@ mod tests {
                 ..PohConfig::default()
             };
             let (exit, poh_recorder, poh_service, entry_receiver) =
-                create_test_recorder(&bank, &blockstore, Some(poh_config), None);
+                create_test_recorder(&bank, blockstore, Some(poh_config), None);
             let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
@@ -773,8 +807,9 @@ mod tests {
                 None,
                 replay_vote_sender,
                 None,
-                Arc::new(ConnectionCache::default()),
+                Arc::new(ConnectionCache::new("connection_cache_test")),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -921,7 +956,7 @@ mod tests {
                     ..PohConfig::default()
                 };
                 let (exit, poh_recorder, poh_service, entry_receiver) =
-                    create_test_recorder(&bank, &blockstore, Some(poh_config), None);
+                    create_test_recorder(&bank, blockstore, Some(poh_config), None);
                 let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
                 let cluster_info = Arc::new(cluster_info);
                 let _banking_stage = BankingStage::new_num_threads(
@@ -934,8 +969,9 @@ mod tests {
                     None,
                     replay_vote_sender,
                     None,
-                    Arc::new(ConnectionCache::default()),
+                    Arc::new(ConnectionCache::new("connection_cache_test")),
                     bank_forks,
+                    &Arc::new(PrioritizationFeeCache::new(0u64)),
                 );
 
                 // wait for banking_stage to eat the packets
@@ -994,17 +1030,17 @@ mod tests {
                 None,
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
-                &Arc::new(blockstore),
+                Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
-            let recorder = poh_recorder.recorder();
+            let recorder = poh_recorder.new_recorder();
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.write().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
             let pubkey = solana_sdk::pubkey::new_rand();
             let keypair2 = Keypair::new();
             let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -1113,7 +1149,7 @@ mod tests {
                 ..PohConfig::default()
             };
             let (exit, poh_recorder, poh_service, _entry_receiver) =
-                create_test_recorder(&bank, &blockstore, Some(poh_config), None);
+                create_test_recorder(&bank, blockstore, Some(poh_config), None);
             let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
@@ -1127,8 +1163,9 @@ mod tests {
                 None,
                 replay_vote_sender,
                 None,
-                Arc::new(ConnectionCache::default()),
+                Arc::new(ConnectionCache::new("connection_cache_test")),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
 
             let keypairs = (0..100).map(|_| Keypair::new()).collect_vec();

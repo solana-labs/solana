@@ -117,7 +117,10 @@ impl SanitizedTransaction {
         };
 
         let is_simple_vote_tx = is_simple_vote_tx.unwrap_or_else(|| {
-            if message.instructions().len() == 1 && matches!(message, SanitizedMessage::Legacy(_)) {
+            if signatures.len() < 3
+                && message.instructions().len() == 1
+                && matches!(message, SanitizedMessage::Legacy(_))
+            {
                 let mut ix_iter = message.program_instructions_iter();
                 ix_iter.next().map(|(program_id, _ix)| program_id)
                     == Some(&crate::vote::program::id())
@@ -291,6 +294,85 @@ impl SanitizedTransaction {
             Err(TransactionError::TooManyAccountLocks)
         } else {
             Ok(())
+        }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::integer_arithmetic)]
+mod tests {
+    use {
+        super::*,
+        crate::signer::{keypair::Keypair, Signer},
+        solana_program::vote::{self, state::Vote},
+    };
+
+    #[test]
+    fn test_try_create_simple_vote_tx() {
+        let bank_hash = Hash::default();
+        let block_hash = Hash::default();
+        let vote_keypair = Keypair::new();
+        let node_keypair = Keypair::new();
+        let auth_keypair = Keypair::new();
+        let votes = Vote::new(vec![1, 2, 3], bank_hash);
+        let vote_ix =
+            vote::instruction::vote(&vote_keypair.pubkey(), &auth_keypair.pubkey(), votes);
+        let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
+        vote_tx.partial_sign(&[&node_keypair], block_hash);
+        vote_tx.partial_sign(&[&auth_keypair], block_hash);
+
+        // single legacy vote ix, 2 signatures
+        {
+            let vote_transaction = SanitizedTransaction::try_create(
+                VersionedTransaction::from(vote_tx.clone()),
+                MessageHash::Compute,
+                None,
+                SimpleAddressLoader::Disabled,
+                true, // require_static_program_ids
+            )
+            .unwrap();
+            assert!(vote_transaction.is_simple_vote_transaction());
+        }
+
+        {
+            // call side says it is not a vote
+            let vote_transaction = SanitizedTransaction::try_create(
+                VersionedTransaction::from(vote_tx.clone()),
+                MessageHash::Compute,
+                Some(false),
+                SimpleAddressLoader::Disabled,
+                true, // require_static_program_ids
+            )
+            .unwrap();
+            assert!(!vote_transaction.is_simple_vote_transaction());
+        }
+
+        // single legacy vote ix, 3 signatures
+        vote_tx.signatures.push(Signature::default());
+        vote_tx.message.header.num_required_signatures = 3;
+        {
+            let vote_transaction = SanitizedTransaction::try_create(
+                VersionedTransaction::from(vote_tx.clone()),
+                MessageHash::Compute,
+                None,
+                SimpleAddressLoader::Disabled,
+                true, // require_static_program_ids
+            )
+            .unwrap();
+            assert!(!vote_transaction.is_simple_vote_transaction());
+        }
+
+        {
+            // call site says it is simple vote
+            let vote_transaction = SanitizedTransaction::try_create(
+                VersionedTransaction::from(vote_tx),
+                MessageHash::Compute,
+                Some(true),
+                SimpleAddressLoader::Disabled,
+                true, // require_static_program_ids
+            )
+            .unwrap();
+            assert!(vote_transaction.is_simple_vote_transaction());
         }
     }
 }

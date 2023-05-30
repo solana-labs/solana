@@ -83,10 +83,16 @@ fn create_connection_cache(
     client_node_id: Option<&Keypair>,
 ) -> ConnectionCache {
     if !use_quic {
-        return ConnectionCache::with_udp(tpu_connection_pool_size);
+        return ConnectionCache::with_udp(
+            "bench-tps-connection_cache_udp",
+            tpu_connection_pool_size,
+        );
     }
     if client_node_id.is_none() {
-        return ConnectionCache::new(tpu_connection_pool_size);
+        return ConnectionCache::new_quic(
+            "bench-tps-connection_cache_quic",
+            tpu_connection_pool_size,
+        );
     }
 
     let rpc_client = Arc::new(RpcClient::new_with_commitment(
@@ -98,12 +104,16 @@ fn create_connection_cache(
     let (stake, total_stake) =
         find_node_activated_stake(rpc_client, client_node_id.pubkey()).unwrap_or_default();
     info!("Stake for specified client_node_id: {stake}, total stake: {total_stake}");
-    let staked_nodes = Arc::new(RwLock::new(StakedNodes {
-        total_stake,
-        pubkey_stake_map: HashMap::from([(client_node_id.pubkey(), stake)]),
-        ..StakedNodes::default()
-    }));
+    let stakes = HashMap::from([
+        (client_node_id.pubkey(), stake),
+        (Pubkey::new_unique(), total_stake - stake),
+    ]);
+    let staked_nodes = Arc::new(RwLock::new(StakedNodes::new(
+        Arc::new(stakes),
+        HashMap::<Pubkey, u64>::default(), // overrides
+    )));
     ConnectionCache::new_with_client_options(
+        "bench-tps-connection_cache_quic",
         tpu_connection_pool_size,
         None,
         Some((client_node_id, bind_address)),
@@ -153,7 +163,7 @@ fn create_client(
                     info!("Searching for target_node: {:?}", target_node);
                     let mut target_client = None;
                     for node in nodes {
-                        if node.id == target_node {
+                        if node.pubkey() == &target_node {
                             target_client = Some(get_client(
                                 &[node],
                                 &SocketAddrSpace::Unspecified,

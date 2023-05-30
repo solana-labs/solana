@@ -50,9 +50,11 @@ for file in "${files[@]}"; do
     fi
   done
 
-  result="$(cargo owner --list -q "$crate_name" --token "$CRATE_TOKEN" 2>&1)"
-  if [[ $result =~ ^error ]]; then
-    if [[ $result == *"Not Found"* ]]; then
+  response=$(curl -s https://crates.io/api/v1/crates/"$crate_name"/owners)
+  errors=$(echo "$response" | jq .errors)
+  if [[ $errors != "null" ]]; then
+    details=$(echo "$response" | jq .errors | jq -r ".[0].detail")
+    if [[ $details = *"Not Found"* ]]; then
       ((error_count++))
       echo "❌ new crate $crate_name not found on crates.io. you can either
 
@@ -64,29 +66,21 @@ for file in "${files[@]}"; do
 
 or
 
-2. make a dummy publication with these steps:
+2. make a dummy publication.
 
-  a. Create a empty crate locally with this template
+  example:
+  scripts/reserve-cratesio-package-name.sh \
+    --token <GRIMES_CRATESIO_TOKEN> \
+    lib solana-new-lib-crate
 
-    [package]
-    name = \"<PACKAGE_NAME>\"
-    version = \"0.0.1\"
-    description = \"<PACKAGE_DESC>\"
-    authors = [\"Solana Labs Maintainers <maintainers@solanalabs.com>\"]
-    repository = \"https://github.com/solana-labs/solana\"
-    license = \"Apache-2.0\"
-    homepage = \"https://solana.com/\"
-    documentation = \"https://docs.rs/<PACKAGE_NAME>\"
-    edition = \"2021\"
-
-  b. cargo publish --token <GRIMES_CRATES_IO_TOKEN>
+  see also: scripts/reserve-cratesio-package-name.sh --help
 "
     else
       ((error_count++))
-      echo "❌ $result"
+      echo "❌ $response"
     fi
   else
-    readarray -t owners <<<"$result"
+    readarray -t owners <<<"$(echo "$response" | jq .users | jq -r ".[] | .login")"
 
     verified_owner_count=0
     unverified_owner_count=0
@@ -113,6 +107,7 @@ or
     fi
   fi
   echo ""
+
 done
 
 if [ "$error_count" -eq 0 ]; then

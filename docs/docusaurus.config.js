@@ -100,7 +100,7 @@ module.exports = {
           position: "right",
         },
         {
-          href: "https://discordapp.com/invite/pquxPsq",
+          href: "https://solana.com/discord",
           // label: "Discord",
           className: "header-link-icon header-discord-link",
           "aria-label": "Solana Discord",
@@ -163,15 +163,15 @@ module.exports = {
             },
             {
               label: "Discord »",
-              href: "https://discordapp.com/invite/pquxPsq",
+              href: "https://solana.com/discord",
             },
             {
               label: "Twitter »",
               href: "https://twitter.com/solana",
             },
             {
-              label: "Forums »",
-              href: "https://forums.solana.com",
+              label: "Forum »",
+              href: "https://forum.solana.com",
             },
           ],
         },
@@ -210,6 +210,12 @@ module.exports = {
         },
         theme: {
           customCss: require.resolve("./src/css/custom.css"),
+        },
+        // Google Analytics are only active in prod
+        gtag: {
+          // this GA code is safe to be published
+          trackingID: "G-94WS0LRZRS",
+          anonymizeIP: true,
         },
       },
     ],

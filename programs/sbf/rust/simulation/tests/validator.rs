@@ -11,7 +11,7 @@ use {
 };
 
 #[test]
-fn no_panic() {
+fn no_panic_rpc_client() {
     solana_logger::setup_with_default("solana_program_runtime=debug");
     let program_id = Pubkey::new_unique();
 

@@ -1,6 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
-
 use {
+    base64::{prelude::BASE64_STANDARD, Engine},
+    crossbeam_channel::Receiver,
     log::*,
     solana_cli_output::CliAccount,
     solana_client::rpc_request::MAX_MULTIPLE_ACCOUNTS,
@@ -9,8 +10,12 @@ use {
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
+    solana_geyser_plugin_manager::{
+        geyser_plugin_manager::GeyserPluginManager, GeyserPluginManagerRequest,
+    },
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
+        contact_info::Protocol,
         gossip_service::discover_cluster,
         socketaddr,
     },
@@ -118,7 +123,6 @@ pub struct TestValidatorGenesis {
     pubsub_config: PubSubConfig,
     rpc_ports: Option<(u16, u16)>, // (JsonRpc, JsonRpcPubSub), None == random ports
     warp_slot: Option<Slot>,
-    no_bpf_jit: bool,
     accounts: HashMap<Pubkey, AccountSharedData>,
     #[allow(deprecated)]
     programs: Vec<ProgramInfo>,
@@ -138,6 +142,7 @@ pub struct TestValidatorGenesis {
     pub log_messages_bytes_limit: Option<usize>,
     pub transaction_account_lock_limit: Option<usize>,
     pub tpu_enable_udp: bool,
+    pub geyser_plugin_manager: Arc<RwLock<GeyserPluginManager>>,
     admin_rpc_service_post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
 }
 
@@ -152,7 +157,6 @@ impl Default for TestValidatorGenesis {
             pubsub_config: PubSubConfig::default(),
             rpc_ports: Option::<(u16, u16)>::default(),
             warp_slot: Option::<Slot>::default(),
-            no_bpf_jit: bool::default(),
             accounts: HashMap::<Pubkey, AccountSharedData>::default(),
             #[allow(deprecated)]
             programs: Vec::<ProgramInfo>::default(),
@@ -172,6 +176,7 @@ impl Default for TestValidatorGenesis {
             log_messages_bytes_limit: Option::<usize>::default(),
             transaction_account_lock_limit: Option::<usize>::default(),
             tpu_enable_udp: DEFAULT_TPU_ENABLE_UDP,
+            geyser_plugin_manager: Arc::new(RwLock::new(GeyserPluginManager::new())),
             admin_rpc_service_post_init:
                 Arc::<RwLock<Option<AdminRpcRequestMetadataPostInit>>>::default(),
         }
@@ -248,11 +253,6 @@ impl TestValidatorGenesis {
 
     pub fn warp_slot(&mut self, warp_slot: Slot) -> &mut Self {
         self.warp_slot = Some(warp_slot);
-        self
-    }
-
-    pub fn bpf_jit(&mut self, bpf_jit: bool) -> &mut Self {
-        self.no_bpf_jit = !bpf_jit;
         self
     }
 
@@ -472,7 +472,8 @@ impl TestValidatorGenesis {
             address,
             AccountSharedData::from(Account {
                 lamports,
-                data: base64::decode(data_base64)
+                data: BASE64_STANDARD
+                    .decode(data_base64)
                     .unwrap_or_else(|err| panic!("Failed to base64 decode: {err}")),
                 owner,
                 executable: false,
@@ -530,7 +531,26 @@ impl TestValidatorGenesis {
         mint_address: Pubkey,
         socket_addr_space: SocketAddrSpace,
     ) -> Result<TestValidator, Box<dyn std::error::Error>> {
-        TestValidator::start(mint_address, self, socket_addr_space).map(|test_validator| {
+        self.start_with_mint_address_and_geyser_plugin_rpc(mint_address, socket_addr_space, None)
+    }
+
+    /// Start a test validator with the address of the mint account that will receive tokens
+    /// created at genesis. Augments admin rpc service with dynamic geyser plugin manager if
+    /// the geyser plugin service is enabled at startup.
+    ///
+    pub fn start_with_mint_address_and_geyser_plugin_rpc(
+        &self,
+        mint_address: Pubkey,
+        socket_addr_space: SocketAddrSpace,
+        rpc_to_plugin_manager_receiver: Option<Receiver<GeyserPluginManagerRequest>>,
+    ) -> Result<TestValidator, Box<dyn std::error::Error>> {
+        TestValidator::start(
+            mint_address,
+            self,
+            socket_addr_space,
+            rpc_to_plugin_manager_receiver,
+        )
+        .map(|test_validator| {
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_io()
                 .enable_time()
@@ -579,7 +599,7 @@ impl TestValidatorGenesis {
         socket_addr_space: SocketAddrSpace,
     ) -> (TestValidator, Keypair) {
         let mint_keypair = Keypair::new();
-        match TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space) {
+        match TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space, None) {
             Ok(test_validator) => {
                 test_validator.wait_for_nonzero_fees().await;
                 (test_validator, mint_keypair)
@@ -835,6 +855,7 @@ impl TestValidator {
         mint_address: Pubkey,
         config: &TestValidatorGenesis,
         socket_addr_space: SocketAddrSpace,
+        rpc_to_plugin_manager_receiver: Option<Receiver<GeyserPluginManagerRequest>>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let preserve_ledger = config.ledger_path.is_some();
         let ledger_path = TestValidator::initialize_ledger(mint_address, config)?;
@@ -863,7 +884,7 @@ impl TestValidator {
         let vote_account_address = validator_vote_account.pubkey();
         let rpc_url = format!("http://{}", node.info.rpc().unwrap());
         let rpc_pubsub_url = format!("ws://{}/", node.info.rpc_pubsub().unwrap());
-        let tpu = node.info.tpu().unwrap();
+        let tpu = node.info.tpu(Protocol::UDP).unwrap();
         let gossip = node.info.gossip().unwrap();
 
         {
@@ -885,7 +906,6 @@ impl TestValidator {
         });
 
         let runtime_config = RuntimeConfig {
-            bpf_jit: !config.no_bpf_jit,
             compute_budget: config
                 .compute_unit_limit
                 .map(|compute_unit_limit| ComputeBudget {
@@ -897,7 +917,7 @@ impl TestValidator {
         };
 
         let mut validator_config = ValidatorConfig {
-            geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
+            on_start_geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
             rpc_addrs: Some((
                 SocketAddr::new(
                     IpAddr::V4(Ipv4Addr::UNSPECIFIED),
@@ -916,7 +936,7 @@ impl TestValidator {
                     .unwrap()
                     .0,
             ],
-            poh_verify: false, // Skip PoH verification of ledger on startup for speed
+            run_verification: false, // Skip PoH verification of ledger on startup for speed
             snapshot_config: SnapshotConfig {
                 full_snapshot_archive_interval_slots: 100,
                 incremental_snapshot_archive_interval_slots: Slot::MAX,
@@ -949,6 +969,7 @@ impl TestValidator {
             vec![],
             &validator_config,
             true, // should_check_duplicate_instance
+            rpc_to_plugin_manager_receiver,
             config.start_progress.clone(),
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,

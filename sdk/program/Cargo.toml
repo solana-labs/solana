@@ -14,7 +14,6 @@ edition = { workspace = true }
 bincode = { workspace = true }
 blake3 = { workspace = true, features = ["digest", "traits-preview"] }
 borsh = { workspace = true }
-borsh-derive = { workspace = true }
 bs58 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
 bytemuck = { workspace = true, features = ["derive"] }
@@ -40,6 +39,7 @@ thiserror = { workspace = true }
 ark-bn254 = { workspace = true }
 ark-ec = { workspace = true }
 ark-ff = { workspace = true }
+ark-serialize = { workspace = true }
 array-bytes = { workspace = true }
 bitflags = { workspace = true }
 base64 = { workspace = true, features = ["alloc", "std"] }

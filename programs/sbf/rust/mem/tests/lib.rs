@@ -1,3 +1,5 @@
+#![cfg(feature = "test-bpf")]
+
 use {
     solana_program_test::*,
     solana_sbf_rust_mem::entrypoint::process_instruction,

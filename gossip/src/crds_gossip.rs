@@ -10,7 +10,7 @@ use {
         cluster_info_metrics::GossipStats,
         crds::{Crds, GossipRoute},
         crds_gossip_error::CrdsGossipError,
-        crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
+        crds_gossip_pull::{CrdsFilter, CrdsGossipPull, CrdsTimeouts, ProcessPullStats},
         crds_gossip_push::CrdsGossipPush,
         crds_value::{CrdsData, CrdsValue},
         duplicate_shred::{self, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
@@ -258,7 +258,7 @@ impl CrdsGossip {
 
     pub fn filter_pull_responses(
         &self,
-        timeouts: &HashMap<Pubkey, u64>,
+        timeouts: &CrdsTimeouts,
         response: Vec<CrdsValue>,
         now: u64,
         process_pull_stats: &mut ProcessPullStats,
@@ -292,12 +292,12 @@ impl CrdsGossip {
         );
     }
 
-    pub fn make_timeouts(
+    pub fn make_timeouts<'a>(
         &self,
         self_pubkey: Pubkey,
-        stakes: &HashMap<Pubkey, u64>,
+        stakes: &'a HashMap<Pubkey, u64>,
         epoch_duration: Duration,
-    ) -> HashMap<Pubkey, u64> {
+    ) -> CrdsTimeouts<'a> {
         self.pull.make_timeouts(self_pubkey, stakes, epoch_duration)
     }
 
@@ -306,13 +306,12 @@ impl CrdsGossip {
         self_pubkey: &Pubkey,
         thread_pool: &ThreadPool,
         now: u64,
-        timeouts: &HashMap<Pubkey, u64>,
+        timeouts: &CrdsTimeouts,
     ) -> usize {
         let mut rv = 0;
         if now > self.pull.crds_timeout {
-            //sanity check
-            assert_eq!(timeouts[self_pubkey], std::u64::MAX);
-            assert!(timeouts.contains_key(&Pubkey::default()));
+            debug_assert_eq!(timeouts[self_pubkey], u64::MAX);
+            debug_assert_ne!(timeouts[&Pubkey::default()], 0u64);
             rv = CrdsGossipPull::purge_active(thread_pool, &self.crds, now, timeouts);
         }
         self.crds
@@ -349,7 +348,7 @@ pub(crate) fn get_gossip_nodes<R: Rng>(
             if value.local_timestamp < active_cutoff {
                 // In order to mitigate eclipse attack, for staked nodes
                 // continue retrying periodically.
-                let stake = stakes.get(&node.id).copied().unwrap_or_default();
+                let stake = stakes.get(node.pubkey()).copied().unwrap_or_default();
                 if stake == 0u64 || !rng.gen_ratio(1, 16) {
                     return None;
                 }
@@ -357,11 +356,14 @@ pub(crate) fn get_gossip_nodes<R: Rng>(
             Some(node)
         })
         .filter(|node| {
-            &node.id != pubkey
-                && verify_shred_version(node.shred_version)
-                && ContactInfo::is_valid_address(&node.gossip, socket_addr_space)
+            node.pubkey() != pubkey
+                && verify_shred_version(node.shred_version())
+                && node
+                    .gossip()
+                    .map(|addr| socket_addr_space.check(&addr))
+                    .unwrap_or_default()
                 && match gossip_validators {
-                    Some(nodes) => nodes.contains(&node.id),
+                    Some(nodes) => nodes.contains(node.pubkey()),
                     None => true,
                 }
         })
@@ -376,9 +378,10 @@ pub(crate) fn dedup_gossip_addresses(
 ) -> HashMap</*gossip:*/ SocketAddr, (/*stake:*/ u64, ContactInfo)> {
     nodes
         .into_iter()
-        .into_grouping_map_by(|node| node.gossip)
+        .filter_map(|node| Some((node.gossip().ok()?, node)))
+        .into_grouping_map()
         .aggregate(|acc, _node_gossip, node| {
-            let stake = stakes.get(&node.id).copied().unwrap_or_default();
+            let stake = stakes.get(node.pubkey()).copied().unwrap_or_default();
             match acc {
                 Some((ref s, _)) if s >= &stake => acc,
                 Some(_) | None => Some((stake, node)),
@@ -402,12 +405,16 @@ pub(crate) fn maybe_ping_gossip_addresses<R: Rng + CryptoRng>(
     nodes
         .into_iter()
         .filter(|node| {
+            let node_gossip = match node.gossip() {
+                Err(_) => return false,
+                Ok(addr) => addr,
+            };
             let (check, ping) = {
-                let node = (node.id, node.gossip);
+                let node = (*node.pubkey(), node_gossip);
                 ping_cache.check(now, node, &mut pingf)
             };
             if let Some(ping) = ping {
-                pings.push((node.gossip, ping));
+                pings.push((node_gossip, ping));
             }
             check
         })
@@ -458,7 +465,7 @@ mod test {
         //incorrect dest
         let mut res = crds_gossip.process_prune_msg(
             &id,
-            &ci.id,
+            ci.pubkey(),
             &Pubkey::from(hash(&[1; 32]).to_bytes()),
             &[prune_pubkey],
             now,
@@ -469,7 +476,7 @@ mod test {
         //correct dest
         res = crds_gossip.process_prune_msg(
             &id,             // self_pubkey
-            &ci.id,          // peer
+            ci.pubkey(),     // peer
             &id,             // destination
             &[prune_pubkey], // origins
             now,
@@ -481,7 +488,7 @@ mod test {
         let timeout = now + crds_gossip.push.prune_timeout * 2;
         res = crds_gossip.process_prune_msg(
             &id,             // self_pubkey
-            &ci.id,          // peer
+            ci.pubkey(),     // peer
             &id,             // destination
             &[prune_pubkey], // origins
             now,

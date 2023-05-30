@@ -209,7 +209,7 @@ where
         self.send_and_confirm_transaction(&[keypair], transaction, tries, 0)
     }
 
-    pub fn send_and_confirm_transaction<T: Signers>(
+    pub fn send_and_confirm_transaction<T: Signers + ?Sized>(
         &self,
         keypairs: &T,
         transaction: &mut Transaction,
@@ -340,7 +340,7 @@ where
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
     C: NewConnectionConfig,
 {
-    fn send_and_confirm_message<T: Signers>(
+    fn send_and_confirm_message<T: Signers + ?Sized>(
         &self,
         keypairs: &T,
         message: Message,

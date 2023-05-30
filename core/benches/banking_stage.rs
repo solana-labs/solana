@@ -27,9 +27,14 @@ use {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     },
-    solana_perf::{packet::to_packet_batches, test_tx::test_tx},
+    solana_perf::{
+        packet::{to_packet_batches, Packet},
+        test_tx::test_tx,
+    },
     solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry},
-    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_runtime::{
+        bank::Bank, bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
+    },
     solana_sdk::{
         genesis_config::GenesisConfig,
         hash::Hash,
@@ -79,22 +84,28 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, _signal_receiver) =
-            create_test_recorder(&bank, &blockstore, None, None);
+            create_test_recorder(&bank, blockstore, None, None);
 
-        let recorder = poh_recorder.read().unwrap().recorder();
+        let recorder = poh_recorder.read().unwrap().new_recorder();
         let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
 
         let tx = test_tx();
         let transactions = vec![tx; 4194304];
-        let batches = transactions_to_deserialized_packets(&transactions).unwrap();
+        let batches = transactions
+            .iter()
+            .filter_map(|transaction| {
+                let packet = Packet::from_data(None, transaction).ok().unwrap();
+                DeserializedPacket::new(packet).ok()
+            })
+            .collect::<Vec<_>>();
         let batches_len = batches.len();
         let mut transaction_buffer = UnprocessedTransactionStorage::new_transaction_storage(
             UnprocessedPacketBatches::from_iter(batches.into_iter(), 2 * batches_len),
             ThreadType::Transactions,
         );
         let (s, _r) = unbounded();
-        let committer = Committer::new(None, s);
-        let consumer = Consumer::new(committer, recorder, QosService::new(1), None, None);
+        let committer = Committer::new(None, s, Arc::new(PrioritizationFeeCache::new(0u64)));
+        let consumer = Consumer::new(committer, recorder, QosService::new(1), None);
         // This tests the performance of buffering packets.
         // If the packet buffers are copied, performance will be poor.
         bencher.iter(move || {
@@ -269,7 +280,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, signal_receiver) =
-            create_test_recorder(&bank, &blockstore, None, None);
+            create_test_recorder(&bank, blockstore, None, None);
         let cluster_info = {
             let keypair = Arc::new(Keypair::new());
             let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
@@ -286,10 +297,10 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             None,
             s,
             None,
-            Arc::new(ConnectionCache::default()),
+            Arc::new(ConnectionCache::new("connection_cache_test")),
             bank_forks,
+            &Arc::new(PrioritizationFeeCache::new(0u64)),
         );
-        poh_recorder.write().unwrap().set_bank(&bank, false);
 
         let chunk_len = verified.len() / CHUNKS;
         let mut start = 0;

@@ -38,7 +38,7 @@ impl LatestValidatorVotePacket {
             return Err(DeserializedPacketError::VoteTransactionError);
         }
 
-        let vote = Arc::new(ImmutableDeserializedPacket::new(packet, None)?);
+        let vote = Arc::new(ImmutableDeserializedPacket::new(packet)?);
         Self::new_from_immutable(vote, vote_source)
     }
 

@@ -5,12 +5,12 @@ use {
     },
     crossbeam_channel::Sender,
     pem::Pem,
-    quinn::{Endpoint, IdleTimeout, ServerConfig, VarInt},
+    quinn::{Endpoint, IdleTimeout, ServerConfig},
     rustls::{server::ClientCertVerified, Certificate, DistinguishedNames},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::PACKET_DATA_SIZE,
-        quic::{QUIC_MAX_TIMEOUT_MS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
+        quic::{QUIC_MAX_TIMEOUT, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
         signature::Keypair,
     },
     std::{
@@ -20,14 +20,13 @@ use {
             Arc, RwLock,
         },
         thread,
-        time::SystemTime,
+        time::{Duration, SystemTime},
     },
-    tokio::runtime::{Builder, Runtime},
+    tokio::runtime::Runtime,
 };
 
 pub const MAX_STAKED_CONNECTIONS: usize = 2000;
 pub const MAX_UNSTAKED_CONNECTIONS: usize = 500;
-const NUM_QUIC_STREAMER_WORKER_THREADS: usize = 1;
 
 struct SkipClientVerification;
 
@@ -58,8 +57,7 @@ pub(crate) fn configure_server(
     identity_keypair: &Keypair,
     gossip_host: IpAddr,
 ) -> Result<(ServerConfig, String), QuicServerError> {
-    let (cert, priv_key) = new_self_signed_tls_certificate(identity_keypair, gossip_host)
-        .map_err(|_e| QuicServerError::ConfigureFailed)?;
+    let (cert, priv_key) = new_self_signed_tls_certificate(identity_keypair, gossip_host)?;
     let cert_chain_pem_parts = vec![Pem {
         tag: "CERTIFICATE".to_string(),
         contents: cert.0.clone(),
@@ -69,8 +67,7 @@ pub(crate) fn configure_server(
     let mut server_tls_config = rustls::ServerConfig::builder()
         .with_safe_defaults()
         .with_client_cert_verifier(SkipClientVerification::new())
-        .with_single_cert(vec![cert], priv_key)
-        .map_err(|_e| QuicServerError::ConfigureFailed)?;
+        .with_single_cert(vec![cert], priv_key)?;
     server_tls_config.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
 
     let mut server_config = ServerConfig::with_crypto(Arc::new(server_tls_config));
@@ -86,7 +83,7 @@ pub(crate) fn configure_server(
             .saturating_mul(MAX_CONCURRENT_UNI_STREAMS)
             .into(),
     );
-    let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
+    let timeout = IdleTimeout::try_from(QUIC_MAX_TIMEOUT).unwrap();
     config.max_idle_timeout(Some(timeout));
 
     // disable bidi & datagrams
@@ -98,8 +95,7 @@ pub(crate) fn configure_server(
 }
 
 fn rt() -> Runtime {
-    Builder::new_multi_thread()
-        .worker_threads(NUM_QUIC_STREAMER_WORKER_THREADS)
+    tokio::runtime::Builder::new_multi_thread()
         .thread_name("quic-server")
         .enable_all()
         .build()
@@ -108,11 +104,12 @@ fn rt() -> Runtime {
 
 #[derive(thiserror::Error, Debug)]
 pub enum QuicServerError {
-    #[error("Server configure failed")]
-    ConfigureFailed,
-
-    #[error("Endpoint creation failed")]
-    EndpointFailed,
+    #[error("Endpoint creation failed: {0}")]
+    EndpointFailed(std::io::Error),
+    #[error("Certificate error: {0}")]
+    CertificateError(#[from] rcgen::RcgenError),
+    #[error("TLS error: {0}")]
+    TlsError(#[from] rustls::Error),
 }
 
 #[derive(Default)]
@@ -124,12 +121,20 @@ pub struct StreamStats {
     pub(crate) total_invalid_chunks: AtomicUsize,
     pub(crate) total_invalid_chunk_size: AtomicUsize,
     pub(crate) total_packets_allocated: AtomicUsize,
+    pub(crate) total_packet_batches_allocated: AtomicUsize,
     pub(crate) total_chunks_received: AtomicUsize,
     pub(crate) total_staked_chunks_received: AtomicUsize,
     pub(crate) total_unstaked_chunks_received: AtomicUsize,
     pub(crate) total_packet_batch_send_err: AtomicUsize,
+    pub(crate) total_handle_chunk_to_packet_batcher_send_err: AtomicUsize,
     pub(crate) total_packet_batches_sent: AtomicUsize,
     pub(crate) total_packet_batches_none: AtomicUsize,
+    pub(crate) total_packets_sent_for_batching: AtomicUsize,
+    pub(crate) total_bytes_sent_for_batching: AtomicUsize,
+    pub(crate) total_chunks_sent_for_batching: AtomicUsize,
+    pub(crate) total_packets_sent_to_consumer: AtomicUsize,
+    pub(crate) total_bytes_sent_to_consumer: AtomicUsize,
+    pub(crate) total_chunks_processed_by_batcher: AtomicUsize,
     pub(crate) total_stream_read_errors: AtomicUsize,
     pub(crate) total_stream_read_timeouts: AtomicUsize,
     pub(crate) num_evictions: AtomicUsize,
@@ -142,14 +147,20 @@ pub struct StreamStats {
     pub(crate) connection_add_failed_on_pruning: AtomicUsize,
     pub(crate) connection_setup_timeout: AtomicUsize,
     pub(crate) connection_setup_error: AtomicUsize,
+    pub(crate) connection_setup_error_closed: AtomicUsize,
+    pub(crate) connection_setup_error_timed_out: AtomicUsize,
+    pub(crate) connection_setup_error_transport: AtomicUsize,
+    pub(crate) connection_setup_error_app_closed: AtomicUsize,
+    pub(crate) connection_setup_error_reset: AtomicUsize,
+    pub(crate) connection_setup_error_locally_closed: AtomicUsize,
     pub(crate) connection_removed: AtomicUsize,
     pub(crate) connection_remove_failed: AtomicUsize,
 }
 
 impl StreamStats {
-    pub fn report(&self) {
+    pub fn report(&self, name: &'static str) {
         datapoint_info!(
-            "quic-connections",
+            name,
             (
                 "active_connections",
                 self.total_connections.load(Ordering::Relaxed),
@@ -237,6 +248,41 @@ impl StreamStats {
                 i64
             ),
             (
+                "connection_setup_error_timed_out",
+                self.connection_setup_error_timed_out
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_setup_error_closed",
+                self.connection_setup_error_closed
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_setup_error_transport",
+                self.connection_setup_error_transport
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_setup_error_app_closed",
+                self.connection_setup_error_app_closed
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_setup_error_reset",
+                self.connection_setup_error_reset.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_setup_error_locally_closed",
+                self.connection_setup_error_locally_closed
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
                 "invalid_chunk",
                 self.total_invalid_chunks.swap(0, Ordering::Relaxed),
                 i64
@@ -249,6 +295,47 @@ impl StreamStats {
             (
                 "packets_allocated",
                 self.total_packets_allocated.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "packet_batches_allocated",
+                self.total_packet_batches_allocated
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "packets_sent_for_batching",
+                self.total_packets_sent_for_batching
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "bytes_sent_for_batching",
+                self.total_bytes_sent_for_batching
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "chunks_sent_for_batching",
+                self.total_chunks_sent_for_batching
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "packets_sent_to_consumer",
+                self.total_packets_sent_to_consumer
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "bytes_sent_to_consumer",
+                self.total_bytes_sent_to_consumer.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "chunks_processed_by_batcher",
+                self.total_chunks_processed_by_batcher
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -270,6 +357,12 @@ impl StreamStats {
             (
                 "packet_batch_send_error",
                 self.total_packet_batch_send_err.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "handle_chunk_to_packet_batcher_send_error",
+                self.total_handle_chunk_to_packet_batcher_send_err
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -298,6 +391,7 @@ impl StreamStats {
 
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
+    name: &'static str,
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
@@ -307,13 +401,14 @@ pub fn spawn_server(
     staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
     max_unstaked_connections: usize,
-    stats: Arc<StreamStats>,
-    wait_for_chunk_timeout_ms: u64,
+    wait_for_chunk_timeout: Duration,
+    coalesce: Duration,
 ) -> Result<(Endpoint, thread::JoinHandle<()>), QuicServerError> {
     let runtime = rt();
-    let (endpoint, task) = {
+    let (endpoint, _stats, task) = {
         let _guard = runtime.enter();
         crate::nonblocking::quic::spawn_server(
+            name,
             sock,
             keypair,
             gossip_host,
@@ -323,8 +418,8 @@ pub fn spawn_server(
             staked_nodes,
             max_staked_connections,
             max_unstaked_connections,
-            stats,
-            wait_for_chunk_timeout_ms,
+            wait_for_chunk_timeout,
+            coalesce,
         )
     }?;
     let handle = thread::Builder::new()
@@ -342,8 +437,9 @@ pub fn spawn_server(
 mod test {
     use {
         super::*,
-        crate::nonblocking::quic::{test::*, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS},
+        crate::nonblocking::quic::{test::*, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT},
         crossbeam_channel::unbounded,
+        solana_sdk::net::DEFAULT_TPU_COALESCE,
         std::net::SocketAddr,
     };
 
@@ -360,8 +456,8 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let stats = Arc::new(StreamStats::default());
         let (_, t) = spawn_server(
+            "quic_streamer_test",
             s,
             &keypair,
             ip,
@@ -371,8 +467,8 @@ mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
         (t, exit, receiver, server_address)
@@ -416,8 +512,8 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let stats = Arc::new(StreamStats::default());
         let (_, t) = spawn_server(
+            "quic_streamer_test",
             s,
             &keypair,
             ip,
@@ -427,8 +523,8 @@ mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 
@@ -459,8 +555,8 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let stats = Arc::new(StreamStats::default());
         let (_, t) = spawn_server(
+            "quic_streamer_test",
             s,
             &keypair,
             ip,
@@ -470,8 +566,8 @@ mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
-            stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 

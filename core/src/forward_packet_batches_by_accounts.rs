@@ -137,29 +137,11 @@ mod tests {
     use {
         super::*,
         crate::unprocessed_packet_batches::DeserializedPacket,
-        solana_runtime::{
-            bank::Bank,
-            genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            transaction_priority_details::TransactionPriorityDetails,
-        },
         solana_sdk::{
-            feature_set::FeatureSet, hash::Hash, pubkey::Pubkey, signature::Keypair,
-            system_transaction,
+            compute_budget::ComputeBudgetInstruction, feature_set::FeatureSet, message::Message,
+            pubkey::Pubkey, system_instruction, transaction::Transaction,
         },
-        std::sync::Arc,
     };
-
-    fn test_setup() -> (Keypair, Hash) {
-        solana_logger::setup();
-        let GenesisConfigInfo {
-            genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config(10);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
-        let start_hash = bank.last_blockhash();
-        (mint_keypair, start_hash)
-    }
 
     /// build test transaction, return corresponding sanitized_transaction and deserialized_packet,
     /// and the batch limit_ratio that would only allow one transaction per bucket.
@@ -167,21 +149,21 @@ mod tests {
         priority: u64,
         write_to_account: &Pubkey,
     ) -> (SanitizedTransaction, DeserializedPacket, u32) {
-        let (mint_keypair, start_hash) = test_setup();
-        let transaction =
-            system_transaction::transfer(&mint_keypair, write_to_account, 2, start_hash);
+        let from_account = solana_sdk::pubkey::new_rand();
+
+        let transaction = Transaction::new_unsigned(Message::new(
+            &[
+                ComputeBudgetInstruction::set_compute_unit_price(priority),
+                system_instruction::transfer(&from_account, write_to_account, 2),
+            ],
+            Some(&from_account),
+        ));
         let sanitized_transaction =
             SanitizedTransaction::from_transaction_for_tests(transaction.clone());
         let tx_cost = CostModel::calculate_cost(&sanitized_transaction, &FeatureSet::all_enabled());
         let cost = tx_cost.sum();
-        let deserialized_packet = DeserializedPacket::new_with_priority_details(
-            Packet::from_data(None, transaction).unwrap(),
-            TransactionPriorityDetails {
-                priority,
-                compute_unit_limit: cost,
-            },
-        )
-        .unwrap();
+        let deserialized_packet =
+            DeserializedPacket::new(Packet::from_data(None, transaction).unwrap()).unwrap();
 
         // set limit ratio so each batch can only have one test transaction
         let limit_ratio: u32 =

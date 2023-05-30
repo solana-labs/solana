@@ -30,14 +30,13 @@ pub struct FetchStage {
 }
 
 impl FetchStage {
-    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         sockets: Vec<UdpSocket>,
         tpu_forwards_sockets: Vec<UdpSocket>,
         tpu_vote_sockets: Vec<UdpSocket>,
         exit: &Arc<AtomicBool>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        coalesce_ms: u64,
+        coalesce: Duration,
     ) -> (Self, PacketBatchReceiver, PacketBatchReceiver) {
         let (sender, receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
@@ -53,7 +52,7 @@ impl FetchStage {
                 &forward_sender,
                 forward_receiver,
                 poh_recorder,
-                coalesce_ms,
+                coalesce,
                 None,
                 DEFAULT_TPU_ENABLE_UDP,
             ),
@@ -73,7 +72,7 @@ impl FetchStage {
         forward_sender: &PacketBatchSender,
         forward_receiver: PacketBatchReceiver,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        coalesce_ms: u64,
+        coalesce: Duration,
         in_vote_only_mode: Option<Arc<AtomicBool>>,
         tpu_enable_udp: bool,
     ) -> Self {
@@ -90,7 +89,7 @@ impl FetchStage {
             forward_sender,
             forward_receiver,
             poh_recorder,
-            coalesce_ms,
+            coalesce,
             in_vote_only_mode,
             tpu_enable_udp,
         )
@@ -149,7 +148,7 @@ impl FetchStage {
         forward_sender: &PacketBatchSender,
         forward_receiver: PacketBatchReceiver,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        coalesce_ms: u64,
+        coalesce: Duration,
         in_vote_only_mode: Option<Arc<AtomicBool>>,
         tpu_enable_udp: bool,
     ) -> Self {
@@ -167,7 +166,7 @@ impl FetchStage {
                         sender.clone(),
                         recycler.clone(),
                         tpu_stats.clone(),
-                        coalesce_ms,
+                        coalesce,
                         true,
                         in_vote_only_mode.clone(),
                     )
@@ -188,7 +187,7 @@ impl FetchStage {
                         forward_sender.clone(),
                         recycler.clone(),
                         tpu_forward_stats.clone(),
-                        coalesce_ms,
+                        coalesce,
                         true,
                         in_vote_only_mode.clone(),
                     )
@@ -208,7 +207,7 @@ impl FetchStage {
                     vote_sender.clone(),
                     recycler.clone(),
                     tpu_vote_stats.clone(),
-                    coalesce_ms,
+                    coalesce,
                     true,
                     None,
                 )

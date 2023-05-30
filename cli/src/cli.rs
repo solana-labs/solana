@@ -59,6 +59,10 @@ pub enum CliCommand {
     Fees {
         blockhash: Option<Hash>,
     },
+    FindProgramDerivedAddress {
+        seeds: Vec<Vec<u8>>,
+        program_id: Pubkey,
+    },
     FirstAvailableBlock,
     GetBlock {
         slot: Option<Slot>,
@@ -214,7 +218,7 @@ pub enum CliCommand {
         nonce_authority: SignerIndex,
         memo: Option<String>,
         fee_payer: SignerIndex,
-        redelegation_stake_account_pubkey: Option<Pubkey>,
+        redelegation_stake_account: Option<SignerIndex>,
         compute_unit_price: Option<u64>,
     },
     SplitStake {
@@ -802,6 +806,9 @@ pub fn parse_command(
         ("create-address-with-seed", Some(matches)) => {
             parse_create_address_with_seed(matches, default_signer, wallet_manager)
         }
+        ("find-program-derived-address", Some(matches)) => {
+            parse_find_program_derived_address(matches)
+        }
         ("decode-transaction", Some(matches)) => parse_decode_transaction(matches),
         ("resolve-signer", Some(matches)) => {
             let signer_path = resolve_signer(matches, "signer", wallet_manager)?;
@@ -887,6 +894,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Fees { ref blockhash } => process_fees(&rpc_client, config, blockhash.as_ref()),
         CliCommand::Feature(feature_subcommand) => {
             process_feature_subcommand(&rpc_client, config, feature_subcommand)
+        }
+        CliCommand::FindProgramDerivedAddress { seeds, program_id } => {
+            process_find_program_derived_address(config, seeds, program_id)
         }
         CliCommand::FirstAvailableBlock => process_first_available_block(&rpc_client),
         CliCommand::GetBlock { slot } => process_get_block(&rpc_client, config, *slot),
@@ -1172,7 +1182,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             nonce_authority,
             memo,
             fee_payer,
-            redelegation_stake_account_pubkey,
+            redelegation_stake_account,
             compute_unit_price,
         } => process_delegate_stake(
             &rpc_client,
@@ -1188,7 +1198,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *nonce_authority,
             memo.as_ref(),
             *fee_payer,
-            redelegation_stake_account_pubkey.as_ref(),
+            *redelegation_stake_account,
             compute_unit_price.as_ref(),
         ),
         CliCommand::SplitStake {

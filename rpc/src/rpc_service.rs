@@ -349,6 +349,7 @@ impl JsonRpcService {
         genesis_hash: Hash,
         ledger_path: &Path,
         validator_exit: Arc<RwLock<Exit>>,
+        exit: Arc<AtomicBool>,
         known_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
         startup_verification_complete: Arc<AtomicBool>,
@@ -357,7 +358,8 @@ impl JsonRpcService {
         max_slots: Arc<MaxSlots>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         connection_cache: Arc<ConnectionCache>,
-        current_transaction_status_slot: Arc<AtomicU64>,
+        max_complete_transaction_status_slot: Arc<AtomicU64>,
+        max_complete_rewards_slot: Arc<AtomicU64>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Result<Self, String> {
         info!("rpc bound to {:?}", rpc_addr);
@@ -379,7 +381,7 @@ impl JsonRpcService {
 
         let tpu_address = cluster_info
             .my_contact_info()
-            .tpu()
+            .tpu(connection_cache.protocol())
             .map_err(|err| format!("{err}"))?;
 
         // sadly, some parts of our current rpc implemention block the jsonrpc's
@@ -428,7 +430,8 @@ impl JsonRpcService {
                                 bigtable_ledger_storage.clone(),
                                 blockstore.clone(),
                                 block_commitment_cache.clone(),
-                                current_transaction_status_slot.clone(),
+                                max_complete_transaction_status_slot.clone(),
+                                max_complete_rewards_slot.clone(),
                                 ConfirmedBlockUploadConfig::default(),
                                 exit_bigtable_ledger_upload_service.clone(),
                             )))
@@ -469,7 +472,8 @@ impl JsonRpcService {
             largest_accounts_cache,
             max_slots,
             leader_schedule_cache,
-            current_transaction_status_slot,
+            max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             prioritization_fee_cache,
         );
 
@@ -482,6 +486,7 @@ impl JsonRpcService {
             receiver,
             &connection_cache,
             send_transaction_service_config,
+            exit,
         ));
 
         #[cfg(test)]
@@ -553,7 +558,9 @@ impl JsonRpcService {
         validator_exit
             .write()
             .unwrap()
-            .register_exit(Box::new(move || close_handle_.close()));
+            .register_exit(Box::new(move || {
+                close_handle_.close();
+            }));
         Ok(Self {
             thread_hdl,
             #[cfg(test)]
@@ -568,7 +575,8 @@ impl JsonRpcService {
         }
     }
 
-    pub fn join(self) -> thread::Result<()> {
+    pub fn join(mut self) -> thread::Result<()> {
+        self.exit();
         self.thread_hdl.join()
     }
 }
@@ -580,7 +588,7 @@ mod tests {
         crate::rpc::{create_validator_exit, tests::new_test_cluster_info},
         solana_gossip::{
             crds::GossipRoute,
-            crds_value::{CrdsData, CrdsValue, SnapshotHashes},
+            crds_value::{AccountsHashes, CrdsData, CrdsValue},
         },
         solana_ledger::{
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -621,7 +629,7 @@ mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let connection_cache = Arc::new(ConnectionCache::default());
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let mut rpc_service = JsonRpcService::new(
             rpc_addr,
             JsonRpcConfig::default(),
@@ -634,6 +642,7 @@ mod tests {
             Hash::default(),
             &PathBuf::from("farf"),
             validator_exit,
+            exit,
             None,
             Arc::new(AtomicBool::new(false)),
             Arc::new(AtomicBool::new(true)),
@@ -646,6 +655,7 @@ mod tests {
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
             connection_cache,
+            Arc::new(AtomicU64::default()),
             Arc::new(AtomicU64::default()),
             Arc::new(PrioritizationFeeCache::default()),
         )
@@ -927,7 +937,7 @@ mod tests {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
                     known_validators[0],
                     vec![
                         (1, Hash::default()),
@@ -948,7 +958,7 @@ mod tests {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
                     known_validators[1],
                     vec![(1000 + health_check_slot_distance - 1, Hash::default())],
                 ))),
@@ -965,7 +975,7 @@ mod tests {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
                     known_validators[2],
                     vec![(1000 + health_check_slot_distance, Hash::default())],
                 ))),

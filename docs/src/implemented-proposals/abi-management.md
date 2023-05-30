@@ -73,6 +73,11 @@ To know the digest for new ABI items, developers can add `frozen_abi` with a
 random digest value and run the unit tests and replace it with the correct
 digest from the assertion test error message.
 
+Run unit tests using the following command to generate digest values:
+```
+SOLANA_ABI_DUMP_DIR=. cargo +nightly test abi
+```
+
 In general, once we add `frozen_abi` and its change is published in the stable
 release channel, its digest should never change. If such a change is needed, we
 should opt for defining a new `struct` like `FooV1`. And special release flow

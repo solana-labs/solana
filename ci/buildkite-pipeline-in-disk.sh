@@ -166,7 +166,7 @@ all_test_steps() {
       "Coverage skipped as no .rs files were modified"
   fi
   # Full test suite
-  command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 70
+  .buildkite/scripts/build-stable.sh >> "$output_file"
   wait_step
 
   # SBF test suite

@@ -12,7 +12,9 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::{AccountShrinkThreshold, CalcAccountsHashDataSource},
+        accounts_db::{
+            AccountShrinkThreshold, CalcAccountsHashDataSource, INCLUDE_SLOT_IN_HASH_TESTS,
+        },
         accounts_hash::CalcAccountsHashConfig,
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankTestConfig},
@@ -123,7 +125,8 @@ impl TestEnvironment {
             SocketAddrSpace::Unspecified,
         ));
 
-        let (pruned_banks_sender, pruned_banks_receiver) = crossbeam_channel::unbounded();
+        let pruned_banks_receiver =
+            AccountsBackgroundService::setup_bank_drop_callback(Arc::clone(&bank_forks));
         let background_services = BackgroundServices::new(
             Arc::clone(&exit),
             Arc::clone(&cluster_info),
@@ -132,12 +135,6 @@ impl TestEnvironment {
             Arc::clone(&bank_forks),
         );
         let bank = bank_forks.read().unwrap().working_bank();
-        bank.set_callback(Some(Box::new(
-            bank.rc
-                .accounts
-                .accounts_db
-                .create_drop_bank_callback(pruned_banks_sender),
-        )));
         assert!(bank
             .feature_set
             .is_active(&feature_set::epoch_accounts_hash::id()));
@@ -159,7 +156,7 @@ impl TestEnvironment {
 
 /// In order to shut down the background services correctly, each service's thread must be joined.
 /// However, since `.join()` takes a `self` and `drop()` takes a `&mut self`, it means a "normal"
-/// implementation of drop will no work.  Instead, we must handle drop ourselves.
+/// implementation of drop will not work.  Instead, we must handle drop ourselves.
 struct BackgroundServices {
     exit: Arc<AtomicBool>,
     accounts_background_service: ManuallyDrop<AccountsBackgroundService>,
@@ -184,8 +181,8 @@ impl BackgroundServices {
             snapshot_package_sender.clone(),
             snapshot_package_receiver,
             None,
-            &exit,
-            &cluster_info,
+            exit.clone(),
+            cluster_info.clone(),
             snapshot_config.clone(),
             false,
         );
@@ -195,11 +192,9 @@ impl BackgroundServices {
             accounts_package_sender.clone(),
             accounts_package_receiver,
             Some(snapshot_package_sender),
-            &exit,
-            &cluster_info,
+            exit.clone(),
+            cluster_info,
             None,
-            false,
-            0,
             snapshot_config.clone(),
         );
 
@@ -217,7 +212,7 @@ impl BackgroundServices {
         };
         let accounts_background_service = AccountsBackgroundService::new(
             bank_forks,
-            &exit,
+            exit.clone(),
             AbsRequestHandlers {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
@@ -322,6 +317,7 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
                         epoch_schedule: bank.epoch_schedule(),
                         rent_collector: bank.rent_collector(),
                         store_detailed_debug_info_on_failure: false,
+                        include_slot_in_hash: INCLUDE_SLOT_IN_HASH_TESTS,
                     },
                 )
                 .unwrap();
@@ -463,6 +459,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
             )
             .unwrap()
             .0;
+            deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
 
             assert_eq!(&deserialized_bank, bank.as_ref());
             assert_eq!(
@@ -590,11 +587,7 @@ fn test_epoch_accounts_hash_and_warping() {
         None,
     );
     // flush the write cache so warping can calculate the accounts hash from storages
-    bank_forks
-        .read()
-        .unwrap()
-        .working_bank()
-        .force_flush_accounts_cache();
+    bank.force_flush_accounts_cache();
     let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
         &bank,
         &Pubkey::default(),
@@ -627,6 +620,8 @@ fn test_epoch_accounts_hash_and_warping() {
     let eah_start_offset = epoch_accounts_hash::calculation_offset_start(&bank);
     let eah_start_slot_in_next_epoch =
         epoch_schedule.get_first_slot_in_epoch(bank.epoch() + 1) + eah_start_offset;
+    // flush the write cache so warping can calculate the accounts hash from storages
+    bank.force_flush_accounts_cache();
     let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
         &bank,
         &Pubkey::default(),

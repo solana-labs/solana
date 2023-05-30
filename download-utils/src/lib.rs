@@ -13,6 +13,7 @@ use {
         fs::{self, File},
         io::{self, Read},
         net::SocketAddr,
+        num::NonZeroUsize,
         path::{Path, PathBuf},
         time::{Duration, Instant},
     },
@@ -263,8 +264,8 @@ pub fn download_snapshot_archive(
     incremental_snapshot_archives_dir: &Path,
     desired_snapshot_hash: (Slot, SnapshotHash),
     snapshot_type: SnapshotType,
-    maximum_full_snapshot_archives_to_retain: usize,
-    maximum_incremental_snapshot_archives_to_retain: usize,
+    maximum_full_snapshot_archives_to_retain: NonZeroUsize,
+    maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
     use_progress_bar: bool,
     progress_notify_callback: &mut DownloadProgressCallbackOption<'_>,
 ) -> Result<(), String> {

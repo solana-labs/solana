@@ -14,9 +14,9 @@ TEST_PREFIX ?= test_
 OUT_DIR ?= ./out
 OS := $(shell uname)
 
-LLVM_DIR = $(LOCAL_PATH)../dependencies/sbf-tools/llvm
+LLVM_DIR = $(LOCAL_PATH)../dependencies/platform-tools/llvm
 LLVM_SYSTEM_INC_DIRS := $(LLVM_DIR)/lib/clang/15.0.4/include
-COMPILER_RT_DIR = $(LOCAL_PATH)../dependencies/sbf-tools/rust/lib/rustlib/sbf-solana-solana/lib
+COMPILER_RT_DIR = $(LOCAL_PATH)../dependencies/platform-tools/rust/lib/rustlib/sbf-solana-solana/lib
 STD_INC_DIRS := $(LLVM_DIR)/include
 STD_LIB_DIRS := $(LLVM_DIR)/lib
 
@@ -111,9 +111,9 @@ TEST_CXX_FLAGS := \
 
 help:
 	@echo ''
-	@echo 'SBF Program makefile'
+	@echo 'Solana VM Program makefile'
 	@echo ''
-	@echo 'This makefile will build SBF Programs from C or C++ source files into ELFs'
+	@echo 'This makefile will build Solana Programs from C or C++ source files into ELFs'
 	@echo ''
 	@echo 'Assumptions:'
 	@echo '  - Programs are located in the source directory: $(SRC_DIR)/<program name>'

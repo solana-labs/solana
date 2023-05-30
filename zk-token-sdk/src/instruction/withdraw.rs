@@ -1,7 +1,3 @@
-use {
-    crate::zk_token_elgamal::pod,
-    bytemuck::{Pod, Zeroable},
-};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -10,37 +6,48 @@ use {
             pedersen::{Pedersen, PedersenCommitment},
         },
         errors::ProofError,
-        instruction::Verifiable,
         range_proof::RangeProof,
-        sigma_proofs::equality_proof::CtxtCommEqualityProof,
+        sigma_proofs::ciphertext_commitment_equality_proof::CiphertextCommitmentEqualityProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,
     std::convert::TryInto,
 };
+use {
+    crate::{
+        instruction::{ProofType, ZkProofData},
+        zk_token_elgamal::pod,
+    },
+    bytemuck::{Pod, Zeroable},
+};
 
 #[cfg(not(target_os = "solana"))]
 const WITHDRAW_AMOUNT_BIT_LENGTH: usize = 64;
 
-/// This struct includes the cryptographic proof *and* the account data information needed to verify
-/// the proof
+/// The instruction data that is needed for the `ProofInstruction::VerifyWithdraw` instruction.
 ///
-/// - The pre-instruction should call WithdrawData::verify_proof(&self)
-/// - The actual program should check that `current_ct` is consistent with what is
-///   currently stored in the confidential token account TODO: update this statement
-///
+/// It includes the cryptographic proof as well as the context data information needed to verify
+/// the proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct WithdrawData {
+    /// The context data for the withdraw proof
+    pub context: WithdrawProofContext, // 128 bytes
+
+    /// Range proof
+    pub proof: WithdrawProof, // 736 bytes
+}
+
+/// The context data needed to verify a withdraw proof.
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct WithdrawProofContext {
     /// The source account ElGamal pubkey
     pub pubkey: pod::ElGamalPubkey, // 32 bytes
 
     /// The source account available balance *after* the withdraw (encrypted by
     /// `source_pk`
     pub final_ciphertext: pod::ElGamalCiphertext, // 64 bytes
-
-    /// Range proof
-    pub proof: WithdrawProof, // 736 bytes
 }
 
 #[cfg(not(target_os = "solana"))]
@@ -64,31 +71,53 @@ impl WithdrawData {
 
         let pod_pubkey = pod::ElGamalPubkey(keypair.public.to_bytes());
         let pod_final_ciphertext: pod::ElGamalCiphertext = final_ciphertext.into();
-        let mut transcript = WithdrawProof::transcript_new(&pod_pubkey, &pod_final_ciphertext);
-        let proof = WithdrawProof::new(keypair, final_balance, &final_ciphertext, &mut transcript);
 
-        Ok(Self {
+        let context = WithdrawProofContext {
             pubkey: pod_pubkey,
             final_ciphertext: pod_final_ciphertext,
-            proof,
-        })
+        };
+
+        let mut transcript = context.new_transcript();
+        let proof = WithdrawProof::new(keypair, final_balance, &final_ciphertext, &mut transcript);
+
+        Ok(Self { context, proof })
     }
 }
 
-#[cfg(not(target_os = "solana"))]
-impl Verifiable for WithdrawData {
-    fn verify(&self) -> Result<(), ProofError> {
-        let mut transcript = WithdrawProof::transcript_new(&self.pubkey, &self.final_ciphertext);
+impl ZkProofData<WithdrawProofContext> for WithdrawData {
+    const PROOF_TYPE: ProofType = ProofType::Withdraw;
 
-        let elgamal_pubkey = self.pubkey.try_into()?;
-        let final_balance_ciphertext = self.final_ciphertext.try_into()?;
+    fn context_data(&self) -> &WithdrawProofContext {
+        &self.context
+    }
+
+    #[cfg(not(target_os = "solana"))]
+    fn verify_proof(&self) -> Result<(), ProofError> {
+        let mut transcript = self.context.new_transcript();
+
+        let elgamal_pubkey = self.context.pubkey.try_into()?;
+        let final_balance_ciphertext = self.context.final_ciphertext.try_into()?;
         self.proof
             .verify(&elgamal_pubkey, &final_balance_ciphertext, &mut transcript)
     }
 }
 
-/// This struct represents the cryptographic proof component that certifies the account's solvency
-/// for withdrawal
+#[allow(non_snake_case)]
+#[cfg(not(target_os = "solana"))]
+impl WithdrawProofContext {
+    fn new_transcript(&self) -> Transcript {
+        let mut transcript = Transcript::new(b"WithdrawProof");
+
+        transcript.append_pubkey(b"pubkey", &self.pubkey);
+        transcript.append_ciphertext(b"ciphertext", &self.final_ciphertext);
+
+        transcript
+    }
+}
+
+/// The withdraw proof.
+///
+/// It contains a ciphertext-commitment equality proof and a 64-bit range proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 #[allow(non_snake_case)]
@@ -97,7 +126,7 @@ pub struct WithdrawProof {
     pub commitment: pod::PedersenCommitment,
 
     /// Associated equality proof
-    pub equality_proof: pod::CtxtCommEqualityProof,
+    pub equality_proof: pod::CiphertextCommitmentEqualityProof,
 
     /// Associated range proof
     pub range_proof: pod::RangeProof64, // 672 bytes
@@ -106,18 +135,6 @@ pub struct WithdrawProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
 impl WithdrawProof {
-    fn transcript_new(
-        pubkey: &pod::ElGamalPubkey,
-        ciphertext: &pod::ElGamalCiphertext,
-    ) -> Transcript {
-        let mut transcript = Transcript::new(b"WithdrawProof");
-
-        transcript.append_pubkey(b"pubkey", pubkey);
-        transcript.append_ciphertext(b"ciphertext", ciphertext);
-
-        transcript
-    }
-
     pub fn new(
         keypair: &ElGamalKeypair,
         final_balance: u64,
@@ -131,11 +148,11 @@ impl WithdrawProof {
         transcript.append_commitment(b"commitment", &pod_commitment);
 
         // generate equality_proof
-        let equality_proof = CtxtCommEqualityProof::new(
+        let equality_proof = CiphertextCommitmentEqualityProof::new(
             keypair,
             final_ciphertext,
-            final_balance,
             &opening,
+            final_balance,
             transcript,
         );
 
@@ -158,17 +175,13 @@ impl WithdrawProof {
         transcript.append_commitment(b"commitment", &self.commitment);
 
         let commitment: PedersenCommitment = self.commitment.try_into()?;
-        let equality_proof: CtxtCommEqualityProof = self.equality_proof.try_into()?;
+        let equality_proof: CiphertextCommitmentEqualityProof = self.equality_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
 
         // verify equality proof
-        //
-        // TODO: we can also consider verifying equality and range proof in a batch
         equality_proof.verify(pubkey, final_ciphertext, &commitment, transcript)?;
 
         // verify range proof
-        //
-        // TODO: double compressing here - consider modifying range proof input type to `PedersenCommitment`
         range_proof.verify(
             vec![&commitment],
             vec![WITHDRAW_AMOUNT_BIT_LENGTH],
@@ -200,7 +213,7 @@ mod test {
             &current_ciphertext,
         )
         .unwrap();
-        assert!(data.verify().is_ok());
+        assert!(data.verify_proof().is_ok());
 
         // generate and verify proof with wrong balance
         let wrong_balance: u64 = 99;
@@ -211,6 +224,6 @@ mod test {
             &current_ciphertext,
         )
         .unwrap();
-        assert!(data.verify().is_err());
+        assert!(data.verify_proof().is_err());
     }
 }

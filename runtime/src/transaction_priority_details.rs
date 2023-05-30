@@ -14,10 +14,14 @@ pub struct TransactionPriorityDetails {
 }
 
 pub trait GetTransactionPriorityDetails {
-    fn get_transaction_priority_details(&self) -> Option<TransactionPriorityDetails>;
+    fn get_transaction_priority_details(
+        &self,
+        round_compute_unit_price_enabled: bool,
+    ) -> Option<TransactionPriorityDetails>;
 
     fn process_compute_budget_instruction<'a>(
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
+        _round_compute_unit_price_enabled: bool,
     ) -> Option<TransactionPriorityDetails> {
         let mut compute_budget = ComputeBudget::default();
         let prioritization_fee_details = compute_budget
@@ -27,6 +31,7 @@ pub trait GetTransactionPriorityDetails {
                 false, // stop supporting prioritization by request_units_deprecated instruction
                 true,  // enable request heap frame instruction
                 true,  // enable support set accounts data size instruction
+                       // TODO: round_compute_unit_price_enabled: bool
             )
             .ok()?;
         Some(TransactionPriorityDetails {
@@ -37,14 +42,26 @@ pub trait GetTransactionPriorityDetails {
 }
 
 impl GetTransactionPriorityDetails for SanitizedVersionedTransaction {
-    fn get_transaction_priority_details(&self) -> Option<TransactionPriorityDetails> {
-        Self::process_compute_budget_instruction(self.get_message().program_instructions_iter())
+    fn get_transaction_priority_details(
+        &self,
+        round_compute_unit_price_enabled: bool,
+    ) -> Option<TransactionPriorityDetails> {
+        Self::process_compute_budget_instruction(
+            self.get_message().program_instructions_iter(),
+            round_compute_unit_price_enabled,
+        )
     }
 }
 
 impl GetTransactionPriorityDetails for SanitizedTransaction {
-    fn get_transaction_priority_details(&self) -> Option<TransactionPriorityDetails> {
-        Self::process_compute_budget_instruction(self.message().program_instructions_iter())
+    fn get_transaction_priority_details(
+        &self,
+        round_compute_unit_price_enabled: bool,
+    ) -> Option<TransactionPriorityDetails> {
+        Self::process_compute_budget_instruction(
+            self.message().program_instructions_iter(),
+            round_compute_unit_price_enabled,
+        )
     }
 }
 
@@ -78,7 +95,7 @@ mod tests {
         let sanitized_versioned_transaction =
             SanitizedVersionedTransaction::try_new(versioned_transaction).unwrap();
         assert_eq!(
-            sanitized_versioned_transaction.get_transaction_priority_details(),
+            sanitized_versioned_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
                 priority: 0,
                 compute_unit_limit:
@@ -91,7 +108,7 @@ mod tests {
         let sanitized_transaction =
             SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
         assert_eq!(
-            sanitized_transaction.get_transaction_priority_details(),
+            sanitized_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
                 priority: 0,
                 compute_unit_limit:
@@ -118,7 +135,7 @@ mod tests {
         let sanitized_versioned_transaction =
             SanitizedVersionedTransaction::try_new(versioned_transaction).unwrap();
         assert_eq!(
-            sanitized_versioned_transaction.get_transaction_priority_details(),
+            sanitized_versioned_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
                 priority: 0,
                 compute_unit_limit: requested_cu as u64,
@@ -129,7 +146,7 @@ mod tests {
         let sanitized_transaction =
             SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
         assert_eq!(
-            sanitized_transaction.get_transaction_priority_details(),
+            sanitized_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
                 priority: 0,
                 compute_unit_limit: requested_cu as u64,
@@ -154,7 +171,7 @@ mod tests {
         let sanitized_versioned_transaction =
             SanitizedVersionedTransaction::try_new(versioned_transaction).unwrap();
         assert_eq!(
-            sanitized_versioned_transaction.get_transaction_priority_details(),
+            sanitized_versioned_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
                 priority: requested_price,
                 compute_unit_limit:
@@ -167,7 +184,7 @@ mod tests {
         let sanitized_transaction =
             SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
         assert_eq!(
-            sanitized_transaction.get_transaction_priority_details(),
+            sanitized_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
                 priority: requested_price,
                 compute_unit_limit:

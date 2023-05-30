@@ -1,5 +1,7 @@
 //! Solana Rust-based SBF program utility functions and types
 
+#![allow(clippy::integer_arithmetic)]
+
 extern crate solana_program;
 use solana_program::{log::sol_log_64, msg};
 

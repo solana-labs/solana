@@ -14,7 +14,6 @@ edition = { workspace = true }
 codecov = { repository = "solana-labs/solana", branch = "master", service = "github" }
 
 [dependencies]
-ahash = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
 bs58 = { workspace = true }
@@ -23,7 +22,6 @@ crossbeam-channel = { workspace = true }
 dashmap = { workspace = true, features = ["rayon", "raw-api"] }
 eager = { workspace = true }
 etcd-client = { workspace = true, features = ["tls"] }
-fs_extra = { workspace = true }
 histogram = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
@@ -63,6 +61,8 @@ solana-tpu-client = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+strum_macros = { workspace = true }
 sys-info = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
@@ -70,6 +70,7 @@ tokio = { workspace = true, features = ["full"] }
 trees = { workspace = true }
 
 [dev-dependencies]
+fs_extra = { workspace = true }
 matches = { workspace = true }
 raptorq = { workspace = true }
 serde_json = { workspace = true }
@@ -101,9 +102,6 @@ name = "sigverify_stage"
 
 [[bench]]
 name = "retransmit_stage"
-
-[[bench]]
-name = "unprocessed_packet_batches"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

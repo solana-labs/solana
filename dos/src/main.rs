@@ -49,6 +49,7 @@ use {
     solana_core::serve_repair::{RepairProtocol, RepairRequestHeader, ServeRepair},
     solana_dos::cli::*,
     solana_gossip::{
+        contact_info::Protocol,
         gossip_service::{discover, get_multi_client},
         legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
@@ -255,8 +256,13 @@ fn create_sender_thread(
 ) -> thread::JoinHandle<()> {
     // ConnectionCache is used instead of client because it gives ~6% higher pps
     let connection_cache = match tpu_use_quic {
-        true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
-        false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+        true => ConnectionCache::new_quic(
+            "connection_cache_dos_quic",
+            DEFAULT_TPU_CONNECTION_POOL_SIZE,
+        ),
+        false => {
+            ConnectionCache::with_udp("connection_cache_dos_udp", DEFAULT_TPU_CONNECTION_POOL_SIZE)
+        }
     };
     let connection = connection_cache.get_connection(target);
 
@@ -414,7 +420,13 @@ fn get_target(
     nodes: &[ContactInfo],
     mode: Mode,
     entrypoint_addr: SocketAddr,
+    tpu_use_quic: bool,
 ) -> Option<(Pubkey, SocketAddr)> {
+    let protocol = if tpu_use_quic {
+        Protocol::QUIC
+    } else {
+        Protocol::UDP
+    };
     let mut target = None;
     if nodes.is_empty() {
         // skip-gossip case
@@ -427,16 +439,18 @@ fn get_target(
         info!("ADDR = {}", entrypoint_addr);
 
         for node in nodes {
-            if node.gossip == entrypoint_addr {
-                info!("{}", node.gossip);
+            if node.gossip().ok() == Some(entrypoint_addr) {
+                info!("{:?}", node.gossip());
                 target = match mode {
-                    Mode::Gossip => Some((node.id, node.gossip)),
-                    Mode::Tvu => Some((node.id, node.tvu)),
-                    Mode::TvuForwards => Some((node.id, node.tvu_forwards)),
-                    Mode::Tpu => Some((node.id, node.tpu)),
-                    Mode::TpuForwards => Some((node.id, node.tpu_forwards)),
-                    Mode::Repair => Some((node.id, node.repair)),
-                    Mode::ServeRepair => Some((node.id, node.serve_repair)),
+                    Mode::Gossip => Some((*node.pubkey(), node.gossip().unwrap())),
+                    Mode::Tvu => Some((*node.pubkey(), node.tvu(Protocol::UDP).unwrap())),
+                    Mode::TvuForwards => Some((*node.pubkey(), node.tvu_forwards().unwrap())),
+                    Mode::Tpu => Some((*node.pubkey(), node.tpu(protocol).unwrap())),
+                    Mode::TpuForwards => {
+                        Some((*node.pubkey(), node.tpu_forwards(protocol).unwrap()))
+                    }
+                    Mode::Repair => Some((*node.pubkey(), node.repair().unwrap())),
+                    Mode::ServeRepair => Some((*node.pubkey(), node.serve_repair().unwrap())),
                     Mode::Rpc => None,
                 };
                 break;
@@ -457,9 +471,9 @@ fn get_rpc_client(
 
     // find target node
     for node in nodes {
-        if node.gossip == entrypoint_addr {
-            info!("{}", node.gossip);
-            return Ok(RpcClient::new_socket(node.rpc));
+        if node.gossip().ok() == Some(entrypoint_addr) {
+            info!("{:?}", node.gossip());
+            return Ok(RpcClient::new_socket(node.rpc().unwrap()));
         }
     }
     Err("Node with entrypoint_addr was not found")
@@ -606,8 +620,12 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
     client: Option<Arc<T>>,
     params: DosClientParameters,
 ) {
-    let target = get_target(nodes, params.mode, params.entrypoint_addr);
-
+    let target = get_target(
+        nodes,
+        params.mode,
+        params.entrypoint_addr,
+        params.tpu_use_quic,
+    );
     if params.mode == Mode::Rpc {
         // creating rpc_client because get_account, get_program_accounts are not implemented for BenchTpsClient
         let rpc_client =
@@ -742,7 +760,7 @@ fn main() {
             Some(&cmd_params.entrypoint_addr),
             None,                              // num_nodes
             Duration::from_secs(60),           // timeout
-            None,                              // find_node_by_pubkey
+            None,                              // find_nodes_by_pubkey
             Some(&cmd_params.entrypoint_addr), // find_node_by_gossip_addr
             None,                              // my_gossip_addr
             0,                                 // my_shred_version
@@ -757,8 +775,14 @@ fn main() {
         });
 
         let connection_cache = match cmd_params.tpu_use_quic {
-            true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
-            false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+            true => ConnectionCache::new_quic(
+                "connection_cache_dos_quic",
+                DEFAULT_TPU_CONNECTION_POOL_SIZE,
+            ),
+            false => ConnectionCache::with_udp(
+                "connection_cache_dos_udp",
+                DEFAULT_TPU_CONNECTION_POOL_SIZE,
+            ),
         };
         let (client, num_clients) = get_multi_client(
             &validators,
@@ -813,7 +837,7 @@ pub mod test {
             &solana_sdk::pubkey::new_rand(),
             timestamp(),
         )];
-        let entrypoint_addr = nodes[0].gossip;
+        let entrypoint_addr = nodes[0].gossip().unwrap();
 
         run_dos_no_client(
             &nodes,
@@ -943,7 +967,10 @@ pub mod test {
 
         let client = Arc::new(ThinClient::new(
             cluster.entry_point_info.rpc().unwrap(),
-            cluster.entry_point_info.tpu().unwrap(),
+            cluster
+                .entry_point_info
+                .tpu(cluster.connection_cache.protocol())
+                .unwrap(),
             cluster.connection_cache.clone(),
         ));
 
@@ -1079,7 +1106,10 @@ pub mod test {
 
         let client = Arc::new(ThinClient::new(
             cluster.entry_point_info.rpc().unwrap(),
-            cluster.entry_point_info.tpu().unwrap(),
+            cluster
+                .entry_point_info
+                .tpu(cluster.connection_cache.protocol())
+                .unwrap(),
             cluster.connection_cache.clone(),
         ));
 

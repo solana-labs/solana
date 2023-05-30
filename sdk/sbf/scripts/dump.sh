@@ -31,7 +31,7 @@ dump_mangled=$dump.mangled
 (
   set -ex
   ls -la "$so" > "$dump_mangled"
-  "$sbf_sdk"/dependencies/sbf-tools/llvm/bin/llvm-readelf -aW "$so" >>"$dump_mangled"
+  "$sbf_sdk"/dependencies/platform-tools/llvm/bin/llvm-readelf -aW "$so" >>"$dump_mangled"
   "$OBJDUMP" --print-imm-hex --source --disassemble "$so" >> "$dump_mangled"
   sed s/://g < "$dump_mangled" | rustfilt > "$dump"
 )

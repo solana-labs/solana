@@ -27,6 +27,7 @@
 use {
     crate::{
         crds_entry::CrdsEntry,
+        crds_gossip_pull::CrdsTimeouts,
         crds_shards::CrdsShards,
         crds_value::{CrdsData, CrdsValue, CrdsValueLabel},
         legacy_contact_info::LegacyContactInfo as ContactInfo,
@@ -222,7 +223,7 @@ impl Crds {
                 match &value.value.data {
                     CrdsData::LegacyContactInfo(node) => {
                         self.nodes.insert(entry_index);
-                        self.shred_versions.insert(pubkey, node.shred_version);
+                        self.shred_versions.insert(pubkey, node.shred_version());
                     }
                     CrdsData::Vote(_, _) => {
                         self.votes.insert(value.ordinal, entry_index);
@@ -248,7 +249,7 @@ impl Crds {
                 self.shards.insert(entry_index, &value);
                 match &value.value.data {
                     CrdsData::LegacyContactInfo(node) => {
-                        self.shred_versions.insert(pubkey, node.shred_version);
+                        self.shred_versions.insert(pubkey, node.shred_version());
                         // self.nodes does not need to be updated since the
                         // entry at this index was and stays contact-info.
                         debug_assert_matches!(
@@ -472,15 +473,12 @@ impl Crds {
         &self,
         thread_pool: &ThreadPool,
         now: u64,
-        timeouts: &HashMap<Pubkey, u64>,
+        timeouts: &CrdsTimeouts,
     ) -> Vec<CrdsValueLabel> {
-        let default_timeout = *timeouts
-            .get(&Pubkey::default())
-            .expect("must have default timeout");
         // Given an index of all crd values associated with a pubkey,
         // returns crds labels of old values to be evicted.
         let evict = |pubkey, index: &IndexSet<usize>| {
-            let timeout = timeouts.get(pubkey).copied().unwrap_or(default_timeout);
+            let timeout = timeouts[pubkey];
             // If the origin's contact-info hasn't expired yet then preserve
             // all associated values.
             let origin = CrdsValueLabel::LegacyContactInfo(*pubkey);
@@ -683,14 +681,14 @@ impl CrdsDataStats {
             CrdsData::LegacyContactInfo(_) => 0,
             CrdsData::Vote(_, _) => 1,
             CrdsData::LowestSlot(_, _) => 2,
-            CrdsData::SnapshotHashes(_) => 3,
+            CrdsData::LegacySnapshotHashes(_) => 3,
             CrdsData::AccountsHashes(_) => 4,
             CrdsData::EpochSlots(_, _) => 5,
             CrdsData::LegacyVersion(_) => 6,
             CrdsData::Version(_) => 7,
             CrdsData::NodeInstance(_) => 8,
             CrdsData::DuplicateShred(_, _) => 9,
-            CrdsData::IncrementalSnapshotHashes(_) => 10,
+            CrdsData::SnapshotHashes(_) => 10,
             CrdsData::ContactInfo(_) => 11,
             // Update CrdsCountsArray if new items are added here.
         }
@@ -721,10 +719,7 @@ impl CrdsStats {
 mod tests {
     use {
         super::*,
-        crate::{
-            crds_value::{new_rand_timestamp, NodeInstance, SnapshotHashes},
-            socketaddr,
-        },
+        crate::crds_value::{new_rand_timestamp, LegacySnapshotHashes, NodeInstance},
         rand::{thread_rng, Rng, SeedableRng},
         rand_chacha::ChaChaRng,
         rayon::ThreadPoolBuilder,
@@ -732,7 +727,7 @@ mod tests {
             signature::{Keypair, Signer},
             timing::timestamp,
         },
-        std::{collections::HashSet, iter::repeat_with, net::Ipv4Addr},
+        std::{collections::HashSet, iter::repeat_with, net::Ipv4Addr, time::Duration},
     };
 
     #[test]
@@ -888,17 +883,34 @@ mod tests {
             crds.insert(val.clone(), 1, GossipRoute::LocalMessage),
             Ok(())
         );
-        let mut set = HashMap::new();
-        set.insert(Pubkey::default(), 0);
-        assert!(crds.find_old_labels(&thread_pool, 0, &set).is_empty());
-        set.insert(Pubkey::default(), 1);
+        let pubkey = Pubkey::new_unique();
+        let stakes = HashMap::from([(Pubkey::new_unique(), 1u64)]);
+        let epoch_duration = Duration::from_secs(48 * 3600);
+        let timeouts = CrdsTimeouts::new(
+            pubkey,
+            0u64, // default_timeout,
+            epoch_duration,
+            &stakes,
+        );
+        assert!(crds.find_old_labels(&thread_pool, 0, &timeouts).is_empty());
+        let timeouts = CrdsTimeouts::new(
+            pubkey,
+            1u64, // default_timeout,
+            epoch_duration,
+            &stakes,
+        );
         assert_eq!(
-            crds.find_old_labels(&thread_pool, 2, &set),
+            crds.find_old_labels(&thread_pool, 2, &timeouts),
             vec![val.label()]
         );
-        set.insert(Pubkey::default(), 2);
+        let timeouts = CrdsTimeouts::new(
+            pubkey,
+            2u64, // default_timeout,
+            epoch_duration,
+            &stakes,
+        );
         assert_eq!(
-            crds.find_old_labels(&thread_pool, 4, &set),
+            crds.find_old_labels(&thread_pool, 4, &timeouts),
             vec![val.label()]
         );
     }
@@ -907,24 +919,51 @@ mod tests {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut rng = thread_rng();
         let mut crds = Crds::default();
-        let mut timeouts = HashMap::new();
         let val = CrdsValue::new_rand(&mut rng, None);
-        timeouts.insert(Pubkey::default(), 3);
+        let mut stakes = HashMap::from([(Pubkey::new_unique(), 1u64)]);
+        let timeouts = CrdsTimeouts::new(
+            Pubkey::new_unique(),
+            3,                              // default_timeout
+            Duration::from_secs(48 * 3600), // epoch_duration
+            &stakes,
+        );
         assert_eq!(
             crds.insert(val.clone(), 0, GossipRoute::LocalMessage),
             Ok(())
         );
         assert!(crds.find_old_labels(&thread_pool, 2, &timeouts).is_empty());
-        timeouts.insert(val.pubkey(), 1);
+        stakes.insert(val.pubkey(), 1u64);
+        let timeouts = CrdsTimeouts::new(
+            Pubkey::new_unique(),
+            1,                        // default_timeout
+            Duration::from_millis(1), // epoch_duration
+            &stakes,
+        );
         assert_eq!(
             crds.find_old_labels(&thread_pool, 2, &timeouts),
             vec![val.label()]
         );
-        timeouts.insert(val.pubkey(), u64::MAX);
+        let timeouts = CrdsTimeouts::new(
+            Pubkey::new_unique(),
+            3,                              // default_timeout
+            Duration::from_secs(48 * 3600), // epoch_duration
+            &stakes,
+        );
         assert!(crds.find_old_labels(&thread_pool, 2, &timeouts).is_empty());
-        timeouts.insert(Pubkey::default(), 1);
+        let timeouts = CrdsTimeouts::new(
+            Pubkey::new_unique(),
+            1,                              // default_timeout
+            Duration::from_secs(48 * 3600), // epoch_duration
+            &stakes,
+        );
         assert!(crds.find_old_labels(&thread_pool, 2, &timeouts).is_empty());
-        timeouts.remove(&val.pubkey());
+        stakes.remove(&val.pubkey());
+        let timeouts = CrdsTimeouts::new(
+            Pubkey::new_unique(),
+            1,                              // default_timeout
+            Duration::from_secs(48 * 3600), // epoch_duration
+            &stakes,
+        );
         assert_eq!(
             crds.find_old_labels(&thread_pool, 2, &timeouts),
             vec![val.label()]
@@ -940,14 +979,19 @@ mod tests {
             crds.insert(val.clone(), 1, GossipRoute::LocalMessage),
             Ok(_)
         );
-        let mut set = HashMap::new();
-        set.insert(Pubkey::default(), 1);
+        let stakes = HashMap::from([(Pubkey::new_unique(), 1u64)]);
+        let timeouts = CrdsTimeouts::new(
+            Pubkey::new_unique(),
+            1,                              // default_timeout
+            Duration::from_secs(48 * 3600), // epoch_duration
+            &stakes,
+        );
         assert_eq!(
-            crds.find_old_labels(&thread_pool, 2, &set),
+            crds.find_old_labels(&thread_pool, 2, &timeouts),
             vec![val.label()]
         );
         crds.remove(&val.label(), /*now=*/ 0);
-        assert!(crds.find_old_labels(&thread_pool, 2, &set).is_empty());
+        assert!(crds.find_old_labels(&thread_pool, 2, &timeouts).is_empty());
     }
     #[test]
     fn test_find_old_records_staked() {
@@ -961,28 +1005,35 @@ mod tests {
             crds.insert(val.clone(), 1, GossipRoute::LocalMessage),
             Ok(())
         );
-        let mut set = HashMap::new();
+        let mut stakes = HashMap::from([(Pubkey::new_unique(), 1u64)]);
+        let timeouts = CrdsTimeouts::new(
+            Pubkey::new_unique(),
+            0,                              // default_timeout
+            Duration::from_secs(48 * 3600), // epoch_duration
+            &stakes,
+        );
         //now < timestamp
-        set.insert(Pubkey::default(), 0);
-        set.insert(val.pubkey(), 0);
-        assert!(crds.find_old_labels(&thread_pool, 0, &set).is_empty());
+        assert!(crds.find_old_labels(&thread_pool, 0, &timeouts).is_empty());
 
         //pubkey shouldn't expire since its timeout is MAX
-        set.insert(val.pubkey(), std::u64::MAX);
-        assert!(crds.find_old_labels(&thread_pool, 2, &set).is_empty());
-
-        //default has max timeout, but pubkey should still expire
-        set.insert(Pubkey::default(), std::u64::MAX);
-        set.insert(val.pubkey(), 1);
-        assert_eq!(
-            crds.find_old_labels(&thread_pool, 2, &set),
-            vec![val.label()]
+        stakes.insert(val.pubkey(), 1u64);
+        let timeouts = CrdsTimeouts::new(
+            Pubkey::new_unique(),
+            0,                              // default_timeout
+            Duration::from_secs(48 * 3600), // epoch_duration
+            &stakes,
         );
+        assert!(crds.find_old_labels(&thread_pool, 2, &timeouts).is_empty());
 
-        set.insert(val.pubkey(), 2);
-        assert!(crds.find_old_labels(&thread_pool, 2, &set).is_empty());
+        let timeouts = CrdsTimeouts::new(
+            Pubkey::new_unique(),
+            0,                        // default_timeout
+            Duration::from_millis(2), // epoch_duration
+            &stakes,
+        );
+        assert!(crds.find_old_labels(&thread_pool, 2, &timeouts).is_empty());
         assert_eq!(
-            crds.find_old_labels(&thread_pool, 3, &set),
+            crds.find_old_labels(&thread_pool, 3, &timeouts),
             vec![val.label()]
         );
     }
@@ -1233,8 +1284,8 @@ mod tests {
         assert_eq!(crds.get_shred_version(&pubkey), None);
         // Initial insertion of a node with shred version:
         let mut node = ContactInfo::new_rand(&mut rng, Some(pubkey));
-        let wallclock = node.wallclock;
-        node.shred_version = 42;
+        let wallclock = node.wallclock();
+        node.set_shred_version(42);
         let node = CrdsData::LegacyContactInfo(node);
         let node = CrdsValue::new_unsigned(node);
         assert_eq!(
@@ -1244,8 +1295,8 @@ mod tests {
         assert_eq!(crds.get_shred_version(&pubkey), Some(42));
         // An outdated  value should not update shred-version:
         let mut node = ContactInfo::new_rand(&mut rng, Some(pubkey));
-        node.wallclock = wallclock - 1; // outdated.
-        node.shred_version = 8;
+        node.set_wallclock(wallclock - 1); // outdated.
+        node.set_shred_version(8);
         let node = CrdsData::LegacyContactInfo(node);
         let node = CrdsValue::new_unsigned(node);
         assert_eq!(
@@ -1255,8 +1306,8 @@ mod tests {
         assert_eq!(crds.get_shred_version(&pubkey), Some(42));
         // Update shred version:
         let mut node = ContactInfo::new_rand(&mut rng, Some(pubkey));
-        node.wallclock = wallclock + 1; // so that it overrides the prev one.
-        node.shred_version = 8;
+        node.set_wallclock(wallclock + 1); // so that it overrides the prev one.
+        node.set_shred_version(8);
         let node = CrdsData::LegacyContactInfo(node);
         let node = CrdsValue::new_unsigned(node);
         assert_eq!(
@@ -1265,8 +1316,8 @@ mod tests {
         );
         assert_eq!(crds.get_shred_version(&pubkey), Some(8));
         // Add other crds values with the same pubkey.
-        let val = SnapshotHashes::new_rand(&mut rng, Some(pubkey));
-        let val = CrdsData::SnapshotHashes(val);
+        let val = LegacySnapshotHashes::new_rand(&mut rng, Some(pubkey));
+        let val = CrdsData::LegacySnapshotHashes(val);
         let val = CrdsValue::new_unsigned(val);
         assert_eq!(
             crds.insert(val, timestamp(), GossipRoute::LocalMessage),
@@ -1279,7 +1330,7 @@ mod tests {
         assert_eq!(crds.get::<&ContactInfo>(pubkey), None);
         assert_eq!(crds.get_shred_version(&pubkey), Some(8));
         // Remove the remaining entry with the same pubkey.
-        crds.remove(&CrdsValueLabel::SnapshotHashes(pubkey), timestamp());
+        crds.remove(&CrdsValueLabel::LegacySnapshotHashes(pubkey), timestamp());
         assert_eq!(crds.get_records(&pubkey).count(), 0);
         assert_eq!(crds.get_shred_version(&pubkey), None);
     }
@@ -1353,17 +1404,19 @@ mod tests {
             crds.insert(val.clone(), 1, GossipRoute::LocalMessage),
             Ok(_)
         );
-        let mut set = HashMap::new();
-
-        //default has max timeout, but pubkey should still expire
-        set.insert(Pubkey::default(), std::u64::MAX);
-        set.insert(val.pubkey(), 1);
+        let stakes = HashMap::from([(Pubkey::new_unique(), 1u64)]);
+        let timeouts = CrdsTimeouts::new(
+            Pubkey::new_unique(),
+            1,                        // default_timeout
+            Duration::from_millis(1), // epoch_duration
+            &stakes,
+        );
         assert_eq!(
-            crds.find_old_labels(&thread_pool, 2, &set),
+            crds.find_old_labels(&thread_pool, 2, &timeouts),
             vec![val.label()]
         );
         crds.remove(&val.label(), /*now=*/ 0);
-        assert!(crds.find_old_labels(&thread_pool, 2, &set).is_empty());
+        assert!(crds.find_old_labels(&thread_pool, 2, &timeouts).is_empty());
     }
 
     #[test]
@@ -1391,7 +1444,7 @@ mod tests {
         let v2 = VersionedCrdsValue::new(
             {
                 let mut contact_info = ContactInfo::new_localhost(&Pubkey::default(), 0);
-                contact_info.rpc = socketaddr!(Ipv4Addr::UNSPECIFIED, 0);
+                contact_info.set_rpc((Ipv4Addr::LOCALHOST, 1244)).unwrap();
                 CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(contact_info))
             },
             Cursor::default(),

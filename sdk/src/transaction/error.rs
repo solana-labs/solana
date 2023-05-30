@@ -157,6 +157,10 @@ pub enum TransactionError {
     /// LoadedAccountsDataSizeLimit set for transaction must be greater than 0.
     #[error("LoadedAccountsDataSizeLimit set for transaction must be greater than 0.")]
     InvalidLoadedAccountsDataSizeLimit,
+
+    /// Sanitized transaction differed before/after feature activiation. Needs to be resanitized.
+    #[error("ResanitizationNeeded")]
+    ResanitizationNeeded,
 }
 
 impl From<SanitizeError> for TransactionError {

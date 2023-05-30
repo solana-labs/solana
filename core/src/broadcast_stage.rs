@@ -16,7 +16,7 @@ use {
     itertools::Itertools,
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
+        contact_info::Protocol,
     },
     solana_ledger::{blockstore::Blockstore, shred::Shred},
     solana_measure::measure::Measure,
@@ -412,10 +412,13 @@ pub fn broadcast_shreds(
             let cluster_nodes =
                 cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);
             update_peer_stats(&cluster_nodes, last_datapoint_submit);
-            shreds.flat_map(move |shred| {
-                let node = cluster_nodes.get_broadcast_peer(&shred.id())?;
-                ContactInfo::is_valid_address(&node.tvu, socket_addr_space)
-                    .then(|| (shred.payload(), node.tvu))
+            shreds.filter_map(move |shred| {
+                cluster_nodes
+                    .get_broadcast_peer(&shred.id())?
+                    .tvu(Protocol::UDP)
+                    .ok()
+                    .filter(|addr| socket_addr_space.check(addr))
+                    .map(|addr| (shred.payload(), addr))
             })
         })
         .collect();
@@ -648,7 +651,7 @@ pub mod test {
             let ticks_per_slot;
             let slot;
             {
-                let bank = broadcast_service.bank.clone();
+                let bank = broadcast_service.bank;
                 start_tick_height = bank.tick_height();
                 max_tick_height = bank.max_tick_height();
                 ticks_per_slot = bank.ticks_per_slot();

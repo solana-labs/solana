@@ -1,6 +1,7 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! multi-stage transaction processing pipeline in software.
 
+pub use solana_sdk::net::DEFAULT_TPU_COALESCE;
 use {
     crate::{
         banking_stage::BankingStage,
@@ -11,15 +12,18 @@ use {
             GossipVerifiedVoteHashSender, VerifiedVoteSender, VoteTracker,
         },
         fetch_stage::FetchStage,
-        find_packet_sender_stake_stage::FindPacketSenderStakeStage,
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
         staked_nodes_updater_service::StakedNodesUpdaterService,
+        validator::GeneratorConfig,
     },
     crossbeam_channel::{unbounded, Receiver},
-    solana_client::connection_cache::ConnectionCache,
+    solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_gossip::cluster_info::ClusterInfo,
-    solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
+    solana_ledger::{
+        blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
+        entry_notifier_service::EntryNotifierSender,
+    },
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
     solana_rpc::{
         optimistically_confirmed_bank_tracker::BankNotificationSender,
@@ -27,12 +31,13 @@ use {
     },
     solana_runtime::{
         bank_forks::BankForks,
+        prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
     solana_sdk::{pubkey::Pubkey, signature::Keypair},
     solana_streamer::{
-        nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-        quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+        nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+        quic::{spawn_server, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
         streamer::StakedNodes,
     },
     std::{
@@ -40,10 +45,9 @@ use {
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread,
+        time::Duration,
     },
 };
-
-pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
 // allow multiple connections for NAT and any open/close overlap
 pub const MAX_QUIC_CONNECTIONS_PER_PEER: usize = 8;
@@ -66,8 +70,6 @@ pub struct Tpu {
     broadcast_stage: BroadcastStage,
     tpu_quic_t: thread::JoinHandle<()>,
     tpu_forwards_quic_t: thread::JoinHandle<()>,
-    find_packet_sender_stake_stage: FindPacketSenderStakeStage,
-    vote_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     staked_nodes_updater_service: StakedNodesUpdaterService,
     tracer_thread_hdl: TracerThread,
 }
@@ -82,6 +84,7 @@ impl Tpu {
         sockets: TpuSockets,
         subscriptions: &Arc<RpcSubscriptions>,
         transaction_status_sender: Option<TransactionStatusSender>,
+        _entry_notification_sender: Option<EntryNotifierSender>,
         blockstore: &Arc<Blockstore>,
         broadcast_type: &BroadcastStageType,
         exit: &Arc<AtomicBool>,
@@ -93,7 +96,7 @@ impl Tpu {
         replay_vote_receiver: ReplayVoteReceiver,
         replay_vote_sender: ReplayVoteSender,
         bank_notification_sender: Option<BankNotificationSender>,
-        tpu_coalesce_ms: u64,
+        tpu_coalesce: Duration,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         connection_cache: &Arc<ConnectionCache>,
         keypair: &Keypair,
@@ -103,6 +106,8 @@ impl Tpu {
         banking_tracer: Arc<BankingTracer>,
         tracer_thread_hdl: TracerThread,
         tpu_enable_udp: bool,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        _generator_config: Option<GeneratorConfig>, /* vestigial code for replay invalidator */
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -126,47 +131,27 @@ impl Tpu {
             &forwarded_packet_sender,
             forwarded_packet_receiver,
             poh_recorder,
-            tpu_coalesce_ms,
+            tpu_coalesce,
             Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
             tpu_enable_udp,
         );
 
         let staked_nodes_updater_service = StakedNodesUpdaterService::new(
             exit.clone(),
-            cluster_info.clone(),
             bank_forks.clone(),
             staked_nodes.clone(),
             shared_staked_nodes_overrides,
         );
 
-        let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
-
-        let find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
-            packet_receiver,
-            find_packet_sender_stake_sender,
-            staked_nodes.clone(),
-            "Tpu",
-        );
-
-        let (vote_find_packet_sender_stake_sender, vote_find_packet_sender_stake_receiver) =
-            unbounded();
-
-        let vote_find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
-            vote_packet_receiver,
-            vote_find_packet_sender_stake_sender,
-            staked_nodes.clone(),
-            "Vote",
-        );
-
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
 
-        let stats = Arc::new(StreamStats::default());
         let (_, tpu_quic_t) = spawn_server(
+            "quic_streamer_tpu",
             transactions_quic_sockets,
             keypair,
             cluster_info
                 .my_contact_info()
-                .tpu_quic()
+                .tpu(Protocol::QUIC)
                 .expect("Operator must spin up node with valid (QUIC) TPU address")
                 .ip(),
             packet_sender,
@@ -175,17 +160,18 @@ impl Tpu {
             staked_nodes.clone(),
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats.clone(),
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            tpu_coalesce,
         )
         .unwrap();
 
         let (_, tpu_forwards_quic_t) = spawn_server(
+            "quic_streamer_tpu_forwards",
             transactions_forwards_quic_sockets,
             keypair,
             cluster_info
                 .my_contact_info()
-                .tpu_forwards_quic()
+                .tpu_forwards(Protocol::QUIC)
                 .expect("Operator must spin up node with valid (QUIC) TPU-forwards address")
                 .ip(),
             forwarded_packet_sender,
@@ -194,25 +180,21 @@ impl Tpu {
             staked_nodes.clone(),
             MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
             0, // Prevent unstaked nodes from forwarding transactions
-            stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            tpu_coalesce,
         )
         .unwrap();
 
         let sigverify_stage = {
             let verifier = TransactionSigVerifier::new(non_vote_sender);
-            SigVerifyStage::new(find_packet_sender_stake_receiver, verifier, "tpu-verifier")
+            SigVerifyStage::new(packet_receiver, verifier, "tpu-verifier")
         };
 
         let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
 
         let vote_sigverify_stage = {
             let verifier = TransactionSigVerifier::new_reject_non_vote(tpu_vote_sender);
-            SigVerifyStage::new(
-                vote_find_packet_sender_stake_receiver,
-                verifier,
-                "tpu-vote-verifier",
-            )
+            SigVerifyStage::new(vote_packet_receiver, verifier, "tpu-vote-verifier")
         };
 
         let (gossip_vote_sender, gossip_vote_receiver) =
@@ -244,6 +226,7 @@ impl Tpu {
             log_messages_bytes_limit,
             connection_cache.clone(),
             bank_forks.clone(),
+            prioritization_fee_cache,
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
@@ -266,8 +249,6 @@ impl Tpu {
             broadcast_stage,
             tpu_quic_t,
             tpu_forwards_quic_t,
-            find_packet_sender_stake_stage,
-            vote_find_packet_sender_stake_stage,
             staked_nodes_updater_service,
             tracer_thread_hdl,
         }
@@ -280,8 +261,6 @@ impl Tpu {
             self.vote_sigverify_stage.join(),
             self.cluster_info_vote_listener.join(),
             self.banking_stage.join(),
-            self.find_packet_sender_stake_stage.join(),
-            self.vote_find_packet_sender_stake_stage.join(),
             self.staked_nodes_updater_service.join(),
             self.tpu_quic_t.join(),
             self.tpu_forwards_quic_t.join(),

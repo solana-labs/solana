@@ -1,5 +1,5 @@
 use {
-    solana_sdk::timing::duration_as_ns,
+    solana_sdk::timing::{duration_as_ms, duration_as_ns, duration_as_s, duration_as_us},
     std::{
         fmt,
         time::{Duration, Instant},
@@ -45,6 +45,26 @@ impl Measure {
     pub fn as_duration(&self) -> Duration {
         Duration::from_nanos(self.as_ns())
     }
+
+    pub fn end_as_ns(self) -> u64 {
+        duration_as_ns(&self.start.elapsed())
+    }
+
+    pub fn end_as_us(self) -> u64 {
+        duration_as_us(&self.start.elapsed())
+    }
+
+    pub fn end_as_ms(self) -> u64 {
+        duration_as_ms(&self.start.elapsed())
+    }
+
+    pub fn end_as_s(self) -> f32 {
+        duration_as_s(&self.start.elapsed())
+    }
+
+    pub fn end_as_duration(self) -> Duration {
+        self.start.elapsed()
+    }
 }
 
 impl fmt::Display for Measure {
@@ -69,16 +89,27 @@ mod tests {
 
     #[test]
     fn test_measure() {
+        let test_duration = Duration::from_millis(100);
         let mut measure = Measure::start("test");
-        sleep(Duration::from_secs(1));
+        sleep(test_duration);
         measure.stop();
-        assert!(measure.as_s() >= 0.99f32 && measure.as_s() <= 1.01f32);
-        assert!(measure.as_ms() >= 990 && measure.as_ms() <= 1_010);
-        assert!(measure.as_us() >= 999_000 && measure.as_us() <= 1_010_000);
-        assert!(
-            measure.as_duration() >= Duration::from_millis(990)
-                && measure.as_duration() <= Duration::from_millis(1_010)
-        );
+        assert!(measure.as_duration() >= test_duration);
+    }
+
+    #[test]
+    fn test_measure_as() {
+        let test_duration = Duration::from_millis(100);
+        let measure = Measure {
+            name: "test",
+            start: Instant::now(),
+            duration: test_duration.as_nanos() as u64,
+        };
+
+        assert!(f32::abs(measure.as_s() - 0.1f32) <= f32::EPSILON);
+        assert_eq!(measure.as_ms(), 100);
+        assert_eq!(measure.as_us(), 100_000);
+        assert_eq!(measure.as_ns(), 100_000_000);
+        assert_eq!(measure.as_duration(), test_duration);
     }
 
     #[test]

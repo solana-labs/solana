@@ -326,16 +326,12 @@ impl Drop for MetricsAgent {
     }
 }
 
-fn get_singleton_agent() -> Arc<Mutex<MetricsAgent>> {
-    static INIT: Once = Once::new();
-    static mut AGENT: Option<Arc<Mutex<MetricsAgent>>> = None;
-    unsafe {
-        INIT.call_once(|| AGENT = Some(Arc::new(Mutex::new(MetricsAgent::default()))));
-        match AGENT {
-            Some(ref agent) => agent.clone(),
-            None => panic!("Failed to initialize metrics agent"),
-        }
-    }
+fn get_singleton_agent() -> &'static MetricsAgent {
+    lazy_static! {
+        static ref AGENT: MetricsAgent = MetricsAgent::default();
+    };
+
+    &AGENT
 }
 
 lazy_static! {
@@ -357,16 +353,14 @@ pub fn set_host_id(host_id: String) {
 /// Submits a new point from any thread.  Note that points are internally queued
 /// and transmitted periodically in batches.
 pub fn submit(point: DataPoint, level: log::Level) {
-    let agent_mutex = get_singleton_agent();
-    let agent = agent_mutex.lock().unwrap();
+    let agent = get_singleton_agent();
     agent.submit(point, level);
 }
 
 /// Submits a new counter or updates an existing counter from any thread.  Note that points are
 /// internally queued and transmitted periodically in batches.
 pub(crate) fn submit_counter(point: CounterPoint, level: log::Level, bucket: u64) {
-    let agent_mutex = get_singleton_agent();
-    let agent = agent_mutex.lock().unwrap();
+    let agent = get_singleton_agent();
     agent.submit_counter(point, level, bucket);
 }
 
@@ -432,8 +426,7 @@ pub fn query(q: &str) -> Result<String, String> {
 /// Blocks until all pending points from previous calls to `submit` have been
 /// transmitted.
 pub fn flush() {
-    let agent_mutex = get_singleton_agent();
-    let agent = agent_mutex.lock().unwrap();
+    let agent = get_singleton_agent();
     agent.flush();
 }
 

@@ -10,8 +10,10 @@ use {
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
-    solana_bpf_loader_program::syscalls::create_loader,
-    solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
+    solana_bpf_loader_program::syscalls::create_program_runtime_environment,
+    solana_clap_utils::{
+        self, hidden_unless_forced, input_parsers::*, input_validators::*, keypair::*,
+    },
     solana_cli_output::{
         CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
         CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
@@ -22,7 +24,10 @@ use {
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
-    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier, vm::VerifiedExecutable},
+    solana_rbpf::{
+        elf::Executable,
+        verifier::{RequisiteVerifier, TautologyVerifier},
+    },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
@@ -35,6 +40,7 @@ use {
         account_utils::StateMut,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        feature_set::FeatureSet,
         instruction::{Instruction, InstructionError},
         loader_instruction,
         message::Message,
@@ -44,9 +50,7 @@ use {
         signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
         system_instruction::{self, SystemError},
         system_program,
-        sysvar::rent::Rent,
         transaction::{Transaction, TransactionError},
-        transaction_context::TransactionContext,
     },
     std::{
         fs::File,
@@ -134,7 +138,7 @@ impl ProgramSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("skip_fee_check")
                         .long("skip-fee-check")
-                        .hidden(true)
+                        .hidden(hidden_unless_forced())
                         .takes_value(false)
                         .global(true)
                 )
@@ -2016,22 +2020,22 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data)
         .map_err(|err| format!("Unable to read program file: {err}"))?;
-    let mut transaction_context = TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
-    let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
     // Verify the program
-    let loader = create_loader(
-        &invoke_context.feature_set,
+    let program_runtime_environment = create_program_runtime_environment(
+        &FeatureSet::default(),
         &ComputeBudget::default(),
-        true,
         true,
         false,
     )
     .unwrap();
-    let executable = Executable::<InvokeContext>::from_elf(&program_data, loader)
-        .map_err(|err| format!("ELF error: {err}"))?;
+    let executable = Executable::<TautologyVerifier, InvokeContext>::from_elf(
+        &program_data,
+        Arc::new(program_runtime_environment),
+    )
+    .map_err(|err| format!("ELF error: {err}"))?;
 
-    let _ = VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
+    let _ = Executable::<RequisiteVerifier, InvokeContext>::verified(executable)
         .map_err(|err| format!("ELF error: {err}"))?;
 
     Ok(program_data)
@@ -2159,9 +2163,9 @@ fn send_deploy_messages(
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
             let connection_cache = if config.use_quic {
-                ConnectionCache::new(1)
+                ConnectionCache::new_quic("connection_cache_cli_program_quic", 1)
             } else {
-                ConnectionCache::with_udp(1)
+                ConnectionCache::with_udp("connection_cache_cli_program_udp", 1)
             };
             let transaction_errors = match connection_cache {
                 ConnectionCache::Udp(cache) => TpuClient::new_with_connection_cache(

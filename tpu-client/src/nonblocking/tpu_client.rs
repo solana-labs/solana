@@ -6,7 +6,7 @@ use {
     log::*,
     solana_connection_cache::{
         connection_cache::{
-            ConnectionCache, ConnectionManager, ConnectionPool, NewConnectionConfig,
+            ConnectionCache, ConnectionManager, ConnectionPool, NewConnectionConfig, Protocol,
             DEFAULT_CONNECTION_POOL_SIZE,
         },
         nonblocking::client_connection::ClientConnection,
@@ -22,6 +22,7 @@ use {
         commitment_config::CommitmentConfig,
         epoch_info::EpochInfo,
         pubkey::Pubkey,
+        quic::QUIC_PORT_OFFSET,
         signature::SignerError,
         transaction::Transaction,
         transport::{Result as TransportResult, TransportError},
@@ -102,6 +103,7 @@ impl LeaderTpuCacheUpdateInfo {
 }
 
 struct LeaderTpuCache {
+    protocol: Protocol,
     first_slot: Slot,
     leaders: Vec<Pubkey>,
     leader_tpu_map: HashMap<Pubkey, SocketAddr>,
@@ -115,9 +117,11 @@ impl LeaderTpuCache {
         slots_in_epoch: Slot,
         leaders: Vec<Pubkey>,
         cluster_nodes: Vec<RpcContactInfo>,
+        protocol: Protocol,
     ) -> Self {
-        let leader_tpu_map = Self::extract_cluster_tpu_sockets(cluster_nodes);
+        let leader_tpu_map = Self::extract_cluster_tpu_sockets(protocol, cluster_nodes);
         Self {
+            protocol,
             first_slot,
             leaders,
             leader_tpu_map,
@@ -183,16 +187,24 @@ impl LeaderTpuCache {
         }
     }
 
-    pub fn extract_cluster_tpu_sockets(
+    fn extract_cluster_tpu_sockets(
+        protocol: Protocol,
         cluster_contact_info: Vec<RpcContactInfo>,
     ) -> HashMap<Pubkey, SocketAddr> {
         cluster_contact_info
             .into_iter()
             .filter_map(|contact_info| {
-                Some((
-                    Pubkey::from_str(&contact_info.pubkey).ok()?,
-                    contact_info.tpu?,
-                ))
+                let pubkey = Pubkey::from_str(&contact_info.pubkey).ok()?;
+                let socket = match protocol {
+                    Protocol::QUIC => contact_info.tpu_quic.or_else(|| {
+                        let mut socket = contact_info.tpu?;
+                        let port = socket.port().checked_add(QUIC_PORT_OFFSET)?;
+                        socket.set_port(port);
+                        Some(socket)
+                    }),
+                    Protocol::UDP => contact_info.tpu,
+                }?;
+                Some((pubkey, socket))
             })
             .collect()
     }
@@ -211,8 +223,8 @@ impl LeaderTpuCache {
         if let Some(cluster_nodes) = cache_update_info.maybe_cluster_nodes {
             match cluster_nodes {
                 Ok(cluster_nodes) => {
-                    let leader_tpu_map = LeaderTpuCache::extract_cluster_tpu_sockets(cluster_nodes);
-                    self.leader_tpu_map = leader_tpu_map;
+                    self.leader_tpu_map =
+                        Self::extract_cluster_tpu_sockets(self.protocol, cluster_nodes);
                     cluster_refreshed = true;
                 }
                 Err(err) => {
@@ -405,13 +417,14 @@ where
 
     /// Create a new client that disconnects when dropped
     pub async fn new(
+        name: &'static str,
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
         connection_manager: M,
     ) -> Result<Self> {
         let connection_cache = Arc::new(
-            ConnectionCache::new(connection_manager, DEFAULT_CONNECTION_POOL_SIZE).unwrap(),
+            ConnectionCache::new(name, connection_manager, DEFAULT_CONNECTION_POOL_SIZE).unwrap(),
         ); // TODO: Handle error properly, as the ConnectionCache ctor is now fallible.
         Self::new_with_connection_cache(rpc_client, websocket_url, config, connection_cache).await
     }
@@ -425,7 +438,8 @@ where
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
         let leader_tpu_service =
-            LeaderTpuService::new(rpc_client.clone(), websocket_url, exit.clone()).await?;
+            LeaderTpuService::new(rpc_client.clone(), websocket_url, M::PROTOCOL, exit.clone())
+                .await?;
 
         Ok(Self {
             fanout_slots: config.fanout_slots.clamp(1, MAX_FANOUT_SLOTS),
@@ -437,12 +451,11 @@ where
     }
 
     #[cfg(feature = "spinner")]
-    pub async fn send_and_confirm_messages_with_spinner<T: Signers>(
+    pub async fn send_and_confirm_messages_with_spinner<T: Signers + ?Sized>(
         &self,
         messages: &[Message],
         signers: &T,
     ) -> Result<Vec<Option<TransactionError>>> {
-        let mut expired_blockhash_retries = 5;
         let progress_bar = spinner::new_progress_bar();
         progress_bar.set_message("Setting up...");
 
@@ -455,7 +468,7 @@ where
         let mut transaction_errors = vec![None; transactions.len()];
         let mut confirmed_transactions = 0;
         let mut block_height = self.rpc_client.get_block_height().await?;
-        while expired_blockhash_retries > 0 {
+        for expired_blockhash_retries in (0..5).rev() {
             let (blockhash, last_valid_block_height) = self
                 .rpc_client
                 .get_latest_blockhash_with_commitment(self.rpc_client.commitment())
@@ -555,7 +568,6 @@ where
             progress_bar.println(format!(
                 "Blockhash expired. {expired_blockhash_retries} retries remaining"
             ));
-            expired_blockhash_retries -= 1;
         }
         Err(TpuSenderError::Custom("Max retries exceeded".into()))
     }
@@ -588,6 +600,7 @@ impl LeaderTpuService {
     pub async fn new(
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
+        protocol: Protocol,
         exit: Arc<AtomicBool>,
     ) -> Result<Self> {
         let start_slot = rpc_client
@@ -605,6 +618,7 @@ impl LeaderTpuService {
             slots_in_epoch,
             leaders,
             cluster_nodes,
+            protocol,
         )));
 
         let pubsub_client = if !websocket_url.is_empty() {
@@ -616,16 +630,13 @@ impl LeaderTpuService {
         let t_leader_tpu_service = Some({
             let recent_slots = recent_slots.clone();
             let leader_tpu_cache = leader_tpu_cache.clone();
-            tokio::spawn(async move {
-                Self::run(
-                    rpc_client,
-                    recent_slots,
-                    leader_tpu_cache,
-                    pubsub_client,
-                    exit,
-                )
-                .await
-            })
+            tokio::spawn(Self::run(
+                rpc_client,
+                recent_slots,
+                leader_tpu_cache,
+                pubsub_client,
+                exit,
+            ))
         });
 
         Ok(LeaderTpuService {
@@ -645,7 +656,7 @@ impl LeaderTpuService {
         self.recent_slots.estimated_current_slot()
     }
 
-    pub fn leader_tpu_sockets(&self, fanout_slots: u64) -> Vec<SocketAddr> {
+    fn leader_tpu_sockets(&self, fanout_slots: u64) -> Vec<SocketAddr> {
         let current_slot = self.recent_slots.estimated_current_slot();
         self.leader_tpu_cache
             .read()

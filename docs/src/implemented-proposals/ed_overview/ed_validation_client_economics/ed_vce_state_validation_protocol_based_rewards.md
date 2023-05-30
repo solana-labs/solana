@@ -2,7 +2,7 @@
 title: Inflation Schedule
 ---
 
-**Subject to change. Follow most recent economic discussions in the Solana forums: https://forums.solana.com**
+**Subject to change.**
 
 Validator-clients have two functional roles in the Solana network:
 
@@ -13,7 +13,7 @@ Validator-client rewards for these services are to be distributed at the end of 
 
 The effective protocol-based annual staking yield \(%\) per epoch received by validation-clients is to be a function of:
 
-- the current global inflation rate, derived from the pre-determined dis-inflationary issuance schedule \(see [Validation-client Economics](ed_vce_overview.md)\)
+- the current global inflation rate, derived from the pre-determined disinflationary issuance schedule \(see [Validation-client Economics](ed_vce_overview.md)\)
 - the fraction of staked SOLs out of the current total circulating supply,
 - the commission charged by the validation service,
 - the up-time/participation \[% of available slots that validator had opportunity to vote on\] of a given validator over the previous epoch.
@@ -25,7 +25,7 @@ As a first step to understanding the impact of the _Inflation Schedule_ on the S
 Specifically:
 
 - _Initial Inflation Rate_: 7-9%
-- _Dis-inflation Rate_: -14-16%
+- _Disinflation Rate_: -14-16%
 - _Long-term Inflation Rate_: 1-2%
 
 Using these ranges to simulate a number of possible Inflation Schedules, we can explore inflation over time:
@@ -46,7 +46,7 @@ $$
 In this case, because _% of Staked SOL_ is a parameter that must be estimated (unlike the _Inflation Schedule_ parameters), it is easier to use specific _Inflation Schedule_ parameters and explore a range of _% of Staked SOL_. For the below example, we’ve chosen the middle of the parameter ranges explored above:
 
 - _Initial Inflation Rate_: 8%
-- _Dis-inflation Rate_: -15%
+- _Disinflation Rate_: -15%
 - _Long-term Inflation Rate_: 1.5%
 
 The values of _% of Staked SOL_ range from 60% - 90%, which we feel covers the likely range we expect to observe, based on feedback from the investor and validator communities as well as what is observed on comparable Proof-of-Stake protocols.

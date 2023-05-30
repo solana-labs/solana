@@ -4,37 +4,42 @@ use {
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            BankHashLamportsVerifyConfig, IncludeSlotInHash, LoadHint, LoadedAccount,
-            ScanStorageResult, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+            IncludeSlotInHash, LoadHint, LoadedAccount, ScanStorageResult,
+            VerifyAccountsHashAndLamportsConfig, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
+            ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
             AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport,
         },
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
-        bank::{
-            Bank, NonceFull, NonceInfo, RentDebits, TransactionCheckResult,
-            TransactionExecutionResult,
-        },
+        bank::{Bank, NonceFull, NonceInfo, TransactionCheckResult, TransactionExecutionResult},
         blockhash_queue::BlockhashQueue,
         rent_collector::RentCollector,
+        rent_debits::RentDebits,
         storable_accounts::StorableAccounts,
-        system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_error_metrics::TransactionErrorMetrics,
     },
     dashmap::DashMap,
+    itertools::Itertools,
     log::*,
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
-    solana_program_runtime::compute_budget::{self, ComputeBudget},
+    solana_program_runtime::{
+        compute_budget::{self, ComputeBudget},
+        loaded_programs::{LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch},
+    },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
-        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        bpf_loader_upgradeable,
         clock::{BankId, Slot},
         feature_set::{
-            self, add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
+            self, add_set_tx_loaded_accounts_data_size_instruction,
+            delay_visibility_of_program_deployment, enable_request_heap_frame_ix,
+            include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
-            use_default_units_in_fee_calculation, FeatureSet,
+            simplify_writable_program_account_check, use_default_units_in_fee_calculation,
+            FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -50,11 +55,11 @@ use {
         pubkey::Pubkey,
         saturating_add_assign,
         slot_hashes::SlotHashes,
-        system_program,
         sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
     },
+    solana_system_program::{get_system_account_kind, SystemAccountKind},
     std::{
         cmp::Reverse,
         collections::{hash_map, BinaryHeap, HashMap, HashSet},
@@ -74,6 +79,12 @@ pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
 pub struct AccountLocks {
     write_locks: HashSet<Pubkey>,
     readonly_locks: HashMap<Pubkey, u64>,
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub(crate) enum RewardInterval {
+    /// the slot within the epoch is OUTSIDE the reward distribution interval
+    OutsideInterval,
 }
 
 impl AccountLocks {
@@ -212,19 +223,10 @@ impl Accounts {
         }
     }
 
-    fn construct_instructions_account(
-        message: &SanitizedMessage,
-        is_owned_by_sysvar: bool,
-    ) -> AccountSharedData {
-        let data = construct_instructions_data(&message.decompile_instructions());
-        let owner = if is_owned_by_sysvar {
-            sysvar::id()
-        } else {
-            system_program::id()
-        };
+    fn construct_instructions_account(message: &SanitizedMessage) -> AccountSharedData {
         AccountSharedData::from(Account {
-            data,
-            owner,
+            data: construct_instructions_data(&message.decompile_instructions()),
+            owner: sysvar::id(),
             ..Account::default()
         })
     }
@@ -285,6 +287,42 @@ impl Accounts {
         }
     }
 
+    fn account_shared_data_from_program(
+        key: &Pubkey,
+        feature_set: &FeatureSet,
+        program: &LoadedProgram,
+        program_accounts: &HashMap<Pubkey, &Pubkey>,
+    ) -> Result<AccountSharedData> {
+        // Check for tombstone
+        let result = match &program.program {
+            LoadedProgramType::FailedVerification | LoadedProgramType::Closed => {
+                Err(TransactionError::InvalidProgramForExecution)
+            }
+            LoadedProgramType::DelayVisibility => {
+                debug_assert!(feature_set.is_active(&delay_visibility_of_program_deployment::id()));
+                Err(TransactionError::InvalidProgramForExecution)
+            }
+            _ => Ok(()),
+        };
+        if feature_set.is_active(&simplify_writable_program_account_check::id()) {
+            // Currently CPI only fails if an execution is actually attempted. With this check it
+            // would also fail if a transaction just references an invalid program. So the checking
+            // of the result is being feature gated.
+            result?;
+        }
+        // It's an executable program account. The program is already loaded in the cache.
+        // So the account data is not needed. Return a dummy AccountSharedData with meta
+        // information.
+        let mut program_account = AccountSharedData::default();
+        let program_owner = program_accounts
+            .get(key)
+            .ok_or(TransactionError::AccountNotFound)?;
+        program_account.set_owner(**program_owner);
+        program_account.set_executable(true);
+        Ok(program_account)
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn load_transaction_accounts(
         &self,
         ancestors: &Ancestors,
@@ -294,6 +332,9 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
+        _reward_interval: RewardInterval,
+        program_accounts: &HashMap<Pubkey, &Pubkey>,
+        loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Result<LoadedTransaction> {
         // NOTE: this check will never fail because `tx` is sanitized
         if tx.signatures().is_empty() && fee != 0 {
@@ -306,7 +347,7 @@ impl Accounts {
         let mut tx_rent: TransactionRent = 0;
         let message = tx.message();
         let account_keys = message.account_keys();
-        let mut account_found_and_dep_index = Vec::with_capacity(account_keys.len());
+        let mut accounts_found = Vec::with_capacity(account_keys.len());
         let mut account_deps = Vec::with_capacity(account_keys.len());
         let mut rent_debits = RentDebits::default();
 
@@ -317,24 +358,46 @@ impl Accounts {
             Self::get_requested_loaded_accounts_data_size_limit(tx, feature_set)?;
         let mut accumulated_accounts_data_size: usize = 0;
 
+        let instruction_accounts = message
+            .instructions()
+            .iter()
+            .flat_map(|instruction| &instruction.accounts)
+            .unique()
+            .collect::<Vec<&u8>>();
+
         let mut accounts = account_keys
             .iter()
             .enumerate()
             .map(|(i, key)| {
                 let mut account_found = true;
-                let mut account_dep_index = None;
                 #[allow(clippy::collapsible_else_if)]
                 let account = if solana_sdk::sysvar::instructions::check_id(key) {
-                    Self::construct_instructions_account(
-                        message,
-                        feature_set
-                            .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
-                    )
+                    Self::construct_instructions_account(message)
                 } else {
-                    let (mut account, rent) = if let Some(account_override) =
+                    let instruction_account = u8::try_from(i)
+                        .map(|i| instruction_accounts.contains(&&i))
+                        .unwrap_or(false);
+                    let (account_size, mut account, rent) = if let Some(account_override) =
                         account_overrides.and_then(|overrides| overrides.get(key))
                     {
-                        (account_override.clone(), 0)
+                        (account_override.data().len(), account_override.clone(), 0)
+                    } else if let Some(program) = (!instruction_account && !message.is_writable(i))
+                        .then_some(())
+                        .and_then(|_| loaded_programs.find(key))
+                    {
+                        // This condition block does special handling for accounts that are passed
+                        // as instruction account to any of the instructions in the transaction.
+                        // It's been noticed that some programs are reading other program accounts
+                        // (that are passed to the program as instruction accounts). So such accounts
+                        // are needed to be loaded even though corresponding compiled program may
+                        // already be present in the cache.
+                        Self::account_shared_data_from_program(
+                            key,
+                            feature_set,
+                            program.as_ref(),
+                            program_accounts,
+                        )
+                        .map(|program_account| (program.account_size, program_account, 0))?
                     } else {
                         self.accounts_db
                             .load_with_fixed_root(ancestors, key)
@@ -348,9 +411,9 @@ impl Accounts {
                                             set_exempt_rent_epoch_max,
                                         )
                                         .rent_amount;
-                                    (account, rent_due)
+                                    (account.data().len(), account, rent_due)
                                 } else {
-                                    (account, 0)
+                                    (account.data().len(), account, 0)
                                 }
                             })
                             .unwrap_or_else(|| {
@@ -362,12 +425,12 @@ impl Accounts {
                                     // with this field already set would allow us to skip rent collection for these accounts.
                                     default_account.set_rent_epoch(u64::MAX);
                                 }
-                                (default_account, 0)
+                                (default_account.data().len(), default_account, 0)
                             })
                     };
                     Self::accumulate_and_check_loaded_account_data_size(
                         &mut accumulated_accounts_data_size,
-                        account.data().len(),
+                        account_size,
                         requested_loaded_accounts_data_size_limit,
                         error_counters,
                     )?;
@@ -391,39 +454,12 @@ impl Accounts {
                     }
 
                     if bpf_loader_upgradeable::check_id(account.owner()) {
-                        if message.is_writable(i) && !message.is_upgradeable_loader_present() {
+                        if !feature_set.is_active(&simplify_writable_program_account_check::id())
+                            && message.is_writable(i)
+                            && !message.is_upgradeable_loader_present()
+                        {
                             error_counters.invalid_writable_account += 1;
                             return Err(TransactionError::InvalidWritableAccount);
-                        }
-
-                        if account.executable() {
-                            // The upgradeable loader requires the derived ProgramData account
-                            if let Ok(UpgradeableLoaderState::Program {
-                                programdata_address,
-                            }) = account.state()
-                            {
-                                if let Some((programdata_account, _)) = self
-                                    .accounts_db
-                                    .load_with_fixed_root(ancestors, &programdata_address)
-                                {
-                                    Self::accumulate_and_check_loaded_account_data_size(
-                                        &mut accumulated_accounts_data_size,
-                                        programdata_account.data().len(),
-                                        requested_loaded_accounts_data_size_limit,
-                                        error_counters,
-                                    )?;
-                                    account_dep_index =
-                                        Some(account_keys.len().saturating_add(account_deps.len())
-                                            as IndexOfAccount);
-                                    account_deps.push((programdata_address, programdata_account));
-                                } else {
-                                    error_counters.account_not_found += 1;
-                                    return Err(TransactionError::ProgramAccountNotFound);
-                                }
-                            } else {
-                                error_counters.invalid_program_for_execution += 1;
-                                return Err(TransactionError::InvalidProgramForExecution);
-                            }
                         }
                     } else if account.executable() && message.is_writable(i) {
                         error_counters.invalid_writable_account += 1;
@@ -436,7 +472,7 @@ impl Accounts {
                     account
                 };
 
-                account_found_and_dep_index.push((account_found, account_dep_index));
+                accounts_found.push(account_found);
                 Ok((*key, account))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -466,9 +502,7 @@ impl Accounts {
                     let (program_id, program_account) = accounts
                         .get(program_index)
                         .ok_or(TransactionError::ProgramAccountNotFound)?;
-                    let (account_found, account_dep_index) = account_found_and_dep_index
-                        .get(program_index)
-                        .unwrap_or(&(true, None));
+                    let account_found = accounts_found.get(program_index).unwrap_or(&true);
                     if native_loader::check_id(program_id) {
                         return Ok(account_indices);
                     }
@@ -481,9 +515,6 @@ impl Accounts {
                         return Err(TransactionError::InvalidProgramForExecution);
                     }
                     account_indices.insert(0, program_index as IndexOfAccount);
-                    if let Some(account_index) = account_dep_index {
-                        account_indices.insert(0, *account_index);
-                    }
                     let owner_id = program_account.owner();
                     if native_loader::check_id(owner_id) {
                         return Ok(account_indices);
@@ -497,16 +528,23 @@ impl Accounts {
                         builtins_start_index.saturating_add(owner_index)
                     } else {
                         let owner_index = accounts.len();
-                        if let Some((program_account, _)) =
+                        if let Some((owner_account, _)) =
                             self.accounts_db.load_with_fixed_root(ancestors, owner_id)
                         {
+                            if disable_builtin_loader_ownership_chains
+                                && !native_loader::check_id(owner_account.owner())
+                                || !owner_account.executable()
+                            {
+                                error_counters.invalid_program_for_execution += 1;
+                                return Err(TransactionError::InvalidProgramForExecution);
+                            }
                             Self::accumulate_and_check_loaded_account_data_size(
                                 &mut accumulated_accounts_data_size,
-                                program_account.data().len(),
+                                owner_account.data().len(),
                                 requested_loaded_accounts_data_size_limit,
                                 error_counters,
                             )?;
-                            accounts.push((*owner_id, program_account));
+                            accounts.push((*owner_id, owner_account));
                         } else {
                             error_counters.account_not_found += 1;
                             return Err(TransactionError::ProgramAccountNotFound);
@@ -556,10 +594,24 @@ impl Accounts {
             }
         };
 
-        if payer_account.lamports() < fee + min_balance {
-            error_counters.insufficient_funds += 1;
-            return Err(TransactionError::InsufficientFundsForFee);
+        // allow collapsible-else-if to make removing the feature gate safer once activated
+        #[allow(clippy::collapsible_else_if)]
+        if feature_set.is_active(&feature_set::checked_arithmetic_in_fee_validation::id()) {
+            payer_account
+                .lamports()
+                .checked_sub(min_balance)
+                .and_then(|v| v.checked_sub(fee))
+                .ok_or_else(|| {
+                    error_counters.insufficient_funds += 1;
+                    TransactionError::InsufficientFundsForFee
+                })?;
+        } else {
+            if payer_account.lamports() < fee + min_balance {
+                error_counters.insufficient_funds += 1;
+                return Err(TransactionError::InsufficientFundsForFee);
+            }
         }
+
         let payer_pre_rent_state = RentState::from_account(payer_account, &rent_collector.rent);
         payer_account
             .checked_sub_lamports(fee)
@@ -571,9 +623,7 @@ impl Accounts {
             &payer_post_rent_state,
             payer_address,
             payer_account,
-            feature_set
-                .is_active(&feature_set::include_account_index_in_rent_error::ID)
-                .then_some(payer_index),
+            payer_index,
         )
     }
 
@@ -599,23 +649,19 @@ impl Accounts {
                     })
                     .is_some()
                 {
-                    tx.message()
-                        .account_keys()
-                        .iter()
-                        .enumerate()
-                        .for_each(|(i, key)| {
-                            if !tx.message().is_writable(i) && !result.contains_key(key) {
-                                if let Ok(index) = self.accounts_db.account_matches_owners(
-                                    ancestors,
-                                    key,
-                                    program_owners,
-                                ) {
-                                    program_owners
-                                        .get(index)
-                                        .and_then(|owner| result.insert(*key, *owner));
-                                }
+                    tx.message().account_keys().iter().for_each(|key| {
+                        if !result.contains_key(key) {
+                            if let Ok(index) = self.accounts_db.account_matches_owners(
+                                ancestors,
+                                key,
+                                program_owners,
+                            ) {
+                                program_owners
+                                    .get(index)
+                                    .and_then(|owner| result.insert(*key, *owner));
                             }
-                        });
+                        }
+                    });
                 } else {
                     // If the transaction's nonce account was not valid, and blockhash is not found,
                     // the transaction will fail to process. Let's not load any programs from the
@@ -628,7 +674,7 @@ impl Accounts {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn load_accounts(
+    pub(crate) fn load_accounts(
         &self,
         ancestors: &Ancestors,
         txs: &[SanitizedTransaction],
@@ -639,6 +685,9 @@ impl Accounts {
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
         account_overrides: Option<&AccountOverrides>,
+        in_reward_interval: RewardInterval,
+        program_accounts: &HashMap<Pubkey, &Pubkey>,
+        loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Vec<TransactionLoadResult> {
         txs.iter()
             .zip(lock_results)
@@ -660,6 +709,7 @@ impl Accounts {
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                             feature_set.is_active(&enable_request_heap_frame_ix::id()) || self.accounts_db.expected_cluster_type() != ClusterType::MainnetBeta,
                             feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+                            feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -673,6 +723,9 @@ impl Accounts {
                         rent_collector,
                         feature_set,
                         account_overrides,
+                        in_reward_interval,
+                        program_accounts,
+                        loaded_programs,
                     ) {
                         Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
@@ -862,17 +915,18 @@ impl Accounts {
 
     /// Only called from startup or test code.
     #[must_use]
-    pub fn verify_bank_hash_and_lamports(
+    pub fn verify_accounts_hash_and_lamports(
         &self,
         slot: Slot,
         total_lamports: u64,
-        config: BankHashLamportsVerifyConfig,
+        base: Option<(Slot, /*capitalization*/ u64)>,
+        config: VerifyAccountsHashAndLamportsConfig,
     ) -> bool {
         if let Err(err) =
             self.accounts_db
-                .verify_bank_hash_and_lamports(slot, total_lamports, config)
+                .verify_accounts_hash_and_lamports(slot, total_lamports, base, config)
         {
-            warn!("verify_bank_hash failed: {:?}, slot: {}", err, slot);
+            warn!("verify_accounts_hash failed: {err:?}, slot: {slot}");
             false
         } else {
             true
@@ -1172,14 +1226,14 @@ impl Accounts {
     pub fn lock_accounts_with_results<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        results: impl Iterator<Item = &'a Result<()>>,
+        results: impl Iterator<Item = Result<()>>,
         tx_account_lock_limit: usize,
     ) -> Vec<Result<()>> {
         let tx_account_locks_results: Vec<Result<_>> = txs
             .zip(results)
             .map(|(tx, result)| match result {
                 Ok(()) => tx.get_account_locks(tx_account_lock_limit),
-                Err(err) => Err(err.clone()),
+                Err(err) => Err(err),
             })
             .collect();
         self.lock_accounts_inner(tx_account_locks_results)
@@ -1255,7 +1309,7 @@ impl Accounts {
             durable_nonce,
             lamports_per_signature,
         );
-        self.accounts_db.store_cached(
+        self.accounts_db.store_cached_inline_update_index(
             (slot, &accounts_to_store[..], include_slot_in_hash),
             Some(&transactions),
         );
@@ -1409,9 +1463,13 @@ mod tests {
         },
         assert_matches::assert_matches,
         solana_address_lookup_table_program::state::LookupTableMeta,
-        solana_program_runtime::executor_cache::TransactionExecutorCache,
+        solana_program_runtime::prioritization_fee::{
+            PrioritizationFeeDetails, PrioritizationFeeType,
+        },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
+            bpf_loader_upgradeable::UpgradeableLoaderState,
+            compute_budget::ComputeBudgetInstruction,
             epoch_schedule::EpochSchedule,
             genesis_config::ClusterType,
             hash::Hash,
@@ -1425,9 +1483,7 @@ mod tests {
         },
         std::{
             borrow::Cow,
-            cell::RefCell,
             convert::TryFrom,
-            rc::Rc,
             sync::atomic::{AtomicBool, AtomicU64, Ordering},
             thread, time,
         },
@@ -1459,7 +1515,8 @@ mod tests {
                 executed_units: 0,
                 accounts_data_len_delta: 0,
             },
-            tx_executor_cache: Rc::new(RefCell::new(TransactionExecutorCache::default())),
+            programs_modified_by_tx: Box::<LoadedProgramsForTxBatch>::default(),
+            programs_updated_only_for_global_cache: Box::<LoadedProgramsForTxBatch>::default(),
         }
     }
 
@@ -1496,6 +1553,9 @@ mod tests {
             feature_set,
             fee_structure,
             None,
+            RewardInterval::OutsideInterval,
+            &HashMap::new(),
+            &LoadedProgramsForTxBatch::default(),
         )
     }
 
@@ -1688,6 +1748,7 @@ mod tests {
             true,
             true,
             true,
+            false,
         );
         assert_eq!(fee, lamports_per_signature);
 
@@ -2495,8 +2556,12 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx.clone(),
+            &accounts,
+            &mut error_counters,
+            Some(&[simplify_writable_program_account_check::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2505,11 +2570,22 @@ mod tests {
             (Err(TransactionError::InvalidWritableAccount), None)
         );
 
+        // Solution 0: Include feature simplify_writable_program_account_check
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+
+        assert_eq!(error_counters.invalid_writable_account, 1);
+        assert_eq!(loaded_accounts.len(), 1);
+
         // Solution 1: include bpf_loader_upgradeable account
         message.account_keys = vec![key0, key1, bpf_loader_upgradeable::id()];
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[simplify_writable_program_account_check::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2524,8 +2600,12 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // mark both executables as readonly
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[simplify_writable_program_account_check::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2537,10 +2617,6 @@ mod tests {
         );
         assert_eq!(
             result.accounts[result.program_indices[0][1] as usize],
-            accounts[4]
-        );
-        assert_eq!(
-            result.accounts[result.program_indices[0][2] as usize],
             accounts[3]
         );
     }
@@ -2583,8 +2659,12 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx.clone(),
+            &accounts,
+            &mut error_counters,
+            Some(&[simplify_writable_program_account_check::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2592,6 +2672,13 @@ mod tests {
             loaded_accounts[0],
             (Err(TransactionError::InvalidWritableAccount), None)
         );
+
+        // Solution 0: Include feature simplify_writable_program_account_check
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+
+        assert_eq!(error_counters.invalid_writable_account, 1);
+        assert_eq!(loaded_accounts.len(), 1);
 
         // Solution 1: include bpf_loader_upgradeable account
         let mut account = AccountSharedData::new(40, 1, &native_loader::id()); // create mock bpf_loader_upgradeable
@@ -2608,7 +2695,7 @@ mod tests {
             tx,
             &accounts_with_upgradeable_loader,
             &mut error_counters,
-            None,
+            Some(&[simplify_writable_program_account_check::id()]),
         );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
@@ -2624,8 +2711,12 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // extend readonly set to include programdata
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[simplify_writable_program_account_check::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2886,23 +2977,19 @@ mod tests {
         let counter_clone = counter.clone();
         let accounts_clone = accounts_arc.clone();
         let exit_clone = exit.clone();
-        thread::spawn(move || {
-            let counter_clone = counter_clone.clone();
-            let exit_clone = exit_clone.clone();
-            loop {
-                let txs = vec![writable_tx.clone()];
-                let results = accounts_clone
-                    .clone()
-                    .lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
-                for result in results.iter() {
-                    if result.is_ok() {
-                        counter_clone.clone().fetch_add(1, Ordering::SeqCst);
-                    }
+        thread::spawn(move || loop {
+            let txs = vec![writable_tx.clone()];
+            let results = accounts_clone
+                .clone()
+                .lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
+            for result in results.iter() {
+                if result.is_ok() {
+                    counter_clone.clone().fetch_add(1, Ordering::SeqCst);
                 }
-                accounts_clone.unlock_accounts(txs.iter(), &results);
-                if exit_clone.clone().load(Ordering::Relaxed) {
-                    break;
-                }
+            }
+            accounts_clone.unlock_accounts(txs.iter(), &results);
+            if exit_clone.clone().load(Ordering::Relaxed) {
+                break;
             }
         });
         let counter_clone = counter;
@@ -3061,7 +3148,7 @@ mod tests {
 
         let results = accounts.lock_accounts_with_results(
             txs.iter(),
-            qos_results.iter(),
+            qos_results.into_iter(),
             MAX_TX_ACCOUNT_LOCKS,
         );
 
@@ -3267,6 +3354,9 @@ mod tests {
             &FeatureSet::all_enabled(),
             &FeeStructure::default(),
             account_overrides,
+            RewardInterval::OutsideInterval,
+            &HashMap::new(),
+            &LoadedProgramsForTxBatch::default(),
         )
     }
 
@@ -4174,5 +4264,260 @@ mod tests {
         test(tx_not_set_limit, &feature_set, &result_default_limit);
         test(tx_set_limit_99, &feature_set, &result_requested_limit);
         test(tx_set_limit_0, &feature_set, &result_invalid_limit);
+    }
+
+    #[test]
+    fn test_load_accounts_too_high_prioritization_fee() {
+        solana_logger::setup();
+        let lamports_per_signature = 5000_u64;
+        let request_units = 1_000_000_u32;
+        let request_unit_price = 2_000_000_000_u64;
+        let prioritization_fee_details = PrioritizationFeeDetails::new(
+            PrioritizationFeeType::ComputeUnitPrice(request_unit_price),
+            request_units as u64,
+        );
+        let prioritization_fee = prioritization_fee_details.get_fee();
+
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+        // set up account with balance of `prioritization_fee`
+        let account = AccountSharedData::new(prioritization_fee, 0, &Pubkey::default());
+        let accounts = vec![(key0, account)];
+
+        let instructions = &[
+            ComputeBudgetInstruction::set_compute_unit_limit(request_units),
+            ComputeBudgetInstruction::set_compute_unit_price(request_unit_price),
+        ];
+        let tx = Transaction::new(
+            &[&keypair],
+            Message::new(instructions, Some(&key0)),
+            Hash::default(),
+        );
+
+        let fee = Bank::calculate_fee(
+            &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+            lamports_per_signature,
+            &FeeStructure::default(),
+            true,
+            false,
+            true,
+            true,
+            true,
+            false,
+        );
+        assert_eq!(fee, lamports_per_signature + prioritization_fee);
+
+        // assert fail to load account with 2B lamport balance for transaction asking for 2B
+        // lamports as prioritization fee.
+        let mut error_counters = TransactionErrorMetrics::default();
+        let loaded_accounts = load_accounts_with_fee(
+            tx,
+            &accounts,
+            lamports_per_signature,
+            &mut error_counters,
+            None,
+        );
+
+        assert_eq!(error_counters.insufficient_funds, 1);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(
+            loaded_accounts[0].clone(),
+            (Err(TransactionError::InsufficientFundsForFee), None),
+        );
+    }
+
+    struct ValidateFeePayerTestParameter {
+        is_nonce: bool,
+        payer_init_balance: u64,
+        fee: u64,
+        expected_result: Result<()>,
+        payer_post_balance: u64,
+        feature_checked_arithmmetic_enable: bool,
+    }
+
+    fn validate_fee_payer_account(
+        test_parameter: ValidateFeePayerTestParameter,
+        rent_collector: &RentCollector,
+    ) {
+        let payer_account_keys = Keypair::new();
+        let mut account = if test_parameter.is_nonce {
+            AccountSharedData::new_data(
+                test_parameter.payer_init_balance,
+                &NonceVersions::new(NonceState::Initialized(nonce::state::Data::default())),
+                &system_program::id(),
+            )
+            .unwrap()
+        } else {
+            AccountSharedData::new(test_parameter.payer_init_balance, 0, &system_program::id())
+        };
+        let mut feature_set = FeatureSet::default();
+        if test_parameter.feature_checked_arithmmetic_enable {
+            feature_set.activate(&feature_set::checked_arithmetic_in_fee_validation::id(), 0);
+        };
+        let result = Accounts::validate_fee_payer(
+            &payer_account_keys.pubkey(),
+            &mut account,
+            0,
+            &mut TransactionErrorMetrics::default(),
+            rent_collector,
+            &feature_set,
+            test_parameter.fee,
+        );
+
+        assert_eq!(result, test_parameter.expected_result);
+        assert_eq!(account.lamports(), test_parameter.payer_post_balance);
+    }
+
+    #[test]
+    fn test_validate_fee_payer() {
+        let rent_collector = RentCollector::new(
+            0,
+            EpochSchedule::default(),
+            500_000.0,
+            Rent {
+                lamports_per_byte_year: 1,
+                ..Rent::default()
+            },
+        );
+        let min_balance = rent_collector.rent.minimum_balance(NonceState::size());
+        let fee = 5_000;
+
+        // If payer account has sufficient balance, expect successful fee deduction,
+        // regardless feature gate status, or if payer is nonce account.
+        {
+            for feature_checked_arithmmetic_enable in [true, false] {
+                for (is_nonce, min_balance) in [(true, min_balance), (false, 0)] {
+                    validate_fee_payer_account(
+                        ValidateFeePayerTestParameter {
+                            is_nonce,
+                            payer_init_balance: min_balance + fee,
+                            fee,
+                            expected_result: Ok(()),
+                            payer_post_balance: min_balance,
+                            feature_checked_arithmmetic_enable,
+                        },
+                        &rent_collector,
+                    );
+                }
+            }
+        }
+
+        // If payer account has no balance, expected AccountNotFound Error
+        // regardless feature gate status, or if payer is nonce account.
+        {
+            for feature_checked_arithmmetic_enable in [true, false] {
+                for is_nonce in [true, false] {
+                    validate_fee_payer_account(
+                        ValidateFeePayerTestParameter {
+                            is_nonce,
+                            payer_init_balance: 0,
+                            fee,
+                            expected_result: Err(TransactionError::AccountNotFound),
+                            payer_post_balance: 0,
+                            feature_checked_arithmmetic_enable,
+                        },
+                        &rent_collector,
+                    );
+                }
+            }
+        }
+
+        // If payer account has insufficent balance, expect InsufficientFundsForFee error
+        // regardless feature gate status, or if payer is nonce account.
+        {
+            for feature_checked_arithmmetic_enable in [true, false] {
+                for (is_nonce, min_balance) in [(true, min_balance), (false, 0)] {
+                    validate_fee_payer_account(
+                        ValidateFeePayerTestParameter {
+                            is_nonce,
+                            payer_init_balance: min_balance + fee - 1,
+                            fee,
+                            expected_result: Err(TransactionError::InsufficientFundsForFee),
+                            payer_post_balance: min_balance + fee - 1,
+                            feature_checked_arithmmetic_enable,
+                        },
+                        &rent_collector,
+                    );
+                }
+            }
+        }
+
+        // normal payer account has balance of u64::MAX, so does fee; since it does not  require
+        // min_balance, expect successful fee deduction, regardless of feature gate status
+        {
+            for feature_checked_arithmmetic_enable in [true, false] {
+                validate_fee_payer_account(
+                    ValidateFeePayerTestParameter {
+                        is_nonce: false,
+                        payer_init_balance: u64::MAX,
+                        fee: u64::MAX,
+                        expected_result: Ok(()),
+                        payer_post_balance: 0,
+                        feature_checked_arithmmetic_enable,
+                    },
+                    &rent_collector,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_validate_nonce_fee_payer_with_checked_arithmetic() {
+        let rent_collector = RentCollector::new(
+            0,
+            EpochSchedule::default(),
+            500_000.0,
+            Rent {
+                lamports_per_byte_year: 1,
+                ..Rent::default()
+            },
+        );
+
+        // nonce payer account has balance of u64::MAX, so does fee; due to nonce account
+        // requires additional min_balance, expect InsufficientFundsForFee error if feature gate is
+        // enabled
+        validate_fee_payer_account(
+            ValidateFeePayerTestParameter {
+                is_nonce: true,
+                payer_init_balance: u64::MAX,
+                fee: u64::MAX,
+                expected_result: Err(TransactionError::InsufficientFundsForFee),
+                payer_post_balance: u64::MAX,
+                feature_checked_arithmmetic_enable: true,
+            },
+            &rent_collector,
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_validate_nonce_fee_payer_without_checked_arithmetic() {
+        let rent_collector = RentCollector::new(
+            0,
+            EpochSchedule::default(),
+            500_000.0,
+            Rent {
+                lamports_per_byte_year: 1,
+                ..Rent::default()
+            },
+        );
+
+        // same test setup as `test_validate_nonce_fee_payer_with_checked_arithmetic`:
+        // nonce payer account has balance of u64::MAX, so does fee; and nonce account
+        // requires additional min_balance, if feature gate is not enabled, in `debug`
+        // mode, `u64::MAX + min_balance` would panic on "attempt to add with overflow";
+        // in `release` mode, the addition will wrap, so the expected result would be
+        // `Ok(())` with post payer balance `0`, therefore fails test with a panic.
+        validate_fee_payer_account(
+            ValidateFeePayerTestParameter {
+                is_nonce: true,
+                payer_init_balance: u64::MAX,
+                fee: u64::MAX,
+                expected_result: Err(TransactionError::InsufficientFundsForFee),
+                payer_post_balance: u64::MAX,
+                feature_checked_arithmmetic_enable: false,
+            },
+            &rent_collector,
+        );
     }
 }

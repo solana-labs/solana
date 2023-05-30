@@ -1,7 +1,5 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
 #![allow(clippy::integer_arithmetic)]
-#[macro_use]
-extern crate solana_bpf_loader_program;
 
 pub mod bank_forks_utils;
 pub mod bigtable_delete;
@@ -16,7 +14,8 @@ pub mod blockstore_meta;
 pub mod blockstore_metrics;
 pub mod blockstore_options;
 pub mod blockstore_processor;
-pub mod builtins;
+pub mod entry_notifier_interface;
+pub mod entry_notifier_service;
 pub mod genesis_utils;
 pub mod leader_schedule;
 pub mod leader_schedule_cache;

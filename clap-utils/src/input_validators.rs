@@ -334,6 +334,51 @@ where
         .map(|_| ())
 }
 
+pub fn is_structured_seed<T>(value: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    let (prefix, value) = value
+        .as_ref()
+        .split_once(':')
+        .ok_or("Seed must contain ':' as delimiter")
+        .unwrap();
+    if prefix.is_empty() || value.is_empty() {
+        Err(String::from("Seed prefix or value is empty"))
+    } else {
+        match prefix {
+            "string" | "pubkey" | "hex" | "u8" => Ok(()),
+            _ => {
+                let len = prefix.len();
+                if len != 5 && len != 6 {
+                    Err(format!("Wrong prefix length {len} {prefix}:{value}"))
+                } else {
+                    let sign = &prefix[0..1];
+                    let type_size = &prefix[1..len.saturating_sub(2)];
+                    let byte_order = &prefix[len.saturating_sub(2)..len];
+                    if sign != "u" && sign != "i" {
+                        Err(format!("Wrong prefix sign {sign} {prefix}:{value}"))
+                    } else if type_size != "16"
+                        && type_size != "32"
+                        && type_size != "64"
+                        && type_size != "128"
+                    {
+                        Err(format!(
+                            "Wrong prefix type size {type_size} {prefix}:{value}"
+                        ))
+                    } else if byte_order != "le" && byte_order != "be" {
+                        Err(format!(
+                            "Wrong prefix byte order {byte_order} {prefix}:{value}"
+                        ))
+                    } else {
+                        Ok(())
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub fn is_derived_address_seed<T>(value: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -364,6 +409,34 @@ where
              (priority increase) requires root or CAP_SYS_NICE (see `man 7 capabilities` \
              for details)",
         ))
+    }
+}
+
+pub fn validate_maximum_full_snapshot_archives_to_retain<T>(value: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    let value = value.as_ref();
+    if value.eq("0") {
+        Err(String::from(
+            "--maximum-full-snapshot-archives-to-retain cannot be zero",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+pub fn validate_maximum_incremental_snapshot_archives_to_retain<T>(value: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    let value = value.as_ref();
+    if value.eq("0") {
+        Err(String::from(
+            "--maximum-incremental-snapshot-archives-to-retain cannot be zero",
+        ))
+    } else {
+        Ok(())
     }
 }
 

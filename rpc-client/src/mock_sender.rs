@@ -3,6 +3,7 @@
 use {
     crate::rpc_sender::*,
     async_trait::async_trait,
+    base64::{prelude::BASE64_STANDARD, Engine},
     serde_json::{json, Number, Value},
     solana_account_decoder::{UiAccount, UiAccountEncoding},
     solana_rpc_client_api::{
@@ -335,7 +336,7 @@ impl RpcSender for MockSender {
                     Signature::new(&[8; 64]).to_string()
                 } else {
                     let tx_str = params.as_array().unwrap()[0].as_str().unwrap().to_string();
-                    let data = base64::decode(tx_str).unwrap();
+                    let data = BASE64_STANDARD.decode(tx_str).unwrap();
                     let tx: Transaction = bincode::deserialize(&data).unwrap();
                     tx.signatures[0].to_string()
                 };
@@ -374,6 +375,7 @@ impl RpcSender for MockSender {
                 pubkey: PUBKEY.to_string(),
                 gossip: Some(SocketAddr::from(([10, 239, 6, 48], 8899))),
                 tpu: Some(SocketAddr::from(([10, 239, 6, 48], 8856))),
+                tpu_quic: Some(SocketAddr::from(([10, 239, 6, 48], 8862))),
                 rpc: Some(SocketAddr::from(([10, 239, 6, 48], 8899))),
                 pubsub: Some(SocketAddr::from(([10, 239, 6, 48], 8900))),
                 version: Some("1.0.0 c375ce1f".to_string()),

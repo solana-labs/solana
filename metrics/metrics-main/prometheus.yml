@@ -1,0 +1,91 @@
+# my global config
+global:
+  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+  # scrape_timeout is set to the global default (10s).
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+  - static_configs:
+    - targets:
+        - '35.206.116.166:9093'
+        - '10.128.0.11:9093'
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+rule_files:
+   - "first_rules.yml"
+  # - "second_rules.yml"
+
+# A scrape configuration containing exactly one endpoint to scrape:
+# Here it's Prometheus itself.
+scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+    # metrics_path defaults to '/metrics'
+    # scheme defaults to 'http'.
+
+  - job_name: 'Devnet'
+    scrape_interval: 15s
+    scrape_timeout: 14s
+    static_configs:
+            - targets: ['devnet-watchtower:9100','devnet-entrypoint:9100','devnet-validator-asia-sg1:9100','devnet-validator-europe-fr2:9100','devnet-validator-us-da11:9100','devnet-validator-us-ny5:9100','devnet-warehouse-us-ny5:9100','devnet-warehouse-asia-ty11:9100']
+
+  - job_name: 'Testnet'
+    scrape_interval: 15s
+    scrape_timeout: 14s
+    static_configs:
+            - targets: ['testnet-watchtower:9100','testnet-entrypoint:9100','testnet-validator-us-sv15:9100','testnet-warehouse-us-sv15:9100','testnet-warehouse-asia-ty11:9100']
+
+  - job_name: 'Mainnet-Beta'
+    scrape_interval: 15s
+    scrape_timeout: 14s
+    static_configs:
+            - targets: ['mainnet-watchtower:9100','mainnet-entrypoint:9100','beta-validator-us-ny5:9100','edge-validator-us-sv15:9100','validator-asia-sg1:9100','validator-europe-fr2:9100','validator-us-ny5:9100','validator-us-sv15:9100','warehouse-asia-sg1:9100','warehouse-europe-fr2:9100','warehouse-us-ny5:9100','warehouse-eu-ld7-aws:9100','warehouse-us-da11-aws:9100','warehouse-eu-ld7-azure:9100','warehouse-us-da11-azure:9100']
+
+  - job_name: 'Non-Staked-Canaries'
+    scrape_interval: 15s
+    scrape_timeout: 14s
+    static_configs:
+            - targets: ['edge-validator-us-sv15:9100','beta-validator-us-ny5:9100','canary-am6-1:9100','canary-am6-2:9100','canary-da11-1:9100','canary-ny5-1:9100','canary-ny5-2:9100','canary-sg1-1:9100','canary-sv15-1:9100','canary-helsinki-1:9100','canary-helsinki-2:9100','canary-sv16-1:9100','canary-am6-3:9100','canary-fr2-1:9100','canary-am6-4:9100','canary-chicago-3:9100','canary-chicago-4:9100','canary-fr2-2:9100','canary-hk2-1:9100','canary-hk2-2:9100','canary-ny5-3:9100','canary-sg1-2:9100','canary-tokyo-2:9100','canary-tokyo-1:9100']
+
+  - job_name: 'Staked-Canaries'
+    scrape_interval: 15s
+    scrape_timeout: 14s
+    static_configs:
+            - targets: ['canary-chicago-1:9100','canary-chicago-2:9100','canary-newyork-1:9100','canary-newyork-2:9100','canary-dallas-1:9100','canary-dallas-2:9100','canary-washington-1:9100']
+
+  - job_name: 'Shared-Development'
+    scrape_interval: 15s
+    scrape_timeout: 14s
+    static_configs:
+            - targets: ['dev-server-us-da11:9100','dev-server-us-ny5:9100','dev-server-us-sv15:9100','dev-server-eu-am6:9100','dev-server-asia-sg1:9100','dev-server-us-da11-2:9100','dev-server-us-da11-3:9100','dev-server-us-da11-4:9100','dev-server-us-da11-5:9100','dev-server-asia-hk2:9100','dev-server-asia-sg1-2:9100','dev-server-eu-am6-2:9100','dev-server-asia-sg1-2:9100','dev-server-us-sv15-2:9100','dev-server-us-da11-6:9100','dev-server-us-da11-7:9100','dev-server-eu-ld7-1:9100','dev-server-us-da11-8:9100','dev-server-eu-ld7-2:9100']
+
+  - job_name: 'Development'
+    scrape_interval: 15s
+    scrape_timeout: 14s
+    static_configs:
+            - targets: ['dev-equinix-washington-36:9100','dev-equinix-washington-35:9100','dev-equinix-washington-34:9100','dev-equinix-washington-33:9100','dev-equinix-washington-32:9100','dev-equinix-washington-31:9100','dev-equinix-washington-30:9100','dev-equinix-washington-29:9100','dev-equinix-washington-28:9100','dev-equinix-washington-27:9100','dev-equinix-washington-26:9100','dev-equinix-washington-25:9100','dev-equinix-washington-24:9100','dev-equinix-washington-23:9100','dev-equinix-washington-22:9100','dev-equinix-washington-21:9100','dev-equinix-washington-20:9100','dev-equinix-washington-19:9100','dev-equinix-washington-18:9100','dev-equinix-washington-17:9100','dev-equinix-washington-16:9100','dev-equinix-washington-15:9100','dev-equinix-washington-14:9100','dev-equinix-washington-13:9100','dev-equinix-washington-12:9100','dev-equinix-washington-11:9100','dev-equinix-washington-10:9100','dev-equinix-washington-9:9100','dev-equinix-washington-8:9100','dev-equinix-washington-7:9100','dev-equinix-washington-6:9100','dev-equinix-washington-5:9100','dev-equinix-washington-4:9100','dev-equinix-washington-3:9100','dev-equinix-washington-2:9100','dev-equinix-washington-1:9100','dev-equinix-toronto-35:9100','dev-equinix-toronto-34:9100','dev-equinix-toronto-33:9100','dev-equinix-toronto-32:9100','dev-equinix-toronto-31:9100','dev-equinix-toronto-30:9100','dev-equinix-toronto-29:9100','dev-equinix-toronto-28:9100','dev-equinix-toronto-27:9100','dev-equinix-toronto-26:9100','dev-equinix-tokyo-14:9100','dev-equinix-tokyo-13:9100','dev-equinix-tokyo-12:9100','dev-equinix-tokyo-11:9100','dev-equinix-tokyo-10:9100','dev-equinix-tokyo-9:9100','dev-equinix-singapore-2:9100','dev-equinix-new-york-8:9100','dev-equinix-new-york-7:9100','dev-equinix-new-york-6:9100','dev-equinix-new-york-5:9100','dev-equinix-hong-kong-2:9100','dev-equinix-hong-kong-1:9100','dev-equinix-toronto-12:9100','dev-equinix-toronto-11:9100','dev-equinix-toronto-10:9100','dev-equinix-toronto-9:9100','dev-equinix-toronto-8:9100','dev-equinix-toronto-7:9100','dev-equinix-toronto-6:9100','dev-equinix-toronto-5:9100','dev-equinix-toronto-4:9100','dev-equinix-toronto-3:9100','dev-equinix-toronto-2:9100','dev-equinix-toronto-1:9100','dev-equinix-frankfurt-10:9100','dev-equinix-frankfurt-9:9100','dev-equinix-frankfurt-8:9100','dev-equinix-frankfurt-7:9100','dev-equinix-frankfurt-6:9100','dev-equinix-frankfurt-5:9100','dev-equinix-tokyo-8:9100','dev-equinix-tokyo-7:9100','dev-equinix-tokyo-6:9100','dev-equinix-tokyo-5:9100','dev-equinix-tokyo-4:9100','dev-equinix-tokyo-3:9100','dev-equinix-tokyo-2:9100','dev-equinix-tokyo-1:9100','dev-equinix-singapore-3:9100','dev-equinix-dallas-8:9100','dev-equinix-singapore-1:9100','dev-equinix-dallas-2:9100','dev-equinix-chicago-25:9100','dev-equinix-chicago-24:9100','dev-equinix-chicago-23:9100','dev-equinix-new-york-4:9100','dev-equinix-new-york-3:9100','dev-equinix-new-york-2:9100','dev-equinix-new-york-1:9100','dev-equinix-paris-1:9100','dev-equinix-chicago-22:9100','dev-equinix-chicago-21:9100','dev-equinix-chicago-20:9100','dev-equinix-chicago-19:9100','dev-equinix-chicago-18:9100','dev-equinix-chicago-17:9100','dev-equinix-chicago-16:9100','dev-equinix-chicago-15:9100','dev-equinix-frankfurt-4:9100','dev-equinix-frankfurt-3:9100','dev-equinix-frankfurt-2:9100','dev-equinix-frankfurt-1:9100','dev-equinix-chicago-14:9100','dev-equinix-dallas-7:9100','dev-equinix-dallas-6:9100','dev-equinix-dallas-5:9100','dev-equinix-dallas-4:9100','dev-equinix-dallas-3:9100','dev-equinix-chicago-13:9100','dev-equinix-dallas-1:9100','dev-equinix-chicago-12:9100','dev-equinix-chicago-11:9100','dev-equinix-amsterdam-21:9100','dev-equinix-amsterdam-20:9100','dev-equinix-amsterdam-19:9100','dev-equinix-amsterdam-18:9100','dev-equinix-amsterdam-17:9100','dev-equinix-toronto-25:9100','dev-equinix-toronto-24:9100','dev-equinix-toronto-23:9100','dev-equinix-toronto-22:9100','dev-equinix-toronto-21:9100','dev-equinix-toronto-20:9100','dev-equinix-toronto-19:9100','dev-equinix-chicago-10:9100','dev-equinix-chicago-9:9100','dev-equinix-chicago-8:9100','dev-equinix-chicago-7:9100','dev-equinix-chicago-6:9100','dev-equinix-chicago-5:9100','dev-equinix-chicago-4:9100','dev-equinix-chicago-3:9100','dev-equinix-chicago-2:9100','dev-equinix-chicago-1:9100','dev-equinix-toronto-18:9100','dev-equinix-toronto-17:9100','dev-equinix-toronto-16:9100','dev-equinix-toronto-15:9100','dev-equinix-toronto-14:9100','dev-equinix-toronto-13:9100','dev-equinix-amsterdam-16:9100','dev-equinix-amsterdam-15:9100','dev-equinix-amsterdam-14:9100','dev-equinix-amsterdam-13:9100','dev-equinix-amsterdam-12:9100','dev-equinix-amsterdam-11:9100','dev-equinix-amsterdam-10:9100','dev-equinix-amsterdam-9:9100','dev-equinix-amsterdam-8:9100','dev-equinix-amsterdam-7:9100','dev-equinix-amsterdam-6:9100','dev-equinix-amsterdam-5:9100','dev-equinix-amsterdam-4:9100','dev-equinix-amsterdam-3:9100','dev-equinix-amsterdam-1:9100']
+
+  - job_name: 'Influx-Meta'
+    scrape_interval: 15s
+    scrape_timeout: 14s
+    static_configs:
+            - targets: ['dev-equinix-washington-24:9100','dev-equinix-washington-25:9100','dev-equinix-washington-26:9100']
+
+  - job_name: 'Influx-Data'
+    scrape_interval: 15s
+    scrape_timeout: 14s
+    static_configs:
+            - targets: ['dev-equinix-washington-27:9100','dev-equinix-washington-28:9100','dev-equinix-washington-29:9100','dev-equinix-washington-30:9100','dev-equinix-washington-31:9100','dev-equinix-washington-32:9100','dev-equinix-amsterdam-19:9100','dev-equinix-amsterdam-20:9100','dev-equinix-amsterdam-21:9100','dev-equinix-amsterdam-22:9100','dev-equinix-chicago-17:9100','dev-equinix-chicago-19:9100','dev-equinix-chicago-25:9100','dev-equinix-dallas-1:9100','dev-equinix-frankfurt-1:9100','dev-equinix-toronto-5:9100']
+
+  - job_name: 'Kin'
+    scrape_interval: 15s
+    scrape_timeout: 14s
+    static_configs:
+            - targets: ['kin-rpc-am6-1:9100','kin-rpc-da11-1:9100','kin-validator-am6-1:9100','kin-validator-da11-1:9100','kin-validator-ny5-1:9100','kin-validator-sg1-1:9100','kin-spare-sg1-1:9100']
+
+  - job_name: 'Metrics'
+    scrape_interval: 15s
+    scrape_timeout: 14s
+    static_configs:
+            - targets: ['metrics-main:9100']

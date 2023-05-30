@@ -11,7 +11,6 @@ edition = { workspace = true }
 
 [dependencies]
 crossbeam-channel = { workspace = true }
-fs_extra = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 rand = { workspace = true }
@@ -33,9 +32,11 @@ solana-thin-client = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-vote-program = { workspace = true }
 tempfile = { workspace = true }
+trees = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+fs_extra = { workspace = true }
 gag = { workspace = true }
 serial_test = { workspace = true }
 solana-download-utils = { workspace = true }

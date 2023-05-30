@@ -7,7 +7,10 @@ use {
         cluster_info_vote_listener::VerifiedVoteReceiver,
         completed_data_sets_service::CompletedDataSetsSender,
         repair_response,
-        repair_service::{DumpedSlotsReceiver, OutstandingShredRepairs, RepairInfo, RepairService},
+        repair_service::{
+            DumpedSlotsReceiver, OutstandingShredRepairs, PopularPrunedForksSender, RepairInfo,
+            RepairService,
+        },
         result::{Error, Result},
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
@@ -240,7 +243,6 @@ where
         let shred = Shred::new_from_serialized_shred(shred.to_vec()).ok()?;
         if packet.meta().repair() {
             let repair_info = RepairMeta {
-                _from_addr: packet.meta().socket_addr(),
                 // If can't parse the nonce, dump the packet.
                 nonce: repair_response::nonce(packet)?,
             };
@@ -292,7 +294,6 @@ where
 }
 
 struct RepairMeta {
-    _from_addr: SocketAddr,
     nonce: Nonce,
 }
 
@@ -318,6 +319,7 @@ impl WindowService {
         duplicate_slots_sender: DuplicateSlotSender,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
         dumped_slots_receiver: DumpedSlotsReceiver,
+        popular_pruned_forks_sender: PopularPrunedForksSender,
     ) -> WindowService {
         let outstanding_requests = Arc::<RwLock<OutstandingShredRepairs>>::default();
 
@@ -333,6 +335,7 @@ impl WindowService {
             outstanding_requests.clone(),
             ancestor_hashes_replay_update_receiver,
             dumped_slots_receiver,
+            popular_pruned_forks_sender,
         );
 
         let (duplicate_sender, duplicate_receiver) = unbounded();
@@ -573,10 +576,7 @@ mod test {
 
     #[test]
     fn test_prune_shreds() {
-        use {
-            crate::serve_repair::ShredRepairType,
-            std::net::{IpAddr, Ipv4Addr},
-        };
+        use crate::serve_repair::ShredRepairType;
         solana_logger::setup();
         let shred = Shred::new_from_parity_shard(
             5,   // slot
@@ -589,18 +589,14 @@ mod test {
             0,   // version
         );
         let mut shreds = vec![shred.clone(), shred.clone(), shred];
-        let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
-        let repair_meta = RepairMeta {
-            _from_addr,
-            nonce: 0,
-        };
+        let repair_meta = RepairMeta { nonce: 0 };
         let outstanding_requests = Arc::new(RwLock::new(OutstandingShredRepairs::default()));
         let repair_type = ShredRepairType::Orphan(9);
         let nonce = outstanding_requests
             .write()
             .unwrap()
             .add_request(repair_type, timestamp());
-        let repair_meta1 = RepairMeta { _from_addr, nonce };
+        let repair_meta1 = RepairMeta { nonce };
         let mut repair_infos = vec![None, Some(repair_meta), Some(repair_meta1)];
         prune_shreds_invalid_repair(&mut shreds, &mut repair_infos, &outstanding_requests);
         assert_eq!(repair_infos.len(), 2);

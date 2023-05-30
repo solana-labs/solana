@@ -5,6 +5,7 @@ use {
         max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         parsed_token_accounts::*, rpc_cache::LargestAccountsCache, rpc_health::*,
     },
+    base64::{prelude::BASE64_STANDARD, Engine},
     bincode::{config::Options, serialize},
     crossbeam_channel::{unbounded, Receiver, Sender},
     jsonrpc_core::{futures::future, types::error, BoxFuture, Error, Metadata, Result},
@@ -13,7 +14,7 @@ use {
         parse_token::{is_known_spl_token_id, token_amount_to_ui_amount, UiTokenAmount},
         UiAccount, UiAccountEncoding, UiDataSliceConfig, MAX_BASE58_BYTES,
     },
-    solana_client::connection_cache::ConnectionCache,
+    solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_entry::entry::Entry,
     solana_faucet::faucet::request_airdrop_transaction,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
@@ -128,7 +129,7 @@ fn is_finalized(
     blockstore: &Blockstore,
     slot: Slot,
 ) -> bool {
-    slot <= block_commitment_cache.highest_confirmed_root()
+    slot <= block_commitment_cache.highest_super_majority_root()
         && (blockstore.is_root(slot) || bank.status_cache_ancestors().contains(&slot))
 }
 
@@ -198,6 +199,7 @@ pub struct JsonRpcRequestProcessor {
     max_slots: Arc<MaxSlots>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     max_complete_transaction_status_slot: Arc<AtomicU64>,
+    max_complete_rewards_slot: Arc<AtomicU64>,
     prioritization_fee_cache: Arc<PrioritizationFeeCache>,
 }
 impl Metadata for JsonRpcRequestProcessor {}
@@ -304,6 +306,7 @@ impl JsonRpcRequestProcessor {
         max_slots: Arc<MaxSlots>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
+        max_complete_rewards_slot: Arc<AtomicU64>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> (Self, Receiver<TransactionInfo>) {
         let (sender, receiver) = unbounded();
@@ -325,6 +328,7 @@ impl JsonRpcRequestProcessor {
                 max_slots,
                 leader_schedule_cache,
                 max_complete_transaction_status_slot,
+                max_complete_rewards_slot,
                 prioritization_fee_cache,
             },
             receiver,
@@ -352,7 +356,10 @@ impl JsonRpcRequestProcessor {
             );
             ClusterInfo::new(contact_info, keypair, socket_addr_space)
         });
-        let tpu_address = cluster_info.my_contact_info().tpu().unwrap();
+        let tpu_address = cluster_info
+            .my_contact_info()
+            .tpu(connection_cache.protocol())
+            .unwrap();
         let (sender, receiver) = unbounded();
         SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
@@ -362,6 +369,7 @@ impl JsonRpcRequestProcessor {
             &connection_cache,
             1000,
             1,
+            exit.clone(),
         );
 
         Self {
@@ -393,6 +401,7 @@ impl JsonRpcRequestProcessor {
             max_slots: Arc::new(MaxSlots::default()),
             leader_schedule_cache: Arc::new(LeaderScheduleCache::new_from_bank(bank)),
             max_complete_transaction_status_slot: Arc::new(AtomicU64::default()),
+            max_complete_rewards_slot: Arc::new(AtomicU64::default()),
             prioritization_fee_cache: Arc::new(PrioritizationFeeCache::default()),
         }
     }
@@ -935,7 +944,7 @@ impl JsonRpcRequestProcessor {
                 }
 
                 let vote_state = account.vote_state();
-                let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
+                let vote_state = vote_state.unwrap_or(&default_vote_state);
                 let last_vote = if let Some(vote) = vote_state.votes.iter().last() {
                     vote.slot()
                 } else {
@@ -1045,11 +1054,12 @@ impl JsonRpcRequestProcessor {
         Ok(())
     }
 
-    fn check_status_is_complete(&self, slot: Slot) -> Result<()> {
+    fn check_blockstore_writes_complete(&self, slot: Slot) -> Result<()> {
         if slot
             > self
                 .max_complete_transaction_status_slot
                 .load(Ordering::SeqCst)
+            || slot > self.max_complete_rewards_slot.load(Ordering::SeqCst)
         {
             Err(RpcCustomError::BlockStatusNotAvailableYet { slot }.into())
         } else {
@@ -1081,9 +1091,9 @@ impl JsonRpcRequestProcessor {
                     .block_commitment_cache
                     .read()
                     .unwrap()
-                    .highest_confirmed_root()
+                    .highest_super_majority_root()
             {
-                self.check_status_is_complete(slot)?;
+                self.check_blockstore_writes_complete(slot)?;
                 let result = self.blockstore.get_rooted_block(slot, true);
                 self.check_blockstore_root(&result, slot)?;
                 let encode_block = |confirmed_block: ConfirmedBlock| -> Result<UiConfirmedBlock> {
@@ -1114,7 +1124,7 @@ impl JsonRpcRequestProcessor {
                 // Check if block is confirmed
                 let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
                 if confirmed_bank.status_cache_ancestors().contains(&slot) {
-                    self.check_status_is_complete(slot)?;
+                    self.check_blockstore_writes_complete(slot)?;
                     let result = self.blockstore.get_complete_block(slot, true);
                     return result
                         .ok()
@@ -1157,16 +1167,16 @@ impl JsonRpcRequestProcessor {
         let commitment = commitment.unwrap_or_default();
         check_is_at_least_confirmed(commitment)?;
 
-        let highest_confirmed_root = self
+        let highest_super_majority_root = self
             .block_commitment_cache
             .read()
             .unwrap()
-            .highest_confirmed_root();
+            .highest_super_majority_root();
 
         let end_slot = min(
             end_slot.unwrap_or_else(|| start_slot.saturating_add(MAX_GET_CONFIRMED_BLOCKS_RANGE)),
             if commitment.is_finalized() {
-                highest_confirmed_root
+                highest_super_majority_root
             } else {
                 self.bank(Some(CommitmentConfig::confirmed())).slot()
             },
@@ -1210,7 +1220,7 @@ impl JsonRpcRequestProcessor {
             .blockstore
             .rooted_slot_iterator(max(start_slot, lowest_blockstore_slot))
             .map_err(|_| Error::internal_error())?
-            .filter(|&slot| slot <= end_slot && slot <= highest_confirmed_root)
+            .filter(|&slot| slot <= end_slot && slot <= highest_super_majority_root)
             .collect();
         let last_element = blocks
             .last()
@@ -1263,11 +1273,11 @@ impl JsonRpcRequestProcessor {
             }
         }
 
-        let highest_confirmed_root = self
+        let highest_super_majority_root = self
             .block_commitment_cache
             .read()
             .unwrap()
-            .highest_confirmed_root();
+            .highest_super_majority_root();
 
         // Finalized blocks
         let mut blocks: Vec<_> = self
@@ -1275,7 +1285,7 @@ impl JsonRpcRequestProcessor {
             .rooted_slot_iterator(max(start_slot, lowest_blockstore_slot))
             .map_err(|_| Error::internal_error())?
             .take(limit)
-            .filter(|&slot| slot <= highest_confirmed_root)
+            .filter(|&slot| slot <= highest_super_majority_root)
             .collect();
 
         // Maybe add confirmed blocks
@@ -1306,7 +1316,7 @@ impl JsonRpcRequestProcessor {
                 .block_commitment_cache
                 .read()
                 .unwrap()
-                .highest_confirmed_root()
+                .highest_super_majority_root()
         {
             let result = self.blockstore.get_block_time(slot);
             self.check_blockstore_root(&result, slot)?;
@@ -1390,7 +1400,7 @@ impl JsonRpcRequestProcessor {
                             .block_commitment_cache
                             .read()
                             .unwrap()
-                            .highest_confirmed_root()
+                            .highest_super_majority_root()
                     })
                     .map(|(slot, status_meta)| {
                         let err = status_meta.status.clone().err();
@@ -1507,7 +1517,7 @@ impl JsonRpcRequestProcessor {
                             .block_commitment_cache
                             .read()
                             .unwrap()
-                            .highest_confirmed_root()
+                            .highest_super_majority_root()
                     {
                         return Ok(Some(encode_transaction(confirmed_transaction)?));
                     }
@@ -1543,7 +1553,7 @@ impl JsonRpcRequestProcessor {
                 self.block_commitment_cache
                     .read()
                     .unwrap()
-                    .highest_confirmed_root(),
+                    .highest_super_majority_root(),
             );
             self.blockstore
                 .get_confirmed_signatures_for_address(pubkey, start_slot, end_slot)
@@ -1565,23 +1575,23 @@ impl JsonRpcRequestProcessor {
         check_is_at_least_confirmed(commitment)?;
 
         if self.config.enable_rpc_transaction_history {
-            let highest_confirmed_root = self
+            let highest_super_majority_root = self
                 .block_commitment_cache
                 .read()
                 .unwrap()
-                .highest_confirmed_root();
+                .highest_super_majority_root();
             let highest_slot = if commitment.is_confirmed() {
                 let confirmed_bank = self.get_bank_with_config(config)?;
                 confirmed_bank.slot()
             } else {
                 let min_context_slot = config.min_context_slot.unwrap_or_default();
-                if highest_confirmed_root < min_context_slot {
+                if highest_super_majority_root < min_context_slot {
                     return Err(RpcCustomError::MinContextSlotNotReached {
-                        context_slot: highest_confirmed_root,
+                        context_slot: highest_super_majority_root,
                     }
                     .into());
                 }
-                highest_confirmed_root
+                highest_super_majority_root
             };
 
             let SignatureInfosForAddress {
@@ -1597,7 +1607,7 @@ impl JsonRpcRequestProcessor {
                     .into_iter()
                     .map(|x| {
                         let mut item: RpcConfirmedTransactionStatusWithSignature = x.into();
-                        if item.slot <= highest_confirmed_root {
+                        if item.slot <= highest_super_majority_root {
                             item.confirmation_status =
                                 Some(TransactionConfirmationStatus::Finalized);
                         } else {
@@ -3441,30 +3451,43 @@ pub mod rpc_full {
             debug!("get_cluster_nodes rpc request received");
             let cluster_info = &meta.cluster_info;
             let socket_addr_space = cluster_info.socket_addr_space();
-            let valid_address_or_none = |addr: &SocketAddr| -> Option<SocketAddr> {
-                ContactInfo::is_valid_address(addr, socket_addr_space).then_some(*addr)
-            };
             let my_shred_version = cluster_info.my_shred_version();
             Ok(cluster_info
                 .all_peers()
                 .iter()
                 .filter_map(|(contact_info, _)| {
-                    if my_shred_version == contact_info.shred_version
-                        && ContactInfo::is_valid_address(&contact_info.gossip, socket_addr_space)
+                    if my_shred_version == contact_info.shred_version()
+                        && contact_info
+                            .gossip()
+                            .map(|addr| socket_addr_space.check(&addr))
+                            .unwrap_or_default()
                     {
                         let (version, feature_set) = if let Some(version) =
-                            cluster_info.get_node_version(&contact_info.id)
+                            cluster_info.get_node_version(contact_info.pubkey())
                         {
                             (Some(version.to_string()), Some(version.feature_set))
                         } else {
                             (None, None)
                         };
                         Some(RpcContactInfo {
-                            pubkey: contact_info.id.to_string(),
-                            gossip: Some(contact_info.gossip),
-                            tpu: valid_address_or_none(&contact_info.tpu),
-                            rpc: valid_address_or_none(&contact_info.rpc),
-                            pubsub: valid_address_or_none(&contact_info.rpc_pubsub),
+                            pubkey: contact_info.pubkey().to_string(),
+                            gossip: contact_info.gossip().ok(),
+                            tpu: contact_info
+                                .tpu(Protocol::UDP)
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
+                            tpu_quic: contact_info
+                                .tpu(Protocol::QUIC)
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
+                            rpc: contact_info
+                                .rpc()
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
+                            pubsub: contact_info
+                                .rpc_pubsub()
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
                             version,
                             feature_set,
                             shred_version: Some(my_shred_version),
@@ -4461,7 +4484,8 @@ where
                     PACKET_DATA_SIZE,
                 )));
             }
-            base64::decode(encoded)
+            BASE64_STANDARD
+                .decode(encoded)
                 .map_err(|e| Error::invalid_params(format!("invalid base64 encoding: {e:?}")))?
         }
     };
@@ -4766,6 +4790,7 @@ pub mod tests {
             let max_slots = Arc::new(MaxSlots::default());
             // note that this means that slot 0 will always be considered complete
             let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(0));
+            let max_complete_rewards_slot = Arc::new(AtomicU64::new(0));
 
             let meta = JsonRpcRequestProcessor::new(
                 config,
@@ -4783,6 +4808,7 @@ pub mod tests {
                 max_slots.clone(),
                 Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 max_complete_transaction_status_slot.clone(),
+                max_complete_rewards_slot,
                 Arc::new(PrioritizationFeeCache::default()),
             )
             .0;
@@ -5008,7 +5034,7 @@ pub mod tests {
                 .into_iter()
                 .map(|tx| SanitizedTransaction::try_from_legacy_transaction(tx).unwrap())
                 .collect();
-            prioritization_fee_cache.update(bank, transactions.iter());
+            prioritization_fee_cache.update(&bank, transactions.iter());
         }
 
         fn get_prioritization_fee_cache(&self) -> &PrioritizationFeeCache {
@@ -5031,7 +5057,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         bank.transfer(20, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
-        let connection_cache = Arc::new(ConnectionCache::default());
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let request_processor = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -5050,7 +5076,7 @@ pub mod tests {
         let genesis = create_genesis_config(20);
         let mint_pubkey = genesis.mint_keypair.pubkey();
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        let connection_cache = Arc::new(ConnectionCache::default());
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -5082,7 +5108,7 @@ pub mod tests {
         let genesis = create_genesis_config(20);
         let mint_pubkey = genesis.mint_keypair.pubkey();
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        let connection_cache = Arc::new(ConnectionCache::default());
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -5121,6 +5147,7 @@ pub mod tests {
             "gossip": "127.0.0.1:8000",
             "shredVersion": 0u16,
             "tpu": "127.0.0.1:8003",
+            "tpuQuic": "127.0.0.1:8009",
             "rpc": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PORT),
             "pubsub": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT),
             "version": null,
@@ -5130,6 +5157,7 @@ pub mod tests {
             "gossip": "127.0.0.1:1235",
             "shredVersion": 0u16,
             "tpu": "127.0.0.1:1234",
+            "tpuQuic": "127.0.0.1:1240",
             "rpc": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PORT),
             "pubsub": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT),
             "version": null,
@@ -5207,7 +5235,7 @@ pub mod tests {
         bank.transfer(4, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
 
-        let connection_cache = Arc::new(ConnectionCache::default());
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -5510,7 +5538,7 @@ pub mod tests {
             Some(json!([address, {"encoding": "base64"}])),
         );
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
-        let expected = json!([base64::encode(&data), "base64"]);
+        let expected = json!([BASE64_STANDARD.encode(&data), "base64"]);
         assert_eq!(result["value"]["data"], expected);
         assert_eq!(result["value"]["space"], 5);
 
@@ -5519,7 +5547,7 @@ pub mod tests {
             Some(json!([address, {"encoding": "base64", "dataSlice": {"length": 2, "offset": 1}}])),
         );
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
-        let expected = json!([base64::encode(&data[1..3]), "base64"]);
+        let expected = json!([BASE64_STANDARD.encode(&data[1..3]), "base64"]);
         assert_eq!(result["value"]["data"], expected);
         assert_eq!(result["value"]["space"], 5);
 
@@ -5539,7 +5567,7 @@ pub mod tests {
             ),
         );
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
-        let expected = json!([base64::encode(&data[1..3]), "base64"]);
+        let expected = json!([BASE64_STANDARD.encode(&data[1..3]), "base64"]);
         assert_eq!(
             result["value"]["data"], expected,
             "should use data slice if parsing fails"
@@ -5581,7 +5609,7 @@ pub mod tests {
             {
                 "owner": "11111111111111111111111111111111",
                 "lamports": 42,
-                "data": [base64::encode(&data), "base64"],
+                "data": [BASE64_STANDARD.encode(&data), "base64"],
                 "executable": false,
                 "rentEpoch": 0,
                 "space": 5,
@@ -5648,7 +5676,7 @@ pub mod tests {
             {
                 "owner": "11111111111111111111111111111111",
                 "lamports": 42,
-                "data": [base64::encode(&data[1..3]), "base64"],
+                "data": [BASE64_STANDARD.encode(&data[1..3]), "base64"],
                 "executable": false,
                 "rentEpoch": 0,
                 "space": 5,
@@ -5883,7 +5911,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
@@ -5967,7 +5995,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
@@ -5995,7 +6023,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
@@ -6044,7 +6072,7 @@ pub mod tests {
                     "accounts":null,
                     "logs":[],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":0,
                 }
             },
             "id":1
@@ -6073,7 +6101,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
@@ -6353,7 +6381,7 @@ pub mod tests {
     fn test_rpc_send_bad_tx() {
         let genesis = create_genesis_config(100);
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        let connection_cache = Arc::new(ConnectionCache::default());
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -6393,7 +6421,11 @@ pub mod tests {
             );
             ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
         });
-        let tpu_address = cluster_info.my_contact_info().tpu().unwrap();
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
+        let tpu_address = cluster_info
+            .my_contact_info()
+            .tpu(connection_cache.protocol())
+            .unwrap();
         let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             None,
@@ -6410,9 +6442,9 @@ pub mod tests {
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
+            Arc::new(AtomicU64::default()),
             Arc::new(PrioritizationFeeCache::default()),
         );
-        let connection_cache = Arc::new(ConnectionCache::default());
         SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
             &bank_forks,
@@ -6421,6 +6453,7 @@ pub mod tests {
             &connection_cache,
             1000,
             1,
+            exit,
         );
 
         let mut bad_transaction = system_transaction::transfer(
@@ -6660,7 +6693,11 @@ pub mod tests {
         )));
 
         let cluster_info = Arc::new(new_test_cluster_info());
-        let tpu_address = cluster_info.my_contact_info().tpu().unwrap();
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
+        let tpu_address = cluster_info
+            .my_contact_info()
+            .tpu(connection_cache.protocol())
+            .unwrap();
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             None,
@@ -6677,9 +6714,9 @@ pub mod tests {
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
+            Arc::new(AtomicU64::default()),
             Arc::new(PrioritizationFeeCache::default()),
         );
-        let connection_cache = Arc::new(ConnectionCache::default());
         SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
             &bank_forks,
@@ -6688,6 +6725,7 @@ pub mod tests {
             &connection_cache,
             1000,
             1,
+            exit,
         );
         assert_eq!(
             request_processor.get_block_commitment(0),
@@ -6951,7 +6989,7 @@ pub mod tests {
         rpc.block_commitment_cache
             .write()
             .unwrap()
-            .set_highest_confirmed_root(8);
+            .set_highest_super_majority_root(8);
 
         let request = create_test_request("getBlockProduction", Some(json!([])));
         let result: RpcResponse<RpcBlockProduction> =
@@ -7008,7 +7046,7 @@ pub mod tests {
         rpc.block_commitment_cache
             .write()
             .unwrap()
-            .set_highest_confirmed_root(8);
+            .set_highest_super_majority_root(8);
 
         let request = create_test_request("getBlocks", Some(json!([0u64])));
         let result: Vec<Slot> = parse_success_result(rpc.handle_request_sync(request));
@@ -7033,7 +7071,7 @@ pub mod tests {
         rpc.block_commitment_cache
             .write()
             .unwrap()
-            .set_highest_confirmed_root(std::u64::MAX);
+            .set_highest_super_majority_root(std::u64::MAX);
 
         let request = create_test_request(
             "getBlocks",
@@ -7061,7 +7099,7 @@ pub mod tests {
         rpc.block_commitment_cache
             .write()
             .unwrap()
-            .set_highest_confirmed_root(8);
+            .set_highest_super_majority_root(8);
 
         let request = create_test_request("getBlocksWithLimit", Some(json!([0u64, 500_001u64])));
         let response = parse_failure_response(rpc.handle_request_sync(request));
@@ -7107,7 +7145,7 @@ pub mod tests {
         rpc.block_commitment_cache
             .write()
             .unwrap()
-            .set_highest_confirmed_root(7);
+            .set_highest_super_majority_root(7);
 
         let slot_duration = slot_duration_from_slots_per_year(rpc.working_bank().slots_per_year());
 
@@ -7353,13 +7391,13 @@ pub mod tests {
         block_commitment.entry(1).or_insert(cache0);
         block_commitment.entry(2).or_insert(cache1);
         block_commitment.entry(3).or_insert(cache2);
-        let highest_confirmed_root = 1;
+        let highest_super_majority_root = 1;
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
             50,
             CommitmentSlots {
                 slot: bank.slot(),
-                highest_confirmed_root,
+                highest_super_majority_root,
                 ..CommitmentSlots::default()
             },
         );
@@ -7386,12 +7424,12 @@ pub mod tests {
             let rpc = RpcHandler::start();
             let bank = rpc.working_bank();
             let RpcHandler { io, meta, .. } = rpc;
-            let mint = SplTokenPubkey::new(&[2; 32]);
-            let owner = SplTokenPubkey::new(&[3; 32]);
-            let delegate = SplTokenPubkey::new(&[4; 32]);
+            let mint = SplTokenPubkey::new_from_array([2; 32]);
+            let owner = SplTokenPubkey::new_from_array([3; 32]);
+            let delegate = SplTokenPubkey::new_from_array([4; 32]);
             let token_account_pubkey = solana_sdk::pubkey::new_rand();
             let token_with_different_mint_pubkey = solana_sdk::pubkey::new_rand();
-            let new_mint = SplTokenPubkey::new(&[5; 32]);
+            let new_mint = SplTokenPubkey::new_from_array([5; 32]);
             if program_id == inline_spl_token_2022::id() {
                 // Add the token account
                 let account_base = TokenAccount {
@@ -7879,9 +7917,9 @@ pub mod tests {
             let bank = rpc.working_bank();
             let RpcHandler { io, meta, .. } = rpc;
 
-            let mint = SplTokenPubkey::new(&[2; 32]);
-            let owner = SplTokenPubkey::new(&[3; 32]);
-            let delegate = SplTokenPubkey::new(&[4; 32]);
+            let mint = SplTokenPubkey::new_from_array([2; 32]);
+            let owner = SplTokenPubkey::new_from_array([3; 32]);
+            let delegate = SplTokenPubkey::new_from_array([4; 32]);
             let token_account_pubkey = solana_sdk::pubkey::new_rand();
             let (program_name, account_size, mint_size) = if program_id
                 == inline_spl_token_2022::id()
@@ -8272,9 +8310,11 @@ pub mod tests {
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let mut pending_optimistically_confirmed_banks = HashSet::new();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
-            max_complete_transaction_status_slot,
+            max_complete_transaction_status_slot.clone(),
+            max_complete_rewards_slot.clone(),
             bank_forks.clone(),
             block_commitment_cache.clone(),
             optimistically_confirmed_bank.clone(),
@@ -8295,7 +8335,8 @@ pub mod tests {
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
-            Arc::new(AtomicU64::default()),
+            max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             Arc::new(PrioritizationFeeCache::default()),
         );
 
@@ -8310,6 +8351,7 @@ pub mod tests {
         let slot: Slot = serde_json::from_value(json["result"].clone()).unwrap();
         assert_eq!(slot, 0);
         let mut highest_confirmed_slot: Slot = 0;
+        let mut highest_root_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
 
         OptimisticallyConfirmedBankTracker::process_notification(
@@ -8320,6 +8362,7 @@ pub mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
         let req =
@@ -8338,6 +8381,7 @@ pub mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
         let req =
@@ -8356,6 +8400,7 @@ pub mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
         let req =
@@ -8375,6 +8420,7 @@ pub mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
         let req =
@@ -8390,7 +8436,7 @@ pub mod tests {
         let ff_tx = vec![0xffu8; PACKET_DATA_SIZE];
         let tx58 = bs58::encode(&ff_tx).into_string();
         assert_eq!(tx58.len(), MAX_BASE58_SIZE);
-        let tx64 = base64::encode(&ff_tx);
+        let tx64 = BASE64_STANDARD.encode(&ff_tx);
         assert_eq!(tx64.len(), MAX_BASE64_SIZE);
     }
 
@@ -8410,7 +8456,7 @@ pub mod tests {
             )
         ));
 
-        let tx64 = base64::encode(&tx_ser);
+        let tx64 = BASE64_STANDARD.encode(&tx_ser);
         let tx64_len = tx64.len();
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
@@ -8431,7 +8477,7 @@ pub mod tests {
             ))
         );
 
-        let tx64 = base64::encode(&tx_ser);
+        let tx64 = BASE64_STANDARD.encode(&tx_ser);
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
                 .unwrap_err(),
@@ -8441,7 +8487,7 @@ pub mod tests {
         );
 
         let tx_ser = vec![0xffu8; PACKET_DATA_SIZE - 2];
-        let mut tx64 = base64::encode(&tx_ser);
+        let mut tx64 = BASE64_STANDARD.encode(&tx_ser);
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx64.clone(), TransactionBinaryEncoding::Base64)
                 .unwrap_err(),
@@ -8567,7 +8613,9 @@ pub mod tests {
 
             let request = create_test_request(
                 "getFeeForMessage",
-                Some(json!([base64::encode(serialize(&legacy_msg).unwrap())])),
+                Some(json!([
+                    BASE64_STANDARD.encode(serialize(&legacy_msg).unwrap())
+                ])),
             );
             let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
             assert_eq!(response.value, TEST_SIGNATURE_FEE);
@@ -8586,7 +8634,7 @@ pub mod tests {
 
             let request = create_test_request(
                 "getFeeForMessage",
-                Some(json!([base64::encode(serialize(&v0_msg).unwrap())])),
+                Some(json!([BASE64_STANDARD.encode(serialize(&v0_msg).unwrap())])),
             );
             let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
             assert_eq!(response.value, TEST_SIGNATURE_FEE);

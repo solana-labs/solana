@@ -113,12 +113,14 @@ where
 
     /// Create a new client that disconnects when dropped
     pub fn new(
+        name: &'static str,
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
         connection_manager: M,
     ) -> Result<Self> {
         let create_tpu_client = NonblockingTpuClient::new(
+            name,
             rpc_client.get_inner_client().clone(),
             websocket_url,
             config,
@@ -158,7 +160,7 @@ where
     }
 
     #[cfg(feature = "spinner")]
-    pub fn send_and_confirm_messages_with_spinner<T: Signers>(
+    pub fn send_and_confirm_messages_with_spinner<T: Signers + ?Sized>(
         &self,
         messages: &[Message],
         signers: &T,

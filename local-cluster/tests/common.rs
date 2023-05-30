@@ -36,6 +36,7 @@ use {
     std::{
         collections::HashSet,
         fs, iter,
+        num::NonZeroUsize,
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -55,6 +56,10 @@ pub const DEFAULT_NODE_STAKE: u64 = 10 * LAMPORTS_PER_SOL;
 
 pub fn last_vote_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<(Slot, Hash)> {
     restore_tower(tower_path, node_pubkey).map(|tower| tower.last_voted_slot_hash().unwrap())
+}
+
+pub fn last_root_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
+    restore_tower(tower_path, node_pubkey).map(|tower| tower.root())
 }
 
 pub fn restore_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
@@ -352,7 +357,7 @@ pub fn run_cluster_partition<C>(
     // Check epochs have correct number of slots
     info!("PARTITION_TEST sleeping until partition starting condition",);
     for node in &cluster_nodes {
-        let node_client = RpcClient::new_socket(node.rpc);
+        let node_client = RpcClient::new_socket(node.rpc().unwrap());
         let epoch_info = node_client.get_epoch_info().unwrap();
         assert_eq!(epoch_info.slots_in_epoch, slots_per_epoch);
     }
@@ -498,8 +503,8 @@ impl SnapshotValidatorConfig {
                 .path()
                 .to_path_buf(),
             bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
-            maximum_full_snapshot_archives_to_retain: usize::MAX,
-            maximum_incremental_snapshot_archives_to_retain: usize::MAX,
+            maximum_full_snapshot_archives_to_retain: NonZeroUsize::new(usize::MAX).unwrap(),
+            maximum_incremental_snapshot_archives_to_retain: NonZeroUsize::new(usize::MAX).unwrap(),
             ..SnapshotConfig::default()
         };
 

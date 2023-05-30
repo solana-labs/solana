@@ -10,7 +10,8 @@ use {
     solana_runtime::{
         accounts::{AccountAddressFilter, Accounts},
         accounts_db::{
-            test_utils::create_test_accounts, AccountShrinkThreshold, BankHashLamportsVerifyConfig,
+            test_utils::create_test_accounts, AccountShrinkThreshold,
+            VerifyAccountsHashAndLamportsConfig, INCLUDE_SLOT_IN_HASH_TESTS,
         },
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
@@ -98,19 +99,22 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let (_, total_lamports) = accounts
         .accounts_db
         .update_accounts_hash_for_tests(0, &ancestors, false, false);
-    let test_hash_calculation = false;
+    accounts.add_root(slot);
+    accounts.accounts_db.flush_accounts_cache(true, Some(slot));
     bencher.iter(|| {
-        assert!(accounts.verify_bank_hash_and_lamports(
+        assert!(accounts.verify_accounts_hash_and_lamports(
             0,
             total_lamports,
-            BankHashLamportsVerifyConfig {
+            None,
+            VerifyAccountsHashAndLamportsConfig {
                 ancestors: &ancestors,
-                test_hash_calculation,
+                test_hash_calculation: false,
                 epoch_schedule: &EpochSchedule::default(),
                 rent_collector: &RentCollector::default(),
                 ignore_mismatch: false,
                 store_detailed_debug_info: false,
                 use_bg_thread_pool: false,
+                include_slot_in_hash: INCLUDE_SLOT_IN_HASH_TESTS,
             }
         ))
     });

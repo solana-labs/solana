@@ -29,6 +29,10 @@ bitflags! {
         const REPAIR         = 0b0000_0100;
         const SIMPLE_VOTE_TX = 0b0000_1000;
         const TRACER_PACKET  = 0b0001_0000;
+        /// to be set by bank.feature_set.is_active(round_compute_unit_price::id()) at the moment
+        /// the packet is built.
+        /// This field can be removed when the above feature gate is adopted by mainnet-beta.
+        const ROUND_COMPUTE_UNIT_PRICE = 0b0010_0000;
     }
 }
 
@@ -39,7 +43,6 @@ pub struct Meta {
     pub addr: IpAddr,
     pub port: u16,
     pub flags: PacketFlags,
-    pub sender_stake: u64,
 }
 
 // serde_as is used as a work around because array isn't supported by serde
@@ -216,6 +219,14 @@ impl Meta {
     }
 
     #[inline]
+    pub fn set_round_compute_unit_price(&mut self, round_compute_unit_price: bool) {
+        self.flags.set(
+            PacketFlags::ROUND_COMPUTE_UNIT_PRICE,
+            round_compute_unit_price,
+        );
+    }
+
+    #[inline]
     pub fn forwarded(&self) -> bool {
         self.flags.contains(PacketFlags::FORWARDED)
     }
@@ -234,6 +245,11 @@ impl Meta {
     pub fn is_tracer_packet(&self) -> bool {
         self.flags.contains(PacketFlags::TRACER_PACKET)
     }
+
+    #[inline]
+    pub fn round_compute_unit_price(&self) -> bool {
+        self.flags.contains(PacketFlags::ROUND_COMPUTE_UNIT_PRICE)
+    }
 }
 
 impl Default for Meta {
@@ -243,7 +259,6 @@ impl Default for Meta {
             addr: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             port: 0,
             flags: PacketFlags::empty(),
-            sender_stake: 0,
         }
     }
 }

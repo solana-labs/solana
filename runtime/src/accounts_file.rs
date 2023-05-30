@@ -3,12 +3,43 @@ use {
         account_storage::meta::{
             StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredAccountMeta,
         },
-        append_vec::{AppendVec, MatchAccountOwnerError},
+        append_vec::{AppendVec, AppendVecError, MatchAccountOwnerError},
         storable_accounts::StorableAccounts,
+        tiered_storage::error::TieredStorageError,
     },
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
-    std::{borrow::Borrow, io, path::PathBuf},
+    std::{
+        borrow::Borrow,
+        mem,
+        path::{Path, PathBuf},
+    },
+    thiserror::Error,
 };
+
+// Data placement should be aligned at the next boundary. Without alignment accessing the memory may
+// crash on some architectures.
+pub const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
+#[macro_export]
+macro_rules! u64_align {
+    ($addr: expr) => {
+        ($addr + (ALIGN_BOUNDARY_OFFSET - 1)) & !(ALIGN_BOUNDARY_OFFSET - 1)
+    };
+}
+
+#[derive(Error, Debug)]
+/// An enum for AccountsFile related errors.
+pub enum AccountsFileError {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("AppendVecError: {0}")]
+    AppendVecError(#[from] AppendVecError),
+
+    #[error("TieredStorageError: {0}")]
+    TieredStorageError(#[from] TieredStorageError),
+}
+
+pub type Result<T> = std::result::Result<T, AccountsFileError>;
 
 #[derive(Debug)]
 /// An enum for accessing an accounts file which can be implemented
@@ -18,6 +49,15 @@ pub enum AccountsFile {
 }
 
 impl AccountsFile {
+    /// Create an AccountsFile instance from the specified path.
+    ///
+    /// The second element of the returned tuple is the number of accounts in the
+    /// accounts file.
+    pub fn new_from_file(path: impl AsRef<Path>, current_len: usize) -> Result<(Self, usize)> {
+        let (av, num_accounts) = AppendVec::new_from_file(path, current_len)?;
+        Ok((Self::AppendVec(av), num_accounts))
+    }
+
     /// By default, all AccountsFile will remove its underlying file on
     /// drop.  Calling this function to disable such behavior for this
     /// instance.
@@ -27,7 +67,7 @@ impl AccountsFile {
         }
     }
 
-    pub fn flush(&self) -> io::Result<()> {
+    pub fn flush(&self) -> Result<()> {
         match self {
             Self::AppendVec(av) => av.flush(),
         }
@@ -63,6 +103,12 @@ impl AccountsFile {
         }
     }
 
+    pub fn is_recyclable(&self) -> bool {
+        match self {
+            Self::AppendVec(_) => true,
+        }
+    }
+
     pub fn file_name(slot: Slot, id: impl std::fmt::Display) -> String {
         format!("{slot}.{id}")
     }
@@ -80,7 +126,7 @@ impl AccountsFile {
         &self,
         offset: usize,
         owners: &[&Pubkey],
-    ) -> Result<usize, MatchAccountOwnerError> {
+    ) -> std::result::Result<usize, MatchAccountOwnerError> {
         match self {
             Self::AppendVec(av) => av.account_matches_owners(offset, owners),
         }

@@ -27,7 +27,8 @@ Subscribe to transaction logging
 A string with one of the following values:
 
 - `all` - subscribe to all transactions except for simple vote transactions
-- `allWithVotes` - subscribe to all transactions including simple vote transactions
+- `allWithVotes` - subscribe to all transactions, including simple vote
+  transactions
 
 </Field>
 
@@ -35,7 +36,17 @@ A string with one of the following values:
 
 An object with the following field:
 
-- `mentions: [ <string> ]` - array of Pubkeys (as base-58 encoded strings) to listen for being mentioned in any transaction
+- `mentions: [ <string> ]` - array containing a single Pubkey (as base-58
+  encoded string); if present, subscribe to only transactions mentioning this address
+
+:::caution
+
+Currently, the `mentions` field
+[only supports one](https://github.com/solana-labs/solana/blob/master/rpc/src/rpc_pubsub.rs#L481)
+Pubkey string per method call. Listing additional addresses will result in an
+error.
+
+:::
 
 </Field>
 
@@ -100,8 +111,13 @@ Configuration object containing the following fields:
 The notification will be an RpcResponse JSON object with value equal to:
 
 - `signature: <string>` - The transaction signature base58 encoded.
-- `err: <object|null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
-- `logs: <array|null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
+- `err: <object|null>` - Error if transaction failed, null if transaction
+  succeeded.
+  [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
+- `logs: <array|null>` - Array of log messages the transaction instructions
+  output during execution, null if simulation failed before the transaction was
+  able to execute (for example due to an invalid blockhash or signature
+  verification failure)
 
 Example:
 

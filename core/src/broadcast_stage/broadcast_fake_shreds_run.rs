@@ -37,7 +37,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
     ) -> Result<()> {
         // 1) Pull entries from banking stage
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
-        let bank = receive_results.bank.clone();
+        let bank = receive_results.bank;
         let last_tick_height = receive_results.last_tick_height;
 
         let next_shred_index = blockstore
@@ -139,9 +139,11 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             peers.iter().enumerate().for_each(|(i, peer)| {
                 if fake == (i <= self.partition) {
                     // Send fake shreds to the first N peers
-                    data_shreds.iter().for_each(|b| {
-                        sock.send_to(b.payload(), peer.tvu_forwards).unwrap();
-                    });
+                    if let Ok(addr) = peer.tvu_forwards() {
+                        data_shreds.iter().for_each(|b| {
+                            sock.send_to(b.payload(), addr).unwrap();
+                        });
+                    }
                 }
             });
         }

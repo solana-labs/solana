@@ -116,7 +116,7 @@ After re-encoding the base64 encoded keys into base58 and grouping by key, we se
 
 You may now realize that program data accounts (the accounts that store the executable byte-code for an on-chain program) can also be closed.
 
-> **Note:** This does _not_ mean that _program accounts_ can be closed (those are immutable and can never be reclaimed, but it's fine they're pretty small). It's also important to keep in mind that once program data accounts are deleted, they can never be recreated for an existing program. Therefor, the corresponding program (and its program id) for any closed program data account is effectively disabled forever and may not be re-deployed
+> **Note:** This does _not_ mean that _program accounts_ can be closed (those are immutable and can never be reclaimed, but it's fine they're pretty small). It's also important to keep in mind that once program data accounts are deleted, they can never be recreated for an existing program. Therefore, the corresponding program (and its program id) for any closed program data account is effectively disabled forever and may not be re-deployed
 
 While it would be uncommon for developers to need to close program data accounts since they can be rewritten during upgrades, one potential scenario is that since program data accounts can't be _resized_. You may wish to deploy your program at a new address to accommodate larger executables.
 

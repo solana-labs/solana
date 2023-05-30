@@ -76,7 +76,7 @@ impl TpuClient<QuicPool, QuicConnectionManager, QuicConfig> {
         websocket_url: &str,
         config: TpuClientConfig,
     ) -> Result<Self> {
-        let connection_cache = match ConnectionCache::default() {
+        let connection_cache = match ConnectionCache::new("connection_cache_tpu_client") {
             ConnectionCache::Quic(cache) => cache,
             ConnectionCache::Udp(_) => {
                 return Err(TpuSenderError::Custom(String::from(
@@ -111,7 +111,7 @@ where
         })
     }
 
-    pub fn send_and_confirm_messages_with_spinner<T: Signers>(
+    pub fn send_and_confirm_messages_with_spinner<T: Signers + ?Sized>(
         &self,
         messages: &[Message],
         signers: &T,

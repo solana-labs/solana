@@ -298,20 +298,16 @@
 //!
 //!     let payer = next_account_info(account_info_iter)?;
 //!     let recipient = next_account_info(account_info_iter)?;
-//!     // The system program is a required account to invoke a system
-//!     // instruction, even though we don't use it directly.
-//!     let system_account = next_account_info(account_info_iter)?;
 //!
 //!     assert!(payer.is_writable);
 //!     assert!(payer.is_signer);
 //!     assert!(recipient.is_writable);
-//!     assert!(system_program::check_id(system_account.key));
 //!
 //!     let lamports = 1000000;
 //!
 //!     invoke(
 //!         &system_instruction::transfer(payer.key, recipient.key, lamports),
-//!         &[payer.clone(), recipient.clone(), system_account.clone()],
+//!         &[payer.clone(), recipient.clone()],
 //!     )
 //! }
 //! ```
@@ -500,6 +496,8 @@ pub mod keccak;
 pub mod lamports;
 pub mod loader_instruction;
 pub mod loader_upgradeable_instruction;
+pub mod loader_v4;
+pub mod loader_v4_instruction;
 pub mod log;
 pub mod message;
 pub mod native_token;

@@ -2,8 +2,8 @@ use {
     crate::{
         crds::VersionedCrdsValue,
         crds_value::{
-            CrdsData, CrdsValue, CrdsValueLabel, IncrementalSnapshotHashes, LegacyVersion,
-            LowestSlot, SnapshotHashes, Version,
+            CrdsData, CrdsValue, CrdsValueLabel, LegacySnapshotHashes, LegacyVersion, LowestSlot,
+            SnapshotHashes, Version,
         },
         legacy_contact_info::LegacyContactInfo,
     },
@@ -58,21 +58,15 @@ impl_crds_entry!(LegacyVersion, CrdsData::LegacyVersion(version), version);
 impl_crds_entry!(LowestSlot, CrdsData::LowestSlot(_, slot), slot);
 impl_crds_entry!(Version, CrdsData::Version(version), version);
 impl_crds_entry!(
-    IncrementalSnapshotHashes,
-    CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
-    incremental_snapshot_hashes
+    LegacySnapshotHashes,
+    CrdsData::LegacySnapshotHashes(snapshot_hashes),
+    snapshot_hashes
 );
-
-impl<'a, 'b> CrdsEntry<'a, 'b> for &'a SnapshotHashes {
-    type Key = Pubkey;
-    fn get_entry(table: &'a CrdsTable, key: Self::Key) -> Option<Self> {
-        let key = CrdsValueLabel::SnapshotHashes(key);
-        match &table.get(&key)?.value.data {
-            CrdsData::SnapshotHashes(snapshot_hash) => Some(snapshot_hash),
-            _ => None,
-        }
-    }
-}
+impl_crds_entry!(
+    SnapshotHashes,
+    CrdsData::SnapshotHashes(snapshot_hashes),
+    snapshot_hashes
+);
 
 #[cfg(test)]
 mod tests {
@@ -124,11 +118,11 @@ mod tests {
                 CrdsData::LegacyVersion(version) => {
                     assert_eq!(crds.get::<&LegacyVersion>(key), Some(version))
                 }
+                CrdsData::LegacySnapshotHashes(hash) => {
+                    assert_eq!(crds.get::<&LegacySnapshotHashes>(key), Some(hash))
+                }
                 CrdsData::SnapshotHashes(hash) => {
                     assert_eq!(crds.get::<&SnapshotHashes>(key), Some(hash))
-                }
-                CrdsData::IncrementalSnapshotHashes(hash) => {
-                    assert_eq!(crds.get::<&IncrementalSnapshotHashes>(key), Some(hash))
                 }
                 _ => (),
             }

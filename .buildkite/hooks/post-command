@@ -1,4 +1,10 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
+
+source ci/upload-ci-artifact.sh
+
+#shellcheck source=ci/common/shared-functions.sh
+source ci/common/shared-functions.sh
 
 #
 # Add job_stats data point
@@ -6,6 +12,15 @@
 if [[ -z $CI_BUILD_START ]]; then
   echo Error: CI_BUILD_START empty
 else
+  # make sure console outputs are uploaded as soon as possible, if any
+  (
+    shopt -s nullglob
+    for console_log in ./intercepted-console-*; do
+      gzip -f "$console_log"
+      upload-ci-artifact "$console_log.gz"
+    done
+  )
+
   CI_BUILD_DURATION=$(( $(date +%s) - CI_BUILD_START + 1 ))
 
   CI_LABEL=${BUILDKITE_LABEL:-build label missing}
@@ -20,13 +35,44 @@ else
     SUCCESS=false
   fi
 
-  if [[ -n $BUILDKITE && -f "results.json" ]]; then
-    # prepare result file
-    awk '/{ "type": .* }/' results.json > sanitized-results.json
+  if [[ -n $BUILDKITE ]]; then
+    if need_to_upload_test_result; then
+      if [[ -f "results.json" ]]; then
+        # extract lines which start with '{'
+        awk '/{.*/' results.json >sanitized-results.json
 
-    # upload to datadog
-    cargo2junit > results.xml < sanitized-results.json
-    datadog-ci junit upload --service solana results.xml
+        echo "~~~ Uploading test results to Buildkite Analytics"
+        buildkite-test-collector <sanitized-results.json
+
+        echo "~~~ Uploading test results to Datadog"
+        cargo2junit >results.xml <sanitized-results.json || true
+        if [[ -f "results.xml" ]]; then
+          datadog-ci junit upload --service solana results.xml
+        fi
+      fi
+
+      if [[ -f "target/nextest/ci/junit.xml" ]]; then
+        echo "~~~ Uploading test results to Buildkite Analytics"
+        curl \
+          -X POST \
+          -H "Authorization: Token token=\"$BUILDKITE_ANALYTICS_TOKEN\"" \
+          -F "data=@target/nextest/ci/junit.xml" \
+          -F "format=junit" \
+          -F "run_env[CI]=buildkite" \
+          -F "run_env[key]=$BUILDKITE_BUILD_ID" \
+          -F "run_env[url]=$BUILDKITE_BUILD_URL" \
+          -F "run_env[branch]=$BUILDKITE_BRANCH" \
+          -F "run_env[commit_sha]=$BUILDKITE_COMMIT" \
+          -F "run_env[number]=$BUILDKITE_BUILD_NUMBER" \
+          -F "run_env[job_id]=$BUILDKITE_JOB_ID" \
+          -F "run_env[message]=$BUILDKITE_MESSAGE" \
+          https://analytics-api.buildkite.com/v1/uploads
+        echo # add a break line for previous command
+
+        echo "~~~ Uploading test results to Datadog"
+        datadog-ci junit upload --service solana target/nextest/ci/junit.xml
+      fi
+    fi
   fi
 
   point_tags="pipeline=$BUILDKITE_PIPELINE_SLUG,job=$CI_LABEL,pr=$PR,success=$SUCCESS"

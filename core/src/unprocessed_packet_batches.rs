@@ -1,9 +1,8 @@
 use {
     crate::immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     min_max_heap::MinMaxHeap,
-    solana_perf::packet::{Packet, PacketBatch},
-    solana_runtime::transaction_priority_details::TransactionPriorityDetails,
-    solana_sdk::{hash::Hash, transaction::Transaction},
+    solana_perf::packet::Packet,
+    solana_sdk::hash::Hash,
     std::{
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
@@ -28,22 +27,7 @@ impl DeserializedPacket {
     }
 
     pub fn new(packet: Packet) -> Result<Self, DeserializedPacketError> {
-        Self::new_internal(packet, None)
-    }
-
-    #[cfg(test)]
-    pub fn new_with_priority_details(
-        packet: Packet,
-        priority_details: TransactionPriorityDetails,
-    ) -> Result<Self, DeserializedPacketError> {
-        Self::new_internal(packet, Some(priority_details))
-    }
-
-    pub fn new_internal(
-        packet: Packet,
-        priority_details: Option<TransactionPriorityDetails>,
-    ) -> Result<Self, DeserializedPacketError> {
-        let immutable_section = ImmutableDeserializedPacket::new(packet, priority_details)?;
+        let immutable_section = ImmutableDeserializedPacket::new(packet)?;
 
         Ok(Self {
             immutable_section: Arc::new(immutable_section),
@@ -306,35 +290,16 @@ impl UnprocessedPacketBatches {
     }
 }
 
-pub fn deserialize_packets<'a>(
-    packet_batch: &'a PacketBatch,
-    packet_indexes: &'a [usize],
-) -> impl Iterator<Item = DeserializedPacket> + 'a {
-    packet_indexes.iter().filter_map(move |packet_index| {
-        DeserializedPacket::new(packet_batch[*packet_index].clone()).ok()
-    })
-}
-
-pub fn transactions_to_deserialized_packets(
-    transactions: &[Transaction],
-) -> Result<Vec<DeserializedPacket>, DeserializedPacketError> {
-    transactions
-        .iter()
-        .map(|transaction| {
-            let packet = Packet::from_data(None, transaction)?;
-            DeserializedPacket::new(packet)
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use {
         super::*,
         solana_perf::packet::PacketFlags,
         solana_sdk::{
+            compute_budget::ComputeBudgetInstruction,
+            message::Message,
             signature::{Keypair, Signer},
-            system_transaction,
+            system_instruction, system_transaction,
             transaction::{SimpleAddressLoader, Transaction},
         },
         solana_vote_program::vote_transaction,
@@ -353,21 +318,16 @@ mod tests {
     }
 
     fn packet_with_priority_details(priority: u64, compute_unit_limit: u64) -> DeserializedPacket {
-        let tx = system_transaction::transfer(
-            &Keypair::new(),
-            &solana_sdk::pubkey::new_rand(),
-            1,
-            Hash::new_unique(),
-        );
-        let packet = Packet::from_data(None, tx).unwrap();
-        DeserializedPacket::new_with_priority_details(
-            packet,
-            TransactionPriorityDetails {
-                priority,
-                compute_unit_limit,
-            },
-        )
-        .unwrap()
+        let from_account = solana_sdk::pubkey::new_rand();
+        let tx = Transaction::new_unsigned(Message::new(
+            &[
+                ComputeBudgetInstruction::set_compute_unit_limit(compute_unit_limit as u32),
+                ComputeBudgetInstruction::set_compute_unit_price(priority),
+                system_instruction::transfer(&from_account, &solana_sdk::pubkey::new_rand(), 1),
+            ],
+            Some(&from_account),
+        ));
+        DeserializedPacket::new(Packet::from_data(None, tx).unwrap()).unwrap()
     }
 
     #[test]

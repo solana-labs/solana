@@ -1,0 +1,11 @@
+route:
+ group_by: [AlertMe]
+ # If an alert isn't caught by a route, send it to the pager.
+ receiver: discord_webhook
+
+receivers:
+- name: 'discord_webhook'
+  #pagerduty_configs:
+  #- service_key: cde8232f1c6d4f09c0884c5b0e5d5f86
+  webhook_configs:
+  - url: 'http://10.128.0.11:9094'

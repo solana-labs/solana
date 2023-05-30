@@ -10,7 +10,7 @@ use {
     solana_entry::entry::Entry,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
-        contact_info::ContactInfo,
+        contact_info::{ContactInfo, Protocol},
     },
     solana_ledger::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -63,9 +63,9 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         let port = socket.local_addr().unwrap().port();
         contact_info.set_tvu((Ipv4Addr::LOCALHOST, port)).unwrap();
         contact_info
-            .set_tvu_forwards(contact_info.tvu().unwrap())
+            .set_tvu_forwards(contact_info.tvu(Protocol::UDP).unwrap())
             .unwrap();
-        info!("local: {:?}", contact_info.tvu().unwrap());
+        info!("local: {:?}", contact_info.tvu(Protocol::UDP).unwrap());
         cluster_info.insert_info(contact_info);
         socket.set_nonblocking(true).unwrap();
         socket

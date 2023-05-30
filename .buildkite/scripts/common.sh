@@ -3,7 +3,8 @@
 export INDENT_LEVEL=2
 
 indent() {
-  sed "s/^/$(printf ' %.0s' $(seq 1 $INDENT_LEVEL))/"
+  local indent=${1:-"$INDENT_LEVEL"}
+  sed "s/^/$(printf ' %.0s' $(seq 1 "$indent"))/"
 }
 
 group() {
@@ -35,11 +36,37 @@ step() {
   local agent
   agent="$(echo "$params" | jq -r '.agent')"
 
-  cat <<EOF | indent
+  local parallelism
+  parallelism="$(echo "$params" | jq -r '.parallelism')"
+  maybe_parallelism="DELETE_THIS_LINE"
+  if [ "$parallelism" != "null" ]; then
+    maybe_parallelism=$(
+      cat <<EOF | indent 2
+parallelism: $parallelism
+EOF
+    )
+  fi
+
+  local retry
+  retry="$(echo "$params" | jq -r '.retry')"
+  maybe_retry="DELETE_THIS_LINE"
+  if [ "$retry" != "null" ]; then
+    maybe_retry=$(
+      cat <<EOF | indent 2
+retry:
+  automatic:
+    - limit: $retry
+EOF
+    )
+  fi
+
+  cat <<EOF | indent | sed '/DELETE_THIS_LINE/d'
 - name: "$name"
   command: "$command"
   timeout_in_minutes: $timeout_in_minutes
   agents:
     queue: "$agent"
+$maybe_parallelism
+$maybe_retry
 EOF
 }

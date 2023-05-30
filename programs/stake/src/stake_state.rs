@@ -15,8 +15,8 @@ use {
         account_utils::StateMut,
         clock::{Clock, Epoch},
         feature_set::{
-            self, stake_allow_zero_undelegated_amount, stake_merge_with_unmatched_credits_observed,
-            stake_split_uses_rent_sysvar, FeatureSet,
+            self, clean_up_delegation_errors, stake_allow_zero_undelegated_amount,
+            stake_merge_with_unmatched_credits_observed, stake_split_uses_rent_sysvar, FeatureSet,
         },
         instruction::{checked_add, InstructionError},
         pubkey::Pubkey,
@@ -733,6 +733,15 @@ pub fn split(
                 } else {
                     // Otherwise, the new split stake should reflect the entire split
                     // requested, less any lamports needed to cover the split_rent_exempt_reserve.
+
+                    if invoke_context
+                        .feature_set
+                        .is_active(&clean_up_delegation_errors::id())
+                        && stake.delegation.stake.saturating_sub(lamports) < minimum_delegation
+                    {
+                        return Err(StakeError::InsufficientDelegation.into());
+                    }
+
                     (
                         lamports,
                         lamports.saturating_sub(
@@ -742,6 +751,15 @@ pub fn split(
                         ),
                     )
                 };
+
+            if invoke_context
+                .feature_set
+                .is_active(&clean_up_delegation_errors::id())
+                && split_stake_amount < minimum_delegation
+            {
+                return Err(StakeError::InsufficientDelegation.into());
+            }
+
             let split_stake = stake.split(remaining_stake_delta, split_stake_amount)?;
             let mut split_meta = meta;
             split_meta.rent_exempt_reserve = validated_split_info.destination_rent_exempt_reserve;
@@ -1289,7 +1307,12 @@ fn validate_split_amount(
     // account, the split amount must be at least the minimum stake delegation.  So if the minimum
     // stake delegation was 10 lamports, then a split amount of 1 lamport would not meet the
     // *delegation* requirements.
-    if source_stake.is_some() && lamports < additional_required_lamports {
+    if !invoke_context
+        .feature_set
+        .is_active(&clean_up_delegation_errors::id())
+        && source_stake.is_some()
+        && lamports < additional_required_lamports
+    {
         return Err(InstructionError::InsufficientFunds);
     }
 
@@ -1779,13 +1802,12 @@ mod tests {
     use {
         super::*,
         proptest::prelude::*,
-        solana_program_runtime::invoke_context::InvokeContext,
+        solana_program_runtime::with_mock_invoke_context,
         solana_sdk::{
             account::{create_account_shared_data_for_test, AccountSharedData},
             native_token,
             pubkey::Pubkey,
             sysvar::SysvarId,
-            transaction_context::TransactionContext,
         },
     };
 
@@ -2916,18 +2938,6 @@ mod tests {
         );
     }
 
-    fn create_mock_tx_context() -> TransactionContext {
-        TransactionContext::new(
-            vec![(
-                Rent::id(),
-                create_account_shared_data_for_test(&Rent::default()),
-            )],
-            Some(Rent::default()),
-            1,
-            1,
-        )
-    }
-
     #[test]
     fn test_lockup_is_expired() {
         let custodian = solana_sdk::pubkey::new_rand();
@@ -3034,9 +3044,7 @@ mod tests {
 
     #[test]
     fn test_things_can_merge() {
-        let mut transaction_context =
-            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        with_mock_invoke_context!(invoke_context, transaction_context, Vec::new());
         let good_stake = Stake {
             credits_observed: 4242,
             delegation: Delegation {
@@ -3134,9 +3142,7 @@ mod tests {
 
     #[test]
     fn test_metas_can_merge() {
-        let mut transaction_context =
-            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        with_mock_invoke_context!(invoke_context, transaction_context, Vec::new());
         // Identical Metas can merge
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
@@ -3282,9 +3288,7 @@ mod tests {
 
     #[test]
     fn test_merge_kind_get_if_mergeable() {
-        let mut transaction_context =
-            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        with_mock_invoke_context!(invoke_context, transaction_context, Vec::new());
         let authority_pubkey = Pubkey::new_unique();
         let initial_lamports = 4242424242;
         let rent = Rent::default();
@@ -3522,9 +3526,7 @@ mod tests {
 
     #[test]
     fn test_merge_kind_merge() {
-        let mut transaction_context =
-            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        with_mock_invoke_context!(invoke_context, transaction_context, Vec::new());
         let clock = Clock::default();
         let lamports = 424242;
         let meta = Meta {
@@ -3603,8 +3605,11 @@ mod tests {
 
     #[test]
     fn test_active_stake_merge() {
-        let mut transaction_context = create_mock_tx_context();
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        let transaction_accounts = vec![(
+            Rent::id(),
+            create_account_shared_data_for_test(&Rent::default()),
+        )];
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let clock = Clock::default();
         let delegation_a = 4_242_424_242u64;
         let delegation_b = 6_200_000_000u64;

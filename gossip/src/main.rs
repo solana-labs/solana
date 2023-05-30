@@ -6,7 +6,8 @@ use {
         SubCommand,
     },
     solana_clap_utils::{
-        input_parsers::keypair_of,
+        hidden_unless_forced,
+        input_parsers::{keypair_of, pubkeys_of},
         input_validators::{is_keypair_or_ask_keyword, is_port, is_pubkey},
     },
     solana_gossip::{
@@ -39,7 +40,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("allow-private-addr")
                 .takes_value(false)
                 .help("Allow contacting private ip addresses")
-                .hidden(true),
+                .hidden(hidden_unless_forced()),
         )
         .subcommand(
             SubCommand::with_name("rpc-url")
@@ -141,6 +142,7 @@ fn parse_matches() -> ArgMatches<'static> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey)
+                        .multiple(true)
                         .help("Public key of a specific node to wait for"),
                 )
                 .arg(&shred_version_arg)
@@ -181,7 +183,7 @@ fn process_spy_results(
     validators: Vec<ContactInfo>,
     num_nodes: Option<usize>,
     num_nodes_exactly: Option<usize>,
-    pubkey: Option<Pubkey>,
+    pubkeys: Option<&[Pubkey]>,
 ) {
     if timeout.is_some() {
         if let Some(num) = num_nodes {
@@ -195,10 +197,12 @@ fn process_spy_results(
                 exit(1);
             }
         }
-        if let Some(node) = pubkey {
-            if !validators.iter().any(|x| x.id == node) {
-                eprintln!("Error: Could not find node {node:?}");
-                exit(1);
+        if let Some(nodes) = pubkeys {
+            for node in nodes {
+                if !validators.iter().any(|x| x.pubkey() == node) {
+                    eprintln!("Error: Could not find node {node:?}");
+                    exit(1);
+                }
             }
         }
     }
@@ -221,9 +225,7 @@ fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std:
     let timeout = matches
         .value_of("timeout")
         .map(|secs| secs.to_string().parse().unwrap());
-    let pubkey = matches
-        .value_of("node_pubkey")
-        .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
+    let pubkeys = pubkeys_of(matches, "node_pubkey");
     let shred_version = value_t_or_exit!(matches, "shred_version", u16);
     let identity_keypair = keypair_of(matches, "identity");
 
@@ -247,14 +249,20 @@ fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std:
         entrypoint_addr.as_ref(),
         num_nodes,
         discover_timeout,
-        pubkey,             // find_node_by_pubkey
+        pubkeys.as_deref(), // find_nodes_by_pubkey
         None,               // find_node_by_gossip_addr
         Some(&gossip_addr), // my_gossip_addr
         shred_version,
         socket_addr_space,
     )?;
 
-    process_spy_results(timeout, validators, num_nodes, num_nodes_exactly, pubkey);
+    process_spy_results(
+        timeout,
+        validators,
+        num_nodes,
+        num_nodes_exactly,
+        pubkeys.as_deref(),
+    );
 
     Ok(())
 }
@@ -282,7 +290,7 @@ fn process_rpc_url(
         entrypoint_addr.as_ref(),
         Some(1), // num_nodes
         Duration::from_secs(timeout),
-        None,                     // find_node_by_pubkey
+        None,                     // find_nodes_by_pubkey
         entrypoint_addr.as_ref(), // find_node_by_gossip_addr
         None,                     // my_gossip_addr
         shred_version,
@@ -291,14 +299,15 @@ fn process_rpc_url(
 
     let rpc_addrs: Vec<_> = validators
         .iter()
-        .filter_map(|contact_info| {
-            if (any || all || Some(contact_info.gossip) == entrypoint_addr)
-                && ContactInfo::is_valid_address(&contact_info.rpc, &socket_addr_space)
-            {
-                return Some(contact_info.rpc);
-            }
-            None
+        .filter(|node| {
+            any || all
+                || node
+                    .gossip()
+                    .map(|addr| Some(addr) == entrypoint_addr)
+                    .unwrap_or_default()
         })
+        .filter_map(|node| node.rpc().ok())
+        .filter(|addr| socket_addr_space.check(addr))
         .collect();
 
     if rpc_addrs.is_empty() {

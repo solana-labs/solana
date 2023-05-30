@@ -124,7 +124,7 @@ impl ThinClient {
         tries: usize
     ) -> TransportResult<Signature>);
 
-    dispatch!(pub fn send_and_confirm_transaction<T: Signers>(
+    dispatch!(pub fn send_and_confirm_transaction<T: Signers + ?Sized>(
         &self,
         keypairs: &T,
         transaction: &mut Transaction,
@@ -172,7 +172,7 @@ impl Client for ThinClient {
 }
 
 impl SyncClient for ThinClient {
-    dispatch!(fn send_and_confirm_message<T: Signers>(
+    dispatch!(fn send_and_confirm_message<T: Signers + ?Sized>(
         &self,
         keypairs: &T,
         message: Message

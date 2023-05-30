@@ -103,7 +103,6 @@ else
     solana-ledger-tool
     solana-log-analyzer
     solana-net-shaper
-    solana-sys-tuner
     solana-validator
     rbpf-cli
   )
@@ -163,6 +162,40 @@ if [[ -z "$validatorOnly" ]]; then
   "$cargo" $maybeRustVersion run --bin gen-headers
   mkdir -p "$installDir"/bin/sdk/sbf
   cp -a sdk/sbf/* "$installDir"/bin/sdk/sbf
+fi
+
+# Add Solidity Compiler
+if [[ -z "$validatorOnly" ]]; then
+  base="https://github.com/hyperledger/solang/releases/download"
+  version="v0.3.0"
+  curlopt="-sSfL --retry 5 --retry-delay 2 --retry-connrefused"
+
+  case $(uname -s) in
+  "Linux")
+    if [[ $(uname -m) == "x86_64" ]]; then
+      arch="x86-64"
+    else
+      arch="arm64"
+    fi
+    # shellcheck disable=SC2086
+    curl $curlopt -o "$installDir/bin/solang" $base/$version/solang-linux-$arch
+    chmod 755 "$installDir/bin/solang"
+    ;;
+  "Darwin")
+    if [[ $(uname -m) == "x86_64" ]]; then
+      arch="intel"
+    else
+      arch="arm"
+    fi
+    # shellcheck disable=SC2086
+    curl $curlopt -o "$installDir/bin/solang" $base/$version/solang-mac-$arch
+    chmod 755 "$installDir/bin/solang"
+    ;;
+  *)
+    # shellcheck disable=SC2086
+    curl $curlopt -o "$installDir/bin/solang.exe" $base/$version/solang.exe
+    ;;
+  esac
 fi
 
 (

@@ -346,7 +346,7 @@ impl Transaction {
     /// #
     /// # Ok::<(), anyhow::Error>(())
     /// ```
-    pub fn new<T: Signers>(
+    pub fn new<T: Signers + ?Sized>(
         from_keypairs: &T,
         message: Message,
         recent_blockhash: Hash,
@@ -501,7 +501,7 @@ impl Transaction {
     /// #
     /// # Ok::<(), anyhow::Error>(())
     /// ```
-    pub fn new_signed_with_payer<T: Signers>(
+    pub fn new_signed_with_payer<T: Signers + ?Sized>(
         instructions: &[Instruction],
         payer: Option<&Pubkey>,
         signing_keypairs: &T,
@@ -526,7 +526,7 @@ impl Transaction {
     ///
     /// Panics when signing fails. See [`Transaction::try_sign`] and for a full
     /// description of failure conditions.
-    pub fn new_with_compiled_instructions<T: Signers>(
+    pub fn new_with_compiled_instructions<T: Signers + ?Sized>(
         from_keypairs: &T,
         keys: &[Pubkey],
         recent_blockhash: Hash,
@@ -705,7 +705,7 @@ impl Transaction {
     /// #
     /// # Ok::<(), anyhow::Error>(())
     /// ```
-    pub fn sign<T: Signers>(&mut self, keypairs: &T, recent_blockhash: Hash) {
+    pub fn sign<T: Signers + ?Sized>(&mut self, keypairs: &T, recent_blockhash: Hash) {
         if let Err(e) = self.try_sign(keypairs, recent_blockhash) {
             panic!("Transaction::sign failed with error {e:?}");
         }
@@ -731,7 +731,7 @@ impl Transaction {
     /// handle the error. See the documentation for
     /// [`Transaction::try_partial_sign`] for a full description of failure
     /// conditions.
-    pub fn partial_sign<T: Signers>(&mut self, keypairs: &T, recent_blockhash: Hash) {
+    pub fn partial_sign<T: Signers + ?Sized>(&mut self, keypairs: &T, recent_blockhash: Hash) {
         if let Err(e) = self.try_partial_sign(keypairs, recent_blockhash) {
             panic!("Transaction::partial_sign failed with error {e:?}");
         }
@@ -750,7 +750,7 @@ impl Transaction {
     ///
     /// Panics if signing fails. Use [`Transaction::try_partial_sign_unchecked`]
     /// to handle the error.
-    pub fn partial_sign_unchecked<T: Signers>(
+    pub fn partial_sign_unchecked<T: Signers + ?Sized>(
         &mut self,
         keypairs: &T,
         positions: Vec<usize>,
@@ -843,7 +843,7 @@ impl Transaction {
     /// #
     /// # Ok::<(), anyhow::Error>(())
     /// ```
-    pub fn try_sign<T: Signers>(
+    pub fn try_sign<T: Signers + ?Sized>(
         &mut self,
         keypairs: &T,
         recent_blockhash: Hash,
@@ -906,7 +906,7 @@ impl Transaction {
     /// [`PresignerError::VerificationFailure`]: crate::signer::presigner::PresignerError::VerificationFailure
     /// [`solana-remote-wallet`]: https://docs.rs/solana-remote-wallet/latest/
     /// [`RemoteKeypair`]: https://docs.rs/solana-remote-wallet/latest/solana_remote_wallet/remote_keypair/struct.RemoteKeypair.html
-    pub fn try_partial_sign<T: Signers>(
+    pub fn try_partial_sign<T: Signers + ?Sized>(
         &mut self,
         keypairs: &T,
         recent_blockhash: Hash,
@@ -932,7 +932,7 @@ impl Transaction {
     /// # Errors
     ///
     /// Returns an error if signing fails.
-    pub fn try_partial_sign_unchecked<T: Signers>(
+    pub fn try_partial_sign_unchecked<T: Signers + ?Sized>(
         &mut self,
         keypairs: &T,
         positions: Vec<usize>,
@@ -1667,5 +1667,23 @@ mod tests {
             .try_partial_sign(&[&from_keypair, &unused_keypair], Hash::default())
             .unwrap_err();
         assert_eq!(err, SignerError::KeypairPubkeyMismatch);
+    }
+
+    #[test]
+    fn test_unsized_signers() {
+        fn instructions_to_tx(
+            instructions: &[Instruction],
+            signers: Box<dyn Signers>,
+        ) -> Transaction {
+            let pubkeys = signers.pubkeys();
+            let first_signer = pubkeys.first().expect("should exist");
+            let message = Message::new(instructions, Some(first_signer));
+            Transaction::new(signers.as_ref(), message, Hash::default())
+        }
+
+        let signer: Box<dyn Signer> = Box::new(Keypair::new());
+        let tx = instructions_to_tx(&[], Box::new(vec![signer]));
+
+        assert!(tx.is_signed());
     }
 }

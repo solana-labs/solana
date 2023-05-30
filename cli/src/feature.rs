@@ -6,7 +6,9 @@ use {
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     console::style,
     serde::{Deserialize, Serialize},
-    solana_clap_utils::{fee_payer::*, input_parsers::*, input_validators::*, keypair::*},
+    solana_clap_utils::{
+        fee_payer::*, hidden_unless_forced, input_parsers::*, input_validators::*, keypair::*,
+    },
     solana_cli_output::{cli_version::CliVersion, QuietDisplay, VerboseDisplay},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
@@ -424,7 +426,7 @@ impl FeatureSubCommands for App<'_, '_> {
                         .arg(
                             Arg::with_name("force")
                                 .long("yolo")
-                                .hidden(true)
+                                .hidden(hidden_unless_forced())
                                 .multiple(true)
                                 .help("Override activation sanity checks. Don't use this flag"),
                         )

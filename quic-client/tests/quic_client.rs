@@ -8,10 +8,10 @@ mod tests {
         solana_quic_client::nonblocking::quic_client::{
             QuicClientCertificate, QuicLazyInitializedEndpoint,
         },
-        solana_sdk::{packet::PACKET_DATA_SIZE, signature::Keypair},
+        solana_sdk::{net::DEFAULT_TPU_COALESCE, packet::PACKET_DATA_SIZE, signature::Keypair},
         solana_streamer::{
-            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, quic::StreamStats,
-            streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate,
+            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, streamer::StakedNodes,
+            tls_certificates::new_self_signed_tls_certificate,
         },
         std::{
             net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
@@ -21,6 +21,7 @@ mod tests {
             },
             time::{Duration, Instant},
         },
+        tokio::time::sleep,
     };
 
     fn check_packets(
@@ -48,19 +49,12 @@ mod tests {
         assert_eq!(total_packets, num_expected_packets);
     }
 
-    fn server_args() -> (
-        UdpSocket,
-        Arc<AtomicBool>,
-        Keypair,
-        IpAddr,
-        Arc<StreamStats>,
-    ) {
+    fn server_args() -> (UdpSocket, Arc<AtomicBool>, Keypair, IpAddr) {
         (
             UdpSocket::bind("127.0.0.1:0").unwrap(),
             Arc::new(AtomicBool::new(false)),
             Keypair::new(),
             "127.0.0.1".parse().unwrap(),
-            Arc::new(StreamStats::default()),
         )
     }
 
@@ -73,8 +67,9 @@ mod tests {
         solana_logger::setup();
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (s, exit, keypair, ip, stats) = server_args();
+        let (s, exit, keypair, ip) = server_args();
         let (_, t) = solana_streamer::quic::spawn_server(
+            "quic_streamer_test",
             s.try_clone().unwrap(),
             &keypair,
             ip,
@@ -84,8 +79,8 @@ mod tests {
             staked_nodes,
             10,
             10,
-            stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 
@@ -111,6 +106,38 @@ mod tests {
         t.join().unwrap();
     }
 
+    // A version of check_packets that avoids blocking in an
+    // async environment. todo: we really need a way of guaranteeing
+    // we don't block in async code/tests, as it can lead to subtle bugs
+    // that don't immediately manifest, but only show up when a separate
+    // change (often itself valid) is made
+    async fn nonblocking_check_packets(
+        receiver: Receiver<PacketBatch>,
+        num_bytes: usize,
+        num_expected_packets: usize,
+    ) {
+        let mut all_packets = vec![];
+        let now = Instant::now();
+        let mut total_packets: usize = 0;
+        while now.elapsed().as_secs() < 10 {
+            if let Ok(packets) = receiver.try_recv() {
+                total_packets = total_packets.saturating_add(packets.len());
+                all_packets.push(packets)
+            } else {
+                sleep(Duration::from_secs(1)).await;
+            }
+            if total_packets >= num_expected_packets {
+                break;
+            }
+        }
+        for batch in all_packets {
+            for p in &batch {
+                assert_eq!(p.meta().size, num_bytes);
+            }
+        }
+        assert_eq!(total_packets, num_expected_packets);
+    }
+
     #[tokio::test]
     async fn test_nonblocking_quic_client_multiple_writes() {
         use {
@@ -120,8 +147,9 @@ mod tests {
         solana_logger::setup();
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (s, exit, keypair, ip, stats) = server_args();
-        let (_, t) = solana_streamer::nonblocking::quic::spawn_server(
+        let (s, exit, keypair, ip) = server_args();
+        let (_, _, t) = solana_streamer::nonblocking::quic::spawn_server(
+            "quic_streamer_test",
             s.try_clone().unwrap(),
             &keypair,
             ip,
@@ -131,8 +159,8 @@ mod tests {
             staked_nodes,
             10,
             10,
-            stats,
-            1000,
+            Duration::from_secs(1), // wait_for_chunk_timeout
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 
@@ -152,7 +180,7 @@ mod tests {
         let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
         assert!(client.send_data_batch(&packets).await.is_ok());
 
-        check_packets(receiver, num_bytes, num_expected_packets);
+        nonblocking_check_packets(receiver, num_bytes, num_expected_packets).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
     }
@@ -175,9 +203,9 @@ mod tests {
         // Request Receiver
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (request_recv_socket, request_recv_exit, keypair, request_recv_ip, request_recv_stats) =
-            server_args();
+        let (request_recv_socket, request_recv_exit, keypair, request_recv_ip) = server_args();
         let (request_recv_endpoint, request_recv_thread) = solana_streamer::quic::spawn_server(
+            "quic_streamer_test",
             request_recv_socket.try_clone().unwrap(),
             &keypair,
             request_recv_ip,
@@ -187,26 +215,21 @@ mod tests {
             staked_nodes.clone(),
             10,
             10,
-            request_recv_stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 
         drop(request_recv_endpoint);
         // Response Receiver:
-        let (
-            response_recv_socket,
-            response_recv_exit,
-            keypair2,
-            response_recv_ip,
-            response_recv_stats,
-        ) = server_args();
+        let (response_recv_socket, response_recv_exit, keypair2, response_recv_ip) = server_args();
         let (sender2, receiver2) = unbounded();
 
         let addr = response_recv_socket.local_addr().unwrap().ip();
         let port = response_recv_socket.local_addr().unwrap().port();
         let server_addr = SocketAddr::new(addr, port);
         let (response_recv_endpoint, response_recv_thread) = solana_streamer::quic::spawn_server(
+            "quic_streamer_test",
             response_recv_socket,
             &keypair2,
             response_recv_ip,
@@ -216,8 +239,8 @@ mod tests {
             staked_nodes,
             10,
             10,
-            response_recv_stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 

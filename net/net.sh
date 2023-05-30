@@ -232,29 +232,37 @@ build() {
   echo "Build took $SECONDS seconds"
 }
 
-SOLANA_HOME="\$HOME/solana"
-CARGO_BIN="\$HOME/.cargo/bin"
+remoteHomeDir() {
+  declare ipAddress=$1
+  declare remoteHome
+  remoteHome="$(ssh "${sshOptions[@]}" "$ipAddress" "echo \$HOME")"
+  echo "$remoteHome"
+}
 
 startCommon() {
   declare ipAddress=$1
+  declare remoteHome
+  remoteHome=$(remoteHomeDir "$ipAddress")
+  local remoteSolanaHome="${remoteHome}/solana"
+  local remoteCargoBin="${remoteHome}/.cargo/bin"
   test -d "$SOLANA_ROOT"
   if $skipSetup; then
     # shellcheck disable=SC2029
     ssh "${sshOptions[@]}" "$ipAddress" "
       set -x;
-      mkdir -p $SOLANA_HOME/config;
+      mkdir -p $remoteSolanaHome/config;
       rm -rf ~/config;
-      mv $SOLANA_HOME/config ~;
-      rm -rf $SOLANA_HOME;
-      mkdir -p $SOLANA_HOME $CARGO_BIN;
-      mv ~/config $SOLANA_HOME/
+      mv $remoteSolanaHome/config ~;
+      rm -rf $remoteSolanaHome;
+      mkdir -p $remoteSolanaHome $remoteCargoBin;
+      mv ~/config $remoteSolanaHome/
     "
   else
     # shellcheck disable=SC2029
     ssh "${sshOptions[@]}" "$ipAddress" "
       set -x;
-      rm -rf $SOLANA_HOME;
-      mkdir -p $CARGO_BIN
+      rm -rf $remoteSolanaHome;
+      mkdir -p $remoteCargoBin
     "
   fi
   [[ -z "$externalNodeSshKey" ]] || ssh-copy-id -f -i "$externalNodeSshKey" "${sshOptions[@]}" "solana@$ipAddress"
@@ -264,10 +272,13 @@ startCommon() {
 syncScripts() {
   echo "rsyncing scripts... to $ipAddress"
   declare ipAddress=$1
+  declare remoteHome
+  remoteHome=$(remoteHomeDir "$ipAddress")
+  local remoteSolanaHome="${remoteHome}/solana"
   rsync -vPrc -e "ssh ${sshOptions[*]}" \
     --exclude 'net/log*' \
     "$SOLANA_ROOT"/{fetch-perf-libs.sh,fetch-spl.sh,scripts,net,multinode-demo} \
-    "$ipAddress":"$SOLANA_HOME"/ > /dev/null
+    "$ipAddress":"$remoteSolanaHome"/ > /dev/null
 }
 
 # Deploy local binaries to bootstrap validator.  Other validators and clients later fetch the
@@ -275,14 +286,18 @@ syncScripts() {
 deployBootstrapValidator() {
   declare ipAddress=$1
 
+  declare remoteHome
+  remoteHome=$(remoteHomeDir "$ipAddress")
+  local remoteCargoBin="${remoteHome}/.cargo/bin"
+
   echo "Deploying software to bootstrap validator ($ipAddress)"
   case $deployMethod in
   tar)
-    rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:$CARGO_BIN/"
+    rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:$remoteCargoBin/"
     rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/version.yml "$ipAddress:~/"
     ;;
   local)
-    rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:$CARGO_BIN/"
+    rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:$remoteCargoBin/"
     rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/version.yml "$ipAddress:~/"
     ;;
   skip)
@@ -1179,7 +1194,9 @@ netem)
     remoteNetemConfigFile="$(basename "$netemConfigFile")"
     if [[ $netemCommand = "add" ]]; then
       for ipAddress in "${validatorIpList[@]}"; do
-        "$here"/scp.sh "$netemConfigFile" solana@"$ipAddress":"$SOLANA_HOME"
+        remoteHome=$(remoteHomeDir "$ipAddress")
+        remoteSolanaHome="${remoteHome}/solana"
+        "$here"/scp.sh "$netemConfigFile" solana@"$ipAddress":"$remoteSolanaHome"
       done
     fi
     for i in "${!validatorIpList[@]}"; do

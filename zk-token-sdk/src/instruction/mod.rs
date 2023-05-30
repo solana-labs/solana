@@ -1,10 +1,14 @@
-pub mod close_account;
+pub mod batched_range_proof;
+pub mod ciphertext_ciphertext_equality;
+pub mod ciphertext_commitment_equality;
 pub mod pubkey_validity;
+pub mod range_proof;
 pub mod transfer;
 pub mod transfer_with_fee;
 pub mod withdraw;
-pub mod withdraw_withheld;
+pub mod zero_balance;
 
+use num_derive::{FromPrimitive, ToPrimitive};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -17,14 +21,51 @@ use {
     curve25519_dalek::scalar::Scalar,
 };
 pub use {
-    close_account::CloseAccountData, pubkey_validity::PubkeyValidityData, transfer::TransferData,
-    transfer_with_fee::TransferWithFeeData, withdraw::WithdrawData,
-    withdraw_withheld::WithdrawWithheldTokensData,
+    batched_range_proof::{
+        batched_range_proof_u128::BatchedRangeProofU128Data,
+        batched_range_proof_u256::BatchedRangeProofU256Data,
+        batched_range_proof_u64::BatchedRangeProofU64Data, BatchedRangeProofContext,
+    },
+    bytemuck::Pod,
+    ciphertext_ciphertext_equality::{
+        CiphertextCiphertextEqualityProofContext, CiphertextCiphertextEqualityProofData,
+    },
+    ciphertext_commitment_equality::{
+        CiphertextCommitmentEqualityProofContext, CiphertextCommitmentEqualityProofData,
+    },
+    pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
+    range_proof::{RangeProofContext, RangeProofU64Data},
+    transfer::{TransferData, TransferProofContext},
+    transfer_with_fee::{FeeParameters, TransferWithFeeData, TransferWithFeeProofContext},
+    withdraw::{WithdrawData, WithdrawProofContext},
+    zero_balance::{ZeroBalanceProofContext, ZeroBalanceProofData},
 };
 
-#[cfg(not(target_os = "solana"))]
-pub trait Verifiable {
-    fn verify(&self) -> Result<(), ProofError>;
+#[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ProofType {
+    /// Empty proof type used to distinguish if a proof context account is initialized
+    Uninitialized,
+    ZeroBalance,
+    Withdraw,
+    CiphertextCiphertextEquality,
+    Transfer,
+    TransferWithFee,
+    PubkeyValidity,
+    RangeProofU64,
+    BatchedRangeProofU64,
+    BatchedRangeProofU128,
+    BatchedRangeProofU256,
+    CiphertextCommitmentEquality,
+}
+
+pub trait ZkProofData<T: Pod> {
+    const PROOF_TYPE: ProofType;
+
+    fn context_data(&self) -> &T;
+
+    #[cfg(not(target_os = "solana"))]
+    fn verify_proof(&self) -> Result<(), ProofError>;
 }
 
 #[cfg(not(target_os = "solana"))]

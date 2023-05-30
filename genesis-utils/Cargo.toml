@@ -10,7 +10,9 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+log = { workspace = true }
 solana-download-utils = { workspace = true }
+solana-rpc-client = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 

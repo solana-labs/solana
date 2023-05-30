@@ -1,9 +1,6 @@
-use {
-    solana_program_runtime::invoke_context::InvokeContext,
-    solana_sdk::instruction::InstructionError,
-};
+use solana_program_runtime::declare_process_instruction;
 
-pub fn process_instruction(_invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+declare_process_instruction!(process_instruction, 150, |_invoke_context| {
     // Do nothing, compute budget instructions handled by the runtime
     Ok(())
-}
+});
