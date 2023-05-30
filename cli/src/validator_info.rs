@@ -44,7 +44,7 @@ pub fn check_details_length(string: String) -> Result<(), String> {
 pub fn check_total_length(info: &ValidatorInfo) -> Result<(), String> {
     let size = serialized_size(&info).unwrap();
     let limit = ValidatorInfo::max_space();
-    
+
     if size > limit {
         Err(format!(
             "Total size {size:?} exceeds limit of {limit:?} bytes"
@@ -104,7 +104,7 @@ fn parse_args(matches: &ArgMatches<'_>) -> Value {
     if let Some(url) = matches.value_of("website") {
         map.insert("website".to_string(), Value::String(url.to_string()));
     }
-    
+
     if let Some(icon_url) = matches.value_of("icon_url") {
         map.insert("iconUrl".to_string(), Value::String(icon_url.to_string()));
     }
@@ -496,7 +496,7 @@ mod tests {
             "-n",
             "alice_keybase",
             "-i",
-            "https://test.com/icon.png"
+            "https://test.com/icon.png",
         ]);
         let subcommand_matches = matches.subcommand();
         assert_eq!(subcommand_matches.0, "validator-info");
