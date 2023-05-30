@@ -1,5 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 #![allow(clippy::redundant_closure)]
+
 use {
     solana_cli::{
         check_balance,
@@ -165,7 +166,7 @@ fn test_stake_redelegation() {
     let stake_state: StakeState = stake_account.state().unwrap();
 
     let rent_exempt_reserve = match stake_state {
-        StakeState::Stake(meta, stake) => {
+        StakeState::Stake(meta, stake, _) => {
             assert_eq!(stake.delegation.voter_pubkey, vote_keypair.pubkey());
             meta.rent_exempt_reserve
         }
@@ -270,7 +271,7 @@ fn test_stake_redelegation() {
     let stake2_state: StakeState = stake2_account.state().unwrap();
 
     match stake2_state {
-        StakeState::Stake(_meta, stake) => {
+        StakeState::Stake(_meta, stake, _) => {
             assert_eq!(stake.delegation.voter_pubkey, vote2_keypair.pubkey());
         }
         _ => panic!("Unexpected stake2 state!"),
@@ -2318,4 +2319,313 @@ fn test_stake_minimum_delegation() {
 
     let result = process_command(&config);
     assert!(matches!(result, Ok(..)));
+}
+
+#[test]
+fn test_stake_redelegation_withdraw_not_permitted() {
+    let mint_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let authorized_withdrawer = Keypair::new().pubkey();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+
+    // setup test validator
+    let slots_per_epoch = 32;
+    let test_validator = TestValidatorGenesis::default()
+        .fee_rate_governor(FeeRateGovernor::new(0, 0))
+        .rent(Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 1.0,
+            ..Rent::default()
+        })
+        .epoch_schedule(EpochSchedule::custom(
+            slots_per_epoch,
+            slots_per_epoch,
+            /* enable_warmup_epochs = */ false,
+        ))
+        .faucet_addr(Some(faucet_addr))
+        .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified)
+        .expect("validator start failed");
+
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+    let default_signer = Keypair::new();
+
+    let mut config = CliConfig::recent_for_tests();
+    config.json_rpc_url = test_validator.rpc_url();
+    config.signers = vec![&default_signer];
+
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &config,
+        &config.signers[0].pubkey(),
+        100_000_000_000,
+    )
+    .unwrap();
+
+    // Create vote account
+    let vote_keypair = Keypair::new();
+    config.signers = vec![&default_signer, &vote_keypair];
+    config.command = CliCommand::CreateVoteAccount {
+        vote_account: 1,
+        seed: None,
+        identity_account: 0,
+        authorized_voter: None,
+        authorized_withdrawer,
+        commission: 0,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        compute_unit_price: None,
+    };
+    process_command(&config).unwrap();
+
+    // Create second vote account
+    let vote2_keypair = Keypair::new();
+    config.signers = vec![&default_signer, &vote2_keypair];
+    config.command = CliCommand::CreateVoteAccount {
+        vote_account: 1,
+        seed: None,
+        identity_account: 0,
+        authorized_voter: None,
+        authorized_withdrawer,
+        commission: 0,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        compute_unit_price: None,
+    };
+    process_command(&config).unwrap();
+
+    // Create stake account
+    let stake_keypair = Keypair::new();
+    config.signers = vec![&default_signer, &stake_keypair];
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: 1,
+        seed: None,
+        staker: None,
+        withdrawer: None,
+        withdrawer_signer: None,
+        lockup: Lockup::default(),
+        amount: SpendAmount::Some(50_000_000_000),
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        from: 0,
+        compute_unit_price: None,
+    };
+    process_command(&config).unwrap();
+
+    // Delegate stake to `vote_keypair`
+    config.signers = vec![&default_signer];
+    config.command = CliCommand::DelegateStake {
+        stake_account_pubkey: stake_keypair.pubkey(),
+        vote_account_pubkey: vote_keypair.pubkey(),
+        stake_authority: 0,
+        force: true,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        redelegation_stake_account: None,
+        compute_unit_price: None,
+    };
+    process_command(&config).unwrap();
+
+    // wait for new epoch
+    wait_for_next_epoch_plus_n_slots(&rpc_client, 0);
+
+    // `stake_keypair` should now be delegated to `vote_keypair` and fully activated
+    let stake_account = rpc_client.get_account(&stake_keypair.pubkey()).unwrap();
+    let stake_state: StakeState = stake_account.state().unwrap();
+
+    let rent_exempt_reserve = match stake_state {
+        StakeState::Stake(meta, stake, _) => {
+            assert_eq!(stake.delegation.voter_pubkey, vote_keypair.pubkey());
+            meta.rent_exempt_reserve
+        }
+        _ => panic!("Unexpected stake state!"),
+    };
+
+    assert_eq!(
+        rpc_client
+            .get_stake_activation(stake_keypair.pubkey(), None)
+            .unwrap(),
+        RpcStakeActivation {
+            state: StakeActivationState::Active,
+            active: 50_000_000_000 - rent_exempt_reserve,
+            inactive: 0
+        }
+    );
+    check_balance!(50_000_000_000, &rpc_client, &stake_keypair.pubkey());
+
+    // Now try to withdraw from stake_account. It will fail.
+    let recipient = keypair_from_seed(&[5u8; 32]).unwrap();
+    let recipient_pubkey = recipient.pubkey();
+    config.command = CliCommand::WithdrawStake {
+        stake_account_pubkey: stake_keypair.pubkey(),
+        destination_account_pubkey: recipient_pubkey,
+        amount: SpendAmount::Some(50_000_000_000),
+        withdraw_authority: 0,
+        custodian: None,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        seed: None,
+        fee_payer: 0,
+        compute_unit_price: None,
+    };
+
+    let withdraw_result = process_command(&config);
+    if let Err(e) = withdraw_result {
+        let s = format!("{}", e);
+        assert!(s.contains("insufficient funds for instruction"));
+    } else {
+        unreachable!();
+    }
+
+    // Setup `stake2_keypair. Add an extra `rent_exempt_reserve` amount into `stake2_keypair`
+    // before redelegation to account for the `rent_exempt_reserve` balance that'll be pealed off
+    // the stake during the redelegation process.
+    let stake2_keypair = Keypair::new();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &config,
+        &stake2_keypair.pubkey(),
+        rent_exempt_reserve,
+    )
+    .unwrap();
+
+    // Redelegate to `vote2_keypair` via `stake2_keypair
+    config.signers = vec![&default_signer, &stake2_keypair];
+    config.command = CliCommand::DelegateStake {
+        stake_account_pubkey: stake_keypair.pubkey(),
+        vote_account_pubkey: vote2_keypair.pubkey(),
+        stake_authority: 0,
+        force: true,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        redelegation_stake_account: Some(1),
+        compute_unit_price: None,
+    };
+    process_command(&config).unwrap();
+
+    // `stake_keypair` should now be deactivating
+    assert_eq!(
+        rpc_client
+            .get_stake_activation(stake_keypair.pubkey(), None)
+            .unwrap(),
+        RpcStakeActivation {
+            state: StakeActivationState::Deactivating,
+            active: 50_000_000_000 - rent_exempt_reserve,
+            inactive: 0,
+        }
+    );
+
+    // `stake_keypair2` should now be activating
+    assert_eq!(
+        rpc_client
+            .get_stake_activation(stake2_keypair.pubkey(), None)
+            .unwrap(),
+        RpcStakeActivation {
+            state: StakeActivationState::Activating,
+            active: 0,
+            inactive: 50_000_000_000 - rent_exempt_reserve,
+        }
+    );
+
+    // check that all the stake, save `rent_exempt_reserve`, have been moved from `stake_keypair`
+    // to `stake2_keypair`
+    check_balance!(rent_exempt_reserve, &rpc_client, &stake_keypair.pubkey());
+    check_balance!(50_000_000_000, &rpc_client, &stake2_keypair.pubkey());
+
+    // Deactivate stake2_account should fail because stake2_account is not fully activated.
+    config.signers = vec![&default_signer];
+
+    config.command = CliCommand::DeactivateStake {
+        stake_account_pubkey: stake2_keypair.pubkey(),
+        stake_authority: 0,
+        sign_only: false,
+        deactivate_delinquent: false,
+        dump_transaction_message: true,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        seed: None,
+        fee_payer: 0,
+        compute_unit_price: None,
+    };
+    let deactivate_result = process_command(&config);
+    if let Err(e) = deactivate_result {
+        let s = format!("{}", e);
+        assert_eq!(
+            s,
+            "redelegated stake must be fully activated before deactivation"
+        );
+    } else {
+        unreachable!();
+    }
+
+    // `stake_keypair2` should still be Activating
+    assert_eq!(
+        rpc_client
+            .get_stake_activation(stake2_keypair.pubkey(), None)
+            .unwrap(),
+        RpcStakeActivation {
+            state: StakeActivationState::Activating,
+            active: 0,
+            inactive: 50_000_000_000 - rent_exempt_reserve,
+        }
+    );
+
+    // Withdraw from stake2 account should still fails
+    let recipient = keypair_from_seed(&[5u8; 32]).unwrap();
+    let recipient_pubkey = recipient.pubkey();
+    config.command = CliCommand::WithdrawStake {
+        stake_account_pubkey: stake2_keypair.pubkey(),
+        destination_account_pubkey: recipient_pubkey,
+        amount: SpendAmount::Some(50_000_000_000),
+        withdraw_authority: 0,
+        custodian: None,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        seed: None,
+        fee_payer: 0,
+        compute_unit_price: None,
+    };
+
+    let withdraw_result = process_command(&config);
+    if let Err(e) = withdraw_result {
+        let s = format!("{}", e);
+        assert!(s.contains("insufficient funds for instruction"));
+    } else {
+        unreachable!();
+    }
 }

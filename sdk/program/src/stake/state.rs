@@ -16,13 +16,34 @@ use {
 
 pub type StakeActivationStatus = StakeHistoryEntry;
 
+#[repr(u8)]
+#[derive(
+    Debug,
+    Default,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Clone,
+    Copy,
+    AbiExample,
+    BorshDeserialize,
+    BorshSchema,
+    BorshSerialize,
+)]
+
+pub enum DeactivationFlag {
+    #[default]
+    Empty = 0,
+    MustFullyActivateBeforeDeactivationIsPermitted = 1,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub enum StakeState {
     #[default]
     Uninitialized,
     Initialized(Meta),
-    Stake(Meta, Stake),
+    Stake(Meta, Stake, DeactivationFlag),
     RewardsPool,
 }
 
@@ -38,7 +59,12 @@ impl BorshDeserialize for StakeState {
             2 => {
                 let meta: Meta = BorshDeserialize::deserialize(buf)?;
                 let stake: Stake = BorshDeserialize::deserialize(buf)?;
-                Ok(StakeState::Stake(meta, stake))
+                let deactivate_flag: DeactivationFlag = BorshDeserialize::deserialize(buf)?;
+
+                // To make BorshSerializer compatible with bincode serializer, 3 padding bytes were added during serialization.
+                // So consume those 3 bytes here.
+                let _pad: [u8; 3] = BorshDeserialize::deserialize(buf)?;
+                Ok(StakeState::Stake(meta, stake, deactivate_flag))
             }
             3 => Ok(StakeState::RewardsPool),
             _ => Err(io::Error::new(
@@ -57,10 +83,16 @@ impl BorshSerialize for StakeState {
                 writer.write_all(&1u32.to_le_bytes())?;
                 meta.serialize(writer)
             }
-            StakeState::Stake(meta, stake) => {
+            StakeState::Stake(meta, stake, deactivate_flag) => {
                 writer.write_all(&2u32.to_le_bytes())?;
                 meta.serialize(writer)?;
-                stake.serialize(writer)
+                stake.serialize(writer)?;
+                deactivate_flag.serialize(writer)?;
+
+                // bincode serializer add 3 more padding bytes for `Stake` variant to pad the last
+                // u8 enum increase the size from 197 bytes to 200 bytes.
+                // To make BorshSerializer compatible with bincode serializer, add 3 padding bytes here.
+                writer.write_all(&[0; 3]) // padding
             }
             StakeState::RewardsPool => writer.write_all(&3u32.to_le_bytes()),
         }
@@ -75,21 +107,21 @@ impl StakeState {
 
     pub fn stake(&self) -> Option<Stake> {
         match self {
-            StakeState::Stake(_meta, stake) => Some(*stake),
+            StakeState::Stake(_meta, stake, _deactivation_flag) => Some(*stake),
             _ => None,
         }
     }
 
     pub fn delegation(&self) -> Option<Delegation> {
         match self {
-            StakeState::Stake(_meta, stake) => Some(stake.delegation),
+            StakeState::Stake(_meta, stake, _deactivation_flag) => Some(stake.delegation),
             _ => None,
         }
     }
 
     pub fn authorized(&self) -> Option<Authorized> {
         match self {
-            StakeState::Stake(meta, _stake) => Some(meta.authorized),
+            StakeState::Stake(meta, _stake, _deactivation_flag) => Some(meta.authorized),
             StakeState::Initialized(meta) => Some(meta.authorized),
             _ => None,
         }
@@ -101,7 +133,7 @@ impl StakeState {
 
     pub fn meta(&self) -> Option<Meta> {
         match self {
-            StakeState::Stake(meta, _stake) => Some(*meta),
+            StakeState::Stake(meta, _stake, _deactivation_flag) => Some(*meta),
             StakeState::Initialized(meta) => Some(*meta),
             _ => None,
         }
@@ -564,13 +596,32 @@ impl Stake {
         Ok(new)
     }
 
-    pub fn deactivate(&mut self, epoch: Epoch) -> Result<(), StakeError> {
+    pub fn deactivate(
+        &mut self,
+        epoch: Epoch,
+        deactivation_flag: DeactivationFlag,
+        history: Option<&StakeHistory>,
+    ) -> Result<(), StakeError> {
         if self.delegation.deactivation_epoch != std::u64::MAX {
-            Err(StakeError::AlreadyDeactivated)
-        } else {
-            self.delegation.deactivation_epoch = epoch;
-            Ok(())
+            return Err(StakeError::AlreadyDeactivated);
         }
+
+        // when deactivation_flag is set to
+        // MustFullyActivateBeforeDeactivationIsPermittedFlag, deactivation is
+        // only permitted when the stake delegation activating amount is zero.
+        if deactivation_flag == DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted {
+            let status = self
+                .delegation
+                .stake_activating_and_deactivating(epoch, history);
+            if status.activating != 0 {
+                return Err(
+                    StakeError::RedelegatedStakeMustFullyActivateBeforeDeactivationIsPermitted,
+                );
+            }
+        }
+
+        self.delegation.deactivation_epoch = epoch;
+        Ok(())
     }
 }
 
@@ -629,6 +680,7 @@ mod test {
                 },
                 credits_observed: 1,
             },
+            DeactivationFlag::Empty,
         ));
     }
 
@@ -663,6 +715,7 @@ mod test {
                 },
                 credits_observed: 1,
             },
+            DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted,
         ));
     }
 
@@ -689,5 +742,44 @@ mod test {
                 ..
             })
         );
+    }
+
+    #[test]
+    fn stake_flag_member_offset() {
+        const FLAG_OFFSET: usize = 196;
+        let check_flag = |flag, expected| {
+            let stake = StakeState::Stake(
+                Meta {
+                    rent_exempt_reserve: 1,
+                    authorized: Authorized {
+                        staker: Pubkey::new_unique(),
+                        withdrawer: Pubkey::new_unique(),
+                    },
+                    lockup: Lockup::default(),
+                },
+                Stake {
+                    delegation: Delegation {
+                        voter_pubkey: Pubkey::new_unique(),
+                        stake: u64::MAX,
+                        activation_epoch: Epoch::MAX,
+                        deactivation_epoch: Epoch::MAX,
+                        warmup_cooldown_rate: f64::MAX,
+                    },
+                    credits_observed: 1,
+                },
+                flag,
+            );
+
+            let bincode_serialized = serialize(&stake).unwrap();
+            let borsh_serialized = StakeState::try_to_vec(&stake).unwrap();
+
+            assert_eq!(bincode_serialized[FLAG_OFFSET], expected);
+            assert_eq!(borsh_serialized[FLAG_OFFSET], expected);
+        };
+        check_flag(
+            DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted,
+            1,
+        );
+        check_flag(DeactivationFlag::Empty, 0);
     }
 }
