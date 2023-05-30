@@ -57,12 +57,13 @@ pub enum PohRecorderError {
     MinHeightNotReached,
 
     #[error("send WorkingBankEntry error")]
-    SendError(#[from] SendError<WorkingBankEntry>),
+    SendError(#[from] SendError<WorkingBankEntryWithIndex>),
 }
 
 type Result<T> = std::result::Result<T, PohRecorderError>;
 
 pub type WorkingBankEntry = (Arc<Bank>, (Entry, u64));
+pub type WorkingBankEntryWithIndex = (Arc<Bank>, (Entry, u64), Option<usize>);
 
 #[derive(Debug, Clone)]
 pub struct BankStart {
@@ -264,6 +265,15 @@ pub struct WorkingBank {
     pub min_tick_height: u64,
     pub max_tick_height: u64,
     pub transaction_index: Option<usize>,
+    pub entry_index: Option<usize>,
+}
+
+impl WorkingBank {
+    fn increment_entry_index(&mut self) {
+        if let Some(index) = self.entry_index.as_mut() {
+            *index += 1
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -280,7 +290,7 @@ pub struct PohRecorder {
     start_tick_height: u64,        // first tick_height this recorder will observe
     tick_cache: Vec<(Entry, u64)>, // cache of entry and its tick_height
     working_bank: Option<WorkingBank>,
-    sender: Sender<WorkingBankEntry>,
+    sender: Sender<WorkingBankEntryWithIndex>,
     poh_timing_point_sender: Option<PohTimingSender>,
     leader_first_tick_height_including_grace_ticks: Option<u64>,
     leader_last_tick_height: u64, // zero if none
@@ -576,7 +586,12 @@ impl PohRecorder {
         self.leader_last_tick_height = leader_last_tick_height;
     }
 
-    pub fn set_bank(&mut self, bank: Arc<Bank>, track_transaction_indexes: bool) {
+    pub fn set_bank(
+        &mut self,
+        bank: Arc<Bank>,
+        track_transaction_indexes: bool,
+        track_entry_indexes: bool,
+    ) {
         assert!(self.working_bank.is_none());
         self.leader_bank_notifier.set_in_progress(&bank);
         let working_bank = WorkingBank {
@@ -585,6 +600,7 @@ impl PohRecorder {
             bank,
             start: Arc::new(Instant::now()),
             transaction_index: track_transaction_indexes.then_some(0),
+            entry_index: track_entry_indexes.then_some(0),
         };
         trace!("new working bank");
         assert_eq!(working_bank.bank.ticks_per_slot(), self.ticks_per_slot());
@@ -631,7 +647,7 @@ impl PohRecorder {
         // will fail instead of broadcasting any ticks
         let working_bank = self
             .working_bank
-            .as_ref()
+            .as_mut()
             .ok_or(PohRecorderError::MaxHeightReached)?;
         if self.tick_height < working_bank.min_tick_height {
             return Err(PohRecorderError::MinHeightNotReached);
@@ -645,7 +661,7 @@ impl PohRecorder {
             .iter()
             .take_while(|x| x.1 <= working_bank.max_tick_height)
             .count();
-        let mut send_result: std::result::Result<(), SendError<WorkingBankEntry>> = Ok(());
+        let mut send_result: std::result::Result<(), SendError<WorkingBankEntryWithIndex>> = Ok(());
 
         if entry_count > 0 {
             trace!(
@@ -658,7 +674,12 @@ impl PohRecorder {
 
             for tick in &self.tick_cache[..entry_count] {
                 working_bank.bank.register_tick(&tick.0.hash);
-                send_result = self.sender.send((working_bank.bank.clone(), tick.clone()));
+                send_result = self.sender.send((
+                    working_bank.bank.clone(),
+                    tick.clone(),
+                    working_bank.entry_index,
+                ));
+                working_bank.increment_entry_index();
                 if send_result.is_err() {
                     break;
                 }
@@ -881,10 +902,15 @@ impl PohRecorder {
                             transactions,
                         };
                         let bank_clone = working_bank.bank.clone();
-                        self.sender.send((bank_clone, (entry, self.tick_height)))
+                        self.sender.send((
+                            bank_clone,
+                            (entry, self.tick_height),
+                            working_bank.entry_index,
+                        ))
                     },
                     "send_poh_entry",
                 );
+                working_bank.increment_entry_index();
                 self.send_entry_us += send_entry_time.as_us();
                 send_entry_res?;
                 let starting_transaction_index =
@@ -918,7 +944,7 @@ impl PohRecorder {
         poh_config: &PohConfig,
         poh_timing_point_sender: Option<PohTimingSender>,
         is_exited: Arc<AtomicBool>,
-    ) -> (Self, Receiver<WorkingBankEntry>, Receiver<Record>) {
+    ) -> (Self, Receiver<WorkingBankEntryWithIndex>, Receiver<Record>) {
         let tick_number = 0;
         let poh = Arc::new(Mutex::new(Poh::new_with_slot_info(
             last_entry_hash,
@@ -987,7 +1013,7 @@ impl PohRecorder {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         poh_config: &PohConfig,
         is_exited: Arc<AtomicBool>,
-    ) -> (Self, Receiver<WorkingBankEntry>, Receiver<Record>) {
+    ) -> (Self, Receiver<WorkingBankEntryWithIndex>, Receiver<Record>) {
         Self::new_with_clear_signal(
             tick_height,
             last_entry_hash,
@@ -1040,7 +1066,7 @@ pub fn create_test_recorder(
     Arc<AtomicBool>,
     Arc<RwLock<PohRecorder>>,
     PohService,
-    Receiver<WorkingBankEntry>,
+    Receiver<WorkingBankEntryWithIndex>,
 ) {
     let leader_schedule_cache = match leader_schedule_cache {
         Some(provided_cache) => provided_cache,
@@ -1060,7 +1086,7 @@ pub fn create_test_recorder(
         &poh_config,
         exit.clone(),
     );
-    poh_recorder.set_bank(bank.clone(), false);
+    poh_recorder.set_bank(bank.clone(), false, false);
 
     let poh_recorder = Arc::new(RwLock::new(poh_recorder));
     let poh_service = PohService::new(

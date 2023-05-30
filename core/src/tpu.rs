@@ -25,7 +25,7 @@ use {
         blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
         entry_notifier_service::EntryNotifierSender,
     },
-    solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
+    solana_poh::poh_recorder::{PohRecorder, WorkingBankEntryWithIndex},
     solana_rpc::{
         optimistically_confirmed_bank_tracker::BankNotificationSender,
         rpc_subscriptions::RpcSubscriptions,
@@ -81,7 +81,7 @@ impl Tpu {
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        entry_receiver: Receiver<WorkingBankEntry>,
+        entry_receiver: Receiver<WorkingBankEntryWithIndex>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         sockets: TpuSockets,
         subscriptions: &Arc<RpcSubscriptions>,

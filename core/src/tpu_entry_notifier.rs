@@ -2,7 +2,7 @@ use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     solana_entry::entry::EntrySummary,
     solana_ledger::entry_notifier_service::{EntryNotification, EntryNotifierSender},
-    solana_poh::poh_recorder::WorkingBankEntry,
+    solana_poh::poh_recorder::{WorkingBankEntry, WorkingBankEntryWithIndex},
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -19,7 +19,7 @@ pub(crate) struct TpuEntryNotifier {
 
 impl TpuEntryNotifier {
     pub(crate) fn new(
-        receiver: Receiver<WorkingBankEntry>,
+        receiver: Receiver<WorkingBankEntryWithIndex>,
         entry_notification_sender: Option<EntryNotifierSender>,
         broadcast_entry_sender: Sender<WorkingBankEntry>,
         exit: Arc<AtomicBool>,
@@ -44,13 +44,13 @@ impl TpuEntryNotifier {
     }
 
     pub(crate) fn send_entry_notification(
-        receiver: &Receiver<WorkingBankEntry>,
+        receiver: &Receiver<WorkingBankEntryWithIndex>,
         entry_notification_sender: &Option<EntryNotifierSender>,
         broadcast_entry_sender: &Sender<WorkingBankEntry>,
     ) -> Result<(), RecvTimeoutError> {
-        let (bank, (entry, tick_height)) = receiver.recv_timeout(Duration::from_secs(1))?;
+        let (bank, (entry, tick_height), index) = receiver.recv_timeout(Duration::from_secs(1))?;
         let slot = bank.slot();
-        let index = 0;
+        let index = index.unwrap_or(0);
 
         if let Some(entry_notification_sender) = entry_notification_sender {
             let entry_summary = EntrySummary {
