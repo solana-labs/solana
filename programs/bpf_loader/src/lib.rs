@@ -1325,6 +1325,7 @@ fn process_loader_upgradeable_instruction(
                 ic_logger_msg!(log_collector, "Program account not owned by loader");
                 return Err(InstructionError::InvalidAccountOwner);
             }
+            let program_key = *program_account.get_key();
             match program_account.get_state()? {
                 UpgradeableLoaderState::Program {
                     programdata_address,
@@ -1402,6 +1403,22 @@ fn process_loader_upgradeable_instruction(
             let mut programdata_account = instruction_context
                 .try_borrow_instruction_account(transaction_context, PROGRAM_DATA_ACCOUNT_INDEX)?;
             programdata_account.set_data_length(new_len)?;
+
+            if invoke_context
+                .feature_set
+                .is_active(&delay_visibility_of_program_deployment::id())
+            {
+                // Add a tombstone, that'll cause the program to be re-verified next time it is used.
+                // The delay visibility tombstones expire in the next slot. That'll cause the program
+                // cache lookup to return a cache miss.
+                invoke_context.programs_modified_by_tx.replenish(
+                    program_key,
+                    Arc::new(LoadedProgram::new_tombstone(
+                        invoke_context.programs_modified_by_tx.slot(),
+                        LoadedProgramType::DelayVisibility,
+                    )),
+                );
+            }
 
             ic_logger_msg!(
                 log_collector,
