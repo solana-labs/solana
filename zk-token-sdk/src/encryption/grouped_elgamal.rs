@@ -162,7 +162,9 @@ impl<const N: usize> GroupedElGamalCiphertext<N> {
     /// that is serialized as 32 bytes. Therefore, the total byte length of a grouped ciphertext is
     /// `(N+1) * 32`.
     fn expected_byte_length() -> usize {
-        N.saturating_add(1).saturating_mul(32)
+        N.checked_add(1)
+            .and_then(|length| length.checked_mul(32))
+            .unwrap()
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
