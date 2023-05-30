@@ -1,6 +1,6 @@
 mod encryption;
-mod transfer_with_fee;
-mod transfer_without_fee;
+mod with_fee;
+mod without_fee;
 
 #[cfg(not(target_os = "solana"))]
 use {
@@ -14,12 +14,12 @@ use {
 #[cfg(not(target_os = "solana"))]
 pub use {
     encryption::{FeeEncryption, TransferAmountEncryption},
-    transfer_with_fee::TransferWithFeePubkeys,
-    transfer_without_fee::TransferPubkeys,
+    with_fee::TransferWithFeePubkeys,
+    without_fee::TransferPubkeys,
 };
 pub use {
-    transfer_with_fee::{TransferWithFeeData, TransferWithFeeProofContext},
-    transfer_without_fee::{TransferData, TransferProofContext},
+    with_fee::{TransferWithFeeData, TransferWithFeeProofContext},
+    without_fee::{TransferData, TransferProofContext},
 };
 
 #[cfg(not(target_os = "solana"))]
