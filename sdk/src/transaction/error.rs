@@ -163,7 +163,7 @@ pub enum TransactionError {
     ResanitizationNeeded,
 
     /// Program execution is temporarily restricted on an account.
-    #[error("Execution of the program referenced by account ({account_index} is temporarily restricted.")]
+    #[error("Execution of the program referenced by account at index {account_index} is temporarily restricted.")]
     ProgramExecutionTemporarilyRestricted { account_index: u8 },
 }
 
