@@ -94,7 +94,6 @@ mod test {
     use spl_associated_token_account::create_associated_token_account as create_associated_token_account_deprecated;
     use {
         super::*,
-        solana_account_decoder::parse_token::pubkey_from_spl_token,
         spl_associated_token_account::{
             get_associated_token_address, get_associated_token_address_with_program_id,
             instruction::{
@@ -120,14 +119,6 @@ mod test {
             accounts: instruction.accounts.clone(),
             data: instruction.data.clone(),
         }
-    }
-
-    fn convert_account_keys(message: &Message) -> Vec<Pubkey> {
-        message
-            .account_keys
-            .iter()
-            .map(pubkey_from_spl_token)
-            .collect()
     }
 
     #[test]
@@ -159,7 +150,7 @@ mod test {
         assert_eq!(
             parse_associated_token(
                 &compiled_instruction,
-                &AccountKeys::new(&convert_account_keys(&message), None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             expected_parsed_ix,
@@ -175,7 +166,7 @@ mod test {
         assert_eq!(
             parse_associated_token(
                 &compiled_instruction,
-                &AccountKeys::new(&convert_account_keys(&message), None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             expected_parsed_ix,
@@ -185,7 +176,7 @@ mod test {
         compiled_instruction.accounts.pop();
         assert!(parse_associated_token(
             &compiled_instruction,
-            &AccountKeys::new(&convert_account_keys(&message), None)
+            &AccountKeys::new(&message.account_keys, None)
         )
         .is_err());
     }
@@ -212,7 +203,7 @@ mod test {
         assert_eq!(
             parse_associated_token(
                 &compiled_instruction,
-                &AccountKeys::new(&convert_account_keys(&message), None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
@@ -230,7 +221,7 @@ mod test {
         compiled_instruction.accounts.pop();
         assert!(parse_associated_token(
             &compiled_instruction,
-            &AccountKeys::new(&convert_account_keys(&message), None)
+            &AccountKeys::new(&message.account_keys, None)
         )
         .is_err());
     }
@@ -257,7 +248,7 @@ mod test {
         assert_eq!(
             parse_associated_token(
                 &compiled_instruction,
-                &AccountKeys::new(&convert_account_keys(&message), None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
@@ -275,7 +266,7 @@ mod test {
         compiled_instruction.accounts.pop();
         assert!(parse_associated_token(
             &compiled_instruction,
-            &AccountKeys::new(&convert_account_keys(&message), None)
+            &AccountKeys::new(&message.account_keys, None)
         )
         .is_err());
     }
@@ -312,7 +303,7 @@ mod test {
         assert_eq!(
             parse_associated_token(
                 &compiled_instruction,
-                &AccountKeys::new(&convert_account_keys(&message), None)
+                &AccountKeys::new(&message.account_keys, None)
             )
             .unwrap(),
             ParsedInstructionEnum {
@@ -331,7 +322,7 @@ mod test {
         compiled_instruction.accounts.pop();
         assert!(parse_associated_token(
             &compiled_instruction,
-            &AccountKeys::new(&convert_account_keys(&message), None)
+            &AccountKeys::new(&message.account_keys, None)
         )
         .is_err());
     }
