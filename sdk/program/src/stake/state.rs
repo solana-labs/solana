@@ -27,17 +27,17 @@ pub enum StakeState {
 }
 
 impl BorshDeserialize for StakeState {
-    fn deserialize(buf: &mut &[u8]) -> io::Result<Self> {
-        let enum_value: u32 = BorshDeserialize::deserialize(buf)?;
+    fn deserialize_reader<R: io::Read>(reader: &mut R) -> io::Result<Self> {
+        let enum_value = u32::deserialize_reader(reader)?;
         match enum_value {
             0 => Ok(StakeState::Uninitialized),
             1 => {
-                let meta: Meta = BorshDeserialize::deserialize(buf)?;
+                let meta = Meta::deserialize_reader(reader)?;
                 Ok(StakeState::Initialized(meta))
             }
             2 => {
-                let meta: Meta = BorshDeserialize::deserialize(buf)?;
-                let stake: Stake = BorshDeserialize::deserialize(buf)?;
+                let meta = Meta::deserialize_reader(reader)?;
+                let stake = Stake::deserialize_reader(reader)?;
                 Ok(StakeState::Stake(meta, stake))
             }
             3 => Ok(StakeState::RewardsPool),
