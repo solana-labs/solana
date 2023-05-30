@@ -261,7 +261,7 @@ declare_process_instruction!(
                 let mut me = get_stake_account()?;
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-                deactivate(&mut me, &clock, &signers)
+                deactivate(invoke_context, &mut me, &clock, &signers)
             }
             Ok(StakeInstruction::SetLockup(lockup)) => {
                 let mut me = get_stake_account()?;
@@ -407,6 +407,7 @@ declare_process_instruction!(
 
                 let clock = invoke_context.get_sysvar_cache().get_clock()?;
                 deactivate_delinquent(
+                    invoke_context,
                     transaction_context,
                     instruction_context,
                     &mut me,
@@ -6458,6 +6459,10 @@ mod tests {
                                 ..Clock::default()
                             }),
                         ),
+                        (
+                            stake_history::id(),
+                            create_account_shared_data_for_test(&StakeHistory::default()),
+                        ),
                     ],
                     vec![
                         AccountMeta {
@@ -7181,10 +7186,10 @@ mod tests {
 
         let mut deactivating_stake_account =
             prepare_stake_account(0 /*activation_epoch:*/, None);
-        if let StakeState::Stake(meta, mut stake, _stake_flags) =
+        if let StakeState::Stake(meta, mut stake, stake_flags) =
             deactivating_stake_account.deserialize_data().unwrap()
         {
-            stake.deactivate(current_epoch).unwrap();
+            stake.deactivate(current_epoch, stake_flags, None).unwrap();
             assert_eq!(
                 StakeActivationStatus {
                     effective: minimum_delegation + rent_exempt_reserve,

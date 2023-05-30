@@ -567,13 +567,31 @@ impl Stake {
         Ok(new)
     }
 
-    pub fn deactivate(&mut self, epoch: Epoch) -> Result<(), StakeError> {
+    pub fn deactivate(
+        &mut self,
+        epoch: Epoch,
+        stake_flags: StakeFlags,
+        history: Option<&StakeHistory>,
+    ) -> Result<(), StakeError> {
         if self.delegation.deactivation_epoch != std::u64::MAX {
-            Err(StakeError::AlreadyDeactivated)
-        } else {
-            self.delegation.deactivation_epoch = epoch;
-            Ok(())
+            return Err(StakeError::AlreadyDeactivated);
         }
+
+        // when MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED flag is set on stake_flags,
+        // deactivation is only permitted when the stake delegation activating amount is zero.
+        if stake_flags.contains(StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED) {
+            let status = self
+                .delegation
+                .stake_activating_and_deactivating(epoch, history);
+            if status.activating != 0 {
+                return Err(
+                    StakeError::RedelegatedStakeMustFullyActivateBeforeDeactivationIsPermitted,
+                );
+            }
+        }
+
+        self.delegation.deactivation_epoch = epoch;
+        Ok(())
     }
 }
 
@@ -694,5 +712,44 @@ mod test {
                 ..
             })
         );
+    }
+
+    #[test]
+    fn stake_flag_member_offset() {
+        const FLAG_OFFSET: usize = 196;
+        let check_flag = |flag, expected| {
+            let stake = StakeState::Stake(
+                Meta {
+                    rent_exempt_reserve: 1,
+                    authorized: Authorized {
+                        staker: Pubkey::new_unique(),
+                        withdrawer: Pubkey::new_unique(),
+                    },
+                    lockup: Lockup::default(),
+                },
+                Stake {
+                    delegation: Delegation {
+                        voter_pubkey: Pubkey::new_unique(),
+                        stake: u64::MAX,
+                        activation_epoch: Epoch::MAX,
+                        deactivation_epoch: Epoch::MAX,
+                        warmup_cooldown_rate: f64::MAX,
+                    },
+                    credits_observed: 1,
+                },
+                flag,
+            );
+
+            let bincode_serialized = serialize(&stake).unwrap();
+            let borsh_serialized = StakeState::try_to_vec(&stake).unwrap();
+
+            assert_eq!(bincode_serialized[FLAG_OFFSET], expected);
+            assert_eq!(borsh_serialized[FLAG_OFFSET], expected);
+        };
+        check_flag(
+            StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED,
+            1,
+        );
+        check_flag(StakeFlags::empty(), 0);
     }
 }
