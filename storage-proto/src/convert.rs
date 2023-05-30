@@ -805,6 +805,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             32 => TransactionError::MaxLoadedAccountsDataSizeExceeded,
             33 => TransactionError::InvalidLoadedAccountsDataSizeLimit,
             34 => TransactionError::ResanitizationNeeded,
+            35 => TransactionError::StakeProgramUnavailable,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -916,6 +917,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::ResanitizationNeeded => {
                     tx_by_addr::TransactionErrorType::ResanitizationNeeded
+                }
+                TransactionError::StakeProgramUnavailable => {
+                    tx_by_addr::TransactionErrorType::StakeProgramUnavailable
                 }
             } as i32,
             instruction_error: match transaction_error {

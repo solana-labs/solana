@@ -23,6 +23,9 @@ pub(crate) struct RewardsMetrics {
     pub(crate) invalid_cached_stake_accounts: usize,
     pub(crate) invalid_cached_stake_accounts_rent_epoch: usize,
     pub(crate) vote_accounts_cache_miss_count: usize,
+    pub(crate) hash_partition_rewards_us: u64,
+    pub(crate) sort_stake_accounts_us: u64,
+    pub(crate) shuffle_stake_accounts_us: u64,
 }
 
 pub(crate) struct NewBankTimings {
@@ -113,6 +116,21 @@ pub(crate) fn report_new_epoch_metrics(
         (
             "vote_accounts_cache_miss_count",
             metrics.vote_accounts_cache_miss_count,
+            i64
+        ),
+        (
+            "hash_partition_rewards_us",
+            metrics.hash_partition_rewards_us,
+            i64
+        ),
+        (
+            "shuffle_stake_accounts_us",
+            metrics.shuffle_stake_accounts_us,
+            i64
+        ),
+        (
+            "sort_stake_accounts_us",
+            metrics.sort_stake_accounts_us,
             i64
         ),
     );
