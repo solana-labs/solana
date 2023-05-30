@@ -1655,7 +1655,7 @@ mod test {
         AncestorHashesService::initiate_ancestor_hashes_requests_for_duplicate_slot(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &connection_cache,
+            connection_cache,
             &cluster_slots,
             &requester_serve_repair,
             &repair_validators,
@@ -1689,7 +1689,7 @@ mod test {
             &requester_blockstore,
             &requester_cluster_info.keypair(),
             &ancestor_hashes_request_socket,
-            &connection_cache,
+            connection_cache,
         )
         .unwrap();
 
@@ -1717,7 +1717,7 @@ mod test {
         AncestorHashesService::initiate_ancestor_hashes_requests_for_duplicate_slot(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &connection_cache,
+            connection_cache,
             &cluster_slots,
             &requester_serve_repair,
             &repair_validators,
@@ -2131,7 +2131,7 @@ mod test {
             &requester_blockstore,
             &requester_cluster_info.keypair(),
             &ancestor_hashes_request_socket,
-            &connection_cache,
+            connection_cache,
         );
         // Should have processed a ping packet
         assert_eq!(decision, None);
@@ -2164,7 +2164,7 @@ mod test {
         AncestorHashesService::manage_ancestor_requests(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &connection_cache,
+            connection_cache,
             &repair_info,
             &outstanding_requests,
             &ancestor_hashes_replay_update_receiver,
@@ -2200,7 +2200,7 @@ mod test {
             &requester_blockstore,
             &requester_cluster_info.keypair(),
             &ancestor_hashes_request_socket,
-            &connection_cache,
+            connection_cache,
         )
         .unwrap();
 
