@@ -14,7 +14,6 @@ edition = { workspace = true }
 bincode = { workspace = true }
 blake3 = { workspace = true, features = ["digest", "traits-preview"] }
 borsh = { workspace = true }
-borsh-derive = { workspace = true }
 bs58 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
 bytemuck = { workspace = true, features = ["derive"] }
