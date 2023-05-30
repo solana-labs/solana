@@ -115,7 +115,7 @@ impl TryFrom<RangeProof256> for decoded::RangeProof {
     }
 }
 
-// The range proof pod types are byte array wrappers, which are both `Pod` and `Zeroable`. However,
+// The range proof pod types are wrappers for byte arrays, which are both `Pod` and `Zeroable`. However,
 // the marker traits `bytemuck::Pod` and `bytemuck::Zeroable` can only be derived for power-of-two
 // length byte arrays. Directly implement these traits for the range proof pod types.
 unsafe impl Zeroable for RangeProof64 {}
