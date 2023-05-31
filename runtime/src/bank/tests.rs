@@ -12540,9 +12540,8 @@ fn test_hash_rewards_into_partitions() {
         .map(|stake_reward| stake_reward.stake_reward_info.lamports)
         .sum::<i64>();
 
-    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
     let stake_rewards_in_bucket =
-        Bank::hash_rewards_into_partitions(&stake_rewards, &Hash::default(), 5, &thread_pool);
+        Bank::hash_rewards_into_partitions(&stake_rewards, &Hash::default(), 5);
 
     let stake_rewards_in_bucket_clone = stake_rewards_in_bucket.iter().flatten().cloned().collect();
     compare(&stake_rewards, &stake_rewards_in_bucket_clone);
@@ -12563,12 +12562,11 @@ fn test_hash_rewards_into_partitions() {
 
 #[test]
 fn test_hash_rewards_into_partitions_empty() {
-    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
     let stake_rewards = vec![];
     let total = 0;
 
     let stake_rewards_in_bucket =
-        Bank::hash_rewards_into_partitions(&stake_rewards, &Hash::default(), 1, &thread_pool);
+        Bank::hash_rewards_into_partitions(&stake_rewards, &Hash::default(), 1);
 
     let total_after_hash_partition = stake_rewards_in_bucket
         .iter()

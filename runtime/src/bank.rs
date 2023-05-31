@@ -59,7 +59,7 @@ use {
         builtins::{BuiltinPrototype, BUILTINS},
         cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
-        epoch_rewards_hasher::{address_to_partition, create_epoch_reward_hasher},
+        epoch_rewards_hasher::EpochRewardHasher,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         message_processor::MessageProcessor,
         partitioned_rewards::PartitionedEpochRewardsConfig,
@@ -2797,29 +2797,13 @@ impl Bank {
         stake_rewards: &StakeRewards,
         parent_block_hash: &Hash,
         num_partitions: usize,
-        thread_pool: &ThreadPool,
     ) -> Vec<StakeRewards> {
-        let hasher = create_epoch_reward_hasher(parent_block_hash);
-
-        let partition_map: DashMap<usize, StakeRewards> = DashMap::with_capacity(num_partitions);
-        for i in 0..num_partitions {
-            partition_map.insert(i, vec![]);
-        }
-
-        thread_pool.install(|| {
-            stake_rewards.par_iter().for_each(|reward| {
-                let partition_index =
-                    address_to_partition(hasher, num_partitions, &reward.stake_pubkey);
-                let entry = partition_map
-                    .entry(&partition_index)
-                    .or_default();
-                entry.push(reward.clone());
-            });
-        });
-
+        let hasher = EpochRewardHasher::new(num_partitions, parent_block_hash);
         let mut result = vec![vec![]; num_partitions];
-        for (i, v) in result.iter_mut().enumerate().take(num_partitions) {
-            *v = mem::take(&mut partition_map.get_mut(&i).unwrap());
+
+        for reward in stake_rewards {
+            let partition_index = &hasher.hash_address_to_partition(&reward.stake_pubkey);
+            result[*partition_index].push(reward.clone());
         }
         result
     }
