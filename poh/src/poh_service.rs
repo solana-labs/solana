@@ -498,7 +498,7 @@ mod tests {
                 hashes_per_batch,
                 record_receiver,
             );
-            poh_recorder.write().unwrap().set_bank(bank, false);
+            poh_recorder.write().unwrap().set_bank(bank, false, false);
 
             // get some events
             let mut hashes = 0;
@@ -509,7 +509,7 @@ mod tests {
 
             let time = Instant::now();
             while run_time != 0 || need_tick || need_entry || need_partial {
-                let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
+                let (_bank, (entry, _tick_height), _entry_index) = entry_receiver.recv().unwrap();
 
                 if entry.is_tick() {
                     num_ticks += 1;

@@ -139,7 +139,7 @@ mod tests {
             blockstore::Blockstore, genesis_utils::GenesisConfigInfo,
             get_tmp_ledger_path_auto_delete, leader_schedule_cache::LeaderScheduleCache,
         },
-        solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
+        solana_poh::poh_recorder::{PohRecorder, WorkingBankEntryWithIndex},
         solana_runtime::{
             bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
             vote_sender_types::ReplayVoteReceiver,
@@ -162,7 +162,7 @@ mod tests {
         genesis_config: GenesisConfig,
         bank: Arc<Bank>,
         _ledger_path: TempDir,
-        _entry_receiver: Receiver<WorkingBankEntry>,
+        _entry_receiver: Receiver<WorkingBankEntryWithIndex>,
         poh_recorder: Arc<RwLock<PohRecorder>>,
         _poh_simulator: JoinHandle<()>,
         _replay_vote_receiver: ReplayVoteReceiver,
@@ -287,7 +287,10 @@ mod tests {
             ..
         } = &test_frame;
         let worker_thread = std::thread::spawn(move || worker.run());
-        poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+        poh_recorder
+            .write()
+            .unwrap()
+            .set_bank(bank.clone(), false, false);
 
         let pubkey1 = Pubkey::new_unique();
 
@@ -329,7 +332,10 @@ mod tests {
             ..
         } = &test_frame;
         let worker_thread = std::thread::spawn(move || worker.run());
-        poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+        poh_recorder
+            .write()
+            .unwrap()
+            .set_bank(bank.clone(), false, false);
 
         let pubkey1 = Pubkey::new_unique();
         let pubkey2 = Pubkey::new_unique();
@@ -374,7 +380,10 @@ mod tests {
             ..
         } = &test_frame;
         let worker_thread = std::thread::spawn(move || worker.run());
-        poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+        poh_recorder
+            .write()
+            .unwrap()
+            .set_bank(bank.clone(), false, false);
 
         let pubkey1 = Pubkey::new_unique();
         let pubkey2 = Pubkey::new_unique();

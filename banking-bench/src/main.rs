@@ -19,7 +19,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_perf::packet::{to_packet_batches, PacketBatch},
-    solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry},
+    solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntryWithIndex},
     solana_runtime::{
         bank::Bank, bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
     },
@@ -49,7 +49,7 @@ use {
 const TRANSFER_TRANSACTION_COST: u32 = 1470;
 
 fn check_txs(
-    receiver: &Arc<Receiver<WorkingBankEntry>>,
+    receiver: &Arc<Receiver<WorkingBankEntryWithIndex>>,
     ref_tx_count: usize,
     poh_recorder: &Arc<RwLock<PohRecorder>>,
 ) -> bool {
@@ -57,7 +57,8 @@ fn check_txs(
     let now = Instant::now();
     let mut no_bank = false;
     loop {
-        if let Ok((_bank, (entry, _tick_height))) = receiver.recv_timeout(Duration::from_millis(10))
+        if let Ok((_bank, (entry, _tick_height), _entry_index)) =
+            receiver.recv_timeout(Duration::from_millis(10))
         {
             total += entry.transactions.len();
         }
@@ -544,7 +545,10 @@ fn main() {
                 );
 
                 assert!(poh_recorder.read().unwrap().bank().is_none());
-                poh_recorder.write().unwrap().set_bank(bank.clone(), false);
+                poh_recorder
+                    .write()
+                    .unwrap()
+                    .set_bank(bank.clone(), false, false);
                 assert!(poh_recorder.read().unwrap().bank().is_some());
                 debug!(
                     "new_bank_time: {}us insert_time: {}us poh_time: {}us",

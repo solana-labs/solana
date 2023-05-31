@@ -98,7 +98,7 @@ mod tests {
             get_tmp_ledger_path_auto_delete, leader_schedule_cache::LeaderScheduleCache,
         },
         solana_perf::packet::to_packet_batches,
-        solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
+        solana_poh::poh_recorder::{PohRecorder, WorkingBankEntryWithIndex},
         solana_runtime::{bank::Bank, bank_forks::BankForks},
         solana_sdk::{
             genesis_config::GenesisConfig, poh_config::PohConfig, pubkey::Pubkey,
@@ -117,7 +117,7 @@ mod tests {
         mint_keypair: Keypair,
         genesis_config: GenesisConfig,
         _ledger_path: TempDir,
-        _entry_receiver: Receiver<WorkingBankEntry>,
+        _entry_receiver: Receiver<WorkingBankEntryWithIndex>,
         _poh_simulator: JoinHandle<()>,
 
         forward_sender: Sender<ForwardWork>,
