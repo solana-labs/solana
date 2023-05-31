@@ -4970,7 +4970,7 @@ impl Bank {
     // to set limit, `compute_budget.loaded_accounts_data_size_limit` is set to default
     // limit of 64MB; which will convert to (64M/32K)*8CU = 16_000 CUs
     //
-    fn calculate_loaded_accounts_data_size_cost(compute_budget: &ComputeBudget) -> u64 {
+    pub fn calculate_loaded_accounts_data_size_cost(compute_budget: &ComputeBudget) -> u64 {
         const ACCOUNT_DATA_COST_PAGE_SIZE: u64 = 32_u64.saturating_mul(1024);
         (compute_budget.loaded_accounts_data_size_limit as u64)
             .saturating_add(ACCOUNT_DATA_COST_PAGE_SIZE.saturating_sub(1))

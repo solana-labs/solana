@@ -13,8 +13,9 @@ use {
     },
     solana_sdk::{
         feature_set::{
-            add_set_tx_loaded_accounts_data_size_instruction, remove_deprecated_request_unit_ix,
-            use_default_units_in_fee_calculation, FeatureSet,
+            add_set_tx_loaded_accounts_data_size_instruction,
+            include_loaded_accounts_data_size_in_fee_calculation,
+            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
         },
         instruction::CompiledInstruction,
         program_utils::limited_deserialize,
@@ -71,6 +72,7 @@ impl CostModel {
     ) {
         let mut builtin_costs = 0u64;
         let mut bpf_costs = 0u64;
+        let mut loaded_accounts_data_size_cost = 0u64;
         let mut data_bytes_len_total = 0u64;
 
         for (program_id, instruction) in transaction.message().program_instructions_iter() {
@@ -85,16 +87,16 @@ impl CostModel {
         }
 
         // calculate bpf cost based on compute budget instructions
-        let mut budget = ComputeBudget::default();
+        let mut compute_budget = ComputeBudget::default();
 
-        // Starting from v1.15, cost model uses compute_budget.set_compute_unit_limit to
+        // Starting from v1.15, cost model uses compute_compute_budget.set_compute_unit_limit to
         // measure bpf_costs (code below), vs earlier versions that use estimated
         // bpf instruction costs. The calculated transaction costs are used by leaders
         // during block packing, different costs for same transaction due to different versions
-        // will not impact consensus. So for v1.15+, should call compute budget with
+        // will not impact consensus. So for v1.15+, should call compute compute_budget with
         // the feature gate `enable_request_heap_frame_ix` enabled.
         let enable_request_heap_frame_ix = true;
-        let result = budget.process_instructions(
+        let result = compute_budget.process_instructions(
             transaction.message().program_instructions_iter(),
             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
@@ -110,6 +112,13 @@ impl CostModel {
                 if bpf_costs > 0 {
                     bpf_costs = budget.compute_unit_limit
                 }
+                loaded_accounts_data_size_cost = if feature_set
+                    .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id())
+                {
+                    Self::calculate_loaded_accounts_data_size_cost(&compute_budget)
+                } else {
+                    0u64
+                };
             }
             Err(_) => {
                 builtin_costs = 0;
@@ -119,6 +128,7 @@ impl CostModel {
 
         tx_cost.builtins_execution_cost = builtin_costs;
         tx_cost.bpf_execution_cost = bpf_costs;
+        tx_cost.loaded_accounts_data_size_cost = loaded_accounts_data_size_cost;
         tx_cost.data_bytes_cost = data_bytes_len_total / INSTRUCTION_DATA_BYTES_COST;
     }
 
