@@ -1409,8 +1409,7 @@ fn process_loader_upgradeable_instruction(
             let slot = invoke_context
                 .get_sysvar_cache()
                 .get_clock()
-                .map(|clock| clock.slot)
-                .unwrap_or(invoke_context.programs_modified_by_tx.slot());
+                .map(|clock| clock.slot)?;
 
             let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
 
