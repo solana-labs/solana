@@ -19,7 +19,7 @@ mod common;
 #[tokio::test]
 async fn test_extend_program() {
     let mut context = setup_test_context().await;
-    let program_file = find_file(&format!("noop.so")).expect("Failed to find the file");
+    let program_file = find_file(&"noop.so").expect("Failed to find the file");
     let data = read_file(program_file);
 
     let program_address = Pubkey::new_unique();
