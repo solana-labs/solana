@@ -2,7 +2,10 @@ use {
     crate::tpu_info::TpuInfo,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     log::*,
-    solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
+    solana_client::{
+        connection_cache::{ConnectionCache, Protocol},
+        tpu_connection::TpuConnection,
+    },
     solana_measure::measure::Measure,
     solana_metrics::datapoint_warn,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -154,7 +157,7 @@ where
     T: TpuInfo + std::marker::Send + 'static,
 {
     /// Get the leader info, refresh if expired
-    pub fn get_leader_info(&mut self, use_quic: bool) -> Option<&T> {
+    pub fn get_leader_info(&mut self, protocol: Protocol) -> Option<&T> {
         if let Some(leader_info) = self.leader_info.as_mut() {
             let now = Instant::now();
             let need_refresh = self
@@ -163,7 +166,7 @@ where
                 .unwrap_or(true);
 
             if need_refresh {
-                leader_info.refresh_recent_peers(use_quic);
+                leader_info.refresh_recent_peers(protocol);
                 self.last_leader_refresh = Some(now);
             }
         }
@@ -462,7 +465,7 @@ impl SendTransactionService {
                         leader_info_provider
                             .lock()
                             .unwrap()
-                            .get_leader_info(connection_cache.use_quic()),
+                            .get_leader_info(connection_cache.protocol()),
                         &connection_cache,
                         &config,
                         stats,
@@ -691,7 +694,7 @@ impl SendTransactionService {
             let iter = wire_transactions.chunks(config.batch_size);
             for chunk in iter {
                 let mut leader_info_provider = leader_info_provider.lock().unwrap();
-                let leader_info = leader_info_provider.get_leader_info(connection_cache.use_quic());
+                let leader_info = leader_info_provider.get_leader_info(connection_cache.protocol());
                 let addresses = Self::get_tpu_addresses(tpu_address, leader_info, config);
 
                 for address in &addresses {
