@@ -244,5 +244,28 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
                 CiphertextCommitmentEqualityProofContext,
             >(invoke_context)
         }
+        ProofInstruction::VerifyGroupedCiphertext2HandlesValidity => {
+            invoke_context
+                .consume_checked(6_440)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            ic_msg!(invoke_context, "VerifyGroupedCiphertext2HandlesValidity");
+            process_verify_proof::<
+                GroupedCiphertext2HandlesValidityProofData,
+                GroupedCiphertext2HandlesValidityProofContext,
+            >(invoke_context)
+        }
+        ProofInstruction::VerifyBatchedGroupedCiphertext2HandlesValidity => {
+            invoke_context
+                .consume_checked(12_575)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            ic_msg!(
+                invoke_context,
+                "VerifyBatchedGroupedCiphertext2HandlesValidity"
+            );
+            process_verify_proof::<
+                BatchedGroupedCiphertext2HandlesValidityProofData,
+                BatchedGroupedCiphertext2HandlesValidityProofContext,
+            >(invoke_context)
+        }
     }
 });

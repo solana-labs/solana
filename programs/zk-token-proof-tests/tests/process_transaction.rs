@@ -11,6 +11,7 @@ use {
     solana_zk_token_sdk::{
         encryption::{
             elgamal::ElGamalKeypair,
+            grouped_elgamal::GroupedElGamal,
             pedersen::{Pedersen, PedersenOpening},
         },
         instruction::*,
@@ -21,7 +22,7 @@ use {
     std::mem::size_of,
 };
 
-const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 11] = [
+const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 13] = [
     ProofInstruction::VerifyZeroBalance,
     ProofInstruction::VerifyWithdraw,
     ProofInstruction::VerifyCiphertextCiphertextEquality,
@@ -33,6 +34,8 @@ const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 11] = [
     ProofInstruction::VerifyBatchedRangeProofU128,
     ProofInstruction::VerifyBatchedRangeProofU256,
     ProofInstruction::VerifyCiphertextCommitmentEquality,
+    ProofInstruction::VerifyGroupedCiphertext2HandlesValidity,
+    ProofInstruction::VerifyBatchedGroupedCiphertext2HandlesValidity,
 ];
 
 #[tokio::test]
@@ -567,6 +570,128 @@ async fn test_ciphertext_commitment_equality() {
     test_close_context_state(
         ProofInstruction::VerifyCiphertextCommitmentEquality,
         size_of::<ProofContextState<CiphertextCommitmentEqualityProofContext>>(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_grouped_ciphertext_2_handles_validity() {
+    let destination_pubkey = ElGamalKeypair::new_rand().public;
+    let auditor_pubkey = ElGamalKeypair::new_rand().public;
+
+    let amount: u64 = 55;
+    let opening = PedersenOpening::new_rand();
+    let grouped_ciphertext =
+        GroupedElGamal::encrypt_with([&destination_pubkey, &auditor_pubkey], amount, &opening);
+
+    let success_proof_data = GroupedCiphertext2HandlesValidityProofData::new(
+        &destination_pubkey,
+        &auditor_pubkey,
+        &grouped_ciphertext,
+        amount,
+        &opening,
+    )
+    .unwrap();
+
+    let incorrect_opening = PedersenOpening::new_rand();
+    let fail_proof_data = GroupedCiphertext2HandlesValidityProofData::new(
+        &destination_pubkey,
+        &auditor_pubkey,
+        &grouped_ciphertext,
+        amount,
+        &incorrect_opening,
+    )
+    .unwrap();
+
+    test_verify_proof_without_context(
+        ProofInstruction::VerifyGroupedCiphertext2HandlesValidity,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofInstruction::VerifyGroupedCiphertext2HandlesValidity,
+        size_of::<ProofContextState<GroupedCiphertext2HandlesValidityProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofInstruction::VerifyGroupedCiphertext2HandlesValidity,
+        size_of::<ProofContextState<GroupedCiphertext2HandlesValidityProofContext>>(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_batched_grouped_ciphertext_2_handles_validity() {
+    let destination_pubkey = ElGamalKeypair::new_rand().public;
+    let auditor_pubkey = ElGamalKeypair::new_rand().public;
+
+    let amount_lo: u64 = 55;
+    let amount_hi: u64 = 22;
+
+    let opening_lo = PedersenOpening::new_rand();
+    let opening_hi = PedersenOpening::new_rand();
+
+    let grouped_ciphertext_lo = GroupedElGamal::encrypt_with(
+        [&destination_pubkey, &auditor_pubkey],
+        amount_lo,
+        &opening_lo,
+    );
+    let grouped_ciphertext_hi = GroupedElGamal::encrypt_with(
+        [&destination_pubkey, &auditor_pubkey],
+        amount_hi,
+        &opening_hi,
+    );
+
+    let success_proof_data = BatchedGroupedCiphertext2HandlesValidityProofData::new(
+        &destination_pubkey,
+        &auditor_pubkey,
+        &grouped_ciphertext_lo,
+        &grouped_ciphertext_hi,
+        amount_lo,
+        amount_hi,
+        &opening_lo,
+        &opening_hi,
+    )
+    .unwrap();
+
+    let incorrect_opening = PedersenOpening::new_rand();
+    let fail_proof_data = BatchedGroupedCiphertext2HandlesValidityProofData::new(
+        &destination_pubkey,
+        &auditor_pubkey,
+        &grouped_ciphertext_lo,
+        &grouped_ciphertext_hi,
+        amount_lo,
+        amount_hi,
+        &incorrect_opening,
+        &opening_hi,
+    )
+    .unwrap();
+
+    test_verify_proof_without_context(
+        ProofInstruction::VerifyBatchedGroupedCiphertext2HandlesValidity,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofInstruction::VerifyBatchedGroupedCiphertext2HandlesValidity,
+        size_of::<ProofContextState<BatchedGroupedCiphertext2HandlesValidityProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofInstruction::VerifyBatchedGroupedCiphertext2HandlesValidity,
+        size_of::<ProofContextState<BatchedGroupedCiphertext2HandlesValidityProofContext>>(),
         &success_proof_data,
     )
     .await;

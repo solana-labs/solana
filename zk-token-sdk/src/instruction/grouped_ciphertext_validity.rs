@@ -39,14 +39,14 @@ use {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct GroupedCiphertext2HandlesValidityProofData {
-    pub context: GroupedCiphertext2HandlesValidityContext,
+    pub context: GroupedCiphertext2HandlesValidityProofContext,
 
     pub proof: pod::ValidityProof,
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-pub struct GroupedCiphertext2HandlesValidityContext {
+pub struct GroupedCiphertext2HandlesValidityProofContext {
     pub destination_pubkey: pod::ElGamalPubkey, // 32 bytes
 
     pub auditor_pubkey: pod::ElGamalPubkey, // 32 bytes
@@ -67,7 +67,7 @@ impl GroupedCiphertext2HandlesValidityProofData {
         let pod_auditor_pubkey = pod::ElGamalPubkey(auditor_pubkey.to_bytes());
         let pod_grouped_ciphertext = (*grouped_ciphertext).into();
 
-        let context = GroupedCiphertext2HandlesValidityContext {
+        let context = GroupedCiphertext2HandlesValidityProofContext {
             destination_pubkey: pod_destination_pubkey,
             auditor_pubkey: pod_auditor_pubkey,
             grouped_ciphertext: pod_grouped_ciphertext,
@@ -87,12 +87,12 @@ impl GroupedCiphertext2HandlesValidityProofData {
     }
 }
 
-impl ZkProofData<GroupedCiphertext2HandlesValidityContext>
+impl ZkProofData<GroupedCiphertext2HandlesValidityProofContext>
     for GroupedCiphertext2HandlesValidityProofData
 {
     const PROOF_TYPE: ProofType = ProofType::GroupedCiphertext2HandlesValidity;
 
-    fn context_data(&self) -> &GroupedCiphertext2HandlesValidityContext {
+    fn context_data(&self) -> &GroupedCiphertext2HandlesValidityProofContext {
         &self.context
     }
 
@@ -122,7 +122,7 @@ impl ZkProofData<GroupedCiphertext2HandlesValidityContext>
 }
 
 #[cfg(not(target_os = "solana"))]
-impl GroupedCiphertext2HandlesValidityContext {
+impl GroupedCiphertext2HandlesValidityProofContext {
     fn new_transcript(&self) -> Transcript {
         let mut transcript = Transcript::new(b"CiphertextValidityProof");
 
