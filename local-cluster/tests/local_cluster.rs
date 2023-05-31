@@ -2189,7 +2189,7 @@ fn create_snapshot_to_hard_fork(
         None,
         None,
         None,
-        &Arc::default(),
+        Arc::default(),
     )
     .unwrap();
     let bank = bank_forks.read().unwrap().get(snapshot_slot).unwrap();

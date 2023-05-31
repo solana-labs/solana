@@ -52,7 +52,7 @@ pub fn load(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     entry_notification_sender: Option<&EntryNotifierSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> LoadResult {
     let (bank_forks, leader_schedule_cache, starting_snapshot_hashes, ..) = load_bank_forks(
         genesis_config,
@@ -91,7 +91,7 @@ pub fn load_bank_forks(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     entry_notification_sender: Option<&EntryNotifierSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> (
     Arc<RwLock<BankForks>>,
     LeaderScheduleCache,
@@ -196,7 +196,7 @@ fn bank_forks_from_snapshot(
     snapshot_config: &SnapshotConfig,
     process_options: &ProcessOptions,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> (Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>) {
     // Fail hard here if snapshot fails to load, don't silently continue
     if account_paths.is_empty() {

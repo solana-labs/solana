@@ -9306,7 +9306,7 @@ where
             ..ACCOUNTS_DB_CONFIG_FOR_TESTING
         }),
         None,
-        &Arc::default(),
+        Arc::default(),
     ));
     let vote_and_stake_accounts =
         load_vote_and_stake_accounts(&bank).vote_with_stake_delegations_map;

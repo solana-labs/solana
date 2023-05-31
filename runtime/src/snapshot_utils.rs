@@ -1492,7 +1492,7 @@ pub fn bank_from_snapshot_archives(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let (unarchived_full_snapshot, mut unarchived_incremental_snapshot, next_append_vec_id) =
         verify_and_unarchive_snapshots(
@@ -1611,7 +1611,7 @@ pub fn bank_from_latest_snapshot_archives(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> Result<(
     Bank,
     FullSnapshotArchiveInfo,
@@ -1704,7 +1704,7 @@ pub fn bank_from_snapshot_dir(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromDirTimings)> {
     // Clear the contents of the account paths run directories.  When constructing the bank, the appendvec
     // files will be extracted from the snapshot hardlink directories into these run/ directories.
@@ -1772,7 +1772,7 @@ pub fn bank_from_latest_snapshot_dir(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> Result<Bank> {
     info!("Loading bank from snapshot dir");
     let bank_snapshot = get_highest_bank_snapshot_post(&bank_snapshots_dir).ok_or_else(|| {
@@ -2614,7 +2614,7 @@ fn rebuild_bank_from_unarchived_snapshots(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> Result<Bank> {
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
@@ -2710,7 +2710,7 @@ fn rebuild_bank_from_snapshot(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> Result<Bank> {
     info!(
         "Rebuilding bank from snapshot {}",
@@ -4356,7 +4356,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
         roundtrip_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -4467,7 +4467,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
         roundtrip_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -4598,7 +4598,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
         roundtrip_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -4719,7 +4719,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
         deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -4856,7 +4856,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
         deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -4921,7 +4921,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
         deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -5489,7 +5489,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
         deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -5562,7 +5562,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
 
@@ -5604,7 +5604,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
 

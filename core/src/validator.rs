@@ -1644,7 +1644,7 @@ fn load_blockstore(
                 .as_ref()
                 .map(|service| service.sender()),
             accounts_update_notifier,
-            exit,
+            exit.clone(),
         );
 
     // Before replay starts, set the callbacks in each of the banks in BankForks so that
