@@ -1384,6 +1384,8 @@ fn process_loader_upgradeable_instruction(
             // Borrowed accounts need to be dropped before native_invoke
             drop(programdata_account);
 
+            // Dereference the program ID to prevent overlapping mutable/immutable borrow of invoke context
+            let program_id = *program_id;
             if required_payment > 0 {
                 let payer_key = *transaction_context.get_key_of_account_at_index(
                     instruction_context.get_index_of_instruction_account_in_transaction(
@@ -1404,21 +1406,28 @@ fn process_loader_upgradeable_instruction(
                 .try_borrow_instruction_account(transaction_context, PROGRAM_DATA_ACCOUNT_INDEX)?;
             programdata_account.set_data_length(new_len)?;
 
-            if invoke_context
-                .feature_set
-                .is_active(&delay_visibility_of_program_deployment::id())
-            {
-                // Add a tombstone, that'll cause the program to be re-verified next time it is used.
-                // The delay visibility tombstones expire in the next slot. That'll cause the program
-                // cache lookup to return a cache miss.
-                invoke_context.programs_modified_by_tx.replenish(
-                    program_key,
-                    Arc::new(LoadedProgram::new_tombstone(
-                        invoke_context.programs_modified_by_tx.slot(),
-                        LoadedProgramType::DelayVisibility,
-                    )),
-                );
-            }
+            let slot = invoke_context
+                .get_sysvar_cache()
+                .get_clock()
+                .map(|clock| clock.slot)
+                .unwrap_or(invoke_context.programs_modified_by_tx.slot());
+
+            let buffer_data_offset = UpgradeableLoaderState::size_of_buffer_metadata();
+
+            deploy_program!(
+                invoke_context,
+                program_key,
+                &program_id,
+                UpgradeableLoaderState::size_of_program().saturating_add(new_len),
+                slot,
+                {
+                    drop(programdata_account);
+                },
+                programdata_account
+                    .get_data()
+                    .get(buffer_data_offset..)
+                    .ok_or(InstructionError::AccountDataTooSmall)?,
+            );
 
             ic_logger_msg!(
                 log_collector,
