@@ -28,12 +28,7 @@ impl ClusterTpuInfo {
 }
 
 impl TpuInfo for ClusterTpuInfo {
-    fn refresh_recent_peers(&mut self, use_quic: bool) {
-        let protocol = if use_quic {
-            Protocol::QUIC
-        } else {
-            Protocol::UDP
-        };
+    fn refresh_recent_peers(&mut self, protocol: Protocol) {
         self.recent_peers = self
             .cluster_info
             .tpu_peers()
