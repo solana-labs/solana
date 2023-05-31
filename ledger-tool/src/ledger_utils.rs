@@ -18,7 +18,7 @@ use {
             self, BlockstoreProcessorError, ProcessOptions, TransactionStatusSender,
         },
     },
-    solana_measure::measure::Measure,
+    solana_measure::measure,
     solana_rpc::{
         transaction_notifier_interface::TransactionNotifierLock,
         transaction_status_service::TransactionStatusService,
@@ -120,7 +120,7 @@ pub fn load_bank_forks(
             if halt_slot < starting_slot {
                 eprintln!(
                 "Unable to load bank forks at slot {halt_slot} because it is less than the starting slot {starting_slot}. \
-                The starting slot will be the latest snapshot slot, or genesis if --no-snapshot flag specified or no snapshots found."
+                The starting slot will be the latest snapshot slot, or genesis if the --no-snapshot flag is specified or if no snapshots are found."
             );
                 exit(1);
             }
@@ -175,33 +175,31 @@ pub fn load_bank_forks(
 
     let (account_run_paths, account_snapshot_paths) =
         create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
-            eprintln!("Error: {err:?}");
+            eprintln!("Error: {err}");
             exit(1);
         });
 
     // From now on, use run/ paths in the same way as the previous account_paths.
     let account_paths = account_run_paths;
 
-    info!("Cleaning contents of account paths: {:?}", account_paths);
-    let mut measure = Measure::start("clean_accounts_paths");
-    account_paths.iter().for_each(|path| {
-        if path.exists() {
-            move_and_async_delete_path_contents(path);
-        }
-    });
-    measure.stop();
-    info!("done. {}", measure);
+    let (_, measure_clean_account_paths) = measure!(
+        account_paths.iter().for_each(|path| {
+            if path.exists() {
+                info!("Cleaning contents of account path: {}", path.display());
+                move_and_async_delete_path_contents(path);
+            }
+        }),
+        "Cleaning account paths"
+    );
+    info!("{measure_clean_account_paths}");
 
     snapshot_utils::purge_incomplete_bank_snapshots(&bank_snapshots_dir);
 
-    info!(
-        "Cleaning contents of account snapshot paths: {:?}",
-        account_snapshot_paths
-    );
-    if let Err(e) =
+    info!("Cleaning contents of account snapshot paths: {account_snapshot_paths:?}");
+    if let Err(err) =
         clean_orphaned_account_snapshot_dirs(&bank_snapshots_dir, &account_snapshot_paths)
     {
-        eprintln!("Failed to clean orphaned account snapshot dirs.  Error: {e:?}");
+        eprintln!("Failed to clean orphaned account snapshot dirs: {err}");
         exit(1);
     }
 
@@ -218,7 +216,7 @@ pub fn load_bank_forks(
         let geyser_service =
             GeyserPluginService::new(confirmed_bank_receiver, &geyser_config_files).unwrap_or_else(
                 |err| {
-                    eprintln!("Failed to setup Geyser service: {err:?}");
+                    eprintln!("Failed to setup Geyser service: {err}");
                     exit(1);
                 },
             );
@@ -226,6 +224,7 @@ pub fn load_bank_forks(
         transaction_notifier = geyser_service.get_transaction_notifier();
     }
 
+    let exit = Arc::new(AtomicBool::new(false));
     let (bank_forks, leader_schedule_cache, starting_snapshot_hashes, ..) =
         bank_forks_utils::load_bank_forks(
             genesis_config,
@@ -237,7 +236,7 @@ pub fn load_bank_forks(
             None,
             None, // Maybe support this later, though
             accounts_update_notifier,
-            &Arc::default(),
+            &exit,
         );
     let block_verification_method = value_t!(
         arg_matches,
@@ -250,7 +249,6 @@ pub fn load_bank_forks(
         block_verification_method,
     );
 
-    let exit = Arc::new(AtomicBool::new(false));
     let node_id = Arc::new(Keypair::new());
     let cluster_info = Arc::new(ClusterInfo::new(
         ContactInfo::new_localhost(&node_id.pubkey(), timestamp()),
