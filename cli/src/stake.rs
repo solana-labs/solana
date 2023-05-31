@@ -1851,16 +1851,15 @@ pub fn process_split_stake(
     let split_stake_account = config.signers[split_stake_account];
     let fee_payer = config.signers[fee_payer];
 
-    let new_source_balance = rpc_client.get_balance(&stake_account_pubkey)? as u64 - lamports;
-    let check_source_stake_account =
-        check_stake_minimum_delegation(&rpc_client, new_source_balance);
+    let new_source_balance = rpc_client.get_balance(stake_account_pubkey)? - lamports;
+    let check_source_stake_account = check_stake_minimum_delegation(rpc_client, new_source_balance);
     if check_source_stake_account.is_err() {
-        check_source_stake_account.map_err(|err| err)?;
+        check_source_stake_account?;
     }
 
-    let check_split_target_account = check_stake_minimum_delegation(&rpc_client, lamports);
+    let check_split_target_account = check_stake_minimum_delegation(rpc_client, lamports);
     if check_split_target_account.is_err() {
-        check_split_target_account.map_err(|err| err)?;
+        check_split_target_account?;
     }
 
     if split_stake_account_seed.is_none() {
@@ -2521,10 +2520,10 @@ pub fn process_delegate_stake(
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
 
-    let stake_balance = rpc_client.get_balance(&stake_account_pubkey)? as u64;
-    let check_min_delegation = check_stake_minimum_delegation(&rpc_client, stake_balance);
+    let stake_balance = rpc_client.get_balance(stake_account_pubkey)?;
+    let check_min_delegation = check_stake_minimum_delegation(rpc_client, stake_balance);
     if check_min_delegation.is_err() {
-        check_min_delegation.map_err(|err| err)?;
+        check_min_delegation?;
     }
 
     let redelegation_stake_account = redelegation_stake_account.map(|index| config.signers[index]);
