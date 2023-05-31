@@ -1,3 +1,6 @@
+//! The utility structs and functions for writing byte blocks for the
+//! accounts db tiered storage.
+
 use {
     crate::tiered_storage::footer::AccountBlockFormat,
     std::{
@@ -6,12 +9,20 @@ use {
     },
 };
 
+/// The byte block writer.
+///
+/// All writes (`write_type` and `write`) will be buffered in the internal
+/// buffer of the ByteBlockWriter using the specified encoding.
+///
+/// To finalize all the writes, invoke `finish` to obtain the encoded byte
+/// block.
 #[derive(Debug)]
 pub enum ByteBlockWriter {
     Raw(Cursor<Vec<u8>>),
 }
 
 impl ByteBlockWriter {
+    /// Create a ByteBlockWriter from the specified AccountBlockFormat.
     pub fn new(encoding: AccountBlockFormat) -> Self {
         match encoding {
             AccountBlockFormat::AlignedRaw => Self::Raw(Cursor::new(Vec::new())),
@@ -19,6 +30,8 @@ impl ByteBlockWriter {
         }
     }
 
+    /// Write the specified typed instance to the internal buffer of
+    /// the ByteBlockWriter instance.
     pub fn write_type<T>(&mut self, value: &T) -> std::io::Result<usize> {
         let size = mem::size_of::<T>();
         let ptr = value as *const _ as *const u8;
@@ -27,6 +40,8 @@ impl ByteBlockWriter {
         Ok(size)
     }
 
+    /// Write the specified typed bytes to the internal buffer of the
+    /// ByteBlockWriter instance.
     pub fn write(&mut self, buf: &[u8]) -> std::io::Result<()> {
         match self {
             Self::Raw(cursor) => cursor.write_all(buf)?,
@@ -34,6 +49,8 @@ impl ByteBlockWriter {
         Ok(())
     }
 
+    /// Flush the internal byte buffer that collects all the previous writes
+    /// into an encoded byte array.
     pub fn finish(self) -> std::io::Result<Vec<u8>> {
         match self {
             Self::Raw(cursor) => Ok(cursor.into_inner()),
