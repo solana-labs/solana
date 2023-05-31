@@ -42,6 +42,7 @@ for Cargo_toml in $Cargo_tomls; do
 
   # check the version which doesn't inherit from worksapce
   if ! grep -q "^version = { workspace = true }$" "$Cargo_toml"; then
+    echo "Warn: $Cargo_toml doesn't use the inherited version"
     grep -q "^version = \"$expectedCrateVersion\"$" "$Cargo_toml" || {
       echo "Error: $Cargo_toml version is not $expectedCrateVersion"
       exit 1
