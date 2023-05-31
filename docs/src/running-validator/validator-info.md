@@ -25,7 +25,7 @@ The recommended dimensions for the validator icon are 360x360px and PNG format.
 Example publish command:
 
 ```bash
-solana validator-info publish "Elvis Validator" -w "https://elvis-validates.com" -i "https://elvis-validates.com/my-icon.png
+solana validator-info publish "Elvis Validator" -w "https://elvis-validates.com" -i "https://elvis-validates.com/my-icon.png"
 ```
 
 Example query command:
