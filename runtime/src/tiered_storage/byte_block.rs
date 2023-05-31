@@ -18,7 +18,7 @@ impl ByteBlockWriter {
             AccountBlockFormat::AlignedRaw => Self::Raw(Cursor::new(Vec::new())),
             AccountBlockFormat::Lz4 => Self::Lz4(
                 lz4::EncoderBuilder::new()
-                    .level(1)
+                    .level(0)
                     .build(Vec::new())
                     .unwrap(),
             ),
@@ -54,7 +54,7 @@ impl ByteBlockWriter {
 }
 
 /// The util struct for reading byte blocks.
-pub struct ByteBlockReader {}
+pub struct ByteBlockReader;
 
 impl ByteBlockReader {
     /// Decode the input byte array using the specified format.
@@ -62,20 +62,17 @@ impl ByteBlockReader {
     /// Typically, the input byte array is the output of ByteBlockWriter::finish().
     ///
     /// Note that calling this function with AccountBlockFormat::AlignedRaw encoding
-    /// will result in InvalidInput error as AccountBlockFormat::AlignedRaw doesn't
+    /// will result in panic as the input is already decoded.
     // require decoding.
     pub fn decode(encoding: AccountBlockFormat, input: &[u8]) -> std::io::Result<Vec<u8>> {
         match encoding {
             AccountBlockFormat::Lz4 => {
                 let mut decoder = lz4::Decoder::new(input).unwrap();
-                let mut output: Vec<u8> = vec![];
+                let mut output = vec![];
                 decoder.read_to_end(&mut output)?;
                 Ok(output)
             }
-            AccountBlockFormat::AlignedRaw => Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "the input buffer is already decoded",
-            )),
+            AccountBlockFormat::AlignedRaw => panic!("the input buffer is already decoded"),
         }
     }
 }
@@ -94,7 +91,7 @@ mod tests {
         (unsafe { std::ptr::read_unaligned(ptr) }, next)
     }
 
-    fn write_single_test_helper(format: AccountBlockFormat) {
+    fn write_single(format: AccountBlockFormat) {
         let mut writer = ByteBlockWriter::new(format);
         let value: u32 = 42;
 
@@ -120,12 +117,12 @@ mod tests {
 
     #[test]
     fn test_write_single_raw_format() {
-        write_single_test_helper(AccountBlockFormat::AlignedRaw);
+        write_single(AccountBlockFormat::AlignedRaw);
     }
 
     #[test]
     fn test_write_single_encoded_format() {
-        write_single_test_helper(AccountBlockFormat::Lz4);
+        write_single(AccountBlockFormat::Lz4);
     }
 
     #[derive(Debug, PartialEq)]
@@ -135,7 +132,7 @@ mod tests {
         data_len: usize,
     }
 
-    fn write_multiple_test_helper(format: AccountBlockFormat) {
+    fn write_multiple(format: AccountBlockFormat) {
         let mut writer = ByteBlockWriter::new(format);
         let test_metas: Vec<TestMetaStruct> = vec![
             TestMetaStruct {
@@ -211,11 +208,11 @@ mod tests {
 
     #[test]
     fn test_write_multiple_raw_format() {
-        write_multiple_test_helper(AccountBlockFormat::AlignedRaw);
+        write_multiple(AccountBlockFormat::AlignedRaw);
     }
 
     #[test]
     fn test_write_multiple_lz4_format() {
-        write_multiple_test_helper(AccountBlockFormat::Lz4);
+        write_multiple(AccountBlockFormat::Lz4);
     }
 }
