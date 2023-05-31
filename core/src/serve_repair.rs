@@ -48,6 +48,7 @@ use {
         cmp::Reverse,
         collections::{HashMap, HashSet},
         net::{SocketAddr, UdpSocket},
+        ops::RangeInclusive,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -101,6 +102,8 @@ pub enum RepairVerifyError {
     TimeSkew,
     #[error("Unsigned")]
     Unsigned,
+    #[error("SlotOutOfRange")]
+    SlotOutOfRange,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -202,6 +205,7 @@ struct ServeRepairStats {
     err_sig_verify: usize,
     err_unsigned: usize,
     err_id_mismatch: usize,
+    err_slot_out_of_range: usize,
 }
 
 #[derive(Debug, AbiExample, Deserialize, Serialize)]
@@ -299,6 +303,22 @@ impl RepairProtocol {
             Self::HighestWindowIndex { header, .. } => &header.sender,
             Self::Orphan { header, .. } => &header.sender,
             Self::AncestorHashes { header, .. } => &header.sender,
+        }
+    }
+
+    fn slot(&self) -> Option<Slot> {
+        match self {
+            RepairProtocol::LegacyWindowIndex(_, slot, _)
+            | RepairProtocol::LegacyHighestWindowIndex(_, slot, _)
+            | RepairProtocol::LegacyOrphan(_, slot)
+            | RepairProtocol::LegacyWindowIndexWithNonce(_, slot, _, _)
+            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, slot, _, _)
+            | RepairProtocol::LegacyOrphanWithNonce(_, slot, _)
+            | RepairProtocol::LegacyAncestorHashes(_, slot, _)
+            | RepairProtocol::WindowIndex { slot, .. }
+            | RepairProtocol::HighestWindowIndex { slot, .. }
+            | RepairProtocol::Orphan { slot, .. } => Some(*slot),
+            RepairProtocol::AncestorHashes { .. } | RepairProtocol::Pong(_) => None,
         }
     }
 
@@ -515,12 +535,26 @@ impl ServeRepair {
         }
     }
 
+    fn verify_within_slot_range(
+        request: &RepairProtocol,
+        slot_range: &RangeInclusive<Slot>,
+    ) -> Result<()> {
+        if let Some(slot) = request.slot() {
+            // no response will be generated for slots with no blockstore data
+            if !slot_range.contains(&slot) {
+                return Err(Error::from(RepairVerifyError::SlotOutOfRange));
+            }
+        }
+        Ok(())
+    }
+
     fn decode_request(
         packet: &Packet,
         epoch_staked_nodes: &Option<Arc<HashMap<Pubkey, u64>>>,
         whitelist: &HashSet<Pubkey>,
         my_id: &Pubkey,
         socket_addr_space: &SocketAddrSpace,
+        available_slot_range: &RangeInclusive<Slot>,
         stats: &mut ServeRepairStats,
         cluster_type: ClusterType,
     ) -> Result<RepairRequestWithMeta> {
@@ -534,6 +568,7 @@ impl ServeRepair {
         if !ContactInfo::is_valid_address(&from_addr, socket_addr_space) {
             return Err(Error::from(RepairVerifyError::Malformed));
         }
+        Self::verify_within_slot_range(&request, available_slot_range)?;
         match Self::verify_signed_packet(my_id, packet, &request) {
             Ok(()) => (),
             Err(Error::RepairVerify(RepairVerifyError::Unsigned)) => match cluster_type {
@@ -584,6 +619,9 @@ impl ServeRepair {
             Error::RepairVerify(RepairVerifyError::Unsigned) => {
                 stats.err_unsigned += 1;
             }
+            Error::RepairVerify(RepairVerifyError::SlotOutOfRange) => {
+                stats.err_slot_out_of_range += 1;
+            }
             _ => {
                 debug_assert!(false, "unhandled error {error:?}");
             }
@@ -596,6 +634,7 @@ impl ServeRepair {
         whitelist: &HashSet<Pubkey>,
         my_id: &Pubkey,
         socket_addr_space: &SocketAddrSpace,
+        available_slot_range: &RangeInclusive<Slot>,
         stats: &mut ServeRepairStats,
         cluster_type: ClusterType,
     ) -> Vec<RepairRequestWithMeta> {
@@ -606,6 +645,7 @@ impl ServeRepair {
                 whitelist,
                 my_id,
                 socket_addr_space,
+                available_slot_range,
                 stats,
                 cluster_type,
             );
@@ -682,6 +722,13 @@ impl ServeRepair {
         stats.dropped_requests_load_shed += dropped_requests;
         stats.total_requests += total_requests;
 
+        let highest_slot = blockstore
+            .highest_slot()
+            .expect("Blockstore::highest_slot()")
+            .unwrap_or(Slot::MAX);
+        let lowest_slot = blockstore.lowest_slot();
+        let available_slot_range = lowest_slot..=highest_slot;
+
         let decode_start = Instant::now();
         let mut decoded_requests = {
             let whitelist = self.repair_whitelist.read().unwrap();
@@ -691,6 +738,7 @@ impl ServeRepair {
                 &whitelist,
                 &my_id,
                 &socket_addr_space,
+                &available_slot_range,
                 stats,
                 cluster_type,
             )
@@ -804,6 +852,7 @@ impl ServeRepair {
             ("err_sig_verify", stats.err_sig_verify, i64),
             ("err_unsigned", stats.err_unsigned, i64),
             ("err_id_mismatch", stats.err_id_mismatch, i64),
+            ("err_slot_out_of_range", stats.err_slot_out_of_range, i64),
         );
 
         *stats = ServeRepairStats::default();
