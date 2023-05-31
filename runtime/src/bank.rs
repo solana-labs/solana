@@ -2810,10 +2810,10 @@ impl Bank {
             stake_rewards.par_iter().for_each(|reward| {
                 let partition_index =
                     address_to_partition(hasher, num_partitions, &reward.stake_pubkey);
-                partition_map
-                    .get_mut(&partition_index)
-                    .unwrap()
-                    .push(reward.clone());
+                let entry = partition_map
+                    .entry(&partition_index)
+                    .or_default();
+                entry.push(reward.clone());
             });
         });
 
