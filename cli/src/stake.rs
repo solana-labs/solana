@@ -1851,6 +1851,21 @@ pub fn process_split_stake(
     let split_stake_account = config.signers[split_stake_account];
     let fee_payer = config.signers[fee_payer];
 
+    let new_source_balance = rpc_client.get_balance(&stake_account_pubkey)? as u64 - lamports;
+    let check_source_stake_account = check_stake_minimum_delegation(&rpc_client, new_source_balance);
+    if check_source_stake_account.is_err() {
+        check_source_stake_account.map_err(|err| {
+            err
+        })?;
+    }
+
+    let check_split_target_account = check_stake_minimum_delegation(&rpc_client, lamports);
+    if check_split_target_account.is_err() {
+        check_split_target_account.map_err(|err| {
+            err
+        })?;
+    }
+
     if split_stake_account_seed.is_none() {
         check_unique_pubkeys(
             (&fee_payer.pubkey(), "fee-payer keypair".to_string()),
@@ -2508,6 +2523,15 @@ pub fn process_delegate_stake(
         (&config.signers[0].pubkey(), "cli keypair".to_string()),
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
+    
+    let stake_balance = rpc_client.get_balance(&stake_account_pubkey)? as u64;
+    let check_min_delegation = check_stake_minimum_delegation(&rpc_client, stake_balance);
+    if check_min_delegation.is_err() {
+        check_min_delegation.map_err(|err| {
+            err
+        })?;
+    }
+
     let redelegation_stake_account = redelegation_stake_account.map(|index| config.signers[index]);
     if let Some(redelegation_stake_account) = &redelegation_stake_account {
         check_unique_pubkeys(
@@ -2635,6 +2659,23 @@ pub fn process_delegate_stake(
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
         log_instruction_custom_error::<StakeError>(result, config)
     }
+}
+
+pub fn check_stake_minimum_delegation(
+    rpc_client: &RpcClient,
+    balance: u64,
+) -> Result<(), CliError> {
+    let minimum_delegation_sol = rpc_client.get_stake_minimum_delegation()?;
+    let minimum_balance =
+            rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())?;
+
+    if balance < minimum_balance + minimum_delegation_sol {
+        Err(CliError::BadParameter(format!("Stake account balance is too low for minimum delegation requirement of {:?} SOL and rent exempt reserve of {:?} lamports", minimum_delegation_sol, minimum_balance)))
+    }
+    else {
+        Ok(())
+    }
+    
 }
 
 pub fn process_stake_minimum_delegation(
