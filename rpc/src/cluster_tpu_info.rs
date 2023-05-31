@@ -28,12 +28,17 @@ impl ClusterTpuInfo {
 }
 
 impl TpuInfo for ClusterTpuInfo {
-    fn refresh_recent_peers(&mut self) {
+    fn refresh_recent_peers(&mut self, use_quic: bool) {
+        let protocol = if use_quic {
+            Protocol::QUIC
+        } else {
+            Protocol::UDP
+        };
         self.recent_peers = self
             .cluster_info
             .tpu_peers()
             .into_iter()
-            .filter_map(|node| Some((*node.pubkey(), node.tpu(Protocol::UDP).ok()?)))
+            .filter_map(|node| Some((*node.pubkey(), node.tpu(protocol).ok()?)))
             .collect();
     }
 
