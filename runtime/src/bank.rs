@@ -62,6 +62,7 @@ use {
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_token,
         message_processor::MessageProcessor,
+        partitioned_rewards::PartitionedEpochRewardsConfig,
         rent_collector::{CollectedInfo, RentCollector},
         rent_debits::RentDebits,
         runtime_config::RuntimeConfig,
@@ -1437,6 +1438,38 @@ impl Bank {
         rent_collector.clone_with_epoch(epoch)
     }
 
+    #[allow(dead_code)]
+    pub(crate) fn set_epoch_reward_status_active(&mut self, stake_rewards: StakeRewards) {
+        self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
+            start_block_height: self.block_height,
+            calculated_epoch_stake_rewards: Arc::new(stake_rewards),
+        });
+    }
+
+    #[allow(dead_code)]
+    fn partitioned_epoch_rewards_config(&self) -> &PartitionedEpochRewardsConfig {
+        &self
+            .rc
+            .accounts
+            .accounts_db
+            .partitioned_epoch_rewards_config
+    }
+
+    /// # stake accounts to store in one block during partitioned reward interval
+    #[allow(dead_code)]
+    fn partitioned_rewards_stake_account_stores_per_block(&self) -> u64 {
+        self.partitioned_epoch_rewards_config()
+            .stake_account_stores_per_block
+    }
+
+    /// reward calculation happens synchronously during the first block of the epoch boundary.
+    /// So, # blocks for reward calculation is 1.
+    #[allow(dead_code)]
+    fn get_reward_calculation_num_blocks(&self) -> Slot {
+        self.partitioned_epoch_rewards_config()
+            .reward_calculation_num_blocks
+    }
+
     fn _new_from_parent(
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
@@ -1592,7 +1625,12 @@ impl Bank {
         let parent_epoch = parent.epoch();
         let (_, update_epoch_time_us) = measure_us!({
             if parent_epoch < new.epoch() {
-                new.process_new_epoch(parent_epoch, parent.slot(), reward_calc_tracer);
+                new.process_new_epoch(
+                    parent_epoch,
+                    parent.slot(),
+                    parent.block_height(),
+                    reward_calc_tracer,
+                );
             } else {
                 // Save a snapshot of stakes for use in consensus and stake weighted networking
                 let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
@@ -1651,6 +1689,7 @@ impl Bank {
         &mut self,
         parent_epoch: Epoch,
         parent_slot: Slot,
+        _parent_height: u64,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
     ) {
         let epoch = self.epoch();

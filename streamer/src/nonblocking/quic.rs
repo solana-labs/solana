@@ -1241,21 +1241,21 @@ pub mod test {
             // the stream -- expect it.
             let s2 = s2.err().unwrap();
             assert!(matches!(s2, quinn::ConnectionError::ApplicationClosed(_)));
-            return;
+        } else {
+            let mut s2 = s2.unwrap();
+            s1.write_all(&[0u8]).await.unwrap();
+            s1.finish().await.unwrap();
+            // Send enough data to create more than 1 chunks.
+            // The first will try to open the connection (which should fail).
+            // The following chunks will enable the detection of connection failure.
+            let data = vec![1u8; PACKET_DATA_SIZE * 2];
+            s2.write_all(&data)
+                .await
+                .expect_err("shouldn't be able to open 2 connections");
+            s2.finish()
+                .await
+                .expect_err("shouldn't be able to open 2 connections");
         }
-        let mut s2 = s2.unwrap();
-        s1.write_all(&[0u8]).await.unwrap();
-        s1.finish().await.unwrap();
-        // Send enough data to create more than 1 chunks.
-        // The first will try to open the connection (which should fail).
-        // The following chunks will enable the detection of connection failure.
-        let data = vec![1u8; PACKET_DATA_SIZE * 2];
-        s2.write_all(&data)
-            .await
-            .expect_err("shouldn't be able to open 2 connections");
-        s2.finish()
-            .await
-            .expect_err("shouldn't be able to open 2 connections");
     }
 
     pub async fn check_multiple_streams(

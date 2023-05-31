@@ -1,3 +1,4 @@
+pub mod byte_block;
 pub mod error;
 pub mod file;
 pub mod footer;

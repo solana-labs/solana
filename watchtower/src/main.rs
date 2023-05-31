@@ -7,7 +7,7 @@ use {
     solana_clap_utils::{
         hidden_unless_forced,
         input_parsers::pubkeys_of,
-        input_validators::{is_parsable, is_pubkey_or_keypair, is_url},
+        input_validators::{is_parsable, is_pubkey_or_keypair, is_url, is_valid_percentage},
     },
     solana_cli_output::display::format_labeled_address,
     solana_metrics::{datapoint_error, datapoint_info},
@@ -35,6 +35,7 @@ struct Config {
     rpc_timeout: Duration,
     minimum_validator_identity_balance: u64,
     monitor_active_stake: bool,
+    active_stake_alert_threshold: u8,
     unhealthy_threshold: usize,
     validator_identity_pubkeys: Vec<Pubkey>,
     name_suffix: String,
@@ -139,7 +140,16 @@ fn get_config() -> Config {
             Arg::with_name("monitor_active_stake")
                 .long("monitor-active-stake")
                 .takes_value(false)
-                .help("Alert when the current stake for the cluster drops below 80%"),
+                .help("Alert when the current stake for the cluster drops below the amount specified by --active-stake-alert-threshold"),
+        )
+        .arg(
+            Arg::with_name("active_stake_alert_threshold")
+                .long("active-stake-alert-threshold")
+                .value_name("PERCENTAGE")
+                .takes_value(true)
+                .validator(is_valid_percentage)
+                .default_value("80")
+                .help("Alert when the current stake for the cluster drops below this value"),
         )
         .arg(
             Arg::with_name("ignore_http_bad_gateway")
@@ -183,6 +193,8 @@ fn get_config() -> Config {
         .collect();
 
     let monitor_active_stake = matches.is_present("monitor_active_stake");
+    let active_stake_alert_threshold =
+        value_t_or_exit!(matches, "active_stake_alert_threshold", u8);
     let ignore_http_bad_gateway = matches.is_present("ignore_http_bad_gateway");
 
     let name_suffix = value_t_or_exit!(matches, "name_suffix", String);
@@ -195,6 +207,7 @@ fn get_config() -> Config {
         rpc_timeout,
         minimum_validator_identity_balance,
         monitor_active_stake,
+        active_stake_alert_threshold,
         unhealthy_threshold,
         validator_identity_pubkeys,
         name_suffix,
@@ -301,7 +314,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ));
                 }
 
-                if config.monitor_active_stake && current_stake_percent < 80. {
+                if config.monitor_active_stake
+                    && current_stake_percent < config.active_stake_alert_threshold as f64
+                {
                     failures.push((
                         "current-stake",
                         format!("Current stake is {current_stake_percent:.2}%"),
