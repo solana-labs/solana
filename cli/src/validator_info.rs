@@ -471,7 +471,7 @@ mod tests {
     fn test_is_short_field() {
         let name = "Alice Validator";
         assert_eq!(is_short_field(name.to_string()), Ok(()));
-        let long_name = "Alice 7cLvFwLCbyHuXQ1RGzhCMobAWYPMSZ3VbUml1qWi1nkc3FD7zj9hzTZzMvYJt6rY9";
+        let long_name = "Alice 7cLvFwLCbyHuXQ1RGzhCMobAWYPMSZ3VbUml1qWi1nkc3FD7zj9hzTZzMvYJt6rY9j9hzTZzMvYJt6rY9";
         assert!(is_short_field(long_name.to_string()).is_err());
     }
 
