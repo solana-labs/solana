@@ -236,7 +236,7 @@ pub fn load_bank_forks(
             None,
             None, // Maybe support this later, though
             accounts_update_notifier,
-            &exit,
+            exit.clone(),
         );
     let block_verification_method = value_t!(
         arg_matches,
