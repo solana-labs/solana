@@ -7073,7 +7073,6 @@ pub(crate) mod tests {
             poh_recorder,
             tower_storage,
             vote_info,
-            false,
         );
 
         let votes = cluster_info.get_votes(cursor);
