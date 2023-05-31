@@ -13,6 +13,10 @@ pub mod zero_balance;
 use crate::errors::ProofError;
 use num_derive::{FromPrimitive, ToPrimitive};
 pub use {
+    batched_grouped_ciphertext_validity::{
+        BatchedGroupedCiphertext2HandlesValidityProofContext,
+        BatchedGroupedCiphertext2HandlesValidityProofData,
+    },
     batched_range_proof::{
         batched_range_proof_u128::BatchedRangeProofU128Data,
         batched_range_proof_u256::BatchedRangeProofU256Data,
@@ -26,7 +30,7 @@ pub use {
         CiphertextCommitmentEqualityProofContext, CiphertextCommitmentEqualityProofData,
     },
     grouped_ciphertext_validity::{
-        GroupedCiphertext2HandlesValidityContext, GroupedCiphertext2HandlesValidityProofData,
+        GroupedCiphertext2HandlesValidityProofContext, GroupedCiphertext2HandlesValidityProofData,
     },
     pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
     range_proof::{RangeProofContext, RangeProofU64Data},
