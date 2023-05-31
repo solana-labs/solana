@@ -134,7 +134,7 @@ mod tests {
                 elgamal::{ElGamalCiphertext, ElGamalKeypair},
                 pedersen::{Pedersen, PedersenOpening},
             },
-            instruction::split_u64,
+            instruction::transfer::split_u64,
             zk_token_elgamal::{ops, pod},
         },
         bytemuck::Zeroable,
