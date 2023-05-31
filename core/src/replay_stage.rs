@@ -3273,7 +3273,8 @@ impl ReplayStage {
 
                         // In this case, we do want to obey threshold, yet try to register our vote on
                         // the current fork, so we choose to vote at the tip of current fork instead.
-                        // This means longer lockout, but it might be enough to get majority vote.
+                        // This will not cause longer lockout because lockout doesn't double after 512
+                        // slots, it might be enough to get majority vote.
                         reset_bank.map(|b| (b, SwitchForkDecision::SameFork))
                     } else {
                         // If we can't switch and our last vote was on a non-duplicate/confirmed slot, then
