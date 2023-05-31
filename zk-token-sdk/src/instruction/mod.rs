@@ -1,6 +1,7 @@
 pub mod batched_range_proof;
 pub mod ciphertext_ciphertext_equality;
 pub mod ciphertext_commitment_equality;
+pub mod grouped_ciphertext_validity;
 pub mod pubkey_validity;
 pub mod range_proof;
 pub mod transfer;
@@ -22,6 +23,9 @@ pub use {
     },
     ciphertext_commitment_equality::{
         CiphertextCommitmentEqualityProofContext, CiphertextCommitmentEqualityProofData,
+    },
+    grouped_ciphertext_validity::{
+        GroupedCiphertext2HandlesValidityContext, GroupedCiphertext2HandlesValidityProofData,
     },
     pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
     range_proof::{RangeProofContext, RangeProofU64Data},
@@ -49,6 +53,7 @@ pub enum ProofType {
     BatchedRangeProofU128,
     BatchedRangeProofU256,
     CiphertextCommitmentEquality,
+    GroupedCiphertext2HandlesValidity,
 }
 
 pub trait ZkProofData<T: Pod> {
