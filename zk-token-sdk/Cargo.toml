@@ -14,6 +14,9 @@ num-derive = { workspace = true }
 num-traits = { workspace = true }
 solana-program = { workspace = true }
 
+[dev-dependencies]
+tiny-bip39 = { workspace = true }
+
 [target.'cfg(not(target_os = "solana"))'.dependencies]
 aes-gcm-siv = { workspace = true }
 arrayref = { workspace = true }

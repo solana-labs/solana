@@ -28,9 +28,6 @@ use {
     serde::{Deserialize, Serialize},
     solana_sdk::{
         derivation_path::DerivationPath,
-        instruction::Instruction,
-        message::Message,
-        pubkey::Pubkey,
         signature::Signature,
         signer::{
             keypair::generate_seed_from_seed_phrase_and_passphrase, EncodableKey, EncodableKeypair,
@@ -45,7 +42,7 @@ use {
 #[cfg(not(target_os = "solana"))]
 use {
     rand::rngs::OsRng,
-    sha3::Sha3_512,
+    sha3::{Digest, Sha3_512},
     std::{
         error, fmt,
         io::{Read, Write},
@@ -57,6 +54,8 @@ use {
 pub enum ElGamalError {
     #[error("key derivation method not supported")]
     DerivationMethodNotSupported,
+    #[error("seed length too short for derivation")]
+    SeedLengthTooShort,
 }
 
 /// Algorithm handle for the twisted ElGamal encryption scheme
@@ -162,24 +161,25 @@ pub struct ElGamalKeypair {
 }
 
 impl ElGamalKeypair {
-    /// Deterministically derives an ElGamal keypair from an Ed25519 signing key and a Solana
-    /// address.
+    /// Deterministically derives an ElGamal keypair from a Solana signer and a public seed..
     ///
-    /// This function exists for applications where a user may not wish to maintin a Solana
-    /// (Ed25519) keypair and an ElGamal keypair separately. A user may wish to solely maintain the
-    /// Solana keypair and then derive the ElGamal keypair on-the-fly whenever
-    /// encryption/decryption is needed.
+    /// This function exists for applications where a user may not wish to maintain a Solana signer
+    /// and an ElGamal keypair separately. Instead, a user can derive the ElGamal keypair
+    /// on-the-fly whenever encryption/decryption is needed.
     ///
-    /// For the spl token-2022 confidential extension application, the ElGamal encryption public
-    /// key is specified in a token account address. A natural way to derive an ElGamal keypair is
-    /// then to define it from the hash of a Solana keypair and a Solana address. However, for
-    /// general hardware wallets, the signing key is not exposed in the API. Therefore, this
-    /// function uses a signer to sign a pre-specified message with respect to a Solana address.
-    /// The resulting signature is then hashed to derive an ElGamal keypair.
+    /// For the spl-token-2022 confidential extension, the ElGamal public key is specified in a
+    /// token account. A natural way to derive an ElGamal keypair is to define it from the hash of
+    /// a Solana keypair and a Solana address as the public seed. However, for general hardware
+    /// wallets, the signing key is not exposed in the API. Therefore, this function uses a signer
+    /// to sign a public seed and the resulting signature is then hashed to derive an ElGamal
+    /// keypair.
     #[cfg(not(target_os = "solana"))]
     #[allow(non_snake_case)]
-    pub fn new(signer: &dyn Signer, address: &Pubkey) -> Result<Self, SignerError> {
-        let secret = ElGamalSecretKey::new(signer, address)?;
+    pub fn new_from_signer(
+        signer: &dyn Signer,
+        public_seed: &[u8],
+    ) -> Result<Self, Box<dyn error::Error>> {
+        let secret = ElGamalSecretKey::new_from_signer(signer, public_seed)?;
         let public = ElGamalPubkey::new(&secret);
         Ok(ElGamalKeypair { public, secret })
     }
@@ -367,20 +367,27 @@ impl fmt::Display for ElGamalPubkey {
 #[zeroize(drop)]
 pub struct ElGamalSecretKey(Scalar);
 impl ElGamalSecretKey {
-    /// Deterministically derives an ElGamal keypair from an Ed25519 signing key and a Solana
-    /// address.
+    /// Deterministically derives an ElGamal secret key from a Solana signer and a public seed.
     ///
-    /// See `ElGamalKeypair::new` for more context on the key derivation.
-    pub fn new(signer: &dyn Signer, address: &Pubkey) -> Result<Self, SignerError> {
-        let message = Message::new(
-            &[Instruction::new_with_bytes(
-                *address,
-                b"ElGamalSecretKey",
-                vec![],
-            )],
-            Some(&signer.try_pubkey()?),
-        );
-        let signature = signer.try_sign_message(&message.serialize())?;
+    /// See `ElGamalKeypair::new_from_signer` for more context on the key derivation.
+    pub fn new_from_signer(
+        signer: &dyn Signer,
+        public_seed: &[u8],
+    ) -> Result<Self, Box<dyn error::Error>> {
+        let seed = Self::seed_from_signer(signer, public_seed)?;
+        let key = Self::from_seed(&seed)?;
+        Ok(key)
+    }
+
+    /// Derive a seed from a Solana signer used to generate an ElGamal secret key.
+    ///
+    /// The seed is derived as the hash of the signature of a public seed.
+    pub fn seed_from_signer(
+        signer: &dyn Signer,
+        public_seed: &[u8],
+    ) -> Result<Vec<u8>, SignerError> {
+        let message = [b"ElGamalSecretKey", public_seed].concat();
+        let signature = signer.try_sign_message(&message)?;
 
         // Some `Signer` implementations return the default signature, which is not suitable for
         // use as key material
@@ -388,9 +395,11 @@ impl ElGamalSecretKey {
             return Err(SignerError::Custom("Rejecting default signatures".into()));
         }
 
-        Ok(ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(
-            signature.as_ref(),
-        )))
+        let mut hasher = Sha3_512::new();
+        hasher.update(signature.as_ref());
+        let result = hasher.finalize();
+
+        Ok(result.to_vec())
     }
 
     /// Randomly samples an ElGamal secret key.
@@ -401,11 +410,11 @@ impl ElGamalSecretKey {
     }
 
     /// Derive an ElGamal secret key from an entropy seed.
-    pub fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
+    pub fn from_seed(seed: &[u8]) -> Result<Self, ElGamalError> {
         const MINIMUM_SEED_LEN: usize = 32;
 
         if seed.len() < MINIMUM_SEED_LEN {
-            return Err("Seed is too short".into());
+            return Err(ElGamalError::SeedLengthTooShort);
         }
         Ok(ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(seed)))
     }
@@ -461,7 +470,8 @@ impl EncodableKey for ElGamalSecretKey {
 
 impl SeedDerivable for ElGamalSecretKey {
     fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
-        Self::from_seed(seed)
+        let key = Self::from_seed(seed)?;
+        Ok(key)
     }
 
     fn from_seed_and_derivation_path(
@@ -475,10 +485,11 @@ impl SeedDerivable for ElGamalSecretKey {
         seed_phrase: &str,
         passphrase: &str,
     ) -> Result<Self, Box<dyn error::Error>> {
-        Self::from_seed(&generate_seed_from_seed_phrase_and_passphrase(
+        let key = Self::from_seed(&generate_seed_from_seed_phrase_and_passphrase(
             seed_phrase,
             passphrase,
-        ))
+        ))?;
+        Ok(key)
     }
 }
 
@@ -714,7 +725,8 @@ mod tests {
     use {
         super::*,
         crate::encryption::pedersen::Pedersen,
-        solana_sdk::{signature::Keypair, signer::null_signer::NullSigner},
+        bip39::{Language, Mnemonic, MnemonicType, Seed},
+        solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::null_signer::NullSigner},
         std::fs::{self, File},
     };
 
@@ -949,21 +961,43 @@ mod tests {
     }
 
     #[test]
-    fn test_secret_key_new() {
+    fn test_secret_key_new_from_signer() {
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
 
         assert_ne!(
-            ElGamalSecretKey::new(&keypair1, &Pubkey::default())
+            ElGamalSecretKey::new_from_signer(&keypair1, Pubkey::default().as_ref())
                 .unwrap()
                 .0,
-            ElGamalSecretKey::new(&keypair2, &Pubkey::default())
+            ElGamalSecretKey::new_from_signer(&keypair2, Pubkey::default().as_ref())
                 .unwrap()
                 .0,
         );
 
         let null_signer = NullSigner::new(&Pubkey::default());
-        assert!(ElGamalSecretKey::new(&null_signer, &Pubkey::default()).is_err());
+        assert!(
+            ElGamalSecretKey::new_from_signer(&null_signer, Pubkey::default().as_ref()).is_err()
+        );
+    }
+
+    #[test]
+    fn test_keypair_from_seed() {
+        let good_seed = vec![0; 32];
+        assert!(ElGamalKeypair::from_seed(&good_seed).is_ok());
+
+        let too_short_seed = vec![0; 31];
+        assert!(ElGamalKeypair::from_seed(&too_short_seed).is_err());
+    }
+
+    #[test]
+    fn test_keypair_from_seed_phrase_and_passphrase() {
+        let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
+        let passphrase = "42";
+        let seed = Seed::new(&mnemonic, passphrase);
+        let expected_keypair = ElGamalKeypair::from_seed(seed.as_bytes()).unwrap();
+        let keypair =
+            ElGamalKeypair::from_seed_phrase_and_passphrase(mnemonic.phrase(), passphrase).unwrap();
+        assert_eq!(keypair.public, expected_keypair.public);
     }
 
     #[test]

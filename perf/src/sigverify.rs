@@ -1410,6 +1410,21 @@ mod tests {
             check_for_simple_vote_transaction(&mut packet, &packet_offsets, 0).ok();
             assert!(!packet.meta().is_simple_vote_tx());
         }
+
+        // single legacy vote tx with extra (invalid) signature is not
+        {
+            let mut tx = new_test_vote_tx(&mut rng);
+            tx.signatures.push(Signature::default());
+            tx.message.header.num_required_signatures = 3;
+            tx.message.instructions[0].data = vec![1, 2, 3];
+            let mut packet = Packet::from_data(None, tx).unwrap();
+            let packet_offsets = do_get_packet_offsets(&packet, 0).unwrap();
+            assert_eq!(
+                Err(PacketError::InvalidSignatureLen),
+                check_for_simple_vote_transaction(&mut packet, &packet_offsets, 0)
+            );
+            assert!(!packet.meta().is_simple_vote_tx());
+        }
     }
 
     #[test]

@@ -12,10 +12,8 @@ use {
     solana_banks_server::banks_server::start_local_server,
     solana_bpf_loader_program::serialization::serialize_parameters,
     solana_program_runtime::{
-        builtin_program::{create_builtin, BuiltinPrograms, ProcessInstructionWithContext},
-        compute_budget::ComputeBudget,
-        ic_msg, stable_log,
-        timings::ExecuteTimings,
+        compute_budget::ComputeBudget, ic_msg, invoke_context::ProcessInstructionWithContext,
+        loaded_programs::LoadedProgram, stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
         accounts_background_service::{AbsRequestSender, SnapshotRequestType},
@@ -436,7 +434,7 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
 
 pub struct ProgramTest {
     accounts: Vec<(Pubkey, AccountSharedData)>,
-    builtin_programs: BuiltinPrograms,
+    builtin_programs: Vec<(Pubkey, String, LoadedProgram)>,
     compute_max_units: Option<u64>,
     prefer_bpf: bool,
     deactivate_feature_set: HashSet<Pubkey>,
@@ -473,7 +471,7 @@ impl Default for ProgramTest {
 
         Self {
             accounts: vec![],
-            builtin_programs: BuiltinPrograms::default(),
+            builtin_programs: vec![],
             compute_max_units: None,
             prefer_bpf,
             deactivate_feature_set,
@@ -694,9 +692,10 @@ impl ProgramTest {
         process_instruction: ProcessInstructionWithContext,
     ) {
         info!("\"{}\" builtin program", program_name);
-        self.builtin_programs.vec.push((
+        self.builtin_programs.push((
             program_id,
-            create_builtin(program_name.to_string(), process_instruction),
+            program_name.to_string(),
+            LoadedProgram::new_builtin(0, program_name.len(), process_instruction),
         ));
     }
 
@@ -708,7 +707,7 @@ impl ProgramTest {
     }
 
     fn setup_bank(
-        &self,
+        &mut self,
     ) -> (
         Arc<RwLock<BankForks>>,
         Arc<RwLock<BlockCommitmentCache>>,
@@ -792,8 +791,10 @@ impl ProgramTest {
         }
 
         // User-supplied additional builtins
-        for (program_id, builtin) in self.builtin_programs.vec.iter() {
-            bank.add_builtin(*program_id, builtin.clone());
+        let mut builtin_programs = Vec::new();
+        std::mem::swap(&mut self.builtin_programs, &mut builtin_programs);
+        for (program_id, name, builtin) in builtin_programs.into_iter() {
+            bank.add_builtin(program_id, name, builtin);
         }
 
         for (address, account) in self.accounts.iter() {
@@ -831,7 +832,7 @@ impl ProgramTest {
         )
     }
 
-    pub async fn start(self) -> (BanksClient, Keypair, Hash) {
+    pub async fn start(mut self) -> (BanksClient, Keypair, Hash) {
         let (bank_forks, block_commitment_cache, last_blockhash, gci) = self.setup_bank();
         let target_tick_duration = gci.genesis_config.poh_config.target_tick_duration;
         let target_slot_duration = target_tick_duration * gci.genesis_config.ticks_per_slot as u32;
@@ -866,7 +867,7 @@ impl ProgramTest {
     ///
     /// Returns a `BanksClient` interface into the test environment as well as a payer `Keypair`
     /// with SOL for sending transactions
-    pub async fn start_with_context(self) -> ProgramTestContext {
+    pub async fn start_with_context(mut self) -> ProgramTestContext {
         let (bank_forks, block_commitment_cache, last_blockhash, gci) = self.setup_bank();
         let target_tick_duration = gci.genesis_config.poh_config.target_tick_duration;
         let transport = start_local_server(

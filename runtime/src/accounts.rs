@@ -55,7 +55,6 @@ use {
         pubkey::Pubkey,
         saturating_add_assign,
         slot_hashes::SlotHashes,
-        system_program,
         sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
@@ -224,19 +223,10 @@ impl Accounts {
         }
     }
 
-    fn construct_instructions_account(
-        message: &SanitizedMessage,
-        is_owned_by_sysvar: bool,
-    ) -> AccountSharedData {
-        let data = construct_instructions_data(&message.decompile_instructions());
-        let owner = if is_owned_by_sysvar {
-            sysvar::id()
-        } else {
-            system_program::id()
-        };
+    fn construct_instructions_account(message: &SanitizedMessage) -> AccountSharedData {
         AccountSharedData::from(Account {
-            data,
-            owner,
+            data: construct_instructions_data(&message.decompile_instructions()),
+            owner: sysvar::id(),
             ..Account::default()
         })
     }
@@ -382,11 +372,7 @@ impl Accounts {
                 let mut account_found = true;
                 #[allow(clippy::collapsible_else_if)]
                 let account = if solana_sdk::sysvar::instructions::check_id(key) {
-                    Self::construct_instructions_account(
-                        message,
-                        feature_set
-                            .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
-                    )
+                    Self::construct_instructions_account(message)
                 } else {
                     let instruction_account = u8::try_from(i)
                         .map(|i| instruction_accounts.contains(&&i))
@@ -637,9 +623,7 @@ impl Accounts {
             &payer_post_rent_state,
             payer_address,
             payer_account,
-            feature_set
-                .is_active(&feature_set::include_account_index_in_rent_error::ID)
-                .then_some(payer_index),
+            payer_index,
         )
     }
 
@@ -1325,7 +1309,7 @@ impl Accounts {
             durable_nonce,
             lamports_per_signature,
         );
-        self.accounts_db.store_cached(
+        self.accounts_db.store_cached_inline_update_index(
             (slot, &accounts_to_store[..], include_slot_in_hash),
             Some(&transactions),
         );
@@ -2993,23 +2977,19 @@ mod tests {
         let counter_clone = counter.clone();
         let accounts_clone = accounts_arc.clone();
         let exit_clone = exit.clone();
-        thread::spawn(move || {
-            let counter_clone = counter_clone.clone();
-            let exit_clone = exit_clone.clone();
-            loop {
-                let txs = vec![writable_tx.clone()];
-                let results = accounts_clone
-                    .clone()
-                    .lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
-                for result in results.iter() {
-                    if result.is_ok() {
-                        counter_clone.clone().fetch_add(1, Ordering::SeqCst);
-                    }
+        thread::spawn(move || loop {
+            let txs = vec![writable_tx.clone()];
+            let results = accounts_clone
+                .clone()
+                .lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
+            for result in results.iter() {
+                if result.is_ok() {
+                    counter_clone.clone().fetch_add(1, Ordering::SeqCst);
                 }
-                accounts_clone.unlock_accounts(txs.iter(), &results);
-                if exit_clone.clone().load(Ordering::Relaxed) {
-                    break;
-                }
+            }
+            accounts_clone.unlock_accounts(txs.iter(), &results);
+            if exit_clone.clone().load(Ordering::Relaxed) {
+                break;
             }
         });
         let counter_clone = counter;

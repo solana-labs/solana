@@ -83,10 +83,16 @@ fn create_connection_cache(
     client_node_id: Option<&Keypair>,
 ) -> ConnectionCache {
     if !use_quic {
-        return ConnectionCache::with_udp(tpu_connection_pool_size);
+        return ConnectionCache::with_udp(
+            "bench-tps-connection_cache_udp",
+            tpu_connection_pool_size,
+        );
     }
     if client_node_id.is_none() {
-        return ConnectionCache::new(tpu_connection_pool_size);
+        return ConnectionCache::new_quic(
+            "bench-tps-connection_cache_quic",
+            tpu_connection_pool_size,
+        );
     }
 
     let rpc_client = Arc::new(RpcClient::new_with_commitment(
@@ -107,6 +113,7 @@ fn create_connection_cache(
         HashMap::<Pubkey, u64>::default(), // overrides
     )));
     ConnectionCache::new_with_client_options(
+        "bench-tps-connection_cache_quic",
         tpu_connection_pool_size,
         None,
         Some((client_node_id, bind_address)),

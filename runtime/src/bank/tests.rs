@@ -33,11 +33,10 @@ use {
     serde::{Deserialize, Serialize},
     solana_logger,
     solana_program_runtime::{
-        builtin_program::create_builtin,
         compute_budget::{self, ComputeBudget, MAX_COMPUTE_UNIT_LIMIT},
         declare_process_instruction,
         invoke_context::mock_process_instruction,
-        loaded_programs::{LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET},
+        loaded_programs::{LoadedProgram, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET},
         prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         timings::ExecuteTimings,
     },
@@ -1379,10 +1378,7 @@ fn test_rent_complex() {
     root_bank.restore_old_behavior_for_fragile_tests();
     let root_bank = Arc::new(root_bank);
     let mut bank = create_child_bank_for_rent_test(&root_bank, &genesis_config);
-    bank.add_builtin(
-        mock_program_id,
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    bank.add_mockup_builtin(mock_program_id, process_instruction);
 
     assert_eq!(bank.last_blockhash(), genesis_config.hash());
 
@@ -2667,8 +2663,7 @@ fn test_insufficient_funds() {
 fn test_executed_transaction_count_post_bank_transaction_count_fix() {
     let mint_amount = sol_to_lamports(1.);
     let (genesis_config, mint_keypair) = create_genesis_config(mint_amount);
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.activate_feature(&feature_set::bank_transaction_count_fix::id());
+    let bank = Bank::new_for_tests(&genesis_config);
     let pubkey = solana_sdk::pubkey::new_rand();
     let amount = genesis_config.rent.minimum_balance(0);
     bank.transfer(amount, &mint_keypair, &pubkey).unwrap();
@@ -4818,10 +4813,7 @@ fn test_add_builtin() {
     });
 
     assert!(bank.get_account(&mock_vote_program_id()).is_none());
-    bank.add_builtin(
-        mock_vote_program_id(),
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    bank.add_mockup_builtin(mock_vote_program_id(), process_instruction);
     assert!(bank.get_account(&mock_vote_program_id()).is_some());
 
     let mock_account = Keypair::new();
@@ -4864,7 +4856,7 @@ fn test_add_duplicate_static_program() {
         mint_keypair,
         ..
     } = create_genesis_config_with_leader(500, &solana_sdk::pubkey::new_rand(), 0);
-    let mut bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
 
     declare_process_instruction!(process_instruction, 1, |_invoke_context| {
         Err(InstructionError::Custom(42))
@@ -4893,11 +4885,11 @@ fn test_add_duplicate_static_program() {
         bank.last_blockhash(),
     );
 
+    let slot = bank.slot().saturating_add(1);
+    let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), slot);
+
     let vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
-    bank.add_builtin(
-        solana_vote_program::id(),
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    bank.add_mockup_builtin(solana_vote_program::id(), process_instruction);
     let new_vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
     // Vote loader account should not be updated since it was included in the genesis config.
     assert_eq!(vote_loader_account.data(), new_vote_loader_account.data());
@@ -4950,11 +4942,13 @@ fn test_add_instruction_processor_for_existing_unrelated_accounts() {
 
         bank.add_builtin(
             vote_id,
-            create_builtin("mock_program1".to_string(), process_instruction),
+            "mock_program1".to_string(),
+            LoadedProgram::new_builtin(0, 0, process_instruction),
         );
         bank.add_builtin(
             stake_id,
-            create_builtin("mock_program2".to_string(), process_instruction),
+            "mock_program2".to_string(),
+            LoadedProgram::new_builtin(0, 0, process_instruction),
         );
         {
             let stakes = bank.stakes_cache.stakes();
@@ -4978,14 +4972,8 @@ fn test_add_instruction_processor_for_existing_unrelated_accounts() {
         // Re-adding builtin programs should be no-op
         bank.update_accounts_hash_for_tests();
         let old_hash = bank.get_accounts_hash().unwrap();
-        bank.add_builtin(
-            vote_id,
-            create_builtin("mockup".to_string(), process_instruction),
-        );
-        bank.add_builtin(
-            stake_id,
-            create_builtin("mockup".to_string(), process_instruction),
-        );
+        bank.add_mockup_builtin(vote_id, process_instruction);
+        bank.add_mockup_builtin(stake_id, process_instruction);
         add_root_and_flush_write_cache(&bank);
         bank.update_accounts_hash_for_tests();
         let new_hash = bank.get_accounts_hash().unwrap();
@@ -6236,10 +6224,7 @@ fn test_transaction_with_duplicate_accounts_in_instruction() {
     });
 
     let mock_program_id = Pubkey::from([2u8; 32]);
-    bank.add_builtin(
-        mock_program_id,
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    bank.add_mockup_builtin(mock_program_id, process_instruction);
 
     let from_pubkey = solana_sdk::pubkey::new_rand();
     let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -6275,10 +6260,7 @@ fn test_transaction_with_program_ids_passed_to_programs() {
     let mut bank = Bank::new_for_tests(&genesis_config);
 
     let mock_program_id = Pubkey::from([2u8; 32]);
-    bank.add_builtin(
-        mock_program_id,
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    bank.add_mockup_builtin(mock_program_id, process_instruction);
 
     let from_pubkey = solana_sdk::pubkey::new_rand();
     let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -6310,7 +6292,7 @@ fn test_transaction_with_program_ids_passed_to_programs() {
 fn test_account_ids_after_program_ids() {
     solana_logger::setup();
     let (genesis_config, mint_keypair) = create_genesis_config(500);
-    let mut bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
 
     let from_pubkey = solana_sdk::pubkey::new_rand();
     let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -6330,10 +6312,10 @@ fn test_account_ids_after_program_ids() {
 
     tx.message.account_keys.push(solana_sdk::pubkey::new_rand());
 
-    bank.add_builtin(
-        solana_vote_program::id(),
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    let slot = bank.slot().saturating_add(1);
+    let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), slot);
+
+    bank.add_mockup_builtin(solana_vote_program::id(), process_instruction);
     let result = bank.process_transaction(&tx);
     assert_eq!(result, Ok(()));
     let account = bank.get_account(&solana_vote_program::id()).unwrap();
@@ -6383,10 +6365,7 @@ fn test_duplicate_account_key() {
         AccountMeta::new(to_pubkey, false),
     ];
 
-    bank.add_builtin(
-        solana_vote_program::id(),
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    bank.add_mockup_builtin(solana_vote_program::id(), process_instruction);
 
     let instruction = Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
     let mut tx = Transaction::new_signed_with_payer(
@@ -6415,10 +6394,7 @@ fn test_process_transaction_with_too_many_account_locks() {
         AccountMeta::new(to_pubkey, false),
     ];
 
-    bank.add_builtin(
-        solana_vote_program::id(),
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    bank.add_mockup_builtin(solana_vote_program::id(), process_instruction);
 
     let instruction = Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
     let mut tx = Transaction::new_signed_with_payer(
@@ -6451,10 +6427,7 @@ fn test_program_id_as_payer() {
         AccountMeta::new(to_pubkey, false),
     ];
 
-    bank.add_builtin(
-        solana_vote_program::id(),
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    bank.add_mockup_builtin(solana_vote_program::id(), process_instruction);
 
     let instruction = Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
     let mut tx = Transaction::new_signed_with_payer(
@@ -6487,7 +6460,7 @@ fn test_program_id_as_payer() {
 #[test]
 fn test_ref_account_key_after_program_id() {
     let (genesis_config, mint_keypair) = create_genesis_config(500);
-    let mut bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
 
     let from_pubkey = solana_sdk::pubkey::new_rand();
     let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -6497,10 +6470,10 @@ fn test_ref_account_key_after_program_id() {
         AccountMeta::new(to_pubkey, false),
     ];
 
-    bank.add_builtin(
-        solana_vote_program::id(),
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    let slot = bank.slot().saturating_add(1);
+    let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), slot);
+
+    bank.add_mockup_builtin(solana_vote_program::id(), process_instruction);
 
     let instruction = Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
     let mut tx = Transaction::new_signed_with_payer(
@@ -6531,7 +6504,11 @@ fn test_fuzz_instructions() {
         .map(|i| {
             let key = solana_sdk::pubkey::new_rand();
             let name = format!("program{i:?}");
-            bank.add_builtin(key, create_builtin(name.clone(), process_instruction));
+            bank.add_builtin(
+                key,
+                name.clone(),
+                LoadedProgram::new_builtin(0, 0, process_instruction),
+            );
             (key, name.as_bytes().to_vec())
         })
         .collect();
@@ -6737,10 +6714,7 @@ fn test_same_program_id_uses_unqiue_executable_accounts() {
 
     // Add a new program
     let program1_pubkey = solana_sdk::pubkey::new_rand();
-    bank.add_builtin(
-        program1_pubkey,
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    bank.add_mockup_builtin(program1_pubkey, process_instruction);
 
     // Add a new program owned by the first
     let program2_pubkey = solana_sdk::pubkey::new_rand();
@@ -6955,17 +6929,15 @@ fn test_add_builtin_no_overwrite() {
     ));
     assert_eq!(bank.get_account_modified_slot(&program_id), None);
 
-    Arc::get_mut(&mut bank).unwrap().add_builtin(
-        program_id,
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    Arc::get_mut(&mut bank)
+        .unwrap()
+        .add_mockup_builtin(program_id, process_instruction);
     assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
     let mut bank = Arc::new(new_from_parent(&bank));
-    Arc::get_mut(&mut bank).unwrap().add_builtin(
-        program_id,
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    Arc::get_mut(&mut bank)
+        .unwrap()
+        .add_mockup_builtin(program_id, process_instruction);
     assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 }
 
@@ -6981,17 +6953,15 @@ fn test_add_builtin_loader_no_overwrite() {
     ));
     assert_eq!(bank.get_account_modified_slot(&loader_id), None);
 
-    Arc::get_mut(&mut bank).unwrap().add_builtin(
-        loader_id,
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    Arc::get_mut(&mut bank)
+        .unwrap()
+        .add_mockup_builtin(loader_id, process_instruction);
     assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
 
     let mut bank = Arc::new(new_from_parent(&bank));
-    Arc::get_mut(&mut bank).unwrap().add_builtin(
-        loader_id,
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    Arc::get_mut(&mut bank)
+        .unwrap()
+        .add_mockup_builtin(loader_id, process_instruction);
     assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
 }
 
@@ -7426,7 +7396,7 @@ fn test_bank_load_program() {
     programdata_account.set_rent_epoch(1);
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
-    let program = bank.load_program(&key1, false);
+    let program = bank.load_program(&key1);
     assert!(program.is_ok());
     let program = program.unwrap();
     assert!(matches!(program.program, LoadedProgramType::LegacyV1(_)));
@@ -7584,7 +7554,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     }
 
     let loaded_program = bank
-        .load_program(&program_keypair.pubkey(), false)
+        .load_program(&program_keypair.pubkey())
         .expect("Failed to load the program");
 
     // Invoke deployed program
@@ -9576,10 +9546,7 @@ fn test_tx_return_data() {
 
     let mock_program_id = Pubkey::from([2u8; 32]);
     let blockhash = bank.last_blockhash();
-    bank.add_builtin(
-        mock_program_id,
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    bank.add_mockup_builtin(mock_program_id, process_instruction);
 
     for index in [
         None,
@@ -9768,10 +9735,7 @@ fn test_transfer_sysvar() {
     });
 
     let program_id = solana_sdk::pubkey::new_rand();
-    bank.add_builtin(
-        program_id,
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    bank.add_mockup_builtin(program_id, process_instruction);
 
     let blockhash = bank.last_blockhash();
     #[allow(deprecated)]
@@ -9983,10 +9947,7 @@ fn test_compute_budget_program_noop() {
         Ok(())
     });
     let program_id = solana_sdk::pubkey::new_rand();
-    bank.add_builtin(
-        program_id,
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    bank.add_mockup_builtin(program_id, process_instruction);
 
     let message = Message::new(
         &[
@@ -10029,10 +9990,7 @@ fn test_compute_request_instruction() {
         Ok(())
     });
     let program_id = solana_sdk::pubkey::new_rand();
-    bank.add_builtin(
-        program_id,
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    bank.add_mockup_builtin(program_id, process_instruction);
 
     let message = Message::new(
         &[
@@ -10082,10 +10040,7 @@ fn test_failed_compute_request_instruction() {
         Ok(())
     });
     let program_id = solana_sdk::pubkey::new_rand();
-    bank.add_builtin(
-        program_id,
-        create_builtin("mockup".to_string(), process_instruction),
-    );
+    bank.add_mockup_builtin(program_id, process_instruction);
 
     // This message will not be executed because the compute budget request is invalid
     let message0 = Message::new(
@@ -10759,10 +10714,7 @@ fn test_invalid_rent_state_changes_existing_accounts() {
     );
 
     let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.add_builtin(
-        mock_program_id,
-        create_builtin("mockup".to_string(), mock_transfer_process_instruction),
-    );
+    bank.add_mockup_builtin(mock_program_id, mock_transfer_process_instruction);
     let recent_blockhash = bank.last_blockhash();
 
     let check_account_is_rent_exempt = |pubkey: &Pubkey| -> bool {
@@ -10845,10 +10797,7 @@ fn test_invalid_rent_state_changes_new_accounts() {
     let rent_exempt_minimum = genesis_config.rent.minimum_balance(account_data_size);
 
     let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.add_builtin(
-        mock_program_id,
-        create_builtin("mockup".to_string(), mock_transfer_process_instruction),
-    );
+    bank.add_mockup_builtin(mock_program_id, mock_transfer_process_instruction);
     let recent_blockhash = bank.last_blockhash();
 
     let check_account_is_rent_exempt = |pubkey: &Pubkey| -> bool {
@@ -10907,10 +10856,7 @@ fn test_drained_created_account() {
     let created_keypair = Keypair::new();
 
     let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.add_builtin(
-        mock_program_id,
-        create_builtin("mockup".to_string(), mock_transfer_process_instruction),
-    );
+    bank.add_mockup_builtin(mock_program_id, mock_transfer_process_instruction);
     let recent_blockhash = bank.last_blockhash();
 
     // Create and drain a small data size account
@@ -11562,10 +11508,7 @@ fn test_resize_and_rent() {
     let mut bank = Bank::new_for_tests(&genesis_config);
 
     let mock_program_id = Pubkey::new_unique();
-    bank.add_builtin(
-        mock_program_id,
-        create_builtin("mockup".to_string(), mock_realloc_process_instruction),
-    );
+    bank.add_mockup_builtin(mock_program_id, mock_realloc_process_instruction);
     let recent_blockhash = bank.last_blockhash();
 
     let account_data_size_small = 1024;
@@ -11836,10 +11779,7 @@ fn test_accounts_data_size_and_resize_transactions() {
     } = genesis_utils::create_genesis_config(100 * LAMPORTS_PER_SOL);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let mock_program_id = Pubkey::new_unique();
-    bank.add_builtin(
-        mock_program_id,
-        create_builtin("mockup".to_string(), mock_realloc_process_instruction),
-    );
+    bank.add_mockup_builtin(mock_program_id, mock_realloc_process_instruction);
 
     let recent_blockhash = bank.last_blockhash();
 

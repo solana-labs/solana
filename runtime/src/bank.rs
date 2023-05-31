@@ -56,12 +56,13 @@ use {
         ancestors::{Ancestors, AncestorsForSerialization},
         bank::metrics::*,
         blockhash_queue::BlockhashQueue,
-        builtins::{self, BuiltinFeatureTransition, Builtins},
+        builtins::{BuiltinPrototype, BUILTINS},
         cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
-        inline_spl_associated_token_account, inline_spl_token,
+        inline_spl_token,
         message_processor::MessageProcessor,
+        partitioned_rewards::PartitionedEpochRewardsConfig,
         rent_collector::{CollectedInfo, RentCollector},
         rent_debits::RentDebits,
         runtime_config::RuntimeConfig,
@@ -89,12 +90,13 @@ use {
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
     },
+    solana_bpf_loader_program::syscalls::create_program_runtime_environment,
     solana_measure::{measure, measure::Measure, measure_us},
     solana_perf::perf_libs,
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
-        builtin_program::BuiltinPrograms,
         compute_budget::{self, ComputeBudget},
+        invoke_context::ProcessInstructionWithContext,
         loaded_programs::{
             LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType, LoadedPrograms,
             LoadedProgramsForTxBatch, WorkingSlot,
@@ -122,7 +124,7 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, add_set_tx_loaded_accounts_data_size_instruction, disable_fee_calculator,
+            self, add_set_tx_loaded_accounts_data_size_instruction,
             enable_early_verification_of_account_modifications, enable_request_heap_frame_ix,
             include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
@@ -220,7 +222,7 @@ struct RentMetrics {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "GBTLfFjModD9ykS9LV4pGi4S8eCrUj2JjWSDQLf8tMwV")]
+#[frozen_abi(digest = "4uKZVBUbS5wkMK6vSzUoeQjAKbXd7AGeNakBeaBG9f4i")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
@@ -765,7 +767,6 @@ impl PartialEq for Bank {
             block_height,
             collector_id,
             collector_fees,
-            fee_calculator,
             fee_rate_governor,
             collected_rent,
             rent_collector,
@@ -777,7 +778,6 @@ impl PartialEq for Bank {
             // TODO: Confirm if all these fields are intentionally ignored!
             builtin_programs: _,
             runtime_config: _,
-            builtin_feature_transitions: _,
             rewards: _,
             cluster_type: _,
             lazy_rent_collection: _,
@@ -824,7 +824,6 @@ impl PartialEq for Bank {
             && block_height == &other.block_height
             && collector_id == &other.collector_id
             && collector_fees.load(Relaxed) == other.collector_fees.load(Relaxed)
-            && fee_calculator == &other.fee_calculator
             && fee_rate_governor == &other.fee_rate_governor
             && collected_rent.load(Relaxed) == other.collected_rent.load(Relaxed)
             && rent_collector == &other.rent_collector
@@ -860,9 +859,12 @@ pub trait DropCallback: fmt::Debug {
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample, Clone, Copy)]
 pub struct RewardInfo {
     pub reward_type: RewardType,
-    pub lamports: i64,          // Reward amount
-    pub post_balance: u64,      // Account balance in lamports after `lamports` was applied
-    pub commission: Option<u8>, // Vote account commission when the reward was credited, only present for voting and staking rewards
+    /// Reward amount
+    pub lamports: i64,
+    /// Account balance in lamports after `lamports` was applied
+    pub post_balance: u64,
+    /// Vote account commission when the reward was credited, only present for voting and staking rewards
+    pub commission: Option<u8>,
 }
 
 #[derive(Debug, Default)]
@@ -877,8 +879,8 @@ impl AbiExample for OptionalDropCallback {
 
 #[derive(AbiExample, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct StartBlockHeightAndRewards {
-    /// the block height of the parent of the slot at which rewards distribution began
-    pub(crate) parent_start_block_height: u64,
+    /// the block height of the slot at which rewards distribution began
+    pub(crate) start_block_height: u64,
     /// calculated epoch rewards pending distribution
     pub(crate) calculated_epoch_stake_rewards: Arc<StakeRewards>,
 }
@@ -986,10 +988,6 @@ pub struct Bank {
     /// Fees that have been collected
     collector_fees: AtomicU64,
 
-    /// Deprecated, do not use
-    /// Latest transaction fees for transactions processed by this bank
-    pub(crate) fee_calculator: FeeCalculator,
-
     /// Track cluster signature throughput and adjust fee rate
     pub(crate) fee_rate_governor: FeeRateGovernor,
 
@@ -1016,15 +1014,10 @@ pub struct Bank {
     /// stream for the slot == self.slot
     is_delta: AtomicBool,
 
-    /// The builtin programs
-    builtin_programs: BuiltinPrograms,
+    builtin_programs: HashSet<Pubkey>,
 
     /// Optional config parameters that can override runtime behavior
     runtime_config: Arc<RuntimeConfig>,
-
-    /// Dynamic feature transitions for builtin programs
-    #[allow(clippy::rc_buffer)]
-    builtin_feature_transitions: Arc<Vec<BuiltinFeatureTransition>>,
 
     /// Protocol-level rewards that were distributed by this bank
     pub rewards: RwLock<Vec<(Pubkey, RewardInfo)>>,
@@ -1101,6 +1094,7 @@ struct LoadVoteAndStakeAccountsResult {
     vote_accounts_cache_miss_count: usize,
 }
 
+#[derive(Debug)]
 struct VoteReward {
     vote_account: AccountSharedData,
     commission: u8,
@@ -1272,7 +1266,6 @@ impl Bank {
             block_height: u64::default(),
             collector_id: Pubkey::default(),
             collector_fees: AtomicU64::default(),
-            fee_calculator: FeeCalculator::default(),
             fee_rate_governor: FeeRateGovernor::default(),
             collected_rent: AtomicU64::default(),
             rent_collector: RentCollector::default(),
@@ -1281,9 +1274,8 @@ impl Bank {
             stakes_cache: StakesCache::default(),
             epoch_stakes: HashMap::<Epoch, EpochStakes>::default(),
             is_delta: AtomicBool::default(),
-            builtin_programs: BuiltinPrograms::default(),
+            builtin_programs: HashSet::<Pubkey>::default(),
             runtime_config: Arc::<RuntimeConfig>::default(),
-            builtin_feature_transitions: Arc::<Vec<BuiltinFeatureTransition>>::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
             cluster_type: Option::<ClusterType>::default(),
             lazy_rent_collection: AtomicBool::default(),
@@ -1358,7 +1350,7 @@ impl Bank {
         runtime_config: Arc<RuntimeConfig>,
         paths: Vec<PathBuf>,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
-        additional_builtins: Option<&Builtins>,
+        additional_builtins: Option<&[BuiltinPrototype]>,
         account_indexes: AccountSecondaryIndexes,
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
@@ -1446,6 +1438,38 @@ impl Bank {
         rent_collector.clone_with_epoch(epoch)
     }
 
+    #[allow(dead_code)]
+    pub(crate) fn set_epoch_reward_status_active(&mut self, stake_rewards: StakeRewards) {
+        self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
+            start_block_height: self.block_height,
+            calculated_epoch_stake_rewards: Arc::new(stake_rewards),
+        });
+    }
+
+    #[allow(dead_code)]
+    fn partitioned_epoch_rewards_config(&self) -> &PartitionedEpochRewardsConfig {
+        &self
+            .rc
+            .accounts
+            .accounts_db
+            .partitioned_epoch_rewards_config
+    }
+
+    /// # stake accounts to store in one block during partitioned reward interval
+    #[allow(dead_code)]
+    fn partitioned_rewards_stake_account_stores_per_block(&self) -> u64 {
+        self.partitioned_epoch_rewards_config()
+            .stake_account_stores_per_block
+    }
+
+    /// reward calculation happens synchronously during the first block of the epoch boundary.
+    /// So, # blocks for reward calculation is 1.
+    #[allow(dead_code)]
+    fn get_reward_calculation_num_blocks(&self) -> Slot {
+        self.partitioned_epoch_rewards_config()
+            .reward_calculation_num_blocks
+    }
+
     fn _new_from_parent(
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
@@ -1475,17 +1499,9 @@ impl Bank {
 
         let (status_cache, status_cache_time_us) = measure_us!(Arc::clone(&parent.status_cache));
 
-        let ((fee_rate_governor, fee_calculator), fee_components_time_us) = measure_us!({
-            let fee_rate_governor =
-                FeeRateGovernor::new_derived(&parent.fee_rate_governor, parent.signature_count());
-
-            let fee_calculator = if parent.feature_set.is_active(&disable_fee_calculator::id()) {
-                FeeCalculator::default()
-            } else {
-                fee_rate_governor.create_fee_calculator()
-            };
-            (fee_rate_governor, fee_calculator)
-        });
+        let (fee_rate_governor, fee_components_time_us) = measure_us!(
+            FeeRateGovernor::new_derived(&parent.fee_rate_governor, parent.signature_count())
+        );
 
         let bank_id = rc.bank_id_generator.fetch_add(1, Relaxed) + 1;
         let (blockhash_queue, blockhash_queue_time_us) =
@@ -1533,7 +1549,6 @@ impl Bank {
             rent_collector: Self::get_rent_collector_from(&parent.rent_collector, epoch),
             max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
-            fee_calculator,
             fee_rate_governor,
             capitalization: AtomicU64::new(parent.capitalization()),
             vote_only_bank,
@@ -1555,11 +1570,10 @@ impl Bank {
             ancestors: Ancestors::default(),
             hash: RwLock::new(Hash::default()),
             is_delta: AtomicBool::new(false),
+            builtin_programs,
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
-            builtin_programs,
             runtime_config: parent.runtime_config.clone(),
-            builtin_feature_transitions: parent.builtin_feature_transitions.clone(),
             hard_forks: parent.hard_forks.clone(),
             rewards: RwLock::new(vec![]),
             cluster_type: parent.cluster_type,
@@ -1611,7 +1625,12 @@ impl Bank {
         let parent_epoch = parent.epoch();
         let (_, update_epoch_time_us) = measure_us!({
             if parent_epoch < new.epoch() {
-                new.process_new_epoch(parent_epoch, parent.slot(), reward_calc_tracer);
+                new.process_new_epoch(
+                    parent_epoch,
+                    parent.slot(),
+                    parent.block_height(),
+                    reward_calc_tracer,
+                );
             } else {
                 // Save a snapshot of stakes for use in consensus and stake weighted networking
                 let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
@@ -1670,6 +1689,7 @@ impl Bank {
         &mut self,
         parent_epoch: Epoch,
         parent_slot: Slot,
+        _parent_height: u64,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
     ) {
         let epoch = self.epoch();
@@ -1834,7 +1854,7 @@ impl Bank {
         runtime_config: Arc<RuntimeConfig>,
         fields: BankFieldsToDeserialize,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
-        additional_builtins: Option<&Builtins>,
+        additional_builtins: Option<&[BuiltinPrototype]>,
         debug_do_not_add_builtins: bool,
         accounts_data_size_initial: u64,
     ) -> Self {
@@ -1890,7 +1910,6 @@ impl Bank {
             block_height: fields.block_height,
             collector_id: fields.collector_id,
             collector_fees: AtomicU64::new(fields.collector_fees),
-            fee_calculator: fields.fee_calculator,
             fee_rate_governor: fields.fee_rate_governor,
             collected_rent: AtomicU64::new(fields.collected_rent),
             // clone()-ing is needed to consider a gated behavior in rent_collector
@@ -1902,7 +1921,6 @@ impl Bank {
             is_delta: AtomicBool::new(fields.is_delta),
             builtin_programs: new(),
             runtime_config,
-            builtin_feature_transitions: new(),
             rewards: new(),
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
@@ -1959,14 +1977,6 @@ impl Bank {
         );
         assert_eq!(bank.epoch_schedule, genesis_config.epoch_schedule);
         assert_eq!(bank.epoch, bank.epoch_schedule.get_epoch(bank.slot));
-        if !bank.feature_set.is_active(&disable_fee_calculator::id()) {
-            bank.fee_rate_governor.lamports_per_signature =
-                bank.fee_calculator.lamports_per_signature;
-            assert_eq!(
-                bank.fee_rate_governor.create_fee_calculator(),
-                bank.fee_calculator
-            );
-        }
 
         datapoint_info!(
             "bank-new-from-fields",
@@ -2016,7 +2026,7 @@ impl Bank {
             block_height: self.block_height,
             collector_id: self.collector_id,
             collector_fees: self.collector_fees.load(Relaxed),
-            fee_calculator: self.fee_calculator,
+            fee_calculator: FeeCalculator::default(),
             fee_rate_governor: self.fee_rate_governor.clone(),
             collected_rent: self.collected_rent.load(Relaxed),
             rent_collector: self.rent_collector.clone(),
@@ -3309,7 +3319,6 @@ impl Bank {
     fn process_genesis_config(&mut self, genesis_config: &GenesisConfig) {
         // Bootstrap validator collects fees until `new_from_parent` is called.
         self.fee_rate_governor = genesis_config.fee_rate_governor.clone();
-        self.fee_calculator = self.fee_rate_governor.create_fee_calculator();
 
         for (pubkey, account) in genesis_config.accounts.iter() {
             assert!(
@@ -4088,14 +4097,6 @@ impl Bank {
         balances
     }
 
-    /// Unload a program from the bank's cache
-    fn remove_program_from_cache(&self, pubkey: &Pubkey) {
-        self.loaded_programs_cache
-            .write()
-            .unwrap()
-            .remove_programs([*pubkey].into_iter());
-    }
-
     fn program_modification_slot(&self, pubkey: &Pubkey) -> Result<Slot> {
         let program = self
             .get_account_with_fixed_root(pubkey)
@@ -4126,11 +4127,7 @@ impl Bank {
         }
     }
 
-    pub fn load_program(
-        &self,
-        pubkey: &Pubkey,
-        debugging_features: bool,
-    ) -> Result<Arc<LoadedProgram>> {
+    pub fn load_program(&self, pubkey: &Pubkey) -> Result<Arc<LoadedProgram>> {
         let program = if let Some(program) = self.get_account_with_fixed_root(pubkey) {
             program
         } else {
@@ -4183,13 +4180,18 @@ impl Bank {
         } else {
             None
         };
+        let program_runtime_environment_v1 = self
+            .loaded_programs_cache
+            .read()
+            .unwrap()
+            .program_runtime_environment_v1
+            .clone();
         solana_bpf_loader_program::load_program_from_account(
             &self.feature_set,
-            &self.runtime_config.compute_budget.unwrap_or_default(),
             None, // log_collector
             &program,
             programdata.as_ref().unwrap_or(&program),
-            debugging_features,
+            program_runtime_environment_v1,
         )
         .map(|(loaded_program, metrics)| {
             let mut timings = ExecuteDetailsTimings::default();
@@ -4275,7 +4277,6 @@ impl Bank {
         let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::new(self.slot);
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
-            &self.builtin_programs,
             tx.message(),
             &loaded_transaction.program_indices,
             &mut transaction_context,
@@ -4438,7 +4439,7 @@ impl Bank {
         let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
             .iter()
             .map(|key| {
-                let program = self.load_program(key, false).unwrap_or_else(|err| {
+                let program = self.load_program(key).unwrap_or_else(|err| {
                     // Create a tombstone for the program in the cache
                     debug!("Failed to load program {}, error {:?}", key, err);
                     Arc::new(LoadedProgram::new_tombstone(
@@ -4528,13 +4529,17 @@ impl Bank {
             bpf_loader_deprecated::id(),
         ];
         let program_owners_refs: Vec<&Pubkey> = program_owners.iter().collect();
-        let program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
+        let mut program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
             &self.ancestors,
             sanitized_txs,
             &mut check_results,
             &program_owners_refs,
             &self.blockhash_queue.read().unwrap(),
         );
+        let native_loader = native_loader::id();
+        for builtin_program in self.builtin_programs.iter() {
+            program_accounts_map.insert(*builtin_program, &native_loader);
+        }
 
         let programs_loaded_for_tx_batch = Rc::new(RefCell::new(
             self.replenish_program_cache(&program_accounts_map),
@@ -6262,24 +6267,40 @@ impl Bank {
     fn finish_init(
         &mut self,
         genesis_config: &GenesisConfig,
-        additional_builtins: Option<&Builtins>,
+        additional_builtins: Option<&[BuiltinPrototype]>,
         debug_do_not_add_builtins: bool,
     ) {
         self.rewards_pool_pubkeys =
             Arc::new(genesis_config.rewards_pools.keys().cloned().collect());
 
-        let mut builtins = builtins::get();
-        if let Some(additional_builtins) = additional_builtins {
-            builtins
-                .genesis_builtins
-                .extend_from_slice(&additional_builtins.genesis_builtins);
-            builtins
-                .feature_transitions
-                .extend_from_slice(&additional_builtins.feature_transitions);
-        }
+        self.apply_feature_activations(
+            ApplyFeatureActivationsCaller::FinishInit,
+            debug_do_not_add_builtins,
+        );
+
         if !debug_do_not_add_builtins {
-            for (program_id, builtin) in builtins.genesis_builtins {
-                self.add_builtin(program_id, builtin);
+            let program_runtime_environment_v1 = create_program_runtime_environment(
+                &self.feature_set,
+                &self.runtime_config.compute_budget.unwrap_or_default(),
+                false, /* deployment */
+                false, /* debugging_features */
+            )
+            .unwrap();
+            self.loaded_programs_cache
+                .write()
+                .unwrap()
+                .program_runtime_environment_v1 = Arc::new(program_runtime_environment_v1);
+            for builtin in BUILTINS
+                .iter()
+                .chain(additional_builtins.unwrap_or(&[]).iter())
+            {
+                if builtin.feature_id.is_none() {
+                    self.add_builtin(
+                        builtin.program_id,
+                        builtin.name.to_string(),
+                        LoadedProgram::new_builtin(0, builtin.name.len(), builtin.entrypoint),
+                    );
+                }
             }
             for precompile in get_precompiles() {
                 if precompile.feature.is_none() {
@@ -6287,12 +6308,6 @@ impl Bank {
                 }
             }
         }
-        self.builtin_feature_transitions = Arc::new(builtins.feature_transitions);
-
-        self.apply_feature_activations(
-            ApplyFeatureActivationsCaller::FinishInit,
-            debug_do_not_add_builtins,
-        );
 
         if self
             .feature_set
@@ -7311,40 +7326,39 @@ impl Bank {
         !self.is_delta.load(Relaxed)
     }
 
+    pub fn add_mockup_builtin(
+        &mut self,
+        program_id: Pubkey,
+        entrypoint: ProcessInstructionWithContext,
+    ) {
+        self.add_builtin(
+            program_id,
+            "mockup".to_string(),
+            LoadedProgram::new_builtin(self.slot, 0, entrypoint),
+        );
+    }
+
     /// Add a built-in program
-    pub fn add_builtin(&mut self, program_id: Pubkey, builtin: Arc<LoadedProgram>) {
-        let name = match &builtin.program {
-            LoadedProgramType::Builtin(name, _) => name,
-            _ => unreachable!(),
-        };
+    pub fn add_builtin(&mut self, program_id: Pubkey, name: String, builtin: LoadedProgram) {
         debug!("Adding program {} under {:?}", name, program_id);
         self.add_builtin_account(name.as_str(), &program_id, false);
-        if let Some(entry) = self
-            .builtin_programs
-            .vec
-            .iter_mut()
-            .find(|entry| entry.0 == program_id)
-        {
-            entry.1 = builtin.clone();
-        } else {
-            self.builtin_programs
-                .vec
-                .push((program_id, builtin.clone()));
-        }
+        self.builtin_programs.insert(program_id);
+        self.loaded_programs_cache
+            .write()
+            .unwrap()
+            .replenish(program_id, Arc::new(builtin));
         debug!("Added program {} under {:?}", name, program_id);
     }
 
     /// Remove a built-in instruction processor
-    pub fn remove_builtin(&mut self, program_id: Pubkey) {
+    pub fn remove_builtin(&mut self, program_id: Pubkey, name: String) {
         debug!("Removing program {}", program_id);
         // Don't remove the account since the bank expects the account state to
         // be idempotent
         self.add_builtin(
             program_id,
-            Arc::new(LoadedProgram::new_tombstone(
-                self.slot,
-                LoadedProgramType::Closed,
-            )),
+            name,
+            LoadedProgram::new_tombstone(self.slot, LoadedProgramType::Closed),
         );
         debug!("Removed program {}", program_id);
     }
@@ -7473,23 +7487,6 @@ impl Bank {
             self.rent_collector.rent.burn_percent = 50; // 50% rent burn
         }
 
-        if new_feature_activations.contains(&feature_set::spl_token_v3_4_0::id()) {
-            self.replace_program_account(
-                &inline_spl_token::id(),
-                &inline_spl_token::program_v3_4_0::id(),
-                "bank-apply_spl_token_v3_4_0",
-            );
-        }
-
-        if new_feature_activations.contains(&feature_set::spl_associated_token_account_v1_1_0::id())
-        {
-            self.replace_program_account(
-                &inline_spl_associated_token_account::id(),
-                &inline_spl_associated_token_account::program_v1_1_0::id(),
-                "bank-apply_spl_associated_token_account_v1_1_0",
-            );
-        }
-
         if !debug_do_not_add_builtins {
             self.apply_builtin_program_feature_transitions(
                 allow_new_activations,
@@ -7573,18 +7570,25 @@ impl Bank {
         only_apply_transitions_for_new_features: bool,
         new_feature_activations: &HashSet<Pubkey>,
     ) {
-        let feature_set = self.feature_set.clone();
-
-        let builtin_feature_transitions = self.builtin_feature_transitions.clone();
-        for transition in builtin_feature_transitions.iter() {
-            let should_apply_action_for_feature_transition =
-                if only_apply_transitions_for_new_features {
-                    new_feature_activations.contains(&transition.feature_id)
-                } else {
-                    feature_set.is_active(&transition.feature_id)
-                };
-            if should_apply_action_for_feature_transition {
-                self.add_builtin(transition.program_id, transition.builtin.clone());
+        for builtin in BUILTINS.iter() {
+            if let Some(feature_id) = builtin.feature_id {
+                let should_apply_action_for_feature_transition =
+                    if only_apply_transitions_for_new_features {
+                        new_feature_activations.contains(&feature_id)
+                    } else {
+                        self.feature_set.is_active(&feature_id)
+                    };
+                if should_apply_action_for_feature_transition {
+                    self.add_builtin(
+                        builtin.program_id,
+                        builtin.name.to_string(),
+                        LoadedProgram::new_builtin(
+                            self.feature_set.activated_slot(&feature_id).unwrap_or(0),
+                            builtin.name.len(),
+                            builtin.entrypoint,
+                        ),
+                    );
+                }
             }
         }
 
@@ -7598,6 +7602,8 @@ impl Bank {
         }
     }
 
+    /// Use to replace programs by feature activation
+    #[allow(dead_code)]
     fn replace_program_account(
         &mut self,
         old_address: &Pubkey,
@@ -7618,7 +7624,11 @@ impl Bank {
                 // Clear new account
                 self.store_account(new_address, &AccountSharedData::default());
 
-                self.remove_program_from_cache(old_address);
+                // Unload a program from the bank's cache
+                self.loaded_programs_cache
+                    .write()
+                    .unwrap()
+                    .remove_programs([*old_address].into_iter());
 
                 self.calculate_and_update_accounts_data_size_delta_off_chain(
                     old_account.data().len(),
@@ -7774,11 +7784,6 @@ impl Bank {
                 .saturating_sub(forward_transactions_to_leader_at_slot_offset as usize),
             &mut error_counters,
         )
-    }
-
-    /// Return reference to builtin_progams
-    pub fn get_builtin_programs(&self) -> &BuiltinPrograms {
-        &self.builtin_programs
     }
 }
 

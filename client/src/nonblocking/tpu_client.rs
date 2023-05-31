@@ -80,11 +80,12 @@ where
 impl TpuClient<QuicPool, QuicConnectionManager, QuicConfig> {
     /// Create a new client that disconnects when dropped
     pub async fn new(
+        name: &'static str,
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
     ) -> Result<Self> {
-        let connection_cache = match ConnectionCache::default() {
+        let connection_cache = match ConnectionCache::new(name) {
             ConnectionCache::Quic(cache) => cache,
             ConnectionCache::Udp(_) => {
                 return Err(TpuSenderError::Custom(String::from(

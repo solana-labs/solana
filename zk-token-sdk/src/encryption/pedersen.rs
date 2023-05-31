@@ -46,9 +46,9 @@ impl Pedersen {
     ///
     /// This function is deterministic.
     #[allow(non_snake_case)]
-    pub fn with<T: Into<Scalar>>(amount: T, open: &PedersenOpening) -> PedersenCommitment {
+    pub fn with<T: Into<Scalar>>(amount: T, opening: &PedersenOpening) -> PedersenCommitment {
         let x: Scalar = amount.into();
-        let r = open.get_scalar();
+        let r = opening.get_scalar();
 
         PedersenCommitment(RistrettoPoint::multiscalar_mul(&[x, *r], &[*G, *H]))
     }
@@ -246,58 +246,58 @@ mod tests {
 
     #[test]
     fn test_pedersen_homomorphic_addition() {
-        let amt_0: u64 = 77;
-        let amt_1: u64 = 57;
+        let amount_0: u64 = 77;
+        let amount_1: u64 = 57;
 
         let rng = &mut OsRng;
-        let open_0 = PedersenOpening(Scalar::random(rng));
-        let open_1 = PedersenOpening(Scalar::random(rng));
+        let opening_0 = PedersenOpening(Scalar::random(rng));
+        let opening_1 = PedersenOpening(Scalar::random(rng));
 
-        let comm_0 = Pedersen::with(amt_0, &open_0);
-        let comm_1 = Pedersen::with(amt_1, &open_1);
-        let comm_addition = Pedersen::with(amt_0 + amt_1, &(open_0 + open_1));
+        let commitment_0 = Pedersen::with(amount_0, &opening_0);
+        let commitment_1 = Pedersen::with(amount_1, &opening_1);
+        let commitment_addition = Pedersen::with(amount_0 + amount_1, &(opening_0 + opening_1));
 
-        assert_eq!(comm_addition, comm_0 + comm_1);
+        assert_eq!(commitment_addition, commitment_0 + commitment_1);
     }
 
     #[test]
     fn test_pedersen_homomorphic_subtraction() {
-        let amt_0: u64 = 77;
-        let amt_1: u64 = 57;
+        let amount_0: u64 = 77;
+        let amount_1: u64 = 57;
 
         let rng = &mut OsRng;
-        let open_0 = PedersenOpening(Scalar::random(rng));
-        let open_1 = PedersenOpening(Scalar::random(rng));
+        let opening_0 = PedersenOpening(Scalar::random(rng));
+        let opening_1 = PedersenOpening(Scalar::random(rng));
 
-        let comm_0 = Pedersen::with(amt_0, &open_0);
-        let comm_1 = Pedersen::with(amt_1, &open_1);
-        let comm_addition = Pedersen::with(amt_0 - amt_1, &(open_0 - open_1));
+        let commitment_0 = Pedersen::with(amount_0, &opening_0);
+        let commitment_1 = Pedersen::with(amount_1, &opening_1);
+        let commitment_addition = Pedersen::with(amount_0 - amount_1, &(opening_0 - opening_1));
 
-        assert_eq!(comm_addition, comm_0 - comm_1);
+        assert_eq!(commitment_addition, commitment_0 - commitment_1);
     }
 
     #[test]
     fn test_pedersen_homomorphic_multiplication() {
-        let amt_0: u64 = 77;
-        let amt_1: u64 = 57;
+        let amount_0: u64 = 77;
+        let amount_1: u64 = 57;
 
-        let (comm, open) = Pedersen::new(amt_0);
-        let scalar = Scalar::from(amt_1);
-        let comm_addition = Pedersen::with(amt_0 * amt_1, &(open * scalar));
+        let (commitment, opening) = Pedersen::new(amount_0);
+        let scalar = Scalar::from(amount_1);
+        let commitment_addition = Pedersen::with(amount_0 * amount_1, &(opening * scalar));
 
-        assert_eq!(comm_addition, comm * scalar);
-        assert_eq!(comm_addition, scalar * comm);
+        assert_eq!(commitment_addition, commitment * scalar);
+        assert_eq!(commitment_addition, scalar * commitment);
     }
 
     #[test]
     fn test_pedersen_commitment_bytes() {
-        let amt: u64 = 77;
-        let (comm, _) = Pedersen::new(amt);
+        let amount: u64 = 77;
+        let (commitment, _) = Pedersen::new(amount);
 
-        let encoded = comm.to_bytes();
+        let encoded = commitment.to_bytes();
         let decoded = PedersenCommitment::from_bytes(&encoded).unwrap();
 
-        assert_eq!(comm, decoded);
+        assert_eq!(commitment, decoded);
 
         // incorrect length encoding
         assert_eq!(PedersenCommitment::from_bytes(&[0; 33]), None);
@@ -305,12 +305,12 @@ mod tests {
 
     #[test]
     fn test_pedersen_opening_bytes() {
-        let open = PedersenOpening(Scalar::random(&mut OsRng));
+        let opening = PedersenOpening(Scalar::random(&mut OsRng));
 
-        let encoded = open.to_bytes();
+        let encoded = opening.to_bytes();
         let decoded = PedersenOpening::from_bytes(&encoded).unwrap();
 
-        assert_eq!(open, decoded);
+        assert_eq!(opening, decoded);
 
         // incorrect length encoding
         assert_eq!(PedersenOpening::from_bytes(&[0; 33]), None);
@@ -318,22 +318,22 @@ mod tests {
 
     #[test]
     fn test_serde_pedersen_commitment() {
-        let amt: u64 = 77;
-        let (comm, _) = Pedersen::new(amt);
+        let amount: u64 = 77;
+        let (commitment, _) = Pedersen::new(amount);
 
-        let encoded = bincode::serialize(&comm).unwrap();
+        let encoded = bincode::serialize(&commitment).unwrap();
         let decoded: PedersenCommitment = bincode::deserialize(&encoded).unwrap();
 
-        assert_eq!(comm, decoded);
+        assert_eq!(commitment, decoded);
     }
 
     #[test]
     fn test_serde_pedersen_opening() {
-        let open = PedersenOpening(Scalar::random(&mut OsRng));
+        let opening = PedersenOpening(Scalar::random(&mut OsRng));
 
-        let encoded = bincode::serialize(&open).unwrap();
+        let encoded = bincode::serialize(&opening).unwrap();
         let decoded: PedersenOpening = bincode::deserialize(&encoded).unwrap();
 
-        assert_eq!(open, decoded);
+        assert_eq!(opening, decoded);
     }
 }

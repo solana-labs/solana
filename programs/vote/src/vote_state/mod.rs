@@ -801,13 +801,8 @@ pub fn authorize<S: std::hash::BuildHasher>(
 
     match vote_authorize {
         VoteAuthorize::Voter => {
-            let authorized_withdrawer_signer = if feature_set
-                .is_active(&feature_set::vote_withdraw_authority_may_change_authorized_voter::id())
-            {
-                verify_authorized_signer(&vote_state.authorized_withdrawer, signers).is_ok()
-            } else {
-                false
-            };
+            let authorized_withdrawer_signer =
+                verify_authorized_signer(&vote_state.authorized_withdrawer, signers).is_ok();
 
             vote_state.set_new_authorized_voter(
                 authorized,
@@ -913,7 +908,7 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     to_account_index: IndexOfAccount,
     signers: &HashSet<Pubkey, S>,
     rent_sysvar: &Rent,
-    clock: Option<&Clock>,
+    clock: &Clock,
     feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let mut vote_account = instruction_context
@@ -930,9 +925,10 @@ pub fn withdraw<S: std::hash::BuildHasher>(
         .ok_or(InstructionError::InsufficientFunds)?;
 
     if remaining_balance == 0 {
-        let reject_active_vote_account_close = clock
-            .zip(vote_state.epoch_credits.last())
-            .map(|(clock, (last_epoch_with_credits, _, _))| {
+        let reject_active_vote_account_close = vote_state
+            .epoch_credits
+            .last()
+            .map(|(last_epoch_with_credits, _, _)| {
                 let current_epoch = clock.epoch;
                 // if current_epoch - last_epoch_with_credits < 2 then the validator has received credits
                 // either in the current epoch or the previous epoch. If it's >= 2 then it has been at least

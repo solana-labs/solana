@@ -10,7 +10,7 @@ use {
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
-    solana_bpf_loader_program::syscalls::create_loader,
+    solana_bpf_loader_program::syscalls::create_program_runtime_environment,
     solana_clap_utils::{
         self, hidden_unless_forced, input_parsers::*, input_validators::*, keypair::*,
     },
@@ -2022,16 +2022,18 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
         .map_err(|err| format!("Unable to read program file: {err}"))?;
 
     // Verify the program
-    let loader = create_loader(
+    let program_runtime_environment = create_program_runtime_environment(
         &FeatureSet::default(),
         &ComputeBudget::default(),
         true,
         false,
     )
     .unwrap();
-    let executable =
-        Executable::<TautologyVerifier, InvokeContext>::from_elf(&program_data, loader)
-            .map_err(|err| format!("ELF error: {err}"))?;
+    let executable = Executable::<TautologyVerifier, InvokeContext>::from_elf(
+        &program_data,
+        Arc::new(program_runtime_environment),
+    )
+    .map_err(|err| format!("ELF error: {err}"))?;
 
     let _ = Executable::<RequisiteVerifier, InvokeContext>::verified(executable)
         .map_err(|err| format!("ELF error: {err}"))?;
@@ -2161,9 +2163,9 @@ fn send_deploy_messages(
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
             let connection_cache = if config.use_quic {
-                ConnectionCache::new(1)
+                ConnectionCache::new_quic("connection_cache_cli_program_quic", 1)
             } else {
-                ConnectionCache::with_udp(1)
+                ConnectionCache::with_udp("connection_cache_cli_program_udp", 1)
             };
             let transaction_errors = match connection_cache {
                 ConnectionCache::Udp(cache) => TpuClient::new_with_connection_cache(

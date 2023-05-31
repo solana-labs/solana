@@ -98,6 +98,30 @@ pull_request_rules:
         ignore_conflicts: true
         branches:
           - v1.14
+  - name: v1.16 feature-gate backport
+    conditions:
+      - label=v1.16
+      - label=feature-gate
+    actions:
+      backport:
+        assignees: *BackportAssignee
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
+        ignore_conflicts: true
+        labels:
+          - feature-gate
+        branches:
+          - v1.16
+  - name: v1.16 non-feature-gate backport
+    conditions:
+      - label=v1.16
+      - label!=feature-gate
+    actions:
+      backport:
+        assignees: *BackportAssignee
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
+        ignore_conflicts: true
+        branches:
+          - v1.16
 
 commands_restrictions:
   # The author of copied PRs is the Mergify user.

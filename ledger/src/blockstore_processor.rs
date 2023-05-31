@@ -1,8 +1,12 @@
 use {
     crate::{
-        block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
-        blockstore_meta::SlotMeta, entry_notifier_service::EntryNotifierSender,
-        leader_schedule_cache::LeaderScheduleCache, token_balances::collect_token_balances,
+        block_error::BlockError,
+        blockstore::Blockstore,
+        blockstore_db::BlockstoreError,
+        blockstore_meta::SlotMeta,
+        entry_notifier_service::{EntryNotification, EntryNotifierSender},
+        leader_schedule_cache::LeaderScheduleCache,
+        token_balances::collect_token_balances,
     },
     chrono_humanize::{Accuracy, HumanTime, Tense},
     crossbeam_channel::Sender,
@@ -1109,7 +1113,7 @@ fn confirm_slot_entries(
     progress: &mut ConfirmationProgress,
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
-    _entry_notification_sender: Option<&EntryNotifierSender>,
+    entry_notification_sender: Option<&EntryNotifierSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     recyclers: &VerifyRecyclers,
     log_messages_bytes_limit: Option<usize>,
@@ -1132,15 +1136,29 @@ fn confirm_slot_entries(
     let slot = bank.slot();
     let (entries, num_shreds, slot_full) = slot_entries_load_result;
     let num_entries = entries.len();
-    let mut entry_starting_indexes = Vec::with_capacity(num_entries);
-    let mut entry_starting_index = progress.num_txs;
+    let mut entry_tx_starting_indexes = Vec::with_capacity(num_entries);
+    let mut entry_tx_starting_index = progress.num_txs;
     let num_txs = entries
         .iter()
-        .map(|e| {
-            let num_txs = e.transactions.len();
-            let next_starting_index = entry_starting_index.saturating_add(num_txs);
-            entry_starting_indexes.push(entry_starting_index);
-            entry_starting_index = next_starting_index;
+        .enumerate()
+        .map(|(i, entry)| {
+            if let Some(entry_notification_sender) = entry_notification_sender {
+                let entry_index = progress.num_entries.saturating_add(i);
+                if let Err(err) = entry_notification_sender.send(EntryNotification {
+                    slot,
+                    index: entry_index,
+                    entry: entry.into(),
+                }) {
+                    warn!(
+                        "Slot {}, entry {} entry_notification_sender send failed: {:?}",
+                        slot, entry_index, err
+                    );
+                }
+            }
+            let num_txs = entry.transactions.len();
+            let next_tx_starting_index = entry_tx_starting_index.saturating_add(num_txs);
+            entry_tx_starting_indexes.push(entry_tx_starting_index);
+            entry_tx_starting_index = next_tx_starting_index;
             num_txs
         })
         .sum::<usize>();
@@ -1222,10 +1240,10 @@ fn confirm_slot_entries(
     let mut replay_timer = Measure::start("replay_elapsed");
     let mut replay_entries: Vec<_> = entries
         .into_iter()
-        .zip(entry_starting_indexes)
-        .map(|(entry, starting_index)| ReplayEntry {
+        .zip(entry_tx_starting_indexes)
+        .map(|(entry, tx_starting_index)| ReplayEntry {
             entry,
-            starting_index,
+            starting_index: tx_starting_index,
         })
         .collect();
     // Note: This will shuffle entries' transactions in-place.
@@ -1840,7 +1858,7 @@ pub mod tests {
         matches::assert_matches,
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
-        solana_program_runtime::{builtin_program::create_builtin, declare_process_instruction},
+        solana_program_runtime::declare_process_instruction,
         solana_runtime::{
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
@@ -3002,10 +3020,7 @@ pub mod tests {
         let mock_program_id = solana_sdk::pubkey::new_rand();
 
         let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.add_builtin(
-            mock_program_id,
-            create_builtin("mockup".to_string(), mock_processor_ok),
-        );
+        bank.add_mockup_builtin(mock_program_id, mock_processor_ok);
 
         let tx = Transaction::new_signed_with_payer(
             &[Instruction::new_with_bincode(
@@ -3046,10 +3061,7 @@ pub mod tests {
 
         (0..get_instruction_errors().len()).for_each(|err| {
             let mut bank = Bank::new_for_tests(&genesis_config);
-            bank.add_builtin(
-                mock_program_id,
-                create_builtin("mockup".to_string(), mock_processor_err),
-            );
+            bank.add_mockup_builtin(mock_program_id, mock_processor_err);
 
             let tx = Transaction::new_signed_with_payer(
                 &[Instruction::new_with_bincode(

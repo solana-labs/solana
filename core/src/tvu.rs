@@ -480,7 +480,7 @@ pub mod tests {
             None,
             AbsRequestSender::default(),
             None,
-            &Arc::new(ConnectionCache::default()),
+            &Arc::new(ConnectionCache::new("connection_cache_test")),
             &ignored_prioritization_fee_cache,
             BankingTracer::new_disabled(),
         )

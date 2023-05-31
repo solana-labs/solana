@@ -14,9 +14,7 @@ use {
         nonce,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        system_instruction::{
-            NonceError, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH,
-        },
+        system_instruction::{SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH},
         system_program,
         transaction_context::{
             BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
@@ -435,7 +433,7 @@ declare_process_instruction!(process_instruction, 150, |invoke_context| {
                     invoke_context,
                     "Advance nonce account: recent blockhash list is empty",
                 );
-                return Err(NonceError::NoRecentBlockhashes.into());
+                return Err(SystemError::NonceNoRecentBlockhashes.into());
             }
             advance_nonce_account(&mut me, &signers, invoke_context)
         }
@@ -474,7 +472,7 @@ declare_process_instruction!(process_instruction, 150, |invoke_context| {
                     invoke_context,
                     "Initialize nonce account: recent blockhash list is empty",
                 );
-                return Err(NonceError::NoRecentBlockhashes.into());
+                return Err(SystemError::NonceNoRecentBlockhashes.into());
             }
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 2)?;
             initialize_nonce_account(&mut me, &authorized, &rent, invoke_context)
@@ -1884,7 +1882,7 @@ mod tests {
                     is_writable: false,
                 },
             ],
-            Err(NonceError::NoRecentBlockhashes.into()),
+            Err(SystemError::NonceNoRecentBlockhashes.into()),
         );
     }
 
@@ -1945,7 +1943,7 @@ mod tests {
                     is_writable: false,
                 },
             ],
-            Err(NonceError::NoRecentBlockhashes.into()),
+            Err(SystemError::NonceNoRecentBlockhashes.into()),
             super::process_instruction,
             |invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());

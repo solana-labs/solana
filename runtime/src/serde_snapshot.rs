@@ -12,13 +12,15 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{Bank, BankFieldsToDeserialize, BankRc},
         blockhash_queue::BlockhashQueue,
-        builtins::Builtins,
+        builtins::BuiltinPrototype,
         epoch_accounts_hash::EpochAccountsHash,
         epoch_stakes::EpochStakes,
         rent_collector::RentCollector,
         runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
-        snapshot_utils::{self, StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION},
+        snapshot_utils::{
+            self, SnapshotError, StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
+        },
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
@@ -353,7 +355,7 @@ pub(crate) fn bank_from_streams<R>(
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
-    additional_builtins: Option<&Builtins>,
+    additional_builtins: Option<&[BuiltinPrototype]>,
     account_secondary_indexes: AccountSecondaryIndexes,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
@@ -563,7 +565,7 @@ fn reconstruct_bank_from_fields<E>(
     account_paths: &[PathBuf],
     storage_and_next_append_vec_id: StorageAndNextAppendVecId,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
-    additional_builtins: Option<&Builtins>,
+    additional_builtins: Option<&[BuiltinPrototype]>,
     account_secondary_indexes: AccountSecondaryIndexes,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
@@ -626,7 +628,7 @@ pub(crate) fn reconstruct_single_storage(
     append_vec_path: &Path,
     current_len: usize,
     append_vec_id: AppendVecId,
-) -> io::Result<Arc<AccountStorageEntry>> {
+) -> Result<Arc<AccountStorageEntry>, SnapshotError> {
     let (accounts_file, num_accounts) = AccountsFile::new_from_file(append_vec_path, current_len)?;
     Ok(Arc::new(AccountStorageEntry::new_existing(
         *slot,
@@ -682,7 +684,7 @@ pub(crate) fn remap_and_reconstruct_single_storage(
     append_vec_path: &Path,
     next_append_vec_id: &AtomicAppendVecId,
     num_collisions: &AtomicUsize,
-) -> io::Result<Arc<AccountStorageEntry>> {
+) -> Result<Arc<AccountStorageEntry>, SnapshotError> {
     let (remapped_append_vec_id, remapped_append_vec_path) = remap_append_vec_file(
         slot,
         old_append_vec_id,
