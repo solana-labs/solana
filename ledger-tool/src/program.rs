@@ -119,7 +119,7 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
         wal_recovery_mode,
         force_update_to_open,
     );
-    let (bank_forks, ..) = load_bank_forks(
+    let (bank_forks, ..) = load_and_process_ledger(
         arg_matches,
         &genesis_config,
         Arc::new(blockstore),

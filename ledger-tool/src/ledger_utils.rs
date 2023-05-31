@@ -67,7 +67,7 @@ pub fn get_shred_storage_type(ledger_path: &Path, message: &str) -> ShredStorage
     }
 }
 
-pub fn load_bank_forks(
+pub fn load_and_process_ledger(
     arg_matches: &ArgMatches,
     genesis_config: &GenesisConfig,
     blockstore: Arc<Blockstore>,
@@ -111,6 +111,8 @@ pub fn load_bank_forks(
         })
     };
 
+    let start_slot_msg = "The starting slot will be the latest snapshot slot, or genesis if \
+        the --no-snapshot flag is specified or if no snapshots are found.";
     match process_options.halt_at_slot {
         // Skip the following checks for sentinel values of Some(0) and None.
         // For Some(0), no slots will be be replayed after starting_slot.
@@ -119,15 +121,17 @@ pub fn load_bank_forks(
         Some(halt_slot) => {
             if halt_slot < starting_slot {
                 eprintln!(
-                "Unable to load bank forks at slot {halt_slot} because it is less than the starting slot {starting_slot}. \
-                The starting slot will be the latest snapshot slot, or genesis if the --no-snapshot flag is specified or if no snapshots are found."
-            );
+                    "Unable to process blockstore from starting slot {starting_slot} to \
+                    {halt_slot}; the ending slot is less than the starting slot. {start_slot_msg}"
+                );
                 exit(1);
             }
             // Check if we have the slot data necessary to replay from starting_slot to >= halt_slot.
             if !blockstore.slot_range_connected(starting_slot, halt_slot) {
                 eprintln!(
-                    "Unable to load bank forks at slot {halt_slot} due to disconnected blocks.",
+                    "Unable to process blockstore from starting slot {starting_slot} to \
+                    {halt_slot}; the blockstore does not contain a replayable chain between these \
+                    slots. {start_slot_msg}"
                 );
                 exit(1);
             }
