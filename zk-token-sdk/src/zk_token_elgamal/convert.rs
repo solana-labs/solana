@@ -53,9 +53,9 @@ mod target_arch {
         crate::{
             curve25519::scalar::PodScalar,
             errors::ProofError,
-            instruction::{
-                transfer::{TransferAmountEncryption, TransferPubkeys},
-                transfer_with_fee::{FeeEncryption, FeeParameters, TransferWithFeePubkeys},
+            instruction::transfer::{
+                FeeEncryption, FeeParameters, TransferAmountEncryption, TransferPubkeys,
+                TransferWithFeePubkeys,
             },
         },
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
