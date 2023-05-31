@@ -12570,13 +12570,13 @@ fn test_hash_rewards_into_partitions_empty() {
     let stake_rewards_in_bucket =
         Bank::hash_rewards_into_partitions(&stake_rewards, &Hash::default(), 1, &thread_pool);
 
-    let total_after_sort_shuffle = stake_rewards_in_bucket
+    let total_after_hash_partition = stake_rewards_in_bucket
         .iter()
         .flatten()
         .map(|stake_reward| stake_reward.stake_reward_info.lamports)
         .sum::<i64>();
 
-    assert_eq!(total, total_after_sort_shuffle);
+    assert_eq!(total, total_after_hash_partition);
 }
 
 fn compare(a: &StakeRewards, b: &StakeRewards) {
