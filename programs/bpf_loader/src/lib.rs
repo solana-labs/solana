@@ -1412,7 +1412,7 @@ fn process_loader_upgradeable_instruction(
                 .map(|clock| clock.slot)
                 .unwrap_or(invoke_context.programs_modified_by_tx.slot());
 
-            let buffer_data_offset = UpgradeableLoaderState::size_of_buffer_metadata();
+            let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
 
             deploy_program!(
                 invoke_context,
@@ -1425,7 +1425,7 @@ fn process_loader_upgradeable_instruction(
                 },
                 programdata_account
                     .get_data()
-                    .get(buffer_data_offset..)
+                    .get(programdata_data_offset..)
                     .ok_or(InstructionError::AccountDataTooSmall)?,
             );
 
