@@ -142,7 +142,7 @@ impl ZkProofData<BatchedGroupedCiphertext2HandlesValidityProofContext>
 #[cfg(not(target_os = "solana"))]
 impl BatchedGroupedCiphertext2HandlesValidityProofContext {
     fn new_transcript(&self) -> Transcript {
-        let mut transcript = Transcript::new(b"AggregateCiphertextValidityProof");
+        let mut transcript = Transcript::new(b"BatchedGroupedCiphertextValidityProof");
 
         transcript.append_pubkey(b"destination-pubkey", &self.destination_pubkey);
         transcript.append_pubkey(b"auditor-pubkey", &self.auditor_pubkey);
