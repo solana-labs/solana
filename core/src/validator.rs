@@ -581,7 +581,6 @@ impl Validator {
             ));
         }
 
-        let exit = Arc::new(AtomicBool::new(false));
         {
             let exit = exit.clone();
             config
