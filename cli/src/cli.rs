@@ -2366,7 +2366,6 @@ mod tests {
 
         // Create stake: Check rent check (20 lamports)
         let bob_keypair = Keypair::new();
-        let bob_pubkey = bob_keypair.pubkey();
         let custodian = solana_sdk::pubkey::new_rand();
         config.command = CliCommand::CreateStakeAccount {
             stake_account: 1,
@@ -2395,7 +2394,6 @@ mod tests {
 
         // Create stake: Check rent + min delegation check (20 + 5 lamports)
         let bob_keypair = Keypair::new();
-        let bob_pubkey = bob_keypair.pubkey();
         let custodian = solana_sdk::pubkey::new_rand();
         config.command = CliCommand::CreateStakeAccount {
             stake_account: 1,
