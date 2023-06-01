@@ -2,13 +2,13 @@
 use {
     crate::{
         encryption::{
-            elgamal::{
-                DecryptHandle, ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey,
-            },
+            elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey},
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
         errors::ProofError,
-        instruction::{combine_lo_hi_ciphertexts, split_u64, Role},
+        instruction::transfer::{
+            combine_lo_hi_ciphertexts, encryption::TransferAmountEncryption, split_u64, Role,
+        },
         range_proof::RangeProof,
         sigma_proofs::{
             ciphertext_commitment_equality_proof::CiphertextCommitmentEqualityProof,
@@ -466,45 +466,6 @@ impl TransferPubkeys {
             destination_pubkey,
             auditor_pubkey,
         })
-    }
-}
-
-#[derive(Clone)]
-#[repr(C)]
-#[cfg(not(target_os = "solana"))]
-pub struct TransferAmountEncryption {
-    pub commitment: PedersenCommitment,
-    pub source_handle: DecryptHandle,
-    pub destination_handle: DecryptHandle,
-    pub auditor_handle: DecryptHandle,
-}
-
-#[cfg(not(target_os = "solana"))]
-impl TransferAmountEncryption {
-    pub fn new(
-        amount: u64,
-        source_pubkey: &ElGamalPubkey,
-        destination_pubkey: &ElGamalPubkey,
-        auditor_pubkey: &ElGamalPubkey,
-    ) -> (Self, PedersenOpening) {
-        let (commitment, opening) = Pedersen::new(amount);
-        let transfer_amount_encryption = Self {
-            commitment,
-            source_handle: source_pubkey.decrypt_handle(&opening),
-            destination_handle: destination_pubkey.decrypt_handle(&opening),
-            auditor_handle: auditor_pubkey.decrypt_handle(&opening),
-        };
-
-        (transfer_amount_encryption, opening)
-    }
-
-    pub fn to_pod(&self) -> pod::TransferAmountEncryption {
-        pod::TransferAmountEncryption {
-            commitment: self.commitment.into(),
-            source_handle: self.source_handle.into(),
-            destination_handle: self.destination_handle.into(),
-            auditor_handle: self.auditor_handle.into(),
-        }
     }
 }
 

@@ -45,7 +45,7 @@ thiserror = { workspace = true }
 serial_test = { workspace = true }
 solana-local-cluster = { workspace = true }
 solana-test-validator = { workspace = true }
-tempfile = "3.5.0"
+tempfile = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

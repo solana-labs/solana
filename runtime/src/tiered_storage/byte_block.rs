@@ -4,7 +4,7 @@
 use {
     crate::tiered_storage::footer::AccountBlockFormat,
     std::{
-        io::{Cursor, Write},
+        io::{Cursor, Read, Write},
         mem,
     },
 };
@@ -19,6 +19,7 @@ use {
 #[derive(Debug)]
 pub enum ByteBlockWriter {
     Raw(Cursor<Vec<u8>>),
+    Lz4(lz4::Encoder<Vec<u8>>),
 }
 
 impl ByteBlockWriter {
@@ -26,7 +27,12 @@ impl ByteBlockWriter {
     pub fn new(encoding: AccountBlockFormat) -> Self {
         match encoding {
             AccountBlockFormat::AlignedRaw => Self::Raw(Cursor::new(Vec::new())),
-            AccountBlockFormat::Lz4 => todo!(),
+            AccountBlockFormat::Lz4 => Self::Lz4(
+                lz4::EncoderBuilder::new()
+                    .level(0)
+                    .build(Vec::new())
+                    .unwrap(),
+            ),
         }
     }
 
@@ -45,6 +51,7 @@ impl ByteBlockWriter {
     pub fn write(&mut self, buf: &[u8]) -> std::io::Result<()> {
         match self {
             Self::Raw(cursor) => cursor.write_all(buf)?,
+            Self::Lz4(lz4_encoder) => lz4_encoder.write_all(buf)?,
         };
         Ok(())
     }
@@ -54,6 +61,34 @@ impl ByteBlockWriter {
     pub fn finish(self) -> std::io::Result<Vec<u8>> {
         match self {
             Self::Raw(cursor) => Ok(cursor.into_inner()),
+            Self::Lz4(lz4_encoder) => {
+                let (compressed_block, result) = lz4_encoder.finish();
+                result?;
+                Ok(compressed_block)
+            }
+        }
+    }
+}
+
+/// The util struct for reading byte blocks.
+pub struct ByteBlockReader;
+
+impl ByteBlockReader {
+    /// Decode the input byte array using the specified format.
+    ///
+    /// Typically, the input byte array is the output of ByteBlockWriter::finish().
+    ///
+    /// Note that calling this function with AccountBlockFormat::AlignedRaw encoding
+    /// will result in panic as the input is already decoded.
+    pub fn decode(encoding: AccountBlockFormat, input: &[u8]) -> std::io::Result<Vec<u8>> {
+        match encoding {
+            AccountBlockFormat::Lz4 => {
+                let mut decoder = lz4::Decoder::new(input).unwrap();
+                let mut output = vec![];
+                decoder.read_to_end(&mut output)?;
+                Ok(output)
+            }
+            AccountBlockFormat::AlignedRaw => panic!("the input buffer is already decoded"),
         }
     }
 }
@@ -72,19 +107,38 @@ mod tests {
         (unsafe { std::ptr::read_unaligned(ptr) }, next)
     }
 
-    #[test]
-    fn test_write_single_raw_format() {
-        let mut writer = ByteBlockWriter::new(AccountBlockFormat::AlignedRaw);
+    fn write_single(format: AccountBlockFormat) {
+        let mut writer = ByteBlockWriter::new(format);
         let value: u32 = 42;
 
         writer.write_type(&value).unwrap();
 
         let buffer = writer.finish().unwrap();
-        assert_eq!(buffer.len(), mem::size_of::<u32>());
 
-        let (value_from_buffer, next) = read_type::<u32>(&buffer, 0);
+        let decoded_buffer = if format == AccountBlockFormat::AlignedRaw {
+            buffer
+        } else {
+            ByteBlockReader::decode(format, &buffer).unwrap()
+        };
+
+        assert_eq!(decoded_buffer.len(), mem::size_of::<u32>());
+
+        let (value_from_buffer, next) = read_type::<u32>(&decoded_buffer, 0);
         assert_eq!(value, value_from_buffer);
-        assert_eq!(next, mem::size_of::<u32>());
+
+        if format != AccountBlockFormat::AlignedRaw {
+            assert_eq!(next, mem::size_of::<u32>());
+        }
+    }
+
+    #[test]
+    fn test_write_single_raw_format() {
+        write_single(AccountBlockFormat::AlignedRaw);
+    }
+
+    #[test]
+    fn test_write_single_encoded_format() {
+        write_single(AccountBlockFormat::Lz4);
     }
 
     #[derive(Debug, PartialEq)]
@@ -94,9 +148,8 @@ mod tests {
         data_len: usize,
     }
 
-    #[test]
-    fn test_write_multiple_raw_format() {
-        let mut writer = ByteBlockWriter::new(AccountBlockFormat::AlignedRaw);
+    fn write_multiple(format: AccountBlockFormat) {
+        let mut writer = ByteBlockWriter::new(format);
         let test_metas: Vec<TestMetaStruct> = vec![
             TestMetaStruct {
                 lamports: 10,
@@ -127,8 +180,15 @@ mod tests {
         writer.write_type(&test_data3).unwrap();
 
         let buffer = writer.finish().unwrap();
+
+        let decoded_buffer = if format == AccountBlockFormat::AlignedRaw {
+            buffer
+        } else {
+            ByteBlockReader::decode(format, &buffer).unwrap()
+        };
+
         assert_eq!(
-            buffer.len(),
+            decoded_buffer.len(),
             mem::size_of::<TestMetaStruct>() * 3
                 + mem::size_of_val(&test_data1)
                 + mem::size_of_val(&test_data2)
@@ -136,20 +196,39 @@ mod tests {
         );
 
         // verify meta1 and its data
-        let (meta1_from_buffer, next1) = read_type::<TestMetaStruct>(&buffer, 0);
+        let (meta1_from_buffer, next1) = read_type::<TestMetaStruct>(&decoded_buffer, 0);
         assert_eq!(test_metas[0], meta1_from_buffer);
-        assert_eq!(test_data1, buffer[next1..][..meta1_from_buffer.data_len]);
+        assert_eq!(
+            test_data1,
+            decoded_buffer[next1..][..meta1_from_buffer.data_len]
+        );
 
         // verify meta2 and its data
         let (meta2_from_buffer, next2) =
-            read_type::<TestMetaStruct>(&buffer, next1 + meta1_from_buffer.data_len);
+            read_type::<TestMetaStruct>(&decoded_buffer, next1 + meta1_from_buffer.data_len);
         assert_eq!(test_metas[1], meta2_from_buffer);
-        assert_eq!(test_data2, buffer[next2..][..meta2_from_buffer.data_len]);
+        assert_eq!(
+            test_data2,
+            decoded_buffer[next2..][..meta2_from_buffer.data_len]
+        );
 
         // verify meta3 and its data
         let (meta3_from_buffer, next3) =
-            read_type::<TestMetaStruct>(&buffer, next2 + meta2_from_buffer.data_len);
+            read_type::<TestMetaStruct>(&decoded_buffer, next2 + meta2_from_buffer.data_len);
         assert_eq!(test_metas[2], meta3_from_buffer);
-        assert_eq!(test_data3, buffer[next3..][..meta3_from_buffer.data_len]);
+        assert_eq!(
+            test_data3,
+            decoded_buffer[next3..][..meta3_from_buffer.data_len]
+        );
+    }
+
+    #[test]
+    fn test_write_multiple_raw_format() {
+        write_multiple(AccountBlockFormat::AlignedRaw);
+    }
+
+    #[test]
+    fn test_write_multiple_lz4_format() {
+        write_multiple(AccountBlockFormat::Lz4);
     }
 }

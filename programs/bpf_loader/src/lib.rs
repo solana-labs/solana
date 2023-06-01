@@ -1325,6 +1325,7 @@ fn process_loader_upgradeable_instruction(
                 ic_logger_msg!(log_collector, "Program account not owned by loader");
                 return Err(InstructionError::InvalidAccountOwner);
             }
+            let program_key = *program_account.get_key();
             match program_account.get_state()? {
                 UpgradeableLoaderState::Program {
                     programdata_address,
@@ -1356,11 +1357,21 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidRealloc);
             }
 
-            if let UpgradeableLoaderState::ProgramData {
-                slot: _,
+            let clock_slot = invoke_context
+                .get_sysvar_cache()
+                .get_clock()
+                .map(|clock| clock.slot)?;
+
+            let upgrade_authority_address = if let UpgradeableLoaderState::ProgramData {
+                slot,
                 upgrade_authority_address,
             } = programdata_account.get_state()?
             {
+                if clock_slot == slot {
+                    ic_logger_msg!(log_collector, "Program was extended in this block already");
+                    return Err(InstructionError::InvalidArgument);
+                }
+
                 if upgrade_authority_address.is_none() {
                     ic_logger_msg!(
                         log_collector,
@@ -1368,10 +1379,11 @@ fn process_loader_upgradeable_instruction(
                     );
                     return Err(InstructionError::Immutable);
                 }
+                upgrade_authority_address
             } else {
                 ic_logger_msg!(log_collector, "ProgramData state is invalid");
                 return Err(InstructionError::InvalidAccountData);
-            }
+            };
 
             let required_payment = {
                 let balance = programdata_account.get_lamports();
@@ -1383,6 +1395,8 @@ fn process_loader_upgradeable_instruction(
             // Borrowed accounts need to be dropped before native_invoke
             drop(programdata_account);
 
+            // Dereference the program ID to prevent overlapping mutable/immutable borrow of invoke context
+            let program_id = *program_id;
             if required_payment > 0 {
                 let payer_key = *transaction_context.get_key_of_account_at_index(
                     instruction_context.get_index_of_instruction_account_in_transaction(
@@ -1402,6 +1416,30 @@ fn process_loader_upgradeable_instruction(
             let mut programdata_account = instruction_context
                 .try_borrow_instruction_account(transaction_context, PROGRAM_DATA_ACCOUNT_INDEX)?;
             programdata_account.set_data_length(new_len)?;
+
+            let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
+
+            deploy_program!(
+                invoke_context,
+                program_key,
+                &program_id,
+                UpgradeableLoaderState::size_of_program().saturating_add(new_len),
+                clock_slot,
+                {
+                    drop(programdata_account);
+                },
+                programdata_account
+                    .get_data()
+                    .get(programdata_data_offset..)
+                    .ok_or(InstructionError::AccountDataTooSmall)?,
+            );
+
+            let mut programdata_account = instruction_context
+                .try_borrow_instruction_account(transaction_context, PROGRAM_DATA_ACCOUNT_INDEX)?;
+            programdata_account.set_state(&UpgradeableLoaderState::ProgramData {
+                slot: clock_slot,
+                upgrade_authority_address,
+            })?;
 
             ic_logger_msg!(
                 log_collector,

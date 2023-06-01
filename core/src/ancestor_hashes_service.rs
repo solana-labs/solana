@@ -1242,15 +1242,13 @@ mod test {
                 blockstore.insert_bank_hash(duplicate_confirmed_slot, hash, true);
             }
 
-            // Set up response threads
+            // Set up repair request receiver threads
             let t_request_receiver = streamer::receiver(
                 Arc::new(responder_node.sockets.serve_repair),
                 exit.clone(),
                 requests_sender,
                 Recycler::default(),
-                Arc::new(StreamerReceiveStats::new(
-                    "ancestor_hashes_response_receiver",
-                )),
+                Arc::new(StreamerReceiveStats::new("repair_request_receiver")),
                 Duration::from_millis(1), // coalesce
                 false,
                 None,

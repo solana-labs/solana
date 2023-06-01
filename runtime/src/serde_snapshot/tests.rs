@@ -122,7 +122,7 @@ where
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        &Arc::default(),
+        Arc::default(),
         None,
         (u64::default(), None),
         None,
@@ -410,7 +410,7 @@ fn test_bank_serialize_style(
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        &Arc::default(),
+        Arc::default(),
     )
     .unwrap();
     dbank.status_cache = Arc::new(RwLock::new(status_cache));
@@ -570,7 +570,7 @@ fn test_extra_fields_eof() {
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        &Arc::default(),
+        Arc::default(),
     )
     .unwrap();
 
@@ -632,7 +632,7 @@ fn test_extra_fields_full_snapshot_archive() {
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        &Arc::default(),
+        Arc::default(),
     )
     .unwrap();
 
@@ -705,7 +705,7 @@ fn test_blank_extra_fields() {
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        &Arc::default(),
+        Arc::default(),
     )
     .unwrap();
 

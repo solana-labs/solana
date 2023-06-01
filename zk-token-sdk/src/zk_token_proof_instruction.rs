@@ -276,6 +276,57 @@ pub enum ProofInstruction {
     ///   `CiphertextCommitmentEqualityProofData`
     ///
     VerifyCiphertextCommitmentEquality,
+
+    /// Verify a grouped-ciphertext validity proof.
+    ///
+    /// A grouped-ciphertext validity proof certifies that a grouped ElGamal ciphertext is
+    /// well-defined, i.e. the ciphertext can be decrypted by private keys associated with its
+    /// decryption handles.
+    ///
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<GroupedCiphertextValidityProofContext>` and assigned to the ZkToken
+    /// proof program prior to the execution of this instruction.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `GroupedCiphertextValidityProofContext`
+    ///
+    VerifyGroupedCiphertext2HandlesValidity,
+
+    /// Verify a batched grouped-ciphertext validity proof.
+    ///
+    /// A batched grouped-ciphertext validity proof certifies the validity of two grouped ElGamal
+    /// ciphertext that are encrypted using the same set of ElGamal public keys. A batched
+    /// grouped-ciphertext validity proof is shorter and more efficient than two individual
+    /// grouped-ciphertext validity proofs.
+    ///
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<BatchedGroupedCiphertextValidityProofContext>` and assigned to the
+    /// ZkToken proof program prior to the execution of this instruction.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `BatchedGroupedCiphertextValidityProofContext`
+    ///
+    VerifyBatchedGroupedCiphertext2HandlesValidity,
 }
 
 /// Pubkeys associated with a context state account to be used as parameters to functions.
