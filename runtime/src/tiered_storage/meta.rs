@@ -1,24 +1,20 @@
+#![allow(dead_code)]
 //! The account meta and related structs for the tiered storage.
 
 use modular_bitfield::prelude::*;
 
 /// The struct that handles the account meta flags.
-#[allow(dead_code)]
 #[bitfield(bits = 32)]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
 pub(crate) struct AccountMetaFlags {
     /// whether the account meta has rent epoch
-    #[allow(dead_code)]
     has_rent_epoch: bool,
     /// whether the account meta has account hash
-    #[allow(dead_code)]
     has_account_hash: bool,
     /// whether the account meta has write version
-    #[allow(dead_code)]
     has_write_version: bool,
     /// the reserved bits.
-    #[allow(dead_code)]
     reserved: B29,
 }
 
