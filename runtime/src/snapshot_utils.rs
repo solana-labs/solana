@@ -5,6 +5,7 @@ use {
             AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig, AtomicAppendVecId,
             CalcAccountsHashDataSource,
         },
+        accounts_file::AccountsFileError,
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -85,8 +86,6 @@ const MAX_SNAPSHOT_VERSION_FILE_SIZE: u64 = 8; // byte
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
 pub const TMP_SNAPSHOT_ARCHIVE_PREFIX: &str = "tmp-snapshot-archive-";
 pub const BANK_SNAPSHOT_PRE_FILENAME_EXTENSION: &str = "pre";
-// Save some bank snapshots but not too many
-pub const MAX_BANK_SNAPSHOTS_TO_RETAIN: usize = 8;
 // The following unsafes are
 // - Safe because the values are fixed, known non-zero constants
 // - Necessary in order to have a plain NonZeroUsize as the constant, NonZeroUsize
@@ -308,6 +307,9 @@ pub enum SnapshotError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
+    #[error("AccountsFile error: {0}")]
+    AccountsFileError(#[from] AccountsFileError),
+
     #[error("serialization error: {0}")]
     Serialize(#[from] bincode::Error),
 
@@ -465,8 +467,18 @@ fn delete_contents_of_path(path: impl AsRef<Path>) {
     }
 }
 
+/// Moves and asynchronously deletes the contents of a directory to avoid blocking on it.
+/// The directory is re-created after the move, and should now be empty.
+pub fn move_and_async_delete_path_contents(path: impl AsRef<Path>) {
+    move_and_async_delete_path(&path);
+    // The following could fail if the rename failed.
+    // If that happens, the directory should be left as is.
+    // So we ignore errors here.
+    let _ = std::fs::create_dir(path);
+}
+
 /// Delete directories/files asynchronously to avoid blocking on it.
-/// Fist, in sync context, rename the original path to *_deleted,
+/// First, in sync context, rename the original path to *_deleted,
 /// then spawn a thread to delete the renamed path.
 /// If the process is killed and the deleting process is not done,
 /// the leftover path will be deleted in the next process life, so
@@ -848,12 +860,8 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
             })
             .for_each(
                 |slot| match BankSnapshotInfo::new_from_dir(&bank_snapshots_dir, slot) {
-                    Ok(snapshot_info) => {
-                        bank_snapshots.push(snapshot_info);
-                    }
-                    Err(err) => {
-                        error!("Unable to read bank snapshot for slot {}: {}", slot, err);
-                    }
+                    Ok(snapshot_info) => bank_snapshots.push(snapshot_info),
+                    Err(err) => warn!("Unable to read bank snapshot for slot {slot}: {err}"),
                 },
             ),
     }
@@ -1484,7 +1492,7 @@ pub fn bank_from_snapshot_archives(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let (unarchived_full_snapshot, mut unarchived_incremental_snapshot, next_append_vec_id) =
         verify_and_unarchive_snapshots(
@@ -1603,7 +1611,7 @@ pub fn bank_from_latest_snapshot_archives(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> Result<(
     Bank,
     FullSnapshotArchiveInfo,
@@ -1696,7 +1704,7 @@ pub fn bank_from_snapshot_dir(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromDirTimings)> {
     // Clear the contents of the account paths run directories.  When constructing the bank, the appendvec
     // files will be extracted from the snapshot hardlink directories into these run/ directories.
@@ -1764,7 +1772,7 @@ pub fn bank_from_latest_snapshot_dir(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> Result<Bank> {
     info!("Loading bank from snapshot dir");
     let bank_snapshot = get_highest_bank_snapshot_post(&bank_snapshots_dir).ok_or_else(|| {
@@ -2606,7 +2614,7 @@ fn rebuild_bank_from_unarchived_snapshots(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> Result<Bank> {
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
@@ -2702,7 +2710,7 @@ fn rebuild_bank_from_snapshot(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> Result<Bank> {
     info!(
         "Rebuilding bank from snapshot {}",
@@ -2986,6 +2994,23 @@ pub fn purge_old_bank_snapshots(
             .rev()
             .skip(num_bank_snapshots_to_retain),
     );
+}
+
+/// At startup, purge old (i.e. unusable) bank snapshots
+///
+/// Only a single bank snapshot could be needed at startup (when using fast boot), so
+/// retain the highest bank snapshot "post", and purge the rest.
+pub fn purge_old_bank_snapshots_at_startup(bank_snapshots_dir: impl AsRef<Path>) {
+    purge_old_bank_snapshots(&bank_snapshots_dir, 0, Some(BankSnapshotType::Pre));
+    purge_old_bank_snapshots(&bank_snapshots_dir, 1, Some(BankSnapshotType::Post));
+
+    let highest_bank_snapshot_post = get_highest_bank_snapshot_post(&bank_snapshots_dir);
+    if let Some(highest_bank_snapshot_post) = highest_bank_snapshot_post {
+        debug!(
+            "Retained bank snapshot for slot {}, and purged the rest.",
+            highest_bank_snapshot_post.slot
+        );
+    }
 }
 
 /// Purges bank snapshots that are older than `slot`
@@ -4331,7 +4356,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
         roundtrip_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -4442,7 +4467,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
         roundtrip_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -4573,7 +4598,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
         roundtrip_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -4694,7 +4719,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
         deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -4831,7 +4856,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
         deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -4896,7 +4921,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
         deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -5464,7 +5489,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
         deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -5537,7 +5562,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
 
@@ -5579,7 +5604,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
         .unwrap();
 
@@ -5639,5 +5664,23 @@ mod tests {
         let bank_snapshots_after = get_bank_snapshots(&bank_snapshots_dir);
         assert_eq!(bank_snapshots_before.len(), bank_snapshots_after.len() + 9);
         assert!(bank_snapshots_after.is_empty());
+    }
+
+    #[test]
+    fn test_purge_old_bank_snapshots_at_startup() {
+        let genesis_config = GenesisConfig::default();
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
+
+        // The bank must stay in scope to ensure the temp dirs that it holds are not dropped
+        let _bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 9, 6);
+
+        purge_old_bank_snapshots_at_startup(&bank_snapshots_dir);
+
+        let bank_snapshots_pre = get_bank_snapshots_pre(&bank_snapshots_dir);
+        assert!(bank_snapshots_pre.is_empty());
+
+        let bank_snapshots_post = get_bank_snapshots_post(&bank_snapshots_dir);
+        assert_eq!(bank_snapshots_post.len(), 1);
+        assert_eq!(bank_snapshots_post.first().unwrap().slot, 6);
     }
 }

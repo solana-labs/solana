@@ -117,6 +117,9 @@ pub struct Stats {
     pub insertions: AtomicU64,
     pub replacements: AtomicU64,
     pub one_hit_wonders: AtomicU64,
+    pub prunes: AtomicU64,
+    pub expired: AtomicU64,
+    pub empty_entries: AtomicU64,
 }
 
 impl Stats {
@@ -128,6 +131,9 @@ impl Stats {
         let replacements = self.replacements.load(Ordering::Relaxed);
         let one_hit_wonders = self.one_hit_wonders.load(Ordering::Relaxed);
         let evictions: u64 = self.evictions.values().sum();
+        let prunes = self.prunes.load(Ordering::Relaxed);
+        let expired = self.expired.load(Ordering::Relaxed);
+        let empty_entries = self.empty_entries.load(Ordering::Relaxed);
         datapoint_info!(
             "loaded-programs-cache-stats",
             ("slot", slot, i64),
@@ -137,10 +143,13 @@ impl Stats {
             ("insertions", insertions, i64),
             ("replacements", replacements, i64),
             ("one_hit_wonders", one_hit_wonders, i64),
+            ("prunes", prunes, i64),
+            ("evict_expired", expired, i64),
+            ("evict_empty_entries", empty_entries, i64),
         );
         debug!(
-            "Loaded Programs Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Insertions: {}, Replacements: {}, One-Hit-Wonders: {}",
-            hits, misses, evictions, insertions, replacements, one_hit_wonders,
+            "Loaded Programs Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Insertions: {}, Replacements: {}, One-Hit-Wonders: {}, Prunes: {}, Expired: {}, Empty: {}",
+            hits, misses, evictions, insertions, replacements, one_hit_wonders, prunes, expired, empty_entries
         );
         if log_enabled!(log::Level::Trace) && !self.evictions.is_empty() {
             let mut evictions = self.evictions.iter().collect::<Vec<_>>();
@@ -204,7 +213,7 @@ impl LoadedProgram {
     /// Creates a new user program
     pub fn new(
         loader_key: &Pubkey,
-        loader: Arc<BuiltInProgram<InvokeContext<'static>>>,
+        program_runtime_environment: Arc<BuiltInProgram<InvokeContext<'static>>>,
         deployment_slot: Slot,
         effective_slot: Slot,
         maybe_expiration_slot: Option<Slot>,
@@ -213,7 +222,7 @@ impl LoadedProgram {
         metrics: &mut LoadProgramMetrics,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut load_elf_time = Measure::start("load_elf_time");
-        let executable = Executable::load(elf_bytes, loader.clone())?;
+        let executable = Executable::load(elf_bytes, program_runtime_environment.clone())?;
         load_elf_time.stop();
         metrics.load_elf_us = load_elf_time.as_us();
 
@@ -337,7 +346,8 @@ pub struct LoadedPrograms {
     ///
     /// Pubkey is the address of a program, multiple versions can coexists simultaneously under the same address (in different slots).
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
-
+    /// Globally shared RBPF config and syscall registry
+    pub program_runtime_environment_v1: Arc<BuiltInProgram<InvokeContext<'static>>>,
     latest_root: Slot,
     pub stats: Stats,
 }
@@ -479,6 +489,7 @@ impl LoadedPrograms {
                         first_ancestor_found = true;
                         first_ancestor_found
                     } else {
+                        self.stats.prunes.fetch_add(1, Ordering::Relaxed);
                         false
                     }
                 })
@@ -635,7 +646,14 @@ impl LoadedPrograms {
             entry.retain(|program| {
                 program
                     .maybe_expiration_slot
-                    .map(|expiration| expiration > current_slot)
+                    .map(|expiration| {
+                        if expiration > current_slot {
+                            true
+                        } else {
+                            self.stats.expired.fetch_add(1, Ordering::Relaxed);
+                            false
+                        }
+                    })
                     .unwrap_or(true)
             });
         }
@@ -646,6 +664,11 @@ impl LoadedPrograms {
             entries.iter_mut().for_each(|entry| {
                 if entry.is_loaded() {
                     *entry = Arc::new(entry.to_unloaded());
+                    self.stats
+                        .evictions
+                        .entry(*id)
+                        .and_modify(|c| saturating_add_assign!(*c, 1))
+                        .or_insert(1);
                 }
             });
         }
@@ -678,7 +701,14 @@ impl LoadedPrograms {
     }
 
     fn remove_programs_with_no_entries(&mut self) {
-        self.entries.retain(|_, programs| !programs.is_empty())
+        let num_programs_before_removal = self.entries.len();
+        self.entries.retain(|_, programs| !programs.is_empty());
+        if self.entries.len() < num_programs_before_removal {
+            self.stats.empty_entries.fetch_add(
+                num_programs_before_removal.saturating_sub(self.entries.len()) as u64,
+                Ordering::Relaxed,
+            );
+        }
     }
 }
 

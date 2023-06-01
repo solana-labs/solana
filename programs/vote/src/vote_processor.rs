@@ -28,12 +28,6 @@ fn process_authorize_with_seed_instruction(
     current_authority_derived_key_owner: &Pubkey,
     current_authority_derived_key_seed: &str,
 ) -> Result<(), InstructionError> {
-    if !invoke_context
-        .feature_set
-        .is_active(&feature_set::vote_authorize_with_seed::id())
-    {
-        return Err(InstructionError::InvalidInstructionData);
-    }
     let clock = get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
     let mut expected_authority_keys: HashSet<Pubkey> = HashSet::default();
     if instruction_context.is_instruction_account_signer(2)? {
@@ -224,15 +218,7 @@ declare_process_instruction!(process_instruction, 2100, |invoke_context| {
         VoteInstruction::Withdraw(lamports) => {
             instruction_context.check_number_of_instruction_accounts(2)?;
             let rent_sysvar = invoke_context.get_sysvar_cache().get_rent()?;
-
-            let clock_if_feature_active = if invoke_context
-                .feature_set
-                .is_active(&feature_set::reject_vote_account_close_unless_zero_credit_epoch::id())
-            {
-                Some(invoke_context.get_sysvar_cache().get_clock()?)
-            } else {
-                None
-            };
+            let clock_sysvar = invoke_context.get_sysvar_cache().get_clock()?;
 
             drop(me);
             vote_state::withdraw(
@@ -243,7 +229,7 @@ declare_process_instruction!(process_instruction, 2100, |invoke_context| {
                 1,
                 &signers,
                 &rent_sysvar,
-                clock_if_feature_active.as_deref(),
+                &clock_sysvar,
                 &invoke_context.feature_set,
             )
         }
@@ -1066,14 +1052,6 @@ mod tests {
             instruction_accounts.clone(),
             Ok(()),
         );
-
-        // should fail, if vote_withdraw_authority_may_change_authorized_voter is disabled
-        process_instruction_disabled_features(
-            &instruction_data,
-            transaction_accounts,
-            instruction_accounts,
-            Err(InstructionError::MissingRequiredSignature),
-        );
     }
 
     #[test]
@@ -1239,30 +1217,9 @@ mod tests {
         instruction_accounts[0].pubkey = vote_pubkey_2;
         process_instruction(
             &serialize(&VoteInstruction::Withdraw(lamports)).unwrap(),
-            transaction_accounts.clone(),
-            instruction_accounts.clone(),
-            Err(VoteError::ActiveVoteAccountClose.into()),
-        );
-
-        // Following features disabled:
-        // reject_vote_account_close_unless_zero_credit_epoch
-
-        // full withdraw, with 0 credit epoch
-        instruction_accounts[0].pubkey = vote_pubkey_1;
-        process_instruction_disabled_features(
-            &serialize(&VoteInstruction::Withdraw(lamports)).unwrap(),
-            transaction_accounts.clone(),
-            instruction_accounts.clone(),
-            Ok(()),
-        );
-
-        // full withdraw, without 0 credit epoch
-        instruction_accounts[0].pubkey = vote_pubkey_2;
-        process_instruction_disabled_features(
-            &serialize(&VoteInstruction::Withdraw(lamports)).unwrap(),
             transaction_accounts,
             instruction_accounts,
-            Ok(()),
+            Err(VoteError::ActiveVoteAccountClose.into()),
         );
     }
 
@@ -1360,22 +1317,6 @@ mod tests {
                 VoteAuthorizeWithSeedArgs {
                     authorization_type,
                     current_authority_derived_key_owner: current_authority_owner,
-                    current_authority_derived_key_seed: current_authority_seed.clone(),
-                    new_authority: new_authority_pubkey,
-                },
-            ))
-            .unwrap(),
-            transaction_accounts.clone(),
-            instruction_accounts.clone(),
-            Ok(()),
-        );
-
-        // Should fail when the `vote_authorize_with_seed` feature is disabled
-        process_instruction_disabled_features(
-            &serialize(&VoteInstruction::AuthorizeWithSeed(
-                VoteAuthorizeWithSeedArgs {
-                    authorization_type,
-                    current_authority_derived_key_owner: current_authority_owner,
                     current_authority_derived_key_seed: current_authority_seed,
                     new_authority: new_authority_pubkey,
                 },
@@ -1383,7 +1324,7 @@ mod tests {
             .unwrap(),
             transaction_accounts,
             instruction_accounts,
-            Err(InstructionError::InvalidInstructionData),
+            Ok(()),
         );
     }
 
@@ -1501,28 +1442,13 @@ mod tests {
                 VoteAuthorizeCheckedWithSeedArgs {
                     authorization_type,
                     current_authority_derived_key_owner: current_authority_owner,
-                    current_authority_derived_key_seed: current_authority_seed.clone(),
-                },
-            ))
-            .unwrap(),
-            transaction_accounts.clone(),
-            instruction_accounts.clone(),
-            Ok(()),
-        );
-
-        // Should fail when the `vote_authorize_with_seed` feature is disabled
-        process_instruction_disabled_features(
-            &serialize(&VoteInstruction::AuthorizeCheckedWithSeed(
-                VoteAuthorizeCheckedWithSeedArgs {
-                    authorization_type,
-                    current_authority_derived_key_owner: current_authority_owner,
                     current_authority_derived_key_seed: current_authority_seed,
                 },
             ))
             .unwrap(),
             transaction_accounts,
             instruction_accounts,
-            Err(InstructionError::InvalidInstructionData),
+            Ok(()),
         );
     }
 

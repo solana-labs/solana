@@ -30,7 +30,7 @@ use {
         },
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
-        accounts_file::AccountsFile,
+        accounts_file::{AccountsFile, AccountsFileError},
         accounts_hash::{
             AccountsDeltaHash, AccountsHash, AccountsHashEnum, AccountsHasher,
             CalcAccountsHashConfig, CalculateHashIntermediate, HashStats, IncrementalAccountsHash,
@@ -59,6 +59,7 @@ use {
         cache_hash_data::{CacheHashData, CacheHashDataFile},
         contains::Contains,
         epoch_accounts_hash::EpochAccountsHashManager,
+        partitioned_rewards::{PartitionedEpochRewardsConfig, TestPartitionedEpochRewards},
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
@@ -96,8 +97,9 @@ use {
         borrow::{Borrow, Cow},
         boxed::Box,
         collections::{hash_map, BTreeSet, HashMap, HashSet},
+        fs,
         hash::{Hash as StdHash, Hasher as StdHasher},
-        io::{Error as IoError, Result as IoResult},
+        io::Result as IoResult,
         ops::{Range, RangeBounds},
         path::{Path, PathBuf},
         str::FromStr,
@@ -476,6 +478,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: true,
     create_ancient_storage: CreateAncientStorage::Pack,
+    test_partitioned_epoch_rewards: TestPartitionedEpochRewards::CompareResults,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -487,6 +490,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: false,
     create_ancient_storage: CreateAncientStorage::Pack,
+    test_partitioned_epoch_rewards: TestPartitionedEpochRewards::None,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -550,6 +554,7 @@ pub struct AccountsDbConfig {
     pub assert_stakes_cache_consistency: bool,
     /// how to create ancient storages
     pub create_ancient_storage: CreateAncientStorage,
+    pub test_partitioned_epoch_rewards: TestPartitionedEpochRewards,
 }
 
 #[cfg(not(test))]
@@ -1138,7 +1143,7 @@ impl AccountStorageEntry {
         self.id.load(Ordering::Acquire)
     }
 
-    pub fn flush(&self) -> Result<(), IoError> {
+    pub fn flush(&self) -> Result<(), AccountsFileError> {
         self.accounts.flush()
     }
 
@@ -1400,6 +1405,7 @@ pub struct AccountsDb {
 
     full_accounts_hash_cache_path: PathBuf,
     incremental_accounts_hash_cache_path: PathBuf,
+    transient_accounts_hash_cache_path: PathBuf,
 
     // used by tests
     // holds this until we are dropped
@@ -1493,6 +1499,11 @@ pub struct AccountsDb {
 
     /// debug feature to scan every append vec and verify refcounts are equal
     exhaustively_verify_refcounts: bool,
+
+    /// this will live here until the feature for partitioned epoch rewards is activated.
+    /// At that point, this and other code can be deleted.
+    #[allow(dead_code)]
+    pub(crate) partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig,
 
     /// the full accounts hash calculation as of a predetermined block height 'N'
     /// to be included in the bank hash at a predetermined block height 'M'
@@ -2401,6 +2412,7 @@ impl AccountsDb {
             paths: vec![],
             full_accounts_hash_cache_path: accounts_hash_cache_path.join("full"),
             incremental_accounts_hash_cache_path: accounts_hash_cache_path.join("incremental"),
+            transient_accounts_hash_cache_path: accounts_hash_cache_path.join("transient"),
             temp_accounts_hash_cache_path,
             shrink_paths: RwLock::new(None),
             temp_paths: None,
@@ -2437,6 +2449,7 @@ impl AccountsDb {
             filler_account_suffix: None,
             log_dead_slots: AtomicBool::new(true),
             exhaustively_verify_refcounts: false,
+            partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig::default(),
             epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
         }
     }
@@ -2449,7 +2462,7 @@ impl AccountsDb {
             AccountShrinkThreshold::default(),
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
     }
 
@@ -2461,7 +2474,7 @@ impl AccountsDb {
             AccountShrinkThreshold::default(),
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
     }
 
@@ -2472,7 +2485,7 @@ impl AccountsDb {
         shrink_ratio: AccountShrinkThreshold,
         mut accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         let accounts_index = AccountsIndex::new(
             accounts_db_config.as_mut().and_then(|x| x.index.take()),
@@ -2511,6 +2524,14 @@ impl AccountsDb {
             .map(|config| config.create_ancient_storage)
             .unwrap_or(CreateAncientStorage::Append);
 
+        let test_partitioned_epoch_rewards = accounts_db_config
+            .as_ref()
+            .map(|config| config.test_partitioned_epoch_rewards)
+            .unwrap_or_default();
+
+        let partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig =
+            PartitionedEpochRewardsConfig::new(test_partitioned_epoch_rewards);
+
         let filler_account_suffix = if filler_accounts_config.count > 0 {
             Some(solana_sdk::pubkey::new_rand())
         } else {
@@ -2532,6 +2553,7 @@ impl AccountsDb {
             write_cache_limit_bytes: accounts_db_config
                 .as_ref()
                 .and_then(|x| x.write_cache_limit_bytes),
+            partitioned_epoch_rewards_config,
             exhaustively_verify_refcounts,
             ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
         };
@@ -7592,6 +7614,8 @@ impl AccountsDb {
                 end: PUBKEY_BINS_FOR_CALCULATING_HASHES,
             };
 
+            fs::create_dir_all(&self.transient_accounts_hash_cache_path)
+                .expect("create transient accounts hash cache dir");
             let accounts_hasher = AccountsHasher {
                 filler_account_suffix: if self.filler_accounts_config.count > 0 {
                     self.filler_account_suffix
@@ -7599,6 +7623,7 @@ impl AccountsDb {
                     None
                 },
                 zero_lamport_accounts: flavor.zero_lamport_accounts(),
+                dir_for_temp_cache_files: self.transient_accounts_hash_cache_path.clone(),
             };
 
             // get raw data by scanning
@@ -7766,8 +7791,23 @@ impl AccountsDb {
     /// As part of calculating the accounts delta hash, get a list of accounts modified this slot
     /// (aka dirty pubkeys) and add them to `self.uncleaned_pubkeys` for future cleaning.
     pub fn calculate_accounts_delta_hash(&self, slot: Slot) -> AccountsDeltaHash {
+        self.calculate_accounts_delta_hash_internal(slot, None)
+    }
+
+    /// Calculate accounts delta hash for `slot`
+    ///
+    /// As part of calculating the accounts delta hash, get a list of accounts modified this slot
+    /// (aka dirty pubkeys) and add them to `self.uncleaned_pubkeys` for future cleaning.
+    pub(crate) fn calculate_accounts_delta_hash_internal(
+        &self,
+        slot: Slot,
+        ignore: Option<Pubkey>,
+    ) -> AccountsDeltaHash {
         let (mut hashes, scan_us, mut accumulate) = self.get_pubkey_hash_for_slot(slot);
         let dirty_keys = hashes.iter().map(|(pubkey, _hash)| *pubkey).collect();
+        if let Some(ignore) = ignore {
+            hashes.retain(|k| k.0 != ignore);
+        }
 
         if self.filler_accounts_enabled() {
             // filler accounts must be added to 'dirty_keys' above but cannot be used to calculate hash
@@ -9408,7 +9448,7 @@ impl AccountsDb {
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
     }
 
@@ -17190,7 +17230,7 @@ pub mod tests {
                     ..ACCOUNTS_DB_CONFIG_FOR_TESTING
                 }),
                 None,
-                &Arc::default(),
+                Arc::default(),
             );
             // before any roots are added, we expect the oldest non-ancient slot to be 0
             assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));
@@ -17224,7 +17264,7 @@ pub mod tests {
                 ..ACCOUNTS_DB_CONFIG_FOR_TESTING
             }),
             None,
-            &Arc::default(),
+            Arc::default(),
         );
         // before any roots are added, we expect the oldest non-ancient slot to be 0
         assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));
@@ -17279,7 +17319,7 @@ pub mod tests {
                         ..ACCOUNTS_DB_CONFIG_FOR_TESTING
                     }),
                     None,
-                    &Arc::default(),
+                    Arc::default(),
                 );
                 // before any roots are added, we expect the oldest non-ancient slot to be 0
                 assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));

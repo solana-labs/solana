@@ -8,11 +8,11 @@ use {
         accounts_db::{
             get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
         },
-        accounts_file::AccountsFile,
+        accounts_file::{AccountsFile, AccountsFileError},
         accounts_hash::{AccountsDeltaHash, AccountsHash},
         bank::{Bank, BankTestConfig},
         epoch_accounts_hash,
-        genesis_utils::{self, activate_all_features, activate_feature},
+        genesis_utils::{activate_all_features, activate_feature},
         snapshot_utils::{
             create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
         },
@@ -23,7 +23,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
-        feature_set::{self, disable_fee_calculator},
+        feature_set,
         genesis_config::{create_genesis_config, ClusterType},
         hash::Hash,
         pubkey::Pubkey,
@@ -43,7 +43,7 @@ use {
 fn copy_append_vecs<P: AsRef<Path>>(
     accounts_db: &AccountsDb,
     output_dir: P,
-) -> std::io::Result<StorageAndNextAppendVecId> {
+) -> Result<StorageAndNextAppendVecId, AccountsFileError> {
     let storage_entries = accounts_db.get_snapshot_storages(RangeFull).0;
     let storage: AccountStorageMap = AccountStorageMap::with_capacity(storage_entries.len());
     let mut next_append_vec_id = 0;
@@ -122,7 +122,7 @@ where
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        &Arc::default(),
+        Arc::default(),
         None,
         (u64::default(), None),
         None,
@@ -236,7 +236,7 @@ fn test_bank_serialize_style(
 ) {
     solana_logger::setup();
     let (mut genesis_config, _) = create_genesis_config(500);
-    genesis_utils::activate_feature(&mut genesis_config, feature_set::epoch_accounts_hash::id());
+    activate_feature(&mut genesis_config, feature_set::epoch_accounts_hash::id());
     genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
     let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
     let eah_start_slot = epoch_accounts_hash::calculation_start(&bank0);
@@ -410,7 +410,7 @@ fn test_bank_serialize_style(
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        &Arc::default(),
+        Arc::default(),
     )
     .unwrap();
     dbank.status_cache = Arc::new(RwLock::new(status_cache));
@@ -509,8 +509,7 @@ fn add_root_and_flush_write_cache(bank: &Bank) {
 #[test]
 fn test_extra_fields_eof() {
     solana_logger::setup();
-    let (mut genesis_config, _) = create_genesis_config(500);
-    activate_feature(&mut genesis_config, disable_fee_calculator::id());
+    let (genesis_config, _) = create_genesis_config(500);
 
     let bank0 = Arc::new(Bank::new_for_tests_with_config(
         &genesis_config,
@@ -571,7 +570,7 @@ fn test_extra_fields_eof() {
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        &Arc::default(),
+        Arc::default(),
     )
     .unwrap();
 
@@ -633,7 +632,7 @@ fn test_extra_fields_full_snapshot_archive() {
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        &Arc::default(),
+        Arc::default(),
     )
     .unwrap();
 
@@ -646,8 +645,7 @@ fn test_extra_fields_full_snapshot_archive() {
 #[test]
 fn test_blank_extra_fields() {
     solana_logger::setup();
-    let (mut genesis_config, _) = create_genesis_config(500);
-    activate_feature(&mut genesis_config, disable_fee_calculator::id());
+    let (genesis_config, _) = create_genesis_config(500);
 
     let bank0 = Arc::new(Bank::new_for_tests_with_config(
         &genesis_config,
@@ -707,7 +705,7 @@ fn test_blank_extra_fields() {
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        &Arc::default(),
+        Arc::default(),
     )
     .unwrap();
 
@@ -721,7 +719,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "8aBQnNxnfKDxGEmMwaq9uLeMh3fw5sKsMGZBsCp15Dmv")]
+    #[frozen_abi(digest = "9BucA5MtPMNNUjADyV27vNgzvDy1RqCLH2gRq5NEuDEF")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]

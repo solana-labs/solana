@@ -24,7 +24,7 @@ mod consts {
     /// Output length for the multiplication operation.
     pub const ALT_BN128_MULTIPLICATION_OUTPUT_LEN: usize = 64;
 
-    /// Output length for pairing operation..
+    /// Output length for pairing operation.
     pub const ALT_BN128_PAIRING_OUTPUT_LEN: usize = 32;
 
     /// Size of the EC point field, in bytes.

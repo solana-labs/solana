@@ -154,7 +154,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndexStorage<
     }
 
     /// allocate BucketMapHolder and InMemAccountsIndex[]
-    pub fn new(bins: usize, config: &Option<AccountsIndexConfig>, exit: &Arc<AtomicBool>) -> Self {
+    pub fn new(bins: usize, config: &Option<AccountsIndexConfig>, exit: Arc<AtomicBool>) -> Self {
         let threads = config
             .as_ref()
             .and_then(|config| config.flush_threads)
@@ -167,11 +167,11 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndexStorage<
             .collect::<Vec<_>>();
 
         Self {
-            _bg_threads: BgThreads::new(&storage, &in_mem, threads, true, exit),
+            _bg_threads: BgThreads::new(&storage, &in_mem, threads, true, &exit),
             storage,
             in_mem,
             startup_worker_threads: Mutex::default(),
-            exit: Arc::clone(exit),
+            exit,
         }
     }
 }

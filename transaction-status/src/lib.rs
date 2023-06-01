@@ -1275,6 +1275,7 @@ pub struct UiParsedMessage {
     pub account_keys: Vec<ParsedAccount>,
     pub recent_blockhash: String,
     pub instructions: Vec<UiInstruction>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub address_table_lookups: Option<Vec<UiAddressTableLookup>>,
 }
 

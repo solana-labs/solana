@@ -192,5 +192,80 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
             ic_msg!(invoke_context, "VerifyPubkeyValidity");
             process_verify_proof::<PubkeyValidityData, PubkeyValidityProofContext>(invoke_context)
         }
+        ProofInstruction::VerifyRangeProofU64 => {
+            if native_programs_consume_cu {
+                invoke_context
+                    .consume_checked(105_066)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            }
+            ic_msg!(invoke_context, "VerifyRangeProof");
+            process_verify_proof::<RangeProofU64Data, RangeProofContext>(invoke_context)
+        }
+        ProofInstruction::VerifyBatchedRangeProofU64 => {
+            if native_programs_consume_cu {
+                invoke_context
+                    .consume_checked(111_478)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            }
+            ic_msg!(invoke_context, "VerifyBatchedRangeProof64");
+            process_verify_proof::<BatchedRangeProofU64Data, BatchedRangeProofContext>(
+                invoke_context,
+            )
+        }
+        ProofInstruction::VerifyBatchedRangeProofU128 => {
+            if native_programs_consume_cu {
+                invoke_context
+                    .consume_checked(204_512)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            }
+            ic_msg!(invoke_context, "VerifyBatchedRangeProof128");
+            process_verify_proof::<BatchedRangeProofU128Data, BatchedRangeProofContext>(
+                invoke_context,
+            )
+        }
+        ProofInstruction::VerifyBatchedRangeProofU256 => {
+            if native_programs_consume_cu {
+                invoke_context
+                    .consume_checked(368_000)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            }
+            ic_msg!(invoke_context, "VerifyBatchedRangeProof256");
+            process_verify_proof::<BatchedRangeProofU256Data, BatchedRangeProofContext>(
+                invoke_context,
+            )
+        }
+        ProofInstruction::VerifyCiphertextCommitmentEquality => {
+            invoke_context
+                .consume_checked(6_424)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            ic_msg!(invoke_context, "VerifyCiphertextCommitmentEquality");
+            process_verify_proof::<
+                CiphertextCommitmentEqualityProofData,
+                CiphertextCommitmentEqualityProofContext,
+            >(invoke_context)
+        }
+        ProofInstruction::VerifyGroupedCiphertext2HandlesValidity => {
+            invoke_context
+                .consume_checked(6_440)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            ic_msg!(invoke_context, "VerifyGroupedCiphertext2HandlesValidity");
+            process_verify_proof::<
+                GroupedCiphertext2HandlesValidityProofData,
+                GroupedCiphertext2HandlesValidityProofContext,
+            >(invoke_context)
+        }
+        ProofInstruction::VerifyBatchedGroupedCiphertext2HandlesValidity => {
+            invoke_context
+                .consume_checked(12_575)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            ic_msg!(
+                invoke_context,
+                "VerifyBatchedGroupedCiphertext2HandlesValidity"
+            );
+            process_verify_proof::<
+                BatchedGroupedCiphertext2HandlesValidityProofData,
+                BatchedGroupedCiphertext2HandlesValidityProofContext,
+            >(invoke_context)
+        }
     }
 });

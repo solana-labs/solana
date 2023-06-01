@@ -1,7 +1,6 @@
 use {
     solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
     solana_sdk::{
-        feature_set,
         instruction::{checked_add, InstructionError},
         nonce::{
             self,
@@ -9,7 +8,7 @@ use {
             State,
         },
         pubkey::Pubkey,
-        system_instruction::{nonce_to_instruction_error, NonceError},
+        system_instruction::SystemError,
         sysvar::rent::Rent,
         transaction_context::{
             BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
@@ -23,10 +22,6 @@ pub fn advance_nonce_account(
     signers: &HashSet<Pubkey>,
     invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
-    let merge_nonce_error_into_system_error = invoke_context
-        .feature_set
-        .is_active(&feature_set::merge_nonce_error_into_system_error::id());
-
     if !account.is_writable() {
         ic_msg!(
             invoke_context,
@@ -53,10 +48,7 @@ pub fn advance_nonce_account(
                     invoke_context,
                     "Advance nonce account: nonce can only advance once per slot"
                 );
-                return Err(nonce_to_instruction_error(
-                    NonceError::NotExpired,
-                    merge_nonce_error_into_system_error,
-                ));
+                return Err(SystemError::NonceBlockhashNotExpired.into());
             }
 
             let new_data = nonce::state::Data::new(
@@ -72,10 +64,7 @@ pub fn advance_nonce_account(
                 "Advance nonce account: Account {} state is invalid",
                 account.get_key()
             );
-            Err(nonce_to_instruction_error(
-                NonceError::BadAccountState,
-                merge_nonce_error_into_system_error,
-            ))
+            Err(InstructionError::InvalidAccountData)
         }
     }
 }
@@ -92,10 +81,6 @@ pub fn withdraw_nonce_account(
 ) -> Result<(), InstructionError> {
     let mut from = instruction_context
         .try_borrow_instruction_account(transaction_context, from_account_index)?;
-    let merge_nonce_error_into_system_error = invoke_context
-        .feature_set
-        .is_active(&feature_set::merge_nonce_error_into_system_error::id());
-
     if !from.is_writable() {
         ic_msg!(
             invoke_context,
@@ -127,10 +112,7 @@ pub fn withdraw_nonce_account(
                         invoke_context,
                         "Withdraw nonce account: nonce can only advance once per slot"
                     );
-                    return Err(nonce_to_instruction_error(
-                        NonceError::NotExpired,
-                        merge_nonce_error_into_system_error,
-                    ));
+                    return Err(SystemError::NonceBlockhashNotExpired.into());
                 }
                 from.set_state(&Versions::new(State::Uninitialized))?;
             } else {
@@ -174,10 +156,6 @@ pub fn initialize_nonce_account(
     rent: &Rent,
     invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
-    let merge_nonce_error_into_system_error = invoke_context
-        .feature_set
-        .is_active(&feature_set::merge_nonce_error_into_system_error::id());
-
     if !account.is_writable() {
         ic_msg!(
             invoke_context,
@@ -214,10 +192,7 @@ pub fn initialize_nonce_account(
                 "Initialize nonce account: Account {} state is invalid",
                 account.get_key()
             );
-            Err(nonce_to_instruction_error(
-                NonceError::BadAccountState,
-                merge_nonce_error_into_system_error,
-            ))
+            Err(InstructionError::InvalidAccountData)
         }
     }
 }
@@ -228,10 +203,6 @@ pub fn authorize_nonce_account(
     signers: &HashSet<Pubkey>,
     invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
-    let merge_nonce_error_into_system_error = invoke_context
-        .feature_set
-        .is_active(&feature_set::merge_nonce_error_into_system_error::id());
-
     if !account.is_writable() {
         ic_msg!(
             invoke_context,
@@ -251,10 +222,7 @@ pub fn authorize_nonce_account(
                 "Authorize nonce account: Account {} state is invalid",
                 account.get_key()
             );
-            Err(nonce_to_instruction_error(
-                NonceError::BadAccountState,
-                merge_nonce_error_into_system_error,
-            ))
+            Err(InstructionError::InvalidAccountData)
         }
         Err(AuthorizeNonceError::MissingRequiredSignature(account_authority)) => {
             ic_msg!(
@@ -278,7 +246,6 @@ mod test {
             hash::hash,
             nonce::{self, State},
             nonce_account::{create_account, verify_nonce_account},
-            system_instruction::SystemError,
             system_program,
             transaction_context::InstructionAccount,
         },

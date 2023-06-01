@@ -93,7 +93,9 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
-        snapshot_utils::{self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path},
+        snapshot_utils::{
+            self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
+        },
     },
     solana_sdk::{
         clock::Slot,
@@ -565,6 +567,9 @@ impl Validator {
         info!("done. {}", start);
 
         snapshot_utils::purge_incomplete_bank_snapshots(&config.snapshot_config.bank_snapshots_dir);
+        snapshot_utils::purge_old_bank_snapshots_at_startup(
+            &config.snapshot_config.bank_snapshots_dir,
+        );
 
         info!("Cleaning orphaned account snapshot directories..");
         if let Err(e) = clean_orphaned_account_snapshot_dirs(
@@ -874,6 +879,7 @@ impl Validator {
         let connection_cache = match use_quic {
             true => {
                 let connection_cache = ConnectionCache::new_with_client_options(
+                    "connection_cache_tpu_quic",
                     tpu_connection_pool_size,
                     None,
                     Some((
@@ -887,7 +893,10 @@ impl Validator {
                 );
                 Arc::new(connection_cache)
             }
-            false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
+            false => Arc::new(ConnectionCache::with_udp(
+                "connection_cache_tpu_udp",
+                tpu_connection_pool_size,
+            )),
         };
 
         // block min prioritization fee cache should be readable by RPC, and writable by validator
@@ -1635,7 +1644,7 @@ fn load_blockstore(
                 .as_ref()
                 .map(|service| service.sender()),
             accounts_update_notifier,
-            exit,
+            exit.clone(),
         );
 
     // Before replay starts, set the callbacks in each of the banks in BankForks so that
@@ -2235,11 +2244,11 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 
 fn cleanup_accounts_paths(config: &ValidatorConfig) {
     for accounts_path in &config.account_paths {
-        move_and_async_delete_path(accounts_path);
+        move_and_async_delete_path_contents(accounts_path);
     }
     if let Some(ref shrink_paths) = config.account_shrink_paths {
         for accounts_path in shrink_paths {
-            move_and_async_delete_path(accounts_path);
+            move_and_async_delete_path_contents(accounts_path);
         }
     }
 }

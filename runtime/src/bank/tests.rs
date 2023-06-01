@@ -2663,8 +2663,7 @@ fn test_insufficient_funds() {
 fn test_executed_transaction_count_post_bank_transaction_count_fix() {
     let mint_amount = sol_to_lamports(1.);
     let (genesis_config, mint_keypair) = create_genesis_config(mint_amount);
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.activate_feature(&feature_set::bank_transaction_count_fix::id());
+    let bank = Bank::new_for_tests(&genesis_config);
     let pubkey = solana_sdk::pubkey::new_rand();
     let amount = genesis_config.rent.minimum_balance(0);
     bank.transfer(amount, &mint_keypair, &pubkey).unwrap();
@@ -7397,7 +7396,7 @@ fn test_bank_load_program() {
     programdata_account.set_rent_epoch(1);
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
-    let program = bank.load_program(&key1, false);
+    let program = bank.load_program(&key1);
     assert!(program.is_ok());
     let program = program.unwrap();
     assert!(matches!(program.program, LoadedProgramType::LegacyV1(_)));
@@ -7555,7 +7554,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     }
 
     let loaded_program = bank
-        .load_program(&program_keypair.pubkey(), false)
+        .load_program(&program_keypair.pubkey())
         .expect("Failed to load the program");
 
     // Invoke deployed program
@@ -9307,7 +9306,7 @@ where
             ..ACCOUNTS_DB_CONFIG_FOR_TESTING
         }),
         None,
-        &Arc::default(),
+        Arc::default(),
     ));
     let vote_and_stake_accounts =
         load_vote_and_stake_accounts(&bank).vote_with_stake_delegations_map;

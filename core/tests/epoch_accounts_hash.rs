@@ -237,11 +237,16 @@ impl Drop for BackgroundServices {
         info!("Stopping background services...");
         self.exit.store(true, Ordering::Relaxed);
 
-        // Join the background threads, and ignore any errors.
         // SAFETY: We do not use any of the `ManuallyDrop` fields again, so `.take()` is OK here.
-        _ = unsafe { ManuallyDrop::take(&mut self.accounts_background_service) }.join();
-        _ = unsafe { ManuallyDrop::take(&mut self.accounts_hash_verifier) }.join();
-        _ = unsafe { ManuallyDrop::take(&mut self.snapshot_packager_service) }.join();
+        unsafe { ManuallyDrop::take(&mut self.accounts_background_service) }
+            .join()
+            .expect("stop AccountsBackgroundService");
+        unsafe { ManuallyDrop::take(&mut self.accounts_hash_verifier) }
+            .join()
+            .expect("stop AccountsHashVerifier");
+        unsafe { ManuallyDrop::take(&mut self.snapshot_packager_service) }
+            .join()
+            .expect("stop SnapshotPackagerService");
 
         info!("Stopping background services... DONE");
     }
@@ -455,7 +460,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
                 true,
                 None,
                 None,
-                &Arc::new(AtomicBool::new(false)),
+                Arc::new(AtomicBool::new(false)),
             )
             .unwrap()
             .0;
@@ -587,11 +592,7 @@ fn test_epoch_accounts_hash_and_warping() {
         None,
     );
     // flush the write cache so warping can calculate the accounts hash from storages
-    bank_forks
-        .read()
-        .unwrap()
-        .working_bank()
-        .force_flush_accounts_cache();
+    bank.force_flush_accounts_cache();
     let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
         &bank,
         &Pubkey::default(),
@@ -624,6 +625,8 @@ fn test_epoch_accounts_hash_and_warping() {
     let eah_start_offset = epoch_accounts_hash::calculation_offset_start(&bank);
     let eah_start_slot_in_next_epoch =
         epoch_schedule.get_first_slot_in_epoch(bank.epoch() + 1) + eah_start_offset;
+    // flush the write cache so warping can calculate the accounts hash from storages
+    bank.force_flush_accounts_cache();
     let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
         &bank,
         &Pubkey::default(),

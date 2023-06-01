@@ -1541,6 +1541,21 @@ fn main() {
                     .help("After 'verify' completes, run a final accounts hash calculation. Final hash calculation could race with accounts background service tasks and assert."),
             )
             .arg(
+                Arg::with_name("partitioned_epoch_rewards_compare_calculation")
+                    .long("partitioned-epoch-rewards-compare-calculation")
+                    .takes_value(false)
+                    .help("Do normal epoch rewards distribution, but also calculate rewards using the partitioned rewards code path and compare the resulting vote and stake accounts")
+                    .hidden(hidden_unless_forced())
+            )
+            .arg(
+                Arg::with_name("partitioned_epoch_rewards_force_enable_single_slot")
+                    .long("partitioned-epoch-rewards-force-enable-single-slot")
+                    .takes_value(false)
+                    .help("Force the partitioned rewards distribution, but distribute all rewards in the first slot in the epoch. This should match consensus with the normal rewards distribution.")
+                    .conflicts_with("partitioned_epoch_rewards_compare_calculation")
+                    .hidden(hidden_unless_forced())
+            )
+            .arg(
                 Arg::with_name("print_accounts_stats")
                     .long("print-accounts-stats")
                     .takes_value(false)
@@ -2186,7 +2201,7 @@ fn main() {
                     wal_recovery_mode,
                     force_update_to_open,
                 );
-                match load_bank_forks(
+                match load_and_process_ledger(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),
@@ -2278,7 +2293,7 @@ fn main() {
                     wal_recovery_mode,
                     force_update_to_open,
                 );
-                match load_bank_forks(
+                match load_and_process_ledger(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),
@@ -2516,7 +2531,7 @@ fn main() {
                     wal_recovery_mode,
                     force_update_to_open,
                 );
-                let (bank_forks, ..) = load_bank_forks(
+                let (bank_forks, ..) = load_and_process_ledger(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),
@@ -2560,7 +2575,7 @@ fn main() {
                     wal_recovery_mode,
                     force_update_to_open,
                 );
-                match load_bank_forks(
+                match load_and_process_ledger(
                     arg_matches,
                     &open_genesis_config_by(&ledger_path, arg_matches),
                     Arc::new(blockstore),
@@ -2730,7 +2745,7 @@ fn main() {
                     output_directory.display()
                 );
 
-                match load_bank_forks(
+                match load_and_process_ledger(
                     arg_matches,
                     &genesis_config,
                     blockstore.clone(),
@@ -3101,7 +3116,7 @@ fn main() {
                     wal_recovery_mode,
                     force_update_to_open,
                 );
-                let (bank_forks, ..) = load_bank_forks(
+                let (bank_forks, ..) = load_and_process_ledger(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),
@@ -3190,7 +3205,7 @@ fn main() {
                     wal_recovery_mode,
                     force_update_to_open,
                 );
-                match load_bank_forks(
+                match load_and_process_ledger(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),

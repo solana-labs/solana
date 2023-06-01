@@ -152,8 +152,8 @@ pub struct EntrySummary {
     pub num_transactions: u64,
 }
 
-impl From<Entry> for EntrySummary {
-    fn from(entry: Entry) -> Self {
+impl From<&Entry> for EntrySummary {
+    fn from(entry: &Entry) -> Self {
         Self {
             num_hashes: entry.num_hashes,
             hash: entry.hash,

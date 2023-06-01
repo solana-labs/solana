@@ -33,14 +33,13 @@ use {
         feature_set::bpf_account_data_direct_mapping,
         feature_set::FeatureSet,
         feature_set::{
-            self, blake3_syscall_enabled, check_syscall_outputs_do_not_overlap,
-            curve25519_syscall_enabled, disable_cpi_setting_executable_and_rent_epoch,
-            disable_deploy_of_alloc_free_syscall, disable_fees_sysvar, enable_alt_bn128_syscall,
-            enable_big_mod_exp_syscall, enable_early_verification_of_account_modifications,
+            self, blake3_syscall_enabled, curve25519_syscall_enabled,
+            disable_cpi_setting_executable_and_rent_epoch, disable_deploy_of_alloc_free_syscall,
+            disable_fees_sysvar, enable_alt_bn128_syscall, enable_big_mod_exp_syscall,
+            enable_early_verification_of_account_modifications,
             error_on_syscall_bpf_function_hash_collisions, libsecp256k1_0_5_upgrade_enabled,
-            limit_secp256k1_recovery_id, reject_callx_r10,
-            stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
-            switch_to_new_elf_parser,
+            reject_callx_r10, stop_sibling_instruction_search_at_parent,
+            stop_truncating_strings_in_syscalls, switch_to_new_elf_parser,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -142,12 +141,12 @@ macro_rules! register_feature_gated_function {
     };
 }
 
-pub fn create_loader<'a>(
+pub fn create_program_runtime_environment<'a>(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,
     reject_deployment_of_broken_elfs: bool,
     debugging_features: bool,
-) -> Result<Arc<BuiltInProgram<InvokeContext<'a>>>, Error> {
+) -> Result<BuiltInProgram<InvokeContext<'a>>, Error> {
     use rand::Rng;
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
@@ -312,7 +311,7 @@ pub fn create_loader<'a>(
     // Log data
     result.register_function(b"sol_log_data", SyscallLogData::call)?;
 
-    Ok(Arc::new(result))
+    Ok(result)
 }
 
 fn translate(
@@ -686,10 +685,7 @@ declare_syscall!(
                         std::mem::size_of_val(bump_seed_ref),
                         address.as_ptr() as usize,
                         std::mem::size_of::<Pubkey>(),
-                    ) && invoke_context
-                        .feature_set
-                        .is_active(&check_syscall_outputs_do_not_overlap::id())
-                    {
+                    ) {
                         return Err(SyscallError::CopyOverlapping.into());
                     }
                     *bump_seed_ref = bump_seed[0];
@@ -873,18 +869,11 @@ declare_syscall!(
                 return Ok(Secp256k1RecoverError::InvalidHash.into());
             }
         };
-        let adjusted_recover_id_val = if invoke_context
-            .feature_set
-            .is_active(&limit_secp256k1_recovery_id::id())
-        {
-            match recovery_id_val.try_into() {
-                Ok(adjusted_recover_id_val) => adjusted_recover_id_val,
-                Err(_) => {
-                    return Ok(Secp256k1RecoverError::InvalidRecoveryId.into());
-                }
+        let adjusted_recover_id_val = match recovery_id_val.try_into() {
+            Ok(adjusted_recover_id_val) => adjusted_recover_id_val,
+            Err(_) => {
+                return Ok(Secp256k1RecoverError::InvalidRecoveryId.into());
             }
-        } else {
-            recovery_id_val as u8
         };
         let recovery_id = match libsecp256k1::RecoveryId::parse(adjusted_recover_id_val) {
             Ok(id) => id,
@@ -1446,10 +1435,7 @@ declare_syscall!(
                 length as usize,
                 program_id_result as *const _ as usize,
                 std::mem::size_of::<Pubkey>(),
-            ) && invoke_context
-                .feature_set
-                .is_active(&check_syscall_outputs_do_not_overlap::id())
-            {
+            ) {
                 return Err(SyscallError::CopyOverlapping.into());
             }
 
@@ -1538,7 +1524,7 @@ declare_syscall!(
                     invoke_context.get_check_size(),
                 )?;
 
-                if (!is_nonoverlapping(
+                if !is_nonoverlapping(
                     result_header as *const _ as usize,
                     std::mem::size_of::<ProcessedSiblingInstruction>(),
                     program_id as *const _ as usize,
@@ -1571,10 +1557,7 @@ declare_syscall!(
                     accounts.as_ptr() as usize,
                     std::mem::size_of::<AccountMeta>()
                         .saturating_mul(result_header.accounts_len as usize),
-                )) && invoke_context
-                    .feature_set
-                    .is_active(&check_syscall_outputs_do_not_overlap::id())
-                {
+                ) {
                     return Err(SyscallError::CopyOverlapping.into());
                 }
 

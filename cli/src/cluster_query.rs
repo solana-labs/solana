@@ -1109,7 +1109,7 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> Pro
     match config.output_format {
         OutputFormat::Json | OutputFormat::JsonCompact => {}
         _ => {
-            let epoch_info = cli_epoch_info.epoch_info.clone();
+            let epoch_info = &cli_epoch_info.epoch_info;
             let average_slot_time_ms = rpc_client
                 .get_recent_performance_samples(Some(60))
                 .ok()

@@ -277,6 +277,7 @@ fn test_program_sbf_sanity() {
     {
         programs.extend_from_slice(&[
             ("alloc", true),
+            ("alt_bn128", true),
             ("sbf_to_sbf", true),
             ("float", true),
             ("multiple_static", true),
@@ -299,6 +300,7 @@ fn test_program_sbf_sanity() {
         programs.extend_from_slice(&[
             ("solana_sbf_rust_128bit", true),
             ("solana_sbf_rust_alloc", true),
+            ("solana_sbf_rust_alt_bn128", true),
             ("solana_sbf_rust_curve25519", true),
             ("solana_sbf_rust_custom_heap", true),
             ("solana_sbf_rust_dep_crate", true),
@@ -1591,6 +1593,9 @@ fn test_program_sbf_test_use_latest_executor() {
         )],
         Some(&mint_keypair.pubkey()),
     );
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
     assert!(bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
         .is_ok());
