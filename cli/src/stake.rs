@@ -1418,7 +1418,6 @@ pub fn process_create_stake_account(
             };
             return Err(CliError::BadParameter(err_msg).into());
         }
-        
         //let minimum_balance = rpc_client
         //    .get_minimum_balance_for_rent_exemption(StakeState::size_of())?
         //    + rpc_client.get_stake_minimum_delegation()?;
