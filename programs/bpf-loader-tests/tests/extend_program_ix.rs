@@ -10,7 +10,7 @@ use {
         signature::{Keypair, Signer},
         system_instruction::{self, SystemError, MAX_PERMITTED_DATA_LENGTH},
         system_program,
-        transaction::Transaction,
+        transaction::{Transaction, TransactionError},
     },
 };
 
@@ -19,10 +19,11 @@ mod common;
 #[tokio::test]
 async fn test_extend_program() {
     let mut context = setup_test_context().await;
+    let program_file = find_file("noop.so").expect("Failed to find the file");
+    let data = read_file(program_file);
 
     let program_address = Pubkey::new_unique();
     let (programdata_address, _) = Pubkey::find_program_address(&[program_address.as_ref()], &id());
-    let program_data_len = 100;
     add_upgradeable_loader_account(
         &mut context,
         &program_address,
@@ -33,6 +34,8 @@ async fn test_extend_program() {
         |_| {},
     )
     .await;
+    let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
+    let program_data_len = data.len() + programdata_data_offset;
     add_upgradeable_loader_account(
         &mut context,
         &programdata_address,
@@ -41,7 +44,7 @@ async fn test_extend_program() {
             upgrade_authority_address: Some(Pubkey::new_unique()),
         },
         program_data_len,
-        |_| {},
+        |account| account.data_as_mut_slice()[programdata_data_offset..].copy_from_slice(&data),
     )
     .await;
 
@@ -69,6 +72,90 @@ async fn test_extend_program() {
     assert_eq!(
         updated_program_data_account.data().len(),
         program_data_len + ADDITIONAL_BYTES as usize
+    );
+}
+
+#[tokio::test]
+async fn test_failed_extend_twice_in_same_slot() {
+    let mut context = setup_test_context().await;
+    let program_file = find_file("noop.so").expect("Failed to find the file");
+    let data = read_file(program_file);
+
+    let program_address = Pubkey::new_unique();
+    let (programdata_address, _) = Pubkey::find_program_address(&[program_address.as_ref()], &id());
+    add_upgradeable_loader_account(
+        &mut context,
+        &program_address,
+        &UpgradeableLoaderState::Program {
+            programdata_address,
+        },
+        UpgradeableLoaderState::size_of_program(),
+        |_| {},
+    )
+    .await;
+    let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
+    let program_data_len = data.len() + programdata_data_offset;
+    add_upgradeable_loader_account(
+        &mut context,
+        &programdata_address,
+        &UpgradeableLoaderState::ProgramData {
+            slot: 0,
+            upgrade_authority_address: Some(Pubkey::new_unique()),
+        },
+        program_data_len,
+        |account| account.data_as_mut_slice()[programdata_data_offset..].copy_from_slice(&data),
+    )
+    .await;
+
+    let client = &mut context.banks_client;
+    let payer = &context.payer;
+    let recent_blockhash = context.last_blockhash;
+    const ADDITIONAL_BYTES: u32 = 42;
+    let transaction = Transaction::new_signed_with_payer(
+        &[extend_program(
+            &program_address,
+            Some(&payer.pubkey()),
+            ADDITIONAL_BYTES,
+        )],
+        Some(&payer.pubkey()),
+        &[payer],
+        recent_blockhash,
+    );
+
+    assert_matches!(client.process_transaction(transaction).await, Ok(()));
+    let updated_program_data_account = client
+        .get_account(programdata_address)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        updated_program_data_account.data().len(),
+        program_data_len + ADDITIONAL_BYTES as usize
+    );
+
+    let recent_blockhash = client
+        .get_new_latest_blockhash(&recent_blockhash)
+        .await
+        .unwrap();
+    // Extending the program in the same slot should fail
+    let transaction = Transaction::new_signed_with_payer(
+        &[extend_program(
+            &program_address,
+            Some(&payer.pubkey()),
+            ADDITIONAL_BYTES,
+        )],
+        Some(&payer.pubkey()),
+        &[payer],
+        recent_blockhash,
+    );
+
+    assert_matches!(
+        client
+            .process_transaction(transaction)
+            .await
+            .unwrap_err()
+            .unwrap(),
+        TransactionError::InstructionError(0, InstructionError::InvalidArgument)
     );
 }
 
@@ -293,6 +380,9 @@ async fn test_extend_program_without_payer() {
     let mut context = setup_test_context().await;
     let rent = context.banks_client.get_rent().await.unwrap();
 
+    let program_file = find_file("noop.so").expect("Failed to find the file");
+    let data = read_file(program_file);
+
     let program_address = Pubkey::new_unique();
     let (programdata_address, _) = Pubkey::find_program_address(&[program_address.as_ref()], &id());
     add_upgradeable_loader_account(
@@ -305,7 +395,8 @@ async fn test_extend_program_without_payer() {
         |_| {},
     )
     .await;
-    let program_data_len = 100;
+    let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
+    let program_data_len = data.len() + programdata_data_offset;
     add_upgradeable_loader_account(
         &mut context,
         &programdata_address,
@@ -314,7 +405,7 @@ async fn test_extend_program_without_payer() {
             upgrade_authority_address: Some(Pubkey::new_unique()),
         },
         program_data_len,
-        |_| {},
+        |account| account.data_as_mut_slice()[programdata_data_offset..].copy_from_slice(&data),
     )
     .await;
 
