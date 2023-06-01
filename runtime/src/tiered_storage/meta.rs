@@ -29,7 +29,7 @@ pub mod tests {
         assert!(!flags.has_rent_epoch());
         assert!(!flags.has_account_hash());
         assert!(!flags.has_write_version());
-        assert_eq!(flags.reserved() as u32, 0u32);
+        assert_eq!(flags.reserved(), 0u32);
 
         assert_eq!(
             std::mem::size_of::<AccountMetaFlags>(),
@@ -67,6 +67,6 @@ pub mod tests {
         verify_flags_serialization(&flags);
 
         // make sure the reserved bits are untouched.
-        assert_eq!(flags.reserved() as u32, 0u32);
+        assert_eq!(flags.reserved(), 0u32);
     }
 }
