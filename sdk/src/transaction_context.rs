@@ -393,7 +393,7 @@ impl TransactionContext {
                         }
                         self.instruction_accounts_lamport_sum(instruction_context)
                             .map(|instruction_accounts_lamport_sum| {
-                                instruction_context.get_instruction_accounts_lamport_sum()
+                                instruction_context.instruction_accounts_lamport_sum
                                     != instruction_accounts_lamport_sum
                             })
                     })
@@ -508,11 +508,6 @@ impl InstructionContext {
     /// That is the number of nested parent Instructions plus one (itself).
     pub fn get_stack_height(&self) -> usize {
         self.nesting_level.saturating_add(1)
-    }
-
-    /// Returns the sum of lamports of the instruction accounts in this Instruction
-    pub fn get_instruction_accounts_lamport_sum(&self) -> u128 {
-        self.instruction_accounts_lamport_sum
     }
 
     /// Number of program accounts
