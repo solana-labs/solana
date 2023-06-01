@@ -12578,8 +12578,8 @@ fn test_hash_rewards_into_partitions_empty() {
     assert_eq!(total, total_after_hash_partition);
 
     assert_eq!(stake_rewards_in_bucket.len(), num_partitions);
-    for i in 0..5 {
-        assert!(stake_rewards_in_bucket[i].is_empty());
+    for bucket in stake_rewards_in_bucket.iter().take(num_partitions) {
+        assert!(bucket.is_empty());
     }
 }
 
