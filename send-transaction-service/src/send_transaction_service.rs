@@ -157,7 +157,7 @@ where
     T: TpuInfo + std::marker::Send + 'static,
 {
     /// Get the leader info, refresh if expired
-    pub fn get_leader_info(&mut self, protocol: Protocol) -> Option<&T> {
+    pub fn get_leader_info(&mut self) -> Option<&T> {
         if let Some(leader_info) = self.leader_info.as_mut() {
             let now = Instant::now();
             let need_refresh = self
@@ -166,7 +166,7 @@ where
                 .unwrap_or(true);
 
             if need_refresh {
-                leader_info.refresh_recent_peers(protocol);
+                leader_info.refresh_recent_peers();
                 self.last_leader_refresh = Some(now);
             }
         }
@@ -462,10 +462,7 @@ impl SendTransactionService {
                     Self::send_transactions_in_batch(
                         &tpu_address,
                         &mut transactions,
-                        leader_info_provider
-                            .lock()
-                            .unwrap()
-                            .get_leader_info(connection_cache.protocol()),
+                        leader_info_provider.lock().unwrap().get_leader_info(),
                         &connection_cache,
                         &config,
                         stats,
@@ -568,7 +565,12 @@ impl SendTransactionService {
         stats: &SendTransactionServiceStats,
     ) {
         // Processing the transactions in batch
-        let addresses = Self::get_tpu_addresses(tpu_address, leader_info, config);
+        let addresses = Self::get_tpu_addresses(
+            tpu_address,
+            leader_info,
+            config,
+            connection_cache.protocol(),
+        );
 
         let wire_transactions = transactions
             .iter()
@@ -694,8 +696,13 @@ impl SendTransactionService {
             let iter = wire_transactions.chunks(config.batch_size);
             for chunk in iter {
                 let mut leader_info_provider = leader_info_provider.lock().unwrap();
-                let leader_info = leader_info_provider.get_leader_info(connection_cache.protocol());
-                let addresses = Self::get_tpu_addresses(tpu_address, leader_info, config);
+                let leader_info = leader_info_provider.get_leader_info();
+                let addresses = Self::get_tpu_addresses(
+                    tpu_address,
+                    leader_info,
+                    config,
+                    connection_cache.protocol(),
+                );
 
                 for address in &addresses {
                     Self::send_transactions(address, chunk, connection_cache, stats);
@@ -754,10 +761,11 @@ impl SendTransactionService {
         tpu_address: &'a SocketAddr,
         leader_info: Option<&'a T>,
         config: &'a Config,
+        protocol: Protocol,
     ) -> Vec<&'a SocketAddr> {
         let addresses = leader_info
             .as_ref()
-            .map(|leader_info| leader_info.get_leader_tpus(config.leader_forward_count));
+            .map(|leader_info| leader_info.get_leader_tpus(config.leader_forward_count, protocol));
         addresses
             .map(|address_list| {
                 if address_list.is_empty() {
