@@ -55,6 +55,8 @@ You should see a line that says: `RPC URL: https://api.testnet.solana.com`
 
 On your local computer, create the 3 keypairs that you will need to run your validator ([docs for reference](../../running-validator/validator-start#generate-identity)):
 
+> **NOTE** Some operators choose to make vanity keypairs for their identity and vote account using the `grind` sub command ([docs for reference](../../running-validator/validator-start#vanity-keypair)).
+
 ```
 solana-keygen new -o validator-keypair.json
 ```
@@ -67,7 +69,7 @@ solana-keygen new -o vote-account-keypair.json
 solana-keygen new -o authorized-withdrawer-keypair.json
 ```
 
-> **IMPORTANT** the `authorized-withdrawer-keypair.json` should be considered very sensitive information.  Many operators choose to use a hardware wallet for the authorized withdrawer key.  The key should always be stored safely. The authorized withdrawer should **never** be stored on the remote machine that the validator software runs on.  For more information, see [validator secuirty best practices](../best-practices/security.md#do-not-store-your-withdrawer-key-on-your-validator)
+> **IMPORTANT** the `authorized-withdrawer-keypair.json` should be considered very sensitive information.  Many operators choose to use a multisig, hardware wallet, or paper wallet for the authorized withdrawer keypair.  A keypair is created on disk in this example for simplicity. Additionally, the withdrawer keypair should always be stored safely. The authorized withdrawer keypair should **never** be stored on the remote machine that the validator software runs on.  For more information, see [validator secuirty best practices](../best-practices/security.md#do-not-store-your-withdrawer-key-on-your-validator)
 
 ## Create a Vote Account
 
@@ -91,25 +93,25 @@ Next, you need to deposit some SOL into that keypair account in order create a t
 solana airdrop 1
 ```
 
-The above command does not work on mainnet, so you will have to acquire some SOL and transfer it into this keypair's account if you are setting up a mainnet validator.
+> **NOTE** The `airdrop` sub command does not work on mainnet, so you will have to acquire SOL and transfer it into this keypair's account if you are setting up a mainnet validator.
 
-Now, use the Solana network to create a vote account.
+Now, use the Solana cluster to create a vote account.
 
-As a reminder, all commands mentioned so far **should be done on your trusted computer** and **NOT** on a server where you intend to run your validator. It is especially important that the following command is done on a _trusted computer_:
+As a reminder, all commands mentioned so far **should be done on your trusted computer** and **NOT** on a server where you intend to run your validator. It is especially important that the following command is done on a **trusted computer**:
 
 ```
 solana create-vote-account -ut \
-    -k ./validator-keypair.json \
+    --fee-payer ./validator-keypair.json \
     ./vote-account-keypair.json \
     ./validator-keypair.json \
     ./authorized-withdrawer-keypair.json
 ```
 
-> Note `-ut` tells the cli command that we would like to use the testnet cluster.  `-k`is specifying the keypair for fee paying.  Both flags are not necessary if you configured the solana cli properly above but they are useful to ensure you're using the intended cluster and keypair.
+> Note `-ut` tells the cli command that we would like to use the testnet cluster.  `--fee-payer` specifies the keypair that will be used to pay the transaction fees.  Both flags are not necessary if you configured the solana cli properly above but they are useful to ensure you're using the intended cluster and keypair.
 
 ## Save the Withdrawer Keypair Securely
 
-If you chose to create the `authorized-withdrawer-keypair.json` locally (not using a hardware wallet), make sure your `authorized-withdrawer-keypair.json` is stored in a safe place, then delete it from your local machine.
+Make sure your `authorized-withdrawer-keypair.json` is stored in a safe place.  If you have chosen to create a keypair on disk, you should first backup the keypair and then delete it from your local machine.
 
 **IMPORTANT**: If you lose your withdrawer key pair, you will lose control of your vote account. You will not be able to withdraw tokens from the vote account or update the withdrawer. Make sure to store the `authorized-withdrawer-keypair.json` securely before you move on.
 
@@ -118,7 +120,7 @@ If you chose to create the `authorized-withdrawer-keypair.json` locally (not usi
 Connect to your remote server. This is specific to your server but will look something like this:
 
 ```
-ssh root@<server.hostname>
+ssh user@<server.hostname>
 ```
 
 You will have to check with your server provider to get the correct user account and hostname that you will ssh into.
@@ -312,6 +314,10 @@ On the validator server, switch to the `sol` user:
 ```
 su - sol
 ```
+
+## Install The Solana CLI on Remote Machine
+
+Your remote machine will need the Solana cli installed to run the validator software.  Refer again to [Solana's Install Tool](../../cli/install-solana-cli-tools#use-solanas-install-tool) or [build from source](../../cli/install-solana-cli-tools#build-from-source).  It is best for operators to build from source rather than using the pre built binaries.
 
 ## Create A Validator Startup Script
 
