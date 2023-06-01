@@ -2279,9 +2279,6 @@ impl Bank {
         let feature_flag = self.feature_set
             .is_active(&feature_set::last_restart_slot_sysvar::id());
 
-        println!("FEATURE FLAG last_restart_slot?: {}",
-                 feature_flag);
-
         if feature_flag {
             let last_restart_slot = {
                 let tmp = self.hard_forks();

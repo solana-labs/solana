@@ -341,8 +341,6 @@ pub mod stake_split_uses_rent_sysvar {
     solana_sdk::declare_id!("FQnc7U4koHqWgRvFaBJjZnV8VPg6L6wWK33yJeDp4yvV");
 }
 
-
-
 pub mod add_get_minimum_delegation_instruction_to_stake_program {
     solana_sdk::declare_id!("St8k9dVXP97xT6faW24YmRSYConLbhsMJA4TJTBLmMT");
 }
