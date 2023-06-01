@@ -2157,7 +2157,7 @@ mod tests {
                 unix_timestamp: 0,
                 custodian,
             },
-            amount: SpendAmount::Some(30),
+            amount: SpendAmount::Some(42_000_000_000),
             sign_only: false,
             dump_transaction_message: false,
             blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
