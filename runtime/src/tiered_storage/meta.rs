@@ -26,9 +26,9 @@ pub mod tests {
     fn test_account_meta_flags_new() {
         let flags = AccountMetaFlags::new();
 
-        assert_eq!(flags.has_rent_epoch(), false);
-        assert_eq!(flags.has_account_hash(), false);
-        assert_eq!(flags.has_write_version(), false);
+        assert!(!flags.has_rent_epoch());
+        assert!(!flags.has_account_hash());
+        assert!(!flags.has_write_version());
         assert_eq!(flags.reserved() as u32, 0u32);
 
         assert_eq!(
@@ -47,23 +47,23 @@ pub mod tests {
 
         flags.set_has_rent_epoch(true);
 
-        assert_eq!(flags.has_rent_epoch(), true);
-        assert_eq!(flags.has_account_hash(), false);
-        assert_eq!(flags.has_write_version(), false);
+        assert!(flags.has_rent_epoch());
+        assert!(!flags.has_account_hash());
+        assert!(!flags.has_write_version());
         verify_flags_serialization(&flags);
 
         flags.set_has_account_hash(true);
 
-        assert_eq!(flags.has_rent_epoch(), true);
-        assert_eq!(flags.has_account_hash(), true);
-        assert_eq!(flags.has_write_version(), false);
+        assert!(flags.has_rent_epoch());
+        assert!(flags.has_account_hash());
+        assert!(!flags.has_write_version());
         verify_flags_serialization(&flags);
 
         flags.set_has_write_version(true);
 
-        assert_eq!(flags.has_rent_epoch(), true);
-        assert_eq!(flags.has_account_hash(), true);
-        assert_eq!(flags.has_write_version(), true);
+        assert!(flags.has_rent_epoch());
+        assert!(flags.has_account_hash());
+        assert!(flags.has_write_version());
         verify_flags_serialization(&flags);
 
         // make sure the reserved bits are untouched.
