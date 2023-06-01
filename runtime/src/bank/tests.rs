@@ -7353,8 +7353,6 @@ fn test_bank_load_program() {
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
     let program = bank.load_program(&key1);
-    assert!(program.is_ok());
-    let program = program.unwrap();
     assert!(matches!(program.program, LoadedProgramType::LegacyV1(_)));
     assert_eq!(
         program.account_size,
@@ -7509,9 +7507,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         assert_eq!(*elf.get(i).unwrap(), *byte);
     }
 
-    let loaded_program = bank
-        .load_program(&program_keypair.pubkey())
-        .expect("Failed to load the program");
+    let loaded_program = bank.load_program(&program_keypair.pubkey());
 
     // Invoke deployed program
     mock_process_instruction(
