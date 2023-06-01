@@ -1420,11 +1420,11 @@ pub fn process_create_stake_account(
         }
 
         let minimum_balance =
-            rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())?;
+            rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())? + rpc_client.get_stake_minimum_delegation()?;
 
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
-                "need at least {minimum_balance} lamports for stake account to be rent exempt, provided lamports: {lamports}"
+                "need at least {minimum_balance} lamports for new stake account to be rent exempt and meet minimum delegation, provided lamports: {lamports}"
             ))
             .into());
         }
@@ -1851,17 +1851,6 @@ pub fn process_split_stake(
     let split_stake_account = config.signers[split_stake_account];
     let fee_payer = config.signers[fee_payer];
 
-    let new_source_balance = rpc_client.get_balance(stake_account_pubkey)? - lamports;
-    let check_source_stake_account = check_stake_minimum_delegation(rpc_client, new_source_balance);
-    if check_source_stake_account.is_err() {
-        check_source_stake_account?;
-    }
-
-    let check_split_target_account = check_stake_minimum_delegation(rpc_client, lamports);
-    if check_split_target_account.is_err() {
-        check_split_target_account?;
-    }
-
     if split_stake_account_seed.is_none() {
         check_unique_pubkeys(
             (&fee_payer.pubkey(), "fee-payer keypair".to_string()),
@@ -1904,11 +1893,19 @@ pub fn process_split_stake(
         }
 
         let minimum_balance =
-            rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())?;
-
+            rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())? + rpc_client.get_stake_minimum_delegation()?;
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
-                "need at least {minimum_balance} lamports for stake account to be rent exempt, provided lamports: {lamports}"
+                "need at least {minimum_balance} lamports for new stake account to be rent exempt and meet minimum delegation, provided lamports: {lamports}"
+            ))
+            .into());
+        }
+
+        let new_source_balance = 
+            rpc_client.get_balance(stake_account_pubkey)? - lamports;
+        if new_source_balance < minimum_balance {
+            return Err(CliError::BadParameter(format!(
+                "need at least {minimum_balance} lamports to remain in source stake account to be rent exempt and meet minimum delegation, remaining lamports: {new_source_balance}"
             ))
             .into());
         }
@@ -2520,12 +2517,6 @@ pub fn process_delegate_stake(
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
 
-    let stake_balance = rpc_client.get_balance(stake_account_pubkey)?;
-    let check_min_delegation = check_stake_minimum_delegation(rpc_client, stake_balance);
-    if check_min_delegation.is_err() {
-        check_min_delegation?;
-    }
-
     let redelegation_stake_account = redelegation_stake_account.map(|index| config.signers[index]);
     if let Some(redelegation_stake_account) = &redelegation_stake_account {
         check_unique_pubkeys(
@@ -2588,6 +2579,19 @@ pub fn process_delegate_stake(
             } else {
                 println!("--force supplied, ignoring: {err}");
             }
+        }
+
+        // Check that the stake account meets the minimum balance required
+        let minimum_balance =
+            rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())? + rpc_client.get_stake_minimum_delegation()?;
+        let stake_account_balance =
+            rpc_client.get_balance(stake_account_pubkey)?;
+
+        if stake_account_balance < minimum_balance {
+            return Err(CliError::BadParameter(format!(
+                "need at least {minimum_balance} lamports to be rent exempt and meet minimum delegation, provided lamports: {stake_account_balance}"
+            ))
+            .into());
         }
     }
 
@@ -2652,21 +2656,6 @@ pub fn process_delegate_stake(
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
         log_instruction_custom_error::<StakeError>(result, config)
-    }
-}
-
-pub fn check_stake_minimum_delegation(
-    rpc_client: &RpcClient,
-    balance: u64,
-) -> Result<(), CliError> {
-    let minimum_delegation_sol = rpc_client.get_stake_minimum_delegation()?;
-    let minimum_balance =
-        rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())?;
-
-    if balance < minimum_balance + minimum_delegation_sol {
-        Err(CliError::BadParameter(format!("Stake account balance is too low for minimum delegation requirement of {:?} SOL and rent exempt reserve of {:?} lamports", minimum_delegation_sol, minimum_balance)))
-    } else {
-        Ok(())
     }
 }
 
