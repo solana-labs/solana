@@ -121,15 +121,9 @@ pub fn load_and_process_ledger(
         Some(halt_slot) => {
             if halt_slot < starting_slot {
                 eprintln!(
-<<<<<<< HEAD
-                "Unable to load bank forks at slot {halt_slot} because it is less than the starting slot {starting_slot}. \
-                The starting slot will be the latest snapshot slot, or genesis if --no-snapshot flag specified or no snapshots found."
-            );
-=======
                     "Unable to process blockstore from starting slot {starting_slot} to \
                     {halt_slot}; the ending slot is less than the starting slot. {start_slot_msg}"
                 );
->>>>>>> 1d6b03358 (ledger-tool: Rename load_frozen_forks() and adjust error messages (#31903))
                 exit(1);
             }
             // Check if we have the slot data necessary to replay from starting_slot to >= halt_slot.
