@@ -62,7 +62,10 @@ use {
     solana_system_program::{get_system_account_kind, SystemAccountKind},
     std::{
         cmp::Reverse,
-        collections::{hash_map, BinaryHeap, HashMap, HashSet},
+        collections::{
+            hash_map::{self, Entry},
+            BinaryHeap, HashMap, HashSet,
+        },
         num::NonZeroUsize,
         ops::RangeBounds,
         path::PathBuf,
@@ -291,7 +294,7 @@ impl Accounts {
         key: &Pubkey,
         feature_set: &FeatureSet,
         program: &LoadedProgram,
-        program_accounts: &HashMap<Pubkey, &Pubkey>,
+        program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     ) -> Result<AccountSharedData> {
         // Check for tombstone
         let result = match &program.program {
@@ -314,7 +317,7 @@ impl Accounts {
         // So the account data is not needed. Return a dummy AccountSharedData with meta
         // information.
         let mut program_account = AccountSharedData::default();
-        let program_owner = program_accounts
+        let (program_owner, _count) = program_accounts
             .get(key)
             .ok_or(TransactionError::AccountNotFound)?;
         program_account.set_owner(**program_owner);
@@ -333,7 +336,7 @@ impl Accounts {
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
         _reward_interval: RewardInterval,
-        program_accounts: &HashMap<Pubkey, &Pubkey>,
+        program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Result<LoadedTransaction> {
         // NOTE: this check will never fail because `tx` is sanitized
@@ -637,8 +640,8 @@ impl Accounts {
         lock_results: &mut [TransactionCheckResult],
         program_owners: &[&'a Pubkey],
         hash_queue: &BlockhashQueue,
-    ) -> HashMap<Pubkey, &'a Pubkey> {
-        let mut result = HashMap::new();
+    ) -> HashMap<Pubkey, (&'a Pubkey, u64)> {
+        let mut result: HashMap<Pubkey, (&'a Pubkey, u64)> = HashMap::new();
         lock_results.iter_mut().zip(txs).for_each(|etx| {
             if let ((Ok(()), nonce), tx) = etx {
                 if nonce
@@ -649,17 +652,27 @@ impl Accounts {
                     })
                     .is_some()
                 {
+                    let mut processed_keys = vec![];
                     tx.message().account_keys().iter().for_each(|key| {
-                        if !result.contains_key(key) {
-                            if let Ok(index) = self.accounts_db.account_matches_owners(
-                                ancestors,
-                                key,
-                                program_owners,
-                            ) {
-                                program_owners
-                                    .get(index)
-                                    .and_then(|owner| result.insert(*key, *owner));
+                        if !processed_keys.contains(key) {
+                            match result.entry(*key) {
+                                Entry::Occupied(mut entry) => {
+                                    let (_, count) = entry.get_mut();
+                                    saturating_add_assign!(*count, 1);
+                                }
+                                Entry::Vacant(entry) => {
+                                    if let Ok(index) = self.accounts_db.account_matches_owners(
+                                        ancestors,
+                                        key,
+                                        program_owners,
+                                    ) {
+                                        program_owners
+                                            .get(index)
+                                            .map(|owner| entry.insert((*owner, 1)));
+                                    }
+                                }
                             }
+                            processed_keys.push(*key);
                         }
                     });
                 } else {
@@ -686,7 +699,7 @@ impl Accounts {
         fee_structure: &FeeStructure,
         account_overrides: Option<&AccountOverrides>,
         in_reward_interval: RewardInterval,
-        program_accounts: &HashMap<Pubkey, &Pubkey>,
+        program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Vec<TransactionLoadResult> {
         txs.iter()
@@ -2067,7 +2080,12 @@ mod tests {
             &[&keypair2],
             &[non_program_pubkey2],
             Hash::new_unique(),
-            vec![account4_pubkey, account3_pubkey, account2_pubkey],
+            vec![
+                account4_pubkey,
+                account4_pubkey,
+                account3_pubkey,
+                account2_pubkey,
+            ],
             vec![CompiledInstruction::new(1, &(), vec![0])],
         );
         hash_queue.register_hash(&tx2.message().recent_blockhash, 0);
@@ -2088,13 +2106,14 @@ mod tests {
             programs
                 .get(&account3_pubkey)
                 .expect("failed to find the program account"),
-            &&program1_pubkey
+            &(&program1_pubkey, 2)
         );
+        // account4_pubkey is listed twice in tx2. Test that the usage count goes up by only 1.
         assert_eq!(
             programs
                 .get(&account4_pubkey)
                 .expect("failed to find the program account"),
-            &&program2_pubkey
+            &(&program2_pubkey, 1)
         );
     }
 
@@ -2197,7 +2216,7 @@ mod tests {
             programs
                 .get(&account3_pubkey)
                 .expect("failed to find the program account"),
-            &&program1_pubkey
+            &(&program1_pubkey, 1)
         );
         assert_eq!(lock_results[1].0, Err(TransactionError::BlockhashNotFound));
     }
