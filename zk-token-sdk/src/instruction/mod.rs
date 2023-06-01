@@ -1,6 +1,8 @@
+pub mod batched_grouped_ciphertext_validity;
 pub mod batched_range_proof;
 pub mod ciphertext_ciphertext_equality;
 pub mod ciphertext_commitment_equality;
+pub mod grouped_ciphertext_validity;
 pub mod pubkey_validity;
 pub mod range_proof;
 pub mod transfer;
@@ -11,6 +13,10 @@ pub mod zero_balance;
 use crate::errors::ProofError;
 use num_derive::{FromPrimitive, ToPrimitive};
 pub use {
+    batched_grouped_ciphertext_validity::{
+        BatchedGroupedCiphertext2HandlesValidityProofContext,
+        BatchedGroupedCiphertext2HandlesValidityProofData,
+    },
     batched_range_proof::{
         batched_range_proof_u128::BatchedRangeProofU128Data,
         batched_range_proof_u256::BatchedRangeProofU256Data,
@@ -22,6 +28,9 @@ pub use {
     },
     ciphertext_commitment_equality::{
         CiphertextCommitmentEqualityProofContext, CiphertextCommitmentEqualityProofData,
+    },
+    grouped_ciphertext_validity::{
+        GroupedCiphertext2HandlesValidityProofContext, GroupedCiphertext2HandlesValidityProofData,
     },
     pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
     range_proof::{RangeProofContext, RangeProofU64Data},
@@ -49,6 +58,8 @@ pub enum ProofType {
     BatchedRangeProofU128,
     BatchedRangeProofU256,
     CiphertextCommitmentEquality,
+    GroupedCiphertext2HandlesValidity,
+    BatchedGroupedCiphertext2HandlesValidity,
 }
 
 pub trait ZkProofData<T: Pod> {

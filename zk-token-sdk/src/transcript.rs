@@ -37,6 +37,13 @@ pub trait TranscriptProtocol {
     /// Append an ElGamal ciphertext with the given `label`.
     fn append_ciphertext(&mut self, label: &'static [u8], point: &pod::ElGamalCiphertext);
 
+    /// Append a grouped ElGamal ciphertext with the given `label`.
+    fn append_grouped_ciphertext_2_handles(
+        &mut self,
+        label: &'static [u8],
+        point: &pod::GroupedElGamalCiphertext2Handles,
+    );
+
     /// Append a Pedersen commitment with the given `label`.
     fn append_commitment(&mut self, label: &'static [u8], point: &pod::PedersenCommitment);
 
@@ -135,6 +142,14 @@ impl TranscriptProtocol for Transcript {
 
     fn append_ciphertext(&mut self, label: &'static [u8], ciphertext: &pod::ElGamalCiphertext) {
         self.append_message(label, &ciphertext.0);
+    }
+
+    fn append_grouped_ciphertext_2_handles(
+        &mut self,
+        label: &'static [u8],
+        grouped_ciphertext: &pod::GroupedElGamalCiphertext2Handles,
+    ) {
+        self.append_message(label, &grouped_ciphertext.0);
     }
 
     fn append_commitment(&mut self, label: &'static [u8], commitment: &pod::PedersenCommitment) {
