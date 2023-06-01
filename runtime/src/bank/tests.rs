@@ -12565,8 +12565,9 @@ fn test_hash_rewards_into_partitions_empty() {
     let stake_rewards = vec![];
     let total = 0;
 
+    let num_partitions = 5;
     let stake_rewards_in_bucket =
-        Bank::hash_rewards_into_partitions(&stake_rewards, &Hash::default(), 1);
+        Bank::hash_rewards_into_partitions(&stake_rewards, &Hash::default(), num_partitions);
 
     let total_after_hash_partition = stake_rewards_in_bucket
         .iter()
@@ -12575,6 +12576,11 @@ fn test_hash_rewards_into_partitions_empty() {
         .sum::<i64>();
 
     assert_eq!(total, total_after_hash_partition);
+
+    assert_eq!(stake_rewards_in_bucket.len(), num_partitions);
+    for i in 0..5 {
+        assert!(stake_rewards_in_bucket[i].is_empty());
+    }
 }
 
 fn compare(a: &StakeRewards, b: &StakeRewards) {
