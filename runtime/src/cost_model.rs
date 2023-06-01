@@ -504,7 +504,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cost_model_calculate_cost() {
+    fn test_cost_model_calculate_cost_all_default() {
         let (mint_keypair, start_hash) = test_setup();
         let tx = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
@@ -517,10 +517,124 @@ mod tests {
         let expected_execution_cost = BUILT_IN_INSTRUCTION_COSTS
             .get(&system_program::id())
             .unwrap();
+        // feature `include_loaded_accounts_data_size_in_fee_calculation` enabled, using
+        // default loaded_accounts_data_size_limit
+        let expected_loaded_accounts_data_size_cost = (64 * 1024 * 1024) / (32 * 1024) * 8;
 
         let tx_cost = CostModel::calculate_cost(&tx, &FeatureSet::all_enabled());
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
         assert_eq!(*expected_execution_cost, tx_cost.builtins_execution_cost);
         assert_eq!(2, tx_cost.writable_accounts.len());
+        assert_eq!(
+            expected_loaded_accounts_data_size_cost,
+            tx_cost.loaded_accounts_data_size_cost
+        );
+    }
+
+    #[test]
+    fn test_cost_model_calculate_cost_disabled_feature() {
+        let (mint_keypair, start_hash) = test_setup();
+        let tx = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            &mint_keypair,
+            &Keypair::new().pubkey(),
+            2,
+            start_hash,
+        ));
+
+        let feature_set = FeatureSet::default();
+        assert!(!feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()));
+        let expected_account_cost = WRITE_LOCK_UNITS * 2;
+        let expected_execution_cost = BUILT_IN_INSTRUCTION_COSTS
+            .get(&system_program::id())
+            .unwrap();
+        // feature `include_loaded_accounts_data_size_in_fee_calculation` not enabled
+        let expected_loaded_accounts_data_size_cost = 0;
+
+        let tx_cost = CostModel::calculate_cost(&tx, &feature_set);
+        assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
+        assert_eq!(*expected_execution_cost, tx_cost.builtins_execution_cost);
+        assert_eq!(2, tx_cost.writable_accounts.len());
+        assert_eq!(
+            expected_loaded_accounts_data_size_cost,
+            tx_cost.loaded_accounts_data_size_cost
+        );
+    }
+
+    #[test]
+    fn test_cost_model_calculate_cost_enabled_feature_with_limit() {
+        let (mint_keypair, start_hash) = test_setup();
+        let to_keypair = Keypair::new();
+        let data_limit = 32 * 1024u32;
+        let tx =
+            SanitizedTransaction::from_transaction_for_tests(Transaction::new_signed_with_payer(
+                &[
+                    system_instruction::transfer(&mint_keypair.pubkey(), &to_keypair.pubkey(), 2),
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_limit),
+                ],
+                Some(&mint_keypair.pubkey()),
+                &[&mint_keypair],
+                start_hash,
+            ));
+
+        let feature_set = FeatureSet::all_enabled();
+        assert!(feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()));
+        let expected_account_cost = WRITE_LOCK_UNITS * 2;
+        let expected_execution_cost = BUILT_IN_INSTRUCTION_COSTS
+            .get(&system_program::id())
+            .unwrap()
+            + BUILT_IN_INSTRUCTION_COSTS
+                .get(&compute_budget::id())
+                .unwrap();
+        // feature `include_loaded_accounts_data_size_in_fee_calculation` is enabled, accounts data
+        // size limit is set.
+        let expected_loaded_accounts_data_size_cost = (data_limit as u64) / (32 * 1024) * 8;
+
+        let tx_cost = CostModel::calculate_cost(&tx, &feature_set);
+        assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
+        assert_eq!(expected_execution_cost, tx_cost.builtins_execution_cost);
+        assert_eq!(2, tx_cost.writable_accounts.len());
+        assert_eq!(
+            expected_loaded_accounts_data_size_cost,
+            tx_cost.loaded_accounts_data_size_cost
+        );
+    }
+
+    #[test]
+    fn test_cost_model_calculate_cost_disabled_feature_with_limit() {
+        let (mint_keypair, start_hash) = test_setup();
+        let to_keypair = Keypair::new();
+        let data_limit = 32 * 1024u32;
+        let tx =
+            SanitizedTransaction::from_transaction_for_tests(Transaction::new_signed_with_payer(
+                &[
+                    system_instruction::transfer(&mint_keypair.pubkey(), &to_keypair.pubkey(), 2),
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_limit),
+                ],
+                Some(&mint_keypair.pubkey()),
+                &[&mint_keypair],
+                start_hash,
+            ));
+
+        let feature_set = FeatureSet::default();
+        assert!(!feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()));
+        let expected_account_cost = WRITE_LOCK_UNITS * 2;
+        let expected_execution_cost = BUILT_IN_INSTRUCTION_COSTS
+            .get(&system_program::id())
+            .unwrap()
+            + BUILT_IN_INSTRUCTION_COSTS
+                .get(&compute_budget::id())
+                .unwrap();
+        // feature `include_loaded_accounts_data_size_in_fee_calculation` is not enabled, accounts data
+        // size limit is set.
+        let expected_loaded_accounts_data_size_cost = 0;
+
+        let tx_cost = CostModel::calculate_cost(&tx, &feature_set);
+        assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
+        assert_eq!(expected_execution_cost, tx_cost.builtins_execution_cost);
+        assert_eq!(2, tx_cost.writable_accounts.len());
+        assert_eq!(
+            expected_loaded_accounts_data_size_cost,
+            tx_cost.loaded_accounts_data_size_cost
+        );
     }
 }
