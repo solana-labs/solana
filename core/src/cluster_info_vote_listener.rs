@@ -264,18 +264,20 @@ impl ClusterInfoVoteListener {
                 })
                 .unwrap()
         };
-        let exit_ = exit.clone();
-        let bank_send_thread = Builder::new()
-            .name("solCiBankSend".to_string())
-            .spawn(move || {
-                let _ = Self::bank_send_loop(
-                    exit_,
-                    verified_vote_label_packets_receiver,
-                    poh_recorder,
-                    &verified_packets_sender,
-                );
-            })
-            .unwrap();
+        let bank_send_thread = {
+            let exit = exit.clone();
+            Builder::new()
+                .name("solCiBankSend".to_string())
+                .spawn(move || {
+                    let _ = Self::bank_send_loop(
+                        exit,
+                        verified_vote_label_packets_receiver,
+                        poh_recorder,
+                        &verified_packets_sender,
+                    );
+                })
+                .unwrap()
+        };
 
         let send_thread = Builder::new()
             .name("solCiProcVotes".to_string())
@@ -1447,7 +1449,7 @@ mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks,
@@ -1563,7 +1565,7 @@ mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks,

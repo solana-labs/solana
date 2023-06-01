@@ -304,7 +304,7 @@ pub fn load_and_process_ledger(
             transaction_notifier,
             blockstore.clone(),
             false,
-            &exit,
+            exit.clone(),
         );
         (
             Some(TransactionStatusSender {
