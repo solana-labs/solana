@@ -170,6 +170,10 @@ impl Stats {
             );
         }
     }
+
+    pub fn reset(&mut self) {
+        *self = Stats::default();
+    }
 }
 
 #[derive(Debug, Default)]
