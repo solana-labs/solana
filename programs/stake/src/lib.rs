@@ -29,7 +29,6 @@ pub fn get_minimum_delegation(feature_set: &FeatureSet) -> u64 {
         MINIMUM_DELEGATION_SOL * LAMPORTS_PER_SOL
     } else {
         #[allow(deprecated)]
-        //solana_sdk::stake::MINIMUM_STAKE_DELEGATION
-        (0.9 * LAMPORTS_PER_SOL) as u64
+        solana_sdk::stake::MINIMUM_STAKE_DELEGATION
     }
 }
