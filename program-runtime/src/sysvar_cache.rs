@@ -5,6 +5,7 @@ use solana_sdk::sysvar::{
 use {
     crate::invoke_context::InvokeContext,
     solana_sdk::{
+        feature_set, feature_set::FeatureSet,
         instruction::InstructionError,
         pubkey::Pubkey,
         sysvar::{
@@ -15,8 +16,6 @@ use {
     },
     std::sync::Arc,
 };
-use solana_sdk::feature_set;
-use solana_sdk::feature_set::FeatureSet;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl ::solana_frozen_abi::abi_example::AbiExample for SysvarCache {

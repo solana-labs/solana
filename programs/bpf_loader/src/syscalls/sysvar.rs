@@ -1,4 +1,3 @@
-use solana_rbpf::error::EbpfError;
 use {super::*, crate::declare_syscall};
 
 fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
