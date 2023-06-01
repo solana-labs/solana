@@ -461,7 +461,7 @@ mod tests {
     fn test_check_url() {
         let url = "http://test.com";
         assert_eq!(check_url(url.to_string()), Ok(()));
-        let long_url = "http://7cLvFwLCbyHuXQ1RGzhCMobAWYPMSZ3VbUml1qWi1nkc3FD7zj9hzTZzMvYJ.com";
+        let long_url = "http://7cLvFwLCbyHuXQ1RGzhCMobAWYPMSZ3VbUml1CMobAWYPMSZ3VbUml1qWi1nkc3FD7zj9hzTZzMvYJ.com";
         assert!(check_url(long_url.to_string()).is_err());
         let non_url = "not parseable";
         assert!(check_url(non_url.to_string()).is_err());
