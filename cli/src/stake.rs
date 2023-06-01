@@ -1398,7 +1398,7 @@ pub fn process_create_stake_account(
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
-    let (message, _lamports) = resolve_spend_tx_and_check_account_balances(
+    let (message, lamports) = resolve_spend_tx_and_check_account_balances(
         rpc_client,
         sign_only,
         amount,
@@ -1418,16 +1418,16 @@ pub fn process_create_stake_account(
             };
             return Err(CliError::BadParameter(err_msg).into());
         }
-        //let minimum_balance = rpc_client
-        //    .get_minimum_balance_for_rent_exemption(StakeState::size_of())?
-        //    + rpc_client.get_stake_minimum_delegation()?;
+        let minimum_balance = rpc_client
+            .get_minimum_balance_for_rent_exemption(StakeState::size_of())?
+            + rpc_client.get_stake_minimum_delegation()?;
 
-        //if lamports < minimum_balance {
-        //    return Err(CliError::BadParameter(format!(
-        //        "need at least {minimum_balance} lamports for new stake account to be rent exempt and meet minimum delegation, provided lamports: {lamports}"
-        //    ))
-        //    .into());
-        //}
+        if lamports < minimum_balance {
+            return Err(CliError::BadParameter(format!(
+                "need at least {minimum_balance} lamports for new stake account to be rent exempt and meet minimum delegation, provided lamports: {lamports}"
+            ))
+            .into());
+        }
 
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = solana_rpc_client_nonce_utils::get_account_with_commitment(

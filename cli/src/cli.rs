@@ -2157,7 +2157,7 @@ mod tests {
                 unix_timestamp: 0,
                 custodian,
             },
-            amount: SpendAmount::Some(42_000_000_000),
+            amount: SpendAmount::Some(30),
             sign_only: false,
             dump_transaction_message: false,
             blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -2170,7 +2170,7 @@ mod tests {
         };
         config.signers = vec![&keypair, &bob_keypair];
         let result = process_command(&config);
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "{:?}", result);
 
         let stake_account_pubkey = solana_sdk::pubkey::new_rand();
         let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -2225,13 +2225,13 @@ mod tests {
             memo: None,
             split_stake_account: 1,
             seed: None,
-            lamports: 30,
+            lamports: 25,
             fee_payer: 0,
             compute_unit_price: None,
         };
         config.signers = vec![&keypair, &split_stake_account];
         let result = process_command(&config);
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "{:?}", result);
 
         let stake_account_pubkey = solana_sdk::pubkey::new_rand();
         let source_stake_account_pubkey = solana_sdk::pubkey::new_rand();

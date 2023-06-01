@@ -4309,7 +4309,7 @@ mod tests {
 
     #[test]
     fn test_get_stake_minimum_delegation() {
-        let expected_minimum_delegation: u64 = 123_456_789;
+        let expected_minimum_delegation: u64 = 5;
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
         // Test: without commitment
