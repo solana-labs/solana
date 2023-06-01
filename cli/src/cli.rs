@@ -2364,6 +2364,106 @@ mod tests {
         };
         assert!(process_command(&config).is_err());
 
+        // Create stake: Check rent check (20 lamports)
+        let bob_keypair = Keypair::new();
+        let bob_pubkey = bob_keypair.pubkey();
+        let custodian = solana_sdk::pubkey::new_rand();
+        config.command = CliCommand::CreateStakeAccount {
+            stake_account: 1,
+            seed: None,
+            staker: None,
+            withdrawer: None,
+            withdrawer_signer: None,
+            lockup: Lockup {
+                epoch: 0,
+                unix_timestamp: 0,
+                custodian,
+            },
+            amount: SpendAmount::Some(15),
+            sign_only: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+            nonce_account: None,
+            nonce_authority: 0,
+            memo: None,
+            fee_payer: 0,
+            from: 0,
+            compute_unit_price: None,
+        };
+        config.signers = vec![&keypair, &bob_keypair];
+        assert!(process_command(&config).is_err());
+
+        // Create stake: Check rent + min delegation check (20 + 5 lamports)
+        let bob_keypair = Keypair::new();
+        let bob_pubkey = bob_keypair.pubkey();
+        let custodian = solana_sdk::pubkey::new_rand();
+        config.command = CliCommand::CreateStakeAccount {
+            stake_account: 1,
+            seed: None,
+            staker: None,
+            withdrawer: None,
+            withdrawer_signer: None,
+            lockup: Lockup {
+                epoch: 0,
+                unix_timestamp: 0,
+                custodian,
+            },
+            amount: SpendAmount::Some(22),
+            sign_only: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+            nonce_account: None,
+            nonce_authority: 0,
+            memo: None,
+            fee_payer: 0,
+            from: 0,
+            compute_unit_price: None,
+        };
+        config.signers = vec![&keypair, &bob_keypair];
+        assert!(process_command(&config).is_err());
+
+        // Split stake: Check rent + min delegation on target (25 lamports min)
+        let stake_account_pubkey = solana_sdk::pubkey::new_rand();
+        let split_stake_account = Keypair::new();
+        config.command = CliCommand::SplitStake {
+            stake_account_pubkey,
+            stake_authority: 0,
+            sign_only: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::default(),
+            nonce_account: None,
+            nonce_authority: 0,
+            memo: None,
+            split_stake_account: 1,
+            seed: None,
+            lamports: 15,
+            fee_payer: 0,
+            compute_unit_price: None,
+        };
+        config.signers = vec![&keypair, &split_stake_account];
+        assert!(process_command(&config).is_err());
+
+        // Split stake: Check rent + min delegation on source account (25 lamports min)
+        let stake_account_pubkey = solana_sdk::pubkey::new_rand();
+        let split_stake_account = Keypair::new();
+        config.command = CliCommand::SplitStake {
+            stake_account_pubkey,
+            stake_authority: 0,
+            sign_only: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::default(),
+            nonce_account: None,
+            nonce_authority: 0,
+            memo: None,
+            split_stake_account: 1,
+            seed: None,
+            lamports: 35,
+            fee_payer: 0,
+            compute_unit_price: None,
+        };
+        config.signers = vec![&keypair, &split_stake_account];
+        assert!(process_command(&config).is_err());
+
         config.command = CliCommand::GetSlot;
         assert!(process_command(&config).is_err());
 
