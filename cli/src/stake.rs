@@ -1398,7 +1398,7 @@ pub fn process_create_stake_account(
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
-    let (message, lamports) = resolve_spend_tx_and_check_account_balances(
+    let (message, _lamports) = resolve_spend_tx_and_check_account_balances(
         rpc_client,
         sign_only,
         amount,
