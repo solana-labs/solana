@@ -2802,8 +2802,8 @@ impl Bank {
         let mut result = vec![vec![]; num_partitions];
 
         for reward in stake_rewards {
-            let partition_index = &hasher.hash_address_to_partition(&reward.stake_pubkey);
-            result[*partition_index].push(reward.clone());
+            let partition_index = hasher.hash_address_to_partition(&reward.stake_pubkey);
+            result[partition_index].push(reward.clone());
         }
         result
     }
