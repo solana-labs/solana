@@ -63,7 +63,6 @@ impl ByteBlockReader {
     ///
     /// Note that calling this function with AccountBlockFormat::AlignedRaw encoding
     /// will result in panic as the input is already decoded.
-    // require decoding.
     pub fn decode(encoding: AccountBlockFormat, input: &[u8]) -> std::io::Result<Vec<u8>> {
         match encoding {
             AccountBlockFormat::Lz4 => {
