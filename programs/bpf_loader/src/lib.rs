@@ -1357,11 +1357,21 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidRealloc);
             }
 
-            if let UpgradeableLoaderState::ProgramData {
-                slot: _,
+            let clock_slot = invoke_context
+                .get_sysvar_cache()
+                .get_clock()
+                .map(|clock| clock.slot)?;
+
+            let upgrade_authority_address = if let UpgradeableLoaderState::ProgramData {
+                slot,
                 upgrade_authority_address,
             } = programdata_account.get_state()?
             {
+                if clock_slot == slot {
+                    ic_logger_msg!(log_collector, "Program was extended in this block already");
+                    return Err(InstructionError::InvalidArgument);
+                }
+
                 if upgrade_authority_address.is_none() {
                     ic_logger_msg!(
                         log_collector,
@@ -1369,10 +1379,11 @@ fn process_loader_upgradeable_instruction(
                     );
                     return Err(InstructionError::Immutable);
                 }
+                upgrade_authority_address
             } else {
                 ic_logger_msg!(log_collector, "ProgramData state is invalid");
                 return Err(InstructionError::InvalidAccountData);
-            }
+            };
 
             let required_payment = {
                 let balance = programdata_account.get_lamports();
@@ -1406,11 +1417,6 @@ fn process_loader_upgradeable_instruction(
                 .try_borrow_instruction_account(transaction_context, PROGRAM_DATA_ACCOUNT_INDEX)?;
             programdata_account.set_data_length(new_len)?;
 
-            let slot = invoke_context
-                .get_sysvar_cache()
-                .get_clock()
-                .map(|clock| clock.slot)?;
-
             let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
 
             deploy_program!(
@@ -1418,7 +1424,7 @@ fn process_loader_upgradeable_instruction(
                 program_key,
                 &program_id,
                 UpgradeableLoaderState::size_of_program().saturating_add(new_len),
-                slot,
+                clock_slot,
                 {
                     drop(programdata_account);
                 },
@@ -1427,6 +1433,13 @@ fn process_loader_upgradeable_instruction(
                     .get(programdata_data_offset..)
                     .ok_or(InstructionError::AccountDataTooSmall)?,
             );
+
+            let mut programdata_account = instruction_context
+                .try_borrow_instruction_account(transaction_context, PROGRAM_DATA_ACCOUNT_INDEX)?;
+            programdata_account.set_state(&UpgradeableLoaderState::ProgramData {
+                slot: clock_slot,
+                upgrade_authority_address,
+            })?;
 
             ic_logger_msg!(
                 log_collector,
