@@ -7366,7 +7366,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     let mut bank = Bank::new_for_tests(&genesis_config);
     bank.feature_set = Arc::new(FeatureSet::all_enabled());
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     // Setup keypairs and addresses
     let payer_keypair = Keypair::new();
@@ -7535,6 +7535,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     // Test initialized program account
     bank.clear_signatures();
     bank.store_account(&buffer_address, &buffer_account);
+    let bank = bank_client.advance_slot(1, &mint_keypair.pubkey()).unwrap();
     let message = Message::new(
         &[Instruction::new_with_bincode(
             bpf_loader_upgradeable::id(),

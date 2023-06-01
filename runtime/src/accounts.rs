@@ -26,7 +26,7 @@ use {
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget},
-        loaded_programs::{LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch},
+        loaded_programs::LoadedProgramsForTxBatch,
     },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -34,8 +34,7 @@ use {
         bpf_loader_upgradeable,
         clock::{BankId, Slot},
         feature_set::{
-            self, add_set_tx_loaded_accounts_data_size_instruction,
-            delay_visibility_of_program_deployment, enable_request_heap_frame_ix,
+            self, add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
             include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
             simplify_writable_program_account_check, use_default_units_in_fee_calculation,
@@ -295,27 +294,8 @@ impl Accounts {
 
     fn account_shared_data_from_program(
         key: &Pubkey,
-        feature_set: &FeatureSet,
-        program: &LoadedProgram,
         program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     ) -> Result<AccountSharedData> {
-        // Check for tombstone
-        let result = match &program.program {
-            LoadedProgramType::FailedVerification(_) | LoadedProgramType::Closed => {
-                Err(TransactionError::InvalidProgramForExecution)
-            }
-            LoadedProgramType::DelayVisibility => {
-                debug_assert!(feature_set.is_active(&delay_visibility_of_program_deployment::id()));
-                Err(TransactionError::InvalidProgramForExecution)
-            }
-            _ => Ok(()),
-        };
-        if feature_set.is_active(&simplify_writable_program_account_check::id()) {
-            // Currently CPI only fails if an execution is actually attempted. With this check it
-            // would also fail if a transaction just references an invalid program. So the checking
-            // of the result is being feature gated.
-            result?;
-        }
         // It's an executable program account. The program is already loaded in the cache.
         // So the account data is not needed. Return a dummy AccountSharedData with meta
         // information.
@@ -399,13 +379,8 @@ impl Accounts {
                         // (that are passed to the program as instruction accounts). So such accounts
                         // are needed to be loaded even though corresponding compiled program may
                         // already be present in the cache.
-                        Self::account_shared_data_from_program(
-                            key,
-                            feature_set,
-                            program.as_ref(),
-                            program_accounts,
-                        )
-                        .map(|program_account| (program.account_size, program_account, 0))?
+                        Self::account_shared_data_from_program(key, program_accounts)
+                            .map(|program_account| (program.account_size, program_account, 0))?
                     } else {
                         self.accounts_db
                             .load_with_fixed_root(ancestors, key)
