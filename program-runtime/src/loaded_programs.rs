@@ -768,14 +768,13 @@ impl solana_frozen_abi::abi_example::AbiExample for LoadedPrograms {
 
 #[cfg(test)]
 mod tests {
-    use solana_rbpf::vm::Config;
     use {
         crate::loaded_programs::{
             BlockRelation, ForkGraph, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
             LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         percentage::Percentage,
-        solana_rbpf::vm::BuiltinProgram,
+        solana_rbpf::vm::{BuiltinProgram, Config},
         solana_sdk::{clock::Slot, pubkey::Pubkey},
         std::{
             ops::ControlFlow,
