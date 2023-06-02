@@ -9,7 +9,7 @@ use {
     log::{debug, log_enabled, trace},
     percentage::PercentageInteger,
     solana_measure::measure::Measure,
-    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier, vm::BuiltInProgram},
+    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier, vm::BuiltinProgram},
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock::Slot, loader_v4,
         pubkey::Pubkey, saturating_add_assign,
@@ -71,7 +71,7 @@ pub enum LoadedProgramType {
     Typed(Executable<RequisiteVerifier, InvokeContext<'static>>),
     #[cfg(test)]
     TestLoaded,
-    Builtin(BuiltInProgram<InvokeContext<'static>>),
+    Builtin(BuiltinProgram<InvokeContext<'static>>),
 }
 
 impl Debug for LoadedProgramType {
@@ -217,7 +217,7 @@ impl LoadedProgram {
     /// Creates a new user program
     pub fn new(
         loader_key: &Pubkey,
-        program_runtime_environment: Arc<BuiltInProgram<InvokeContext<'static>>>,
+        program_runtime_environment: Arc<BuiltinProgram<InvokeContext<'static>>>,
         deployment_slot: Slot,
         effective_slot: Slot,
         maybe_expiration_slot: Option<Slot>,
@@ -286,7 +286,7 @@ impl LoadedProgram {
         account_size: usize,
         entrypoint: ProcessInstructionWithContext,
     ) -> Self {
-        let mut program = BuiltInProgram::default();
+        let mut program = BuiltinProgram::default();
         program
             .register_function(b"entrypoint", entrypoint)
             .unwrap();
@@ -351,7 +351,7 @@ pub struct LoadedPrograms {
     /// Pubkey is the address of a program, multiple versions can coexists simultaneously under the same address (in different slots).
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
     /// Globally shared RBPF config and syscall registry
-    pub program_runtime_environment_v1: Arc<BuiltInProgram<InvokeContext<'static>>>,
+    pub program_runtime_environment_v1: Arc<BuiltinProgram<InvokeContext<'static>>>,
     latest_root: Slot,
     pub stats: Stats,
 }
@@ -740,7 +740,7 @@ mod tests {
             LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         percentage::Percentage,
-        solana_rbpf::vm::BuiltInProgram,
+        solana_rbpf::vm::BuiltinProgram,
         solana_sdk::{clock::Slot, pubkey::Pubkey},
         std::{
             ops::ControlFlow,
@@ -753,7 +753,7 @@ mod tests {
 
     fn new_test_builtin_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
-            program: LoadedProgramType::Builtin(BuiltInProgram::default()),
+            program: LoadedProgramType::Builtin(BuiltinProgram::default()),
             account_size: 0,
             deployment_slot,
             effective_slot,
