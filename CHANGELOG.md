@@ -5,43 +5,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) and follows a [Backwards Compatability Policy](https://docs.solana.com/developing/backwards-compatibility)
 
 ## Adding to this Changelog
+### Audience
 * Entries in this log are intended to be easily understood by consensus validators, rpc operators, and dapp developers.
-* Add notes to the [Unreleased] section that corresponds with the branch you're updating.
-    * Add a description of your change to the Changes section
-    * If your change is likely to require operators to update their configs add to the Upgrade Notes
-        * If you backport your change to the previous release branch or you're updating the stable branch, add note to the "patch" section
-        * If you don't backport, add node to the "minor version" section (these notes will be carried forward for releases on this branch until the previous branch is no longer supported)
+
+### Noteworthy
+* Changes that relate to a SIMD, or add a feature gate should add an entry to this log. Other changes that are relevant to consensus validators, rpc operators, and dapp developers should add an entry at the discretion of authors and reviewers.
+
+### Instructions
+* Update this log with the same commit that implements the change. If the change is spread over several commits update this log with the commit that makes the feature code complete.
+* Add notes to the [Unreleased] section in each branch that you merge to
+  * Add a description of your change to the Changes section
+  * If your change is likely to require operators to update their configs add to the Upgrade Notes
 
 ## How To Maintain This Changelog
-* When the version is bumped:
-    * Patch
-        * Date and tag the [Unreleased] section with the new release including a link to the release page
-        * Create new [Unreleased] section and copy the minor upgrade notes into it
-    * Minor
-        * Advance the version numbers in the [Unreleased sections]
+* When a release is tagged and the version is bumped:
+  * Date and tag the [Unreleased] section with the new release including a link to the release page
+  * Create new [Unreleased] section
 
 ## Unreleased
-### [master - edge]
-* Changes
-* Upgrade Notes
-    * Minor version upgrade
--
-
-### [v1.16 - beta]
 * Changes
   * Added a change log!
 * Upgrade Notes
-  * Patch upgrade
-  * Minor version upgrade
-
-### [v1.14 - stable]
-* Changes
-* Upgrade Notes
-  * Patch upgrade
 
 ## Released
-### 2022-07-23 - [1.11.4] 
-
-### 2022-07-26 - [1.10.33]
-- Fix bug to enable support for token-2022 accounts in preTokenBalances/postTokenBalances
-- Add Display implementations for various zk-token-sdk Pod structs
+### 2023-05-31 - [1.16.0](https://github.com/solana-labs/solana/releases/tag/v1.16.0)
