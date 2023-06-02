@@ -201,10 +201,14 @@ macro_rules! deploy_program {
             Arc::new(program_runtime_environment),
         )?;
         if let Some(old_entry) = find_program_in_cache($invoke_context, &$program_id) {
-            let usage_counter = old_entry.tx_usage_counter.load(Ordering::Relaxed);
-            executor.tx_usage_counter.store(usage_counter, Ordering::Relaxed);
-            let usage_counter = old_entry.ix_usage_counter.load(Ordering::Relaxed);
-            executor.ix_usage_counter.store(usage_counter, Ordering::Relaxed);
+            executor.tx_usage_counter.store(
+                old_entry.tx_usage_counter.load(Ordering::Relaxed),
+                Ordering::Relaxed
+            );
+            executor.ix_usage_counter.store(
+                old_entry.ix_usage_counter.load(Ordering::Relaxed),
+                Ordering::Relaxed
+            );
         }
         $drop
         load_program_metrics.program_id = $program_id.to_string();

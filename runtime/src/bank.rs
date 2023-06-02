@@ -4544,7 +4544,7 @@ impl Bank {
         );
         let native_loader = native_loader::id();
         for builtin_program in self.builtin_programs.iter() {
-            program_accounts_map.insert(*builtin_program, (&native_loader, 1));
+            program_accounts_map.insert(*builtin_program, (&native_loader, 0));
         }
 
         let programs_loaded_for_tx_batch = Rc::new(RefCell::new(
