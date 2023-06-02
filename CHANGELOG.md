@@ -9,7 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Entries in this log are intended to be easily understood by consensus validators, rpc operators, and dapp developers.
 
 ### Noteworthy
-* Changes that relate to a SIMD, or add a feature gate should add an entry to this log. Other changes that are relevant to consensus validators, rpc operators, and dapp developers should add an entry at the discretion of authors and reviewers.
+* Changes that relate to a SIMD, or add a feature gate should add an entry to this log. Other changes that are relevant to the aforementioned audiences should add an entry at the discretion of authors and reviewers.
 
 ### Instructions
 * Update this log with the same commit that implements the change. If the change is spread over several commits update this log with the commit that makes the feature code complete.
