@@ -32,7 +32,7 @@ pub struct BatchedRangeProofU256Data {
     pub context: BatchedRangeProofContext,
 
     /// The batched range proof
-    pub proof: pod::RangeProof256,
+    pub proof: pod::RangeProofU256,
 }
 
 #[cfg(not(target_os = "solana"))]

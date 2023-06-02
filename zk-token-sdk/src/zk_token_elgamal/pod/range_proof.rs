@@ -10,10 +10,10 @@ use crate::{
 /// The `RangeProof` type as a `Pod` restricted to proofs on 64-bit numbers.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct RangeProof64(pub [u8; 672]);
+pub struct RangeProofU64(pub [u8; 672]);
 
 #[cfg(not(target_os = "solana"))]
-impl TryFrom<decoded::RangeProof> for RangeProof64 {
+impl TryFrom<decoded::RangeProof> for RangeProofU64 {
     type Error = RangeProofError;
 
     fn try_from(decoded_proof: decoded::RangeProof) -> Result<Self, Self::Error> {
@@ -30,15 +30,15 @@ impl TryFrom<decoded::RangeProof> for RangeProof64 {
         buf[160..192].copy_from_slice(decoded_proof.t_x_blinding.as_bytes());
         buf[192..224].copy_from_slice(decoded_proof.e_blinding.as_bytes());
         buf[224..672].copy_from_slice(&decoded_proof.ipp_proof.to_bytes());
-        Ok(RangeProof64(buf))
+        Ok(RangeProofU64(buf))
     }
 }
 
 #[cfg(not(target_os = "solana"))]
-impl TryFrom<RangeProof64> for decoded::RangeProof {
+impl TryFrom<RangeProofU64> for decoded::RangeProof {
     type Error = RangeProofError;
 
-    fn try_from(pod_proof: RangeProof64) -> Result<Self, Self::Error> {
+    fn try_from(pod_proof: RangeProofU64) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)
     }
 }
@@ -46,10 +46,10 @@ impl TryFrom<RangeProof64> for decoded::RangeProof {
 /// The `RangeProof` type as a `Pod` restricted to proofs on 128-bit numbers.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct RangeProof128(pub [u8; 736]);
+pub struct RangeProofU128(pub [u8; 736]);
 
 #[cfg(not(target_os = "solana"))]
-impl TryFrom<decoded::RangeProof> for RangeProof128 {
+impl TryFrom<decoded::RangeProof> for RangeProofU128 {
     type Error = RangeProofError;
 
     fn try_from(decoded_proof: decoded::RangeProof) -> Result<Self, Self::Error> {
@@ -66,15 +66,15 @@ impl TryFrom<decoded::RangeProof> for RangeProof128 {
         buf[160..192].copy_from_slice(decoded_proof.t_x_blinding.as_bytes());
         buf[192..224].copy_from_slice(decoded_proof.e_blinding.as_bytes());
         buf[224..736].copy_from_slice(&decoded_proof.ipp_proof.to_bytes());
-        Ok(RangeProof128(buf))
+        Ok(RangeProofU128(buf))
     }
 }
 
 #[cfg(not(target_os = "solana"))]
-impl TryFrom<RangeProof128> for decoded::RangeProof {
+impl TryFrom<RangeProofU128> for decoded::RangeProof {
     type Error = RangeProofError;
 
-    fn try_from(pod_proof: RangeProof128) -> Result<Self, Self::Error> {
+    fn try_from(pod_proof: RangeProofU128) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)
     }
 }
@@ -82,10 +82,10 @@ impl TryFrom<RangeProof128> for decoded::RangeProof {
 /// The `RangeProof` type as a `Pod` restricted to proofs on 256-bit numbers.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct RangeProof256(pub [u8; 800]);
+pub struct RangeProofU256(pub [u8; 800]);
 
 #[cfg(not(target_os = "solana"))]
-impl TryFrom<decoded::RangeProof> for RangeProof256 {
+impl TryFrom<decoded::RangeProof> for RangeProofU256 {
     type Error = RangeProofError;
 
     fn try_from(decoded_proof: decoded::RangeProof) -> Result<Self, Self::Error> {
@@ -102,15 +102,15 @@ impl TryFrom<decoded::RangeProof> for RangeProof256 {
         buf[160..192].copy_from_slice(decoded_proof.t_x_blinding.as_bytes());
         buf[192..224].copy_from_slice(decoded_proof.e_blinding.as_bytes());
         buf[224..800].copy_from_slice(&decoded_proof.ipp_proof.to_bytes());
-        Ok(RangeProof256(buf))
+        Ok(RangeProofU256(buf))
     }
 }
 
 #[cfg(not(target_os = "solana"))]
-impl TryFrom<RangeProof256> for decoded::RangeProof {
+impl TryFrom<RangeProofU256> for decoded::RangeProof {
     type Error = RangeProofError;
 
-    fn try_from(pod_proof: RangeProof256) -> Result<Self, Self::Error> {
+    fn try_from(pod_proof: RangeProofU256) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)
     }
 }
@@ -118,11 +118,11 @@ impl TryFrom<RangeProof256> for decoded::RangeProof {
 // The range proof pod types are wrappers for byte arrays, which are both `Pod` and `Zeroable`. However,
 // the marker traits `bytemuck::Pod` and `bytemuck::Zeroable` can only be derived for power-of-two
 // length byte arrays. Directly implement these traits for the range proof pod types.
-unsafe impl Zeroable for RangeProof64 {}
-unsafe impl Pod for RangeProof64 {}
+unsafe impl Zeroable for RangeProofU64 {}
+unsafe impl Pod for RangeProofU64 {}
 
-unsafe impl Zeroable for RangeProof128 {}
-unsafe impl Pod for RangeProof128 {}
+unsafe impl Zeroable for RangeProofU128 {}
+unsafe impl Pod for RangeProofU128 {}
 
-unsafe impl Zeroable for RangeProof256 {}
-unsafe impl Pod for RangeProof256 {}
+unsafe impl Zeroable for RangeProofU256 {}
+unsafe impl Pod for RangeProofU256 {}
