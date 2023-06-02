@@ -1303,10 +1303,10 @@ pub fn add_bank_snapshot(
         )?;
         Ok(())
     };
-    let (bank_snapshot_consumed_size, bank_serialize) = measure!(serialize_snapshot_data_file(
-        &bank_snapshot_path,
-        bank_snapshot_serializer
-    )?);
+    let (bank_snapshot_consumed_size, bank_serialize) = measure!(
+        serialize_snapshot_data_file(&bank_snapshot_path, bank_snapshot_serializer)?,
+        "bank serialize"
+    );
     add_snapshot_time.stop();
 
     let status_cache_path = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
