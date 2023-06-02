@@ -6,7 +6,7 @@ use {
         timings::ExecuteDetailsTimings,
     },
     itertools::Itertools,
-    log::{debug, error, log_enabled, trace},
+    log::{debug, log_enabled, trace},
     percentage::PercentageInteger,
     solana_measure::measure::Measure,
     solana_rbpf::{elf::Executable, verifier::RequisiteVerifier, vm::BuiltinProgram},
@@ -336,17 +336,6 @@ impl LoadedProgram {
                 | LoadedProgramType::Closed
                 | LoadedProgramType::DelayVisibility
         )
-    }
-
-    fn is_loaded(&self) -> bool {
-        match self.program {
-            LoadedProgramType::LegacyV0(_)
-            | LoadedProgramType::LegacyV1(_)
-            | LoadedProgramType::Typed(_) => true,
-            #[cfg(test)]
-            LoadedProgramType::TestLoaded(_) => true,
-            _ => false,
-        }
     }
 
     fn is_implicit_delay_visibility_tombstone(&self, slot: Slot) -> bool {
@@ -690,17 +679,13 @@ impl LoadedPrograms {
     fn unload_program(&mut self, id: &Pubkey) {
         if let Some(entries) = self.entries.get_mut(id) {
             entries.iter_mut().for_each(|entry| {
-                if entry.is_loaded() {
-                    if let Some(unloaded) = entry.to_unloaded() {
-                        *entry = Arc::new(unloaded);
-                        self.stats
-                            .evictions
-                            .entry(*id)
-                            .and_modify(|c| saturating_add_assign!(*c, 1))
-                            .or_insert(1);
-                    } else {
-                        error!("Failed to unload the program");
-                    }
+                if let Some(unloaded) = entry.to_unloaded() {
+                    *entry = Arc::new(unloaded);
+                    self.stats
+                        .evictions
+                        .entry(*id)
+                        .and_modify(|c| saturating_add_assign!(*c, 1))
+                        .or_insert(1);
                 }
             });
         }
@@ -718,20 +703,16 @@ impl LoadedPrograms {
         for (id, program) in remove {
             if let Some(entries) = self.entries.get_mut(id) {
                 if let Some(candidate) = entries.iter_mut().find(|entry| entry == &program) {
-                    if candidate.is_loaded() {
-                        if let Some(unloaded) = candidate.to_unloaded() {
-                            if candidate.tx_usage_counter.load(Ordering::Relaxed) == 1 {
-                                self.stats.one_hit_wonders.fetch_add(1, Ordering::Relaxed);
-                            }
-                            self.stats
-                                .evictions
-                                .entry(*id)
-                                .and_modify(|c| saturating_add_assign!(*c, 1))
-                                .or_insert(1);
-                            *candidate = Arc::new(unloaded);
-                        } else {
-                            error!("Failed to unload the program");
+                    if let Some(unloaded) = candidate.to_unloaded() {
+                        if candidate.tx_usage_counter.load(Ordering::Relaxed) == 1 {
+                            self.stats.one_hit_wonders.fetch_add(1, Ordering::Relaxed);
                         }
+                        self.stats
+                            .evictions
+                            .entry(*id)
+                            .and_modify(|c| saturating_add_assign!(*c, 1))
+                            .or_insert(1);
+                        *candidate = Arc::new(unloaded);
                     }
                 }
             }
