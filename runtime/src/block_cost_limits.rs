@@ -4,7 +4,7 @@ use {
     lazy_static::lazy_static,
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, compute_budget, ed25519_program,
-        pubkey::Pubkey, secp256k1_program,
+        loader_v4, pubkey::Pubkey, secp256k1_program,
     },
     std::collections::HashMap,
 };
@@ -41,6 +41,7 @@ lazy_static! {
         (bpf_loader_upgradeable::id(), solana_bpf_loader_program::UPGRADEABLE_LOADER_COMPUTE_UNITS),
         (bpf_loader_deprecated::id(), solana_bpf_loader_program::DEPRECATED_LOADER_COMPUTE_UNITS),
         (bpf_loader::id(), solana_bpf_loader_program::DEFAULT_LOADER_COMPUTE_UNITS),
+        (loader_v4::id(), solana_loader_v4_program::DEFAULT_COMPUTE_UNITS),
         // Note: These are precompile, run directly in bank during sanitizing;
         (secp256k1_program::id(), COMPUTE_UNIT_TO_US_RATIO * 24),
         (ed25519_program::id(), COMPUTE_UNIT_TO_US_RATIO * 24),
