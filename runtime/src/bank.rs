@@ -2276,7 +2276,8 @@ impl Bank {
     }
 
     pub fn update_last_restart_slot(&self) {
-        let feature_flag = self.feature_set
+        let feature_flag = self
+            .feature_set
             .is_active(&feature_set::last_restart_slot_sysvar::id());
 
         if feature_flag {

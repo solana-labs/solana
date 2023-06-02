@@ -1,15 +1,10 @@
-use solana_program_runtime::solana_rbpf::syscalls::bpf_syscall_string;
-use solana_sdk::account_info::next_account_info;
-use solana_sdk::clock::Slot;
-use solana_sdk::instruction::{AccountMeta, Instruction};
-use solana_sdk::sysvar;
-use solana_sdk::sysvar::last_restart_slot;
-use solana_sdk::sysvar::last_restart_slot::LastRestartSlot;
 use {
     solana_program_test::{processor, ProgramTest},
     solana_sdk::{
+        clock::Slot,
+        instruction::{AccountMeta, Instruction},
         account_info::AccountInfo, entrypoint::ProgramResult, msg, pubkey::Pubkey,
-        signature::Signer, sysvar::Sysvar, transaction::Transaction,
+        signature::Signer, sysvar::{Sysvar, last_restart_slot::LastRestartSlot}, transaction::Transaction,
     },
 };
 

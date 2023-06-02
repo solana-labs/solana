@@ -38,9 +38,10 @@ use {
             disable_cpi_setting_executable_and_rent_epoch, disable_deploy_of_alloc_free_syscall,
             disable_fees_sysvar, enable_alt_bn128_syscall, enable_big_mod_exp_syscall,
             enable_early_verification_of_account_modifications,
-            error_on_syscall_bpf_function_hash_collisions, libsecp256k1_0_5_upgrade_enabled,
-            reject_callx_r10, stop_sibling_instruction_search_at_parent,
-            stop_truncating_strings_in_syscalls, switch_to_new_elf_parser,
+            error_on_syscall_bpf_function_hash_collisions, last_restart_slot_sysvar,
+            libsecp256k1_0_5_upgrade_enabled, reject_callx_r10,
+            stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
+            switch_to_new_elf_parser,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -67,7 +68,6 @@ use {
     },
     thiserror::Error as ThisError,
 };
-use solana_sdk::feature_set::last_restart_slot_sysvar;
 
 mod cpi;
 mod logging;

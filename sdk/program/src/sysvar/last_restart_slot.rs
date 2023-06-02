@@ -39,7 +39,6 @@
 //! ```
 //!
 
-
 pub use crate::last_restart_slot::LastRestartSlot;
 use crate::{impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar};
 

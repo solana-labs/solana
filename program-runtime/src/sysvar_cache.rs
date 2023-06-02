@@ -5,7 +5,6 @@ use solana_sdk::sysvar::{
 use {
     crate::invoke_context::InvokeContext,
     solana_sdk::{
-        feature_set, feature_set::FeatureSet,
         instruction::InstructionError,
         pubkey::Pubkey,
         sysvar::{
@@ -126,7 +125,7 @@ impl SysvarCache {
 
     pub fn fill_missing_entries<F: FnMut(&Pubkey, &mut dyn FnMut(&[u8]))>(
         &mut self,
-        mut get_account_data: F
+        mut get_account_data: F,
     ) {
         if self.clock.is_none() {
             get_account_data(&Clock::id(), &mut |data: &[u8]| {
