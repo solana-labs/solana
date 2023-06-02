@@ -652,29 +652,26 @@ impl Accounts {
                     })
                     .is_some()
                 {
-                    let mut processed_keys = vec![];
-                    tx.message().account_keys().iter().for_each(|key| {
-                        if !processed_keys.contains(key) {
-                            match result.entry(*key) {
-                                Entry::Occupied(mut entry) => {
-                                    let (_, count) = entry.get_mut();
-                                    saturating_add_assign!(*count, 1);
-                                }
-                                Entry::Vacant(entry) => {
-                                    if let Ok(index) = self.accounts_db.account_matches_owners(
-                                        ancestors,
-                                        key,
-                                        program_owners,
-                                    ) {
-                                        program_owners
-                                            .get(index)
-                                            .map(|owner| entry.insert((*owner, 1)));
-                                    }
+                    tx.message()
+                        .account_keys()
+                        .iter()
+                        .for_each(|key| match result.entry(*key) {
+                            Entry::Occupied(mut entry) => {
+                                let (_, count) = entry.get_mut();
+                                saturating_add_assign!(*count, 1);
+                            }
+                            Entry::Vacant(entry) => {
+                                if let Ok(index) = self.accounts_db.account_matches_owners(
+                                    ancestors,
+                                    key,
+                                    program_owners,
+                                ) {
+                                    program_owners
+                                        .get(index)
+                                        .map(|owner| entry.insert((*owner, 1)));
                                 }
                             }
-                            processed_keys.push(*key);
-                        }
-                    });
+                        });
                 } else {
                     // If the transaction's nonce account was not valid, and blockhash is not found,
                     // the transaction will fail to process. Let's not load any programs from the
@@ -2080,12 +2077,7 @@ mod tests {
             &[&keypair2],
             &[non_program_pubkey2],
             Hash::new_unique(),
-            vec![
-                account4_pubkey,
-                account4_pubkey,
-                account3_pubkey,
-                account2_pubkey,
-            ],
+            vec![account4_pubkey, account3_pubkey, account2_pubkey],
             vec![CompiledInstruction::new(1, &(), vec![0])],
         );
         hash_queue.register_hash(&tx2.message().recent_blockhash, 0);
@@ -2108,7 +2100,6 @@ mod tests {
                 .expect("failed to find the program account"),
             &(&program1_pubkey, 2)
         );
-        // account4_pubkey is listed twice in tx2. Test that the usage count goes up by only 1.
         assert_eq!(
             programs
                 .get(&account4_pubkey)
