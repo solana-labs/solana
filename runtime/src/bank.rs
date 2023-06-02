@@ -1681,6 +1681,7 @@ impl Bank {
             .stats
             .submit(parent.slot());
 
+        new.loaded_programs_cache.write().unwrap().stats.reset();
         new
     }
 
