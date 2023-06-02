@@ -264,6 +264,7 @@ impl ClusterInfoVoteListener {
                 })
                 .unwrap()
         };
+        let bank_forks_clone = bank_forks.clone();
         let bank_send_thread = {
             let exit = exit.clone();
             Builder::new()
@@ -274,6 +275,7 @@ impl ClusterInfoVoteListener {
                         verified_vote_label_packets_receiver,
                         poh_recorder,
                         &verified_packets_sender,
+                        bank_forks_clone,
                     );
                 })
                 .unwrap()
@@ -379,6 +381,7 @@ impl ClusterInfoVoteListener {
         verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
         poh_recorder: Arc<RwLock<PohRecorder>>,
         verified_packets_sender: &BankingPacketSender,
+        bank_forks: Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
@@ -393,11 +396,7 @@ impl ClusterInfoVoteListener {
                 .read()
                 .unwrap()
                 .would_be_leader(3 * slot_hashes::MAX_ENTRIES as u64 * DEFAULT_TICKS_PER_SLOT);
-            let feature_set = poh_recorder
-                .read()
-                .unwrap()
-                .bank()
-                .map(|bank| bank.feature_set.clone());
+            let feature_set = Some(bank_forks.read().unwrap().root_bank().feature_set.clone());
 
             if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
