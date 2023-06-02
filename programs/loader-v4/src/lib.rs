@@ -38,6 +38,8 @@ use {
     },
 };
 
+pub const DEFAULT_COMPUTE_UNITS: u64 = 2_000;
+
 pub fn get_state(data: &[u8]) -> Result<&LoaderV4State, InstructionError> {
     unsafe {
         let data = data
@@ -560,7 +562,7 @@ pub fn process_instruction_inner(
             .feature_set
             .is_active(&feature_set::native_programs_consume_cu::id())
         {
-            invoke_context.consume_checked(2000)?;
+            invoke_context.consume_checked(DEFAULT_COMPUTE_UNITS)?;
         }
         match limited_deserialize(instruction_data)? {
             LoaderV4Instruction::Write { offset, bytes } => {
