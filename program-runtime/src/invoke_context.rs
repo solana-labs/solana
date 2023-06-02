@@ -14,7 +14,7 @@ use {
     solana_rbpf::{
         ebpf::MM_HEAP_START,
         memory_region::MemoryMapping,
-        vm::{BuiltInFunction, Config, ContextObject, ProgramResult},
+        vm::{BuiltinFunction, Config, ContextObject, ProgramResult},
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -43,7 +43,7 @@ use {
     },
 };
 
-pub type ProcessInstructionWithContext = BuiltInFunction<InvokeContext<'static>>;
+pub type ProcessInstructionWithContext = BuiltinFunction<InvokeContext<'static>>;
 
 /// Adapter so we can unify the interfaces of built-in programs and syscalls
 #[macro_export]

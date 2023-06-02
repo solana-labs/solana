@@ -16,7 +16,7 @@ use {
         memory_region::{MemoryMapping, MemoryRegion},
         verifier::RequisiteVerifier,
         vm::{
-            BuiltInProgram, Config, ContextObject, EbpfVm, ProgramResult,
+            BuiltinProgram, Config, ContextObject, EbpfVm, ProgramResult,
             PROGRAM_ENVIRONMENT_KEY_SHIFT,
         },
     },
@@ -105,7 +105,7 @@ pub fn load_program_from_account(
         aligned_memory_mapping: true,
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
-    let loader = BuiltInProgram::new_loader(config);
+    let loader = BuiltinProgram::new_loader(config);
     let state = get_state(program.get_data())?;
     let programdata = program
         .get_data()
