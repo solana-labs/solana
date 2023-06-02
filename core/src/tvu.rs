@@ -114,7 +114,7 @@ impl Tvu {
         maybe_process_block_store: Option<ProcessBlockStore>,
         tower_storage: Arc<dyn TowerStorage>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         turbine_disabled: Arc<AtomicBool>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -163,7 +163,7 @@ impl Tvu {
             bank_forks.clone(),
             cluster_info.clone(),
             turbine_disabled,
-            exit,
+            exit.clone(),
         );
 
         let (verified_sender, verified_receiver) = unbounded();
@@ -313,12 +313,12 @@ impl Tvu {
                 ledger_cleanup_slot_receiver,
                 blockstore.clone(),
                 max_ledger_shreds,
-                exit,
+                exit.clone(),
             )
         });
 
         let duplicate_shred_listener = DuplicateShredListener::new(
-            exit.clone(),
+            exit,
             cluster_info.clone(),
             DuplicateShredHandler::new(
                 blockstore,
@@ -448,7 +448,7 @@ pub mod tests {
             blockstore,
             ledger_signal_receiver,
             &Arc::new(RpcSubscriptions::new_for_tests(
-                &exit,
+                exit.clone(),
                 max_complete_transaction_status_slot,
                 max_complete_rewards_slot,
                 bank_forks.clone(),
@@ -459,7 +459,7 @@ pub mod tests {
             None,
             Arc::new(crate::tower_storage::FileTowerStorage::default()),
             &leader_schedule_cache,
-            &exit,
+            exit.clone(),
             block_commitment_cache,
             Arc::<AtomicBool>::default(),
             None,

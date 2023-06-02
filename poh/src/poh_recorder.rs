@@ -1066,7 +1066,7 @@ pub fn create_test_recorder(
     let poh_service = PohService::new(
         poh_recorder.clone(),
         &poh_config,
-        &exit,
+        exit.clone(),
         bank.ticks_per_slot(),
         crate::poh_service::DEFAULT_PINNED_CPU_CORE,
         crate::poh_service::DEFAULT_HASHES_PER_BATCH,

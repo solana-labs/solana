@@ -97,13 +97,12 @@ impl PohService {
     pub fn new(
         poh_recorder: Arc<RwLock<PohRecorder>>,
         poh_config: &PohConfig,
-        poh_exit: &Arc<AtomicBool>,
+        poh_exit: Arc<AtomicBool>,
         ticks_per_slot: u64,
         pinned_cpu_core: usize,
         hashes_per_batch: u64,
         record_receiver: Receiver<Record>,
     ) -> Self {
-        let poh_exit_ = poh_exit.clone();
         let poh_config = poh_config.clone();
         let tick_producer = Builder::new()
             .name("solPohTickProd".to_string())
@@ -113,14 +112,14 @@ impl PohService {
                         Self::low_power_tick_producer(
                             poh_recorder,
                             &poh_config,
-                            &poh_exit_,
+                            &poh_exit,
                             record_receiver,
                         );
                     } else {
                         Self::short_lived_low_power_tick_producer(
                             poh_recorder,
                             &poh_config,
-                            &poh_exit_,
+                            &poh_exit,
                             record_receiver,
                         );
                     }
@@ -133,7 +132,7 @@ impl PohService {
                     }
                     Self::tick_producer(
                         poh_recorder,
-                        &poh_exit_,
+                        &poh_exit,
                         ticks_per_slot,
                         hashes_per_batch,
                         record_receiver,
@@ -143,7 +142,7 @@ impl PohService {
                         ),
                     );
                 }
-                poh_exit_.store(true, Ordering::Relaxed);
+                poh_exit.store(true, Ordering::Relaxed);
             })
             .unwrap();
 
@@ -493,7 +492,7 @@ mod tests {
             let poh_service = PohService::new(
                 poh_recorder.clone(),
                 &poh_config,
-                &exit,
+                exit.clone(),
                 0,
                 DEFAULT_PINNED_CPU_CORE,
                 hashes_per_batch,

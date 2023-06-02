@@ -58,7 +58,7 @@ impl BgThreads {
         in_mem: &[Arc<InMemAccountsIndex<T, U>>],
         threads: usize,
         can_advance_age: bool,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         // stop signal used for THIS batch of bg threads
         let local_exit = Arc::new(AtomicBool::default());
@@ -68,8 +68,8 @@ impl BgThreads {
                     // the first thread we start is special
                     let can_advance_age = can_advance_age && idx == 0;
                     let storage_ = Arc::clone(storage);
-                    let local_exit_ = Arc::clone(&local_exit);
-                    let system_exit_ = Arc::clone(exit);
+                    let local_exit = local_exit.clone();
+                    let system_exit = exit.clone();
                     let in_mem_ = in_mem.to_vec();
 
                     // note that using rayon here causes us to exhaust # rayon threads and many tests running in parallel deadlock
@@ -77,7 +77,7 @@ impl BgThreads {
                         .name(format!("solIdxFlusher{idx:02}"))
                         .spawn(move || {
                             storage_.background(
-                                vec![local_exit_, system_exit_],
+                                vec![local_exit, system_exit],
                                 in_mem_,
                                 can_advance_age,
                             );
@@ -123,7 +123,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndexStorage<
                 &self.in_mem,
                 Self::num_threads(),
                 false, // cannot advance age from any of these threads
-                &self.exit,
+                self.exit.clone(),
             ));
         }
         self.storage.set_startup(value);
@@ -167,7 +167,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndexStorage<
             .collect::<Vec<_>>();
 
         Self {
-            _bg_threads: BgThreads::new(&storage, &in_mem, threads, true, &exit),
+            _bg_threads: BgThreads::new(&storage, &in_mem, threads, true, exit.clone()),
             storage,
             in_mem,
             startup_worker_threads: Mutex::default(),

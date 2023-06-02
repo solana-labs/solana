@@ -32,9 +32,8 @@ impl TransactionStatusService {
         transaction_notifier: Option<TransactionNotifierLock>,
         blockstore: Arc<Blockstore>,
         enable_extended_tx_metadata_storage: bool,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
-        let exit = exit.clone();
         let thread_hdl = Builder::new()
             .name("solTxStatusWrtr".to_string())
             .spawn(move || loop {
@@ -442,7 +441,7 @@ pub(crate) mod tests {
             Some(test_notifier.clone()),
             blockstore,
             false,
-            &exit,
+            exit.clone(),
         );
 
         transaction_status_sender
