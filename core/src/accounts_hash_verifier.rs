@@ -91,6 +91,7 @@ impl AccountsHashVerifier {
                         &mut hashes,
                         &snapshot_config,
                         accounts_hash_fault_injector,
+                        &exit,
                     ));
 
                     // Done processing the current snapshot, so the current snapshot dir
@@ -246,6 +247,7 @@ impl AccountsHashVerifier {
         hashes: &mut Vec<(Slot, Hash)>,
         snapshot_config: &SnapshotConfig,
         accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
+        exit: &AtomicBool,
     ) {
         let accounts_hash =
             Self::calculate_and_verify_accounts_hash(&accounts_package, snapshot_config);
@@ -265,6 +267,7 @@ impl AccountsHashVerifier {
             snapshot_package_sender,
             snapshot_config,
             accounts_hash,
+            exit,
         );
     }
 
@@ -547,6 +550,7 @@ impl AccountsHashVerifier {
         snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
         snapshot_config: &SnapshotConfig,
         accounts_hash: AccountsHashEnum,
+        exit: &AtomicBool,
     ) {
         if !snapshot_config.should_generate_snapshots()
             || !matches!(
@@ -561,9 +565,15 @@ impl AccountsHashVerifier {
         };
 
         let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
-        snapshot_package_sender
-            .send(snapshot_package)
-            .expect("send snapshot package");
+        let send_result = snapshot_package_sender.send(snapshot_package);
+        if let Err(err) = send_result {
+            // Sending the snapshot package should never fail *unless* we're shutting down.
+            let snapshot_package = &err.0;
+            assert!(
+                exit.load(Ordering::Relaxed),
+                "Failed to send snapshot package: {err}, {snapshot_package:?}"
+            );
+        }
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -597,6 +607,7 @@ mod tests {
         solana_logger::setup();
         let cluster_info = new_test_cluster_info();
         let cluster_info = Arc::new(cluster_info);
+        let exit = AtomicBool::new(false);
 
         let mut hashes = vec![];
         let full_snapshot_archive_interval_slots = 100;
@@ -621,6 +632,7 @@ mod tests {
                 &mut hashes,
                 &snapshot_config,
                 None,
+                &exit,
             );
 
             // sleep for 1ms to create a newer timestamp for gossip entry
