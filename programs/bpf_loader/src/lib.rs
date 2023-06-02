@@ -62,6 +62,10 @@ use {
     syscalls::create_program_runtime_environment,
 };
 
+pub const DEFAULT_LOADER_COMPUTE_UNITS: u64 = 570;
+pub const DEPRECATED_LOADER_COMPUTE_UNITS: u64 = 1_140;
+pub const UPGRADEABLE_LOADER_COMPUTE_UNITS: u64 = 2_370;
+
 #[allow(clippy::too_many_arguments)]
 pub fn load_program_from_bytes(
     feature_set: &FeatureSet,
@@ -515,17 +519,17 @@ fn process_instruction_inner(
         let program_id = instruction_context.get_last_program_key(transaction_context)?;
         return if bpf_loader_upgradeable::check_id(program_id) {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(2_370)?;
+                invoke_context.consume_checked(UPGRADEABLE_LOADER_COMPUTE_UNITS)?;
             }
             process_loader_upgradeable_instruction(invoke_context)
         } else if bpf_loader::check_id(program_id) {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(570)?;
+                invoke_context.consume_checked(DEFAULT_LOADER_COMPUTE_UNITS)?;
             }
             process_loader_instruction(invoke_context)
         } else if bpf_loader_deprecated::check_id(program_id) {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(1_140)?;
+                invoke_context.consume_checked(DEPRECATED_LOADER_COMPUTE_UNITS)?;
             }
             ic_logger_msg!(log_collector, "Deprecated loader is no longer supported");
             Err(InstructionError::UnsupportedProgramId)
