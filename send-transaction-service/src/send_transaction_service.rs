@@ -2,7 +2,10 @@ use {
     crate::tpu_info::TpuInfo,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     log::*,
-    solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
+    solana_client::{
+        connection_cache::{ConnectionCache, Protocol},
+        tpu_connection::TpuConnection,
+    },
     solana_measure::measure::Measure,
     solana_metrics::datapoint_warn,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -562,7 +565,12 @@ impl SendTransactionService {
         stats: &SendTransactionServiceStats,
     ) {
         // Processing the transactions in batch
-        let addresses = Self::get_tpu_addresses(tpu_address, leader_info, config);
+        let addresses = Self::get_tpu_addresses(
+            tpu_address,
+            leader_info,
+            config,
+            connection_cache.protocol(),
+        );
 
         let wire_transactions = transactions
             .iter()
@@ -689,7 +697,12 @@ impl SendTransactionService {
             for chunk in iter {
                 let mut leader_info_provider = leader_info_provider.lock().unwrap();
                 let leader_info = leader_info_provider.get_leader_info();
-                let addresses = Self::get_tpu_addresses(tpu_address, leader_info, config);
+                let addresses = Self::get_tpu_addresses(
+                    tpu_address,
+                    leader_info,
+                    config,
+                    connection_cache.protocol(),
+                );
 
                 for address in &addresses {
                     Self::send_transactions(address, chunk, connection_cache, stats);
@@ -748,10 +761,11 @@ impl SendTransactionService {
         tpu_address: &'a SocketAddr,
         leader_info: Option<&'a T>,
         config: &'a Config,
+        protocol: Protocol,
     ) -> Vec<&'a SocketAddr> {
         let addresses = leader_info
             .as_ref()
-            .map(|leader_info| leader_info.get_leader_tpus(config.leader_forward_count));
+            .map(|leader_info| leader_info.get_leader_tpus(config.leader_forward_count, protocol));
         addresses
             .map(|address_list| {
                 if address_list.is_empty() {
