@@ -608,7 +608,9 @@ pub fn process_instruction_inner(
             get_or_create_executor_time.as_us()
         );
         drop(program);
-        loaded_program.usage_counter.fetch_add(1, Ordering::Relaxed);
+        loaded_program
+            .ix_usage_counter
+            .fetch_add(1, Ordering::Relaxed);
         match &loaded_program.program {
             LoadedProgramType::FailedVerification
             | LoadedProgramType::Closed
