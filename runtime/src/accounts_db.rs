@@ -8990,9 +8990,14 @@ impl AccountsDb {
                 if not_sparse || too_small_to_shrink {
                     return 0;
                 }
-                info!(
+                trace!(
                     "shrink_stale_slot ({}): not_sparse: {} count: {}/{} byte: {}/{}",
-                    slot, not_sparse, alive_count, stored_count, written_bytes, total_bytes,
+                    slot,
+                    not_sparse,
+                    alive_count,
+                    stored_count,
+                    written_bytes,
+                    total_bytes,
                 );
             }
 
