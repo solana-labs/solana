@@ -181,7 +181,7 @@ use {
         sync::{
             atomic::{
                 AtomicBool, AtomicI64, AtomicU64, AtomicUsize,
-                Ordering::{AcqRel, Acquire, Relaxed},
+                Ordering::{self, AcqRel, Acquire, Relaxed},
             },
             Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
@@ -4407,26 +4407,31 @@ impl Bank {
 
     fn replenish_program_cache(
         &self,
-        program_accounts_map: &HashMap<Pubkey, &Pubkey>,
+        program_accounts_map: &HashMap<Pubkey, (&Pubkey, u64)>,
     ) -> LoadedProgramsForTxBatch {
-        let programs_and_slots: Vec<(Pubkey, LoadedProgramMatchCriteria)> =
+        let programs_and_slots: Vec<(Pubkey, (LoadedProgramMatchCriteria, u64))> =
             if self.check_program_modification_slot {
                 program_accounts_map
-                    .keys()
-                    .map(|pubkey| {
+                    .iter()
+                    .map(|(pubkey, (_, count))| {
                         (
                             *pubkey,
-                            self.program_modification_slot(pubkey)
-                                .map_or(LoadedProgramMatchCriteria::Tombstone, |slot| {
-                                    LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot)
-                                }),
+                            (
+                                self.program_modification_slot(pubkey)
+                                    .map_or(LoadedProgramMatchCriteria::Tombstone, |slot| {
+                                        LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot)
+                                    }),
+                                *count,
+                            ),
                         )
                     })
                     .collect()
             } else {
                 program_accounts_map
-                    .keys()
-                    .map(|pubkey| (*pubkey, LoadedProgramMatchCriteria::NoCriteria))
+                    .iter()
+                    .map(|(pubkey, (_, count))| {
+                        (*pubkey, (LoadedProgramMatchCriteria::NoCriteria, *count))
+                    })
                     .collect()
             };
 
@@ -4439,7 +4444,7 @@ impl Bank {
         // Load missing programs while global cache is unlocked
         let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
             .iter()
-            .map(|key| {
+            .map(|(key, count)| {
                 let program = self.load_program(key).unwrap_or_else(|err| {
                     // Create a tombstone for the program in the cache
                     debug!("Failed to load program {}, error {:?}", key, err);
@@ -4448,6 +4453,7 @@ impl Bank {
                         LoadedProgramType::FailedVerification,
                     ))
                 });
+                program.tx_usage_counter.store(*count, Ordering::Relaxed);
                 (*key, program)
             })
             .collect();
@@ -4539,7 +4545,7 @@ impl Bank {
         );
         let native_loader = native_loader::id();
         for builtin_program in self.builtin_programs.iter() {
-            program_accounts_map.insert(*builtin_program, &native_loader);
+            program_accounts_map.insert(*builtin_program, (&native_loader, 0));
         }
 
         let programs_loaded_for_tx_batch = Rc::new(RefCell::new(
