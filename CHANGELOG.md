@@ -13,18 +13,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Instructions
 * Update this log with the same commit that implements the change. If the change is spread over several commits update this log with the commit that makes the feature code complete.
-* Add notes to the [Unreleased] section in each branch that you merge to
+* Add notes to the [Unreleased] section in each branch that you merge to.
   * Add a description of your change to the Changes section
   * If your change is likely to require operators to update their configs add to the Upgrade Notes
+* If you add entries on multiple branches please use the same wording if possible. This simplifies the process of diffing between versions of the log. 
 
 ## How To Maintain This Changelog
 * When a release is tagged and the version is bumped:
   * Date and tag the [Unreleased] section with the new release including a link to the release page
   * Create new [Unreleased] section
-
+change
 ## Unreleased
 * Changes
-  * Added a change log!
+  * Added a changelog!
 * Upgrade Notes
 
 ## Released
