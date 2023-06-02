@@ -103,7 +103,7 @@ pub type Result<T> = std::result::Result<T, StreamerError>;
 
 fn recv_loop(
     socket: &UdpSocket,
-    exit: Arc<AtomicBool>,
+    exit: &AtomicBool,
     packet_batch_sender: &PacketBatchSender,
     recycler: &PacketBatchRecycler,
     stats: &StreamerReceiveStats,
@@ -173,7 +173,7 @@ pub fn receiver(
         .spawn(move || {
             let _ = recv_loop(
                 &socket,
-                exit,
+                &exit,
                 &packet_batch_sender,
                 &recycler,
                 &stats,

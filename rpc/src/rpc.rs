@@ -382,12 +382,12 @@ impl JsonRpcRequestProcessor {
                 CommitmentSlots::new_from_slot(bank.slot()),
             ))),
             blockstore,
-            validator_exit: create_validator_exit(&exit),
+            validator_exit: create_validator_exit(exit.clone()),
             health: Arc::new(RpcHealth::new(
                 cluster_info.clone(),
                 None,
                 0,
-                exit.clone(),
+                exit,
                 Arc::clone(bank.get_startup_verification_complete()),
             )),
             cluster_info,
@@ -4526,10 +4526,9 @@ fn sanitize_transaction(
     .map_err(|err| Error::invalid_params(format!("invalid transaction: {err}")))
 }
 
-pub fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Exit>> {
+pub fn create_validator_exit(exit: Arc<AtomicBool>) -> Arc<RwLock<Exit>> {
     let mut validator_exit = Exit::default();
-    let exit_ = exit.clone();
-    validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
+    validator_exit.register_exit(Box::new(move || exit.store(true, Ordering::Relaxed)));
     Arc::new(RwLock::new(validator_exit))
 }
 
@@ -4596,7 +4595,7 @@ pub fn populate_blockstore_for_tests(
             None,
             blockstore,
             false,
-            &Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicBool::new(false)),
         );
 
     // Check that process_entries successfully writes can_commit transactions statuses, and
@@ -4780,7 +4779,7 @@ pub mod tests {
             let leader_pubkey = *bank.collector_id();
             let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
             let exit = Arc::new(AtomicBool::new(false));
-            let validator_exit = create_validator_exit(&exit);
+            let validator_exit = create_validator_exit(exit);
             let cluster_info = Arc::new(new_test_cluster_info());
             let identity = cluster_info.id();
             cluster_info.insert_info(ContactInfo::new_with_socketaddr(
@@ -6401,7 +6400,7 @@ pub mod tests {
     #[test]
     fn test_rpc_send_transaction_preflight() {
         let exit = Arc::new(AtomicBool::new(false));
-        let validator_exit = create_validator_exit(&exit);
+        let validator_exit = create_validator_exit(exit.clone());
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
@@ -6672,7 +6671,7 @@ pub mod tests {
     #[test]
     fn test_rpc_processor_get_block_commitment() {
         let exit = Arc::new(AtomicBool::new(false));
-        let validator_exit = create_validator_exit(&exit);
+        let validator_exit = create_validator_exit(exit.clone());
         let bank_forks = new_bank_forks().0;
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
@@ -8287,7 +8286,7 @@ pub mod tests {
     #[test]
     fn test_rpc_single_gossip() {
         let exit = Arc::new(AtomicBool::new(false));
-        let validator_exit = create_validator_exit(&exit);
+        let validator_exit = create_validator_exit(exit.clone());
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
@@ -8312,7 +8311,7 @@ pub mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot.clone(),
             max_complete_rewards_slot.clone(),
             bank_forks.clone(),

@@ -402,7 +402,7 @@ pub struct TransferWithFeeProof {
     pub ciphertext_amount_validity_proof: pod::AggregatedValidityProof,
     pub fee_sigma_proof: pod::FeeSigmaProof,
     pub fee_ciphertext_validity_proof: pod::AggregatedValidityProof,
-    pub range_proof: pod::RangeProof256,
+    pub range_proof: pod::RangeProofU256,
 }
 
 #[allow(non_snake_case)]

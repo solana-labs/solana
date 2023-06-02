@@ -21,7 +21,7 @@ pub use {
         TransferWithFeePubkeys,
     },
     pedersen::PedersenCommitment,
-    range_proof::{RangeProof128, RangeProof256, RangeProof64},
+    range_proof::{RangeProofU128, RangeProofU256, RangeProofU64},
     sigma_proofs::{
         AggregatedValidityProof, CiphertextCiphertextEqualityProof,
         CiphertextCommitmentEqualityProof, FeeSigmaProof, PubkeyValidityProof, ValidityProof,

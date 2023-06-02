@@ -28,8 +28,7 @@ pub struct EntryNotifierService {
 }
 
 impl EntryNotifierService {
-    pub fn new(entry_notifier: EntryNotifierLock, exit: &Arc<AtomicBool>) -> Self {
-        let exit = exit.clone();
+    pub fn new(entry_notifier: EntryNotifierLock, exit: Arc<AtomicBool>) -> Self {
         let (entry_notification_sender, entry_notification_receiver) = unbounded();
         let thread_hdl = Builder::new()
             .name("solEntryNotif".to_string())

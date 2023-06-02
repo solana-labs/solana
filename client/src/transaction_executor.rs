@@ -51,7 +51,7 @@ impl TransactionExecutor {
         let sigs = Arc::new(RwLock::new(Vec::new()));
         let cleared = Arc::new(RwLock::new(Vec::new()));
         let exit = Arc::new(AtomicBool::new(false));
-        let sig_clear_t = Self::start_sig_clear_thread(&exit, &sigs, &cleared, &client);
+        let sig_clear_t = Self::start_sig_clear_thread(exit.clone(), &sigs, &cleared, &client);
         Self {
             sigs,
             cleared,
@@ -96,13 +96,12 @@ impl TransactionExecutor {
     }
 
     fn start_sig_clear_thread(
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         sigs: &Arc<RwLock<PendingQueue>>,
         cleared: &Arc<RwLock<Vec<u64>>>,
         client: &Arc<RpcClient>,
     ) -> JoinHandle<()> {
         let sigs = sigs.clone();
-        let exit = exit.clone();
         let cleared = cleared.clone();
         let client = client.clone();
         Builder::new()

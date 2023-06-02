@@ -4,7 +4,7 @@ use {
     lazy_static::lazy_static,
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, compute_budget, ed25519_program,
-        feature, incinerator, native_loader, pubkey::Pubkey, secp256k1_program, system_program,
+        loader_v4, pubkey::Pubkey, secp256k1_program,
     },
     std::collections::HashMap,
 };
@@ -32,21 +32,19 @@ pub const INSTRUCTION_DATA_BYTES_COST: u64 = 140 /*bytes per us*/ / COMPUTE_UNIT
 lazy_static! {
     /// Number of compute units for each built-in programs
     pub static ref BUILT_IN_INSTRUCTION_COSTS: HashMap<Pubkey, u64> = [
-        (feature::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
-        (incinerator::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
-        (native_loader::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
-        (solana_sdk::stake::config::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
-        (solana_sdk::stake::program::id(), COMPUTE_UNIT_TO_US_RATIO * 25),
-        (solana_config_program::id(), COMPUTE_UNIT_TO_US_RATIO * 15),
-        (solana_vote_program::id(), COMPUTE_UNIT_TO_US_RATIO * 70),
+        (solana_stake_program::id(), solana_stake_program::stake_instruction::DEFAULT_COMPUTE_UNITS),
+        (solana_config_program::id(), solana_config_program::config_processor::DEFAULT_COMPUTE_UNITS),
+        (solana_vote_program::id(), solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS),
+        (solana_system_program::id(), solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS),
+        (compute_budget::id(), solana_compute_budget_program::DEFAULT_COMPUTE_UNITS),
+        (solana_address_lookup_table_program::id(), solana_address_lookup_table_program::processor::DEFAULT_COMPUTE_UNITS),
+        (bpf_loader_upgradeable::id(), solana_bpf_loader_program::UPGRADEABLE_LOADER_COMPUTE_UNITS),
+        (bpf_loader_deprecated::id(), solana_bpf_loader_program::DEPRECATED_LOADER_COMPUTE_UNITS),
+        (bpf_loader::id(), solana_bpf_loader_program::DEFAULT_LOADER_COMPUTE_UNITS),
+        (loader_v4::id(), solana_loader_v4_program::DEFAULT_COMPUTE_UNITS),
+        // Note: These are precompile, run directly in bank during sanitizing;
         (secp256k1_program::id(), COMPUTE_UNIT_TO_US_RATIO * 24),
         (ed25519_program::id(), COMPUTE_UNIT_TO_US_RATIO * 24),
-        (system_program::id(), COMPUTE_UNIT_TO_US_RATIO * 5),
-        (compute_budget::id(), COMPUTE_UNIT_TO_US_RATIO * 5),
-        (solana_address_lookup_table_program::id(), COMPUTE_UNIT_TO_US_RATIO * 25),
-        (bpf_loader_upgradeable::id(), COMPUTE_UNIT_TO_US_RATIO * 79),
-        (bpf_loader_deprecated::id(), COMPUTE_UNIT_TO_US_RATIO * 38),
-        (bpf_loader::id(), COMPUTE_UNIT_TO_US_RATIO * 19),
     ]
     .iter()
     .cloned()

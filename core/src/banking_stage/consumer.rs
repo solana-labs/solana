@@ -1611,7 +1611,7 @@ mod tests {
                 None,
                 blockstore.clone(),
                 false,
-                &Arc::new(AtomicBool::new(false)),
+                Arc::new(AtomicBool::new(false)),
             );
 
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
@@ -1749,7 +1749,7 @@ mod tests {
                 None,
                 blockstore.clone(),
                 false,
-                &Arc::new(AtomicBool::new(false)),
+                Arc::new(AtomicBool::new(false)),
             );
 
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();

@@ -23,7 +23,7 @@ use {
         error::EbpfError,
         memory_region::{AccessType, MemoryCowCallback, MemoryMapping, MemoryRegion},
         verifier::RequisiteVerifier,
-        vm::{BuiltInProgram, ContextObject, EbpfVm, ProgramResult},
+        vm::{BuiltinProgram, ContextObject, EbpfVm, ProgramResult},
     },
     solana_sdk::{
         account::WritableAccount,
@@ -62,6 +62,10 @@ use {
     syscalls::create_program_runtime_environment,
 };
 
+pub const DEFAULT_LOADER_COMPUTE_UNITS: u64 = 570;
+pub const DEPRECATED_LOADER_COMPUTE_UNITS: u64 = 1_140;
+pub const UPGRADEABLE_LOADER_COMPUTE_UNITS: u64 = 2_370;
+
 #[allow(clippy::too_many_arguments)]
 pub fn load_program_from_bytes(
     feature_set: &FeatureSet,
@@ -71,7 +75,7 @@ pub fn load_program_from_bytes(
     loader_key: &Pubkey,
     account_size: usize,
     deployment_slot: Slot,
-    program_runtime_environment: Arc<BuiltInProgram<InvokeContext<'static>>>,
+    program_runtime_environment: Arc<BuiltinProgram<InvokeContext<'static>>>,
 ) -> Result<LoadedProgram, InstructionError> {
     let effective_slot = if feature_set.is_active(&delay_visibility_of_program_deployment::id()) {
         deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET)
@@ -100,7 +104,7 @@ pub fn load_program_from_account(
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
-    program_runtime_environment: Arc<BuiltInProgram<InvokeContext<'static>>>,
+    program_runtime_environment: Arc<BuiltinProgram<InvokeContext<'static>>>,
 ) -> Result<(Arc<LoadedProgram>, LoadProgramMetrics), InstructionError> {
     if !check_loader_id(program.get_owner()) {
         ic_logger_msg!(
@@ -352,7 +356,7 @@ macro_rules! create_vm {
 #[macro_export]
 macro_rules! mock_create_vm {
     ($vm:ident, $additional_regions:expr, $orig_account_lengths:expr, $invoke_context:expr $(,)?) => {
-        let loader = std::sync::Arc::new(BuiltInProgram::new_loader(
+        let loader = std::sync::Arc::new(BuiltinProgram::new_loader(
             solana_rbpf::vm::Config::default(),
         ));
         let function_registry = solana_rbpf::vm::FunctionRegistry::default();
@@ -515,17 +519,17 @@ fn process_instruction_inner(
         let program_id = instruction_context.get_last_program_key(transaction_context)?;
         return if bpf_loader_upgradeable::check_id(program_id) {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(2_370)?;
+                invoke_context.consume_checked(UPGRADEABLE_LOADER_COMPUTE_UNITS)?;
             }
             process_loader_upgradeable_instruction(invoke_context)
         } else if bpf_loader::check_id(program_id) {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(570)?;
+                invoke_context.consume_checked(DEFAULT_LOADER_COMPUTE_UNITS)?;
             }
             process_loader_instruction(invoke_context)
         } else if bpf_loader_deprecated::check_id(program_id) {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(1_140)?;
+                invoke_context.consume_checked(DEPRECATED_LOADER_COMPUTE_UNITS)?;
             }
             ic_logger_msg!(log_collector, "Deprecated loader is no longer supported");
             Err(InstructionError::UnsupportedProgramId)
