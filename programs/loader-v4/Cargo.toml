@@ -1,6 +1,6 @@
 [package]
 name = "solana-loader-v4-program"
-description = "Solana Loader v3"
+description = "Solana Loader v4"
 publish = false
 version = { workspace = true }
 authors = { workspace = true }
