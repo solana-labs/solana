@@ -41,7 +41,7 @@ pub struct RangeProofU64Data {
     pub context: RangeProofContext,
 
     /// The proof that a committed value in a Pedersen commitment is a 64-bit value
-    pub proof: pod::RangeProof64,
+    pub proof: pod::RangeProofU64,
 }
 
 #[cfg(not(target_os = "solana"))]
