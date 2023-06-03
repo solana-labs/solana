@@ -16,7 +16,7 @@ use {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     },
     solana_poh::{
-        poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntryWithIndex},
+        poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry},
         poh_service::PohService,
     },
     solana_runtime::bank::Bank,
@@ -87,7 +87,7 @@ struct BenchFrame {
     exit: Arc<AtomicBool>,
     poh_recorder: Arc<RwLock<PohRecorder>>,
     poh_service: PohService,
-    signal_receiver: Receiver<WorkingBankEntryWithIndex>,
+    signal_receiver: Receiver<WorkingBankEntry>,
 }
 
 fn setup() -> BenchFrame {

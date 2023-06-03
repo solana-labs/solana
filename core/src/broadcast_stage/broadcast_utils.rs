@@ -36,13 +36,13 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
         32 * ShredData::capacity(/*merkle_proof_size*/ None).unwrap() as u64;
     let timer = Duration::new(1, 0);
     let recv_start = Instant::now();
-    let (mut bank, (entry, mut last_tick_height)) = receiver.recv_timeout(timer)?;
+    let (mut bank, (entry, mut last_tick_height), _) = receiver.recv_timeout(timer)?;
     let mut entries = vec![entry];
     assert!(last_tick_height <= bank.max_tick_height());
 
     // Drain channel
     while last_tick_height != bank.max_tick_height() {
-        let (try_bank, (entry, tick_height)) = match receiver.try_recv() {
+        let (try_bank, (entry, tick_height), _) = match receiver.try_recv() {
             Ok(working_bank_entry) => working_bank_entry,
             Err(_) => break,
         };
@@ -65,7 +65,7 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
     while last_tick_height != bank.max_tick_height()
         && serialized_batch_byte_count < target_serialized_batch_byte_count
     {
-        let (try_bank, (entry, tick_height)) =
+        let (try_bank, (entry, tick_height), _) =
             match receiver.recv_deadline(coalesce_start + ENTRY_COALESCE_DURATION) {
                 Ok(working_bank_entry) => working_bank_entry,
                 Err(_) => break,
@@ -139,7 +139,7 @@ mod tests {
             .map(|i| {
                 let entry = Entry::new(&last_hash, 1, vec![tx.clone()]);
                 last_hash = entry.hash;
-                s.send((bank1.clone(), (entry.clone(), i))).unwrap();
+                s.send((bank1.clone(), (entry.clone(), i), None)).unwrap();
                 entry
             })
             .collect();
@@ -173,11 +173,11 @@ mod tests {
                 last_hash = entry.hash;
                 // Interrupt slot 1 right before the last tick
                 if tick_height == expected_last_height {
-                    s.send((bank2.clone(), (entry.clone(), tick_height)))
+                    s.send((bank2.clone(), (entry.clone(), tick_height), None))
                         .unwrap();
                     Some(entry)
                 } else {
-                    s.send((bank1.clone(), (entry, tick_height))).unwrap();
+                    s.send((bank1.clone(), (entry, tick_height), None)).unwrap();
                     None
                 }
             })

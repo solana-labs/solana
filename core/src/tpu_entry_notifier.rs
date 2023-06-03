@@ -2,7 +2,7 @@ use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     solana_entry::entry::EntrySummary,
     solana_ledger::entry_notifier_service::{EntryNotification, EntryNotifierSender},
-    solana_poh::poh_recorder::{WorkingBankEntry, WorkingBankEntryWithIndex},
+    solana_poh::poh_recorder::WorkingBankEntry,
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -19,8 +19,8 @@ pub(crate) struct TpuEntryNotifier {
 
 impl TpuEntryNotifier {
     pub(crate) fn new(
-        receiver: Receiver<WorkingBankEntryWithIndex>,
-        entry_notification_sender: Option<EntryNotifierSender>,
+        receiver: Receiver<WorkingBankEntry>,
+        entry_notification_sender: EntryNotifierSender,
         broadcast_entry_sender: Sender<WorkingBankEntry>,
         exit: Arc<AtomicBool>,
     ) -> Self {
@@ -44,33 +44,31 @@ impl TpuEntryNotifier {
     }
 
     pub(crate) fn send_entry_notification(
-        receiver: &Receiver<WorkingBankEntryWithIndex>,
-        entry_notification_sender: &Option<EntryNotifierSender>,
+        receiver: &Receiver<WorkingBankEntry>,
+        entry_notification_sender: &EntryNotifierSender,
         broadcast_entry_sender: &Sender<WorkingBankEntry>,
     ) -> Result<(), RecvTimeoutError> {
         let (bank, (entry, tick_height), index) = receiver.recv_timeout(Duration::from_secs(1))?;
         let slot = bank.slot();
         let index = index.unwrap_or(0);
 
-        if let Some(entry_notification_sender) = entry_notification_sender {
-            let entry_summary = EntrySummary {
-                num_hashes: entry.num_hashes,
-                hash: entry.hash,
-                num_transactions: entry.transactions.len() as u64,
-            };
-            if let Err(err) = entry_notification_sender.send(EntryNotification {
-                slot,
-                index,
-                entry: entry_summary,
-            }) {
-                warn!(
-                    "Failed to send slot {slot:?} entry {index:?} from Tpu to EntryNotifierService, error {err:?}",
-                );
-            }
+        let entry_summary = EntrySummary {
+            num_hashes: entry.num_hashes,
+            hash: entry.hash,
+            num_transactions: entry.transactions.len() as u64,
+        };
+        if let Err(err) = entry_notification_sender.send(EntryNotification {
+            slot,
+            index,
+            entry: entry_summary,
+        }) {
+            warn!(
+                "Failed to send slot {slot:?} entry {index:?} from Tpu to EntryNotifierService, error {err:?}",
+            );
         }
 
         // TODO: in PohRecorder, we panic if the send to BroadcastStage fails. Should we do the same here?
-        if let Err(err) = broadcast_entry_sender.send((bank, (entry, tick_height))) {
+        if let Err(err) = broadcast_entry_sender.send((bank, (entry, tick_height), None)) {
             warn!(
                 "Failed to send slot {slot:?} entry {index:?} from Tpu to BroadcastStage, error {err:?}",
             );

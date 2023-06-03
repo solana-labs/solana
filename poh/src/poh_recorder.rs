@@ -57,13 +57,13 @@ pub enum PohRecorderError {
     MinHeightNotReached,
 
     #[error("send WorkingBankEntry error")]
-    SendError(#[from] SendError<WorkingBankEntryWithIndex>),
+    SendError(#[from] SendError<WorkingBankEntry>),
 }
 
 type Result<T> = std::result::Result<T, PohRecorderError>;
 
-pub type WorkingBankEntry = (Arc<Bank>, (Entry, u64));
-pub type WorkingBankEntryWithIndex = (Arc<Bank>, (Entry, u64), Option<usize>);
+// pub type WorkingBankEntry = (Arc<Bank>, (Entry, u64));
+pub type WorkingBankEntry = (Arc<Bank>, (Entry, u64), Option<usize>);
 
 #[derive(Debug, Clone)]
 pub struct BankStart {
@@ -290,7 +290,7 @@ pub struct PohRecorder {
     start_tick_height: u64,        // first tick_height this recorder will observe
     tick_cache: Vec<(Entry, u64)>, // cache of entry and its tick_height
     working_bank: Option<WorkingBank>,
-    sender: Sender<WorkingBankEntryWithIndex>,
+    sender: Sender<WorkingBankEntry>,
     poh_timing_point_sender: Option<PohTimingSender>,
     leader_first_tick_height_including_grace_ticks: Option<u64>,
     leader_last_tick_height: u64, // zero if none
@@ -661,7 +661,7 @@ impl PohRecorder {
             .iter()
             .take_while(|x| x.1 <= working_bank.max_tick_height)
             .count();
-        let mut send_result: std::result::Result<(), SendError<WorkingBankEntryWithIndex>> = Ok(());
+        let mut send_result: std::result::Result<(), SendError<WorkingBankEntry>> = Ok(());
 
         if entry_count > 0 {
             trace!(
@@ -944,7 +944,7 @@ impl PohRecorder {
         poh_config: &PohConfig,
         poh_timing_point_sender: Option<PohTimingSender>,
         is_exited: Arc<AtomicBool>,
-    ) -> (Self, Receiver<WorkingBankEntryWithIndex>, Receiver<Record>) {
+    ) -> (Self, Receiver<WorkingBankEntry>, Receiver<Record>) {
         let tick_number = 0;
         let poh = Arc::new(Mutex::new(Poh::new_with_slot_info(
             last_entry_hash,
@@ -1013,7 +1013,7 @@ impl PohRecorder {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         poh_config: &PohConfig,
         is_exited: Arc<AtomicBool>,
-    ) -> (Self, Receiver<WorkingBankEntryWithIndex>, Receiver<Record>) {
+    ) -> (Self, Receiver<WorkingBankEntry>, Receiver<Record>) {
         Self::new_with_clear_signal(
             tick_height,
             last_entry_hash,
@@ -1066,7 +1066,7 @@ pub fn create_test_recorder(
     Arc<AtomicBool>,
     Arc<RwLock<PohRecorder>>,
     PohService,
-    Receiver<WorkingBankEntryWithIndex>,
+    Receiver<WorkingBankEntry>,
 ) {
     let leader_schedule_cache = match leader_schedule_cache {
         Some(provided_cache) => provided_cache,

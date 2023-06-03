@@ -139,7 +139,7 @@ mod tests {
             blockstore::Blockstore, genesis_utils::GenesisConfigInfo,
             get_tmp_ledger_path_auto_delete, leader_schedule_cache::LeaderScheduleCache,
         },
-        solana_poh::poh_recorder::{PohRecorder, WorkingBankEntryWithIndex},
+        solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
         solana_runtime::{
             bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
             vote_sender_types::ReplayVoteReceiver,
@@ -162,7 +162,7 @@ mod tests {
         genesis_config: GenesisConfig,
         bank: Arc<Bank>,
         _ledger_path: TempDir,
-        _entry_receiver: Receiver<WorkingBankEntryWithIndex>,
+        _entry_receiver: Receiver<WorkingBankEntry>,
         poh_recorder: Arc<RwLock<PohRecorder>>,
         _poh_simulator: JoinHandle<()>,
         _replay_vote_receiver: ReplayVoteReceiver,

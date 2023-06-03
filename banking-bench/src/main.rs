@@ -19,7 +19,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_perf::packet::{to_packet_batches, PacketBatch},
-    solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntryWithIndex},
+    solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry},
     solana_runtime::{
         bank::Bank, bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
     },
@@ -49,7 +49,7 @@ use {
 const TRANSFER_TRANSACTION_COST: u32 = 1470;
 
 fn check_txs(
-    receiver: &Arc<Receiver<WorkingBankEntryWithIndex>>,
+    receiver: &Arc<Receiver<WorkingBankEntry>>,
     ref_tx_count: usize,
     poh_recorder: &Arc<RwLock<PohRecorder>>,
 ) -> bool {

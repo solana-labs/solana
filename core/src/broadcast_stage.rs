@@ -659,7 +659,7 @@ pub mod test {
                 let ticks = create_ticks(max_tick_height - start_tick_height, 0, Hash::default());
                 for (i, tick) in ticks.into_iter().enumerate() {
                     entry_sender
-                        .send((bank.clone(), (tick, i as u64 + 1)))
+                        .send((bank.clone(), (tick, i as u64 + 1), None))
                         .expect("Expect successful send to broadcast service");
                 }
             }

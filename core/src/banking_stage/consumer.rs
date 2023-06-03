@@ -739,7 +739,7 @@ mod tests {
             leader_schedule_cache::LeaderScheduleCache,
         },
         solana_perf::packet::Packet,
-        solana_poh::poh_recorder::{PohRecorder, WorkingBankEntryWithIndex},
+        solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
         solana_program_runtime::timings::ProgramTiming,
         solana_rpc::transaction_status_service::TransactionStatusService,
         solana_runtime::{cost_model::CostModel, prioritization_fee_cache::PrioritizationFeeCache},
@@ -852,7 +852,7 @@ mod tests {
         Vec<Transaction>,
         Arc<Bank>,
         Arc<RwLock<PohRecorder>>,
-        Receiver<WorkingBankEntryWithIndex>,
+        Receiver<WorkingBankEntry>,
         JoinHandle<()>,
     ) {
         Blockstore::destroy(ledger_path).unwrap();

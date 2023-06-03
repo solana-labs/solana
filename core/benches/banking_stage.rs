@@ -31,7 +31,7 @@ use {
         packet::{to_packet_batches, Packet},
         test_tx::test_tx,
     },
-    solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntryWithIndex},
+    solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry},
     solana_runtime::{
         bank::Bank, bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
     },
@@ -57,7 +57,7 @@ use {
     test::Bencher,
 };
 
-fn check_txs(receiver: &Arc<Receiver<WorkingBankEntryWithIndex>>, ref_tx_count: usize) {
+fn check_txs(receiver: &Arc<Receiver<WorkingBankEntry>>, ref_tx_count: usize) {
     let mut total = 0;
     let now = Instant::now();
     loop {
