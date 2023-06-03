@@ -233,7 +233,12 @@ fn run_bank_forks_snapshot_n<F>(
         if slot % set_root_interval == 0 || slot == last_slot {
             // set_root should send a snapshot request
             bank_forks.set_root(bank.slot(), &request_sender, None);
-            snapshot_request_handler.handle_snapshot_requests(false, 0, &mut None);
+            snapshot_request_handler.handle_snapshot_requests(
+                false,
+                0,
+                &mut None,
+                &AtomicBool::new(false),
+            );
         }
     }
 
@@ -753,6 +758,7 @@ fn test_bank_forks_incremental_snapshot(
                 false,
                 0,
                 &mut last_full_snapshot_slot,
+                &AtomicBool::new(false),
             );
         }
 

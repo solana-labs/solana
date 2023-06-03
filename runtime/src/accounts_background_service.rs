@@ -149,6 +149,7 @@ impl SnapshotRequestHandler {
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
+        exit: &AtomicBool,
     ) -> Option<Result<u64, SnapshotError>> {
         let (
             snapshot_request,
@@ -174,6 +175,7 @@ impl SnapshotRequestHandler {
             last_full_snapshot_slot,
             snapshot_request,
             accounts_package_type,
+            exit,
         ))
     }
 
@@ -295,6 +297,7 @@ impl SnapshotRequestHandler {
         last_full_snapshot_slot: &mut Option<Slot>,
         snapshot_request: SnapshotRequest,
         accounts_package_type: AccountsPackageType,
+        exit: &AtomicBool,
     ) -> Result<u64, SnapshotError> {
         debug!(
             "handling snapshot request: {:?}, {:?}",
@@ -414,9 +417,15 @@ impl SnapshotRequestHandler {
                 )
             }
         };
-        self.accounts_package_sender
-            .send(accounts_package)
-            .expect("send accounts package");
+        let send_result = self.accounts_package_sender.send(accounts_package);
+        if let Err(err) = send_result {
+            // Sending the accounts package should never fail *unless* we're shutting down.
+            let accounts_package = &err.0;
+            assert!(
+                exit.load(Ordering::Relaxed),
+                "Failed to send accounts package: {err}, {accounts_package:?}"
+            );
+        }
         snapshot_time.stop();
         info!(
             "Took bank snapshot. accounts package type: {:?}, slot: {}, bank hash: {}",
@@ -528,11 +537,13 @@ impl AbsRequestHandlers {
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
+        exit: &AtomicBool,
     ) -> Option<Result<u64, SnapshotError>> {
         self.snapshot_request_handler.handle_snapshot_requests(
             test_hash_calculation,
             non_snapshot_time_us,
             last_full_snapshot_slot,
+            exit,
         )
     }
 }
@@ -615,6 +626,7 @@ impl AccountsBackgroundService {
                                 test_hash_calculation,
                                 non_snapshot_time,
                                 &mut last_full_snapshot_slot,
+                                &exit,
                             )
                         })
                         .flatten();
