@@ -17,9 +17,9 @@ this log. Other changes that are relevant to the aforementioned audiences should
 add an entry at the discretion of authors and reviewers.
 
 ### Instructions
-* Update this log with the same commit that implements the change. If the change
-is spread over several commits update this log with the commit that makes the
-feature code complete.
+* Update this log in the same pull request that implements the change. If the
+change is spread over several pull requests update this log in the one that
+makes the feature code complete.
 * Add notes to the [Unreleased] section in each branch that you merge to.
   * Add a description of your change to the Changes section
   * If your change is likely to require operators to update their configs add to
