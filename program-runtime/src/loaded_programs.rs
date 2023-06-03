@@ -65,12 +65,12 @@ pub enum LoadedProgramType {
     Closed,
     DelayVisibility,
     /// Successfully verified but not currently compiled, used to track usage statistics when a compiled program is evicted from memory.
-    Unloaded,
+    Unloaded(Arc<BuiltinProgram<InvokeContext<'static>>>),
     LegacyV0(Executable<RequisiteVerifier, InvokeContext<'static>>),
     LegacyV1(Executable<RequisiteVerifier, InvokeContext<'static>>),
     Typed(Executable<RequisiteVerifier, InvokeContext<'static>>),
     #[cfg(test)]
-    TestLoaded,
+    TestLoaded(Arc<BuiltinProgram<InvokeContext<'static>>>),
     Builtin(BuiltinProgram<InvokeContext<'static>>),
 }
 
@@ -82,12 +82,12 @@ impl Debug for LoadedProgramType {
             }
             LoadedProgramType::Closed => write!(f, "LoadedProgramType::Closed"),
             LoadedProgramType::DelayVisibility => write!(f, "LoadedProgramType::DelayVisibility"),
-            LoadedProgramType::Unloaded => write!(f, "LoadedProgramType::Unloaded"),
+            LoadedProgramType::Unloaded(_) => write!(f, "LoadedProgramType::Unloaded"),
             LoadedProgramType::LegacyV0(_) => write!(f, "LoadedProgramType::LegacyV0"),
             LoadedProgramType::LegacyV1(_) => write!(f, "LoadedProgramType::LegacyV1"),
             LoadedProgramType::Typed(_) => write!(f, "LoadedProgramType::Typed"),
             #[cfg(test)]
-            LoadedProgramType::TestLoaded => write!(f, "LoadedProgramType::TestLoaded"),
+            LoadedProgramType::TestLoaded(_) => write!(f, "LoadedProgramType::TestLoaded"),
             LoadedProgramType::Builtin(_) => write!(f, "LoadedProgramType::Builtin"),
         }
     }
@@ -272,16 +272,24 @@ impl LoadedProgram {
         })
     }
 
-    pub fn to_unloaded(&self) -> Self {
-        Self {
-            program: LoadedProgramType::Unloaded,
+    pub fn to_unloaded(&self) -> Option<Self> {
+        let env = match &self.program {
+            LoadedProgramType::LegacyV0(program)
+            | LoadedProgramType::LegacyV1(program)
+            | LoadedProgramType::Typed(program) => program.get_loader().clone(),
+            #[cfg(test)]
+            LoadedProgramType::TestLoaded(env) => env.clone(),
+            _ => return None,
+        };
+        Some(Self {
+            program: LoadedProgramType::Unloaded(env),
             account_size: self.account_size,
             deployment_slot: self.deployment_slot,
             effective_slot: self.effective_slot,
             maybe_expiration_slot: self.maybe_expiration_slot,
             tx_usage_counter: AtomicU64::new(self.tx_usage_counter.load(Ordering::Relaxed)),
             ix_usage_counter: AtomicU64::new(self.tx_usage_counter.load(Ordering::Relaxed)),
-        }
+        })
     }
 
     /// Creates a new built-in program
@@ -328,17 +336,6 @@ impl LoadedProgram {
                 | LoadedProgramType::Closed
                 | LoadedProgramType::DelayVisibility
         )
-    }
-
-    fn is_loaded(&self) -> bool {
-        match self.program {
-            LoadedProgramType::LegacyV0(_)
-            | LoadedProgramType::LegacyV1(_)
-            | LoadedProgramType::Typed(_) => true,
-            #[cfg(test)]
-            LoadedProgramType::TestLoaded => true,
-            _ => false,
-        }
     }
 
     fn is_implicit_delay_visibility_tombstone(&self, slot: Slot) -> bool {
@@ -447,7 +444,7 @@ impl LoadedPrograms {
             if existing.deployment_slot == entry.deployment_slot
                 && existing.effective_slot == entry.effective_slot
             {
-                if matches!(existing.program, LoadedProgramType::Unloaded) {
+                if matches!(existing.program, LoadedProgramType::Unloaded(_)) {
                     // The unloaded program is getting reloaded
                     // Copy over the usage counter to the new entry
                     let mut usage_count = existing.tx_usage_counter.load(Ordering::Relaxed);
@@ -552,7 +549,7 @@ impl LoadedPrograms {
 
         Self::matches_loaded_program_criteria(entry, match_criteria)
             // If the program was unloaded. Consider it as unusable, so it can be reloaded.
-            && !matches!(entry.program, LoadedProgramType::Unloaded)
+            && !matches!(entry.program, LoadedProgramType::Unloaded(_))
     }
 
     /// Extracts a subset of the programs relevant to a transaction batch
@@ -636,8 +633,8 @@ impl LoadedPrograms {
                         | LoadedProgramType::LegacyV1(_)
                         | LoadedProgramType::Typed(_) => Some((*id, program.clone())),
                         #[cfg(test)]
-                        LoadedProgramType::TestLoaded => Some((*id, program.clone())),
-                        LoadedProgramType::Unloaded
+                        LoadedProgramType::TestLoaded(_) => Some((*id, program.clone())),
+                        LoadedProgramType::Unloaded(_)
                         | LoadedProgramType::FailedVerification
                         | LoadedProgramType::Closed
                         | LoadedProgramType::DelayVisibility
@@ -682,8 +679,8 @@ impl LoadedPrograms {
     fn unload_program(&mut self, id: &Pubkey) {
         if let Some(entries) = self.entries.get_mut(id) {
             entries.iter_mut().for_each(|entry| {
-                if entry.is_loaded() {
-                    *entry = Arc::new(entry.to_unloaded());
+                if let Some(unloaded) = entry.to_unloaded() {
+                    *entry = Arc::new(unloaded);
                     self.stats
                         .evictions
                         .entry(*id)
@@ -706,15 +703,17 @@ impl LoadedPrograms {
         for (id, program) in remove {
             if let Some(entries) = self.entries.get_mut(id) {
                 if let Some(candidate) = entries.iter_mut().find(|entry| entry == &program) {
-                    if candidate.tx_usage_counter.load(Ordering::Relaxed) == 1 {
-                        self.stats.one_hit_wonders.fetch_add(1, Ordering::Relaxed);
+                    if let Some(unloaded) = candidate.to_unloaded() {
+                        if candidate.tx_usage_counter.load(Ordering::Relaxed) == 1 {
+                            self.stats.one_hit_wonders.fetch_add(1, Ordering::Relaxed);
+                        }
+                        self.stats
+                            .evictions
+                            .entry(*id)
+                            .and_modify(|c| saturating_add_assign!(*c, 1))
+                            .or_insert(1);
+                        *candidate = Arc::new(unloaded);
                     }
-                    self.stats
-                        .evictions
-                        .entry(*id)
-                        .and_modify(|c| saturating_add_assign!(*c, 1))
-                        .or_insert(1);
-                    *candidate = Arc::new(candidate.to_unloaded());
                 }
             }
         }
@@ -756,7 +755,7 @@ mod tests {
             LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         percentage::Percentage,
-        solana_rbpf::vm::BuiltinProgram,
+        solana_rbpf::vm::{BuiltinProgram, Config},
         solana_sdk::{clock::Slot, pubkey::Pubkey},
         std::{
             ops::ControlFlow,
@@ -793,8 +792,11 @@ mod tests {
         key: Pubkey,
         slot: Slot,
     ) -> Arc<LoadedProgram> {
-        let unloaded =
-            Arc::new(new_test_loaded_program(slot, slot.saturating_add(1)).to_unloaded());
+        let unloaded = Arc::new(
+            new_test_loaded_program(slot, slot.saturating_add(1))
+                .to_unloaded()
+                .expect("Failed to unload the program"),
+        );
         cache.replenish(key, unloaded).1
     }
 
@@ -918,10 +920,10 @@ mod tests {
         programs.sort_by_key(|(_id, _slot, usage_count)| *usage_count);
 
         let num_loaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::TestLoaded)
+            matches!(program_type, LoadedProgramType::TestLoaded(_))
         });
         let num_unloaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::Unloaded)
+            matches!(program_type, LoadedProgramType::Unloaded(_))
         });
         let num_tombstones = num_matching_entries(&cache, |program_type| {
             matches!(
@@ -951,7 +953,7 @@ mod tests {
             .iter()
             .flat_map(|(id, cached_programs)| {
                 cached_programs.iter().filter_map(|program| {
-                    matches!(program.program, LoadedProgramType::Unloaded)
+                    matches!(program.program, LoadedProgramType::Unloaded(_))
                         .then_some((*id, program.tx_usage_counter.load(Ordering::Relaxed)))
                 })
             })
@@ -963,10 +965,10 @@ mod tests {
         }
 
         let num_loaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::TestLoaded)
+            matches!(program_type, LoadedProgramType::TestLoaded(_))
         });
         let num_unloaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::Unloaded)
+            matches!(program_type, LoadedProgramType::Unloaded(_))
         });
         let num_tombstones = num_matching_entries(&cache, |program_type| {
             matches!(
@@ -999,13 +1001,13 @@ mod tests {
         cache.sort_and_unload(Percentage::from(2));
 
         let num_unloaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::Unloaded)
+            matches!(program_type, LoadedProgramType::Unloaded(_))
         });
         assert_eq!(num_unloaded, 1);
 
         cache.entries.values().for_each(|programs| {
             programs.iter().for_each(|program| {
-                if matches!(program.program, LoadedProgramType::Unloaded) {
+                if matches!(program.program, LoadedProgramType::Unloaded(_)) {
                     // Test that the usage counter is retained for the unloaded program
                     assert_eq!(program.tx_usage_counter.load(Ordering::Relaxed), 10);
                     assert_eq!(program.deployment_slot, 0);
@@ -1023,7 +1025,7 @@ mod tests {
 
         cache.entries.values().for_each(|programs| {
             programs.iter().for_each(|program| {
-                if matches!(program.program, LoadedProgramType::Unloaded)
+                if matches!(program.program, LoadedProgramType::Unloaded(_))
                     && program.deployment_slot == 0
                     && program.effective_slot == 2
                 {
@@ -1259,17 +1261,33 @@ mod tests {
     fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
         new_test_loaded_program_with_usage(deployment_slot, effective_slot, AtomicU64::default())
     }
+
     fn new_test_loaded_program_with_usage(
         deployment_slot: Slot,
         effective_slot: Slot,
         usage_counter: AtomicU64,
     ) -> Arc<LoadedProgram> {
+        new_test_loaded_program_with_usage_and_expiry(
+            deployment_slot,
+            effective_slot,
+            usage_counter,
+            None,
+        )
+    }
+
+    fn new_test_loaded_program_with_usage_and_expiry(
+        deployment_slot: Slot,
+        effective_slot: Slot,
+        usage_counter: AtomicU64,
+        expiry: Option<Slot>,
+    ) -> Arc<LoadedProgram> {
+        let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
         Arc::new(LoadedProgram {
-            program: LoadedProgramType::TestLoaded,
+            program: LoadedProgramType::TestLoaded(env),
             account_size: 0,
             deployment_slot,
             effective_slot,
-            maybe_expiration_slot: None,
+            maybe_expiration_slot: expiry,
             tx_usage_counter: usage_counter,
             ix_usage_counter: AtomicU64::default(),
         })
@@ -1852,15 +1870,11 @@ mod tests {
 
     #[test]
     fn test_usable_entries_for_slot() {
-        let unloaded_entry = Arc::new(LoadedProgram {
-            program: LoadedProgramType::Unloaded,
-            account_size: 0,
-            deployment_slot: 0,
-            effective_slot: 0,
-            maybe_expiration_slot: None,
-            tx_usage_counter: AtomicU64::default(),
-            ix_usage_counter: AtomicU64::default(),
-        });
+        let unloaded_entry = Arc::new(
+            new_test_loaded_program(0, 0)
+                .to_unloaded()
+                .expect("Failed to unload the program"),
+        );
         assert!(!LoadedPrograms::is_entry_usable(
             &unloaded_entry,
             0,
@@ -1949,15 +1963,12 @@ mod tests {
             &LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(1)
         ));
 
-        let program = Arc::new(LoadedProgram {
-            program: LoadedProgramType::TestLoaded,
-            account_size: 0,
-            deployment_slot: 0,
-            effective_slot: 1,
-            maybe_expiration_slot: Some(2),
-            tx_usage_counter: AtomicU64::default(),
-            ix_usage_counter: AtomicU64::default(),
-        });
+        let program = Arc::new(new_test_loaded_program_with_usage_and_expiry(
+            0,
+            1,
+            AtomicU64::default(),
+            Some(2),
+        ));
 
         assert!(LoadedPrograms::is_entry_usable(
             &program,
