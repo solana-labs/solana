@@ -48,14 +48,14 @@ impl TpuEntryNotifier {
         entry_notification_sender: &EntryNotifierSender,
         broadcast_entry_sender: &Sender<WorkingBankEntry>,
     ) -> Result<(), RecvTimeoutError> {
-        let (bank, (entry, tick_height), index) = receiver.recv_timeout(Duration::from_secs(1))?;
-        let slot = bank.slot();
-        let index = index.unwrap_or(0);
+        let working_bank_entry = receiver.recv_timeout(Duration::from_secs(1))?;
+        let slot = working_bank_entry.bank.slot();
+        let index = working_bank_entry.entry_index.unwrap_or(0);
 
         let entry_summary = EntrySummary {
-            num_hashes: entry.num_hashes,
-            hash: entry.hash,
-            num_transactions: entry.transactions.len() as u64,
+            num_hashes: working_bank_entry.entry.num_hashes,
+            hash: working_bank_entry.entry.hash,
+            num_transactions: working_bank_entry.entry.transactions.len() as u64,
         };
         if let Err(err) = entry_notification_sender.send(EntryNotification {
             slot,
@@ -68,7 +68,7 @@ impl TpuEntryNotifier {
         }
 
         // TODO: in PohRecorder, we panic if the send to BroadcastStage fails. Should we do the same here?
-        if let Err(err) = broadcast_entry_sender.send((bank, (entry, tick_height), None)) {
+        if let Err(err) = broadcast_entry_sender.send(working_bank_entry) {
             warn!(
                 "Failed to send slot {slot:?} entry {index:?} from Tpu to BroadcastStage, error {err:?}",
             );

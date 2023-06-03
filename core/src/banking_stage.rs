@@ -598,6 +598,7 @@ mod tests {
         solana_poh::{
             poh_recorder::{
                 create_test_recorder, PohRecorderError, Record, RecordTransactionsSummary,
+                WorkingBankEntry,
             },
             poh_service::PohService,
         },
@@ -741,7 +742,7 @@ mod tests {
             trace!("getting entries");
             let entries: Vec<_> = entry_receiver
                 .iter()
-                .map(|(_bank, (entry, _tick_height), _entry_index)| entry)
+                .map(|WorkingBankEntry { entry, .. }| entry)
                 .collect();
             trace!("done");
             assert_eq!(entries.len(), genesis_config.ticks_per_slot as usize);
@@ -863,7 +864,7 @@ mod tests {
             loop {
                 let entries: Vec<Entry> = entry_receiver
                     .iter()
-                    .map(|(_bank, (entry, _tick_height), _entry_index)| entry)
+                    .map(|WorkingBankEntry { entry, .. }| entry)
                     .collect();
 
                 assert!(entries.verify(&blockhash));
@@ -990,7 +991,7 @@ mod tests {
             // check that the balance is what we expect.
             let entries: Vec<_> = entry_receiver
                 .iter()
-                .map(|(_bank, (entry, _tick_height), _entry_index)| entry)
+                .map(|WorkingBankEntry { entry, .. }| entry)
                 .collect();
 
             let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
@@ -1055,7 +1056,7 @@ mod tests {
             ];
 
             let _ = recorder.record_transactions(bank.slot(), txs.clone());
-            let (_bank, (entry, _tick_height), _entry_index) = entry_receiver.recv().unwrap();
+            let WorkingBankEntry { entry, .. } = entry_receiver.recv().unwrap();
             assert_eq!(entry.transactions, txs);
 
             // Once bank is set to a new bank (setting bank.slot() + 1 in record_transactions),

@@ -381,6 +381,7 @@ impl PohService {
 mod tests {
     use {
         super::*,
+        crate::poh_recorder::WorkingBankEntry,
         rand::{thread_rng, Rng},
         solana_ledger::{
             blockstore::Blockstore,
@@ -509,7 +510,7 @@ mod tests {
 
             let time = Instant::now();
             while run_time != 0 || need_tick || need_entry || need_partial {
-                let (_bank, (entry, _tick_height), _entry_index) = entry_receiver.recv().unwrap();
+                let WorkingBankEntry { entry, .. } = entry_receiver.recv().unwrap();
 
                 if entry.is_tick() {
                     num_ticks += 1;

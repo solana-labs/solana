@@ -986,7 +986,7 @@ mod tests {
 
             let mut done = false;
             // read entries until I find mine, might be ticks...
-            while let Ok((_bank, (entry, _tick_height), _entry_index)) = entry_receiver.recv() {
+            while let Ok(WorkingBankEntry { entry, .. }) = entry_receiver.recv() {
                 if !entry.is_tick() {
                     trace!("got entry");
                     assert_eq!(entry.transactions.len(), transactions.len());
