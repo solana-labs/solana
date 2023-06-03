@@ -4124,8 +4124,9 @@ mod tests {
         let transaction_accounts = vec![];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let program_id = Pubkey::new_unique();
+        let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
         let program = LoadedProgram {
-            program: LoadedProgramType::Unloaded,
+            program: LoadedProgramType::Unloaded(env),
             account_size: 0,
             deployment_slot: 0,
             effective_slot: 0,
@@ -4163,8 +4164,9 @@ mod tests {
         let transaction_accounts = vec![];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let program_id = Pubkey::new_unique();
+        let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
         let program = LoadedProgram {
-            program: LoadedProgramType::Unloaded,
+            program: LoadedProgramType::Unloaded(env),
             account_size: 0,
             deployment_slot: 0,
             effective_slot: 0,
