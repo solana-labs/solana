@@ -663,7 +663,7 @@ pub mod test {
                             bank: bank.clone(),
                             entry: tick,
                             tick_height: i as u64 + 1,
-                            entry_index: None,
+                            entry_index: 0,
                         })
                         .expect("Expect successful send to broadcast service");
                 }

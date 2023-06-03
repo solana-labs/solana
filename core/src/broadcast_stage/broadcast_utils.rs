@@ -157,7 +157,7 @@ mod tests {
                     bank: bank1.clone(),
                     entry: entry.clone(),
                     tick_height: i,
-                    entry_index: None,
+                    entry_index: 0,
                 })
                 .unwrap();
                 entry
@@ -197,7 +197,7 @@ mod tests {
                         bank: bank2.clone(),
                         entry: entry.clone(),
                         tick_height,
-                        entry_index: None,
+                        entry_index: 0,
                     })
                     .unwrap();
                     Some(entry)
@@ -206,7 +206,7 @@ mod tests {
                         bank: bank1.clone(),
                         entry,
                         tick_height,
-                        entry_index: None,
+                        entry_index: 0,
                     })
                     .unwrap();
                     None

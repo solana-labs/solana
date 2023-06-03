@@ -544,10 +544,7 @@ fn main() {
                 );
 
                 assert!(poh_recorder.read().unwrap().bank().is_none());
-                poh_recorder
-                    .write()
-                    .unwrap()
-                    .set_bank(bank.clone(), false, false);
+                poh_recorder.write().unwrap().set_bank(bank.clone(), false);
                 assert!(poh_recorder.read().unwrap().bank().is_some());
                 debug!(
                     "new_bank_time: {}us insert_time: {}us poh_time: {}us",

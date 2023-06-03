@@ -50,7 +50,7 @@ impl TpuEntryNotifier {
     ) -> Result<(), RecvTimeoutError> {
         let working_bank_entry = receiver.recv_timeout(Duration::from_secs(1))?;
         let slot = working_bank_entry.bank.slot();
-        let index = working_bank_entry.entry_index.unwrap_or(0);
+        let index = working_bank_entry.entry_index;
 
         let entry_summary = EntrySummary {
             num_hashes: working_bank_entry.entry.num_hashes,

@@ -1052,7 +1052,6 @@ impl ReplayStage {
                         &banking_tracer,
                         has_new_vote_been_rooted,
                         transaction_status_sender.is_some(),
-                        entry_notification_sender.is_some(),
                     );
 
                     let poh_bank = poh_recorder.read().unwrap().bank();
@@ -1823,7 +1822,6 @@ impl ReplayStage {
         banking_tracer: &Arc<BankingTracer>,
         has_new_vote_been_rooted: bool,
         track_transaction_indexes: bool,
-        track_entry_indexes: bool,
     ) {
         // all the individual calls to poh_recorder.read() are designed to
         // increase granularity, decrease contention
@@ -1947,11 +1945,10 @@ impl ReplayStage {
             banking_tracer.hash_event(parent.slot(), &parent.last_blockhash(), &parent.hash());
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
-            poh_recorder.write().unwrap().set_bank(
-                tpu_bank,
-                track_transaction_indexes,
-                track_entry_indexes,
-            );
+            poh_recorder
+                .write()
+                .unwrap()
+                .set_bank(tpu_bank, track_transaction_indexes);
         } else {
             error!("{} No next leader found", my_pubkey);
         }
