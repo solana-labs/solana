@@ -1,5 +1,6 @@
 [package]
 name = "solana-banks-client"
+description = "Solana banks client"
 documentation = "https://docs.rs/solana-banks-client"
 version = { workspace = true }
 authors = { workspace = true }
