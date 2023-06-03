@@ -270,7 +270,7 @@ pub struct TransferProof {
     pub validity_proof: pod::AggregatedValidityProof,
 
     // Associated range proof
-    pub range_proof: pod::RangeProof128,
+    pub range_proof: pod::RangeProofU128,
 }
 
 #[allow(non_snake_case)]

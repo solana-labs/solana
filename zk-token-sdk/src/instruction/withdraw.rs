@@ -129,7 +129,7 @@ pub struct WithdrawProof {
     pub equality_proof: pod::CiphertextCommitmentEqualityProof,
 
     /// Associated range proof
-    pub range_proof: pod::RangeProof64, // 672 bytes
+    pub range_proof: pod::RangeProofU64, // 672 bytes
 }
 
 #[allow(non_snake_case)]
