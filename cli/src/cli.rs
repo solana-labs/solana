@@ -2170,7 +2170,7 @@ mod tests {
         };
         config.signers = vec![&keypair, &bob_keypair];
         let result = process_command(&config);
-        assert!(result.is_ok(), "{:?}", result);
+        assert!(result.is_ok(), "{result:?}");
 
         let stake_account_pubkey = solana_sdk::pubkey::new_rand();
         let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -2231,7 +2231,7 @@ mod tests {
         };
         config.signers = vec![&keypair, &split_stake_account];
         let result = process_command(&config);
-        assert!(result.is_ok(), "{:?}", result);
+        assert!(result.is_ok(), "{result:?}");
 
         let stake_account_pubkey = solana_sdk::pubkey::new_rand();
         let source_stake_account_pubkey = solana_sdk::pubkey::new_rand();
