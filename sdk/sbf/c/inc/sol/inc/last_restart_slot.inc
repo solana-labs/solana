@@ -12,7 +12,7 @@ extern "C" {
 /**
  * Get Last Restart Slot
  */
-@SYSCALL u64 sol_get_last_restart_slot();
+@SYSCALL u64 sol_get_last_restart_slot(uint8_t *result);
 
 #ifdef __cplusplus
 }

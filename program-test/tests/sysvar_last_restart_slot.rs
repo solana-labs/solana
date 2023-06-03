@@ -1,10 +1,15 @@
 use {
     solana_program_test::{processor, ProgramTest},
     solana_sdk::{
+        account_info::AccountInfo,
         clock::Slot,
+        entrypoint::ProgramResult,
         instruction::{AccountMeta, Instruction},
-        account_info::AccountInfo, entrypoint::ProgramResult, msg, pubkey::Pubkey,
-        signature::Signer, sysvar::{Sysvar, last_restart_slot::LastRestartSlot}, transaction::Transaction,
+        msg,
+        pubkey::Pubkey,
+        signature::Signer,
+        sysvar::{last_restart_slot, last_restart_slot::LastRestartSlot, Sysvar},
+        transaction::Transaction,
     },
 };
 
@@ -44,7 +49,7 @@ async fn get_sysvar_last_restart_slot() {
     let instructions = vec![Instruction::new_with_bincode(
         program_id,
         &(),
-        vec![AccountMeta::new(sysvar::last_restart_slot::id(), false)],
+        vec![AccountMeta::new(last_restart_slot::id(), false)],
     )];
 
     let transaction = Transaction::new_signed_with_payer(
@@ -101,7 +106,7 @@ async fn get_sysvar_last_restart_slot_from_account() {
         program_id,
         &(),
         // note: here we pass the sysvar as an account
-        vec![AccountMeta::new(sysvar::last_restart_slot::id(), false)],
+        vec![AccountMeta::new(last_restart_slot::id(), false)],
     )];
 
     let transaction = Transaction::new_signed_with_payer(
