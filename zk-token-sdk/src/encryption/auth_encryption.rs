@@ -12,7 +12,6 @@ use {
     thiserror::Error,
 };
 use {
-    arrayref::{array_ref, array_refs},
     base64::{prelude::BASE64_STANDARD, Engine},
     sha3::{Digest, Sha3_512},
     solana_sdk::{
@@ -218,13 +217,10 @@ impl AeCiphertext {
             return None;
         }
 
-        let bytes = array_ref![bytes, 0, 36];
-        let (nonce, ciphertext) = array_refs![bytes, 12, 24];
+        let nonce = bytes[..32].try_into().ok()?;
+        let ciphertext = bytes[32..].try_into().ok()?;
 
-        Some(AeCiphertext {
-            nonce: *nonce,
-            ciphertext: *ciphertext,
-        })
+        Some(AeCiphertext { nonce, ciphertext })
     }
 }
 
