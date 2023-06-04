@@ -16,6 +16,7 @@ use {
             pedersen::{PedersenCommitment, PedersenOpening, G, H},
         },
         errors::ProofVerificationError,
+        sigma_proofs::canonical_scalar_from_slice,
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -211,18 +212,8 @@ impl GroupedCiphertext2HandlesValidityProof {
         let Y_0 = CompressedRistretto::from_slice(&bytes[..32]);
         let Y_1 = CompressedRistretto::from_slice(&bytes[32..64]);
         let Y_2 = CompressedRistretto::from_slice(&bytes[64..96]);
-
-        let z_r = bytes[96..128]
-            .try_into()
-            .map_err(|_| ProofVerificationError::Deserialization)?;
-        let z_x = bytes[128..160]
-            .try_into()
-            .map_err(|_| ProofVerificationError::Deserialization)?;
-
-        let z_r =
-            Scalar::from_canonical_bytes(z_r).ok_or(ProofVerificationError::Deserialization)?;
-        let z_x =
-            Scalar::from_canonical_bytes(z_x).ok_or(ProofVerificationError::Deserialization)?;
+        let z_r = canonical_scalar_from_slice(&bytes[96..128])?;
+        let z_x = canonical_scalar_from_slice(&bytes[128..160])?;
 
         Ok(GroupedCiphertext2HandlesValidityProof {
             Y_0,

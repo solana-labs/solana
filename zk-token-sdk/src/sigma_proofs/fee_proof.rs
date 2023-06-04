@@ -4,7 +4,10 @@
 
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::encryption::pedersen::{PedersenCommitment, PedersenOpening, G, H},
+    crate::{
+        encryption::pedersen::{PedersenCommitment, PedersenOpening, G, H},
+        sigma_proofs::canonical_scalar_from_slice,
+    },
     rand::rngs::OsRng,
 };
 use {
@@ -367,39 +370,14 @@ impl FeeSigmaProof {
         }
 
         let Y_max_proof = CompressedRistretto::from_slice(&bytes[..32]);
-
-        let z_max_bytes = bytes[32..64]
-            .try_into()
-            .map_err(|_| ProofVerificationError::Deserialization)?;
-        let z_max_proof = Scalar::from_canonical_bytes(z_max_bytes)
-            .ok_or(ProofVerificationError::Deserialization)?;
-
-        let c_max_proof = bytes[64..96]
-            .try_into()
-            .map_err(|_| ProofVerificationError::Deserialization)?;
-        let c_max_proof = Scalar::from_canonical_bytes(c_max_proof)
-            .ok_or(ProofVerificationError::Deserialization)?;
+        let z_max_proof = canonical_scalar_from_slice(&bytes[32..64])?;
+        let c_max_proof = canonical_scalar_from_slice(&bytes[64..96])?;
 
         let Y_delta = CompressedRistretto::from_slice(&bytes[96..128]);
         let Y_claimed = CompressedRistretto::from_slice(&bytes[128..160]);
-
-        let z_x_bytes = bytes[160..192]
-            .try_into()
-            .map_err(|_| ProofVerificationError::Deserialization)?;
-        let z_x = Scalar::from_canonical_bytes(z_x_bytes)
-            .ok_or(ProofVerificationError::Deserialization)?;
-
-        let z_delta_bytes = bytes[192..224]
-            .try_into()
-            .map_err(|_| ProofVerificationError::Deserialization)?;
-        let z_delta = Scalar::from_canonical_bytes(z_delta_bytes)
-            .ok_or(ProofVerificationError::Deserialization)?;
-
-        let z_claimed_bytes = bytes[224..256]
-            .try_into()
-            .map_err(|_| ProofVerificationError::Deserialization)?;
-        let z_claimed = Scalar::from_canonical_bytes(z_claimed_bytes)
-            .ok_or(ProofVerificationError::Deserialization)?;
+        let z_x = canonical_scalar_from_slice(&bytes[160..192])?;
+        let z_delta = canonical_scalar_from_slice(&bytes[192..224])?;
+        let z_claimed = canonical_scalar_from_slice(&bytes[224..256])?;
 
         Ok(Self {
             fee_max_proof: FeeMaxProof {

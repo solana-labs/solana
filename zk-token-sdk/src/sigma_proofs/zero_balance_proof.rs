@@ -11,6 +11,7 @@ use {
             pedersen::H,
         },
         errors::ProofVerificationError,
+        sigma_proofs::canonical_scalar_from_slice,
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -166,12 +167,7 @@ impl ZeroBalanceProof {
 
         let Y_P = CompressedRistretto::from_slice(&bytes[..32]);
         let Y_D = CompressedRistretto::from_slice(&bytes[32..64]);
-
-        let z_bytes = bytes[64..96]
-            .try_into()
-            .map_err(|_| ProofVerificationError::Deserialization)?;
-        let z =
-            Scalar::from_canonical_bytes(z_bytes).ok_or(ProofVerificationError::Deserialization)?;
+        let z = canonical_scalar_from_slice(&bytes[64..96])?;
 
         Ok(ZeroBalanceProof { Y_P, Y_D, z })
     }
