@@ -18,7 +18,6 @@ use {
 };
 use {
     crate::{sigma_proofs::errors::ZeroBalanceProofError, transcript::TranscriptProtocol},
-    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -165,13 +164,14 @@ impl ZeroBalanceProof {
             return Err(ProofVerificationError::Deserialization.into());
         }
 
-        let bytes = array_ref![bytes, 0, 96];
-        let (Y_P, Y_D, z) = array_refs![bytes, 32, 32, 32];
+        let Y_P = CompressedRistretto::from_slice(&bytes[..32]);
+        let Y_D = CompressedRistretto::from_slice(&bytes[32..64]);
 
-        let Y_P = CompressedRistretto::from_slice(Y_P);
-        let Y_D = CompressedRistretto::from_slice(Y_D);
-
-        let z = Scalar::from_canonical_bytes(*z).ok_or(ProofVerificationError::Deserialization)?;
+        let z_bytes = bytes[64..96]
+            .try_into()
+            .map_err(|_| ProofVerificationError::Deserialization)?;
+        let z =
+            Scalar::from_canonical_bytes(z_bytes).ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(ZeroBalanceProof { Y_P, Y_D, z })
     }

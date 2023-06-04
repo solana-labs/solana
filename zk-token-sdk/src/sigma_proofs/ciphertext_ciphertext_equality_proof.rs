@@ -18,7 +18,6 @@ use {
 };
 use {
     crate::{sigma_proofs::errors::EqualityProofError, transcript::TranscriptProtocol},
-    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -239,20 +238,28 @@ impl CiphertextCiphertextEqualityProof {
             return Err(ProofVerificationError::Deserialization.into());
         }
 
-        let bytes = array_ref![bytes, 0, 224];
-        let (Y_0, Y_1, Y_2, Y_3, z_s, z_x, z_r) = array_refs![bytes, 32, 32, 32, 32, 32, 32, 32];
+        let Y_0 = CompressedRistretto::from_slice(&bytes[..32]);
+        let Y_1 = CompressedRistretto::from_slice(&bytes[32..64]);
+        let Y_2 = CompressedRistretto::from_slice(&bytes[64..96]);
+        let Y_3 = CompressedRistretto::from_slice(&bytes[96..128]);
 
-        let Y_0 = CompressedRistretto::from_slice(Y_0);
-        let Y_1 = CompressedRistretto::from_slice(Y_1);
-        let Y_2 = CompressedRistretto::from_slice(Y_2);
-        let Y_3 = CompressedRistretto::from_slice(Y_3);
+        let z_s_bytes = bytes[128..160]
+            .try_into()
+            .map_err(|_| ProofVerificationError::Deserialization)?;
+        let z_s = Scalar::from_canonical_bytes(z_s_bytes)
+            .ok_or(ProofVerificationError::Deserialization)?;
 
-        let z_s =
-            Scalar::from_canonical_bytes(*z_s).ok_or(ProofVerificationError::Deserialization)?;
-        let z_x =
-            Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
-        let z_r =
-            Scalar::from_canonical_bytes(*z_r).ok_or(ProofVerificationError::Deserialization)?;
+        let z_x_bytes = bytes[160..192]
+            .try_into()
+            .map_err(|_| ProofVerificationError::Deserialization)?;
+        let z_x = Scalar::from_canonical_bytes(z_x_bytes)
+            .ok_or(ProofVerificationError::Deserialization)?;
+
+        let z_r_bytes = bytes[192..224]
+            .try_into()
+            .map_err(|_| ProofVerificationError::Deserialization)?;
+        let z_r = Scalar::from_canonical_bytes(z_r_bytes)
+            .ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(CiphertextCiphertextEqualityProof {
             Y_0,

@@ -12,7 +12,6 @@ use {
         errors::ProofVerificationError, sigma_proofs::errors::FeeSigmaProofError,
         transcript::TranscriptProtocol,
     },
-    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -367,23 +366,39 @@ impl FeeSigmaProof {
             return Err(ProofVerificationError::Deserialization.into());
         }
 
-        let bytes = array_ref![bytes, 0, 256];
-        let (Y_max_proof, z_max_proof, c_max_proof, Y_delta, Y_claimed, z_x, z_delta, z_claimed) =
-            array_refs![bytes, 32, 32, 32, 32, 32, 32, 32, 32];
+        let Y_max_proof = CompressedRistretto::from_slice(&bytes[..32]);
 
-        let Y_max_proof = CompressedRistretto::from_slice(Y_max_proof);
-        let z_max_proof = Scalar::from_canonical_bytes(*z_max_proof)
-            .ok_or(ProofVerificationError::Deserialization)?;
-        let c_max_proof = Scalar::from_canonical_bytes(*c_max_proof)
+        let z_max_bytes = bytes[32..64]
+            .try_into()
+            .map_err(|_| ProofVerificationError::Deserialization)?;
+        let z_max_proof = Scalar::from_canonical_bytes(z_max_bytes)
             .ok_or(ProofVerificationError::Deserialization)?;
 
-        let Y_delta = CompressedRistretto::from_slice(Y_delta);
-        let Y_claimed = CompressedRistretto::from_slice(Y_claimed);
-        let z_x =
-            Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
-        let z_delta = Scalar::from_canonical_bytes(*z_delta)
+        let c_max_proof = bytes[64..96]
+            .try_into()
+            .map_err(|_| ProofVerificationError::Deserialization)?;
+        let c_max_proof = Scalar::from_canonical_bytes(c_max_proof)
             .ok_or(ProofVerificationError::Deserialization)?;
-        let z_claimed = Scalar::from_canonical_bytes(*z_claimed)
+
+        let Y_delta = CompressedRistretto::from_slice(&bytes[96..128]);
+        let Y_claimed = CompressedRistretto::from_slice(&bytes[128..160]);
+
+        let z_x_bytes = bytes[160..192]
+            .try_into()
+            .map_err(|_| ProofVerificationError::Deserialization)?;
+        let z_x = Scalar::from_canonical_bytes(z_x_bytes)
+            .ok_or(ProofVerificationError::Deserialization)?;
+
+        let z_delta_bytes = bytes[192..224]
+            .try_into()
+            .map_err(|_| ProofVerificationError::Deserialization)?;
+        let z_delta = Scalar::from_canonical_bytes(z_delta_bytes)
+            .ok_or(ProofVerificationError::Deserialization)?;
+
+        let z_claimed_bytes = bytes[224..256]
+            .try_into()
+            .map_err(|_| ProofVerificationError::Deserialization)?;
+        let z_claimed = Scalar::from_canonical_bytes(z_claimed_bytes)
             .ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(Self {

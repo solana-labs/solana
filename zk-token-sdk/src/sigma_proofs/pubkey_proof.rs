@@ -17,7 +17,6 @@ use {
         errors::ProofVerificationError, sigma_proofs::errors::PubkeyValidityProofError,
         transcript::TranscriptProtocol,
     },
-    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -126,11 +125,13 @@ impl PubkeyValidityProof {
             return Err(ProofVerificationError::Deserialization.into());
         }
 
-        let bytes = array_ref![bytes, 0, 64];
-        let (Y, z) = array_refs![bytes, 32, 32];
+        let Y = CompressedRistretto::from_slice(&bytes[..32]);
 
-        let Y = CompressedRistretto::from_slice(Y);
-        let z = Scalar::from_canonical_bytes(*z).ok_or(ProofVerificationError::Deserialization)?;
+        let z_bytes = bytes[32..64]
+            .try_into()
+            .map_err(|_| ProofVerificationError::Deserialization)?;
+        let z =
+            Scalar::from_canonical_bytes(z_bytes).ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(PubkeyValidityProof { Y, z })
     }

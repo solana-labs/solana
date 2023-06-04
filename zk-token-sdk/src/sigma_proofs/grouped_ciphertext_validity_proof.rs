@@ -23,7 +23,6 @@ use {
 };
 use {
     crate::{sigma_proofs::errors::ValidityProofError, transcript::TranscriptProtocol},
-    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -209,17 +208,21 @@ impl GroupedCiphertext2HandlesValidityProof {
             return Err(ProofVerificationError::Deserialization.into());
         }
 
-        let bytes = array_ref![bytes, 0, 160];
-        let (Y_0, Y_1, Y_2, z_r, z_x) = array_refs![bytes, 32, 32, 32, 32, 32];
+        let Y_0 = CompressedRistretto::from_slice(&bytes[..32]);
+        let Y_1 = CompressedRistretto::from_slice(&bytes[32..64]);
+        let Y_2 = CompressedRistretto::from_slice(&bytes[64..96]);
 
-        let Y_0 = CompressedRistretto::from_slice(Y_0);
-        let Y_1 = CompressedRistretto::from_slice(Y_1);
-        let Y_2 = CompressedRistretto::from_slice(Y_2);
+        let z_r = bytes[96..128]
+            .try_into()
+            .map_err(|_| ProofVerificationError::Deserialization)?;
+        let z_x = bytes[128..160]
+            .try_into()
+            .map_err(|_| ProofVerificationError::Deserialization)?;
 
         let z_r =
-            Scalar::from_canonical_bytes(*z_r).ok_or(ProofVerificationError::Deserialization)?;
+            Scalar::from_canonical_bytes(z_r).ok_or(ProofVerificationError::Deserialization)?;
         let z_x =
-            Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
+            Scalar::from_canonical_bytes(z_x).ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(GroupedCiphertext2HandlesValidityProof {
             Y_0,
