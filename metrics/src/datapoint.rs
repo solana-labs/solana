@@ -120,6 +120,19 @@ macro_rules! create_datapoint {
 
     (@fields $point:ident) => {};
 
+    // process optional fields
+    (@fields $point:ident ($name:expr, $value:expr, Option<$type:ident>) , $($rest:tt)*) => {
+        if let Some(value) = $value {
+            $crate::create_datapoint!(@field $point $name, value, $type);
+        }
+        $crate::create_datapoint!(@fields $point $($rest)*);
+    };
+    (@fields $point:ident ($name:expr, $value:expr, Option<$type:ident>) $(,)?) => {
+        if let Some(value) = $value {
+            $crate::create_datapoint!(@field $point $name, value, $type);
+        }
+    };
+
     // process tags
     (@fields $point:ident $tag_name:expr => $tag_value:expr, $($rest:tt)*) => {
         $crate::create_datapoint!(@tag $point $tag_name, $tag_value);
@@ -259,6 +272,42 @@ mod test {
         );
         assert_eq!(point.fields[2], ("f64", "12.34".to_string()));
         assert_eq!(point.fields[3], ("bool", "true".to_string()));
+    }
+
+    #[test]
+    fn test_optional_datapoint() {
+        datapoint_debug!("name", ("field name", Some("test"), Option<String>));
+        datapoint_info!("name", ("field name", Some(12.34_f64), Option<f64>));
+        datapoint_trace!("name", ("field name", Some(true), Option<bool>));
+        datapoint_warn!("name", ("field name", Some(1), Option<i64>));
+        datapoint_error!("name", ("field name", Some(1), Option<i64>),);
+        datapoint_debug!("name", ("field name", None::<String>, Option<String>));
+        datapoint_info!("name", ("field name", None::<f64>, Option<f64>));
+        datapoint_trace!("name", ("field name", None::<bool>, Option<bool>));
+        datapoint_warn!("name", ("field name", None::<i64>, Option<i64>));
+        datapoint_error!("name", ("field name", None::<i64>, Option<i64>),);
+
+        let point = create_datapoint!(
+            @point "name",
+            ("some_i64", Some(1), Option<i64>),
+            ("no_i64", None::<i64>, Option<i64>),
+            ("some_String", Some("string space string"), Option<String>),
+            ("no_String", None::<String>, Option<String>),
+            ("some_f64", Some(12.34_f64), Option<f64>),
+            ("no_f64", None::<f64>, Option<f64>),
+            ("some_bool", Some(true), Option<bool>),
+            ("no_bool", None::<bool>, Option<bool>),
+        );
+        assert_eq!(point.name, "name");
+        assert_eq!(point.tags.len(), 0);
+        assert_eq!(point.fields[0], ("some_i64", "1i".to_string()));
+        assert_eq!(
+            point.fields[1],
+            ("some_String", "\"string space string\"".to_string())
+        );
+        assert_eq!(point.fields[2], ("some_f64", "12.34".to_string()));
+        assert_eq!(point.fields[3], ("some_bool", "true".to_string()));
+        assert_eq!(point.fields.len(), 4);
     }
 
     #[test]
