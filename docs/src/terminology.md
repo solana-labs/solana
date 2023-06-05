@@ -68,13 +68,13 @@ A measure of the network confirmation for the [block](#block).
 A set of [validators](#validator) maintaining a single [ledger](#ledger).
 
 ## cluster restart
-When a [cluster](#cluster) stops finalizing blocks for a prolonged period of
-time, as determined by social consensus amongst the validator operators, a
-pre-defined set of operations is performed by at least 80% of the stake weight
-to resume block production from the highest optimistically confirmed slot. Any
-processed but non-confirmed blocks may be discarded during the restart
-procedure. This is different from sporadic single validator restart which does
-not impact the cluster. See
+When a [cluster](#cluster) stops finalizing blocks due to an unrecoverable set
+of failures, as determined by social consensus amongst the validator operators,
+a pre-defined set of operations is performed by at least 80% of the stake
+weight to resume block production from the highest optimistically confirmed
+slot. Any processed but non-confirmed blocks may be discarded during the
+restart procedure. This is different from sporadic single validator restart
+which does not impact the cluster. See
 [cluster restart](https://docs.solana.com/running-validator/restart-cluster)
 for details.
 
@@ -92,7 +92,9 @@ The wallclock duration between a [leader](#leader) creating a [tick entry](#tick
 
 ## confirmed block
 
-See [optimistically confirmed block](#optimistically-confirmed-block).
+A [block](#block) that has received supermajority stake-weighted [votes](#vote)
+should not get rolled back given < 5% malicious. Details can be found at
+[Optimistic Confirmation](optimistic_confirmation.md#Primitives).
 
 ## control plane
 
@@ -230,12 +232,6 @@ A computer participating in a [cluster](#cluster).
 ## node count
 
 The number of [validators](#validator) participating in a [cluster](#cluster).
-
-## optimistically confirmed block
-
-A [block](#block) which got the [ledger votes](#ledger-vote) from
-[validators](#validator) holding more than 2/3 of total [stake](#stake) in a
-[cluster](#cluster). The votes may or may not have been confirmed to a block.
 
 ## PoH
 
