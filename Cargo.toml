@@ -400,8 +400,8 @@ x509-parser = "0.14.0"
 zeroize = { version = "1.3", default-features = false }
 zstd = "0.11.2"
 
-# for details, see https://github.com/solana-labs/crossbeam/commit/fd279d707025f0e60951e429bf778b4813d1b6bf
 [patch.crates-io]
+# for details, see https://github.com/solana-labs/crossbeam/commit/fd279d707025f0e60951e429bf778b4813d1b6bf
 crossbeam-epoch = { git = "https://github.com/solana-labs/crossbeam", rev = "fd279d707025f0e60951e429bf778b4813d1b6bf" }
 
 # We include the following crates as our dependencies above from crates.io:
