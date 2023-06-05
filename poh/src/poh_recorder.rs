@@ -183,6 +183,13 @@ impl TransactionRecorder {
                         starting_transaction_index: None,
                     };
                 }
+                Err(PohRecorderError::SendError(_)) => {
+                    return RecordTransactionsSummary {
+                        record_transactions_timings,
+                        result: Err(PohRecorderError::MaxHeightReached),
+                        starting_transaction_index: None,
+                    };
+                }
                 Err(e) => panic!("Poh recorder returned unexpected error: {e:?}"),
             }
         }
