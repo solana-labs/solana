@@ -48,7 +48,7 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
     }
 
     /// Release unnecessary locks before execution.
-    pub fn release_locks_early(&mut self, results: impl Iterator<Item = Result<()>>) {
+    pub fn release_locks_early<T, U>(&mut self, results: &[(Result<T>, U)]) {
         // If we don't need to unlock, then we don't need to release locks early
         if !self.needs_unlock() {
             return;
@@ -61,14 +61,20 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
             ..
         } = self;
 
+        assert_eq!(sanitized_txs.len(), results.len());
         let tx_and_is_locked = results
+            .iter()
             .zip(sanitized_txs.iter())
             .zip(lock_results.iter_mut())
             .filter(|(_, lock_result)| lock_result.is_ok())
-            .filter(|((result, _), _)| result.is_err())
-            .map(|((result, tx), lock_result)| {
-                *lock_result = result; // modify `lock_result` so it won't be unlocked later on drop
-                (tx, true)
+            .filter_map(|((result, tx), lock_result)| {
+                match &result.0 {
+                    Ok(_) => None,
+                    Err(err) => {
+                        *lock_result = Err(err.clone()); // modify `lock_result` so it won't be unlocked later on drop
+                        Some((tx, true))
+                    }
+                }
             });
 
         bank.accounts().unlock_accounts(tx_and_is_locked);

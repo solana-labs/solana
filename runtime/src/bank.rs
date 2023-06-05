@@ -4516,10 +4516,7 @@ impl Bank {
         );
         load_time.stop();
 
-        batch.release_locks_early(loaded_transactions.iter().map(|r| match &r.0 {
-            Ok(_) => Ok(()),
-            Err(err) => Err(err.clone()),
-        }));
+        batch.release_locks_early(&loaded_transactions);
 
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
