@@ -1,4 +1,3 @@
-use solana_sdk::sysvar::last_restart_slot::LastRestartSlot;
 #[allow(deprecated)]
 use solana_sdk::sysvar::{fees::Fees, recent_blockhashes::RecentBlockhashes};
 use {
@@ -16,7 +15,7 @@ use {
         slot_hashes::SlotHashes,
         slot_history::{self, SlotHistory},
         stake_history::{StakeHistory, StakeHistoryEntry},
-        sysvar::{self, rewards::Rewards},
+        sysvar::{self, last_restart_slot::LastRestartSlot, rewards::Rewards},
     },
 };
 
