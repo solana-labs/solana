@@ -58,7 +58,7 @@ impl TpuEntryNotifier {
     ) -> Result<(), RecvTimeoutError> {
         let (bank, (entry, tick_height)) = entry_receiver.recv_timeout(Duration::from_secs(1))?;
         let slot = bank.slot();
-        let index = if slot > *current_slot {
+        let index = if slot != *current_slot {
             *current_index = 0;
             *current_slot = slot;
             0
