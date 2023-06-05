@@ -9,6 +9,13 @@ use {
     },
 };
 
+/// The encoder for the byte-block.
+#[derive(Debug)]
+pub enum ByteBlockEncoder {
+    Raw(Cursor<Vec<u8>>),
+    Lz4(lz4::Encoder<Vec<u8>>),
+}
+
 /// The byte block writer.
 ///
 /// All writes (`write_type` and `write`) will be buffered in the internal
@@ -17,23 +24,33 @@ use {
 /// To finalize all the writes, invoke `finish` to obtain the encoded byte
 /// block.
 #[derive(Debug)]
-pub enum ByteBlockWriter {
-    Raw(Cursor<Vec<u8>>),
-    Lz4(lz4::Encoder<Vec<u8>>),
+pub struct ByteBlockWriter {
+    /// the encoder for the byte-block
+    encoder: ByteBlockEncoder,
+    /// the length of the raw data
+    len: usize,
 }
 
 impl ByteBlockWriter {
     /// Create a ByteBlockWriter from the specified AccountBlockFormat.
     pub fn new(encoding: AccountBlockFormat) -> Self {
-        match encoding {
-            AccountBlockFormat::AlignedRaw => Self::Raw(Cursor::new(Vec::new())),
-            AccountBlockFormat::Lz4 => Self::Lz4(
-                lz4::EncoderBuilder::new()
-                    .level(0)
-                    .build(Vec::new())
-                    .unwrap(),
-            ),
+        Self {
+            encoder: match encoding {
+                AccountBlockFormat::AlignedRaw => ByteBlockEncoder::Raw(Cursor::new(Vec::new())),
+                AccountBlockFormat::Lz4 => ByteBlockEncoder::Lz4(
+                    lz4::EncoderBuilder::new()
+                        .level(0)
+                        .build(Vec::new())
+                        .unwrap(),
+                ),
+            },
+            len: 0,
         }
+    }
+
+    /// Return the length of the raw data (i.e. after decoding).
+    pub fn raw_len(&self) -> usize {
+        self.len
     }
 
     /// Write the specified typed instance to the internal buffer of
@@ -49,19 +66,20 @@ impl ByteBlockWriter {
     /// Write the specified typed bytes to the internal buffer of the
     /// ByteBlockWriter instance.
     pub fn write(&mut self, buf: &[u8]) -> std::io::Result<()> {
-        match self {
-            Self::Raw(cursor) => cursor.write_all(buf)?,
-            Self::Lz4(lz4_encoder) => lz4_encoder.write_all(buf)?,
+        match &mut self.encoder {
+            ByteBlockEncoder::Raw(cursor) => cursor.write_all(buf)?,
+            ByteBlockEncoder::Lz4(lz4_encoder) => lz4_encoder.write_all(buf)?,
         };
+        self.len += buf.len();
         Ok(())
     }
 
     /// Flush the internal byte buffer that collects all the previous writes
     /// into an encoded byte array.
     pub fn finish(self) -> std::io::Result<Vec<u8>> {
-        match self {
-            Self::Raw(cursor) => Ok(cursor.into_inner()),
-            Self::Lz4(lz4_encoder) => {
+        match self.encoder {
+            ByteBlockEncoder::Raw(cursor) => Ok(cursor.into_inner()),
+            ByteBlockEncoder::Lz4(lz4_encoder) => {
                 let (compressed_block, result) = lz4_encoder.finish();
                 result?;
                 Ok(compressed_block)
@@ -112,6 +130,7 @@ mod tests {
         let value: u32 = 42;
 
         writer.write_type(&value).unwrap();
+        assert_eq!(writer.raw_len(), mem::size_of::<u32>());
 
         let buffer = writer.finish().unwrap();
 
@@ -178,6 +197,13 @@ mod tests {
         writer.write_type(&test_data2).unwrap();
         writer.write_type(&test_metas[2]).unwrap();
         writer.write_type(&test_data3).unwrap();
+        assert_eq!(
+            writer.raw_len(),
+            mem::size_of::<TestMetaStruct>() * 3
+                + mem::size_of_val(&test_data1)
+                + mem::size_of_val(&test_data2)
+                + mem::size_of_val(&test_data3)
+        );
 
         let buffer = writer.finish().unwrap();
 

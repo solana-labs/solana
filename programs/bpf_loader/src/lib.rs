@@ -205,8 +205,14 @@ macro_rules! deploy_program {
             Arc::new(program_runtime_environment),
         )?;
         if let Some(old_entry) = find_program_in_cache($invoke_context, &$program_id) {
-            let usage_counter = old_entry.usage_counter.load(Ordering::Relaxed);
-            executor.usage_counter.store(usage_counter, Ordering::Relaxed);
+            executor.tx_usage_counter.store(
+                old_entry.tx_usage_counter.load(Ordering::Relaxed),
+                Ordering::Relaxed
+            );
+            executor.ix_usage_counter.store(
+                old_entry.ix_usage_counter.load(Ordering::Relaxed),
+                Ordering::Relaxed
+            );
         }
         $drop
         load_program_metrics.program_id = $program_id.to_string();
@@ -562,7 +568,7 @@ fn process_instruction_inner(
         get_or_create_executor_time.as_us()
     );
 
-    executor.usage_counter.fetch_add(1, Ordering::Relaxed);
+    executor.ix_usage_counter.fetch_add(1, Ordering::Relaxed);
     match &executor.program {
         LoadedProgramType::FailedVerification
         | LoadedProgramType::Closed
@@ -4122,13 +4128,15 @@ mod tests {
         let transaction_accounts = vec![];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let program_id = Pubkey::new_unique();
+        let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
         let program = LoadedProgram {
-            program: LoadedProgramType::Unloaded,
+            program: LoadedProgramType::Unloaded(env),
             account_size: 0,
             deployment_slot: 0,
             effective_slot: 0,
             maybe_expiration_slot: None,
-            usage_counter: AtomicU64::new(100),
+            tx_usage_counter: AtomicU64::new(100),
+            ix_usage_counter: AtomicU64::new(100),
         };
         invoke_context
             .programs_modified_by_tx
@@ -4145,7 +4153,14 @@ mod tests {
             .expect("Didn't find upgraded program in the cache");
 
         assert_eq!(updated_program.deployment_slot, 2);
-        assert_eq!(updated_program.usage_counter.load(Ordering::Relaxed), 100);
+        assert_eq!(
+            updated_program.tx_usage_counter.load(Ordering::Relaxed),
+            100
+        );
+        assert_eq!(
+            updated_program.ix_usage_counter.load(Ordering::Relaxed),
+            100
+        );
     }
 
     #[test]
@@ -4153,13 +4168,15 @@ mod tests {
         let transaction_accounts = vec![];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let program_id = Pubkey::new_unique();
+        let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
         let program = LoadedProgram {
-            program: LoadedProgramType::Unloaded,
+            program: LoadedProgramType::Unloaded(env),
             account_size: 0,
             deployment_slot: 0,
             effective_slot: 0,
             maybe_expiration_slot: None,
-            usage_counter: AtomicU64::new(100),
+            tx_usage_counter: AtomicU64::new(100),
+            ix_usage_counter: AtomicU64::new(100),
         };
         invoke_context
             .programs_modified_by_tx
@@ -4177,6 +4194,7 @@ mod tests {
             .expect("Didn't find upgraded program in the cache");
 
         assert_eq!(program2.deployment_slot, 2);
-        assert_eq!(program2.usage_counter.load(Ordering::Relaxed), 0);
+        assert_eq!(program2.tx_usage_counter.load(Ordering::Relaxed), 0);
+        assert_eq!(program2.ix_usage_counter.load(Ordering::Relaxed), 0);
     }
 }

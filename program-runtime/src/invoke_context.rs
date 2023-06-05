@@ -735,7 +735,7 @@ impl<'a> InvokeContext<'a> {
             _ => None,
         }
         .ok_or(InstructionError::UnsupportedProgramId)?;
-        entry.usage_counter.fetch_add(1, Ordering::Relaxed);
+        entry.ix_usage_counter.fetch_add(1, Ordering::Relaxed);
 
         let program_id = *instruction_context.get_last_program_key(self.transaction_context)?;
         self.transaction_context

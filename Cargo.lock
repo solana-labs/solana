@@ -3082,8 +3082,7 @@ checksum = "61807f77802ff30975e01f4f071c8ba10c022052f98b3294119f3e615d13e5be"
 [[package]]
 name = "ntapi"
 version = "0.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f6bb902e437b6d86e03cce10a7e2af662292c5dfef23b65899ea3ac9354ad44"
+source = "git+https://github.com/solana-labs/ntapi?rev=5980bbab2e0501a8100eb88c12222d664ccb3a0a#5980bbab2e0501a8100eb88c12222d664ccb3a0a"
 dependencies = [
  "winapi 0.3.9",
 ]
