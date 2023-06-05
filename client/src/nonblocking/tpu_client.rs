@@ -3,7 +3,6 @@ use {
     crate::{connection_cache::ConnectionCache, tpu_client::TpuClientConfig},
     solana_connection_cache::connection_cache::{
         ConnectionCache as BackendConnectionCache, ConnectionManager, ConnectionPool,
-        NewConnectionConfig,
     },
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
     solana_rpc_client::nonblocking::rpc_client::RpcClient,
@@ -31,7 +30,6 @@ impl<P, M, C> TpuClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: NewConnectionConfig,
 {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
@@ -101,7 +99,6 @@ impl<P, M, C> TpuClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: NewConnectionConfig,
 {
     /// Create a new client that disconnects when dropped
     pub async fn new_with_connection_cache(

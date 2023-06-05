@@ -3,7 +3,7 @@ use {
     crate::nonblocking::tpu_client::TpuClient as NonblockingTpuClient,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_connection_cache::connection_cache::{
-        ConnectionCache, ConnectionManager, ConnectionPool, NewConnectionConfig,
+        ConnectionCache, ConnectionManager, ConnectionPool,
     },
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{clock::Slot, transaction::Transaction, transport::Result as TransportResult},
@@ -71,7 +71,6 @@ impl<P, M, C> TpuClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: NewConnectionConfig,
 {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size

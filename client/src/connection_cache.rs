@@ -5,7 +5,6 @@ use {
         client_connection::ClientConnection,
         connection_cache::{
             BaseClientConnection, ConnectionCache as BackendConnectionCache, ConnectionPool,
-            NewConnectionConfig,
         },
     },
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
