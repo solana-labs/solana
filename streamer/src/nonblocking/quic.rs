@@ -89,6 +89,7 @@ pub fn spawn_server(
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
+    alpn_protocols: Vec<Vec<u8>>,
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
@@ -99,7 +100,7 @@ pub fn spawn_server(
     coalesce: Duration,
 ) -> Result<(Endpoint, Arc<StreamStats>, JoinHandle<()>), QuicServerError> {
     info!("Start {name} quic server on {sock:?}");
-    let (config, _cert) = configure_server(keypair, gossip_host)?;
+    let (config, _cert) = configure_server(keypair, gossip_host, alpn_protocols)?;
 
     let endpoint = Endpoint::new(EndpointConfig::default(), Some(config), sock, TokioRuntime)
         .map_err(QuicServerError::EndpointFailed)?;
@@ -1139,7 +1140,6 @@ pub mod test {
             .expect("Failed to use client certificate");
 
         crypto.enable_early_data = true;
-        crypto.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
 
         let mut config = ClientConfig::new(Arc::new(crypto));
 
@@ -1174,6 +1174,7 @@ pub mod test {
             s,
             &keypair,
             ip,
+            vec![], // alpn_protocols
             sender,
             exit.clone(),
             max_connections_per_peer,
@@ -1604,6 +1605,7 @@ pub mod test {
             s,
             &keypair,
             ip,
+            vec![], // alpn_protocols
             sender,
             exit.clone(),
             1,
@@ -1635,6 +1637,7 @@ pub mod test {
             s,
             &keypair,
             ip,
+            vec![], // alpn_protocols
             sender,
             exit.clone(),
             2,

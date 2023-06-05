@@ -1,8 +1,5 @@
 use {
-    crate::{
-        nonblocking::quic::ALPN_TPU_PROTOCOL_ID, streamer::StakedNodes,
-        tls_certificates::new_self_signed_tls_certificate,
-    },
+    crate::{streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate},
     crossbeam_channel::Sender,
     pem::Pem,
     quinn::{Endpoint, IdleTimeout, ServerConfig},
@@ -56,6 +53,7 @@ impl rustls::server::ClientCertVerifier for SkipClientVerification {
 pub(crate) fn configure_server(
     identity_keypair: &Keypair,
     gossip_host: IpAddr,
+    alpn_protocols: Vec<Vec<u8>>,
 ) -> Result<(ServerConfig, String), QuicServerError> {
     let (cert, priv_key) = new_self_signed_tls_certificate(identity_keypair, gossip_host)?;
     let cert_chain_pem_parts = vec![Pem {
@@ -68,7 +66,7 @@ pub(crate) fn configure_server(
         .with_safe_defaults()
         .with_client_cert_verifier(SkipClientVerification::new())
         .with_single_cert(vec![cert], priv_key)?;
-    server_tls_config.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
+    server_tls_config.alpn_protocols = alpn_protocols;
 
     let mut server_config = ServerConfig::with_crypto(Arc::new(server_tls_config));
     server_config.use_retry(true);
@@ -396,6 +394,7 @@ pub fn spawn_server(
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
+    alpn_protocols: Vec<Vec<u8>>,
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
@@ -413,6 +412,7 @@ pub fn spawn_server(
             sock,
             keypair,
             gossip_host,
+            alpn_protocols,
             packet_sender,
             exit,
             max_connections_per_peer,
@@ -462,6 +462,7 @@ mod test {
             s,
             &keypair,
             ip,
+            vec![], // alpn_protocols
             sender,
             exit.clone(),
             1,
@@ -518,6 +519,7 @@ mod test {
             s,
             &keypair,
             ip,
+            vec![], // alpn_protocols
             sender,
             exit.clone(),
             2,
@@ -561,6 +563,7 @@ mod test {
             s,
             &keypair,
             ip,
+            vec![], // alpn_protocols
             sender,
             exit.clone(),
             1,

@@ -23,6 +23,7 @@ use {
     },
 };
 
+const ALPN_TVU_PROTOCOL_ID: &[u8] = b"solana-tvu";
 const MAX_QUIC_CONNECTIONS_PER_PEER: usize = 8;
 const MAX_STAKED_QUIC_CONNECTIONS: usize = 2000;
 const MAX_UNSTAKED_QUIC_CONNECTIONS: usize = 1000;
@@ -240,6 +241,7 @@ impl ShredFetchStage {
             quic_socket,
             &keypair,
             ip_addr,
+            vec![Vec::from(ALPN_TVU_PROTOCOL_ID)],
             packet_sender,
             exit,
             MAX_QUIC_CONNECTIONS_PER_PEER,

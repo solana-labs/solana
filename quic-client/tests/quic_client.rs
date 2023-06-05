@@ -73,6 +73,7 @@ mod tests {
             s.try_clone().unwrap(),
             &keypair,
             ip,
+            vec![], // alpn_protocols
             sender,
             exit.clone(),
             1,
@@ -153,6 +154,7 @@ mod tests {
             s.try_clone().unwrap(),
             &keypair,
             ip,
+            vec![], // alpn_protocols
             sender,
             exit.clone(),
             1,
@@ -209,6 +211,7 @@ mod tests {
             request_recv_socket.try_clone().unwrap(),
             &keypair,
             request_recv_ip,
+            vec![], // alpn_protocols
             sender,
             request_recv_exit.clone(),
             1,
@@ -233,6 +236,7 @@ mod tests {
             response_recv_socket,
             &keypair2,
             response_recv_ip,
+            vec![], // alpn_protocols
             sender2,
             response_recv_exit.clone(),
             1,

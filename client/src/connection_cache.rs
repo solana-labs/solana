@@ -249,6 +249,7 @@ mod tests {
             response_recv_socket,
             &keypair2,
             response_recv_ip,
+            vec![], // alpn_protocols
             sender2,
             response_recv_exit.clone(),
             1,

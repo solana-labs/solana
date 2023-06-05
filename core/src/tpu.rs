@@ -37,7 +37,7 @@ use {
     },
     solana_sdk::{pubkey::Pubkey, signature::Keypair},
     solana_streamer::{
-        nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+        nonblocking::quic::{ALPN_TPU_PROTOCOL_ID, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT},
         quic::{spawn_server, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
         streamer::StakedNodes,
     },
@@ -156,6 +156,7 @@ impl Tpu {
                 .tpu(Protocol::QUIC)
                 .expect("Operator must spin up node with valid (QUIC) TPU address")
                 .ip(),
+            vec![Vec::from(ALPN_TPU_PROTOCOL_ID)],
             packet_sender,
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_PEER,
@@ -176,6 +177,7 @@ impl Tpu {
                 .tpu_forwards(Protocol::QUIC)
                 .expect("Operator must spin up node with valid (QUIC) TPU-forwards address")
                 .ip(),
+            vec![Vec::from(ALPN_TPU_PROTOCOL_ID)],
             forwarded_packet_sender,
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_PEER,
