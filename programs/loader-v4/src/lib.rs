@@ -16,7 +16,7 @@ use {
         memory_region::{MemoryMapping, MemoryRegion},
         verifier::RequisiteVerifier,
         vm::{
-            BuiltInProgram, Config, ContextObject, EbpfVm, ProgramResult,
+            BuiltinProgram, Config, ContextObject, EbpfVm, ProgramResult,
             PROGRAM_ENVIRONMENT_KEY_SHIFT,
         },
     },
@@ -37,6 +37,8 @@ use {
         sync::{atomic::Ordering, Arc},
     },
 };
+
+pub const DEFAULT_COMPUTE_UNITS: u64 = 2_000;
 
 pub fn get_state(data: &[u8]) -> Result<&LoaderV4State, InstructionError> {
     unsafe {
@@ -105,7 +107,7 @@ pub fn load_program_from_account(
         aligned_memory_mapping: true,
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
-    let loader = BuiltInProgram::new_loader(config);
+    let loader = BuiltinProgram::new_loader(config);
     let state = get_state(program.get_data())?;
     let programdata = program
         .get_data()
@@ -560,7 +562,7 @@ pub fn process_instruction_inner(
             .feature_set
             .is_active(&feature_set::native_programs_consume_cu::id())
         {
-            invoke_context.consume_checked(2000)?;
+            invoke_context.consume_checked(DEFAULT_COMPUTE_UNITS)?;
         }
         match limited_deserialize(instruction_data)? {
             LoaderV4Instruction::Write { offset, bytes } => {
@@ -606,7 +608,9 @@ pub fn process_instruction_inner(
             get_or_create_executor_time.as_us()
         );
         drop(program);
-        loaded_program.usage_counter.fetch_add(1, Ordering::Relaxed);
+        loaded_program
+            .ix_usage_counter
+            .fetch_add(1, Ordering::Relaxed);
         match &loaded_program.program {
             LoadedProgramType::FailedVerification
             | LoadedProgramType::Closed

@@ -920,7 +920,7 @@ mod tests {
                 SocketAddrSpace::Unspecified,
             ));
             let exit = Arc::new(AtomicBool::new(false));
-            let validator_exit = create_validator_exit(&exit);
+            let validator_exit = create_validator_exit(exit);
             let (bank_forks, vote_keypair) = new_bank_forks_with_config(BankTestConfig {
                 secondary_indexes: config.account_indexes,
             });

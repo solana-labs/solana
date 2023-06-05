@@ -2201,7 +2201,7 @@ fn main() {
                     wal_recovery_mode,
                     force_update_to_open,
                 );
-                match load_bank_forks(
+                match load_and_process_ledger(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),
@@ -2293,7 +2293,7 @@ fn main() {
                     wal_recovery_mode,
                     force_update_to_open,
                 );
-                match load_bank_forks(
+                match load_and_process_ledger(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),
@@ -2531,7 +2531,7 @@ fn main() {
                     wal_recovery_mode,
                     force_update_to_open,
                 );
-                let (bank_forks, ..) = load_bank_forks(
+                let (bank_forks, ..) = load_and_process_ledger(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),
@@ -2575,7 +2575,7 @@ fn main() {
                     wal_recovery_mode,
                     force_update_to_open,
                 );
-                match load_bank_forks(
+                match load_and_process_ledger(
                     arg_matches,
                     &open_genesis_config_by(&ledger_path, arg_matches),
                     Arc::new(blockstore),
@@ -2745,7 +2745,7 @@ fn main() {
                     output_directory.display()
                 );
 
-                match load_bank_forks(
+                match load_and_process_ledger(
                     arg_matches,
                     &genesis_config,
                     blockstore.clone(),
@@ -3116,7 +3116,7 @@ fn main() {
                     wal_recovery_mode,
                     force_update_to_open,
                 );
-                let (bank_forks, ..) = load_bank_forks(
+                let (bank_forks, ..) = load_and_process_ledger(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),
@@ -3205,7 +3205,7 @@ fn main() {
                     wal_recovery_mode,
                     force_update_to_open,
                 );
-                match load_bank_forks(
+                match load_and_process_ledger(
                     arg_matches,
                     &genesis_config,
                     Arc::new(blockstore),

@@ -32,9 +32,8 @@ impl RewardsRecorderService {
         rewards_receiver: RewardsRecorderReceiver,
         max_complete_rewards_slot: Arc<AtomicU64>,
         blockstore: Arc<Blockstore>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
-        let exit = exit.clone();
         let thread_hdl = Builder::new()
             .name("solRewardsWritr".to_string())
             .spawn(move || loop {

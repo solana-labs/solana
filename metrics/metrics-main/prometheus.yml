@@ -89,3 +89,9 @@ scrape_configs:
     scrape_timeout: 14s
     static_configs:
             - targets: ['metrics-main:9100']
+
+  - job_name: 'Stackpath'
+    scrape_interval: 15s
+    scrape_timeout: 14s
+    static_configs:
+            - targets: ['dev-stackpath-eu-lhr-2:9100','dev-stackpath-us-den-2']

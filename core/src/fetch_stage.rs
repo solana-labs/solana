@@ -34,7 +34,7 @@ impl FetchStage {
         sockets: Vec<UdpSocket>,
         tpu_forwards_sockets: Vec<UdpSocket>,
         tpu_vote_sockets: Vec<UdpSocket>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         coalesce: Duration,
     ) -> (Self, PacketBatchReceiver, PacketBatchReceiver) {
@@ -66,7 +66,7 @@ impl FetchStage {
         sockets: Vec<UdpSocket>,
         tpu_forwards_sockets: Vec<UdpSocket>,
         tpu_vote_sockets: Vec<UdpSocket>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         sender: &PacketBatchSender,
         vote_sender: &PacketBatchSender,
         forward_sender: &PacketBatchSender,
@@ -142,7 +142,7 @@ impl FetchStage {
         tpu_sockets: Vec<Arc<UdpSocket>>,
         tpu_forwards_sockets: Vec<Arc<UdpSocket>>,
         tpu_vote_sockets: Vec<Arc<UdpSocket>>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         sender: &PacketBatchSender,
         vote_sender: &PacketBatchSender,
         forward_sender: &PacketBatchSender,
@@ -234,7 +234,6 @@ impl FetchStage {
             })
             .unwrap();
 
-        let exit = exit.clone();
         let metrics_thread_hdl = Builder::new()
             .name("solFetchStgMetr".to_string())
             .spawn(move || loop {

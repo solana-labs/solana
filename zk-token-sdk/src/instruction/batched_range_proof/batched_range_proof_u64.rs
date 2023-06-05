@@ -18,7 +18,7 @@ use {
 };
 
 /// The instruction data that is needed for the
-/// `ProofInstruction::VerifyBatchedRangeProof64` instruction.
+/// `ProofInstruction::VerifyBatchedRangeProofU64` instruction.
 ///
 /// It includes the cryptographic proof as well as the context data information needed to verify
 /// the proof.
@@ -29,7 +29,7 @@ pub struct BatchedRangeProofU64Data {
     pub context: BatchedRangeProofContext,
 
     /// The batched range proof
-    pub proof: pod::RangeProof64,
+    pub proof: pod::RangeProofU64,
 }
 
 #[cfg(not(target_os = "solana"))]

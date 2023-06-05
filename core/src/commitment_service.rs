@@ -56,7 +56,7 @@ pub struct AggregateCommitmentService {
 
 impl AggregateCommitmentService {
     pub fn new(
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         subscriptions: Arc<RpcSubscriptions>,
     ) -> (Sender<CommitmentAggregationData>, Self) {
@@ -64,19 +64,18 @@ impl AggregateCommitmentService {
             Sender<CommitmentAggregationData>,
             Receiver<CommitmentAggregationData>,
         ) = unbounded();
-        let exit_ = exit.clone();
         (
             sender,
             Self {
                 t_commitment: Builder::new()
                     .name("solAggCommitSvc".to_string())
                     .spawn(move || loop {
-                        if exit_.load(Ordering::Relaxed) {
+                        if exit.load(Ordering::Relaxed) {
                             break;
                         }
 
                         if let Err(RecvTimeoutError::Disconnected) =
-                            Self::run(&receiver, &block_commitment_cache, &subscriptions, &exit_)
+                            Self::run(&receiver, &block_commitment_cache, &subscriptions, &exit)
                         {
                             break;
                         }
@@ -90,7 +89,7 @@ impl AggregateCommitmentService {
         receiver: &Receiver<CommitmentAggregationData>,
         block_commitment_cache: &RwLock<BlockCommitmentCache>,
         subscriptions: &Arc<RpcSubscriptions>,
-        exit: &Arc<AtomicBool>,
+        exit: &AtomicBool,
     ) -> Result<(), RecvTimeoutError> {
         loop {
             if exit.load(Ordering::Relaxed) {

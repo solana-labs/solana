@@ -536,7 +536,7 @@ impl ReplayStage {
         trace!("replay stage");
         // Start the replay stage loop
         let (lockouts_sender, commitment_service) = AggregateCommitmentService::new(
-            &exit,
+            exit.clone(),
             block_commitment_cache.clone(),
             rpc_subscriptions.clone(),
         );
@@ -4013,7 +4013,7 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks.clone(),
@@ -4583,7 +4583,7 @@ pub(crate) mod tests {
             let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
             let max_complete_rewards_slot = Arc::new(AtomicU64::default());
             let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-                &exit,
+                exit,
                 max_complete_transaction_status_slot,
                 max_complete_rewards_slot,
                 bank_forks.clone(),
@@ -4656,7 +4656,7 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit.clone(),
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks.clone(),
@@ -4664,7 +4664,7 @@ pub(crate) mod tests {
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         ));
         let (lockouts_sender, _) = AggregateCommitmentService::new(
-            &exit,
+            exit,
             block_commitment_cache.clone(),
             rpc_subscriptions,
         );

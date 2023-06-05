@@ -23,7 +23,7 @@ use {
         error::EbpfError,
         memory_region::{AccessType, MemoryCowCallback, MemoryMapping, MemoryRegion},
         verifier::RequisiteVerifier,
-        vm::{BuiltInProgram, ContextObject, EbpfVm, ProgramResult},
+        vm::{BuiltinProgram, ContextObject, EbpfVm, ProgramResult},
     },
     solana_sdk::{
         account::WritableAccount,
@@ -62,6 +62,10 @@ use {
     syscalls::create_program_runtime_environment,
 };
 
+pub const DEFAULT_LOADER_COMPUTE_UNITS: u64 = 570;
+pub const DEPRECATED_LOADER_COMPUTE_UNITS: u64 = 1_140;
+pub const UPGRADEABLE_LOADER_COMPUTE_UNITS: u64 = 2_370;
+
 #[allow(clippy::too_many_arguments)]
 pub fn load_program_from_bytes(
     feature_set: &FeatureSet,
@@ -71,7 +75,7 @@ pub fn load_program_from_bytes(
     loader_key: &Pubkey,
     account_size: usize,
     deployment_slot: Slot,
-    program_runtime_environment: Arc<BuiltInProgram<InvokeContext<'static>>>,
+    program_runtime_environment: Arc<BuiltinProgram<InvokeContext<'static>>>,
 ) -> Result<LoadedProgram, InstructionError> {
     let effective_slot = if feature_set.is_active(&delay_visibility_of_program_deployment::id()) {
         deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET)
@@ -100,7 +104,7 @@ pub fn load_program_from_account(
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
-    program_runtime_environment: Arc<BuiltInProgram<InvokeContext<'static>>>,
+    program_runtime_environment: Arc<BuiltinProgram<InvokeContext<'static>>>,
 ) -> Result<(Arc<LoadedProgram>, LoadProgramMetrics), InstructionError> {
     if !check_loader_id(program.get_owner()) {
         ic_logger_msg!(
@@ -201,8 +205,14 @@ macro_rules! deploy_program {
             Arc::new(program_runtime_environment),
         )?;
         if let Some(old_entry) = find_program_in_cache($invoke_context, &$program_id) {
-            let usage_counter = old_entry.usage_counter.load(Ordering::Relaxed);
-            executor.usage_counter.store(usage_counter, Ordering::Relaxed);
+            executor.tx_usage_counter.store(
+                old_entry.tx_usage_counter.load(Ordering::Relaxed),
+                Ordering::Relaxed
+            );
+            executor.ix_usage_counter.store(
+                old_entry.ix_usage_counter.load(Ordering::Relaxed),
+                Ordering::Relaxed
+            );
         }
         $drop
         load_program_metrics.program_id = $program_id.to_string();
@@ -352,7 +362,7 @@ macro_rules! create_vm {
 #[macro_export]
 macro_rules! mock_create_vm {
     ($vm:ident, $additional_regions:expr, $orig_account_lengths:expr, $invoke_context:expr $(,)?) => {
-        let loader = std::sync::Arc::new(BuiltInProgram::new_loader(
+        let loader = std::sync::Arc::new(BuiltinProgram::new_loader(
             solana_rbpf::vm::Config::default(),
         ));
         let function_registry = solana_rbpf::vm::FunctionRegistry::default();
@@ -515,17 +525,17 @@ fn process_instruction_inner(
         let program_id = instruction_context.get_last_program_key(transaction_context)?;
         return if bpf_loader_upgradeable::check_id(program_id) {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(2_370)?;
+                invoke_context.consume_checked(UPGRADEABLE_LOADER_COMPUTE_UNITS)?;
             }
             process_loader_upgradeable_instruction(invoke_context)
         } else if bpf_loader::check_id(program_id) {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(570)?;
+                invoke_context.consume_checked(DEFAULT_LOADER_COMPUTE_UNITS)?;
             }
             process_loader_instruction(invoke_context)
         } else if bpf_loader_deprecated::check_id(program_id) {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(1_140)?;
+                invoke_context.consume_checked(DEPRECATED_LOADER_COMPUTE_UNITS)?;
             }
             ic_logger_msg!(log_collector, "Deprecated loader is no longer supported");
             Err(InstructionError::UnsupportedProgramId)
@@ -558,7 +568,7 @@ fn process_instruction_inner(
         get_or_create_executor_time.as_us()
     );
 
-    executor.usage_counter.fetch_add(1, Ordering::Relaxed);
+    executor.ix_usage_counter.fetch_add(1, Ordering::Relaxed);
     match &executor.program {
         LoadedProgramType::FailedVerification
         | LoadedProgramType::Closed
@@ -1325,6 +1335,7 @@ fn process_loader_upgradeable_instruction(
                 ic_logger_msg!(log_collector, "Program account not owned by loader");
                 return Err(InstructionError::InvalidAccountOwner);
             }
+            let program_key = *program_account.get_key();
             match program_account.get_state()? {
                 UpgradeableLoaderState::Program {
                     programdata_address,
@@ -1356,11 +1367,21 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidRealloc);
             }
 
-            if let UpgradeableLoaderState::ProgramData {
-                slot: _,
+            let clock_slot = invoke_context
+                .get_sysvar_cache()
+                .get_clock()
+                .map(|clock| clock.slot)?;
+
+            let upgrade_authority_address = if let UpgradeableLoaderState::ProgramData {
+                slot,
                 upgrade_authority_address,
             } = programdata_account.get_state()?
             {
+                if clock_slot == slot {
+                    ic_logger_msg!(log_collector, "Program was extended in this block already");
+                    return Err(InstructionError::InvalidArgument);
+                }
+
                 if upgrade_authority_address.is_none() {
                     ic_logger_msg!(
                         log_collector,
@@ -1368,10 +1389,11 @@ fn process_loader_upgradeable_instruction(
                     );
                     return Err(InstructionError::Immutable);
                 }
+                upgrade_authority_address
             } else {
                 ic_logger_msg!(log_collector, "ProgramData state is invalid");
                 return Err(InstructionError::InvalidAccountData);
-            }
+            };
 
             let required_payment = {
                 let balance = programdata_account.get_lamports();
@@ -1383,6 +1405,8 @@ fn process_loader_upgradeable_instruction(
             // Borrowed accounts need to be dropped before native_invoke
             drop(programdata_account);
 
+            // Dereference the program ID to prevent overlapping mutable/immutable borrow of invoke context
+            let program_id = *program_id;
             if required_payment > 0 {
                 let payer_key = *transaction_context.get_key_of_account_at_index(
                     instruction_context.get_index_of_instruction_account_in_transaction(
@@ -1402,6 +1426,30 @@ fn process_loader_upgradeable_instruction(
             let mut programdata_account = instruction_context
                 .try_borrow_instruction_account(transaction_context, PROGRAM_DATA_ACCOUNT_INDEX)?;
             programdata_account.set_data_length(new_len)?;
+
+            let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
+
+            deploy_program!(
+                invoke_context,
+                program_key,
+                &program_id,
+                UpgradeableLoaderState::size_of_program().saturating_add(new_len),
+                clock_slot,
+                {
+                    drop(programdata_account);
+                },
+                programdata_account
+                    .get_data()
+                    .get(programdata_data_offset..)
+                    .ok_or(InstructionError::AccountDataTooSmall)?,
+            );
+
+            let mut programdata_account = instruction_context
+                .try_borrow_instruction_account(transaction_context, PROGRAM_DATA_ACCOUNT_INDEX)?;
+            programdata_account.set_state(&UpgradeableLoaderState::ProgramData {
+                slot: clock_slot,
+                upgrade_authority_address,
+            })?;
 
             ic_logger_msg!(
                 log_collector,
@@ -4080,13 +4128,15 @@ mod tests {
         let transaction_accounts = vec![];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let program_id = Pubkey::new_unique();
+        let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
         let program = LoadedProgram {
-            program: LoadedProgramType::Unloaded,
+            program: LoadedProgramType::Unloaded(env),
             account_size: 0,
             deployment_slot: 0,
             effective_slot: 0,
             maybe_expiration_slot: None,
-            usage_counter: AtomicU64::new(100),
+            tx_usage_counter: AtomicU64::new(100),
+            ix_usage_counter: AtomicU64::new(100),
         };
         invoke_context
             .programs_modified_by_tx
@@ -4103,7 +4153,14 @@ mod tests {
             .expect("Didn't find upgraded program in the cache");
 
         assert_eq!(updated_program.deployment_slot, 2);
-        assert_eq!(updated_program.usage_counter.load(Ordering::Relaxed), 100);
+        assert_eq!(
+            updated_program.tx_usage_counter.load(Ordering::Relaxed),
+            100
+        );
+        assert_eq!(
+            updated_program.ix_usage_counter.load(Ordering::Relaxed),
+            100
+        );
     }
 
     #[test]
@@ -4111,13 +4168,15 @@ mod tests {
         let transaction_accounts = vec![];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let program_id = Pubkey::new_unique();
+        let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
         let program = LoadedProgram {
-            program: LoadedProgramType::Unloaded,
+            program: LoadedProgramType::Unloaded(env),
             account_size: 0,
             deployment_slot: 0,
             effective_slot: 0,
             maybe_expiration_slot: None,
-            usage_counter: AtomicU64::new(100),
+            tx_usage_counter: AtomicU64::new(100),
+            ix_usage_counter: AtomicU64::new(100),
         };
         invoke_context
             .programs_modified_by_tx
@@ -4135,6 +4194,7 @@ mod tests {
             .expect("Didn't find upgraded program in the cache");
 
         assert_eq!(program2.deployment_slot, 2);
-        assert_eq!(program2.usage_counter.load(Ordering::Relaxed), 0);
+        assert_eq!(program2.tx_usage_counter.load(Ordering::Relaxed), 0);
+        assert_eq!(program2.ix_usage_counter.load(Ordering::Relaxed), 0);
     }
 }
