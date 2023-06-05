@@ -35,6 +35,7 @@ impl TpuEntryNotifier {
                     }
 
                     if let Err(RecvTimeoutError::Disconnected) = Self::send_entry_notification(
+                        exit.clone(),
                         &entry_receiver,
                         &entry_notification_sender,
                         &broadcast_entry_sender,
@@ -50,6 +51,7 @@ impl TpuEntryNotifier {
     }
 
     pub(crate) fn send_entry_notification(
+        exit: Arc<AtomicBool>,
         entry_receiver: &Receiver<WorkingBankEntry>,
         entry_notification_sender: &EntryNotifierSender,
         broadcast_entry_sender: &Sender<WorkingBankEntry>,
@@ -86,6 +88,9 @@ impl TpuEntryNotifier {
             warn!(
                 "Failed to send slot {slot:?} entry {index:?} from Tpu to BroadcastStage, error {err:?}",
             );
+            // If the BroadcastStage channel is closed, the validator has halted. Try to exit
+            // gracefully.
+            exit.store(true, Ordering::Relaxed);
         }
         Ok(())
     }
