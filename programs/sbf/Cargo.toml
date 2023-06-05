@@ -160,6 +160,10 @@ members = [
 targets = ["x86_64-unknown-linux-gnu"]
 
 [patch.crates-io]
+# Rust 1.69+ broke ntapi v0.3.x, which doesn't contain proper fix:
+#   https://github.com/MSxDOS/ntapi/pull/12
+ntapi = { git = "https://github.com/solana-labs/ntapi", rev = "5980bbab2e0501a8100eb88c12222d664ccb3a0a" }
+
 # We include the following crates as our dependencies from crates.io:
 #
 #  * spl-associated-token-account
