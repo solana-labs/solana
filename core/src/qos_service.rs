@@ -7,10 +7,7 @@ use {
     crate::banking_stage::{committer::CommitTransactionDetails, BatchedTransactionDetails},
     crossbeam_channel::{unbounded, Receiver, Sender},
     solana_measure::measure::Measure,
-    solana_runtime::{
-        bank::Bank,
-        cost_model::{CostModel, TransactionCost},
-    },
+    solana_runtime::{bank::Bank, cost_model::CostModel, transaction_cost::TransactionCost},
     solana_sdk::{
         clock::Slot,
         feature_set::FeatureSet,
