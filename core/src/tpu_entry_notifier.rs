@@ -26,17 +26,23 @@ impl TpuEntryNotifier {
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("solTpuEntry".to_string())
-            .spawn(move || loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
+            .spawn(move || {
+                let mut current_slot = 0;
+                let mut current_index = 0;
+                loop {
+                    if exit.load(Ordering::Relaxed) {
+                        break;
+                    }
 
-                if let Err(RecvTimeoutError::Disconnected) = Self::send_entry_notification(
-                    &entry_receiver,
-                    &entry_notification_sender,
-                    &broadcast_entry_sender,
-                ) {
-                    break;
+                    if let Err(RecvTimeoutError::Disconnected) = Self::send_entry_notification(
+                        &entry_receiver,
+                        &entry_notification_sender,
+                        &broadcast_entry_sender,
+                        &mut current_slot,
+                        &mut current_index,
+                    ) {
+                        break;
+                    }
                 }
             })
             .unwrap();
@@ -47,10 +53,19 @@ impl TpuEntryNotifier {
         entry_receiver: &Receiver<WorkingBankEntry>,
         entry_notification_sender: &EntryNotifierSender,
         broadcast_entry_sender: &Sender<WorkingBankEntry>,
+        current_slot: &mut u64,
+        current_index: &mut usize,
     ) -> Result<(), RecvTimeoutError> {
         let (bank, (entry, tick_height)) = entry_receiver.recv_timeout(Duration::from_secs(1))?;
         let slot = bank.slot();
-        let index = 0;
+        let index = if slot > *current_slot {
+            *current_index = 0;
+            *current_slot = slot;
+            0
+        } else {
+            *current_index += 1;
+            *current_index
+        };
 
         let entry_summary = EntrySummary {
             num_hashes: entry.num_hashes,
