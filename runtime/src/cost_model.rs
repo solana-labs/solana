@@ -45,6 +45,23 @@ impl CostModel {
         tx_cost
     }
 
+    // Calculate cost of loaded accounts size in the same way heap cost is charged at
+    // rate of 8cu per 32K. Citing `program_runtime\src\compute_budget.rs`: "(cost of
+    // heap is about) 0.5us per 32k at 15 units/us rounded up"
+    //
+    // Before feature `support_set_loaded_accounts_data_size_limit_ix` is enabled, or
+    // if user doesn't use compute budget ix `set_loaded_accounts_data_size_limit_ix`
+    // to set limit, `compute_budget.loaded_accounts_data_size_limit` is set to default
+    // limit of 64MB; which will convert to (64M/32K)*8CU = 16_000 CUs
+    //
+    pub fn calculate_loaded_accounts_data_size_cost(compute_budget: &ComputeBudget) -> u64 {
+        const ACCOUNT_DATA_COST_PAGE_SIZE: u64 = 32_u64.saturating_mul(1024);
+        (compute_budget.loaded_accounts_data_size_limit as u64)
+            .saturating_add(ACCOUNT_DATA_COST_PAGE_SIZE.saturating_sub(1))
+            .saturating_div(ACCOUNT_DATA_COST_PAGE_SIZE)
+            .saturating_mul(compute_budget.heap_cost)
+    }
+
     fn get_signature_cost(transaction: &SanitizedTransaction) -> u64 {
         transaction.signatures().len() as u64 * SIGNATURE_COST
     }
@@ -110,15 +127,14 @@ impl CostModel {
             Ok(_) => {
                 // if tx contained user-space instructions and a more accurate estimate available correct it
                 if bpf_costs > 0 {
-                    bpf_costs = budget.compute_unit_limit
+                    bpf_costs = compute_budget.compute_unit_limit
                 }
-                loaded_accounts_data_size_cost = if feature_set
+                if feature_set
                     .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id())
                 {
-                    Self::calculate_loaded_accounts_data_size_cost(&compute_budget)
-                } else {
-                    0u64
-                };
+                    loaded_accounts_data_size_cost =
+                        Self::calculate_loaded_accounts_data_size_cost(&compute_budget);
+                }
             }
             Err(_) => {
                 builtin_costs = 0;
