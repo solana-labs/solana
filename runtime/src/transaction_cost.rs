@@ -9,6 +9,11 @@ pub struct TransactionCost {
     pub signature_cost: u64,
     pub write_lock_cost: u64,
     pub data_bytes_cost: u64,
+    // Note: Once feature gate `native_programs_consume_cu` is activated in mnb,
+    //       it won't be necessary to track builtin and bpf programs' execution
+    //       cost separately, the requested compute_unit_limit will apply to
+    //       both programs. `builtins_execution_cost` and `bpf_execution_cost`
+    //       can be combined into `programs_execution_cost`.
     pub builtins_execution_cost: u64,
     pub bpf_execution_cost: u64,
     pub loaded_accounts_data_size_cost: u64,
@@ -73,5 +78,10 @@ impl TransactionCost {
             .saturating_add(self.builtins_execution_cost)
             .saturating_add(self.bpf_execution_cost)
             .saturating_add(self.loaded_accounts_data_size_cost)
+    }
+
+    pub fn programs_execution_cost(&self) -> u64 {
+        self.builtins_execution_cost
+            .saturating_add(self.bpf_execution_cost)
     }
 }

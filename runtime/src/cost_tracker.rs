@@ -6,7 +6,11 @@
 use {
     crate::{block_cost_limits::*, transaction_cost::TransactionCost},
     solana_sdk::{
-        clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::TransactionError,
+        clock::Slot,
+        feature_set::{native_programs_consume_cu, FeatureSet},
+        pubkey::Pubkey,
+        saturating_add_assign,
+        transaction::TransactionError,
     },
     std::{cmp::Ordering, collections::HashMap},
 };
@@ -117,8 +121,17 @@ impl CostTracker {
         &mut self,
         estimated_tx_cost: &TransactionCost,
         actual_execution_units: u64,
+        feature_set: &FeatureSet,
     ) {
-        let estimated_execution_units = estimated_tx_cost.bpf_execution_cost;
+        // when feature gate `native_programs_consume_cu` is activated, `runtime` will consume
+        // compute units for both bpf and builtin program. Therefore the `actual_execution_units`
+        // will include builtin_execution_costs as well.
+        let estimated_execution_units = if feature_set.is_active(&native_programs_consume_cu::id())
+        {
+            estimated_tx_cost.programs_execution_cost()
+        } else {
+            estimated_tx_cost.bpf_execution_cost
+        };
         match actual_execution_units.cmp(&estimated_execution_units) {
             Ordering::Equal => (),
             Ordering::Greater => {
@@ -818,11 +831,14 @@ mod tests {
         let acct1 = Pubkey::new_unique();
         let acct2 = Pubkey::new_unique();
         let acct3 = Pubkey::new_unique();
-        let cost = 100;
+        let builtin_cost: u64 = 10;
+        let bpf_cost: u64 = 90;
+        let execution_cost = builtin_cost + bpf_cost;
 
         let tx_cost = TransactionCost {
             writable_accounts: vec![acct1, acct2, acct3],
-            bpf_execution_cost: cost,
+            builtins_execution_cost: builtin_cost,
+            bpf_execution_cost: bpf_cost,
             ..TransactionCost::default()
         };
 
@@ -831,35 +847,59 @@ mod tests {
         // Assert OK to add tx_cost
         assert!(cost_tracker.try_add(&tx_cost).is_ok());
         let (_costliest_account, costliest_account_cost) = cost_tracker.find_costliest_account();
-        assert_eq!(cost, cost_tracker.block_cost);
-        assert_eq!(cost, costliest_account_cost);
+        assert_eq!(execution_cost, cost_tracker.block_cost);
+        assert_eq!(execution_cost, costliest_account_cost);
         assert_eq!(1, cost_tracker.transaction_count);
 
         // assert no-change if actual units is same as estimated units
-        let mut expected_cost = cost;
-        cost_tracker.update_execution_cost(&tx_cost, cost);
-        let (_costliest_account, costliest_account_cost) = cost_tracker.find_costliest_account();
-        assert_eq!(expected_cost, cost_tracker.block_cost);
-        assert_eq!(expected_cost, costliest_account_cost);
-        assert_eq!(1, cost_tracker.transaction_count);
+        let mut expected_cost = execution_cost;
+        for feature_set in [FeatureSet::default(), FeatureSet::all_enabled()] {
+            let actual_consumed_cu = if feature_set.is_active(&native_programs_consume_cu::id()) {
+                builtin_cost + bpf_cost
+            } else {
+                bpf_cost
+            };
+            cost_tracker.update_execution_cost(&tx_cost, actual_consumed_cu, &feature_set);
+            let (_costliest_account, costliest_account_cost) =
+                cost_tracker.find_costliest_account();
+            assert_eq!(expected_cost, cost_tracker.block_cost);
+            assert_eq!(expected_cost, costliest_account_cost);
+            assert_eq!(1, cost_tracker.transaction_count);
+        }
 
         // assert cost are adjusted down
         let reduced_units = 3;
-        expected_cost -= reduced_units;
-        cost_tracker.update_execution_cost(&tx_cost, cost - reduced_units);
-        let (_costliest_account, costliest_account_cost) = cost_tracker.find_costliest_account();
-        assert_eq!(expected_cost, cost_tracker.block_cost);
-        assert_eq!(expected_cost, costliest_account_cost);
-        assert_eq!(1, cost_tracker.transaction_count);
+        for feature_set in [FeatureSet::default(), FeatureSet::all_enabled()] {
+            let actual_consumed_cu = if feature_set.is_active(&native_programs_consume_cu::id()) {
+                builtin_cost + bpf_cost
+            } else {
+                bpf_cost
+            } - reduced_units;
+            expected_cost -= reduced_units;
+            cost_tracker.update_execution_cost(&tx_cost, actual_consumed_cu, &feature_set);
+            let (_costliest_account, costliest_account_cost) =
+                cost_tracker.find_costliest_account();
+            assert_eq!(expected_cost, cost_tracker.block_cost);
+            assert_eq!(expected_cost, costliest_account_cost);
+            assert_eq!(1, cost_tracker.transaction_count);
+        }
 
         // assert cost are adjusted up
         let increased_units = 1;
-        expected_cost += increased_units;
-        cost_tracker.update_execution_cost(&tx_cost, cost + increased_units);
-        let (_costliest_account, costliest_account_cost) = cost_tracker.find_costliest_account();
-        assert_eq!(expected_cost, cost_tracker.block_cost);
-        assert_eq!(expected_cost, costliest_account_cost);
-        assert_eq!(1, cost_tracker.transaction_count);
+        for feature_set in [FeatureSet::default(), FeatureSet::all_enabled()] {
+            let actual_consumed_cu = if feature_set.is_active(&native_programs_consume_cu::id()) {
+                builtin_cost + bpf_cost
+            } else {
+                bpf_cost
+            } + increased_units;
+            expected_cost += increased_units;
+            cost_tracker.update_execution_cost(&tx_cost, actual_consumed_cu, &feature_set);
+            let (_costliest_account, costliest_account_cost) =
+                cost_tracker.find_costliest_account();
+            assert_eq!(expected_cost, cost_tracker.block_cost);
+            assert_eq!(expected_cost, costliest_account_cost);
+            assert_eq!(1, cost_tracker.transaction_count);
+        }
     }
 
     #[test]
