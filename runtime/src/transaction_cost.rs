@@ -59,6 +59,10 @@ impl TransactionCost {
         }
     }
 
+    pub fn new_with_default_capacity() -> Self {
+        Self::default()
+    }
+
     pub fn reset(&mut self) {
         self.writable_accounts.clear();
         self.signature_cost = 0;

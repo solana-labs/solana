@@ -32,7 +32,7 @@ impl CostModel {
         transaction: &SanitizedTransaction,
         feature_set: &FeatureSet,
     ) -> TransactionCost {
-        let mut tx_cost = TransactionCost::default();
+        let mut tx_cost = TransactionCost::new_with_default_capacity();
 
         tx_cost.signature_cost = Self::get_signature_cost(transaction);
         Self::get_write_lock_cost(&mut tx_cost, transaction);
