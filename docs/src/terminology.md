@@ -95,7 +95,7 @@ The wallclock duration between a [leader](#leader) creating a [tick entry](#tick
 A [block](#block) that has received [super majority](#supermajority)
 stake-weighted [votes](#vote) should not get rolled back given < 5% malicious. 
 Details can be found at
-[Optimistic Confirmation](optimistic_confirmation.md#Primitives).
+[Optimistic Confirmation](proposals/optimistic_confirmation.md#Primitives).
 
 ## control plane
 
