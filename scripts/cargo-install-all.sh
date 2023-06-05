@@ -142,8 +142,12 @@ mkdir -p "$installDir/bin"
 
   # Exclude `spl-token` binary for net.sh builds
   if [[ -z "$validatorOnly" ]]; then
+    # the config is work around until we ship newer spl-token-cli...
     # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-    "$cargo" $maybeRustVersion install --locked spl-token-cli --root "$installDir"
+    "$cargo" $maybeRustVersion \
+      --config 'patch.crates-io.ntapi.git="https://github.com/solana-labs/ntapi"' \
+      --config 'patch.crates-io.ntapi.rev="5980bbab2e0501a8100eb88c12222d664ccb3a0a"' \
+      install --locked spl-token-cli --root "$installDir"
   fi
 )
 

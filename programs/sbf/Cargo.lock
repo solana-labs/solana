@@ -2825,9 +2825,8 @@ dependencies = [
 
 [[package]]
 name = "ntapi"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a31937dea023539c72ddae0e3571deadc1414b300483fa7aaec176168cfa9d2"
+version = "0.3.6"
+source = "git+https://github.com/solana-labs/ntapi?rev=5980bbab2e0501a8100eb88c12222d664ccb3a0a#5980bbab2e0501a8100eb88c12222d664ccb3a0a"
 dependencies = [
  "winapi 0.3.9",
 ]
