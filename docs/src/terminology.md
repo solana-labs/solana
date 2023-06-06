@@ -90,8 +90,9 @@ The wallclock duration between a [leader](#leader) creating a [tick entry](#tick
 
 ## confirmed block
 
-A [block](#block) that has received [super majority](#supermajority)
-stake-weighted [votes](#vote) should not get rolled back given < 5% malicious.
+A [block](#block) for which a [super majority](#supermajority) of
+stake-weighted [votes](#vote) have been observed. Cannot be rolled
+back given < 5% defective stake.
 Details can be found at
 [Optimistic Confirmation](proposals/optimistic_confirmation.md#primitives).
 
