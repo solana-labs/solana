@@ -102,9 +102,19 @@ impl CostModel {
             feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
         );
 
-        // if tx contained user-space instructions and a more accurate estimate available correct it
-        if bpf_costs > 0 && result.is_ok() {
-            bpf_costs = budget.compute_unit_limit
+        // if failed to process compute_budget instructions, the transaction will not be executed
+        // by `bank`, therefore it should be considered as no execution cost by cost model.
+        match result {
+            Ok(_) => {
+                // if tx contained user-space instructions and a more accurate estimate available correct it
+                if bpf_costs > 0 {
+                    bpf_costs = budget.compute_unit_limit
+                }
+            }
+            Err(_) => {
+                builtin_costs = 0;
+                bpf_costs = 0;
+            }
         }
 
         tx_cost.builtins_execution_cost = builtin_costs;
@@ -345,6 +355,50 @@ mod tests {
         );
         assert_eq!(12_345, tx_cost.bpf_execution_cost);
         assert_eq!(1, tx_cost.data_bytes_cost);
+    }
+
+    #[test]
+    fn test_cost_model_with_failed_compute_budget_transaction() {
+        let (mint_keypair, start_hash) = test_setup();
+
+        let instructions = vec![
+            CompiledInstruction::new(3, &(), vec![1, 2, 0]),
+            CompiledInstruction::new_from_raw_parts(
+                4,
+                ComputeBudgetInstruction::SetComputeUnitLimit(12_345)
+                    .pack()
+                    .unwrap(),
+                vec![],
+            ),
+            // to trigger `duplicate_instruction_error` error
+            CompiledInstruction::new_from_raw_parts(
+                4,
+                ComputeBudgetInstruction::SetComputeUnitLimit(1_000)
+                    .pack()
+                    .unwrap(),
+                vec![],
+            ),
+        ];
+        let tx = Transaction::new_with_compiled_instructions(
+            &[&mint_keypair],
+            &[
+                solana_sdk::pubkey::new_rand(),
+                solana_sdk::pubkey::new_rand(),
+            ],
+            start_hash,
+            vec![inline_spl_token::id(), compute_budget::id()],
+            instructions,
+        );
+        let token_transaction = SanitizedTransaction::from_transaction_for_tests(tx);
+
+        let mut tx_cost = TransactionCost::default();
+        CostModel::get_transaction_cost(
+            &mut tx_cost,
+            &token_transaction,
+            &FeatureSet::all_enabled(),
+        );
+        assert_eq!(0, tx_cost.builtins_execution_cost);
+        assert_eq!(0, tx_cost.bpf_execution_cost);
     }
 
     #[test]
