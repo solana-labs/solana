@@ -498,6 +498,7 @@ impl LoadedPrograms {
                         true
                     }
                     LoadedProgramType::Unloaded(environment)
+                    | LoadedProgramType::FailedVerification(environment)
                         if Arc::ptr_eq(environment, &self.program_runtime_environment_v1) =>
                     {
                         true
