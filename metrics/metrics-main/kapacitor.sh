@@ -30,7 +30,7 @@ sudo docker run \
   --detach \
   --name=kapacitor \
   --env KAPACITOR_USERNAME="$KAPACITOR_USERNAME" \
-  --env KAPACITOR_USERNAME="$KAPACITOR_PASSWORD" \
+  --env KAPACITOR_PASSWORD="$KAPACITOR_PASSWORD" \
   --publish 9092:9092 \
   --volume "$PWD"/kapacitor.conf:/etc/kapacitor/kapacitor.conf \
   --volume /var/lib/kapacitor:/var/lib/kapacitor \
