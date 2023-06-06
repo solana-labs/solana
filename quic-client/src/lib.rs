@@ -186,9 +186,8 @@ impl BaseClientConnection for Quic {
     }
 }
 
-#[derive(Default)]
 pub struct QuicConnectionManager {
-    connection_config: Option<QuicConfig>,
+    connection_config: QuicConfig,
 }
 
 impl ConnectionManager for QuicConnectionManager {
@@ -200,13 +199,7 @@ impl ConnectionManager for QuicConnectionManager {
     fn new_connection_pool(&self) -> Self::ConnectionPool {
         QuicPool {
             connections: Vec::default(),
-            endpoint: Arc::new(
-                self.connection_config
-                    .as_ref()
-                    .map_or(QuicLazyInitializedEndpoint::default(), |config| {
-                        config.create_endpoint()
-                    }),
-            ),
+            endpoint: Arc::new(self.connection_config.create_endpoint()),
         }
     }
 
@@ -216,10 +209,8 @@ impl ConnectionManager for QuicConnectionManager {
 }
 
 impl QuicConnectionManager {
-    pub fn new_with_connection_config(config: QuicConfig) -> Self {
-        Self {
-            connection_config: Some(config),
-        }
+    pub fn new_with_connection_config(connection_config: QuicConfig) -> Self {
+        Self { connection_config }
     }
 }
 #[cfg(test)]
