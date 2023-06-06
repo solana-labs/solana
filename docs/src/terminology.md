@@ -68,15 +68,13 @@ A measure of the network confirmation for the [block](#block).
 A set of [validators](#validator) maintaining a single [ledger](#ledger).
 
 ## cluster restart
-When a [cluster](#cluster) stops finalizing blocks due to an unrecoverable set
-of failures, as determined by social consensus amongst the validator operators,
-a pre-defined set of operations is performed by at least 80% of the stake
-weight to resume block production from the highest optimistically confirmed
-slot. Any processed but non-confirmed blocks may be discarded during the
-restart procedure. This is different from sporadic single validator restart
-which does not impact the cluster. See
-[cluster restart](https://docs.solana.com/running-validator/restart-cluster)
-for details.
+When a [cluster](#cluster) is operating with degraded performance to such an
+extent that validator operators representing a superminority of stake deem
+the goodput of the system to be unacceptably low and unlikely to resolve
+itself that [manual intervention](https://docs.solana.com/running-validator/restart-cluster) is preferred.
+
+**NOTE:** This is different from individual validator process restarts
+which does not materially impact the cluster.
 
 ## compute budget
 
