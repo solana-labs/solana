@@ -204,56 +204,84 @@ fn bank_forks_from_snapshot(
         process::exit(1);
     }
 
-    // Given that we are going to boot from an archive, the accountvecs held in the snapshot dirs for fast-boot should
-    // be released.  They will be released by the account_background_service anyway.  But in the case of the account_paths
-    // using memory-mounted file system, they are not released early enough to give space for the new append-vecs from
-    // the archives, causing the out-of-memory problem.  So, purge the snapshot dirs upfront before loading from the archive.
-    snapshot_utils::purge_old_bank_snapshots(&snapshot_config.bank_snapshots_dir, 0, None);
+    let (deserialized_bank, starting_snapshot_hashes) = if process_options.boot_from_local_state {
+        assert!(
+            !snapshot_config.should_generate_snapshots(),
+            "booting from local state does not support generating snapshots yet",
+        );
 
-    let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
-        snapshot_utils::bank_from_latest_snapshot_archives(
+        let bank = snapshot_utils::bank_from_latest_snapshot_dir(
             &snapshot_config.bank_snapshots_dir,
-            &snapshot_config.full_snapshot_archives_dir,
-            &snapshot_config.incremental_snapshot_archives_dir,
-            &account_paths,
             genesis_config,
             &process_options.runtime_config,
+            &account_paths,
             process_options.debug_keys.clone(),
             None,
             process_options.account_indexes.clone(),
             process_options.limit_load_slot_count_from_snapshot,
             process_options.shrink_ratio,
-            process_options.accounts_db_test_hash_calculation,
-            process_options.accounts_db_skip_shrink,
             process_options.verify_index,
             process_options.accounts_db_config.clone(),
             accounts_update_notifier,
             exit,
         )
-        .expect("Load from snapshot failed");
+        .expect("load bank from local state");
+
+        (bank, None)
+    } else {
+        // Given that we are going to boot from an archive, the accountvecs held in the snapshot dirs for fast-boot should
+        // be released.  They will be released by the account_background_service anyway.  But in the case of the account_paths
+        // using memory-mounted file system, they are not released early enough to give space for the new append-vecs from
+        // the archives, causing the out-of-memory problem.  So, purge the snapshot dirs upfront before loading from the archive.
+        snapshot_utils::purge_old_bank_snapshots(&snapshot_config.bank_snapshots_dir, 0, None);
+
+        let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
+            snapshot_utils::bank_from_latest_snapshot_archives(
+                &snapshot_config.bank_snapshots_dir,
+                &snapshot_config.full_snapshot_archives_dir,
+                &snapshot_config.incremental_snapshot_archives_dir,
+                &account_paths,
+                genesis_config,
+                &process_options.runtime_config,
+                process_options.debug_keys.clone(),
+                None,
+                process_options.account_indexes.clone(),
+                process_options.limit_load_slot_count_from_snapshot,
+                process_options.shrink_ratio,
+                process_options.accounts_db_test_hash_calculation,
+                process_options.accounts_db_skip_shrink,
+                process_options.verify_index,
+                process_options.accounts_db_config.clone(),
+                accounts_update_notifier,
+                exit,
+            )
+            .expect("load bank from snapshot archives");
+
+        let full_snapshot_hash = FullSnapshotHash((
+            full_snapshot_archive_info.slot(),
+            *full_snapshot_archive_info.hash(),
+        ));
+        let starting_incremental_snapshot_hash =
+            incremental_snapshot_archive_info.map(|incremental_snapshot_archive_info| {
+                IncrementalSnapshotHash((
+                    incremental_snapshot_archive_info.slot(),
+                    *incremental_snapshot_archive_info.hash(),
+                ))
+            });
+        let starting_snapshot_hashes = StartingSnapshotHashes {
+            full: full_snapshot_hash,
+            incremental: starting_incremental_snapshot_hash,
+        };
+
+        (deserialized_bank, Some(starting_snapshot_hashes))
+    };
 
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);
     }
 
-    let full_snapshot_hash = FullSnapshotHash((
-        full_snapshot_archive_info.slot(),
-        *full_snapshot_archive_info.hash(),
-    ));
-    let starting_incremental_snapshot_hash =
-        incremental_snapshot_archive_info.map(|incremental_snapshot_archive_info| {
-            IncrementalSnapshotHash((
-                incremental_snapshot_archive_info.slot(),
-                *incremental_snapshot_archive_info.hash(),
-            ))
-        });
-    let starting_snapshot_hashes = StartingSnapshotHashes {
-        full: full_snapshot_hash,
-        incremental: starting_incremental_snapshot_hash,
-    };
-
     (
         Arc::new(RwLock::new(BankForks::new(deserialized_bank))),
-        Some(starting_snapshot_hashes),
+        starting_snapshot_hashes,
     )
 }
