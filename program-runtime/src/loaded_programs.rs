@@ -483,6 +483,36 @@ impl LoadedPrograms {
         entry
     }
 
+    /// On the epoch boundary this removes all programs of the outdated feature set
+    pub fn prune_feature_set_transition(&mut self) {
+        for second_level in self.entries.values_mut() {
+            second_level.retain(|entry| {
+                let retain = match &entry.program {
+                    LoadedProgramType::Builtin(_) | LoadedProgramType::Closed => true,
+                    LoadedProgramType::LegacyV0(program) | LoadedProgramType::LegacyV1(program)
+                        if Arc::ptr_eq(
+                            program.get_loader(),
+                            &self.program_runtime_environment_v1,
+                        ) =>
+                    {
+                        true
+                    }
+                    LoadedProgramType::Unloaded(environment)
+                        if Arc::ptr_eq(environment, &self.program_runtime_environment_v1) =>
+                    {
+                        true
+                    }
+                    _ => false,
+                };
+                if !retain {
+                    self.stats.prunes.fetch_add(1, Ordering::Relaxed);
+                }
+                retain
+            });
+        }
+        self.remove_programs_with_no_entries();
+    }
+
     /// Before rerooting the blockstore this removes all programs of orphan forks
     pub fn prune<F: ForkGraph>(&mut self, fork_graph: &F, new_root: Slot) {
         let previous_root = self.latest_root;
