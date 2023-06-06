@@ -977,6 +977,16 @@ fn assert_capitalization(bank: &Bank) {
     let debug_verify = true;
     assert!(bank.calculate_and_verify_capitalization(debug_verify));
 }
+
+/// Get the AccessType required, based on `process_options`
+fn get_access_type(process_options: &ProcessOptions) -> AccessType {
+    if process_options.boot_from_local_state {
+        AccessType::PrimaryForMaintenance
+    } else {
+        AccessType::Secondary
+    }
+}
+
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 
@@ -2216,7 +2226,7 @@ fn main() {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -2308,7 +2318,7 @@ fn main() {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -2545,14 +2555,9 @@ fn main() {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 info!("genesis hash: {}", genesis_config.hash());
 
-                let access_type = if process_options.boot_from_local_state {
-                    AccessType::PrimaryForMaintenance
-                } else {
-                    AccessType::Secondary
-                };
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    access_type,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -2595,14 +2600,9 @@ fn main() {
                     ..ProcessOptions::default()
                 };
 
-                let access_type = if process_options.boot_from_local_state {
-                    AccessType::PrimaryForMaintenance
-                } else {
-                    AccessType::Secondary
-                };
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    access_type,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -3142,14 +3142,9 @@ fn main() {
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let include_sysvars = arg_matches.is_present("include_sysvars");
-                let access_type = if process_options.boot_from_local_state {
-                    AccessType::PrimaryForMaintenance
-                } else {
-                    AccessType::Secondary
-                };
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    access_type,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -3237,14 +3232,9 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let access_type = if process_options.boot_from_local_state {
-                    AccessType::PrimaryForMaintenance
-                } else {
-                    AccessType::Secondary
-                };
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    access_type,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
