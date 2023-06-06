@@ -6565,6 +6565,10 @@ mod tests {
                                 ..Clock::default()
                             }),
                         ),
+                        (
+                            stake_history::id(),
+                            create_account_shared_data_for_test(&StakeHistory::default()),
+                        ),
                     ],
                     vec![
                         AccountMeta {
