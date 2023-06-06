@@ -63,16 +63,6 @@ impl TransactionCost {
         Self::default()
     }
 
-    pub fn reset(&mut self) {
-        self.writable_accounts.clear();
-        self.signature_cost = 0;
-        self.write_lock_cost = 0;
-        self.data_bytes_cost = 0;
-        self.builtins_execution_cost = 0;
-        self.bpf_execution_cost = 0;
-        self.is_simple_vote = false;
-    }
-
     pub fn sum(&self) -> u64 {
         self.signature_cost
             .saturating_add(self.write_lock_cost)
