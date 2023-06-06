@@ -26,6 +26,8 @@ impl EpochRewardHasher {
         } = self;
         hasher.write(address.as_ref());
         let hash64 = hasher.finish();
+
+        // Compute the partition index by modulo the address hash to number of partitions w.o bias
         ((partitions as u128)
             .saturating_mul(u128::from(hash64))
             .saturating_div(u128::from(u64::MAX).saturating_add(1))) as usize
