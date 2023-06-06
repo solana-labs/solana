@@ -57,9 +57,11 @@ pub trait WorkingSlot {
     fn is_ancestor(&self, other: Slot) -> bool;
 }
 
+#[derive(Default)]
 pub enum LoadedProgramType {
     /// Tombstone for undeployed, closed or unloadable programs
     FailedVerification(Arc<BuiltinProgram<InvokeContext<'static>>>),
+    #[default]
     Closed,
     DelayVisibility,
     /// Successfully verified but not currently compiled, used to track usage statistics when a compiled program is evicted from memory.
@@ -91,7 +93,7 @@ impl Debug for LoadedProgramType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct LoadedProgram {
     /// The program of this entry
     pub program: LoadedProgramType,
