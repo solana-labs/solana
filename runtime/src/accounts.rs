@@ -298,7 +298,7 @@ impl Accounts {
     ) -> Result<AccountSharedData> {
         // Check for tombstone
         let result = match &program.program {
-            LoadedProgramType::FailedVerification | LoadedProgramType::Closed => {
+            LoadedProgramType::FailedVerification(_) | LoadedProgramType::Closed => {
                 Err(TransactionError::InvalidProgramForExecution)
             }
             LoadedProgramType::DelayVisibility => {

@@ -57,11 +57,9 @@ pub trait WorkingSlot {
     fn is_ancestor(&self, other: Slot) -> bool;
 }
 
-#[derive(Default)]
 pub enum LoadedProgramType {
     /// Tombstone for undeployed, closed or unloadable programs
-    #[default]
-    FailedVerification,
+    FailedVerification(Arc<BuiltinProgram<InvokeContext<'static>>>),
     Closed,
     DelayVisibility,
     /// Successfully verified but not currently compiled, used to track usage statistics when a compiled program is evicted from memory.
@@ -77,7 +75,7 @@ pub enum LoadedProgramType {
 impl Debug for LoadedProgramType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            LoadedProgramType::FailedVerification => {
+            LoadedProgramType::FailedVerification(_) => {
                 write!(f, "LoadedProgramType::FailedVerification")
             }
             LoadedProgramType::Closed => write!(f, "LoadedProgramType::Closed"),
@@ -93,7 +91,7 @@ impl Debug for LoadedProgramType {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct LoadedProgram {
     /// The program of this entry
     pub program: LoadedProgramType,
@@ -332,7 +330,7 @@ impl LoadedProgram {
     pub fn is_tombstone(&self) -> bool {
         matches!(
             self.program,
-            LoadedProgramType::FailedVerification
+            LoadedProgramType::FailedVerification(_)
                 | LoadedProgramType::Closed
                 | LoadedProgramType::DelayVisibility
         )
@@ -665,7 +663,7 @@ impl LoadedPrograms {
                         #[cfg(test)]
                         LoadedProgramType::TestLoaded(_) => Some((*id, program.clone())),
                         LoadedProgramType::Unloaded(_)
-                        | LoadedProgramType::FailedVerification
+                        | LoadedProgramType::FailedVerification(_)
                         | LoadedProgramType::Closed
                         | LoadedProgramType::DelayVisibility
                         | LoadedProgramType::Builtin(_) => None,
@@ -873,12 +871,13 @@ mod tests {
                 programs.push((program1, *deployment_slot, usage_counter));
             });
 
+        let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
         for slot in 21..31 {
             set_tombstone(
                 &mut cache,
                 program1,
                 slot,
-                LoadedProgramType::FailedVerification,
+                LoadedProgramType::FailedVerification(env.clone()),
             );
         }
 
@@ -959,7 +958,7 @@ mod tests {
             matches!(
                 program_type,
                 LoadedProgramType::DelayVisibility
-                    | LoadedProgramType::FailedVerification
+                    | LoadedProgramType::FailedVerification(_)
                     | LoadedProgramType::Closed
             )
         });
@@ -1004,7 +1003,7 @@ mod tests {
             matches!(
                 program_type,
                 LoadedProgramType::DelayVisibility
-                    | LoadedProgramType::FailedVerification
+                    | LoadedProgramType::FailedVerification(_)
                     | LoadedProgramType::Closed
             )
         });
@@ -1070,11 +1069,12 @@ mod tests {
     fn test_replace_tombstones() {
         let mut cache = LoadedPrograms::default();
         let program1 = Pubkey::new_unique();
+        let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
         set_tombstone(
             &mut cache,
             program1,
             10,
-            LoadedProgramType::FailedVerification,
+            LoadedProgramType::FailedVerification(env),
         );
 
         let loaded_program = new_test_loaded_program(10, 10);
@@ -1085,10 +1085,12 @@ mod tests {
 
     #[test]
     fn test_tombstone() {
-        let tombstone = LoadedProgram::new_tombstone(0, LoadedProgramType::FailedVerification);
+        let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
+        let tombstone =
+            LoadedProgram::new_tombstone(0, LoadedProgramType::FailedVerification(env.clone()));
         assert!(matches!(
             tombstone.program,
-            LoadedProgramType::FailedVerification
+            LoadedProgramType::FailedVerification(_)
         ));
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 0);
@@ -1106,7 +1108,7 @@ mod tests {
             &mut cache,
             program1,
             10,
-            LoadedProgramType::FailedVerification,
+            LoadedProgramType::FailedVerification(env.clone()),
         );
         let second_level = &cache
             .entries
@@ -1135,7 +1137,7 @@ mod tests {
             &mut cache,
             program2,
             60,
-            LoadedProgramType::FailedVerification,
+            LoadedProgramType::FailedVerification(env),
         );
         let second_level = &cache
             .entries
