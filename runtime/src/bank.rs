@@ -4450,7 +4450,13 @@ impl Bank {
                     debug!("Failed to load program {}, error {:?}", key, err);
                     Arc::new(LoadedProgram::new_tombstone(
                         self.slot,
-                        LoadedProgramType::FailedVerification,
+                        LoadedProgramType::FailedVerification(
+                            self.loaded_programs_cache
+                                .read()
+                                .unwrap()
+                                .program_runtime_environment_v1
+                                .clone(),
+                        ),
                     ))
                 });
                 program.tx_usage_counter.store(*count, Ordering::Relaxed);
