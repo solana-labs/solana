@@ -117,6 +117,8 @@ impl Serializer {
                 self.fill_write(MAX_PERMITTED_DATA_INCREASE + BPF_ALIGN_OF_U128, 0)
                     .map_err(|_| InstructionError::InvalidArgument)?;
                 self.region_start += BPF_ALIGN_OF_U128.saturating_sub(align_offset);
+                // put the realloc padding in its own region
+                self.push_region(account.can_data_be_changed().is_ok());
             }
         }
 
@@ -127,7 +129,7 @@ impl Serializer {
         &mut self,
         account: &mut BorrowedAccount<'_>,
     ) -> Result<u64, InstructionError> {
-        self.push_region();
+        self.push_region(true);
         let vaddr = self.vaddr;
         let account_len = account.get_data().len();
         if account_len > 0 {
@@ -158,19 +160,26 @@ impl Serializer {
         Ok(vaddr)
     }
 
-    fn push_region(&mut self) {
+    fn push_region(&mut self, writable: bool) {
         let range = self.region_start..self.buffer.len();
-        let region = MemoryRegion::new_writable(
-            self.buffer.as_slice_mut().get_mut(range.clone()).unwrap(),
-            self.vaddr,
-        );
+        let region = if writable {
+            MemoryRegion::new_writable(
+                self.buffer.as_slice_mut().get_mut(range.clone()).unwrap(),
+                self.vaddr,
+            )
+        } else {
+            MemoryRegion::new_readonly(
+                self.buffer.as_slice().get(range.clone()).unwrap(),
+                self.vaddr,
+            )
+        };
         self.regions.push(region);
         self.region_start = range.end;
         self.vaddr += range.len() as u64;
     }
 
     fn finish(mut self) -> (AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>) {
-        self.push_region();
+        self.push_region(true);
         debug_assert_eq!(self.region_start, self.buffer.len());
         (self.buffer, self.regions)
     }
