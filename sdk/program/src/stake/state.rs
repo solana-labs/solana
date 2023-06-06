@@ -11,7 +11,7 @@ use {
         stake_history::{StakeHistory, StakeHistoryEntry},
     },
     borsh::{maybestd::io, BorshDeserialize, BorshSchema, BorshSerialize},
-    std::collections::HashSet,
+    std::{collections::HashSet, ops::Add},
 };
 
 pub type StakeActivationStatus = StakeHistoryEntry;
@@ -35,6 +35,18 @@ pub enum DeactivationFlag {
     #[default]
     Empty = 0,
     MustFullyActivateBeforeDeactivationIsPermitted = 1,
+}
+
+impl Add for DeactivationFlag {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        if self == DeactivationFlag::Empty && other == DeactivationFlag::Empty {
+            DeactivationFlag::Empty
+        } else {
+            DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted
+        }
+    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
@@ -781,5 +793,31 @@ mod test {
             1,
         );
         check_flag(DeactivationFlag::Empty, 0);
+    }
+
+    #[test]
+    fn test_deactivation_flag_add() {
+        assert_eq!(
+            DeactivationFlag::Empty,
+            DeactivationFlag::Empty + DeactivationFlag::Empty
+        );
+
+        assert_eq!(
+            DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted,
+            DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted
+                + DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted
+        );
+
+        assert_eq!(
+            DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted,
+            DeactivationFlag::Empty
+                + DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted
+        );
+
+        assert_eq!(
+            DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted,
+            DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted
+                + DeactivationFlag::Empty
+        );
     }
 }

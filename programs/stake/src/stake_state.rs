@@ -642,6 +642,7 @@ pub fn deactivate(
         let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
         stake.deactivate(clock.epoch, deactivate_flag, Some(&stake_history))?;
         // After deactivation, need to clear DeactivationFlag to Empty.
+        // So that future activation and deactivation are not subject to the `MustFullyActivateBeforeDeactivationIsPermitted` restriction.
         stake_account.set_state(&StakeState::Stake(meta, stake, DeactivationFlag::Empty))
     } else {
         Err(InstructionError::InvalidAccountData)
@@ -1334,24 +1335,24 @@ fn validate_split_amount(
 
 #[derive(Clone, Debug, PartialEq)]
 enum MergeKind {
-    Inactive(Meta, u64),
-    ActivationEpoch(Meta, Stake),
+    Inactive(Meta, u64, DeactivationFlag),
+    ActivationEpoch(Meta, Stake, DeactivationFlag),
     FullyActive(Meta, Stake),
 }
 
 impl MergeKind {
     fn meta(&self) -> &Meta {
         match self {
-            Self::Inactive(meta, _) => meta,
-            Self::ActivationEpoch(meta, _) => meta,
+            Self::Inactive(meta, _, _) => meta,
+            Self::ActivationEpoch(meta, _, _) => meta,
             Self::FullyActive(meta, _) => meta,
         }
     }
 
     fn active_stake(&self) -> Option<&Stake> {
         match self {
-            Self::Inactive(_, _) => None,
-            Self::ActivationEpoch(_, stake) => Some(stake),
+            Self::Inactive(_, _, _) => None,
+            Self::ActivationEpoch(_, stake, _) => Some(stake),
             Self::FullyActive(_, stake) => Some(stake),
         }
     }
@@ -1364,7 +1365,7 @@ impl MergeKind {
         stake_history: &StakeHistory,
     ) -> Result<Self, InstructionError> {
         match stake_state {
-            StakeState::Stake(meta, stake, _deactivation_flag) => {
+            StakeState::Stake(meta, stake, deactivation_flag) => {
                 // stake must not be in a transient state. Transient here meaning
                 // activating or deactivating with non-zero effective stake.
                 let status = stake
@@ -1372,8 +1373,8 @@ impl MergeKind {
                     .stake_activating_and_deactivating(clock.epoch, Some(stake_history));
 
                 match (status.effective, status.activating, status.deactivating) {
-                    (0, 0, 0) => Ok(Self::Inactive(*meta, stake_lamports)),
-                    (0, _, _) => Ok(Self::ActivationEpoch(*meta, *stake)),
+                    (0, 0, 0) => Ok(Self::Inactive(*meta, stake_lamports, *deactivation_flag)),
+                    (0, _, _) => Ok(Self::ActivationEpoch(*meta, *stake, *deactivation_flag)),
                     (_, 0, 0) => Ok(Self::FullyActive(*meta, *stake)),
                     _ => {
                         let err = StakeError::MergeTransientStake;
@@ -1382,7 +1383,11 @@ impl MergeKind {
                     }
                 }
             }
-            StakeState::Initialized(meta) => Ok(Self::Inactive(*meta, stake_lamports)),
+            StakeState::Initialized(meta) => Ok(Self::Inactive(
+                *meta,
+                stake_lamports,
+                DeactivationFlag::Empty,
+            )),
             _ => Err(InstructionError::InvalidAccountData),
         }
     }
@@ -1476,15 +1481,22 @@ impl MergeKind {
             })
             .unwrap_or(Ok(()))?;
         let merged_state = match (self, source) {
-            (Self::Inactive(_, _), Self::Inactive(_, _)) => None,
-            (Self::Inactive(_, _), Self::ActivationEpoch(_, _)) => None,
-            (Self::ActivationEpoch(meta, mut stake), Self::Inactive(_, source_lamports)) => {
+            (Self::Inactive(_, _, _), Self::Inactive(_, _, _)) => None,
+            (Self::Inactive(_, _, _), Self::ActivationEpoch(_, _, _)) => None,
+            (
+                Self::ActivationEpoch(meta, mut stake, deactivation_flag),
+                Self::Inactive(_, source_lamports, source_deactivation_flag),
+            ) => {
                 stake.delegation.stake = checked_add(stake.delegation.stake, source_lamports)?;
-                Some(StakeState::Stake(meta, stake, DeactivationFlag::Empty))
+                Some(StakeState::Stake(
+                    meta,
+                    stake,
+                    deactivation_flag + source_deactivation_flag,
+                ))
             }
             (
-                Self::ActivationEpoch(meta, mut stake),
-                Self::ActivationEpoch(source_meta, source_stake),
+                Self::ActivationEpoch(meta, mut stake, deactivation_flag),
+                Self::ActivationEpoch(source_meta, source_stake, source_deactivation_flag),
             ) => {
                 let source_lamports = checked_add(
                     source_meta.rent_exempt_reserve,
@@ -1496,7 +1508,12 @@ impl MergeKind {
                     source_lamports,
                     source_stake.credits_observed,
                 )?;
-                Some(StakeState::Stake(meta, stake, DeactivationFlag::Empty))
+
+                Some(StakeState::Stake(
+                    meta,
+                    stake,
+                    deactivation_flag + source_deactivation_flag,
+                ))
             }
             (Self::FullyActive(meta, mut stake), Self::FullyActive(_, source_stake)) => {
                 // Don't stake the source account's `rent_exempt_reserve` to
@@ -3360,7 +3377,7 @@ mod tests {
                 &stake_history
             )
             .unwrap(),
-            MergeKind::Inactive(meta, stake_lamports)
+            MergeKind::Inactive(meta, stake_lamports, DeactivationFlag::Empty)
         );
 
         clock.epoch = 0;
@@ -3409,7 +3426,7 @@ mod tests {
                 &stake_history
             )
             .unwrap(),
-            MergeKind::ActivationEpoch(meta, stake),
+            MergeKind::ActivationEpoch(meta, stake, DeactivationFlag::Empty),
         );
 
         // all paritially activated, transient epochs fail
@@ -3531,7 +3548,7 @@ mod tests {
                 &stake_history
             )
             .unwrap(),
-            MergeKind::Inactive(meta, stake_lamports),
+            MergeKind::Inactive(meta, stake_lamports, DeactivationFlag::Empty),
         );
     }
 
@@ -3551,8 +3568,8 @@ mod tests {
             },
             ..Stake::default()
         };
-        let inactive = MergeKind::Inactive(Meta::default(), lamports);
-        let activation_epoch = MergeKind::ActivationEpoch(meta, stake);
+        let inactive = MergeKind::Inactive(Meta::default(), lamports, DeactivationFlag::Empty);
+        let activation_epoch = MergeKind::ActivationEpoch(meta, stake, DeactivationFlag::Empty);
         let fully_active = MergeKind::FullyActive(meta, stake);
 
         assert_eq!(
@@ -3646,8 +3663,8 @@ mod tests {
         };
 
         // activating stake merge, match credits observed
-        let activation_epoch_a = MergeKind::ActivationEpoch(meta, stake_a);
-        let activation_epoch_b = MergeKind::ActivationEpoch(meta, stake_b);
+        let activation_epoch_a = MergeKind::ActivationEpoch(meta, stake_a, DeactivationFlag::Empty);
+        let activation_epoch_b = MergeKind::ActivationEpoch(meta, stake_b, DeactivationFlag::Empty);
         let new_stake = activation_epoch_a
             .merge(&invoke_context, activation_epoch_b, &clock)
             .unwrap()
@@ -3681,8 +3698,8 @@ mod tests {
             },
             credits_observed: credits_b,
         };
-        let activation_epoch_a = MergeKind::ActivationEpoch(meta, stake_a);
-        let activation_epoch_b = MergeKind::ActivationEpoch(meta, stake_b);
+        let activation_epoch_a = MergeKind::ActivationEpoch(meta, stake_a, DeactivationFlag::Empty);
+        let activation_epoch_b = MergeKind::ActivationEpoch(meta, stake_b, DeactivationFlag::Empty);
         let new_stake = activation_epoch_a
             .merge(&invoke_context, activation_epoch_b, &clock)
             .unwrap()
