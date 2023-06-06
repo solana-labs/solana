@@ -488,7 +488,9 @@ impl LoadedPrograms {
         for second_level in self.entries.values_mut() {
             second_level.retain(|entry| {
                 let retain = match &entry.program {
-                    LoadedProgramType::Builtin(_) | LoadedProgramType::Closed => true,
+                    LoadedProgramType::Builtin(_)
+                    | LoadedProgramType::DelayVisibility
+                    | LoadedProgramType::Closed => true,
                     LoadedProgramType::LegacyV0(program) | LoadedProgramType::LegacyV1(program)
                         if Arc::ptr_eq(
                             program.get_loader(),
