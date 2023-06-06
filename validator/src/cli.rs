@@ -543,21 +543,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Disable reporting of OS disk statistics.")
         )
         .arg(
-            Arg::with_name("accounts-hash-interval-slots")
-                .long("accounts-hash-interval-slots")
-                .value_name("NUMBER")
-                .takes_value(true)
-                .default_value(&default_args.accounts_hash_interval_slots)
-                .help("Number of slots between generating accounts hash.")
-                .validator(|val| {
-                    if val.eq("0") {
-                        Err(String::from("Accounts hash interval cannot be zero"))
-                    } else {
-                        Ok(())
-                    }
-                }),
-        )
-        .arg(
             Arg::with_name("snapshot_version")
                 .long("snapshot-version")
                 .value_name("SNAPSHOT_VERSION")
@@ -1747,6 +1732,22 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
             .takes_value(false)
             .help("Abort the validator if a bank hash mismatch is detected within known validator set"),
     );
+    add_arg!(
+        Arg::with_name("accounts_hash_interval_slots")
+            .long("accounts-hash-interval-slots")
+            .value_name("NUMBER")
+            .takes_value(true)
+            .help("Number of slots between verifying accounts hash.")
+            .validator(|val| {
+                if val.eq("0") {
+                    Err(String::from("Accounts hash interval cannot be zero"))
+                } else {
+                    Ok(())
+                }
+            })
+            .requires("halt_on_known_validators_accounts_hash_mismatch"),
+        usage_warning: "Manually specifying the accounts hash interval is only meaningful when using --halt-on-known-validators-accounts-hash-mismatch, which is deprecated.",
+    );
     add_arg!(Arg::with_name("incremental_snapshots")
         .long("incremental-snapshots")
         .takes_value(false)
@@ -1881,7 +1882,6 @@ pub struct DefaultArgs {
 
     pub contact_debug_interval: String,
 
-    pub accounts_hash_interval_slots: String,
     pub accounts_filler_count: String,
     pub accounts_filler_size: String,
     pub accountsdb_repl_threads: String,
@@ -1970,7 +1970,6 @@ impl DefaultArgs {
             max_snapshot_download_abort: MAX_SNAPSHOT_DOWNLOAD_ABORT.to_string(),
             snapshot_archive_format: DEFAULT_ARCHIVE_COMPRESSION.to_string(),
             contact_debug_interval: "120000".to_string(),
-            accounts_hash_interval_slots: "100".to_string(),
             snapshot_version: SnapshotVersion::default(),
             rocksdb_shred_compaction: "level".to_string(),
             rocksdb_ledger_compression: "none".to_string(),
