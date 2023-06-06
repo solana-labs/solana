@@ -1702,22 +1702,18 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
             .help("Enables faster starting of validators by skipping startup clean and shrink."),
         usage_warning: "Enabled by default",
     );
-    add_arg!(
-        Arg::with_name("accounts_hash_interval_slots")
-            .long("accounts-hash-interval-slots")
-            .value_name("NUMBER")
-            .takes_value(true)
-            .help("Number of slots between verifying accounts hash.")
-            .validator(|val| {
-                if val.eq("0") {
-                    Err(String::from("Accounts hash interval cannot be zero"))
-                } else {
-                    Ok(())
-                }
-            })
-            .requires("halt_on_known_validators_accounts_hash_mismatch"),
-        usage_warning: "Manually specifying the accounts hash interval is only meaningful when using --halt-on-known-validators-accounts-hash-mismatch, which is deprecated.",
-    );
+    add_arg!(Arg::with_name("accounts_hash_interval_slots")
+        .long("accounts-hash-interval-slots")
+        .value_name("NUMBER")
+        .takes_value(true)
+        .help("Number of slots between verifying accounts hash.")
+        .validator(|val| {
+            if val.eq("0") {
+                Err(String::from("Accounts hash interval cannot be zero"))
+            } else {
+                Ok(())
+            }
+        }));
     add_arg!(
         Arg::with_name("disable_quic_servers")
             .long("disable-quic-servers")
