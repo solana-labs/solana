@@ -1703,6 +1703,22 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
         usage_warning: "Enabled by default",
     );
     add_arg!(
+        Arg::with_name("accounts_hash_interval_slots")
+            .long("accounts-hash-interval-slots")
+            .value_name("NUMBER")
+            .takes_value(true)
+            .help("Number of slots between verifying accounts hash.")
+            .validator(|val| {
+                if val.eq("0") {
+                    Err(String::from("Accounts hash interval cannot be zero"))
+                } else {
+                    Ok(())
+                }
+            })
+            .requires("halt_on_known_validators_accounts_hash_mismatch"),
+        usage_warning: "Manually specifying the accounts hash interval is only meaningful when using --halt-on-known-validators-accounts-hash-mismatch, which is deprecated.",
+    );
+    add_arg!(
         Arg::with_name("disable_quic_servers")
             .long("disable-quic-servers")
             .takes_value(false),
@@ -1731,22 +1747,6 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
             .requires("known_validators")
             .takes_value(false)
             .help("Abort the validator if a bank hash mismatch is detected within known validator set"),
-    );
-    add_arg!(
-        Arg::with_name("accounts_hash_interval_slots")
-            .long("accounts-hash-interval-slots")
-            .value_name("NUMBER")
-            .takes_value(true)
-            .help("Number of slots between verifying accounts hash.")
-            .validator(|val| {
-                if val.eq("0") {
-                    Err(String::from("Accounts hash interval cannot be zero"))
-                } else {
-                    Ok(())
-                }
-            })
-            .requires("halt_on_known_validators_accounts_hash_mismatch"),
-        usage_warning: "Manually specifying the accounts hash interval is only meaningful when using --halt-on-known-validators-accounts-hash-mismatch, which is deprecated.",
     );
     add_arg!(Arg::with_name("incremental_snapshots")
         .long("incremental-snapshots")
