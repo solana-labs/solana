@@ -874,6 +874,8 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
             .for_each(
                 |slot| match BankSnapshotInfo::new_from_dir(&bank_snapshots_dir, slot) {
                     Ok(snapshot_info) => bank_snapshots.push(snapshot_info),
+                    // Other threads may be modifying bank snapshots in parallel; only return
+                    // snapshots that are complete as deemed by BankSnapshotInfo::new_from_dir()
                     Err(err) => debug!("Unable to read bank snapshot for slot {slot}: {err}"),
                 },
             ),
