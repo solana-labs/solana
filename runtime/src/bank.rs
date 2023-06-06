@@ -6286,17 +6286,6 @@ impl Bank {
         );
 
         if !debug_do_not_add_builtins {
-            let program_runtime_environment_v1 = create_program_runtime_environment(
-                &self.feature_set,
-                &self.runtime_config.compute_budget.unwrap_or_default(),
-                false, /* deployment */
-                false, /* debugging_features */
-            )
-            .unwrap();
-            self.loaded_programs_cache
-                .write()
-                .unwrap()
-                .program_runtime_environment_v1 = Arc::new(program_runtime_environment_v1);
             for builtin in BUILTINS
                 .iter()
                 .chain(additional_builtins.unwrap_or(&[]).iter())
@@ -7577,6 +7566,33 @@ impl Bank {
         only_apply_transitions_for_new_features: bool,
         new_feature_activations: &HashSet<Pubkey>,
     ) {
+        const FEATURES_AFFECTING_RBPF: &[Pubkey] = &[
+            feature_set::error_on_syscall_bpf_function_hash_collisions::id(),
+            feature_set::reject_callx_r10::id(),
+            feature_set::switch_to_new_elf_parser::id(),
+            feature_set::bpf_account_data_direct_mapping::id(),
+        ];
+        if !only_apply_transitions_for_new_features
+            || FEATURES_AFFECTING_RBPF
+                .iter()
+                .any(|key| new_feature_activations.contains(key))
+        {
+            let program_runtime_environment_v1 = create_program_runtime_environment(
+                &self.feature_set,
+                &self.runtime_config.compute_budget.unwrap_or_default(),
+                false, /* deployment */
+                false, /* debugging_features */
+            )
+            .unwrap();
+            let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
+            if *loaded_programs_cache.program_runtime_environment_v1
+                != program_runtime_environment_v1
+            {
+                loaded_programs_cache.program_runtime_environment_v1 =
+                    Arc::new(program_runtime_environment_v1);
+            }
+            loaded_programs_cache.prune_feature_set_transition();
+        }
         for builtin in BUILTINS.iter() {
             if let Some(feature_id) = builtin.feature_id {
                 let should_apply_action_for_feature_transition =
@@ -7598,7 +7614,6 @@ impl Bank {
                 }
             }
         }
-
         for precompile in get_precompiles() {
             #[allow(clippy::blocks_in_if_conditions)]
             if precompile.feature.map_or(false, |ref feature_id| {
