@@ -8,9 +8,7 @@ use {
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_connection_cache::{
         client_connection::ClientConnection,
-        connection_cache::{
-            ConnectionCache, ConnectionManager, ConnectionPool, NewConnectionConfig,
-        },
+        connection_cache::{ConnectionCache, ConnectionManager, ConnectionPool},
     },
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{config::RpcProgramAccountsConfig, response::Response},
@@ -126,7 +124,6 @@ impl<P, M, C> ThinClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: NewConnectionConfig,
 {
     /// Create a new ThinClient that will interface with the Rpc at `rpc_addr` using TCP
     /// and the Tpu at `tpu_addr` over `transactions_socket` using Quic or UDP
@@ -327,7 +324,6 @@ impl<P, M, C> Client for ThinClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: NewConnectionConfig,
 {
     fn tpu_addr(&self) -> String {
         self.tpu_addr().to_string()
@@ -338,7 +334,6 @@ impl<P, M, C> SyncClient for ThinClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: NewConnectionConfig,
 {
     fn send_and_confirm_message<T: Signers + ?Sized>(
         &self,
@@ -623,7 +618,6 @@ impl<P, M, C> AsyncClient for ThinClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: NewConnectionConfig,
 {
     fn async_send_versioned_transaction(
         &self,
