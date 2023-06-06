@@ -101,7 +101,8 @@ mod tests {
     use {
         super::*,
         crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
-        solana_sdk::{signature::Keypair, system_transaction},
+        itertools::Itertools,
+        solana_sdk::{signature::Keypair, system_transaction, transaction::TransactionError},
     };
 
     #[test]
@@ -122,8 +123,34 @@ mod tests {
         drop(batch);
 
         // Now grabbing locks should work again
-        let batch2 = bank.prepare_sanitized_batch(&txs);
+        let mut batch2 = bank.prepare_sanitized_batch(&txs);
         assert!(batch2.lock_results().iter().all(|x| x.is_ok()));
+
+        // Test releasing locks early
+        let results = (0..txs.len())
+            .map(|i| {
+                if i % 2 == 0 {
+                    (Ok(()), ())
+                } else {
+                    (Err(TransactionError::InsufficientFundsForFee), ())
+                }
+            })
+            .collect_vec();
+
+        batch2.release_locks_early(&results);
+        assert!(batch2
+            .lock_results()
+            .iter()
+            .enumerate()
+            .all(|(i, x)| if i % 2 == 0 { x.is_ok() } else { x.is_err() }));
+
+        // Can grab locks for transaction at odd indexes
+        let batch3 = bank.prepare_sanitized_batch(&txs);
+        assert!(batch3
+            .lock_results()
+            .iter()
+            .enumerate()
+            .all(|(i, x)| if i % 2 == 0 { x.is_err() } else { x.is_ok() }));
     }
 
     #[test]
