@@ -24,6 +24,7 @@ pub struct TransactionErrorMetrics {
     pub would_exceed_max_vote_cost_limit: usize,
     pub would_exceed_account_data_block_limit: usize,
     pub max_loaded_accounts_data_size_exceeded: usize,
+    pub program_execution_temporarily_restricted: usize,
 }
 
 impl TransactionErrorMetrics {
@@ -80,6 +81,10 @@ impl TransactionErrorMetrics {
         saturating_add_assign!(
             self.max_loaded_accounts_data_size_exceeded,
             other.max_loaded_accounts_data_size_exceeded
+        );
+        saturating_add_assign!(
+            self.program_execution_temporarily_restricted,
+            other.program_execution_temporarily_restricted
         );
     }
 
@@ -160,6 +165,11 @@ impl TransactionErrorMetrics {
             (
                 "max_loaded_accounts_data_size_exceeded",
                 self.max_loaded_accounts_data_size_exceeded as i64,
+                i64
+            ),
+            (
+                "program_execution_temporarily_restricted",
+                self.program_execution_temporarily_restricted as i64,
                 i64
             ),
         );
