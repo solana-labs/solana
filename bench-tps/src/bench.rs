@@ -248,7 +248,7 @@ where
 
 fn create_sampler_thread<T>(
     client: &Arc<T>,
-    exit_signal: &Arc<AtomicBool>,
+    exit_signal: Arc<AtomicBool>,
     sample_period: u64,
     maxes: &Arc<RwLock<Vec<(String, SampleStats)>>>,
 ) -> JoinHandle<()>
@@ -256,13 +256,12 @@ where
     T: 'static + BenchTpsClient + Send + Sync + ?Sized,
 {
     info!("Sampling TPS every {} second...", sample_period);
-    let exit_signal = exit_signal.clone();
     let maxes = maxes.clone();
     let client = client.clone();
     Builder::new()
         .name("solana-client-sample".to_string())
         .spawn(move || {
-            sample_txs(&exit_signal, &maxes, sample_period, &client);
+            sample_txs(exit_signal, &maxes, sample_period, &client);
         })
         .unwrap()
 }
@@ -325,7 +324,7 @@ fn create_sender_threads<T>(
     thread_batch_sleep_ms: usize,
     total_tx_sent_count: &Arc<AtomicUsize>,
     threads: usize,
-    exit_signal: &Arc<AtomicBool>,
+    exit_signal: Arc<AtomicBool>,
     shared_tx_active_thread_count: &Arc<AtomicIsize>,
 ) -> Vec<JoinHandle<()>>
 where
@@ -407,7 +406,7 @@ where
     // collect the max transaction rate and total tx count seen
     let maxes = Arc::new(RwLock::new(Vec::new()));
     let sample_period = 1; // in seconds
-    let sample_thread = create_sampler_thread(&client, &exit_signal, sample_period, &maxes);
+    let sample_thread = create_sampler_thread(&client, exit_signal.clone(), sample_period, &maxes);
 
     let shared_txs: SharedTransactions = Arc::new(RwLock::new(VecDeque::new()));
 
@@ -439,7 +438,7 @@ where
         thread_batch_sleep_ms,
         &total_tx_sent_count,
         threads,
-        &exit_signal,
+        exit_signal.clone(),
         &shared_tx_active_thread_count,
     );
 
@@ -786,7 +785,7 @@ fn get_new_latest_blockhash<T: BenchTpsClient + ?Sized>(
 }
 
 fn poll_blockhash<T: BenchTpsClient + ?Sized>(
-    exit_signal: &Arc<AtomicBool>,
+    exit_signal: &AtomicBool,
     blockhash: &Arc<RwLock<Hash>>,
     client: &Arc<T>,
     id: &Pubkey,
@@ -836,7 +835,7 @@ fn poll_blockhash<T: BenchTpsClient + ?Sized>(
 }
 
 fn do_tx_transfers<T: BenchTpsClient + ?Sized>(
-    exit_signal: &Arc<AtomicBool>,
+    exit_signal: &AtomicBool,
     shared_txs: &SharedTransactions,
     shared_tx_thread_count: &Arc<AtomicIsize>,
     total_tx_sent_count: &Arc<AtomicUsize>,

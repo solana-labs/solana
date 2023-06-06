@@ -362,7 +362,7 @@ pub(crate) fn bank_from_streams<R>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -572,7 +572,7 @@ fn reconstruct_bank_from_fields<E>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -719,7 +719,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
     epoch_accounts_hash: Option<Hash>,
     capitalizations: (u64, Option<u64>),
     incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,

@@ -85,6 +85,7 @@ struct PacketAccumulator {
 
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
+    name: &'static str,
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
@@ -94,16 +95,17 @@ pub fn spawn_server(
     staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
     max_unstaked_connections: usize,
-    stats: Arc<StreamStats>,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
-) -> Result<(Endpoint, JoinHandle<()>), QuicServerError> {
-    info!("Start quic server on {:?}", sock);
+) -> Result<(Endpoint, Arc<StreamStats>, JoinHandle<()>), QuicServerError> {
+    info!("Start {name} quic server on {sock:?}");
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
     let endpoint = Endpoint::new(EndpointConfig::default(), Some(config), sock, TokioRuntime)
         .map_err(QuicServerError::EndpointFailed)?;
+    let stats = Arc::<StreamStats>::default();
     let handle = tokio::spawn(run_server(
+        name,
         endpoint.clone(),
         packet_sender,
         exit,
@@ -111,15 +113,16 @@ pub fn spawn_server(
         staked_nodes,
         max_staked_connections,
         max_unstaked_connections,
-        stats,
+        stats.clone(),
         wait_for_chunk_timeout,
         coalesce,
     ));
-    Ok((endpoint, handle))
+    Ok((endpoint, stats, handle))
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn run_server(
+async fn run_server(
+    name: &'static str,
     incoming: Endpoint,
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
@@ -152,7 +155,7 @@ pub async fn run_server(
         let timeout_connection = timeout(WAIT_FOR_CONNECTION_TIMEOUT, incoming.accept()).await;
 
         if last_datapoint.elapsed().as_secs() >= 5 {
-            stats.report();
+            stats.report(name);
             last_datapoint = Instant::now();
         }
 
@@ -1166,8 +1169,8 @@ pub mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(option_staked_nodes.unwrap_or_default()));
-        let stats = Arc::new(StreamStats::default());
-        let (_, t) = spawn_server(
+        let (_, stats, t) = spawn_server(
+            "quic_streamer_test",
             s,
             &keypair,
             ip,
@@ -1177,7 +1180,6 @@ pub mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats.clone(),
             Duration::from_secs(2),
             DEFAULT_TPU_COALESCE,
         )
@@ -1239,21 +1241,21 @@ pub mod test {
             // the stream -- expect it.
             let s2 = s2.err().unwrap();
             assert!(matches!(s2, quinn::ConnectionError::ApplicationClosed(_)));
-            return;
+        } else {
+            let mut s2 = s2.unwrap();
+            s1.write_all(&[0u8]).await.unwrap();
+            s1.finish().await.unwrap();
+            // Send enough data to create more than 1 chunks.
+            // The first will try to open the connection (which should fail).
+            // The following chunks will enable the detection of connection failure.
+            let data = vec![1u8; PACKET_DATA_SIZE * 2];
+            s2.write_all(&data)
+                .await
+                .expect_err("shouldn't be able to open 2 connections");
+            s2.finish()
+                .await
+                .expect_err("shouldn't be able to open 2 connections");
         }
-        let mut s2 = s2.unwrap();
-        s1.write_all(&[0u8]).await.unwrap();
-        s1.finish().await.unwrap();
-        // Send enough data to create more than 1 chunks.
-        // The first will try to open the connection (which should fail).
-        // The following chunks will enable the detection of connection failure.
-        let data = vec![1u8; PACKET_DATA_SIZE * 2];
-        s2.write_all(&data)
-            .await
-            .expect_err("shouldn't be able to open 2 connections");
-        s2.finish()
-            .await
-            .expect_err("shouldn't be able to open 2 connections");
     }
 
     pub async fn check_multiple_streams(
@@ -1597,8 +1599,8 @@ pub mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let stats = Arc::new(StreamStats::default());
-        let (_, t) = spawn_server(
+        let (_, _, t) = spawn_server(
+            "quic_streamer_test",
             s,
             &keypair,
             ip,
@@ -1608,7 +1610,6 @@ pub mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
-            stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )
@@ -1629,8 +1630,8 @@ pub mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let stats = Arc::new(StreamStats::default());
-        let (_, t) = spawn_server(
+        let (_, stats, t) = spawn_server(
+            "quic_streamer_test",
             s,
             &keypair,
             ip,
@@ -1640,7 +1641,6 @@ pub mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats.clone(),
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )

@@ -31,7 +31,6 @@ use {
         snapshot_utils::{
             self, ArchiveFormat,
             SnapshotVersion::{self, V1_2_0},
-            MAX_BANK_SNAPSHOTS_TO_RETAIN,
         },
         status_cache::MAX_CACHE_ENTRIES,
     },
@@ -180,7 +179,7 @@ fn restore_from_snapshot(
         false,
         Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        &Arc::default(),
+        Arc::default(),
     )
     .unwrap();
     deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
@@ -234,7 +233,12 @@ fn run_bank_forks_snapshot_n<F>(
         if slot % set_root_interval == 0 || slot == last_slot {
             // set_root should send a snapshot request
             bank_forks.set_root(bank.slot(), &request_sender, None);
-            snapshot_request_handler.handle_snapshot_requests(false, 0, &mut None);
+            snapshot_request_handler.handle_snapshot_requests(
+                false,
+                0,
+                &mut None,
+                &AtomicBool::new(false),
+            );
         }
     }
 
@@ -329,6 +333,7 @@ fn test_concurrent_snapshot_packaging(
     cluster_type: ClusterType,
 ) {
     solana_logger::setup();
+    const MAX_BANK_SNAPSHOTS_TO_RETAIN: usize = 8;
 
     // Set up snapshotting config
     let mut snapshot_test_config =
@@ -373,7 +378,7 @@ fn test_concurrent_snapshot_packaging(
     let saved_slot = 4;
     let mut saved_archive_path = None;
 
-    for forks in 0..snapshot_utils::MAX_BANK_SNAPSHOTS_TO_RETAIN + 2 {
+    for forks in 0..MAX_BANK_SNAPSHOTS_TO_RETAIN + 2 {
         let bank = Bank::new_from_parent(
             &bank_forks[forks as u64],
             &Pubkey::default(),
@@ -484,7 +489,7 @@ fn test_concurrent_snapshot_packaging(
     assert!(bank_snapshots
         .into_iter()
         .map(|path| path.slot)
-        .eq(3..=snapshot_utils::MAX_BANK_SNAPSHOTS_TO_RETAIN as u64 + 2));
+        .eq(3..=MAX_BANK_SNAPSHOTS_TO_RETAIN as u64 + 2));
 
     // Create a SnapshotPackagerService to create tarballs from all the pending
     // SnapshotPackage's on the channel. By the time this service starts, we have already
@@ -753,6 +758,7 @@ fn test_bank_forks_incremental_snapshot(
                 false,
                 0,
                 &mut last_full_snapshot_slot,
+                &AtomicBool::new(false),
             );
         }
 
@@ -889,7 +895,7 @@ fn restore_from_snapshots_and_check_banks_are_equal(
         false,
         Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        &Arc::default(),
+        Arc::default(),
     )?;
     deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
 
@@ -1108,7 +1114,7 @@ fn test_snapshots_with_background_services(
         false,
         Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        &exit,
+        exit.clone(),
     )
     .unwrap();
     deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();

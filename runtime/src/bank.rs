@@ -62,6 +62,7 @@ use {
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_token,
         message_processor::MessageProcessor,
+        partitioned_rewards::PartitionedEpochRewardsConfig,
         rent_collector::{CollectedInfo, RentCollector},
         rent_debits::RentDebits,
         runtime_config::RuntimeConfig,
@@ -180,7 +181,7 @@ use {
         sync::{
             atomic::{
                 AtomicBool, AtomicI64, AtomicU64, AtomicUsize,
-                Ordering::{AcqRel, Acquire, Relaxed},
+                Ordering::{self, AcqRel, Acquire, Relaxed},
             },
             Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
@@ -221,7 +222,7 @@ struct RentMetrics {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "GBTLfFjModD9ykS9LV4pGi4S8eCrUj2JjWSDQLf8tMwV")]
+#[frozen_abi(digest = "4uKZVBUbS5wkMK6vSzUoeQjAKbXd7AGeNakBeaBG9f4i")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
@@ -1323,7 +1324,7 @@ impl Bank {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
     }
 
@@ -1339,7 +1340,7 @@ impl Bank {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
     }
 
@@ -1355,7 +1356,7 @@ impl Bank {
         debug_do_not_add_builtins: bool,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         let accounts = Accounts::new_with_config(
             paths,
@@ -1435,6 +1436,38 @@ impl Bank {
 
     fn get_rent_collector_from(rent_collector: &RentCollector, epoch: Epoch) -> RentCollector {
         rent_collector.clone_with_epoch(epoch)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn set_epoch_reward_status_active(&mut self, stake_rewards: StakeRewards) {
+        self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
+            start_block_height: self.block_height,
+            calculated_epoch_stake_rewards: Arc::new(stake_rewards),
+        });
+    }
+
+    #[allow(dead_code)]
+    fn partitioned_epoch_rewards_config(&self) -> &PartitionedEpochRewardsConfig {
+        &self
+            .rc
+            .accounts
+            .accounts_db
+            .partitioned_epoch_rewards_config
+    }
+
+    /// # stake accounts to store in one block during partitioned reward interval
+    #[allow(dead_code)]
+    fn partitioned_rewards_stake_account_stores_per_block(&self) -> u64 {
+        self.partitioned_epoch_rewards_config()
+            .stake_account_stores_per_block
+    }
+
+    /// reward calculation happens synchronously during the first block of the epoch boundary.
+    /// So, # blocks for reward calculation is 1.
+    #[allow(dead_code)]
+    fn get_reward_calculation_num_blocks(&self) -> Slot {
+        self.partitioned_epoch_rewards_config()
+            .reward_calculation_num_blocks
     }
 
     fn _new_from_parent(
@@ -1592,7 +1625,12 @@ impl Bank {
         let parent_epoch = parent.epoch();
         let (_, update_epoch_time_us) = measure_us!({
             if parent_epoch < new.epoch() {
-                new.process_new_epoch(parent_epoch, parent.slot(), reward_calc_tracer);
+                new.process_new_epoch(
+                    parent_epoch,
+                    parent.slot(),
+                    parent.block_height(),
+                    reward_calc_tracer,
+                );
             } else {
                 // Save a snapshot of stakes for use in consensus and stake weighted networking
                 let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
@@ -1643,6 +1681,7 @@ impl Bank {
             .stats
             .submit(parent.slot());
 
+        new.loaded_programs_cache.write().unwrap().stats.reset();
         new
     }
 
@@ -1651,6 +1690,7 @@ impl Bank {
         &mut self,
         parent_epoch: Epoch,
         parent_slot: Slot,
+        _parent_height: u64,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
     ) {
         let epoch = self.epoch();
@@ -4367,26 +4407,31 @@ impl Bank {
 
     fn replenish_program_cache(
         &self,
-        program_accounts_map: &HashMap<Pubkey, &Pubkey>,
+        program_accounts_map: &HashMap<Pubkey, (&Pubkey, u64)>,
     ) -> LoadedProgramsForTxBatch {
-        let programs_and_slots: Vec<(Pubkey, LoadedProgramMatchCriteria)> =
+        let programs_and_slots: Vec<(Pubkey, (LoadedProgramMatchCriteria, u64))> =
             if self.check_program_modification_slot {
                 program_accounts_map
-                    .keys()
-                    .map(|pubkey| {
+                    .iter()
+                    .map(|(pubkey, (_, count))| {
                         (
                             *pubkey,
-                            self.program_modification_slot(pubkey)
-                                .map_or(LoadedProgramMatchCriteria::Tombstone, |slot| {
-                                    LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot)
-                                }),
+                            (
+                                self.program_modification_slot(pubkey)
+                                    .map_or(LoadedProgramMatchCriteria::Tombstone, |slot| {
+                                        LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot)
+                                    }),
+                                *count,
+                            ),
                         )
                     })
                     .collect()
             } else {
                 program_accounts_map
-                    .keys()
-                    .map(|pubkey| (*pubkey, LoadedProgramMatchCriteria::NoCriteria))
+                    .iter()
+                    .map(|(pubkey, (_, count))| {
+                        (*pubkey, (LoadedProgramMatchCriteria::NoCriteria, *count))
+                    })
                     .collect()
             };
 
@@ -4399,7 +4444,7 @@ impl Bank {
         // Load missing programs while global cache is unlocked
         let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
             .iter()
-            .map(|key| {
+            .map(|(key, count)| {
                 let program = self.load_program(key).unwrap_or_else(|err| {
                     // Create a tombstone for the program in the cache
                     debug!("Failed to load program {}, error {:?}", key, err);
@@ -4408,6 +4453,7 @@ impl Bank {
                         LoadedProgramType::FailedVerification,
                     ))
                 });
+                program.tx_usage_counter.store(*count, Ordering::Relaxed);
                 (*key, program)
             })
             .collect();
@@ -4499,7 +4545,7 @@ impl Bank {
         );
         let native_loader = native_loader::id();
         for builtin_program in self.builtin_programs.iter() {
-            program_accounts_map.insert(*builtin_program, &native_loader);
+            program_accounts_map.insert(*builtin_program, (&native_loader, 0));
         }
 
         let programs_loaded_for_tx_batch = Rc::new(RefCell::new(

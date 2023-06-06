@@ -497,7 +497,7 @@ pub fn start_gossip_voter(
         // node later.
         node_keypair.insecure_clone(),
         Some(gossip_addr),
-        &exit,
+        exit.clone(),
         None,
         0,
         false,

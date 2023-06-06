@@ -1,5 +1,7 @@
 [package]
 name = "solana-zk-token-sdk"
+description = "Solana Zk Token SDK"
+documentation = "https://docs.rs/solana-zk-token-sdk"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }

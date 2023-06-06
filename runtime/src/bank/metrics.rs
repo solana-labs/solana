@@ -1,4 +1,5 @@
 use {
+    crate::bank::Bank,
     solana_sdk::clock::{Epoch, Slot},
     std::sync::atomic::{AtomicU64, Ordering::Relaxed},
 };
@@ -161,5 +162,46 @@ pub(crate) fn report_new_bank_metrics(
             timings.fill_sysvar_cache_time_us,
             i64
         ),
+    );
+}
+
+/// Metrics for partitioned epoch reward store
+#[allow(dead_code)]
+#[derive(Debug, Default)]
+pub(crate) struct RewardsStoreMetrics {
+    pub(crate) partition_index: u64,
+    pub(crate) store_stake_accounts_us: u64,
+    pub(crate) store_stake_accounts_count: usize,
+    pub(crate) total_stake_accounts_count: usize,
+    pub(crate) pre_capitalization: u64,
+    pub(crate) post_capitalization: u64,
+}
+
+#[allow(dead_code)]
+pub(crate) fn report_partitioned_reward_metrics(bank: &Bank, timings: RewardsStoreMetrics) {
+    datapoint_info!(
+        "bank-partitioned_epoch_rewards_credit",
+        ("slot", bank.slot(), i64),
+        ("epoch", bank.epoch(), i64),
+        ("block_height", bank.block_height(), i64),
+        ("parent_slot", bank.parent_slot(), i64),
+        ("partition_index", timings.partition_index, i64),
+        (
+            "store_stake_accounts_us",
+            timings.store_stake_accounts_us,
+            i64
+        ),
+        (
+            "store_stake_accounts_count",
+            timings.store_stake_accounts_count,
+            i64
+        ),
+        (
+            "total_stake_accounts_count",
+            timings.total_stake_accounts_count,
+            i64
+        ),
+        ("pre_capitalization", timings.pre_capitalization, i64),
+        ("post_capitalization", timings.post_capitalization, i64),
     );
 }

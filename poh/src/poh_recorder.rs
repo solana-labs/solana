@@ -10,7 +10,6 @@
 //! For Entries:
 //! * recorded entry must be >= WorkingBank::min_tick_height && entry must be < WorkingBank::max_tick_height
 //!
-pub use solana_sdk::clock::Slot;
 use {
     crate::{leader_bank_notifier::LeaderBankNotifier, poh_service::PohService},
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, SendError, Sender, TrySendError},
@@ -28,8 +27,12 @@ use {
     solana_metrics::poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     solana_runtime::bank::Bank,
     solana_sdk::{
-        clock::NUM_CONSECUTIVE_LEADER_SLOTS, hash::Hash, poh_config::PohConfig, pubkey::Pubkey,
-        saturating_add_assign, transaction::VersionedTransaction,
+        clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
+        hash::Hash,
+        poh_config::PohConfig,
+        pubkey::Pubkey,
+        saturating_add_assign,
+        transaction::VersionedTransaction,
     },
     std::{
         cmp,
@@ -1063,7 +1066,7 @@ pub fn create_test_recorder(
     let poh_service = PohService::new(
         poh_recorder.clone(),
         &poh_config,
-        &exit,
+        exit.clone(),
         bank.ticks_per_slot(),
         crate::poh_service::DEFAULT_PINNED_CPU_CORE,
         crate::poh_service::DEFAULT_HASHES_PER_BATCH,

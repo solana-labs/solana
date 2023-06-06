@@ -16,7 +16,7 @@ use {
             pedersen::PedersenOpening,
         },
         errors::ProofError,
-        sigma_proofs::ctxt_ctxt_equality_proof::CiphertextCiphertextEqualityProof,
+        sigma_proofs::ciphertext_ciphertext_equality_proof::CiphertextCiphertextEqualityProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,

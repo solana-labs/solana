@@ -87,13 +87,12 @@ pub struct OptimisticallyConfirmedBankTracker {
 impl OptimisticallyConfirmedBankTracker {
     pub fn new(
         receiver: BankNotificationReceiver,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         bank_forks: Arc<RwLock<BankForks>>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
         subscriptions: Arc<RpcSubscriptions>,
         slot_notification_subscribers: Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
     ) -> Self {
-        let exit_ = exit.clone();
         let mut pending_optimistically_confirmed_banks = HashSet::new();
         let mut last_notified_confirmed_slot: Slot = 0;
         let mut highest_confirmed_slot: Slot = 0;
@@ -101,7 +100,7 @@ impl OptimisticallyConfirmedBankTracker {
         let thread_hdl = Builder::new()
             .name("solOpConfBnkTrk".to_string())
             .spawn(move || loop {
-                if exit_.load(Ordering::Relaxed) {
+                if exit.load(Ordering::Relaxed) {
                     break;
                 }
 
@@ -433,7 +432,7 @@ mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks.clone(),

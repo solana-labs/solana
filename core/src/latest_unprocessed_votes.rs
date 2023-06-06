@@ -7,7 +7,11 @@ use {
     rand::{thread_rng, Rng},
     solana_perf::packet::Packet,
     solana_runtime::bank::Bank,
-    solana_sdk::{clock::Slot, program_utils::limited_deserialize, pubkey::Pubkey},
+    solana_sdk::{
+        clock::{Slot, UnixTimestamp},
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+    },
     solana_vote_program::vote_instruction::VoteInstruction,
     std::{
         collections::HashMap,
@@ -30,6 +34,7 @@ pub struct LatestValidatorVotePacket {
     vote: Option<Arc<ImmutableDeserializedPacket>>,
     slot: Slot,
     forwarded: bool,
+    timestamp: Option<UnixTimestamp>,
 }
 
 impl LatestValidatorVotePacket {
@@ -62,6 +67,7 @@ impl LatestValidatorVotePacket {
                     .get(0)
                     .ok_or(DeserializedPacketError::VoteTransactionError)?;
                 let slot = vote_state_update_instruction.last_voted_slot().unwrap_or(0);
+                let timestamp = vote_state_update_instruction.timestamp();
 
                 Ok(Self {
                     vote: Some(vote),
@@ -69,6 +75,7 @@ impl LatestValidatorVotePacket {
                     pubkey,
                     vote_source,
                     forwarded: false,
+                    timestamp,
                 })
             }
             _ => Err(DeserializedPacketError::VoteTransactionError),
@@ -85,6 +92,10 @@ impl LatestValidatorVotePacket {
 
     pub fn slot(&self) -> Slot {
         self.slot
+    }
+
+    pub fn timestamp(&self) -> Option<UnixTimestamp> {
+        self.timestamp
     }
 
     pub fn is_forwarded(&self) -> bool {
@@ -193,12 +204,20 @@ impl LatestUnprocessedVotes {
     ) -> Option<LatestValidatorVotePacket> {
         let pubkey = vote.pubkey();
         let slot = vote.slot();
+        let timestamp = vote.timestamp();
         if let Some(latest_vote) = self.get_entry(pubkey) {
-            let latest_slot = latest_vote.read().unwrap().slot();
-            if slot > latest_slot {
+            let (latest_slot, latest_timestamp) = latest_vote
+                .read()
+                .map(|vote| (vote.slot(), vote.timestamp()))
+                .unwrap();
+            // Allow votes for later slots or the same slot with later timestamp (refreshed votes)
+            // We directly compare as options to prioritize votes for same slot with timestamp as
+            // Some > None
+            if slot > latest_slot || ((slot == latest_slot) && (timestamp > latest_timestamp)) {
                 let mut latest_vote = latest_vote.write().unwrap();
                 let latest_slot = latest_vote.slot();
-                if slot > latest_slot {
+                let latest_timestamp = latest_vote.timestamp();
+                if slot > latest_slot || ((slot == latest_slot) && (timestamp > latest_timestamp)) {
                     let old_vote = std::mem::replace(latest_vote.deref_mut(), vote);
                     if old_vote.is_vote_taken() {
                         return None;
@@ -217,12 +236,22 @@ impl LatestUnprocessedVotes {
         None
     }
 
+    #[cfg(test)]
     pub fn get_latest_vote_slot(&self, pubkey: Pubkey) -> Option<Slot> {
         self.latest_votes_per_pubkey
             .read()
             .unwrap()
             .get(&pubkey)
             .map(|l| l.read().unwrap().slot())
+    }
+
+    #[cfg(test)]
+    fn get_latest_timestamp(&self, pubkey: Pubkey) -> Option<UnixTimestamp> {
+        self.latest_votes_per_pubkey
+            .read()
+            .unwrap()
+            .get(&pubkey)
+            .and_then(|l| l.read().unwrap().timestamp())
     }
 
     /// Returns how many packets were forwardable
@@ -336,8 +365,10 @@ mod tests {
         slots: Vec<(u64, u32)>,
         vote_source: VoteSource,
         keypairs: &ValidatorVoteKeypairs,
+        timestamp: Option<UnixTimestamp>,
     ) -> LatestValidatorVotePacket {
-        let vote = VoteStateUpdate::from(slots);
+        let mut vote = VoteStateUpdate::from(slots);
+        vote.timestamp = timestamp;
         let vote_tx = new_vote_state_update_transaction(
             vote,
             Hash::new_unique(),
@@ -481,8 +512,13 @@ mod tests {
         let keypair_a = ValidatorVoteKeypairs::new_rand();
         let keypair_b = ValidatorVoteKeypairs::new_rand();
 
-        let vote_a = from_slots(vec![(0, 2), (1, 1)], VoteSource::Gossip, &keypair_a);
-        let vote_b = from_slots(vec![(0, 5), (4, 2), (9, 1)], VoteSource::Gossip, &keypair_b);
+        let vote_a = from_slots(vec![(0, 2), (1, 1)], VoteSource::Gossip, &keypair_a, None);
+        let vote_b = from_slots(
+            vec![(0, 5), (4, 2), (9, 1)],
+            VoteSource::Gossip,
+            &keypair_b,
+            None,
+        );
 
         assert!(latest_unprocessed_votes
             .update_latest_vote(vote_a)
@@ -505,8 +541,14 @@ mod tests {
             vec![(0, 5), (1, 4), (3, 3), (10, 1)],
             VoteSource::Gossip,
             &keypair_a,
+            None,
         );
-        let vote_b = from_slots(vec![(0, 5), (4, 2), (6, 1)], VoteSource::Gossip, &keypair_a);
+        let vote_b = from_slots(
+            vec![(0, 5), (4, 2), (6, 1)],
+            VoteSource::Gossip,
+            &keypair_b,
+            None,
+        );
 
         // Evict previous vote
         assert_eq!(
@@ -526,6 +568,114 @@ mod tests {
         );
 
         assert_eq!(2, latest_unprocessed_votes.len());
+
+        // Same votes should be no-ops
+        let vote_a = from_slots(
+            vec![(0, 5), (1, 4), (3, 3), (10, 1)],
+            VoteSource::Gossip,
+            &keypair_a,
+            None,
+        );
+        let vote_b = from_slots(
+            vec![(0, 5), (4, 2), (9, 1)],
+            VoteSource::Gossip,
+            &keypair_b,
+            None,
+        );
+        latest_unprocessed_votes.update_latest_vote(vote_a);
+        latest_unprocessed_votes.update_latest_vote(vote_b);
+
+        assert_eq!(2, latest_unprocessed_votes.len());
+        assert_eq!(
+            10,
+            latest_unprocessed_votes
+                .get_latest_vote_slot(keypair_a.node_keypair.pubkey())
+                .unwrap()
+        );
+        assert_eq!(
+            9,
+            latest_unprocessed_votes
+                .get_latest_vote_slot(keypair_b.node_keypair.pubkey())
+                .unwrap()
+        );
+
+        // Same votes with timestamps should override
+        let vote_a = from_slots(
+            vec![(0, 5), (1, 4), (3, 3), (10, 1)],
+            VoteSource::Gossip,
+            &keypair_a,
+            Some(1),
+        );
+        let vote_b = from_slots(
+            vec![(0, 5), (4, 2), (9, 1)],
+            VoteSource::Gossip,
+            &keypair_b,
+            Some(2),
+        );
+        latest_unprocessed_votes.update_latest_vote(vote_a);
+        latest_unprocessed_votes.update_latest_vote(vote_b);
+
+        assert_eq!(2, latest_unprocessed_votes.len());
+        assert_eq!(
+            Some(1),
+            latest_unprocessed_votes.get_latest_timestamp(keypair_a.node_keypair.pubkey())
+        );
+        assert_eq!(
+            Some(2),
+            latest_unprocessed_votes.get_latest_timestamp(keypair_b.node_keypair.pubkey())
+        );
+
+        // Same votes with bigger timestamps should override
+        let vote_a = from_slots(
+            vec![(0, 5), (1, 4), (3, 3), (10, 1)],
+            VoteSource::Gossip,
+            &keypair_a,
+            Some(5),
+        );
+        let vote_b = from_slots(
+            vec![(0, 5), (4, 2), (9, 1)],
+            VoteSource::Gossip,
+            &keypair_b,
+            Some(6),
+        );
+        latest_unprocessed_votes.update_latest_vote(vote_a);
+        latest_unprocessed_votes.update_latest_vote(vote_b);
+
+        assert_eq!(2, latest_unprocessed_votes.len());
+        assert_eq!(
+            Some(5),
+            latest_unprocessed_votes.get_latest_timestamp(keypair_a.node_keypair.pubkey())
+        );
+        assert_eq!(
+            Some(6),
+            latest_unprocessed_votes.get_latest_timestamp(keypair_b.node_keypair.pubkey())
+        );
+
+        // Same votes with smaller timestamps should not override
+        let vote_a = from_slots(
+            vec![(0, 5), (1, 4), (3, 3), (10, 1)],
+            VoteSource::Gossip,
+            &keypair_a,
+            Some(2),
+        );
+        let vote_b = from_slots(
+            vec![(0, 5), (4, 2), (9, 1)],
+            VoteSource::Gossip,
+            &keypair_b,
+            Some(3),
+        );
+        latest_unprocessed_votes.update_latest_vote(vote_a);
+        latest_unprocessed_votes.update_latest_vote(vote_b);
+
+        assert_eq!(2, latest_unprocessed_votes.len());
+        assert_eq!(
+            Some(5),
+            latest_unprocessed_votes.get_latest_timestamp(keypair_a.node_keypair.pubkey())
+        );
+        assert_eq!(
+            Some(6),
+            latest_unprocessed_votes.get_latest_timestamp(keypair_b.node_keypair.pubkey())
+        );
     }
 
     #[test]
@@ -548,6 +698,7 @@ mod tests {
                         vec![(i, 1)],
                         VoteSource::Gossip,
                         &keypairs[rng.gen_range(0, 10)],
+                        None,
                     );
                     latest_unprocessed_votes.update_latest_vote(vote);
                 }
@@ -562,6 +713,7 @@ mod tests {
                         vec![(i, 1)],
                         VoteSource::Tpu,
                         &keypairs_tpu[rng.gen_range(0, 10)],
+                        None,
                     );
                     latest_unprocessed_votes_tpu.update_latest_vote(vote);
                     if i % 214 == 0 {
@@ -594,8 +746,8 @@ mod tests {
         let keypair_a = ValidatorVoteKeypairs::new_rand();
         let keypair_b = ValidatorVoteKeypairs::new_rand();
 
-        let vote_a = from_slots(vec![(1, 1)], VoteSource::Gossip, &keypair_a);
-        let vote_b = from_slots(vec![(2, 1)], VoteSource::Tpu, &keypair_b);
+        let vote_a = from_slots(vec![(1, 1)], VoteSource::Gossip, &keypair_a, None);
+        let vote_b = from_slots(vec![(2, 1)], VoteSource::Tpu, &keypair_b, None);
         latest_unprocessed_votes.update_latest_vote(vote_a);
         latest_unprocessed_votes.update_latest_vote(vote_b);
 
@@ -685,11 +837,11 @@ mod tests {
         let keypair_c = ValidatorVoteKeypairs::new_rand();
         let keypair_d = ValidatorVoteKeypairs::new_rand();
 
-        let vote_a = from_slots(vec![(1, 1)], VoteSource::Gossip, &keypair_a);
-        let mut vote_b = from_slots(vec![(2, 1)], VoteSource::Tpu, &keypair_b);
+        let vote_a = from_slots(vec![(1, 1)], VoteSource::Gossip, &keypair_a, None);
+        let mut vote_b = from_slots(vec![(2, 1)], VoteSource::Tpu, &keypair_b, None);
         vote_b.forwarded = true;
-        let vote_c = from_slots(vec![(3, 1)], VoteSource::Tpu, &keypair_c);
-        let vote_d = from_slots(vec![(4, 1)], VoteSource::Gossip, &keypair_d);
+        let vote_c = from_slots(vec![(3, 1)], VoteSource::Tpu, &keypair_c, None);
+        let vote_d = from_slots(vec![(4, 1)], VoteSource::Gossip, &keypair_d, None);
 
         latest_unprocessed_votes.update_latest_vote(vote_a);
         latest_unprocessed_votes.update_latest_vote(vote_b);

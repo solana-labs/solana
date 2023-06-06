@@ -15,8 +15,8 @@
 //! We refer to the zk-token paper for the formal details and security proofs of these argument
 //! systems.
 
-pub mod ctxt_comm_equality_proof;
-pub mod ctxt_ctxt_equality_proof;
+pub mod ciphertext_ciphertext_equality_proof;
+pub mod ciphertext_commitment_equality_proof;
 pub mod errors;
 pub mod fee_proof;
 pub mod pubkey_proof;

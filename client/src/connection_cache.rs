@@ -217,8 +217,7 @@ mod tests {
         crossbeam_channel::unbounded,
         solana_sdk::{net::DEFAULT_TPU_COALESCE, signature::Keypair},
         solana_streamer::{
-            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, quic::StreamStats,
-            streamer::StakedNodes,
+            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, streamer::StakedNodes,
         },
         std::{
             net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
@@ -229,37 +228,25 @@ mod tests {
         },
     };
 
-    fn server_args() -> (
-        UdpSocket,
-        Arc<AtomicBool>,
-        Keypair,
-        IpAddr,
-        Arc<StreamStats>,
-    ) {
+    fn server_args() -> (UdpSocket, Arc<AtomicBool>, Keypair, IpAddr) {
         (
             UdpSocket::bind("127.0.0.1:0").unwrap(),
             Arc::new(AtomicBool::new(false)),
             Keypair::new(),
             "127.0.0.1".parse().unwrap(),
-            Arc::new(StreamStats::default()),
         )
     }
 
     #[test]
     fn test_connection_with_specified_client_endpoint() {
         // Start a response receiver:
-        let (
-            response_recv_socket,
-            response_recv_exit,
-            keypair2,
-            response_recv_ip,
-            response_recv_stats,
-        ) = server_args();
+        let (response_recv_socket, response_recv_exit, keypair2, response_recv_ip) = server_args();
         let (sender2, _receiver2) = unbounded();
 
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
 
         let (response_recv_endpoint, response_recv_thread) = solana_streamer::quic::spawn_server(
+            "quic_streamer_test",
             response_recv_socket,
             &keypair2,
             response_recv_ip,
@@ -269,7 +256,6 @@ mod tests {
             staked_nodes,
             10,
             10,
-            response_recv_stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )

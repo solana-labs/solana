@@ -171,7 +171,7 @@ fn start_gossip_node(
         gossip_validators,
         should_check_duplicate_instance,
         None,
-        &gossip_exit_flag,
+        gossip_exit_flag.clone(),
     );
     (cluster_info, gossip_exit_flag, gossip_service)
 }

@@ -195,7 +195,7 @@ impl Dashboard {
 
 async fn wait_for_validator_startup(
     ledger_path: &Path,
-    exit: &Arc<AtomicBool>,
+    exit: &AtomicBool,
     progress_bar: ProgressBar,
     refresh_interval: Duration,
 ) -> Option<(SocketAddr, SystemTime)> {
