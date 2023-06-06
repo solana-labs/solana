@@ -3081,8 +3081,8 @@ checksum = "61807f77802ff30975e01f4f071c8ba10c022052f98b3294119f3e615d13e5be"
 
 [[package]]
 name = "ntapi"
-version = "0.3.6"
-source = "git+https://github.com/solana-labs/ntapi?rev=5980bbab2e0501a8100eb88c12222d664ccb3a0a#5980bbab2e0501a8100eb88c12222d664ccb3a0a"
+version = "0.3.7"
+source = "git+https://github.com/solana-labs/ntapi?rev=97ede981a1777883ff86d142b75024b023f04fad#97ede981a1777883ff86d142b75024b023f04fad"
 dependencies = [
  "winapi 0.3.9",
 ]
