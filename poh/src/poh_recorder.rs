@@ -183,10 +183,10 @@ impl TransactionRecorder {
                         starting_transaction_index: None,
                     };
                 }
-                Err(PohRecorderError::SendError(_)) => {
+                Err(PohRecorderError::SendError(e)) => {
                     return RecordTransactionsSummary {
                         record_transactions_timings,
-                        result: Err(PohRecorderError::MaxHeightReached),
+                        result: Err(PohRecorderError::SendError(e)),
                         starting_transaction_index: None,
                     };
                 }
