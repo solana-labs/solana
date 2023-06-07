@@ -59,7 +59,6 @@ use {
         builtins::{BuiltinPrototype, BUILTINS},
         cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
-        epoch_rewards_hasher::EpochRewardHasher,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         message_processor::MessageProcessor,
         partitioned_rewards::PartitionedEpochRewardsConfig,
@@ -2790,22 +2789,6 @@ impl Bank {
             invalid_cached_stake_accounts_rent_epoch: 0,
             vote_accounts_cache_miss_count: vote_accounts_cache_miss_count.into_inner(),
         }
-    }
-
-    #[allow(dead_code)]
-    fn hash_rewards_into_partitions(
-        stake_rewards: &StakeRewards,
-        parent_block_hash: &Hash,
-        num_partitions: usize,
-    ) -> Vec<StakeRewards> {
-        let hasher = EpochRewardHasher::new(num_partitions, parent_block_hash);
-        let mut result = vec![vec![]; num_partitions];
-
-        for reward in stake_rewards {
-            let partition_index = hasher.hash_address_to_partition(&reward.stake_pubkey);
-            result[partition_index].push(reward.clone());
-        }
-        result
     }
 
     /// Load, calculate and payout epoch rewards for stake and vote accounts
