@@ -133,7 +133,7 @@ impl AbiExample for StakeAccount<Delegation> {
             DeactivationFlag::example(),
         );
         let mut account = Account::example();
-        account.data.resize(196, 0u8);
+        account.data.resize(200, 0u8);
         account.owner = solana_stake_program::id();
         account.set_state(&stake_state).unwrap();
         Self::try_from(AccountSharedData::from(account)).unwrap()
