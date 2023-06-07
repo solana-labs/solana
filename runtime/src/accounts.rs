@@ -31,7 +31,7 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
-        bpf_loader_upgradeable,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
             self, add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
@@ -369,9 +369,12 @@ impl Accounts {
                         account_overrides.and_then(|overrides| overrides.get(key))
                     {
                         (account_override.data().len(), account_override.clone(), 0)
-                    } else if let Some(program) = (!instruction_account && !message.is_writable(i))
-                        .then_some(())
-                        .and_then(|_| loaded_programs.find(key))
+                    } else if let Some(program) = (feature_set
+                        .is_active(&simplify_writable_program_account_check::id())
+                        && !instruction_account
+                        && !message.is_writable(i))
+                    .then_some(())
+                    .and_then(|_| loaded_programs.find(key))
                     {
                         // This condition block does special handling for accounts that are passed
                         // as instruction account to any of the instructions in the transaction.
@@ -436,18 +439,39 @@ impl Accounts {
                         validated_fee_payer = true;
                     }
 
-                    if bpf_loader_upgradeable::check_id(account.owner()) {
-                        if !feature_set.is_active(&simplify_writable_program_account_check::id())
-                            && message.is_writable(i)
-                            && !message.is_upgradeable_loader_present()
-                        {
+                    if !feature_set.is_active(&simplify_writable_program_account_check::id()) {
+                        if bpf_loader_upgradeable::check_id(account.owner()) {
+                            if message.is_writable(i) && !message.is_upgradeable_loader_present() {
+                                error_counters.invalid_writable_account += 1;
+                                return Err(TransactionError::InvalidWritableAccount);
+                            }
+
+                            if account.executable() {
+                                // The upgradeable loader requires the derived ProgramData account
+                                if let Ok(UpgradeableLoaderState::Program {
+                                    programdata_address,
+                                }) = account.state()
+                                {
+                                    if self
+                                        .accounts_db
+                                        .load_with_fixed_root(ancestors, &programdata_address)
+                                        .is_none()
+                                    {
+                                        error_counters.account_not_found += 1;
+                                        return Err(TransactionError::ProgramAccountNotFound);
+                                    }
+                                } else {
+                                    error_counters.invalid_program_for_execution += 1;
+                                    return Err(TransactionError::InvalidProgramForExecution);
+                                }
+                            }
+                        } else if account.executable() && message.is_writable(i) {
                             error_counters.invalid_writable_account += 1;
                             return Err(TransactionError::InvalidWritableAccount);
                         }
-                    } else if account.executable() && message.is_writable(i) {
-                        error_counters.invalid_writable_account += 1;
-                        return Err(TransactionError::InvalidWritableAccount);
-                    } else if in_reward_interval
+                    }
+
+                    if in_reward_interval
                         && message.is_writable(i)
                         && solana_stake_program::check_id(account.owner())
                     {
@@ -1466,7 +1490,6 @@ mod tests {
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
-            bpf_loader_upgradeable::UpgradeableLoaderState,
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::EpochSchedule,
             genesis_config::ClusterType,
@@ -2465,8 +2488,12 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[simplify_writable_program_account_check::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2479,8 +2506,12 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // mark both executables as readonly
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[simplify_writable_program_account_check::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
