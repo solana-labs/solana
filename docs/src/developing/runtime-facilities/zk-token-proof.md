@@ -42,7 +42,7 @@ cannot change the original value that is contained in a commitment.
 Interested readers can refer to the following resources for a more in-depth
 treatment of Pedersen commitment and the (twisted) ElGamal encryption schemes.
 
-- Notes on the twisted ElGamal encryption
+- [Notes](./zk-docs/twisted_elgamal.pdf) on the twisted ElGamal encryption
 - A technical
   [overview](https://github.com/solana-labs/solana-program-library/blob/master/token/zk-token-protocol-paper/part1.pdf)
   of the SPL Token-2022 confidential extension
