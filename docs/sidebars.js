@@ -301,6 +301,11 @@ module.exports = {
           id: "developing/runtime-facilities/sysvars",
           label: "Sysvar Cluster Data",
         },
+        {
+          type: "doc",
+          label: "ZK Token Proof Program",
+          id: "developing/runtime-facilities/zk-token-proof",
+        }
       ],
     },
     {
