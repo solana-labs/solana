@@ -6914,7 +6914,7 @@ fn test_shrink_candidate_slots_cached() {
     // No more slots should be shrunk
     assert_eq!(bank2.shrink_candidate_slots(), 0);
     // alive_counts represents the count of alive accounts in the three slots 0,1,2
-    assert_eq!(alive_counts, vec![16, 1, 7]);
+    assert_eq!(alive_counts, vec![15, 1, 7]);
 }
 
 #[test]
@@ -7299,61 +7299,17 @@ fn test_add_precompiled_account_after_frozen() {
 fn test_reconfigure_token2_native_mint() {
     solana_logger::setup();
 
-    let mut genesis_config =
+    let genesis_config =
         create_genesis_config_with_leader(5, &solana_sdk::pubkey::new_rand(), 0).genesis_config;
-
-    // ClusterType::Development - Native mint exists immediately
-    assert_eq!(genesis_config.cluster_type, ClusterType::Development);
     let bank = Arc::new(Bank::new_for_tests(&genesis_config));
     assert_eq!(
         bank.get_balance(&inline_spl_token::native_mint::id()),
         1000000000
     );
-
-    // Testnet - Native mint blinks into existence at epoch 93
-    genesis_config.cluster_type = ClusterType::Testnet;
-    let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-    assert_eq!(bank.get_balance(&inline_spl_token::native_mint::id()), 0);
-    bank.deposit(&inline_spl_token::native_mint::id(), 4200000000)
-        .unwrap();
-
-    let bank = Bank::new_from_parent(
-        &bank,
-        &Pubkey::default(),
-        genesis_config.epoch_schedule.get_first_slot_in_epoch(93),
-    );
-
     let native_mint_account = bank
         .get_account(&inline_spl_token::native_mint::id())
         .unwrap();
     assert_eq!(native_mint_account.data().len(), 82);
-    assert_eq!(
-        bank.get_balance(&inline_spl_token::native_mint::id()),
-        4200000000
-    );
-    assert_eq!(native_mint_account.owner(), &inline_spl_token::id());
-
-    // MainnetBeta - Native mint blinks into existence at epoch 75
-    genesis_config.cluster_type = ClusterType::MainnetBeta;
-    let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-    assert_eq!(bank.get_balance(&inline_spl_token::native_mint::id()), 0);
-    bank.deposit(&inline_spl_token::native_mint::id(), 4200000000)
-        .unwrap();
-
-    let bank = Bank::new_from_parent(
-        &bank,
-        &Pubkey::default(),
-        genesis_config.epoch_schedule.get_first_slot_in_epoch(75),
-    );
-
-    let native_mint_account = bank
-        .get_account(&inline_spl_token::native_mint::id())
-        .unwrap();
-    assert_eq!(native_mint_account.data().len(), 82);
-    assert_eq!(
-        bank.get_balance(&inline_spl_token::native_mint::id()),
-        4200000000
-    );
     assert_eq!(native_mint_account.owner(), &inline_spl_token::id());
 }
 

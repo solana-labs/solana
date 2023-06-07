@@ -60,7 +60,6 @@ use {
         cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
-        inline_spl_token,
         message_processor::MessageProcessor,
         partitioned_rewards::PartitionedEpochRewardsConfig,
         rent_collector::{CollectedInfo, RentCollector},
@@ -142,7 +141,7 @@ use {
         loader_v4,
         message::{AccountKeys, SanitizedMessage},
         native_loader,
-        native_token::{sol_to_lamports, LAMPORTS_PER_SOL},
+        native_token::LAMPORTS_PER_SOL,
         nonce::{self, state::DurableNonce, NONCED_TX_MARKER_IX_INDEX},
         nonce_account,
         packet::PACKET_DATA_SIZE,
@@ -7478,7 +7477,6 @@ impl Bank {
                 allow_new_activations,
                 &new_feature_activations,
             );
-            self.reconfigure_token2_native_mint();
         }
 
         if new_feature_activations.contains(&feature_set::cap_accounts_data_len::id()) {
@@ -7645,54 +7643,6 @@ impl Bank {
                 self.calculate_and_update_accounts_data_size_delta_off_chain(
                     old_account.data().len(),
                     new_account.data().len(),
-                );
-            }
-        }
-    }
-
-    fn reconfigure_token2_native_mint(&mut self) {
-        let reconfigure_token2_native_mint = match self.cluster_type() {
-            ClusterType::Development => true,
-            ClusterType::Devnet => true,
-            ClusterType::Testnet => self.epoch() == 93,
-            ClusterType::MainnetBeta => self.epoch() == 75,
-        };
-
-        if reconfigure_token2_native_mint {
-            let mut native_mint_account = solana_sdk::account::AccountSharedData::from(Account {
-                owner: inline_spl_token::id(),
-                data: inline_spl_token::native_mint::ACCOUNT_DATA.to_vec(),
-                lamports: sol_to_lamports(1.),
-                executable: false,
-                rent_epoch: self.epoch() + 1,
-            });
-
-            // As a workaround for
-            // https://github.com/solana-labs/solana-program-library/issues/374, ensure that the
-            // spl-token 2 native mint account is owned by the spl-token 2 program.
-            let old_account_data_size;
-            let store = if let Some(existing_native_mint_account) =
-                self.get_account_with_fixed_root(&inline_spl_token::native_mint::id())
-            {
-                old_account_data_size = existing_native_mint_account.data().len();
-                if existing_native_mint_account.owner() == &solana_sdk::system_program::id() {
-                    native_mint_account.set_lamports(existing_native_mint_account.lamports());
-                    true
-                } else {
-                    false
-                }
-            } else {
-                old_account_data_size = 0;
-                self.capitalization
-                    .fetch_add(native_mint_account.lamports(), Relaxed);
-                true
-            };
-
-            if store {
-                self.store_account(&inline_spl_token::native_mint::id(), &native_mint_account);
-                self.calculate_and_update_accounts_data_size_delta_off_chain(
-                    old_account_data_size,
-                    native_mint_account.data().len(),
                 );
             }
         }
