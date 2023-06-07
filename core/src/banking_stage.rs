@@ -4,21 +4,18 @@
 
 use {
     self::{
+        committer::Committer,
         consumer::Consumer,
         decision_maker::{BufferedPacketsDecision, DecisionMaker},
         forwarder::Forwarder,
-        packet_receiver::PacketReceiver,
-    },
-    crate::{
-        banking_stage::committer::Committer,
-        banking_trace::BankingPacketReceiver,
         latest_unprocessed_votes::{LatestUnprocessedVotes, VoteSource},
-        leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
+        leader_slot_metrics::LeaderSlotMetricsTracker,
+        packet_receiver::PacketReceiver,
         qos_service::QosService,
-        tracer_packet_stats::TracerPacketStats,
         unprocessed_packet_batches::*,
         unprocessed_transaction_storage::{ThreadType, UnprocessedTransactionStorage},
     },
+    crate::{banking_trace::BankingPacketReceiver, tracer_packet_stats::TracerPacketStats},
     crossbeam_channel::RecvTimeoutError,
     histogram::Histogram,
     solana_client::connection_cache::ConnectionCache,
@@ -43,11 +40,24 @@ use {
     },
 };
 
+// Below modules are pub to allow use by banking_stage bench
 pub mod committer;
 pub mod consumer;
+pub mod leader_slot_metrics;
+pub mod qos_service;
+pub mod unprocessed_packet_batches;
+pub mod unprocessed_transaction_storage;
+
 mod decision_maker;
+mod forward_packet_batches_by_accounts;
 mod forwarder;
+mod immutable_deserialized_packet;
+mod latest_unprocessed_votes;
+mod leader_slot_timing_metrics;
+mod multi_iterator_scanner;
+mod packet_deserializer;
 mod packet_receiver;
+mod read_write_account_set;
 
 #[allow(dead_code)]
 mod scheduler_messages;

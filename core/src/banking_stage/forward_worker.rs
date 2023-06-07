@@ -84,12 +84,10 @@ fn try_drain_iter<T>(work: T, receiver: &Receiver<T>) -> impl Iterator<Item = T>
 mod tests {
     use {
         super::*,
-        crate::{
-            banking_stage::{
-                scheduler_messages::TransactionId,
-                tests::{create_slow_genesis_config, new_test_cluster_info, simulate_poh},
-            },
+        crate::banking_stage::{
             immutable_deserialized_packet::ImmutableDeserializedPacket,
+            scheduler_messages::TransactionId,
+            tests::{create_slow_genesis_config, new_test_cluster_info, simulate_poh},
         },
         crossbeam_channel::unbounded,
         solana_client::connection_cache::ConnectionCache,

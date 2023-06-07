@@ -4,7 +4,7 @@
 //!
 
 use {
-    crate::banking_stage::{committer::CommitTransactionDetails, BatchedTransactionDetails},
+    super::{committer::CommitTransactionDetails, BatchedTransactionDetails},
     crossbeam_channel::{unbounded, Receiver, Sender},
     solana_measure::measure::Measure,
     solana_runtime::{bank::Bank, cost_model::CostModel, transaction_cost::TransactionCost},
