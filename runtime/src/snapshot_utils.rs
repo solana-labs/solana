@@ -861,7 +861,7 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
             .for_each(
                 |slot| match BankSnapshotInfo::new_from_dir(&bank_snapshots_dir, slot) {
                     Ok(snapshot_info) => bank_snapshots.push(snapshot_info),
-                    Err(err) => warn!("Unable to read bank snapshot for slot {slot}: {err}"),
+                    Err(err) => debug!("Unable to read bank snapshot for slot {slot}: {err}"),
                 },
             ),
     }

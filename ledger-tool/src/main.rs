@@ -977,6 +977,16 @@ fn assert_capitalization(bank: &Bank) {
     let debug_verify = true;
     assert!(bank.calculate_and_verify_capitalization(debug_verify));
 }
+
+/// Get the AccessType required, based on `process_options`
+fn get_access_type(process_options: &ProcessOptions) -> AccessType {
+    if process_options.boot_from_local_state {
+        AccessType::PrimaryForMaintenance
+    } else {
+        AccessType::Secondary
+    }
+}
+
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 
@@ -1160,6 +1170,21 @@ fn main() {
         .multiple(true)
         .takes_value(true)
         .help("Log when transactions are processed that reference the given key(s).");
+    let boot_from_local_state = Arg::with_name("boot_from_local_state")
+        .long("boot-from-local-state")
+        .takes_value(false)
+        .hidden(hidden_unless_forced())
+        .help("Boot from state already on disk")
+        .long_help(
+            "Boot from state already on disk, instead of \
+            extracting it from a snapshot archive. \
+            This requires primary access, so another instance of \
+            solana-ledger-tool or solana-validator cannot \
+            simultaneously use the same ledger/accounts. \
+            Note, this will use the latest state available, \
+            which may be newer than the latest snapshot archive.",
+        )
+        .conflicts_with("no_snapshot");
 
     let default_max_full_snapshot_archives_to_retain =
         &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
@@ -1519,6 +1544,7 @@ fn main() {
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&debug_key_arg)
             .arg(&geyser_plugin_args)
+            .arg(&boot_from_local_state)
             .arg(
                 Arg::with_name("skip_poh_verify")
                     .long("skip-poh-verify")
@@ -1574,6 +1600,7 @@ fn main() {
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&boot_from_local_state)
             .arg(
                 Arg::with_name("include_all_votes")
                     .long("include-all-votes")
@@ -1801,6 +1828,7 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&geyser_plugin_args)
             .arg(&accounts_data_encoding_arg)
+            .arg(&boot_from_local_state)
             .arg(
                 Arg::with_name("include_sysvars")
                     .long("include-sysvars")
@@ -1833,6 +1861,7 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&geyser_plugin_args)
+            .arg(&boot_from_local_state)
             .arg(
                 Arg::with_name("warp_epoch")
                     .required(false)
@@ -2197,7 +2226,7 @@ fn main() {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -2289,7 +2318,7 @@ fn main() {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -2519,6 +2548,7 @@ fn main() {
                         .is_present("accounts_db_test_hash_calculation"),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                     runtime_config: RuntimeConfig::default(),
+                    boot_from_local_state: arg_matches.is_present("boot_from_local_state"),
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
@@ -2527,7 +2557,7 @@ fn main() {
 
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -2566,12 +2596,13 @@ fn main() {
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
+                    boot_from_local_state: arg_matches.is_present("boot_from_local_state"),
                     ..ProcessOptions::default()
                 };
 
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -3106,13 +3137,14 @@ fn main() {
                     halt_at_slot,
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
+                    boot_from_local_state: arg_matches.is_present("boot_from_local_state"),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let include_sysvars = arg_matches.is_present("include_sysvars");
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -3196,12 +3228,13 @@ fn main() {
                     halt_at_slot,
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
+                    boot_from_local_state: arg_matches.is_present("boot_from_local_state"),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
