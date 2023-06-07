@@ -634,14 +634,8 @@ mod tests {
         let feature_set = FeatureSet::default();
         assert!(!feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()));
         let expected_account_cost = WRITE_LOCK_UNITS * 2;
-        let expected_execution_cost = BUILT_IN_INSTRUCTION_COSTS
-            .get(&system_program::id())
-            .unwrap()
-            + BUILT_IN_INSTRUCTION_COSTS
-                .get(&compute_budget::id())
-                .unwrap();
-        // feature `include_loaded_accounts_data_size_in_fee_calculation` is not enabled, accounts data
-        // size limit is set.
+        // with features all diabled, builtins and loaded account size don't cost CU
+        let expected_execution_cost = 0;
         let expected_loaded_accounts_data_size_cost = 0;
 
         let tx_cost = CostModel::calculate_cost(&tx, &feature_set);
