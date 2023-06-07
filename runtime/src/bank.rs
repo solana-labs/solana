@@ -70,6 +70,7 @@ use {
         sorted_storages::SortedStorages,
         stake_account::{self, StakeAccount},
         stake_history::StakeHistory,
+        stake_rewards::StakeReward,
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift,
             MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW_V2,
@@ -1127,19 +1128,6 @@ pub struct CommitTransactionCounts {
     pub committed_non_vote_transactions_count: u64,
     pub committed_with_failure_result_count: u64,
     pub signature_count: u64,
-}
-
-#[derive(AbiExample, Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub(crate) struct StakeReward {
-    stake_pubkey: Pubkey,
-    stake_reward_info: RewardInfo,
-    stake_account: AccountSharedData,
-}
-
-impl StakeReward {
-    fn get_stake_reward(&self) -> i64 {
-        self.stake_reward_info.lamports
-    }
 }
 
 /// allow [StakeReward] to be passed to `StoreAccounts` directly without copies or vec construction
