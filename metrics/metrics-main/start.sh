@@ -54,8 +54,8 @@ sudo docker run -it -d \
   --user root:root \
   --publish 9090:9090 \
   --name=prometheus \
-  --volume /prometheus/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml \
-  --volume /prometheus/prometheus/first_rules.yml:/etc/prometheus/first_rules.yml \
+  --volume "$PWD"/prometheus.yml:/etc/prometheus/prometheus.yml \
+  --volume "$PWD"/first_rules.yml:/etc/prometheus/first_rules.yml \
   --volume /prometheus/prometheus/data:/prometheus \
   --volume /etc/hosts:/etc/hosts \
   $PROMETHEUS_IMAGE
@@ -65,7 +65,7 @@ sudo docker run -it -d \
   --user root:root \
   --publish 9093:9093 \
   --name=alertmanager \
-  --volume /prometheus/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml \
+  --volume "$PWD"/alertmanager.yml:/etc/alertmanager/alertmanager.yml \
   --volume /etc/hosts:/etc/hosts \
   $ALERTMANAGER_IMAGE
 
