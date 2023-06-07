@@ -11,7 +11,7 @@ use {
         stake_history::{StakeHistory, StakeHistoryEntry},
     },
     borsh::{maybestd::io, BorshDeserialize, BorshSchema, BorshSerialize},
-    std::{collections::HashSet, ops::Add},
+    std::collections::HashSet,
 };
 
 pub type StakeActivationStatus = StakeHistoryEntry;
@@ -37,11 +37,13 @@ pub enum DeactivationFlag {
     MustFullyActivateBeforeDeactivationIsPermitted = 1,
 }
 
-impl Add for DeactivationFlag {
-    type Output = Self;
-
-    fn add(self, other: Self) -> Self {
-        if self == DeactivationFlag::Empty && other == DeactivationFlag::Empty {
+impl DeactivationFlag {
+    /// Given two deactivation flags from two stake states to merge, Return the deactivationFlag
+    /// for the merged stake state.
+    pub fn merge(deactivation_flag1: Self, deactivation_flag2: Self) -> Self {
+        if deactivation_flag1 == DeactivationFlag::Empty
+            && deactivation_flag2 == DeactivationFlag::Empty
+        {
             DeactivationFlag::Empty
         } else {
             DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted
@@ -799,25 +801,31 @@ mod test {
     fn test_deactivation_flag_add() {
         assert_eq!(
             DeactivationFlag::Empty,
-            DeactivationFlag::Empty + DeactivationFlag::Empty
+            DeactivationFlag::merge(DeactivationFlag::Empty, DeactivationFlag::Empty)
         );
 
         assert_eq!(
             DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted,
-            DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted
-                + DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted
+            DeactivationFlag::merge(
+                DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted,
+                DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted
+            )
         );
 
         assert_eq!(
             DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted,
-            DeactivationFlag::Empty
-                + DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted
+            DeactivationFlag::merge(
+                DeactivationFlag::Empty,
+                DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted
+            )
         );
 
         assert_eq!(
             DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted,
-            DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted
-                + DeactivationFlag::Empty
+            DeactivationFlag::merge(
+                DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted,
+                DeactivationFlag::Empty
+            )
         );
     }
 }

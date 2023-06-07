@@ -1491,7 +1491,7 @@ impl MergeKind {
                 Some(StakeState::Stake(
                     meta,
                     stake,
-                    deactivation_flag + source_deactivation_flag,
+                    DeactivationFlag::merge(deactivation_flag, source_deactivation_flag),
                 ))
             }
             (
@@ -1512,7 +1512,7 @@ impl MergeKind {
                 Some(StakeState::Stake(
                     meta,
                     stake,
-                    deactivation_flag + source_deactivation_flag,
+                    DeactivationFlag::merge(deactivation_flag, source_deactivation_flag),
                 ))
             }
             (Self::FullyActive(meta, mut stake), Self::FullyActive(_, source_stake)) => {
