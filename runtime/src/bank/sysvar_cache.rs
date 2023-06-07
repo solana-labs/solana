@@ -1,21 +1,13 @@
 use {
     super::Bank,
     solana_program_runtime::sysvar_cache::SysvarCache,
-    solana_sdk::{account::ReadableAccount, feature_set},
+    solana_sdk::{account::ReadableAccount},
 };
 
 impl Bank {
     pub(crate) fn fill_missing_sysvar_cache_entries(&self) {
         let mut sysvar_cache = self.sysvar_cache.write().unwrap();
         sysvar_cache.fill_missing_entries(|pubkey, callback| {
-            if solana_sdk::sysvar::last_restart_slot::check_id(pubkey)
-                && !self
-                    .feature_set
-                    .is_active(&feature_set::last_restart_slot_sysvar::id())
-            {
-                return;
-            }
-
             let acc = self.get_account_with_fixed_root(pubkey);
             if let Some(account) = acc {
                 callback(account.data());

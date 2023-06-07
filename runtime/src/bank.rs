@@ -2282,9 +2282,13 @@ impl Bank {
 
         if feature_flag {
             let last_restart_slot = {
-                let tmp = self.hard_forks();
-                let hard_forks = tmp.read().unwrap();
-                hard_forks.iter().last().map(|(slot, _)| *slot).unwrap_or(0)
+                let hard_forks = self.hard_forks();
+                let hard_forks_r = hard_forks.read().unwrap();
+                hard_forks_r
+                    .iter()
+                    .last()
+                    .map(|(slot, _)| *slot)
+                    .unwrap_or(0)
             };
 
             self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {

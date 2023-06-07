@@ -178,7 +178,6 @@ impl SysvarCache {
                 }
             });
         }
-
         if self.last_restart_slot.is_none() {
             get_account_data(&LastRestartSlot::id(), &mut |data: &[u8]| {
                 if let Ok(last_restart_slot) = bincode::deserialize(data) {

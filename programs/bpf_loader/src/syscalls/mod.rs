@@ -6,10 +6,9 @@ pub use self::{
     mem_ops::{SyscallMemcmp, SyscallMemcpy, SyscallMemmove, SyscallMemset},
     sysvar::{
         SyscallGetClockSysvar, SyscallGetEpochScheduleSysvar, SyscallGetFeesSysvar,
-        SyscallGetRentSysvar,
+        SyscallGetLastRestartSlotSysvar, SyscallGetRentSysvar,
     },
 };
-use crate::syscalls::sysvar::SyscallGetLastRestartSlotSysvar;
 #[allow(deprecated)]
 use {
     solana_program_runtime::{
