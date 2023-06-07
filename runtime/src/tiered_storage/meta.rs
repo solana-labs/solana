@@ -22,6 +22,15 @@ pub struct AccountMetaFlags {
     reserved: B29,
 }
 
+impl AccountMetaFlags {
+    /// Update the flags based on the existence of each optional field.
+    pub fn update(&mut self, optional_fields: &AccountMetaOptionalFields) {
+        self.set_has_rent_epoch(optional_fields.rent_epoch.is_some());
+        self.set_has_account_hash(optional_fields.account_hash.is_some());
+        self.set_has_write_version(optional_fields.write_version.is_some());
+    }
+}
+
 /// The in-memory struct for the optional fields for tiered account meta.
 ///
 /// Note that the storage representation of the optional fields might be
@@ -38,13 +47,6 @@ pub struct AccountMetaOptionalFields {
 }
 
 impl AccountMetaOptionalFields {
-    /// Update the input flags based on the existence of each optional field.
-    pub fn update_flags(&self, flags: &mut AccountMetaFlags) {
-        flags.set_has_rent_epoch(self.rent_epoch.is_some());
-        flags.set_has_account_hash(self.account_hash.is_some());
-        flags.set_has_write_version(self.write_version.is_some());
-    }
-
     /// The size of the optional fields in bytes (excluding the boolean flags).
     pub fn size(&self) -> usize {
         self.rent_epoch.map_or(0, |_| std::mem::size_of::<Epoch>())
@@ -111,7 +113,7 @@ pub mod tests {
         flags: &mut AccountMetaFlags,
         opt_fields: AccountMetaOptionalFields,
     ) {
-        opt_fields.update_flags(flags);
+        flags.update(&opt_fields);
         assert_eq!(flags.has_rent_epoch(), opt_fields.rent_epoch.is_some());
         assert_eq!(flags.has_account_hash(), opt_fields.account_hash.is_some());
         assert_eq!(
