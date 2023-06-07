@@ -512,7 +512,9 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
     Builder::new()
         .name("solDeletePath".to_string())
         .spawn(move || {
-            std::fs::remove_dir_all(path_delete).unwrap();
+            if let Err(err) = std::fs::remove_dir_all(&path_delete) {
+                panic!("Failed to remove path {}: {}", path_delete.display(), err);
+            }
         })
         .unwrap();
 }
