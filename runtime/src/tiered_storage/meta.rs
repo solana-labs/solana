@@ -7,13 +7,13 @@ use modular_bitfield::prelude::*;
 #[bitfield(bits = 32)]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
-pub(crate) struct AccountMetaFlags {
+pub struct AccountMetaFlags {
     /// whether the account meta has rent epoch
-    has_rent_epoch: bool,
+    pub has_rent_epoch: bool,
     /// whether the account meta has account hash
-    has_account_hash: bool,
+    pub has_account_hash: bool,
     /// whether the account meta has write version
-    has_write_version: bool,
+    pub has_write_version: bool,
     /// the reserved bits.
     reserved: B29,
 }
