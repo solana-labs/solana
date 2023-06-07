@@ -503,7 +503,11 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
         return;
     }
 
-    path_delete.push("_to_be_deleted");
+    path_delete.set_file_name(format!(
+        "{}{}",
+        path_delete.file_name().unwrap().to_str().unwrap(),
+        "_to_be_deleted"
+    ));
     if let Err(err) = std::fs::rename(&path, &path_delete) {
         warn!(
             "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
