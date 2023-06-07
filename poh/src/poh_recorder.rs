@@ -183,6 +183,13 @@ impl TransactionRecorder {
                         starting_transaction_index: None,
                     };
                 }
+                Err(PohRecorderError::SendError(e)) => {
+                    return RecordTransactionsSummary {
+                        record_transactions_timings,
+                        result: Err(PohRecorderError::SendError(e)),
+                        starting_transaction_index: None,
+                    };
+                }
                 Err(e) => panic!("Poh recorder returned unexpected error: {e:?}"),
             }
         }
