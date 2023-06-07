@@ -3763,16 +3763,7 @@ impl Bank {
     pub fn prepare_entry_batch(&self, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch> {
         let sanitized_txs = txs
             .into_iter()
-            .map(|tx| {
-                SanitizedTransaction::try_create(
-                    tx,
-                    MessageHash::Compute,
-                    None,
-                    self,
-                    self.feature_set
-                        .is_active(&feature_set::require_static_program_ids_in_transaction::ID),
-                )
-            })
+            .map(|tx| SanitizedTransaction::try_create(tx, MessageHash::Compute, None, self))
             .collect::<Result<Vec<_>>>()?;
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_results = self
@@ -6852,14 +6843,7 @@ impl Bank {
                 tx.message.hash()
             };
 
-            SanitizedTransaction::try_create(
-                tx,
-                message_hash,
-                None,
-                self,
-                self.feature_set
-                    .is_active(&feature_set::require_static_program_ids_in_transaction::ID),
-            )
+            SanitizedTransaction::try_create(tx, message_hash, None, self)
         }?;
 
         if verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles

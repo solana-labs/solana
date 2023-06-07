@@ -1697,7 +1697,6 @@ mod tests {
             MessageHash::Compute,
             Some(false),
             bank.as_ref(),
-            true, // require_static_program_ids
         )
         .unwrap();
 
