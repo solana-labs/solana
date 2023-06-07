@@ -512,9 +512,22 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
     Builder::new()
         .name("solDeletePath".to_string())
         .spawn(move || {
-            std::fs::remove_dir_all(path_delete).unwrap();
+            trace!("background deleting {}...", path_delete.display());
+            let (_, measure_delete) = measure!(std::fs::remove_dir_all(&path_delete)
+                .map_err(|err| {
+                    SnapshotError::IoWithSourceAndFile(
+                        err,
+                        "background remove_dir_all",
+                        path_delete.clone(),
+                    )
+                })
+                .expect("background delete"));
+            trace!(
+                "background deleting {}... Done, and{measure_delete}",
+                path_delete.display()
+            );
         })
-        .unwrap();
+        .expect("spawn background delete thread");
 }
 
 /// The account snapshot directories under <account_path>/snapshot/<slot> contain account files hardlinked
