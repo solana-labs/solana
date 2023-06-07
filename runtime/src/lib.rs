@@ -71,6 +71,7 @@ pub mod snapshot_utils;
 pub mod sorted_storages;
 mod stake_account;
 pub mod stake_history;
+mod stake_rewards;
 pub mod stake_weighted_timestamp;
 pub mod stakes;
 pub mod static_ids;
