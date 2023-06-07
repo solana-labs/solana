@@ -26,6 +26,8 @@ use {
     },
 };
 
+const ACCOUNT_DATA_COST_PAGE_SIZE: u64 = 32_u64.saturating_mul(1024);
+
 pub struct CostModel;
 
 impl CostModel {
@@ -55,7 +57,6 @@ impl CostModel {
     // limit of 64MB; which will convert to (64M/32K)*8CU = 16_000 CUs
     //
     pub fn calculate_loaded_accounts_data_size_cost(compute_budget: &ComputeBudget) -> u64 {
-        const ACCOUNT_DATA_COST_PAGE_SIZE: u64 = 32_u64.saturating_mul(1024);
         (compute_budget.loaded_accounts_data_size_limit as u64)
             .saturating_add(ACCOUNT_DATA_COST_PAGE_SIZE.saturating_sub(1))
             .saturating_div(ACCOUNT_DATA_COST_PAGE_SIZE)
@@ -535,7 +536,11 @@ mod tests {
             .unwrap();
         // feature `include_loaded_accounts_data_size_in_fee_calculation` enabled, using
         // default loaded_accounts_data_size_limit
-        let expected_loaded_accounts_data_size_cost = (64 * 1024 * 1024) / (32 * 1024) * 8;
+        const DEFAULT_PAGE_COST: u64 = 8;
+        let expected_loaded_accounts_data_size_cost =
+            solana_program_runtime::compute_budget::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES as u64
+                / ACCOUNT_DATA_COST_PAGE_SIZE
+                * DEFAULT_PAGE_COST;
 
         let tx_cost = CostModel::calculate_cost(&tx, &FeatureSet::all_enabled());
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
