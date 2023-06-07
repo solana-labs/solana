@@ -1359,7 +1359,6 @@ pub mod tests {
                 let mut write_ancient_accounts = WriteAncientAccounts::default();
 
                 slots.clone().for_each(|slot| {
-                    db.add_root(slot);
                     assert!(db.storage.get_slot_storage_entry(slot).is_some());
                 });
 

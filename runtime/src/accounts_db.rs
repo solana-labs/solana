@@ -4627,6 +4627,16 @@ impl AccountsDb {
             bank_hash_stats.remove(&slot);
             // the storage has been removed from this slot and recycled or dropped
             assert!(self.storage.remove(&slot, false).is_none());
+            assert!(
+                !self
+                    .accounts_index
+                    .roots_tracker
+                    .read()
+                    .unwrap()
+                    .alive_roots
+                    .contains(&slot),
+                "slot: {slot}"
+            );
         });
     }
 
@@ -18128,6 +18138,11 @@ pub mod tests {
         create_storages_and_update_index(&db, None, slot1, num_slots, alive, account_data_size);
 
         let slot1 = slot1 as Slot;
+        for slot in slot1..(slot1 + num_slots as u64) {
+            db.add_root(slot);
+            // we don't want to add the store to dirty_stores
+            db.dirty_stores.remove(&slot);
+        }
         (db, slot1)
     }
 
