@@ -24,6 +24,8 @@ makes the feature code complete.
   * Add a description of your change to the Changes section
   * If your change is likely to require operators to update their configs add to
   the Upgrade Notes
+* If you add entries on multiple branches please use the same wording if
+possible. This simplifies the process of diffing between versions of the log.
 
 ## How To Maintain This Changelog
 * When a release is tagged and the version is bumped:
