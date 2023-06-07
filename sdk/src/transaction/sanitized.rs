@@ -327,7 +327,6 @@ mod tests {
                 MessageHash::Compute,
                 None,
                 SimpleAddressLoader::Disabled,
-                true, // require_static_program_ids
             )
             .unwrap();
             assert!(vote_transaction.is_simple_vote_transaction());
@@ -340,7 +339,6 @@ mod tests {
                 MessageHash::Compute,
                 Some(false),
                 SimpleAddressLoader::Disabled,
-                true, // require_static_program_ids
             )
             .unwrap();
             assert!(!vote_transaction.is_simple_vote_transaction());
@@ -355,7 +353,6 @@ mod tests {
                 MessageHash::Compute,
                 None,
                 SimpleAddressLoader::Disabled,
-                true, // require_static_program_ids
             )
             .unwrap();
             assert!(!vote_transaction.is_simple_vote_transaction());
@@ -368,7 +365,6 @@ mod tests {
                 MessageHash::Compute,
                 Some(true),
                 SimpleAddressLoader::Disabled,
-                true, // require_static_program_ids
             )
             .unwrap();
             assert!(vote_transaction.is_simple_vote_transaction());
