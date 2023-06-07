@@ -29,10 +29,9 @@ possible. This simplifies the process of diffing between versions of the log.
 
 ## How To Maintain This Changelog
 * When a release is tagged and the version is bumped:
-  * Date and tag the [Unreleased] section with the new release including a link
-  to the release page
-  * Create new [Unreleased] section
-change
+  * Move that release's notes to the Released section
+  * Add a new section to Unreleased for the next anticipated release.
+
 ## Unreleased
 * Changes
   * Added a changelog!
