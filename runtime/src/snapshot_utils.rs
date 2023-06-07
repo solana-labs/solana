@@ -496,13 +496,13 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
         return;
     }
 
-    // If the original path (`path_delete` here) is already being deleted,
+    // If the original path (`pathbuf` here) is already being deleted,
     // then the path should not be moved and deleted again.
-    let mut path_delete = path.as_ref().to_path_buf();
-    if lock.contains(&path_delete) {
+    if lock.contains(path.as_ref()) {
         return;
     }
 
+    let mut path_delete = path.as_ref().to_path_buf();
     path_delete.set_file_name(format!(
         "{}{}",
         path_delete.file_name().unwrap().to_str().unwrap(),
@@ -517,8 +517,9 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
         // from moving & deleting this directory via `move_and_async_delete_path`.
         lock.insert(path.as_ref().to_path_buf());
         drop(lock); // unlock before doing sync delete
-        delete_contents_of_path(path);
-        IN_PROGRESS_DELETES.lock().unwrap().remove(&path_delete);
+
+        delete_contents_of_path(&path);
+        IN_PROGRESS_DELETES.lock().unwrap().remove(path.as_ref());
         return;
     }
 
