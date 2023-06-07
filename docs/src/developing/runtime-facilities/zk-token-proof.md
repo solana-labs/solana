@@ -87,3 +87,40 @@ persists even after the a transaction containing the proof instruction is
 finished with its execution. The creation of context state accounts can be
 useful in settings where ZK proofs are required from PDAs or when proof data is
 too large to fit inside a single transaction.
+
+## Proof Instructions
+
+The ZK Token proof program supports the following the list of zero-knowledge
+proofs.
+
+#### Proofs on ElGamal ciphertexts
+
+- `VerifyPubkeyValidity`:
+
+  - The ElGamal public-key validity proof instruction certifies that an ElGamal
+    public-key is a properly formed public key.
+  - Mathematical description and proof of security:
+    [[Notes]](./zk-docs/pubkey_proof.pdf)
+
+- `VerifyZeroBalance`:
+
+  - The zero-balance proof certifies that an ElBamal ciphertext encrypts the
+    number zero.
+  - Mathematical description and proof of security:
+    [[Notes]](./zk-docs/zero_proof.pdf)
+
+#### Equality proofs
+
+- `VerifyCiphertextCommitmentEquality`:
+
+  - The ciphertext-commitment equality proof certifies that an ElGamal
+    ciphertext and a Pedersen commitment encode the same message.
+  - Mathematical description and proof of security:
+    [[Notes]](./zk-docs/ciphertext_commitment_equality.pdf)
+
+- `VerifyCiphertextCiphertextEquality`:
+
+  - The ciphertext-ciphertext equality proof certifies that two ElGamal
+    ciphertexts encrypt the same message. the number zero.
+  - Mathematical description and proof of security:
+    [[Notes]](./zk-docs/ciphertext_ciphertext_equality.pdf)
