@@ -345,17 +345,20 @@ impl BankWithSchedulerInner {
 
     #[must_use]
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
-        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::DroppedFromBankForks);
-        maybe_timings_and_result.map(|(result, _timings)| result)
+        let maybe_result_with_timings = self.wait_for_scheduler(WaitReason::DroppedFromBankForks);
+        maybe_result_with_timings.map(|(result, _timings)| result)
     }
 
     fn wait_for_reusable_scheduler(bank: &Bank, scheduler: &InstalledSchedulerRwLock) {
-        let maybe_timings_and_result = Self::do_wait_for_scheduler(
+        let maybe_result_with_timings = Self::do_wait_for_scheduler(
             bank,
             scheduler,
             WaitReason::ReinitializedForRecentBlockhash,
         );
-        assert!(maybe_timings_and_result.is_none());
+        assert!(
+            maybe_result_with_timings.is_none(),
+            "Premature result was returned from scheduler after reinitialized"
+        );
     }
 
     fn drop_scheduler(&self) {
@@ -386,7 +389,10 @@ impl Deref for BankWithScheduler {
 impl BankForks {
     pub fn install_scheduler_pool(&mut self, pool: InstalledSchedulerPoolArc) {
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
-        assert!(self.scheduler_pool.replace(pool).is_none());
+        assert!(
+            self.scheduler_pool.replace(pool).is_none(),
+            "Reinstalling scheduler pool isn't supported"
+        );
     }
 }
 
