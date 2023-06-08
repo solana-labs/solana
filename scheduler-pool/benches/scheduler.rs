@@ -772,9 +772,8 @@ mod thread_utilization {
                     .map(|(idx, tx)| (tx.signature(), idx)),
             );
 
-            let mut is_done = false;
-            while !is_done {
-                is_done = true;
+            loop {
+                let mut is_done = true;
                 for idx in 0..processing_states.len() {
                     match processing_states[idx] {
                         State::Blocked => {
