@@ -4167,6 +4167,16 @@ pub(crate) fn verify_shred_slots(slot: Slot, parent: Slot, root: Slot) -> bool {
     if slot == 0 && parent == 0 && root == 0 {
         return true; // valid write to slot zero.
     }
+
+    if parent >= slot {
+        //panic!("parent={parent} slot={slot}");
+        error!("SHRED_CHECK parent={parent} slot={slot}");
+    }
+    if root > parent {
+        //panic!("root={root} parent={parent}");
+        error!("SHRED_CHECK root={root} parent={parent}");
+    }
+
     // Ignore shreds that chain to slots before the root,
     // or have invalid parent >= slot.
     root <= parent && parent < slot

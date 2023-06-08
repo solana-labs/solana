@@ -47,6 +47,7 @@ pub fn get_unknown_last_index(
     slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
     processed_slots: &mut HashSet<Slot>,
     limit: usize,
+    root_slot: Slot,
 ) -> Vec<ShredRepairType> {
     let iter = GenericTraversal::new(tree);
     let mut unknown_last = Vec::new();
@@ -65,6 +66,7 @@ pub fn get_unknown_last_index(
                 } else {
                     slot_meta.consumed
                 };
+                assert!(slot >= root_slot);
                 unknown_last.push((slot, slot_meta.received, num_processed_shreds));
                 processed_slots.insert(slot);
             }
@@ -72,6 +74,16 @@ pub fn get_unknown_last_index(
     }
     // prioritize slots with more received shreds
     unknown_last.sort_by(|(_, _, count1), (_, _, count2)| count2.cmp(count1));
+
+    unknown_last
+        .iter()
+        .for_each(|(slot, last, count)| {
+            if *slot < root_slot {
+                let msg = format!("root_slot={root_slot} slot={slot} last_index={last} shred_count={count} tree={tree:?}");
+                panic!("{msg}");
+            }
+        });
+
     unknown_last
         .iter()
         .take(limit)
@@ -115,7 +127,10 @@ pub fn get_closest_completion(
     slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
     processed_slots: &mut HashSet<Slot>,
     limit: usize,
+    top_level_root_slot: Slot,
 ) -> (Vec<ShredRepairType>, /* processed slots */ usize) {
+    assert_eq!(root_slot, top_level_root_slot);
+
     let mut slot_dists: Vec<(Slot, u64)> = Vec::default();
     let iter = GenericTraversal::new(tree);
     for slot in iter {
@@ -163,6 +178,7 @@ pub fn get_closest_completion(
                     }
                     last_index.saturating_sub(slot_meta.consumed)
                 };
+                assert!(slot >= top_level_root_slot);
                 slot_dists.push((slot, dist));
             }
         }
@@ -179,6 +195,7 @@ pub fn get_closest_completion(
         // attempt to repair heaviest slots starting with their parents
         let path = get_unrepaired_path(slot, blockstore, slot_meta_cache, &mut visited);
         for path_slot in path {
+            assert!(path_slot >= top_level_root_slot);
             if repairs.len() >= limit {
                 break;
             }
@@ -191,6 +208,7 @@ pub fn get_closest_completion(
                 path_slot,
                 slot_meta,
                 limit - repairs.len(),
+                top_level_root_slot,
             );
             repairs.extend(new_repairs);
             total_processed_slots += 1;
@@ -222,6 +240,7 @@ pub mod test {
             &mut slot_meta_cache,
             &mut processed_slots,
             10,
+            blockstore.last_root(),
         );
         assert_eq!(
             repairs,
@@ -244,6 +263,7 @@ pub mod test {
             &mut slot_meta_cache,
             &mut processed_slots,
             10,
+            0,
         );
         assert_eq!(repairs, []);
 
@@ -269,6 +289,7 @@ pub mod test {
             &mut slot_meta_cache,
             &mut processed_slots,
             1,
+            0,
         );
         assert_eq!(repairs, [ShredRepairType::Shred(1, 3)]);
     }

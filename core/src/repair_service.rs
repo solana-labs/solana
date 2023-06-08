@@ -314,12 +314,12 @@ impl RepairService {
             let mut add_votes_elapsed;
 
             let root_bank = repair_info.bank_forks.read().unwrap().root_bank();
+            let new_root = root_bank.slot();
             let repairs = {
-                let new_root = root_bank.slot();
-
                 // Purge outdated slots from the weighting heuristic
                 set_root_elapsed = Measure::start("set_root_elapsed");
                 repair_weight.set_root(new_root);
+                error!("repair_weight.set_root({new_root})");
                 set_root_elapsed.stop();
 
                 // Remove dumped slots from the weighting heuristic
@@ -351,6 +351,9 @@ impl RepairService {
                         }
                     });
                 dump_slots_elapsed.stop();
+
+                let repair_weight_root = repair_weight.root();
+                error!("repair_weight_root={repair_weight_root}");
 
                 // Add new votes to the weighting heuristic
                 get_votes_elapsed = Measure::start("get_votes_elapsed");
@@ -386,6 +389,7 @@ impl RepairService {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut repair_timing,
                     &mut best_repairs_stats,
+                    new_root,
                 );
 
                 let mut popular_pruned_forks = repair_weight.get_popular_pruned_forks(
@@ -425,6 +429,15 @@ impl RepairService {
                 repairs
                     .iter()
                     .filter_map(|repair_request| {
+                        // sanity check repair requests
+                        if repair_request.slot() < new_root {
+                            let msg = format!(
+                                "Creating {repair_request:?} for slot before root={new_root}"
+                            );
+                            error!("{msg}");
+                            panic!("{msg}");
+                            //return None;
+                        }
                         let (to, req) = serve_repair
                             .repair_request(
                                 &repair_info.cluster_slots,
@@ -599,10 +612,14 @@ impl RepairService {
         slot: Slot,
         slot_meta: &SlotMeta,
         max_repairs: usize,
+        root_slot: Slot,
     ) -> Vec<ShredRepairType> {
         if max_repairs == 0 || slot_meta.is_full() {
             vec![]
         } else if slot_meta.consumed == slot_meta.received {
+            if slot < root_slot {
+                panic!("root_slot={root_slot} slot={slot} slot_meta={slot_meta:?}");
+            }
             // check delay time of last shred
             if let Some(reference_tick) = slot_meta
                 .received
@@ -623,6 +640,9 @@ impl RepairService {
             }
             vec![ShredRepairType::HighestShred(slot, slot_meta.received)]
         } else {
+            if slot < root_slot {
+                panic!("root_slot={root_slot} slot={slot} slot_meta={slot_meta:?}");
+            }
             blockstore
                 .find_missing_data_indexes(
                     slot,
@@ -644,6 +664,7 @@ impl RepairService {
         repairs: &mut Vec<ShredRepairType>,
         max_repairs: usize,
         slot: Slot,
+        root_slot: Slot,
     ) {
         let mut pending_slots = vec![slot];
         while repairs.len() < max_repairs && !pending_slots.is_empty() {
@@ -654,6 +675,7 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     max_repairs - repairs.len(),
+                    root_slot,
                 );
                 repairs.extend(new_repairs);
                 let next_slots = slot_meta.next_slots;
@@ -691,6 +713,7 @@ impl RepairService {
                 slot,
                 &meta,
                 max_repairs - repairs.len(),
+                blockstore.last_root(),
             );
             repairs.extend(new_repairs);
         }
@@ -713,6 +736,7 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     MAX_REPAIR_PER_DUPLICATE,
+                    blockstore.last_root(),
                 ))
             }
         } else {
@@ -911,6 +935,7 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
+                    blockstore.last_root(),
                 ),
                 vec![
                     ShredRepairType::Orphan(2),
@@ -947,6 +972,7 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
+                    blockstore.last_root(),
                 ),
                 vec![ShredRepairType::HighestShred(0, 0)]
             );
@@ -1007,6 +1033,7 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
+                    blockstore.last_root(),
                 ),
                 expected
             );
@@ -1022,6 +1049,7 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
+                    blockstore.last_root(),
                 )[..],
                 expected[0..expected.len() - 2]
             );
@@ -1068,6 +1096,7 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
+                    blockstore.last_root(),
                 ),
                 expected
             );

@@ -735,7 +735,7 @@ fn test_incremental_snapshot_download() {
 #[test]
 #[serial]
 fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_startup() {
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
+    //solana_logger::setup_with_default(RUST_LOG_FILTER);
     // If these intervals change, also make sure to change the loop timers accordingly.
     let accounts_hash_interval = 3;
     let incremental_snapshot_interval = accounts_hash_interval * 3;
@@ -1004,11 +1004,25 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     info!("Waiting for the validator to see enough slots to cross a full snapshot interval ({next_full_snapshot_slot})...");
     let timer = Instant::now();
     loop {
+        /*
         let validator_current_slot = cluster
             .get_validator_client(&validator_identity.pubkey())
             .unwrap()
             .get_slot_with_commitment(CommitmentConfig::finalized())
             .unwrap();
+        */
+        let validator_client = cluster
+            .get_validator_client(&validator_identity.pubkey())
+            .unwrap();
+        let validator_current_slot =
+            validator_client.get_slot_with_commitment(CommitmentConfig::finalized());
+        error!("<<<###>>> {validator_current_slot:?}");
+        assert!(
+            validator_current_slot.is_ok(),
+            "!!!!!! get_slot_result={validator_current_slot:?}"
+        );
+        error!("validator_current_slot={validator_current_slot:?}");
+        let validator_current_slot = validator_current_slot.unwrap();
         trace!("validator current slot: {validator_current_slot}");
         if validator_current_slot > next_full_snapshot_slot {
             break;
