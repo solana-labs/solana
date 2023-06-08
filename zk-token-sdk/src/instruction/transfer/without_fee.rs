@@ -7,7 +7,7 @@ use {
         },
         errors::ProofError,
         instruction::transfer::{
-            combine_lo_hi_ciphertexts, encryption::TransferAmountEncryption, split_u64, Role,
+            combine_lo_hi_ciphertexts, encryption::TransferAmountCiphertext, split_u64, Role,
         },
         range_proof::RangeProof,
         sigma_proofs::{
@@ -63,10 +63,10 @@ pub struct TransferData {
 #[repr(C)]
 pub struct TransferProofContext {
     /// Group encryption of the low 16 bits of the transfer amount
-    pub ciphertext_lo: pod::TransferAmountEncryption, // 128 bytes
+    pub ciphertext_lo: pod::TransferAmountCiphertext, // 128 bytes
 
     /// Group encryption of the high 48 bits of the transfer amount
-    pub ciphertext_hi: pod::TransferAmountEncryption, // 128 bytes
+    pub ciphertext_hi: pod::TransferAmountCiphertext, // 128 bytes
 
     /// The public encryption keys associated with the transfer: source, dest, and auditor
     pub transfer_pubkeys: pod::TransferPubkeys, // 96 bytes
@@ -87,14 +87,14 @@ impl TransferData {
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS);
 
-        let (ciphertext_lo, opening_lo) = TransferAmountEncryption::new(
+        let (ciphertext_lo, opening_lo) = TransferAmountCiphertext::new(
             amount_lo,
             &source_keypair.public,
             destination_pubkey,
             auditor_pubkey,
         );
 
-        let (ciphertext_hi, opening_hi) = TransferAmountEncryption::new(
+        let (ciphertext_hi, opening_hi) = TransferAmountCiphertext::new(
             amount_hi,
             &source_keypair.public,
             destination_pubkey,
@@ -129,8 +129,8 @@ impl TransferData {
             destination_pubkey: (*destination_pubkey).into(),
             auditor_pubkey: (*auditor_pubkey).into(),
         };
-        let pod_ciphertext_lo: pod::TransferAmountEncryption = ciphertext_lo.into();
-        let pod_ciphertext_hi: pod::TransferAmountEncryption = ciphertext_hi.into();
+        let pod_ciphertext_lo: pod::TransferAmountCiphertext = ciphertext_lo.into();
+        let pod_ciphertext_hi: pod::TransferAmountCiphertext = ciphertext_hi.into();
         let pod_new_source_ciphertext: pod::ElGamalCiphertext = new_source_ciphertext.into();
 
         let context = TransferProofContext {
@@ -156,7 +156,7 @@ impl TransferData {
 
     /// Extracts the lo ciphertexts associated with a transfer data
     fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let ciphertext_lo: TransferAmountEncryption = self.context.ciphertext_lo.try_into()?;
+        let ciphertext_lo: TransferAmountCiphertext = self.context.ciphertext_lo.try_into()?;
 
         let handle_lo = match role {
             Role::Source => Some(ciphertext_lo.get_source_handle()),
@@ -177,7 +177,7 @@ impl TransferData {
 
     /// Extracts the lo ciphertexts associated with a transfer data
     fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let ciphertext_hi: TransferAmountEncryption = self.context.ciphertext_hi.try_into()?;
+        let ciphertext_hi: TransferAmountCiphertext = self.context.ciphertext_hi.try_into()?;
 
         let handle_hi = match role {
             Role::Source => Some(ciphertext_hi.get_source_handle()),
@@ -353,8 +353,8 @@ impl TransferProof {
 
     pub fn verify(
         &self,
-        ciphertext_lo: &TransferAmountEncryption,
-        ciphertext_hi: &TransferAmountEncryption,
+        ciphertext_lo: &TransferAmountCiphertext,
+        ciphertext_hi: &TransferAmountCiphertext,
         transfer_pubkeys: &TransferPubkeys,
         ciphertext_new_spendable: &ElGamalCiphertext,
         transcript: &mut Transcript,

@@ -11,10 +11,10 @@ use crate::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(C)]
 #[cfg(not(target_os = "solana"))]
-pub struct TransferAmountEncryption(pub(crate) GroupedElGamalCiphertext<3>);
+pub struct TransferAmountCiphertext(pub(crate) GroupedElGamalCiphertext<3>);
 
 #[cfg(not(target_os = "solana"))]
-impl TransferAmountEncryption {
+impl TransferAmountCiphertext {
     pub fn new(
         amount: u64,
         source_pubkey: &ElGamalPubkey,

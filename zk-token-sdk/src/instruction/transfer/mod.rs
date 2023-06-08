@@ -13,7 +13,7 @@ use {
 };
 #[cfg(not(target_os = "solana"))]
 pub use {
-    encryption::{FeeEncryption, TransferAmountEncryption},
+    encryption::{FeeEncryption, TransferAmountCiphertext},
     with_fee::TransferWithFeePubkeys,
     without_fee::TransferPubkeys,
 };

@@ -24,18 +24,18 @@ pub struct TransferWithFeePubkeys {
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-pub struct TransferAmountEncryption(pub GroupedElGamalCiphertext3Handles);
+pub struct TransferAmountCiphertext(pub GroupedElGamalCiphertext3Handles);
 
-impl From<decoded::TransferAmountEncryption> for TransferAmountEncryption {
-    fn from(decoded_ciphertext: decoded::TransferAmountEncryption) -> Self {
+impl From<decoded::TransferAmountCiphertext> for TransferAmountCiphertext {
+    fn from(decoded_ciphertext: decoded::TransferAmountCiphertext) -> Self {
         Self(decoded_ciphertext.0.into())
     }
 }
 
-impl TryFrom<TransferAmountEncryption> for decoded::TransferAmountEncryption {
+impl TryFrom<TransferAmountCiphertext> for decoded::TransferAmountCiphertext {
     type Error = ProofError;
 
-    fn try_from(pod_ciphertext: TransferAmountEncryption) -> Result<Self, Self::Error> {
+    fn try_from(pod_ciphertext: TransferAmountCiphertext) -> Result<Self, Self::Error> {
         Ok(Self(pod_ciphertext.0.try_into()?))
     }
 }

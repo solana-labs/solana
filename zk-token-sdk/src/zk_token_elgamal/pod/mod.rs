@@ -17,7 +17,7 @@ pub use {
     elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
     grouped_elgamal::{GroupedElGamalCiphertext2Handles, GroupedElGamalCiphertext3Handles},
     instruction::{
-        FeeEncryption, FeeParameters, TransferAmountEncryption, TransferPubkeys,
+        FeeEncryption, FeeParameters, TransferAmountCiphertext, TransferPubkeys,
         TransferWithFeePubkeys,
     },
     pedersen::PedersenCommitment,
