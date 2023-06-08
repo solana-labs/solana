@@ -575,7 +575,7 @@ fn process_entries(
                     )?;
                     batches.clear();
                     for hash in &tick_hashes {
-                        bank.with_scheduler_lock(|scheduler| bank.register_tick(hash, scheduler));
+                        bank.register_tick(hash);
                     }
                     tick_hashes.clear();
                 }
@@ -651,11 +651,9 @@ fn process_entries(
         log_messages_bytes_limit,
         prioritization_fee_cache,
     )?;
-    bank.with_scheduler_lock(|scheduler| {
-        for hash in tick_hashes {
-            bank.register_tick(hash, scheduler)
-        }
-    });
+    for hash in tick_hashes {
+        bank.register_tick(hash);
+    }
     Ok(())
 }
 

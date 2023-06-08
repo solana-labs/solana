@@ -8341,9 +8341,7 @@ pub mod test_utils {
         let mut tick_hash = bank.last_blockhash();
         loop {
             tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
-            bank.with_scheduler_lock(|scheduler| {
-                bank.register_tick(&tick_hash, scheduler);
-            });
+            bank.register_tick(&tick_hash);
             if tick_hash == bank.last_blockhash() {
                 bank.freeze();
                 return;

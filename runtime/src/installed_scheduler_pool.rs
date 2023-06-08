@@ -31,6 +31,7 @@ use {
     solana_program_runtime::timings::ExecuteTimings,
     solana_scheduler::{SchedulingMode, WithSchedulingMode},
     solana_sdk::{
+        hash::Hash,
         slot_history::Slot,
         transaction::{Result, SanitizedTransaction},
     },
@@ -251,10 +252,8 @@ impl BankWithScheduler {
         &self.inner.bank
     }
 
-    // don't indefintely lend out scheduler refs to avoid accidental mix because scheduler should
-    // strictly tied to bank
-    pub fn with_scheduler_lock(&self, callback: impl FnOnce(&InstalledSchedulerRwLock)) {
-        callback(&self.inner.scheduler)
+    pub fn register_tick(&self, hash: &Hash) {
+        self.bank().register_tick(hash, &self.inner.scheduler);
     }
 
     pub fn has_installed_scheduler(&self) -> bool {
