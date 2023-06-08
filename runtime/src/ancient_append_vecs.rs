@@ -2988,53 +2988,65 @@ pub mod tests {
         }
     }
 
+    /// combines ALL possible slots in `sorted_slots`
+    fn combine_ancient_slots_packed_for_tests(db: &AccountsDb, sorted_slots: Vec<Slot>) {
+        // combine normal append vec(s) into packed ancient append vec
+        let tuning = PackedAncientStorageTuning {
+            max_ancient_slots: 0,
+            // re-combine/shrink 55% of the data savings this pass
+            percent_of_alive_shrunk_data: 55,
+            ideal_storage_size: NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
+            can_randomly_shrink: CAN_RANDOMLY_SHRINK_FALSE,
+        };
+
+        let mut stats_sub = ShrinkStatsSub::default();
+        db.combine_ancient_slots_packed_internal(sorted_slots, tuning, &mut stats_sub);
+    }
+
     #[test]
     fn test_shrink_packed_ancient() {
         solana_logger::setup();
 
-        let num_normal_slots = 1;
-        // build an ancient append vec at slot 'ancient_slot'
-        let (db, ancient_slot) =
-            get_one_packed_ancient_append_vec_and_others(true, num_normal_slots);
+        for num_normal_slots in 1..4 {
+            // build an ancient append vec at slot 'ancient_slot'
+            let (db, ancient_slot) =
+                get_one_packed_ancient_append_vec_and_others(true, num_normal_slots);
 
-        let max_slot_inclusive = ancient_slot + (num_normal_slots as Slot);
-        let initial_accounts = get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1));
-        compare_all_accounts(
-            &initial_accounts,
-            &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
-        );
+            let max_slot_inclusive = ancient_slot + (num_normal_slots as Slot);
+            let initial_accounts = get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1));
+            compare_all_accounts(
+                &initial_accounts,
+                &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
+            );
 
-        // combine normal append vec(s) into existing ancient append vec
-        db.combine_ancient_slots_packed(
-            (ancient_slot..=max_slot_inclusive).collect(),
-            CAN_RANDOMLY_SHRINK_FALSE,
-        );
+            combine_ancient_slots_packed_for_tests(
+                &db,
+                (ancient_slot..=max_slot_inclusive).collect(),
+            );
 
-        compare_all_accounts(
-            &initial_accounts,
-            &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
-        );
+            compare_all_accounts(
+                &initial_accounts,
+                &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
+            );
 
-        // create a 2nd ancient append vec at 'next_slot'
-        let next_slot = max_slot_inclusive + 1;
-        create_storages_and_update_index(&db, None, next_slot, num_normal_slots, true, None);
-        let max_slot_inclusive = next_slot + (num_normal_slots as Slot);
+            // create a 2nd ancient append vec at 'next_slot'
+            let next_slot = max_slot_inclusive + 1;
+            create_storages_and_update_index(&db, None, next_slot, num_normal_slots, true, None);
+            let max_slot_inclusive = next_slot + (num_normal_slots as Slot);
 
-        let initial_accounts = get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1));
-        compare_all_accounts(
-            &initial_accounts,
-            &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
-        );
+            let initial_accounts = get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1));
+            compare_all_accounts(
+                &initial_accounts,
+                &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
+            );
 
-        db.combine_ancient_slots_packed(
-            (next_slot..=max_slot_inclusive).collect(),
-            CAN_RANDOMLY_SHRINK_FALSE,
-        );
+            combine_ancient_slots_packed_for_tests(&db, (next_slot..=max_slot_inclusive).collect());
 
-        compare_all_accounts(
-            &initial_accounts,
-            &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
-        );
+            compare_all_accounts(
+                &initial_accounts,
+                &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
+            );
+        }
     }
 
     #[test]
