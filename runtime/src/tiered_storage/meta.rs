@@ -60,7 +60,7 @@ impl AccountMetaOptionalFields {
 
 #[cfg(test)]
 pub mod tests {
-    use {crate::tiered_storage::meta::*, solana_sdk::hash::Hash};
+    use super::*;
 
     #[test]
     fn test_account_meta_flags_new() {
