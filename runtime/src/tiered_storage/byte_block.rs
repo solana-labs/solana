@@ -2,7 +2,7 @@
 //! accounts db tiered storage.
 
 use {
-    crate::tiered_storage::footer::AccountBlockFormat,
+    crate::tiered_storage::{footer::AccountBlockFormat, meta::AccountMetaOptionalFields},
     std::{
         io::{Cursor, Read, Write},
         mem,
@@ -63,6 +63,30 @@ impl ByteBlockWriter {
         Ok(size)
     }
 
+    /// Write all the Some fields of the specified AccountMetaOptionalFields.
+    ///
+    /// Note that the existance of each optional field is stored separately in
+    /// AccountMetaFlags.
+    pub fn write_optional_fields(
+        &mut self,
+        opt_fields: &AccountMetaOptionalFields,
+    ) -> std::io::Result<usize> {
+        let mut size = 0;
+        if let Some(rent_epoch) = opt_fields.rent_epoch {
+            size += self.write_type(&rent_epoch)?;
+        }
+        if let Some(hash) = opt_fields.account_hash {
+            size += self.write_type(&hash)?;
+        }
+        if let Some(write_version) = opt_fields.write_version {
+            size += self.write_type(&write_version)?;
+        }
+
+        debug_assert_eq!(size, opt_fields.size());
+
+        Ok(size)
+    }
+
     /// Write the specified typed bytes to the internal buffer of the
     /// ByteBlockWriter instance.
     pub fn write(&mut self, buf: &[u8]) -> std::io::Result<()> {
@@ -113,7 +137,11 @@ impl ByteBlockReader {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {
+        super::*,
+        crate::account_storage::meta::StoredMetaWriteVersion,
+        solana_sdk::{hash::Hash, stake_history::Epoch},
+    };
 
     fn read_type<T>(buffer: &[u8], offset: usize) -> (T, usize) {
         let size = std::mem::size_of::<T>();
@@ -256,5 +284,91 @@ mod tests {
     #[test]
     fn test_write_multiple_lz4_format() {
         write_multiple(AccountBlockFormat::Lz4);
+    }
+
+    fn write_optional_fields(format: AccountBlockFormat) {
+        let mut test_epoch = 5432312;
+        let mut test_write_version = 231;
+
+        let mut writer = ByteBlockWriter::new(format);
+        let mut opt_fields_vec = vec![];
+        let mut some_count = 0;
+
+        // prepare a vector of optional fields that contains all combinations
+        // of Some and None.
+        for rent_epoch in [None, Some(test_epoch)] {
+            for account_hash in [None, Some(Hash::new_unique())] {
+                for write_version in [None, Some(test_write_version)] {
+                    some_count += rent_epoch.map_or(0, |_| 1)
+                        + account_hash.map_or(0, |_| 1)
+                        + write_version.map_or(0, |_| 1);
+
+                    opt_fields_vec.push(AccountMetaOptionalFields {
+                        rent_epoch,
+                        account_hash,
+                        write_version,
+                    });
+                    test_write_version += 1;
+                }
+            }
+            test_epoch += 1;
+        }
+
+        // write all the combinations of the optional fields
+        let mut expected_size = 0;
+        for opt_fields in &opt_fields_vec {
+            writer.write_optional_fields(opt_fields).unwrap();
+            expected_size += opt_fields.size();
+        }
+
+        let buffer = writer.finish().unwrap();
+        let decoded_buffer = if format == AccountBlockFormat::AlignedRaw {
+            buffer
+        } else {
+            ByteBlockReader::decode(format, &buffer).unwrap()
+        };
+
+        // first, verify whether the size of the decoded data matches the
+        // expected size.
+        assert_eq!(decoded_buffer.len(), expected_size);
+
+        // verify the correctness of the written optional fields
+        let mut verified_count = 0;
+        let mut offset = 0;
+        for opt_fields in &opt_fields_vec {
+            if let Some(expected_rent_epoch) = opt_fields.rent_epoch {
+                let (rent_epoch, next) = read_type::<Epoch>(&decoded_buffer, offset);
+                assert_eq!(rent_epoch, expected_rent_epoch);
+                verified_count += 1;
+                offset = next;
+            }
+            if let Some(expected_hash) = opt_fields.account_hash {
+                let (hash, next) = read_type::<Hash>(&decoded_buffer, offset);
+                assert_eq!(hash, expected_hash);
+                verified_count += 1;
+                offset = next;
+            }
+            if let Some(expected_write_version) = opt_fields.write_version {
+                let (write_version, next) =
+                    read_type::<StoredMetaWriteVersion>(&decoded_buffer, offset);
+                assert_eq!(write_version, expected_write_version);
+                verified_count += 1;
+                offset = next;
+            }
+        }
+
+        // make sure the number of Some fields matches the number of fields we
+        // have verified.
+        assert_eq!(some_count, verified_count);
+    }
+
+    #[test]
+    fn test_write_optionl_fields_raw_format() {
+        write_optional_fields(AccountBlockFormat::AlignedRaw);
+    }
+
+    #[test]
+    fn test_write_optional_fields_lz4_format() {
+        write_optional_fields(AccountBlockFormat::Lz4);
     }
 }
