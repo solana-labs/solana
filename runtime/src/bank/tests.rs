@@ -7353,8 +7353,6 @@ fn test_bank_load_program() {
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
     let program = bank.load_program(&key1);
-    assert!(program.is_ok());
-    let program = program.unwrap();
     assert!(matches!(program.program, LoadedProgramType::LegacyV1(_)));
     assert_eq!(
         program.account_size,
@@ -7368,7 +7366,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     let mut bank = Bank::new_for_tests(&genesis_config);
     bank.feature_set = Arc::new(FeatureSet::all_enabled());
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     // Setup keypairs and addresses
     let payer_keypair = Keypair::new();
@@ -7509,9 +7507,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         assert_eq!(*elf.get(i).unwrap(), *byte);
     }
 
-    let loaded_program = bank
-        .load_program(&program_keypair.pubkey())
-        .expect("Failed to load the program");
+    let loaded_program = bank.load_program(&program_keypair.pubkey());
 
     // Invoke deployed program
     mock_process_instruction(
@@ -7539,6 +7535,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     // Test initialized program account
     bank.clear_signatures();
     bank.store_account(&buffer_address, &buffer_account);
+    let bank = bank_client.advance_slot(1, &mint_keypair.pubkey()).unwrap();
     let message = Message::new(
         &[Instruction::new_with_bincode(
             bpf_loader_upgradeable::id(),

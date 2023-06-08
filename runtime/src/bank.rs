@@ -4106,11 +4106,14 @@ impl Bank {
         }
     }
 
-    pub fn load_program(&self, pubkey: &Pubkey) -> Result<Arc<LoadedProgram>> {
+    pub fn load_program(&self, pubkey: &Pubkey) -> Arc<LoadedProgram> {
         let program = if let Some(program) = self.get_account_with_fixed_root(pubkey) {
             program
         } else {
-            return Err(TransactionError::ProgramAccountNotFound);
+            return Arc::new(LoadedProgram::new_tombstone(
+                self.slot,
+                LoadedProgramType::Closed,
+            ));
         };
         let mut transaction_accounts = vec![(*pubkey, program)];
         let is_upgradeable_loader =
@@ -4125,10 +4128,16 @@ impl Bank {
                 {
                     transaction_accounts.push((programdata_address, programdata_account));
                 } else {
-                    return Err(TransactionError::ProgramAccountNotFound);
+                    return Arc::new(LoadedProgram::new_tombstone(
+                        self.slot,
+                        LoadedProgramType::Closed,
+                    ));
                 }
             } else {
-                return Err(TransactionError::ProgramAccountNotFound);
+                return Arc::new(LoadedProgram::new_tombstone(
+                    self.slot,
+                    LoadedProgramType::Closed,
+                ));
             }
         }
         let mut transaction_context = TransactionContext::new(
@@ -4137,24 +4146,20 @@ impl Bank {
             1,
             1,
         );
-        let instruction_context = transaction_context
-            .get_next_instruction_context()
-            .map_err(|err| TransactionError::InstructionError(0, err))?;
+        let instruction_context = transaction_context.get_next_instruction_context().unwrap();
         instruction_context.configure(if is_upgradeable_loader { &[0, 1] } else { &[0] }, &[], &[]);
-        transaction_context
-            .push()
-            .map_err(|err| TransactionError::InstructionError(0, err))?;
+        transaction_context.push().unwrap();
         let instruction_context = transaction_context
             .get_current_instruction_context()
-            .map_err(|err| TransactionError::InstructionError(0, err))?;
+            .unwrap();
         let program = instruction_context
             .try_borrow_program_account(&transaction_context, 0)
-            .map_err(|err| TransactionError::InstructionError(0, err))?;
+            .unwrap();
         let programdata = if is_upgradeable_loader {
             Some(
                 instruction_context
                     .try_borrow_program_account(&transaction_context, 1)
-                    .map_err(|err| TransactionError::InstructionError(0, err))?,
+                    .unwrap(),
             )
         } else {
             None
@@ -4170,14 +4175,19 @@ impl Bank {
             None, // log_collector
             &program,
             programdata.as_ref().unwrap_or(&program),
-            program_runtime_environment_v1,
+            program_runtime_environment_v1.clone(),
         )
         .map(|(loaded_program, metrics)| {
             let mut timings = ExecuteDetailsTimings::default();
             metrics.submit_datapoint(&mut timings);
             loaded_program
         })
-        .map_err(|err| TransactionError::InstructionError(0, err))
+        .unwrap_or_else(|_| {
+            Arc::new(LoadedProgram::new_tombstone(
+                self.slot,
+                LoadedProgramType::FailedVerification(program_runtime_environment_v1),
+            ))
+        })
     }
 
     pub fn clear_program_cache(&self) {
@@ -4423,20 +4433,7 @@ impl Bank {
         let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
             .iter()
             .map(|(key, count)| {
-                let program = self.load_program(key).unwrap_or_else(|err| {
-                    // Create a tombstone for the program in the cache
-                    debug!("Failed to load program {}, error {:?}", key, err);
-                    Arc::new(LoadedProgram::new_tombstone(
-                        self.slot,
-                        LoadedProgramType::FailedVerification(
-                            self.loaded_programs_cache
-                                .read()
-                                .unwrap()
-                                .program_runtime_environment_v1
-                                .clone(),
-                        ),
-                    ))
-                });
+                let program = self.load_program(key);
                 program.tx_usage_counter.store(*count, Ordering::Relaxed);
                 (*key, program)
             })
