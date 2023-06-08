@@ -12435,28 +12435,28 @@ fn test_calculate_loaded_accounts_data_size_cost() {
     compute_budget.loaded_accounts_data_size_limit = 31_usize * 1024;
     assert_eq!(
         compute_budget.heap_cost,
-        Bank::calculate_loaded_accounts_data_size_cost(&compute_budget)
+        CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget)
     );
 
     // ... requesting exact 32K should be charged as one block
     compute_budget.loaded_accounts_data_size_limit = 32_usize * 1024;
     assert_eq!(
         compute_budget.heap_cost,
-        Bank::calculate_loaded_accounts_data_size_cost(&compute_budget)
+        CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget)
     );
 
     // ... requesting slightly above 32K should be charged as 2 block
     compute_budget.loaded_accounts_data_size_limit = 33_usize * 1024;
     assert_eq!(
         compute_budget.heap_cost * 2,
-        Bank::calculate_loaded_accounts_data_size_cost(&compute_budget)
+        CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget)
     );
 
     // ... requesting exact 64K should be charged as 2 block
     compute_budget.loaded_accounts_data_size_limit = 64_usize * 1024;
     assert_eq!(
         compute_budget.heap_cost * 2,
-        Bank::calculate_loaded_accounts_data_size_cost(&compute_budget)
+        CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget)
     );
 }
 

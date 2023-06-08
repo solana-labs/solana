@@ -57,6 +57,7 @@ use {
         bank::metrics::*,
         blockhash_queue::BlockhashQueue,
         builtins::{BuiltinPrototype, BUILTINS},
+        cost_model::CostModel,
         cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
@@ -4915,7 +4916,7 @@ impl Bank {
         // `compute_fee` covers costs for both requested_compute_units and
         // requested_loaded_account_data_size
         let loaded_accounts_data_size_cost = if include_loaded_account_data_size_in_fee {
-            Self::calculate_loaded_accounts_data_size_cost(&compute_budget)
+            CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget)
         } else {
             0_u64
         };
@@ -4940,23 +4941,6 @@ impl Bank {
             .saturating_add(compute_fee) as f64)
             * congestion_multiplier)
             .round() as u64
-    }
-
-    // Calculate cost of loaded accounts size in the same way heap cost is charged at
-    // rate of 8cu per 32K. Citing `program_runtime\src\compute_budget.rs`: "(cost of
-    // heap is about) 0.5us per 32k at 15 units/us rounded up"
-    //
-    // Before feature `support_set_loaded_accounts_data_size_limit_ix` is enabled, or
-    // if user doesn't use compute budget ix `set_loaded_accounts_data_size_limit_ix`
-    // to set limit, `compute_budget.loaded_accounts_data_size_limit` is set to default
-    // limit of 64MB; which will convert to (64M/32K)*8CU = 16_000 CUs
-    //
-    fn calculate_loaded_accounts_data_size_cost(compute_budget: &ComputeBudget) -> u64 {
-        const ACCOUNT_DATA_COST_PAGE_SIZE: u64 = 32_u64.saturating_mul(1024);
-        (compute_budget.loaded_accounts_data_size_limit as u64)
-            .saturating_add(ACCOUNT_DATA_COST_PAGE_SIZE.saturating_sub(1))
-            .saturating_div(ACCOUNT_DATA_COST_PAGE_SIZE)
-            .saturating_mul(compute_budget.heap_cost)
     }
 
     fn filter_program_errors_and_collect_fee(

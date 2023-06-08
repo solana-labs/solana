@@ -11,6 +11,7 @@ pub struct TransactionCost {
     pub data_bytes_cost: u64,
     pub builtins_execution_cost: u64,
     pub bpf_execution_cost: u64,
+    pub loaded_accounts_data_size_cost: u64,
     pub account_data_size: u64,
     pub is_simple_vote: bool,
 }
@@ -24,6 +25,7 @@ impl Default for TransactionCost {
             data_bytes_cost: 0u64,
             builtins_execution_cost: 0u64,
             bpf_execution_cost: 0u64,
+            loaded_accounts_data_size_cost: 0u64,
             account_data_size: 0u64,
             is_simple_vote: false,
         }
@@ -42,6 +44,7 @@ impl PartialEq for TransactionCost {
             && self.data_bytes_cost == other.data_bytes_cost
             && self.builtins_execution_cost == other.builtins_execution_cost
             && self.bpf_execution_cost == other.bpf_execution_cost
+            && self.loaded_accounts_data_size_cost == other.loaded_accounts_data_size_cost
             && self.account_data_size == other.account_data_size
             && self.is_simple_vote == other.is_simple_vote
             && to_hash_set(&self.writable_accounts) == to_hash_set(&other.writable_accounts)
@@ -69,5 +72,6 @@ impl TransactionCost {
             .saturating_add(self.data_bytes_cost)
             .saturating_add(self.builtins_execution_cost)
             .saturating_add(self.bpf_execution_cost)
+            .saturating_add(self.loaded_accounts_data_size_cost)
     }
 }
