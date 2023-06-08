@@ -20,12 +20,15 @@ impl EpochRewardsHasher {
     }
 
     /// Return partition index (0..partitions) by hashing `address` with the `hasher`
-    pub(crate) fn hash_address_to_partition(&self, address: &Pubkey) -> usize {
-        let mut hasher = self.hasher; // make copy here
+    pub(crate) fn hash_address_to_partition(self, address: &Pubkey) -> usize {
+        let Self {
+            mut hasher,
+            partitions,
+        } = self;
         hasher.write(address.as_ref());
         let hash64 = hasher.finish();
 
-        hash_to_partition(hash64, self.partitions)
+        hash_to_partition(hash64, partitions)
     }
 }
 
@@ -47,7 +50,12 @@ fn hash_rewards_into_partitions(
     let mut result = vec![vec![]; num_partitions];
 
     for reward in stake_rewards {
-        let partition_index = hasher.hash_address_to_partition(&reward.stake_pubkey);
+        // clone here so the hasher's state is re-used on each call to `hash_address_to_partition`.
+        // This prevents us from re-hashing the seed each time.
+        // The clone is explicit (as opposed to an implicit copy) so it is clear this is intended.
+        let partition_index = hasher
+            .clone()
+            .hash_address_to_partition(&reward.stake_pubkey);
         result[partition_index].push(reward.clone());
     }
     result
@@ -177,16 +185,25 @@ mod tests {
         RangeInclusive::new(start as u64, end_inclusive as u64)
     }
 
-    /// Make sure that each time hash_address_to_partition is called, the hasher is copied.
+    /// Make sure that each time hash_address_to_partition is called, it uses the initial seed state and that clone correctly copies the initial hasher state.
     #[test]
     fn test_hasher_copy() {
-        let hasher = EpochRewardsHasher::new(10, &Hash::new_unique());
+        let seed = Hash::new_unique();
+        let partitions = 10;
+        let hasher = EpochRewardsHasher::new(partitions, &seed);
 
         let pk = Pubkey::new_unique();
 
-        let b1 = hasher.hash_address_to_partition(&pk);
+        let b1 = hasher.clone().hash_address_to_partition(&pk);
         let b2 = hasher.hash_address_to_partition(&pk);
         assert_eq!(b1, b2);
+
+        // make sure b1 includes the seed's hash
+        let mut hasher = SipHasher13::new();
+        hasher.write(seed.as_ref());
+        hasher.write(pk.as_ref());
+        let partition = hash_to_partition(hasher.finish(), partitions);
+        assert_eq!(partition, b1);
     }
 
     #[test]
