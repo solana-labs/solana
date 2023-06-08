@@ -1396,6 +1396,22 @@ pub fn main() {
         } else {
             vec![ledger_path.join("accounts")]
         };
+
+    let account_paths: Vec<PathBuf> = account_paths
+        .into_iter()
+        .map(|account_path| {
+            match std::fs::create_dir_all(&account_path)
+                .and_then(|_| std::fs::canonicalize(&account_path))
+            {
+                Ok(account_path) => account_path,
+                Err(err) => {
+                    eprintln!("Unable to access account path: {account_path:?}, err: {err:?}");
+                    exit(1);
+                }
+            }
+        })
+        .collect();
+
     let account_shrink_paths: Option<Vec<PathBuf>> =
         values_t!(matches, "account_shrink_path", String)
             .map(|shrink_paths| shrink_paths.into_iter().map(PathBuf::from).collect())
