@@ -98,7 +98,7 @@ impl ClusterConfig {
         cluster_lamports: u64,
         lamports_per_node: u64,
     ) -> Self {
-        let stakes: Vec<_> = (0..num_nodes).map(|_| lamports_per_node).collect();
+        let stakes: Vec<_> = vec![lamports_per_node; num_nodes];
         Self {
             node_stakes: stakes,
             cluster_lamports,
