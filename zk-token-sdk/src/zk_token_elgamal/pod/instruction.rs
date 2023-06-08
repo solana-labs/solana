@@ -1,6 +1,9 @@
 use crate::zk_token_elgamal::pod::{
-    DecryptHandle, ElGamalPubkey, PedersenCommitment, Pod, PodU16, PodU64, Zeroable,
+    DecryptHandle, ElGamalPubkey, GroupedElGamalCiphertext3Handles, PedersenCommitment, Pod,
+    PodU16, PodU64, Zeroable,
 };
+#[cfg(not(target_os = "solana"))]
+use crate::{errors::ProofError, instruction::transfer as decoded};
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
@@ -21,11 +24,20 @@ pub struct TransferWithFeePubkeys {
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-pub struct TransferAmountEncryption {
-    pub commitment: PedersenCommitment,
-    pub source_handle: DecryptHandle,
-    pub destination_handle: DecryptHandle,
-    pub auditor_handle: DecryptHandle,
+pub struct TransferAmountEncryption(pub GroupedElGamalCiphertext3Handles);
+
+impl From<decoded::TransferAmountEncryption> for TransferAmountEncryption {
+    fn from(decoded_ciphertext: decoded::TransferAmountEncryption) -> Self {
+        Self(decoded_ciphertext.0.into())
+    }
+}
+
+impl TryFrom<TransferAmountEncryption> for decoded::TransferAmountEncryption {
+    type Error = ProofError;
+
+    fn try_from(pod_ciphertext: TransferAmountEncryption) -> Result<Self, Self::Error> {
+        Ok(Self(pod_ciphertext.0.try_into()?))
+    }
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]

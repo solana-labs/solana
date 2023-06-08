@@ -11,7 +11,7 @@ use crate::{
 #[derive(Clone)]
 #[repr(C)]
 #[cfg(not(target_os = "solana"))]
-pub struct TransferAmountEncryption(GroupedElGamalCiphertext<3>);
+pub struct TransferAmountEncryption(pub(crate) GroupedElGamalCiphertext<3>);
 
 #[cfg(not(target_os = "solana"))]
 impl TransferAmountEncryption {
@@ -45,15 +45,6 @@ impl TransferAmountEncryption {
 
     pub fn get_auditor_handle(&self) -> &DecryptHandle {
         &self.0.handles.get(2).unwrap()
-    }
-
-    pub fn to_pod(&self) -> pod::TransferAmountEncryption {
-        pod::TransferAmountEncryption {
-            commitment: self.commitment.into(),
-            source_handle: self.source_handle.into(),
-            destination_handle: self.destination_handle.into(),
-            auditor_handle: self.auditor_handle.into(),
-        }
     }
 }
 

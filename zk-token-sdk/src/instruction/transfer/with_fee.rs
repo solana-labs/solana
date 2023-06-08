@@ -182,8 +182,8 @@ impl TransferWithFeeData {
             auditor_pubkey: (*auditor_pubkey).into(),
             withdraw_withheld_authority_pubkey: (*withdraw_withheld_authority_pubkey).into(),
         };
-        let pod_ciphertext_lo: pod::TransferAmountEncryption = ciphertext_lo.to_pod();
-        let pod_ciphertext_hi: pod::TransferAmountEncryption = ciphertext_hi.to_pod();
+        let pod_ciphertext_lo: pod::TransferAmountEncryption = ciphertext_lo.into();
+        let pod_ciphertext_hi: pod::TransferAmountEncryption = ciphertext_hi.into();
         let pod_new_source_ciphertext: pod::ElGamalCiphertext = new_source_ciphertext.into();
         let pod_fee_ciphertext_lo: pod::FeeEncryption = fee_ciphertext_lo.to_pod();
         let pod_fee_ciphertext_hi: pod::FeeEncryption = fee_ciphertext_hi.to_pod();
