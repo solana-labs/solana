@@ -26,12 +26,14 @@ pub struct TransferWithFeePubkeys {
 #[repr(C)]
 pub struct TransferAmountCiphertext(pub GroupedElGamalCiphertext3Handles);
 
+#[cfg(not(target_os = "solana"))]
 impl From<decoded::TransferAmountCiphertext> for TransferAmountCiphertext {
     fn from(decoded_ciphertext: decoded::TransferAmountCiphertext) -> Self {
         Self(decoded_ciphertext.0.into())
     }
 }
 
+#[cfg(not(target_os = "solana"))]
 impl TryFrom<TransferAmountCiphertext> for decoded::TransferAmountCiphertext {
     type Error = ProofError;
 
