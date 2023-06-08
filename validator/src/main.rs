@@ -44,7 +44,8 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
-            self, create_all_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
+            self, create_all_accounts_run_and_snapshot_dirs, create_and_canonicalize_directories,
+            ArchiveFormat, SnapshotVersion,
         },
     },
     solana_sdk::{
@@ -1392,25 +1393,15 @@ pub fn main() {
                 .join(",")
                 .split(',')
                 .map(PathBuf::from)
-                .collect()
+                .collect::<Vec<_>>()
         } else {
             vec![ledger_path.join("accounts")]
         };
-
-    let account_paths: Vec<PathBuf> = account_paths
-        .into_iter()
-        .map(|account_path| {
-            match std::fs::create_dir_all(&account_path)
-                .and_then(|_| std::fs::canonicalize(&account_path))
-            {
-                Ok(account_path) => account_path,
-                Err(err) => {
-                    eprintln!("Unable to access account path: {account_path:?}, err: {err:?}");
-                    exit(1);
-                }
-            }
-        })
-        .collect();
+    let account_paths = snapshot_utils::create_and_canonicalize_directories(&account_paths)
+        .unwrap_or_else(|err| {
+            eprintln!("Unable to access account path: {err:?}");
+            exit(1);
+        });
 
     let account_shrink_paths: Option<Vec<PathBuf>> =
         values_t!(matches, "account_shrink_path", String)
@@ -1429,20 +1420,10 @@ pub fn main() {
     validator_config.account_snapshot_paths = account_snapshot_paths;
 
     validator_config.account_shrink_paths = account_shrink_paths.map(|paths| {
-        paths
-            .into_iter()
-            .map(|account_path| {
-                match fs::create_dir_all(&account_path)
-                    .and_then(|_| fs::canonicalize(&account_path))
-                {
-                    Ok(account_path) => account_path,
-                    Err(err) => {
-                        eprintln!("Unable to access account path: {account_path:?}, err: {err:?}");
-                        exit(1);
-                    }
-                }
-            })
-            .collect()
+        create_and_canonicalize_directories(&paths).unwrap_or_else(|err| {
+            eprintln!("Unable to access account shrink path: {err:?}");
+            exit(1);
+        })
     });
 
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
