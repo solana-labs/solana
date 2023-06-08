@@ -107,7 +107,7 @@ fn get_unrepaired_path(
 }
 
 /// Finds repairs for slots that are closest to completion (# of missing shreds).
-/// Additionaly we repair up to their oldest full ancestor (using blockstore fork info).
+/// Additionally we repair up to their oldest full ancestor (using blockstore fork info).
 pub fn get_closest_completion(
     tree: &HeaviestSubtreeForkChoice,
     blockstore: &Blockstore,

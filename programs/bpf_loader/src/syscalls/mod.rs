@@ -17,7 +17,7 @@ use {
     },
     solana_rbpf::{
         memory_region::{AccessType, MemoryMapping},
-        vm::{BuiltInProgram, Config, ProgramResult, PROGRAM_ENVIRONMENT_KEY_SHIFT},
+        vm::{BuiltinProgram, Config, ProgramResult, PROGRAM_ENVIRONMENT_KEY_SHIFT},
     },
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
@@ -146,8 +146,10 @@ pub fn create_program_runtime_environment<'a>(
     compute_budget: &ComputeBudget,
     reject_deployment_of_broken_elfs: bool,
     debugging_features: bool,
-) -> Result<BuiltInProgram<InvokeContext<'a>>, Error> {
+) -> Result<BuiltinProgram<InvokeContext<'a>>, Error> {
     use rand::Rng;
+    // When adding new features for RBPF,
+    // also add them to `Bank::apply_builtin_program_feature_transitions()`.
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
@@ -186,7 +188,7 @@ pub fn create_program_runtime_environment<'a>(
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
 
-    let mut result = BuiltInProgram::new_loader(config);
+    let mut result = BuiltinProgram::new_loader(config);
 
     // Abort
     result.register_function(b"abort", SyscallAbort::call)?;
@@ -1786,7 +1788,7 @@ mod tests {
         solana_rbpf::{
             error::EbpfError,
             memory_region::MemoryRegion,
-            vm::{BuiltInFunction, Config},
+            vm::{BuiltinFunction, Config},
         },
         solana_sdk::{
             account::{create_account_shared_data_for_test, AccountSharedData},
@@ -3341,7 +3343,7 @@ mod tests {
         seeds: &[&[u8]],
         program_id: &Pubkey,
         overlap_outputs: bool,
-        syscall: BuiltInFunction<InvokeContext<'b>>,
+        syscall: BuiltinFunction<InvokeContext<'b>>,
     ) -> Result<(Pubkey, u8), Error> {
         const SEEDS_VA: u64 = 0x100000000;
         const PROGRAM_ID_VA: u64 = 0x200000000;

@@ -32,10 +32,9 @@ impl CompletedDataSetsService {
         completed_sets_receiver: CompletedDataSetsReceiver,
         blockstore: Arc<Blockstore>,
         rpc_subscriptions: Arc<RpcSubscriptions>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         max_slots: Arc<MaxSlots>,
     ) -> Self {
-        let exit = exit.clone();
         let thread_hdl = Builder::new()
             .name("solComplDataSet".to_string())
             .spawn(move || loop {

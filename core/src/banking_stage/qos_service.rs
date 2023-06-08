@@ -4,13 +4,10 @@
 //!
 
 use {
-    crate::banking_stage::{committer::CommitTransactionDetails, BatchedTransactionDetails},
+    super::{committer::CommitTransactionDetails, BatchedTransactionDetails},
     crossbeam_channel::{unbounded, Receiver, Sender},
     solana_measure::measure::Measure,
-    solana_runtime::{
-        bank::Bank,
-        cost_model::{CostModel, TransactionCost},
-    },
+    solana_runtime::{bank::Bank, cost_model::CostModel, transaction_cost::TransactionCost},
     solana_sdk::{
         clock::Slot,
         feature_set::FeatureSet,
@@ -34,7 +31,7 @@ pub enum QosMetrics {
 // QosService is local to each banking thread, each instance of QosService provides services to
 // one banking thread.
 // It hosts a private thread for async metrics reporting, tagged with banking threads ID. Banking
-// thread calls `report_metrics(slot)` at end of `process_and_record_tramsaction()`, or any time
+// thread calls `report_metrics(slot)` at end of `process_and_record_transaction()`, or any time
 // it wants, QosService sends `slot` to reporting thread via channel, signalling stats to be
 // reported if new bank slot has changed.
 //

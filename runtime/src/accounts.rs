@@ -62,7 +62,10 @@ use {
     solana_system_program::{get_system_account_kind, SystemAccountKind},
     std::{
         cmp::Reverse,
-        collections::{hash_map, BinaryHeap, HashMap, HashSet},
+        collections::{
+            hash_map::{self, Entry},
+            BinaryHeap, HashMap, HashSet,
+        },
         num::NonZeroUsize,
         ops::RangeBounds,
         path::PathBuf,
@@ -81,8 +84,11 @@ pub struct AccountLocks {
     readonly_locks: HashMap<Pubkey, u64>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub(crate) enum RewardInterval {
+    /// the slot within the epoch is INSIDE the reward distribution interval
+    InsideInterval,
     /// the slot within the epoch is OUTSIDE the reward distribution interval
     OutsideInterval,
 }
@@ -171,7 +177,7 @@ impl Accounts {
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
     }
 
@@ -188,7 +194,7 @@ impl Accounts {
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
     }
 
@@ -199,7 +205,7 @@ impl Accounts {
         shrink_ratio: AccountShrinkThreshold,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         Self::new_empty(AccountsDb::new_with_config(
             paths,
@@ -291,11 +297,11 @@ impl Accounts {
         key: &Pubkey,
         feature_set: &FeatureSet,
         program: &LoadedProgram,
-        program_accounts: &HashMap<Pubkey, &Pubkey>,
+        program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     ) -> Result<AccountSharedData> {
         // Check for tombstone
         let result = match &program.program {
-            LoadedProgramType::FailedVerification | LoadedProgramType::Closed => {
+            LoadedProgramType::FailedVerification(_) | LoadedProgramType::Closed => {
                 Err(TransactionError::InvalidProgramForExecution)
             }
             LoadedProgramType::DelayVisibility => {
@@ -314,7 +320,7 @@ impl Accounts {
         // So the account data is not needed. Return a dummy AccountSharedData with meta
         // information.
         let mut program_account = AccountSharedData::default();
-        let program_owner = program_accounts
+        let (program_owner, _count) = program_accounts
             .get(key)
             .ok_or(TransactionError::AccountNotFound)?;
         program_account.set_owner(**program_owner);
@@ -332,10 +338,12 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
-        _reward_interval: RewardInterval,
-        program_accounts: &HashMap<Pubkey, &Pubkey>,
+        reward_interval: RewardInterval,
+        program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Result<LoadedTransaction> {
+        let in_reward_interval = reward_interval == RewardInterval::InsideInterval;
+
         // NOTE: this check will never fail because `tx` is sanitized
         if tx.signatures().is_empty() && fee != 0 {
             return Err(TransactionError::MissingSignatureForFee);
@@ -464,6 +472,14 @@ impl Accounts {
                     } else if account.executable() && message.is_writable(i) {
                         error_counters.invalid_writable_account += 1;
                         return Err(TransactionError::InvalidWritableAccount);
+                    } else if in_reward_interval
+                        && message.is_writable(i)
+                        && solana_stake_program::check_id(account.owner())
+                    {
+                        error_counters.program_execution_temporarily_restricted += 1;
+                        return Err(TransactionError::ProgramExecutionTemporarilyRestricted {
+                            account_index: i as u8,
+                        });
                     }
 
                     tx_rent += rent;
@@ -637,8 +653,8 @@ impl Accounts {
         lock_results: &mut [TransactionCheckResult],
         program_owners: &[&'a Pubkey],
         hash_queue: &BlockhashQueue,
-    ) -> HashMap<Pubkey, &'a Pubkey> {
-        let mut result = HashMap::new();
+    ) -> HashMap<Pubkey, (&'a Pubkey, u64)> {
+        let mut result: HashMap<Pubkey, (&'a Pubkey, u64)> = HashMap::new();
         lock_results.iter_mut().zip(txs).for_each(|etx| {
             if let ((Ok(()), nonce), tx) = etx {
                 if nonce
@@ -649,19 +665,26 @@ impl Accounts {
                     })
                     .is_some()
                 {
-                    tx.message().account_keys().iter().for_each(|key| {
-                        if !result.contains_key(key) {
-                            if let Ok(index) = self.accounts_db.account_matches_owners(
-                                ancestors,
-                                key,
-                                program_owners,
-                            ) {
-                                program_owners
-                                    .get(index)
-                                    .and_then(|owner| result.insert(*key, *owner));
+                    tx.message()
+                        .account_keys()
+                        .iter()
+                        .for_each(|key| match result.entry(*key) {
+                            Entry::Occupied(mut entry) => {
+                                let (_, count) = entry.get_mut();
+                                saturating_add_assign!(*count, 1);
                             }
-                        }
-                    });
+                            Entry::Vacant(entry) => {
+                                if let Ok(index) = self.accounts_db.account_matches_owners(
+                                    ancestors,
+                                    key,
+                                    program_owners,
+                                ) {
+                                    program_owners
+                                        .get(index)
+                                        .map(|owner| entry.insert((*owner, 1)));
+                                }
+                            }
+                        });
                 } else {
                     // If the transaction's nonce account was not valid, and blockhash is not found,
                     // the transaction will fail to process. Let's not load any programs from the
@@ -686,7 +709,7 @@ impl Accounts {
         fee_structure: &FeeStructure,
         account_overrides: Option<&AccountOverrides>,
         in_reward_interval: RewardInterval,
-        program_accounts: &HashMap<Pubkey, &Pubkey>,
+        program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Vec<TransactionLoadResult> {
         txs.iter()
@@ -2088,13 +2111,13 @@ mod tests {
             programs
                 .get(&account3_pubkey)
                 .expect("failed to find the program account"),
-            &&program1_pubkey
+            &(&program1_pubkey, 2)
         );
         assert_eq!(
             programs
                 .get(&account4_pubkey)
                 .expect("failed to find the program account"),
-            &&program2_pubkey
+            &(&program2_pubkey, 1)
         );
     }
 
@@ -2197,7 +2220,7 @@ mod tests {
             programs
                 .get(&account3_pubkey)
                 .expect("failed to find the program account"),
-            &&program1_pubkey
+            &(&program1_pubkey, 1)
         );
         assert_eq!(lock_results[1].0, Err(TransactionError::BlockhashNotFound));
     }

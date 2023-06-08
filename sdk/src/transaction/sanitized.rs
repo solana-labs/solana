@@ -95,9 +95,8 @@ impl SanitizedTransaction {
         message_hash: impl Into<MessageHash>,
         is_simple_vote_tx: Option<bool>,
         address_loader: impl AddressLoader,
-        require_static_program_ids: bool,
     ) -> Result<Self> {
-        tx.sanitize(require_static_program_ids)?;
+        tx.sanitize()?;
 
         let message_hash = match message_hash.into() {
             MessageHash::Compute => tx.message.hash(),
@@ -328,7 +327,6 @@ mod tests {
                 MessageHash::Compute,
                 None,
                 SimpleAddressLoader::Disabled,
-                true, // require_static_program_ids
             )
             .unwrap();
             assert!(vote_transaction.is_simple_vote_transaction());
@@ -341,7 +339,6 @@ mod tests {
                 MessageHash::Compute,
                 Some(false),
                 SimpleAddressLoader::Disabled,
-                true, // require_static_program_ids
             )
             .unwrap();
             assert!(!vote_transaction.is_simple_vote_transaction());
@@ -356,7 +353,6 @@ mod tests {
                 MessageHash::Compute,
                 None,
                 SimpleAddressLoader::Disabled,
-                true, // require_static_program_ids
             )
             .unwrap();
             assert!(!vote_transaction.is_simple_vote_transaction());
@@ -369,7 +365,6 @@ mod tests {
                 MessageHash::Compute,
                 Some(true),
                 SimpleAddressLoader::Disabled,
-                true, // require_static_program_ids
             )
             .unwrap();
             assert!(vote_transaction.is_simple_vote_transaction());

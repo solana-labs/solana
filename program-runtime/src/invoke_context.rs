@@ -14,7 +14,7 @@ use {
     solana_rbpf::{
         ebpf::MM_HEAP_START,
         memory_region::MemoryMapping,
-        vm::{BuiltInFunction, Config, ContextObject, ProgramResult},
+        vm::{BuiltinFunction, Config, ContextObject, ProgramResult},
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -43,7 +43,7 @@ use {
     },
 };
 
-pub type ProcessInstructionWithContext = BuiltInFunction<InvokeContext<'static>>;
+pub type ProcessInstructionWithContext = BuiltinFunction<InvokeContext<'static>>;
 
 /// Adapter so we can unify the interfaces of built-in programs and syscalls
 #[macro_export]
@@ -735,7 +735,7 @@ impl<'a> InvokeContext<'a> {
             _ => None,
         }
         .ok_or(InstructionError::UnsupportedProgramId)?;
-        entry.usage_counter.fetch_add(1, Ordering::Relaxed);
+        entry.ix_usage_counter.fetch_add(1, Ordering::Relaxed);
 
         let program_id = *instruction_context.get_last_program_key(self.transaction_context)?;
         self.transaction_context

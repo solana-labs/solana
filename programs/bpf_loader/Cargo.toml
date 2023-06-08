@@ -1,5 +1,6 @@
 [package]
 name = "solana-bpf-loader-program"
+description = "Solana BPF loader"
 documentation = "https://docs.rs/solana-bpf-loader-program"
 version = { workspace = true }
 authors = { workspace = true }

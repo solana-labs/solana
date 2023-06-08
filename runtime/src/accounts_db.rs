@@ -2462,7 +2462,7 @@ impl AccountsDb {
             AccountShrinkThreshold::default(),
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
     }
 
@@ -2474,7 +2474,7 @@ impl AccountsDb {
             AccountShrinkThreshold::default(),
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
     }
 
@@ -2485,7 +2485,7 @@ impl AccountsDb {
         shrink_ratio: AccountShrinkThreshold,
         mut accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         let accounts_index = AccountsIndex::new(
             accounts_db_config.as_mut().and_then(|x| x.index.take()),
@@ -9448,7 +9448,7 @@ impl AccountsDb {
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
     }
 
@@ -17230,7 +17230,7 @@ pub mod tests {
                     ..ACCOUNTS_DB_CONFIG_FOR_TESTING
                 }),
                 None,
-                &Arc::default(),
+                Arc::default(),
             );
             // before any roots are added, we expect the oldest non-ancient slot to be 0
             assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));
@@ -17264,7 +17264,7 @@ pub mod tests {
                 ..ACCOUNTS_DB_CONFIG_FOR_TESTING
             }),
             None,
-            &Arc::default(),
+            Arc::default(),
         );
         // before any roots are added, we expect the oldest non-ancient slot to be 0
         assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));
@@ -17319,7 +17319,7 @@ pub mod tests {
                         ..ACCOUNTS_DB_CONFIG_FOR_TESTING
                     }),
                     None,
-                    &Arc::default(),
+                    Arc::default(),
                 );
                 // before any roots are added, we expect the oldest non-ancient slot to be 0
                 assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));

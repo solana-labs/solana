@@ -142,7 +142,7 @@ fn test_account_subscription() {
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
     let max_complete_rewards_slot = Arc::new(AtomicU64::default());
     let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-        &exit,
+        exit.clone(),
         max_complete_transaction_status_slot,
         max_complete_rewards_slot,
         bank_forks.clone(),
@@ -261,7 +261,7 @@ fn test_block_subscription() {
     let max_complete_rewards_slot = Arc::new(AtomicU64::default());
     // setup RpcSubscriptions && PubSubService
     let subscriptions = Arc::new(RpcSubscriptions::new_for_tests_with_blockstore(
-        &exit,
+        exit.clone(),
         max_complete_transaction_status_slot,
         max_complete_rewards_slot,
         blockstore.clone(),
@@ -348,7 +348,7 @@ fn test_program_subscription() {
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
     let max_complete_rewards_slot = Arc::new(AtomicU64::default());
     let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-        &exit,
+        exit.clone(),
         max_complete_transaction_status_slot,
         max_complete_rewards_slot,
         bank_forks.clone(),
@@ -434,7 +434,7 @@ fn test_root_subscription() {
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
     let max_complete_rewards_slot = Arc::new(AtomicU64::default());
     let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-        &exit,
+        exit.clone(),
         max_complete_transaction_status_slot,
         max_complete_rewards_slot,
         bank_forks.clone(),
@@ -485,7 +485,7 @@ fn test_slot_subscription() {
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
     let max_complete_rewards_slot = Arc::new(AtomicU64::default());
     let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-        &exit,
+        exit.clone(),
         max_complete_transaction_status_slot,
         max_complete_rewards_slot,
         bank_forks,
@@ -561,7 +561,7 @@ async fn test_slot_subscription_async() {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit.clone(),
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks,

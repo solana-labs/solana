@@ -8,7 +8,7 @@ use {
     },
     solana_sdk::{
         account::from_account,
-        clock::Slot,
+        clock::{Slot, UnixTimestamp},
         feature_set::{allow_votes_to_directly_update_vote_state, FeatureSet},
         hash::Hash,
         pubkey::Pubkey,
@@ -138,6 +138,7 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
                                         hash,
                                         packet_batch,
                                         signature,
+                                        ..
                                     }) => self
                                         .filter_vote(slot, hash, packet_batch, signature)
                                         .map(|packet| vec![packet])
@@ -170,6 +171,7 @@ pub struct GossipVote {
     hash: Hash,
     packet_batch: PacketBatch,
     signature: Signature,
+    timestamp: Option<UnixTimestamp>,
 }
 
 pub enum SingleValidatorVotes {
@@ -182,6 +184,13 @@ impl SingleValidatorVotes {
         match self {
             Self::FullTowerVote(vote) => vote.slot,
             _ => 0,
+        }
+    }
+
+    fn get_latest_timestamp(&self) -> Option<UnixTimestamp> {
+        match self {
+            Self::FullTowerVote(vote) => vote.timestamp,
+            _ => None,
         }
     }
 
@@ -229,15 +238,24 @@ impl VerifiedVotePackets {
                     }
                     let slot = vote.last_voted_slot().unwrap();
                     let hash = vote.hash();
+                    let timestamp = vote.timestamp();
 
                     match (vote, is_full_tower_vote_enabled) {
                         (VoteStateUpdate(_), true) => {
-                            let latest_gossip_slot = match self.0.get(&vote_account_key) {
-                                Some(vote) => vote.get_latest_gossip_slot(),
-                                _ => 0,
-                            };
+                            let (latest_gossip_slot, latest_timestamp) =
+                                self.0.get(&vote_account_key).map_or((0, None), |vote| {
+                                    (vote.get_latest_gossip_slot(), vote.get_latest_timestamp())
+                                });
                             // Since votes are not incremental, we keep only the latest vote
-                            if slot > latest_gossip_slot {
+                            // If the vote is for the same slot we will only allow it if
+                            // it has a later timestamp (refreshed vote)
+                            //
+                            // Timestamp can be None if something was wrong with the senders clock.
+                            // We directly compare as Options to ensure that votes with proper
+                            // timestamps have precedence (Some is > None).
+                            if slot > latest_gossip_slot
+                                || ((slot == latest_gossip_slot) && (timestamp > latest_timestamp))
+                            {
                                 self.0.insert(
                                     vote_account_key,
                                     FullTowerVote(GossipVote {
@@ -245,6 +263,7 @@ impl VerifiedVotePackets {
                                         hash,
                                         packet_batch,
                                         signature,
+                                        timestamp,
                                     }),
                                 );
                             }
@@ -264,6 +283,7 @@ impl VerifiedVotePackets {
                                         hash,
                                         packet_batch,
                                         signature,
+                                        ..
                                     } = std::mem::take(gossip_vote);
                                     votes.insert((slot, hash), (packet_batch, signature));
                                     self.0.insert(vote_account_key, IncrementalVotes(votes));
@@ -301,7 +321,7 @@ mod tests {
     use {
         super::{SingleValidatorVotes::*, *},
         crate::{result::Error, vote_simulator::VoteSimulator},
-        crossbeam_channel::unbounded,
+        crossbeam_channel::{unbounded, Receiver, Sender},
         solana_perf::packet::Packet,
         solana_sdk::slot_hashes::MAX_ENTRIES,
         solana_vote_program::vote_state::{Lockout, Vote, VoteStateUpdate},
@@ -678,6 +698,110 @@ mod tests {
                 .unwrap()
                 .len()
         );
+    }
+
+    fn send_vote_state_update_and_process(
+        s: &Sender<Vec<VerifiedVoteMetadata>>,
+        r: &Receiver<Vec<VerifiedVoteMetadata>>,
+        vote: VoteStateUpdate,
+        vote_account_key: Pubkey,
+        feature_set: Option<Arc<FeatureSet>>,
+        verified_vote_packets: &mut VerifiedVotePackets,
+    ) -> GossipVote {
+        s.send(vec![VerifiedVoteMetadata {
+            vote_account_key,
+            vote: VoteTransaction::from(vote),
+            packet_batch: PacketBatch::default(),
+            signature: Signature::new(&[1u8; 64]),
+        }])
+        .unwrap();
+        verified_vote_packets
+            .receive_and_process_vote_packets(r, true, feature_set)
+            .unwrap();
+        match verified_vote_packets.0.get(&vote_account_key).unwrap() {
+            SingleValidatorVotes::FullTowerVote(gossip_vote) => gossip_vote.clone(),
+            _ => panic!("Received incremental vote"),
+        }
+    }
+
+    #[test]
+    fn test_latest_vote_tie_break_with_feature() {
+        let (s, r) = unbounded();
+        let vote_account_key = solana_sdk::pubkey::new_rand();
+
+        // Send identical vote state updates with different timestamps
+        let mut vote = VoteStateUpdate::from(vec![(2, 4), (4, 3), (6, 2), (7, 1)]);
+        vote.timestamp = Some(5);
+
+        let mut vote_later_ts = vote.clone();
+        vote_later_ts.timestamp = Some(6);
+
+        let mut vote_earlier_ts = vote.clone();
+        vote_earlier_ts.timestamp = Some(4);
+
+        let mut vote_no_ts = vote.clone();
+        vote_no_ts.timestamp = None;
+
+        let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
+        let mut feature_set = FeatureSet::default();
+        feature_set.activate(&allow_votes_to_directly_update_vote_state::id(), 0);
+        let feature_set = Some(Arc::new(feature_set));
+
+        // Original vote
+        let GossipVote {
+            slot, timestamp, ..
+        } = send_vote_state_update_and_process(
+            &s,
+            &r,
+            vote.clone(),
+            vote_account_key,
+            feature_set.clone(),
+            &mut verified_vote_packets,
+        );
+        assert_eq!(slot, vote.last_voted_slot().unwrap());
+        assert_eq!(timestamp, vote.timestamp);
+
+        // Same vote with later timestamp should override
+        let GossipVote {
+            slot, timestamp, ..
+        } = send_vote_state_update_and_process(
+            &s,
+            &r,
+            vote_later_ts.clone(),
+            vote_account_key,
+            feature_set.clone(),
+            &mut verified_vote_packets,
+        );
+        assert_eq!(slot, vote_later_ts.last_voted_slot().unwrap());
+        assert_eq!(timestamp, vote_later_ts.timestamp);
+
+        // Same vote with earlier timestamp should not override
+        let GossipVote {
+            slot, timestamp, ..
+        } = send_vote_state_update_and_process(
+            &s,
+            &r,
+            vote_earlier_ts,
+            vote_account_key,
+            feature_set.clone(),
+            &mut verified_vote_packets,
+        );
+        assert_eq!(slot, vote_later_ts.last_voted_slot().unwrap());
+        assert_eq!(timestamp, vote_later_ts.timestamp);
+
+        // Same vote with no timestamp should not override
+        let GossipVote {
+            slot, timestamp, ..
+        } = send_vote_state_update_and_process(
+            &s,
+            &r,
+            vote_no_ts,
+            vote_account_key,
+            feature_set,
+            &mut verified_vote_packets,
+        );
+        assert_eq!(slot, vote_later_ts.last_voted_slot().unwrap());
+        assert_eq!(timestamp, vote_later_ts.timestamp);
     }
 
     #[test]

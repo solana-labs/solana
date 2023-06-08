@@ -1,5 +1,6 @@
 mod auth_encryption;
 mod elgamal;
+mod grouped_elgamal;
 mod instruction;
 mod pedersen;
 mod range_proof;
@@ -14,12 +15,13 @@ pub use {
     auth_encryption::AeCiphertext,
     bytemuck::{Pod, Zeroable},
     elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
+    grouped_elgamal::{GroupedElGamalCiphertext2Handles, GroupedElGamalCiphertext3Handles},
     instruction::{
         FeeEncryption, FeeParameters, TransferAmountEncryption, TransferPubkeys,
         TransferWithFeePubkeys,
     },
     pedersen::PedersenCommitment,
-    range_proof::{RangeProof128, RangeProof256, RangeProof64},
+    range_proof::{RangeProofU128, RangeProofU256, RangeProofU64},
     sigma_proofs::{
         AggregatedValidityProof, CiphertextCiphertextEqualityProof,
         CiphertextCommitmentEqualityProof, FeeSigmaProof, PubkeyValidityProof, ValidityProof,

@@ -19,7 +19,10 @@ use {
     solana_runtime::accounts_update_notifier_interface::AccountsUpdateNotifier,
     std::{
         path::{Path, PathBuf},
-        sync::{atomic::AtomicBool, Arc, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
         thread,
         time::Duration,
     },
@@ -231,7 +234,7 @@ impl GeyserPluginService {
                     }
                 }
 
-                if exit.load(std::sync::atomic::Ordering::Relaxed) {
+                if exit.load(Ordering::Relaxed) {
                     break;
                 }
             })

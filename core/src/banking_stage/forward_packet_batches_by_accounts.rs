@@ -1,5 +1,5 @@
 use {
-    crate::immutable_deserialized_packet::ImmutableDeserializedPacket,
+    super::immutable_deserialized_packet::ImmutableDeserializedPacket,
     solana_perf::packet::Packet,
     solana_runtime::{
         block_cost_limits,
@@ -136,7 +136,7 @@ impl ForwardPacketBatchesByAccounts {
 mod tests {
     use {
         super::*,
-        crate::unprocessed_packet_batches::DeserializedPacket,
+        crate::banking_stage::unprocessed_packet_batches::DeserializedPacket,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction, feature_set::FeatureSet, message::Message,
             pubkey::Pubkey, system_instruction, transaction::Transaction,

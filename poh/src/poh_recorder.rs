@@ -183,6 +183,13 @@ impl TransactionRecorder {
                         starting_transaction_index: None,
                     };
                 }
+                Err(PohRecorderError::SendError(e)) => {
+                    return RecordTransactionsSummary {
+                        record_transactions_timings,
+                        result: Err(PohRecorderError::SendError(e)),
+                        starting_transaction_index: None,
+                    };
+                }
                 Err(e) => panic!("Poh recorder returned unexpected error: {e:?}"),
             }
         }
@@ -1066,7 +1073,7 @@ pub fn create_test_recorder(
     let poh_service = PohService::new(
         poh_recorder.clone(),
         &poh_config,
-        &exit,
+        exit.clone(),
         bank.ticks_per_slot(),
         crate::poh_service::DEFAULT_PINNED_CPU_CORE,
         crate::poh_service::DEFAULT_HASHES_PER_BATCH,

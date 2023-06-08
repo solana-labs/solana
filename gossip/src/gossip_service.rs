@@ -39,7 +39,7 @@ impl GossipService {
         gossip_validators: Option<HashSet<Pubkey>>,
         should_check_duplicate_instance: bool,
         stats_reporter_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         let (request_sender, request_receiver) = unbounded();
         let gossip_socket = Arc::new(gossip_socket);
@@ -73,12 +73,10 @@ impl GossipService {
             should_check_duplicate_instance,
             exit.clone(),
         );
-        let t_gossip = cluster_info.clone().gossip(
-            bank_forks,
-            response_sender,
-            gossip_validators,
-            exit.clone(),
-        );
+        let t_gossip =
+            cluster_info
+                .clone()
+                .gossip(bank_forks, response_sender, gossip_validators, exit);
         let t_responder = streamer::responder(
             "Gossip",
             gossip_socket,
@@ -144,7 +142,7 @@ pub fn discover(
     let (gossip_service, ip_echo, spy_ref) = make_gossip_node(
         keypair,
         entrypoint,
-        &exit,
+        exit.clone(),
         my_gossip_addr,
         my_shred_version,
         true, // should_check_duplicate_instance,
@@ -302,7 +300,7 @@ fn spy(
 pub fn make_gossip_node(
     keypair: Keypair,
     entrypoint: Option<&SocketAddr>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
     gossip_addr: Option<&SocketAddr>,
     shred_version: u16,
     should_check_duplicate_instance: bool,
@@ -360,7 +358,7 @@ mod tests {
             None,
             true, // should_check_duplicate_instance
             None,
-            &exit,
+            exit.clone(),
         );
         exit.store(true, Ordering::Relaxed);
         d.join().unwrap();

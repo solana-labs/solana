@@ -6,7 +6,7 @@ use {
     log::*,
     solana_connection_cache::{
         connection_cache::{
-            ConnectionCache, ConnectionManager, ConnectionPool, NewConnectionConfig, Protocol,
+            ConnectionCache, ConnectionManager, ConnectionPool, Protocol,
             DEFAULT_CONNECTION_POOL_SIZE,
         },
         nonblocking::client_connection::ClientConnection,
@@ -280,7 +280,6 @@ async fn send_wire_transaction_to_addr<P, M, C>(
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: NewConnectionConfig,
 {
     let conn = connection_cache.get_nonblocking_connection(addr);
     conn.send_data(&wire_transaction).await
@@ -294,7 +293,6 @@ async fn send_wire_transaction_batch_to_addr<P, M, C>(
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: NewConnectionConfig,
 {
     let conn = connection_cache.get_nonblocking_connection(addr);
     conn.send_data_batch(wire_transactions).await
@@ -304,7 +302,6 @@ impl<P, M, C> TpuClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: NewConnectionConfig,
 {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size

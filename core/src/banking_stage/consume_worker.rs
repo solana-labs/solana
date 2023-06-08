@@ -126,13 +126,11 @@ fn try_drain_iter<T>(work: T, receiver: &Receiver<T>) -> impl Iterator<Item = T>
 mod tests {
     use {
         super::*,
-        crate::{
-            banking_stage::{
-                committer::Committer,
-                scheduler_messages::{TransactionBatchId, TransactionId},
-                tests::{create_slow_genesis_config, sanitize_transactions, simulate_poh},
-            },
+        crate::banking_stage::{
+            committer::Committer,
             qos_service::QosService,
+            scheduler_messages::{TransactionBatchId, TransactionId},
+            tests::{create_slow_genesis_config, sanitize_transactions, simulate_poh},
         },
         crossbeam_channel::unbounded,
         solana_ledger::{

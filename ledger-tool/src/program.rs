@@ -119,7 +119,7 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
         wal_recovery_mode,
         force_update_to_open,
     );
-    let (bank_forks, ..) = load_bank_forks(
+    let (bank_forks, ..) = load_and_process_ledger(
         arg_matches,
         &genesis_config,
         Arc::new(blockstore),
@@ -545,7 +545,13 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
             debug!("Failed to load program {}, error {:?}", key, err);
             Arc::new(LoadedProgram::new_tombstone(
                 0,
-                LoadedProgramType::FailedVerification,
+                LoadedProgramType::FailedVerification(
+                    bank.loaded_programs_cache
+                        .read()
+                        .unwrap()
+                        .program_runtime_environment_v1
+                        .clone(),
+                ),
             ))
         });
         debug!("Loaded program {}", key);
