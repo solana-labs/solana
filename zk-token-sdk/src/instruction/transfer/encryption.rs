@@ -8,7 +8,7 @@ use crate::{
     zk_token_elgamal::pod,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(C)]
 #[cfg(not(target_os = "solana"))]
 pub struct TransferAmountEncryption(pub(crate) GroupedElGamalCiphertext<3>);
