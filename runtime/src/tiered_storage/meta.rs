@@ -22,12 +22,13 @@ pub struct AccountMetaFlags {
     reserved: B29,
 }
 
-impl AccountMetaFlags {
-    /// Update the flags based on the existence of each optional field.
-    pub fn update(&mut self, optional_fields: &AccountMetaOptionalFields) {
-        self.set_has_rent_epoch(optional_fields.rent_epoch.is_some());
-        self.set_has_account_hash(optional_fields.account_hash.is_some());
-        self.set_has_write_version(optional_fields.write_version.is_some());
+impl From<&AccountMetaOptionalFields> for AccountMetaFlags {
+    fn from(optional_fields: &AccountMetaOptionalFields) -> Self {
+        let mut flags = AccountMetaFlags::default();
+        flags.set_has_rent_epoch(optional_fields.rent_epoch.is_some());
+        flags.set_has_account_hash(optional_fields.account_hash.is_some());
+        flags.set_has_write_version(optional_fields.write_version.is_some());
+        flags
     }
 }
 
@@ -109,11 +110,8 @@ pub mod tests {
         assert_eq!(flags.reserved(), 0u32);
     }
 
-    fn update_and_verify_flags(
-        flags: &mut AccountMetaFlags,
-        opt_fields: AccountMetaOptionalFields,
-    ) {
-        flags.update(&opt_fields);
+    fn update_and_verify_flags(opt_fields: &AccountMetaOptionalFields) {
+        let flags: AccountMetaFlags = opt_fields.into();
         assert_eq!(flags.has_rent_epoch(), opt_fields.rent_epoch.is_some());
         assert_eq!(flags.has_account_hash(), opt_fields.account_hash.is_some());
         assert_eq!(
@@ -125,26 +123,17 @@ pub mod tests {
 
     #[test]
     fn test_optional_fields_update_flags() {
-        let mut flags = AccountMetaFlags::new();
-        assert!(!flags.has_rent_epoch());
-        assert!(!flags.has_account_hash());
-        assert!(!flags.has_write_version());
-        assert_eq!(flags.reserved(), 0u32);
-
         let test_epoch = 5432312;
         let test_write_version = 231;
 
         for rent_epoch in [None, Some(test_epoch)] {
             for account_hash in [None, Some(Hash::new_unique())] {
                 for write_version in [None, Some(test_write_version)] {
-                    update_and_verify_flags(
-                        &mut flags,
-                        AccountMetaOptionalFields {
-                            rent_epoch,
-                            account_hash,
-                            write_version,
-                        },
-                    );
+                    update_and_verify_flags(&AccountMetaOptionalFields {
+                        rent_epoch,
+                        account_hash,
+                        write_version,
+                    });
                 }
             }
         }
