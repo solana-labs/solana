@@ -200,7 +200,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
         let context = self.context.as_ref().expect("active context");
 
         let fail_fast = match context.mode() {
-            // this should be false, for (upcoming) BlockGeneration variant.
+            // this should be false, for (upcoming) BlockProduction variant.
             SchedulingMode::BlockVerification => true,
         };
 
