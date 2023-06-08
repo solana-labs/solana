@@ -5,7 +5,7 @@ use {
     std::hash::Hasher,
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) struct EpochRewardHasher {
     hasher: SipHasher13,
     partitions: usize,
@@ -20,15 +20,12 @@ impl EpochRewardHasher {
     }
 
     /// Return partition index (0..partitions) by hashing `address` with the `hasher`
-    pub(crate) fn hash_address_to_partition(self, address: &Pubkey) -> usize {
-        let Self {
-            mut hasher,
-            partitions,
-        } = self;
+    pub(crate) fn hash_address_to_partition(&self, address: &Pubkey) -> usize {
+        let mut hasher = self.hasher; // make copy here
         hasher.write(address.as_ref());
         let hash64 = hasher.finish();
 
-        hash_to_partition(hash64, partitions)
+        hash_to_partition(hash64, self.partitions)
     }
 }
 
