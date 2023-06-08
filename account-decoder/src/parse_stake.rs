@@ -6,7 +6,7 @@ use {
     bincode::deserialize,
     solana_sdk::{
         clock::{Epoch, UnixTimestamp},
-        stake::state::{Authorized, Delegation, Lockup, Meta, Stake, StakeState},
+        stake::state::{Authorized, DeactivationFlag, Delegation, Lockup, Meta, Stake, StakeState},
     },
 };
 
@@ -18,11 +18,15 @@ pub fn parse_stake(data: &[u8]) -> Result<StakeAccountType, ParseAccountError> {
         StakeState::Initialized(meta) => StakeAccountType::Initialized(UiStakeAccount {
             meta: meta.into(),
             stake: None,
+            deactivation_flag: None,
         }),
-        StakeState::Stake(meta, stake, _) => StakeAccountType::Delegated(UiStakeAccount {
-            meta: meta.into(),
-            stake: Some(stake.into()),
-        }),
+        StakeState::Stake(meta, stake, deactivation_flag) => {
+            StakeAccountType::Delegated(UiStakeAccount {
+                meta: meta.into(),
+                stake: Some(stake.into()),
+                deactivation_flag: Some(deactivation_flag),
+            })
+        }
         StakeState::RewardsPool => StakeAccountType::RewardsPool,
     };
     Ok(parsed_account)
@@ -42,6 +46,7 @@ pub enum StakeAccountType {
 pub struct UiStakeAccount {
     pub meta: UiMeta,
     pub stake: Option<UiStake>,
+    pub deactivation_flag: Option<DeactivationFlag>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -179,6 +184,7 @@ mod test {
                     }
                 },
                 stake: None,
+                deactivation_flag: None,
             })
         );
 
@@ -194,35 +200,40 @@ mod test {
             credits_observed: 10,
         };
 
-        let stake_state = StakeState::Stake(meta, stake, DeactivationFlag::Empty);
-        let stake_data = serialize(&stake_state).unwrap();
-        assert_eq!(
-            parse_stake(&stake_data).unwrap(),
-            StakeAccountType::Delegated(UiStakeAccount {
-                meta: UiMeta {
-                    rent_exempt_reserve: 42.to_string(),
-                    authorized: UiAuthorized {
-                        staker: pubkey.to_string(),
-                        withdrawer: pubkey.to_string(),
+        let check_stake_state = |flag| {
+            let stake_state = StakeState::Stake(meta, stake, flag);
+            let stake_data = serialize(&stake_state).unwrap();
+            assert_eq!(
+                parse_stake(&stake_data).unwrap(),
+                StakeAccountType::Delegated(UiStakeAccount {
+                    meta: UiMeta {
+                        rent_exempt_reserve: 42.to_string(),
+                        authorized: UiAuthorized {
+                            staker: pubkey.to_string(),
+                            withdrawer: pubkey.to_string(),
+                        },
+                        lockup: UiLockup {
+                            unix_timestamp: 0,
+                            epoch: 1,
+                            custodian: custodian.to_string(),
+                        }
                     },
-                    lockup: UiLockup {
-                        unix_timestamp: 0,
-                        epoch: 1,
-                        custodian: custodian.to_string(),
-                    }
-                },
-                stake: Some(UiStake {
-                    delegation: UiDelegation {
-                        voter: voter_pubkey.to_string(),
-                        stake: 20.to_string(),
-                        activation_epoch: 2.to_string(),
-                        deactivation_epoch: std::u64::MAX.to_string(),
-                        warmup_cooldown_rate: 0.25,
-                    },
-                    credits_observed: 10,
+                    stake: Some(UiStake {
+                        delegation: UiDelegation {
+                            voter: voter_pubkey.to_string(),
+                            stake: 20.to_string(),
+                            activation_epoch: 2.to_string(),
+                            deactivation_epoch: std::u64::MAX.to_string(),
+                            warmup_cooldown_rate: 0.25,
+                        },
+                        credits_observed: 10,
+                    }),
+                    deactivation_flag: Some(flag),
                 })
-            })
-        );
+            );
+        };
+        check_stake_state(DeactivationFlag::Empty);
+        check_stake_state(DeactivationFlag::MustFullyActivateBeforeDeactivationIsPermitted);
 
         let stake_state = StakeState::RewardsPool;
         let stake_data = serialize(&stake_state).unwrap();
