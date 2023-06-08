@@ -159,11 +159,9 @@ mod tests {
         let partition = partition as u128;
         let partitions = partitions as u128;
         let mut start = max_plus_1 * partition / partitions;
-        if partition > 0 {
-            if start * partitions / max_plus_1 == partition - 1 {
-                // partitions don't evenly divide and the start of this partition needs to be 1 greater
-                start += 1;
-            }
+        if partition > 0 && start * partitions / max_plus_1 == partition - 1 {
+            // partitions don't evenly divide and the start of this partition needs to be 1 greater
+            start += 1;
         }
 
         let mut end_inclusive = start + max_plus_1 / partitions - 1;
