@@ -6,12 +6,12 @@ use {
 };
 
 #[derive(Debug, Clone)]
-pub(crate) struct EpochRewardHasher {
+pub(crate) struct EpochRewardsHasher {
     hasher: SipHasher13,
     partitions: usize,
 }
 
-impl EpochRewardHasher {
+impl EpochRewardsHasher {
     /// Use SipHasher13 keyed on the `seed` for calculating epoch reward partition
     pub(crate) fn new(partitions: usize, seed: &Hash) -> Self {
         let mut hasher = SipHasher13::new();
@@ -43,7 +43,7 @@ fn hash_rewards_into_partitions(
     parent_block_hash: &Hash,
     num_partitions: usize,
 ) -> Vec<StakeRewards> {
-    let hasher = EpochRewardHasher::new(num_partitions, parent_block_hash);
+    let hasher = EpochRewardsHasher::new(num_partitions, parent_block_hash);
     let mut result = vec![vec![]; num_partitions];
 
     for reward in stake_rewards {
@@ -180,7 +180,7 @@ mod tests {
     /// Make sure that each time hash_address_to_partition is called, the hasher is copied.
     #[test]
     fn test_hasher_copy() {
-        let hasher = EpochRewardHasher::new(10, &Hash::new_unique());
+        let hasher = EpochRewardsHasher::new(10, &Hash::new_unique());
 
         let pk = Pubkey::new_unique();
 
