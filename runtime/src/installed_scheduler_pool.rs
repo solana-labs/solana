@@ -261,9 +261,7 @@ impl BankWithScheduler {
     }
 
     pub(crate) fn into_bank(self) -> Arc<Bank> {
-        let bank = self.bank_cloned();
-        drop(self);
-        bank
+        self.bank_cloned()
     }
 
     #[must_use]
