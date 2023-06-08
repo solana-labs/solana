@@ -73,6 +73,7 @@ use {
 mod archive_format;
 mod snapshot_storage_rebuilder;
 pub use archive_format::*;
+use std::sync::Mutex;
 
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
 pub const SNAPSHOT_VERSION_FILENAME: &str = "version";
@@ -478,37 +479,52 @@ pub fn move_and_async_delete_path_contents(path: impl AsRef<Path>) {
 }
 
 /// Delete directories/files asynchronously to avoid blocking on it.
-/// First, in sync context, rename the original path to *_deleted,
-/// then spawn a thread to delete the renamed path.
-/// If the process is killed and the deleting process is not done,
-/// the leftover path will be deleted in the next process life, so
-/// there is no file space leaking.
+/// First, in sync context, check if the original path exists, if it
+/// does, rename the original path to *_to_be_deleted.
+/// If there's an in-progress deleting thread for this path, return.
+/// Then spawn a thread to delete the renamed path.
 pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
-    let mut path_delete = PathBuf::new();
-    path_delete.push(&path);
+    lazy_static! {
+        static ref IN_PROGRESS_DELETES: Mutex<HashSet<PathBuf>> = Mutex::new(HashSet::new());
+    };
+
+    // Grab the mutex so no new async delete threads can be spawned for this path.
+    let mut lock = IN_PROGRESS_DELETES.lock().unwrap();
+
+    // If the path does not exist, there's nothing to delete.
+    if !path.as_ref().exists() {
+        return;
+    }
+
+    // If the original path (`pathbuf` here) is already being deleted,
+    // then the path should not be moved and deleted again.
+    if lock.contains(path.as_ref()) {
+        return;
+    }
+
+    let mut path_delete = path.as_ref().to_path_buf();
     path_delete.set_file_name(format!(
         "{}{}",
         path_delete.file_name().unwrap().to_str().unwrap(),
         "_to_be_deleted"
     ));
-
-    if path_delete.exists() {
-        std::fs::remove_dir_all(&path_delete).unwrap();
-    }
-
-    if !path.as_ref().exists() {
-        return;
-    }
-
     if let Err(err) = std::fs::rename(&path, &path_delete) {
         warn!(
             "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
             err.to_string()
         );
-        delete_contents_of_path(path);
+        // Although the delete here is synchronous, we want to prevent another thread
+        // from moving & deleting this directory via `move_and_async_delete_path`.
+        lock.insert(path.as_ref().to_path_buf());
+        drop(lock); // unlock before doing sync delete
+
+        delete_contents_of_path(&path);
+        IN_PROGRESS_DELETES.lock().unwrap().remove(path.as_ref());
         return;
     }
 
+    lock.insert(path_delete.clone());
+    drop(lock);
     Builder::new()
         .name("solDeletePath".to_string())
         .spawn(move || {
@@ -526,6 +542,8 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
                 "background deleting {}... Done, and{measure_delete}",
                 path_delete.display()
             );
+
+            IN_PROGRESS_DELETES.lock().unwrap().remove(&path_delete);
         })
         .expect("spawn background delete thread");
 }
