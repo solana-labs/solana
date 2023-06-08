@@ -1393,7 +1393,7 @@ pub fn main() {
                 .join(",")
                 .split(',')
                 .map(PathBuf::from)
-                .collect::<Vec<_>>()
+                .collect()
         } else {
             vec![ledger_path.join("accounts")]
         };
