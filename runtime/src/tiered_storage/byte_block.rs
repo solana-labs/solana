@@ -82,7 +82,7 @@ impl ByteBlockWriter {
             length += self.write_type(&write_version)?;
         }
 
-        assert_eq!(length, opt_fields.size());
+        debug_assert!(length == opt_fields.size());
 
         Ok(length)
     }
