@@ -22,8 +22,8 @@ pub struct AccountMetaFlags {
     reserved: B29,
 }
 
-impl From<&AccountMetaOptionalFields> for AccountMetaFlags {
-    fn from(optional_fields: &AccountMetaOptionalFields) -> Self {
+impl AccountMetaFlags {
+    fn new_from(optional_fields: &AccountMetaOptionalFields) -> Self {
         let mut flags = AccountMetaFlags::default();
         flags.set_has_rent_epoch(optional_fields.rent_epoch.is_some());
         flags.set_has_account_hash(optional_fields.account_hash.is_some());
@@ -111,7 +111,7 @@ pub mod tests {
     }
 
     fn update_and_verify_flags(opt_fields: &AccountMetaOptionalFields) {
-        let flags: AccountMetaFlags = opt_fields.into();
+        let flags: AccountMetaFlags = AccountMetaFlags::new_from(opt_fields);
         assert_eq!(flags.has_rent_epoch(), opt_fields.rent_epoch.is_some());
         assert_eq!(flags.has_account_hash(), opt_fields.account_hash.is_some());
         assert_eq!(
