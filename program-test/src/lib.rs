@@ -1135,7 +1135,7 @@ impl ProgramTestContext {
                     // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
                     solana_runtime::accounts_db::CalcAccountsHashDataSource::IndexForTests,
                 ))
-                .bank_cloned()
+                .clone()
         };
 
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();

@@ -317,7 +317,7 @@ fn process_batches(
             batches.len()
         );
         rebatch_and_execute_batches(
-            bank.bank(),
+            bank,
             batches,
             transaction_status_sender,
             replay_vote_sender,
@@ -483,7 +483,7 @@ pub fn process_entries_for_tests(
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
     let verify_transaction = {
-        let bank = bank.clone();
+        let bank = bank.clone_with_scheduler();
         move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
             bank.verify_transaction(versioned_tx, TransactionVerificationMode::FullVerification)
         }
@@ -1259,7 +1259,7 @@ fn confirm_slot_entries(
     };
 
     let verify_transaction = {
-        let bank = bank.clone();
+        let bank = bank.clone_with_scheduler();
         move |versioned_tx: VersionedTransaction,
               verification_mode: TransactionVerificationMode|
               -> Result<SanitizedTransaction> {
@@ -1386,7 +1386,7 @@ fn process_bank_0(
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank0.slot(), bank0.hash(), false);
     }
-    cache_block_meta(bank0.bank(), cache_block_meta_sender);
+    cache_block_meta(bank0, cache_block_meta_sender);
 }
 
 // Given a bank, add its children to the pending slots queue if those children slots are
@@ -1540,7 +1540,7 @@ fn load_frozen_forks(
             // Block must be frozen by this point, otherwise `process_single_slot` would
             // have errored above
             assert!(bank.is_frozen());
-            all_banks.insert(bank.slot(), bank.clone());
+            all_banks.insert(bank.slot(), bank.clone_with_scheduler());
             m.stop();
             process_single_slot_us += m.as_us();
 
@@ -1559,7 +1559,7 @@ fn load_frozen_forks(
                             // If there's a cluster confirmed root greater than our last
                             // replayed root, then because the cluster confirmed root should
                             // be descended from our last root, it must exist in `all_banks`
-                            let cluster_root_bank = all_banks.get(&supermajority_root).unwrap().bank_cloned();
+                            let cluster_root_bank = all_banks.get(&supermajority_root).unwrap();
 
                             // cluster root must be a descendant of our root, otherwise something
                             // is drastically wrong
@@ -1571,7 +1571,7 @@ fn load_frozen_forks(
 
                             // Ensure cluster-confirmed root and parents are set as root in blockstore
                             let mut rooted_slots = vec![];
-                            let mut new_root_bank = cluster_root_bank.clone();
+                            let mut new_root_bank = Arc::clone(cluster_root_bank);
                             loop {
                                 if new_root_bank.slot() == root { break; } // Found the last root in the chain, yay!
                                 assert!(new_root_bank.slot() > root);
@@ -1593,7 +1593,7 @@ fn load_frozen_forks(
                         }
                     })
                 } else if blockstore.is_root(slot) {
-                    Some(bank.bank_cloned())
+                    Some(&bank)
                 } else {
                     None
                 }
@@ -1606,7 +1606,7 @@ fn load_frozen_forks(
                 let mut m = Measure::start("set_root");
                 root = new_root_bank.slot();
 
-                leader_schedule_cache.set_root(&new_root_bank);
+                leader_schedule_cache.set_root(new_root_bank);
                 let _ = bank_forks.write().unwrap().set_root(
                     root,
                     accounts_background_request_sender,
@@ -1645,7 +1645,7 @@ fn load_frozen_forks(
             }
 
             process_next_slots(
-                bank.bank(),
+                &bank,
                 &meta,
                 blockstore,
                 leader_schedule_cache,
@@ -1779,7 +1779,7 @@ fn process_single_slot(
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank.slot(), bank.hash(), false);
     }
-    cache_block_meta(bank.bank(), cache_block_meta_sender);
+    cache_block_meta(bank, cache_block_meta_sender);
 
     Ok(())
 }

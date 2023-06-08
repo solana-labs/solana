@@ -254,13 +254,24 @@ impl PohRecorderBank {
     }
 }
 
-#[derive(Clone)]
 pub struct WorkingBank {
     pub bank: BankWithScheduler,
     pub start: Arc<Instant>,
     pub min_tick_height: u64,
     pub max_tick_height: u64,
     pub transaction_index: Option<usize>,
+}
+
+impl Clone for WorkingBank {
+    fn clone(&self) -> Self {
+        Self {
+            bank: self.bank.clone_with_scheduler(),
+            start: self.start.clone(),
+            min_tick_height: self.min_tick_height,
+            max_tick_height: self.max_tick_height,
+            transaction_index: self.transaction_index,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -376,12 +387,12 @@ impl PohRecorder {
     }
 
     pub fn bank(&self) -> Option<Arc<Bank>> {
-        self.working_bank.as_ref().map(|w| w.bank.bank_cloned())
+        self.working_bank.as_ref().map(|w| w.bank.clone())
     }
 
     pub fn bank_start(&self) -> Option<BankStart> {
         self.working_bank.as_ref().map(|w| BankStart {
-            working_bank: w.bank.bank_cloned(),
+            working_bank: w.bank.clone(),
             bank_creation_time: w.start.clone(),
         })
     }
@@ -575,9 +586,9 @@ impl PohRecorder {
 
     pub fn set_bank(&mut self, bank: BankWithScheduler, track_transaction_indexes: bool) {
         assert!(self.working_bank.is_none());
-        self.leader_bank_notifier.set_in_progress(bank.bank());
+        self.leader_bank_notifier.set_in_progress(&bank);
         let working_bank = WorkingBank {
-            bank: bank.clone(),
+            bank: bank.clone_with_scheduler(),
             start: Arc::new(Instant::now()),
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.max_tick_height(),
@@ -595,7 +606,7 @@ impl PohRecorder {
                     "resetting poh due to hashes per tick change detected at {}",
                     working_bank.bank.slot()
                 );
-                self.reset_poh(working_bank.clone().bank.bank_cloned(), false);
+                self.reset_poh(working_bank.clone().bank.clone(), false);
             }
         }
         self.working_bank = Some(working_bank);
@@ -668,9 +679,7 @@ impl PohRecorder {
 
             for tick in &self.tick_cache[..entry_count] {
                 working_bank.bank.register_tick(&tick.0.hash);
-                send_result = self
-                    .sender
-                    .send((working_bank.bank.bank_cloned(), tick.clone()));
+                send_result = self.sender.send((working_bank.bank.clone(), tick.clone()));
                 if send_result.is_err() {
                     break;
                 }
@@ -682,7 +691,7 @@ impl PohRecorder {
                 working_bank.max_tick_height,
                 working_bank.bank.slot()
             );
-            self.start_bank = working_bank.bank.bank_cloned();
+            self.start_bank = working_bank.bank.clone();
             let working_slot = self.start_slot();
             self.start_tick_height = working_slot * self.ticks_per_slot + 1;
             self.clear_bank();
@@ -892,7 +901,7 @@ impl PohRecorder {
                             hash: poh_entry.hash,
                             transactions,
                         };
-                        let bank_clone = working_bank.bank.bank_cloned();
+                        let bank_clone = working_bank.bank.clone();
                         self.sender.send((bank_clone, (entry, self.tick_height)))
                     },
                     "send_poh_entry",

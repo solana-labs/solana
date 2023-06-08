@@ -4942,7 +4942,7 @@ pub mod tests {
                 .read()
                 .unwrap()
                 .working_bank_with_scheduler()
-                .clone();
+                .clone_with_scheduler();
             for (i, root) in roots.iter().enumerate() {
                 let new_bank =
                     Bank::new_from_parent(&parent_bank, parent_bank.collector_id(), *root);
@@ -5000,7 +5000,7 @@ pub mod tests {
                 CommitmentSlots::new_from_slot(self.bank_forks.read().unwrap().highest_slot()),
             );
             *self.block_commitment_cache.write().unwrap() = new_block_commitment;
-            bank.bank_cloned()
+            bank.clone()
         }
 
         fn store_vote_account(&self, vote_pubkey: &Pubkey, vote_state: VoteState) {

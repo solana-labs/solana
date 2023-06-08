@@ -76,7 +76,7 @@ pub struct BankForks {
 impl Index<u64> for BankForks {
     type Output = Arc<Bank>;
     fn index(&self, bank_slot: Slot) -> &Self::Output {
-        self.banks[&bank_slot].bank()
+        &self.banks[&bank_slot]
     }
 }
 
@@ -89,7 +89,7 @@ impl BankForks {
     pub fn banks(&self) -> HashMap<Slot, Arc<Bank>> {
         self.banks
             .iter()
-            .map(|(&k, b)| (k, b.bank_cloned()))
+            .map(|(&k, b)| (k, <Arc<Bank>>::clone(b)))
             .collect()
     }
 
@@ -126,7 +126,7 @@ impl BankForks {
         self.banks
             .iter()
             .filter(|(_, b)| b.is_frozen())
-            .map(|(&k, b)| (k, b.bank_cloned()))
+            .map(|(&k, b)| (k, <Arc<Bank>>::clone(b)))
             .collect()
     }
 
@@ -139,11 +139,11 @@ impl BankForks {
     }
 
     pub fn get(&self, bank_slot: Slot) -> Option<Arc<Bank>> {
-        self.get_with_scheduler(bank_slot).map(|b| b.bank_cloned())
+        self.get_with_scheduler(bank_slot).map(|b| b.clone())
     }
 
     pub fn get_with_scheduler(&self, bank_slot: Slot) -> Option<BankWithScheduler> {
-        self.banks.get(&bank_slot).cloned()
+        self.banks.get(&bank_slot).map(|b| b.clone_with_scheduler())
     }
 
     pub fn get_with_checked_hash(
@@ -210,7 +210,9 @@ impl BankForks {
         } else {
             BankWithScheduler::new(bank.clone(), None)
         };
-        let prev = self.banks.insert(bank.slot(), bank_with_scheduler.clone());
+        let prev = self
+            .banks
+            .insert(bank.slot(), bank_with_scheduler.clone_with_scheduler());
         assert!(prev.is_none());
         let slot = bank.slot();
         self.descendants.entry(slot).or_default();
@@ -266,11 +268,10 @@ impl BankForks {
         // ensure atomic ordering correctness.
         self.root.store(root, Ordering::Release);
 
-        let root_bank = self
+        let root_bank = &**self
             .banks
             .get(&root)
-            .expect("root bank didn't exist in bank_forks")
-            .bank();
+            .expect("root bank didn't exist in bank_forks");
         let new_epoch = root_bank.epoch();
         if old_epoch != new_epoch {
             info!(

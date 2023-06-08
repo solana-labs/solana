@@ -210,7 +210,6 @@ impl SchedulingContext {
 
 // tiny wrapper to ensure to call wait_for_termination() via ::drop() inside
 // BankForks::set_root()'s pruning.
-#[derive(Clone)]
 pub struct BankWithScheduler {
     inner: Arc<BankWithSchedulerInner>,
 }
@@ -244,16 +243,14 @@ impl BankWithScheduler {
         Self::new(bank, None)
     }
 
-    pub fn bank_cloned(&self) -> Arc<Bank> {
-        self.bank().clone()
-    }
-
-    pub fn bank(&self) -> &Arc<Bank> {
-        &self.inner.bank
+    pub fn clone_with_scheduler(&self) -> BankWithScheduler {
+        BankWithScheduler {
+            inner: self.inner.clone(),
+        }
     }
 
     pub fn register_tick(&self, hash: &Hash) {
-        self.bank().register_tick(hash, &self.inner.scheduler);
+        self.inner.bank.register_tick(hash, &self.inner.scheduler);
     }
 
     pub fn has_installed_scheduler(&self) -> bool {
@@ -261,7 +258,7 @@ impl BankWithScheduler {
     }
 
     pub(crate) fn into_bank(self) -> Arc<Bank> {
-        self.bank_cloned()
+        self.inner.bank.clone()
     }
 
     #[must_use]

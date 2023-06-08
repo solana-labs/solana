@@ -2709,7 +2709,7 @@ impl ReplayStage {
                 // report cost tracker stats
                 cost_update_sender
                     .send(CostUpdate::FrozenBank {
-                        bank: bank.bank_cloned(),
+                        bank: <Arc<Bank>>::clone(bank),
                     })
                     .unwrap_or_else(|err| {
                         warn!("cost_update_sender failed sending bank stats: {:?}", err)
@@ -2749,7 +2749,7 @@ impl ReplayStage {
                 );
                 if let Some(sender) = bank_notification_sender {
                     sender
-                        .send(BankNotification::Frozen(bank.bank_cloned()))
+                        .send(BankNotification::Frozen(<Arc<Bank>>::clone(bank)))
                         .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
                 }
                 blockstore_processor::cache_block_meta(bank, cache_block_meta_sender);
@@ -4460,7 +4460,7 @@ pub(crate) mod tests {
                 .or_insert_with(|| ForkProgress::new(bank1.last_blockhash(), None, None, 0, 0));
             let shreds = shred_to_insert(
                 &validator_keypairs.values().next().unwrap().node_keypair,
-                bank1.bank_cloned(),
+                bank1.clone(),
             );
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
