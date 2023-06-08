@@ -839,7 +839,7 @@ lazy_static! {
         (checked_arithmetic_in_fee_validation::id(), "checked arithmetic in fee validation #31273"),
         (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
         (last_restart_slot_sysvar::id(), "enable new sysvar last_restart_slot"),
-        (round_compute_unit_price::id(), "round down compute-unit-price to the nearest lamports #31453"),
+        (round_compute_unit_price::id(), "round down compute-unit-price to the nearest 1_000 micro-lamports #31453"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
