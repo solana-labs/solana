@@ -7,9 +7,9 @@ proofs that are tailored to work with Pedersen commitments and ElGamal
 encryption over the elliptic curve
 [curve25519](https://www.rfc-editor.org/rfc/rfc7748#section-4.1). The program
 was originally designed to verify the zero-knowledge proofs that are required
-for the [SPL Token-2022](https://spl.solana.com/token-2022) program. However,
+for the [SPL Token 2022](https://spl.solana.com/token-2022) program. However,
 the zero-knowledge proofs in the proof program can be used in more general
-contexts outside of Token-2022 as well.
+contexts outside of SPL Token 2022 as well.
 
 - Program id: `ZkTokenProof1111111111111111111111111111111`
 - Instructions:
@@ -45,7 +45,7 @@ treatment of Pedersen commitment and the (twisted) ElGamal encryption schemes.
 - [Notes](./zk-docs/twisted_elgamal.pdf) on the twisted ElGamal encryption
 - A technical
   [overview](https://github.com/solana-labs/solana-program-library/blob/master/token/zk-token-protocol-paper/part1.pdf)
-  of the SPL Token-2022 confidential extension
+  of the SPL Token 2022 confidential extension
 - Pretty Good Confidentiality [research paper](https://eprint.iacr.org/2019/319)
 
 The ZK Token proof program contains proof verification instructions on various
@@ -78,7 +78,7 @@ The ZK Token proof program processes a proof instruction in two steps:
 The simplest way to use a proof instruction is to execute it without producing a
 context state account. In this case, the proof instruction can be included as
 part of a larger Solana transaction that contains instructions of other Solana
-programs. Programs such as the Token-2022 program should directly access the
+programs. Programs such as the SPL Token 2022 program should directly access the
 context data from the proof instruction data and use it in its program logic.
 
 Alternatively, a proof instruction can be executed to produce a context state
