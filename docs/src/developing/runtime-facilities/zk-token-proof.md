@@ -14,9 +14,6 @@ contexts outside of SPL Token 2022 as well.
 - Program id: `ZkTokenProof1111111111111111111111111111111`
 - Instructions:
   [ProofInstruction](https://github.com/solana-labs/solana/blob/master/zk-token-sdk/src/zk_token_proof_instruction.rs)
-- Status: The program is in active development and is not yet available. Please
-  follow the feature gate `zk1snxsc6Fh3wsGNbbHAJNHiJoYgF29mMnTSusGx5EJ` for
-  updates.
 
 ### Pedersen commitments and ElGamal encryption
 
@@ -93,7 +90,7 @@ too large to fit inside a single transaction.
 The ZK Token proof program supports the following the list of zero-knowledge
 proofs.
 
-#### Proofs on ElGamal ciphertexts
+#### Proofs on ElGamal encryption
 
 - `VerifyPubkeyValidity`:
 
