@@ -2,21 +2,16 @@
 use crate::{
     encryption::{
         elgamal::{DecryptHandle, ElGamalPubkey},
+        grouped_elgamal::{GroupedElGamal, GroupedElGamalCiphertext},
         pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
     },
     zk_token_elgamal::pod,
 };
 
-// TransferAmountEncryption
 #[derive(Clone)]
 #[repr(C)]
 #[cfg(not(target_os = "solana"))]
-pub struct TransferAmountEncryption {
-    pub commitment: PedersenCommitment,
-    pub source_handle: DecryptHandle,
-    pub destination_handle: DecryptHandle,
-    pub auditor_handle: DecryptHandle,
-}
+pub struct TransferAmountEncryption(GroupedElGamalCiphertext<3>);
 
 #[cfg(not(target_os = "solana"))]
 impl TransferAmountEncryption {
@@ -26,15 +21,30 @@ impl TransferAmountEncryption {
         destination_pubkey: &ElGamalPubkey,
         auditor_pubkey: &ElGamalPubkey,
     ) -> (Self, PedersenOpening) {
-        let (commitment, opening) = Pedersen::new(amount);
-        let transfer_amount_encryption = Self {
-            commitment,
-            source_handle: source_pubkey.decrypt_handle(&opening),
-            destination_handle: destination_pubkey.decrypt_handle(&opening),
-            auditor_handle: auditor_pubkey.decrypt_handle(&opening),
-        };
+        let opening = PedersenOpening::new_rand();
+        let grouped_ciphertext = GroupedElGamal::<3>::encrypt_with(
+            [source_pubkey, destination_pubkey, auditor_pubkey],
+            amount,
+            &opening,
+        );
 
-        (transfer_amount_encryption, opening)
+        (Self(grouped_ciphertext), opening)
+    }
+
+    pub fn get_commitment(&self) -> &PedersenCommitment {
+        &self.0.commitment
+    }
+
+    pub fn get_source_handle(&self) -> &DecryptHandle {
+        &self.0.handles.get(0).unwrap()
+    }
+
+    pub fn get_destination_handle(&self) -> &DecryptHandle {
+        &self.0.handles.get(1).unwrap()
+    }
+
+    pub fn get_auditor_handle(&self) -> &DecryptHandle {
+        &self.0.handles.get(2).unwrap()
     }
 
     pub fn to_pod(&self) -> pod::TransferAmountEncryption {
