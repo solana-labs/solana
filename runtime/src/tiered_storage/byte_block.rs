@@ -71,20 +71,20 @@ impl ByteBlockWriter {
         &mut self,
         opt_fields: &AccountMetaOptionalFields,
     ) -> std::io::Result<usize> {
-        let mut length = 0;
+        let mut size = 0;
         if let Some(rent_epoch) = opt_fields.rent_epoch {
-            length += self.write_type(&rent_epoch)?;
+            size += self.write_type(&rent_epoch)?;
         }
         if let Some(hash) = opt_fields.account_hash {
-            length += self.write_type(&hash)?;
+            size += self.write_type(&hash)?;
         }
         if let Some(write_version) = opt_fields.write_version {
-            length += self.write_type(&write_version)?;
+            size += self.write_type(&write_version)?;
         }
 
-        debug_assert!(length == opt_fields.size());
+        debug_assert_eq!(size, opt_fields.size());
 
-        Ok(length)
+        Ok(size)
     }
 
     /// Write the specified typed bytes to the internal buffer of the
