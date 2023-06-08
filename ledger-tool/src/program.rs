@@ -15,9 +15,7 @@ use {
     },
     solana_program_runtime::{
         invoke_context::InvokeContext,
-        loaded_programs::{
-            LoadProgramMetrics, LoadedProgram, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET,
-        },
+        loaded_programs::{LoadProgramMetrics, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET},
         with_mock_invoke_context,
     },
     solana_rbpf::{
@@ -540,22 +538,8 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
     let mut loaded_programs =
         LoadedProgramsForTxBatch::new(bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET);
     for key in cached_account_keys {
-        let program = bank.load_program(&key).unwrap_or_else(|err| {
-            // Create a tombstone for the program in the cache
-            debug!("Failed to load program {}, error {:?}", key, err);
-            Arc::new(LoadedProgram::new_tombstone(
-                0,
-                LoadedProgramType::FailedVerification(
-                    bank.loaded_programs_cache
-                        .read()
-                        .unwrap()
-                        .program_runtime_environment_v1
-                        .clone(),
-                ),
-            ))
-        });
+        loaded_programs.replenish(key, bank.load_program(&key));
         debug!("Loaded program {}", key);
-        loaded_programs.replenish(key, program);
     }
     invoke_context.programs_loaded_for_tx_batch = &loaded_programs;
 
