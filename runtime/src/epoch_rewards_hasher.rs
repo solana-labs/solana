@@ -13,9 +13,9 @@ pub(crate) struct EpochRewardHasher {
 
 impl EpochRewardHasher {
     /// Use SipHasher13 keyed on the `seed` for calculating epoch reward partition
-    pub(crate) fn new(partitions: usize, hash: &Hash) -> Self {
+    pub(crate) fn new(partitions: usize, seed: &Hash) -> Self {
         let mut hasher = SipHasher13::new();
-        hasher.write(hash.as_ref());
+        hasher.write(seed.as_ref());
         Self { hasher, partitions }
     }
 
