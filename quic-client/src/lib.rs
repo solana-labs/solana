@@ -79,6 +79,7 @@ impl ConnectionPool for QuicPool {
     }
 }
 
+#[derive(Clone)]
 pub struct QuicConfig {
     client_certificate: Arc<QuicClientCertificate>,
     maybe_staked_nodes: Option<Arc<RwLock<StakedNodes>>>,
@@ -204,7 +205,7 @@ impl ConnectionManager for QuicConnectionManager {
     }
 
     fn new_connection_config(&self) -> QuicConfig {
-        QuicConfig::new().unwrap()
+        self.connection_config.clone()
     }
 }
 
