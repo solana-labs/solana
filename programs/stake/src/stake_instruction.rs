@@ -425,24 +425,17 @@ declare_process_instruction!(
             }
             Ok(StakeInstruction::DeactivateDelinquent) => {
                 let mut me = get_stake_account()?;
-                if invoke_context
-                    .feature_set
-                    .is_active(&feature_set::stake_deactivate_delinquent_instruction::id())
-                {
-                    instruction_context.check_number_of_instruction_accounts(3)?;
+                instruction_context.check_number_of_instruction_accounts(3)?;
 
-                    let clock = invoke_context.get_sysvar_cache().get_clock()?;
-                    deactivate_delinquent(
-                        transaction_context,
-                        instruction_context,
-                        &mut me,
-                        1,
-                        2,
-                        clock.epoch,
-                    )
-                } else {
-                    Err(InstructionError::InvalidInstructionData)
-                }
+                let clock = invoke_context.get_sysvar_cache().get_clock()?;
+                deactivate_delinquent(
+                    transaction_context,
+                    instruction_context,
+                    &mut me,
+                    1,
+                    2,
+                    clock.epoch,
+                )
             }
             Ok(StakeInstruction::Redelegate) => {
                 let mut me = get_stake_account()?;
