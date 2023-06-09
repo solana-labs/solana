@@ -18,7 +18,7 @@ use {
             pedersen::PedersenOpening,
         },
         errors::ProofError,
-        sigma_proofs::validity_proof::GroupedCiphertext2HandlesValidityProof,
+        sigma_proofs::grouped_ciphertext_validity_proof::GroupedCiphertext2HandlesValidityProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,

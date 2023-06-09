@@ -14,9 +14,9 @@ use {
         },
         range_proof::RangeProof,
         sigma_proofs::{
+            batched_grouped_ciphertext_validity_proof::BatchedGroupedCiphertext2HandlesValidityProof,
             ciphertext_commitment_equality_proof::CiphertextCommitmentEqualityProof,
             fee_proof::FeeSigmaProof,
-            validity_proof::BatchedGroupedCiphertext2HandlesValidityProof,
         },
         transcript::TranscriptProtocol,
     },

@@ -20,7 +20,7 @@ use {
             pedersen::PedersenOpening,
         },
         errors::ProofError,
-        sigma_proofs::validity_proof::BatchedGroupedCiphertext2HandlesValidityProof,
+        sigma_proofs::batched_grouped_ciphertext_validity_proof::BatchedGroupedCiphertext2HandlesValidityProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,
