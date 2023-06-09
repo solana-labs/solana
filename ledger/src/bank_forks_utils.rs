@@ -239,6 +239,23 @@ fn bank_forks_from_snapshot(
                     full_snapshot_archive_info.slot(),
                 );
 
+            // If a newer snapshot archive was downloaded, it is possible that the snapshot
+            // slot is higher than the local bank we just loaded.  It is unlikely the user
+            // intended to still boot from local state in this scenario.
+            if bank.slot() < full_snapshot_archive_info.slot()
+                || Some(bank.slot())
+                    < incremental_snapshot_archive_info
+                        .as_ref()
+                        .map(SnapshotArchiveInfoGetter::slot)
+            {
+                error!(
+                    "Attempting to boot from local state at a slot *older* than the latest \
+                     snapshot archive is not supported. Either remove the snapshot archive \
+                     or remove the --boot-from-local-state CLI flag."
+                );
+                process::exit(1);
+            }
+
             (
                 bank,
                 full_snapshot_archive_info,
