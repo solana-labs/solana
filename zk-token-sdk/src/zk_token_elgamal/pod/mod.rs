@@ -24,8 +24,8 @@ pub use {
     range_proof::{RangeProofU128, RangeProofU256, RangeProofU64},
     sigma_proofs::{
         AggregatedValidityProof, CiphertextCiphertextEqualityProof,
-        CiphertextCommitmentEqualityProof, FeeSigmaProof, PubkeyValidityProof, ValidityProof,
-        ZeroBalanceProof,
+        CiphertextCommitmentEqualityProof, FeeSigmaProof, GroupedCiphertext2HandlesValidityProof,
+        PubkeyValidityProof, ZeroBalanceProof,
     },
 };
 

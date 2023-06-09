@@ -9,7 +9,7 @@ use crate::sigma_proofs::{
     pubkey_proof::PubkeyValidityProof as DecodedPubkeyValidityProof,
     validity_proof::{
         AggregatedValidityProof as DecodedAggregatedValidityProof,
-        ValidityProof as DecodedValidityProof,
+        GroupedCiphertext2HandlesValidityProof as DecodedGroupedCiphertext2HandlesValidityProof,
     },
     zero_balance_proof::ZeroBalanceProof as DecodedZeroBalanceProof,
 };
@@ -57,23 +57,27 @@ impl TryFrom<CiphertextCiphertextEqualityProof> for DecodedCiphertextCiphertextE
     }
 }
 
-/// The `ValidityProof` type as a `Pod`.
+/// The `GroupedCiphertext2HandlesValidityProof` type as a `Pod`.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct ValidityProof(pub [u8; 160]);
+pub struct GroupedCiphertext2HandlesValidityProof(pub [u8; 160]);
 
 #[cfg(not(target_os = "solana"))]
-impl From<DecodedValidityProof> for ValidityProof {
-    fn from(decoded_proof: DecodedValidityProof) -> Self {
+impl From<DecodedGroupedCiphertext2HandlesValidityProof>
+    for GroupedCiphertext2HandlesValidityProof
+{
+    fn from(decoded_proof: DecodedGroupedCiphertext2HandlesValidityProof) -> Self {
         Self(decoded_proof.to_bytes())
     }
 }
 
 #[cfg(not(target_os = "solana"))]
-impl TryFrom<ValidityProof> for DecodedValidityProof {
+impl TryFrom<GroupedCiphertext2HandlesValidityProof>
+    for DecodedGroupedCiphertext2HandlesValidityProof
+{
     type Error = ValidityProofError;
 
-    fn try_from(pod_proof: ValidityProof) -> Result<Self, Self::Error> {
+    fn try_from(pod_proof: GroupedCiphertext2HandlesValidityProof) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)
     }
 }
@@ -171,8 +175,8 @@ unsafe impl Pod for CiphertextCommitmentEqualityProof {}
 unsafe impl Zeroable for CiphertextCiphertextEqualityProof {}
 unsafe impl Pod for CiphertextCiphertextEqualityProof {}
 
-unsafe impl Zeroable for ValidityProof {}
-unsafe impl Pod for ValidityProof {}
+unsafe impl Zeroable for GroupedCiphertext2HandlesValidityProof {}
+unsafe impl Pod for GroupedCiphertext2HandlesValidityProof {}
 
 unsafe impl Zeroable for AggregatedValidityProof {}
 unsafe impl Pod for AggregatedValidityProof {}

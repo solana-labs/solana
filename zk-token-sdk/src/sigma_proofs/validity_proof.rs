@@ -32,12 +32,12 @@ use {
     merlin::Transcript,
 };
 
-/// The ciphertext validity proof.
+/// The grouped ciphertext validity proof for 2 handles.
 ///
 /// Contains all the elliptic curve and scalar components that make up the sigma protocol.
 #[allow(non_snake_case)]
 #[derive(Clone)]
-pub struct ValidityProof {
+pub struct GroupedCiphertext2HandlesValidityProof {
     Y_0: CompressedRistretto,
     Y_1: CompressedRistretto,
     Y_2: CompressedRistretto,
@@ -47,8 +47,8 @@ pub struct ValidityProof {
 
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
-impl ValidityProof {
-    /// The ciphertext validity proof constructor.
+impl GroupedCiphertext2HandlesValidityProof {
+    /// The grouped ciphertext validity proof for 2 handles.
     ///
     /// The function does *not* hash the public keys, commitment, or decryption handles into the
     /// transcript. For security, the caller (the main protocol) should hash these public
@@ -111,7 +111,7 @@ impl ValidityProof {
         }
     }
 
-    /// The ciphertext validity proof verifier.
+    /// The grouped ciphertext validity proof for 2 handles verifier.
     ///
     /// * `commitment` - The Pedersen commitment
     /// * `(destination_pubkey, auditor_pubkey)` - The ElGamal pubkeys associated with the decryption
@@ -221,7 +221,7 @@ impl ValidityProof {
         let z_x =
             Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
 
-        Ok(ValidityProof {
+        Ok(GroupedCiphertext2HandlesValidityProof {
             Y_0,
             Y_1,
             Y_2,
@@ -242,7 +242,7 @@ impl ValidityProof {
 /// handles.
 #[allow(non_snake_case)]
 #[derive(Clone)]
-pub struct AggregatedValidityProof(ValidityProof);
+pub struct AggregatedValidityProof(GroupedCiphertext2HandlesValidityProof);
 
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
@@ -264,7 +264,7 @@ impl AggregatedValidityProof {
         let aggregated_message = amount_lo.into() + amount_hi.into() * t;
         let aggregated_opening = opening_lo + &(opening_hi * &t);
 
-        AggregatedValidityProof(ValidityProof::new(
+        AggregatedValidityProof(GroupedCiphertext2HandlesValidityProof::new(
             (destination_pubkey, auditor_pubkey),
             aggregated_message,
             &aggregated_opening,
@@ -310,7 +310,7 @@ impl AggregatedValidityProof {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ValidityProofError> {
-        ValidityProof::from_bytes(bytes).map(Self)
+        GroupedCiphertext2HandlesValidityProof::from_bytes(bytes).map(Self)
     }
 }
 
@@ -335,7 +335,7 @@ mod test {
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
-        let proof = ValidityProof::new(
+        let proof = GroupedCiphertext2HandlesValidityProof::new(
             (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
@@ -367,7 +367,7 @@ mod test {
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
-        let proof = ValidityProof::new(
+        let proof = GroupedCiphertext2HandlesValidityProof::new(
             (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
@@ -396,7 +396,7 @@ mod test {
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
-        let proof = ValidityProof::new(
+        let proof = GroupedCiphertext2HandlesValidityProof::new(
             (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
@@ -426,7 +426,7 @@ mod test {
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
-        let proof = ValidityProof::new(
+        let proof = GroupedCiphertext2HandlesValidityProof::new(
             (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
@@ -455,7 +455,7 @@ mod test {
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
-        let proof = ValidityProof::new(
+        let proof = GroupedCiphertext2HandlesValidityProof::new(
             (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
