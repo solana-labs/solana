@@ -462,7 +462,7 @@ dependencies = [
  "matchit",
  "memchr",
  "mime",
- "percent-encoding 2.2.0",
+ "percent-encoding 2.3.0",
  "pin-project-lite",
  "rustversion",
  "serde",
@@ -1844,11 +1844,11 @@ checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
 name = "form_urlencoded"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9c384f161156f5260c24a097c56119f9be8c798586aecc13afbcbe7b7e26bf8"
+checksum = "a62bc1cf6f830c2ec14a513a9fb124d0a213a629668a4186f329db21fe045652"
 dependencies = [
- "percent-encoding 2.2.0",
+ "percent-encoding 2.3.0",
 ]
 
 [[package]]
@@ -2435,9 +2435,9 @@ dependencies = [
 
 [[package]]
 name = "idna"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e14ddfc70884202db2244c223200c204c2bda1bc6e0998d11b5e024d657209e6"
+checksum = "7d20d6b07bfbc108882d88ed8e37d39636dcc260e15e30c45e6ba089610b917c"
 dependencies = [
  "unicode-bidi",
  "unicode-normalization",
@@ -2484,9 +2484,9 @@ dependencies = [
 
 [[package]]
 name = "indicatif"
-version = "0.17.4"
+version = "0.17.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db45317f37ef454e6519b6c3ed7d377e5f23346f0823f86e65ca36912d1d0ef8"
+checksum = "8ff8cc23a7393a397ed1d7f56e6365cba772aba9f9912ab968b03043c395d057"
 dependencies = [
  "console",
  "instant",
@@ -2715,9 +2715,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "libc"
-version = "0.2.144"
+version = "0.2.146"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b00cc1c228a6782d0f076e7b232802e0c5689d41bb5df366f2a6b6621cfdfe1"
+checksum = "f92be4933c13fd498862a9e02a3055f8a8d9c039ce33db97306fd5a6caa7f29b"
 
 [[package]]
 name = "libloading"
@@ -3081,8 +3081,8 @@ checksum = "61807f77802ff30975e01f4f071c8ba10c022052f98b3294119f3e615d13e5be"
 
 [[package]]
 name = "ntapi"
-version = "0.3.6"
-source = "git+https://github.com/solana-labs/ntapi?rev=5980bbab2e0501a8100eb88c12222d664ccb3a0a#5980bbab2e0501a8100eb88c12222d664ccb3a0a"
+version = "0.3.7"
+source = "git+https://github.com/solana-labs/ntapi?rev=97ede981a1777883ff86d142b75024b023f04fad#97ede981a1777883ff86d142b75024b023f04fad"
 dependencies = [
  "winapi 0.3.9",
 ]
@@ -3265,9 +3265,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.17.2"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9670a07f94779e00908f3e686eab508878ebb390ba6e604d3a284c00e8d0487b"
+checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
 
 [[package]]
 name = "opaque-debug"
@@ -3283,9 +3283,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openssl"
-version = "0.10.53"
+version = "0.10.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12df40a956736488b7b44fe79fe12d4f245bb5b3f5a1f6095e499760015be392"
+checksum = "69b3f656a17a6cbc115b5c7a40c616947d213ba182135b014d6051b73ab6f019"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -3348,7 +3348,7 @@ dependencies = [
  "futures-util",
  "js-sys",
  "lazy_static",
- "percent-encoding 2.2.0",
+ "percent-encoding 2.3.0",
  "pin-project",
  "rand 0.8.5",
  "thiserror",
@@ -3492,9 +3492,9 @@ checksum = "31010dd2e1ac33d5b46a5b413495239882813e0369f8ed8a5e266f173602f831"
 
 [[package]]
 name = "percent-encoding"
-version = "2.2.0"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "478c572c3d73181ff3c2539045f6eb99e5491218eae919370993b890cdbdd98e"
+checksum = "9b2a4787296e9989611394c33f193f676704af1686e70b8f8033ab5ba9a35a94"
 
 [[package]]
 name = "percentage"
@@ -3914,7 +3914,7 @@ version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d464fae65fff2680baf48019211ce37aaec0c78e9264c84a3e484717f965104e"
 dependencies = [
- "percent-encoding 2.2.0",
+ "percent-encoding 2.3.0",
 ]
 
 [[package]]
@@ -4206,9 +4206,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.8.3"
+version = "1.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81ca098a9821bd52d6b24fd8b10bd081f47d39c22778cafaa75a2857a62c6390"
+checksum = "d0ab3ca65655bb1e41f2a8c8cd662eb4fb035e67c3f78da1d61dffe89d07300f"
 dependencies = [
  "aho-corasick 1.0.1",
  "memchr",
@@ -4257,7 +4257,7 @@ dependencies = [
  "mime",
  "native-tls",
  "once_cell",
- "percent-encoding 2.2.0",
+ "percent-encoding 2.3.0",
  "pin-project-lite",
  "rustls 0.20.8",
  "rustls-pemfile 1.0.0",
@@ -4269,7 +4269,7 @@ dependencies = [
  "tokio-rustls 0.23.3",
  "tokio-util 0.7.1",
  "tower-service",
- "url 2.3.1",
+ "url 2.4.0",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -5242,7 +5242,7 @@ dependencies = [
  "thiserror",
  "tiny-bip39",
  "uriparse",
- "url 2.3.1",
+ "url 2.4.0",
 ]
 
 [[package]]
@@ -5260,7 +5260,7 @@ dependencies = [
  "thiserror",
  "tiny-bip39",
  "uriparse",
- "url 2.3.1",
+ "url 2.4.0",
 ]
 
 [[package]]
@@ -5327,7 +5327,7 @@ dependencies = [
  "serde_yaml 0.9.21",
  "solana-clap-utils",
  "solana-sdk",
- "url 2.3.1",
+ "url 2.4.0",
 ]
 
 [[package]]
@@ -5821,7 +5821,7 @@ dependencies = [
  "solana-version",
  "tar",
  "tempfile",
- "url 2.3.1",
+ "url 2.4.0",
  "winapi 0.3.9",
  "winreg",
 ]
@@ -6100,7 +6100,7 @@ dependencies = [
  "solana-sdk",
  "solana-version",
  "tokio",
- "url 2.3.1",
+ "url 2.4.0",
 ]
 
 [[package]]
@@ -6309,7 +6309,7 @@ dependencies = [
  "tokio-stream",
  "tokio-tungstenite",
  "tungstenite",
- "url 2.3.1",
+ "url 2.4.0",
 ]
 
 [[package]]
@@ -7482,15 +7482,16 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.5.0"
+version = "3.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9fbec84f381d5795b08656e4912bec604d162bff9291d6189a78f4c8ab87998"
+checksum = "31c0432476357e58790aaa47a8efb0c5138f137343f3b5f23bd36a27e3b0a6d6"
 dependencies = [
+ "autocfg",
  "cfg-if 1.0.0",
  "fastrand",
  "redox_syscall 0.3.5",
  "rustix",
- "windows-sys 0.45.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -7835,7 +7836,7 @@ dependencies = [
  "http-body",
  "hyper",
  "hyper-timeout",
- "percent-encoding 2.2.0",
+ "percent-encoding 2.3.0",
  "pin-project",
  "prost 0.9.0",
  "prost-derive 0.9.0",
@@ -7868,7 +7869,7 @@ dependencies = [
  "http-body",
  "hyper",
  "hyper-timeout",
- "percent-encoding 2.2.0",
+ "percent-encoding 2.3.0",
  "pin-project",
  "prost 0.11.9",
  "prost-derive 0.11.9",
@@ -8054,7 +8055,7 @@ dependencies = [
  "rustls 0.20.8",
  "sha-1 0.10.0",
  "thiserror",
- "url 2.3.1",
+ "url 2.4.0",
  "utf-8",
  "webpki 0.22.0",
  "webpki-roots",
@@ -8089,9 +8090,9 @@ dependencies = [
 
 [[package]]
 name = "unicode-bidi"
-version = "0.3.7"
+version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a01404663e3db436ed2746d9fefef640d868edae3cceb81c3b8d5732fda678f"
+checksum = "92888ba5573ff080736b3648696b70cafad7d250551175acbaa4e0385b3e1460"
 
 [[package]]
 name = "unicode-ident"
@@ -8101,9 +8102,9 @@ checksum = "15c61ba63f9235225a22310255a29b806b907c9b8c964bcbd0a2c70f3f2deea7"
 
 [[package]]
 name = "unicode-normalization"
-version = "0.1.19"
+version = "0.1.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d54590932941a9e9266f0832deed84ebe1bf2e4c9e4a3554d393d18f5e854bf9"
+checksum = "5c5713f0fc4b5db668a2ac63cdb7bb4469d8c9fed047b1d0292cc7b0ce2ba921"
 dependencies = [
  "tinyvec",
 ]
@@ -8186,13 +8187,13 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.3.1"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d68c799ae75762b8c3fe375feb6600ef5602c883c5d21eb51c09f22b83c4643"
+checksum = "50bff7831e19200a85b17131d085c25d7811bc4e186efdaf54bbd132994a88cb"
 dependencies = [
  "form_urlencoded",
- "idna 0.3.0",
- "percent-encoding 2.2.0",
+ "idna 0.4.0",
+ "percent-encoding 2.3.0",
 ]
 
 [[package]]

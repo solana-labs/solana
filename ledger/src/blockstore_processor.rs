@@ -632,6 +632,8 @@ pub struct ProcessOptions {
     /// true if after processing the contents of the blockstore at startup, we should run an accounts hash calc
     /// This is useful for debugging.
     pub run_final_accounts_hash_calc: bool,
+    /// Enable booting from state already on disk, instead of extracting if from a snapshot archive.
+    pub boot_from_local_state: bool,
 }
 
 pub fn test_process_blockstore(

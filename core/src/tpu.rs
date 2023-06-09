@@ -15,6 +15,7 @@ use {
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
         staked_nodes_updater_service::StakedNodesUpdaterService,
+        tpu_entry_notifier::TpuEntryNotifier,
         validator::GeneratorConfig,
     },
     crossbeam_channel::{unbounded, Receiver},
@@ -70,6 +71,7 @@ pub struct Tpu {
     broadcast_stage: BroadcastStage,
     tpu_quic_t: thread::JoinHandle<()>,
     tpu_forwards_quic_t: thread::JoinHandle<()>,
+    tpu_entry_notifier: Option<TpuEntryNotifier>,
     staked_nodes_updater_service: StakedNodesUpdaterService,
     tracer_thread_hdl: TracerThread,
 }
@@ -84,7 +86,7 @@ impl Tpu {
         sockets: TpuSockets,
         subscriptions: &Arc<RpcSubscriptions>,
         transaction_status_sender: Option<TransactionStatusSender>,
-        _entry_notification_sender: Option<EntryNotifierSender>,
+        entry_notification_sender: Option<EntryNotifierSender>,
         blockstore: &Arc<Blockstore>,
         broadcast_type: &BroadcastStageType,
         exit: Arc<AtomicBool>,
@@ -229,6 +231,20 @@ impl Tpu {
             prioritization_fee_cache,
         );
 
+        let (entry_receiver, tpu_entry_notifier) =
+            if let Some(entry_notification_sender) = entry_notification_sender {
+                let (broadcast_entry_sender, broadcast_entry_receiver) = unbounded();
+                let tpu_entry_notifier = TpuEntryNotifier::new(
+                    entry_receiver,
+                    entry_notification_sender,
+                    broadcast_entry_sender,
+                    exit.clone(),
+                );
+                (broadcast_entry_receiver, Some(tpu_entry_notifier))
+            } else {
+                (entry_receiver, None)
+            };
+
         let broadcast_stage = broadcast_type.new_broadcast_stage(
             broadcast_sockets,
             cluster_info.clone(),
@@ -249,6 +265,7 @@ impl Tpu {
             broadcast_stage,
             tpu_quic_t,
             tpu_forwards_quic_t,
+            tpu_entry_notifier,
             staked_nodes_updater_service,
             tracer_thread_hdl,
         }
@@ -268,6 +285,9 @@ impl Tpu {
         let broadcast_result = self.broadcast_stage.join();
         for result in results {
             result?;
+        }
+        if let Some(tpu_entry_notifier) = self.tpu_entry_notifier {
+            tpu_entry_notifier.join()?;
         }
         let _ = broadcast_result?;
         if let Some(tracer_thread_hdl) = self.tracer_thread_hdl {

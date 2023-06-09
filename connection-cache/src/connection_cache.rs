@@ -29,7 +29,7 @@ pub enum Protocol {
 
 pub trait ConnectionManager {
     type ConnectionPool: ConnectionPool;
-    type NewConnectionConfig: NewConnectionConfig;
+    type NewConnectionConfig;
 
     const PROTOCOL: Protocol;
 
@@ -55,7 +55,6 @@ impl<P, M, C> ConnectionCache<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: NewConnectionConfig,
 {
     pub fn new(
         name: &'static str,
@@ -300,12 +299,8 @@ pub enum ClientError {
     IoError(#[from] std::io::Error),
 }
 
-pub trait NewConnectionConfig: Sized {
-    fn new() -> Result<Self, ClientError>;
-}
-
 pub trait ConnectionPool {
-    type NewConnectionConfig: NewConnectionConfig;
+    type NewConnectionConfig;
     type BaseClientConnection: BaseClientConnection;
 
     /// Add a connection to the pool
@@ -441,7 +436,7 @@ mod tests {
         }
     }
 
-    impl NewConnectionConfig for MockUdpConfig {
+    impl MockUdpConfig {
         fn new() -> Result<Self, ClientError> {
             Ok(Self {
                 udp_socket: Arc::new(

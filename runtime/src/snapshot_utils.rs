@@ -73,6 +73,7 @@ use {
 mod archive_format;
 mod snapshot_storage_rebuilder;
 pub use archive_format::*;
+use std::sync::Mutex;
 
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
 pub const SNAPSHOT_VERSION_FILENAME: &str = "version";
@@ -478,43 +479,73 @@ pub fn move_and_async_delete_path_contents(path: impl AsRef<Path>) {
 }
 
 /// Delete directories/files asynchronously to avoid blocking on it.
-/// First, in sync context, rename the original path to *_deleted,
-/// then spawn a thread to delete the renamed path.
-/// If the process is killed and the deleting process is not done,
-/// the leftover path will be deleted in the next process life, so
-/// there is no file space leaking.
+/// First, in sync context, check if the original path exists, if it
+/// does, rename the original path to *_to_be_deleted.
+/// If there's an in-progress deleting thread for this path, return.
+/// Then spawn a thread to delete the renamed path.
 pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
-    let mut path_delete = PathBuf::new();
-    path_delete.push(&path);
+    lazy_static! {
+        static ref IN_PROGRESS_DELETES: Mutex<HashSet<PathBuf>> = Mutex::new(HashSet::new());
+    };
+
+    // Grab the mutex so no new async delete threads can be spawned for this path.
+    let mut lock = IN_PROGRESS_DELETES.lock().unwrap();
+
+    // If the path does not exist, there's nothing to delete.
+    if !path.as_ref().exists() {
+        return;
+    }
+
+    // If the original path (`pathbuf` here) is already being deleted,
+    // then the path should not be moved and deleted again.
+    if lock.contains(path.as_ref()) {
+        return;
+    }
+
+    let mut path_delete = path.as_ref().to_path_buf();
     path_delete.set_file_name(format!(
         "{}{}",
         path_delete.file_name().unwrap().to_str().unwrap(),
         "_to_be_deleted"
     ));
-
-    if path_delete.exists() {
-        std::fs::remove_dir_all(&path_delete).unwrap();
-    }
-
-    if !path.as_ref().exists() {
-        return;
-    }
-
     if let Err(err) = std::fs::rename(&path, &path_delete) {
         warn!(
             "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
             err.to_string()
         );
-        delete_contents_of_path(path);
+        // Although the delete here is synchronous, we want to prevent another thread
+        // from moving & deleting this directory via `move_and_async_delete_path`.
+        lock.insert(path.as_ref().to_path_buf());
+        drop(lock); // unlock before doing sync delete
+
+        delete_contents_of_path(&path);
+        IN_PROGRESS_DELETES.lock().unwrap().remove(path.as_ref());
         return;
     }
 
+    lock.insert(path_delete.clone());
+    drop(lock);
     Builder::new()
         .name("solDeletePath".to_string())
         .spawn(move || {
-            std::fs::remove_dir_all(path_delete).unwrap();
+            trace!("background deleting {}...", path_delete.display());
+            let (_, measure_delete) = measure!(std::fs::remove_dir_all(&path_delete)
+                .map_err(|err| {
+                    SnapshotError::IoWithSourceAndFile(
+                        err,
+                        "background remove_dir_all",
+                        path_delete.clone(),
+                    )
+                })
+                .expect("background delete"));
+            trace!(
+                "background deleting {}... Done, and{measure_delete}",
+                path_delete.display()
+            );
+
+            IN_PROGRESS_DELETES.lock().unwrap().remove(&path_delete);
         })
-        .unwrap();
+        .expect("spawn background delete thread");
 }
 
 /// The account snapshot directories under <account_path>/snapshot/<slot> contain account files hardlinked
@@ -861,7 +892,9 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
             .for_each(
                 |slot| match BankSnapshotInfo::new_from_dir(&bank_snapshots_dir, slot) {
                     Ok(snapshot_info) => bank_snapshots.push(snapshot_info),
-                    Err(err) => warn!("Unable to read bank snapshot for slot {slot}: {err}"),
+                    // Other threads may be modifying bank snapshots in parallel; only return
+                    // snapshots that are complete as deemed by BankSnapshotInfo::new_from_dir()
+                    Err(err) => debug!("Unable to read bank snapshot for slot {slot}: {err}"),
                 },
             ),
     }
@@ -1246,32 +1279,12 @@ pub fn add_bank_snapshot(
 ) -> Result<BankSnapshotInfo> {
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     let slot = bank.slot();
-    // bank_snapshots_dir/slot
     let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
-    if bank_snapshot_dir.is_dir() {
-        // There is a time window from when a snapshot directory is created to when its content
-        // is fully filled to become a full state good to construct a bank from.  At the init time,
-        // the system may not be booted from the latest snapshot directory, but an older and complete
-        // directory.  Then, when adding new snapshots, the newer incomplete snapshot directory could
-        // be found.  If so, it should be removed.
-        purge_bank_snapshot(&bank_snapshot_dir)?;
-    } else {
-        // Even the snapshot directory is not found, still ensure the account snapshot directory
-        // is also clean.  hardlink failure will happen if an old file exists.
-        let account_paths = &bank.accounts().accounts_db.paths;
-        let slot_str = slot.to_string();
-        for account_path in account_paths {
-            let account_snapshot_path = account_path
-                .parent()
-                .ok_or(SnapshotError::InvalidAccountPath(account_path.clone()))?
-                .join("snapshot")
-                .join(&slot_str);
-            if account_snapshot_path.is_dir() {
-                // remove the account snapshot directory
-                move_and_async_delete_path(&account_snapshot_path);
-            }
-        }
-    }
+    assert!(
+        !bank_snapshot_dir.exists(),
+        "A bank snapshot already exists for slot {slot}!? Path: {}",
+        bank_snapshot_dir.display()
+    );
     fs::create_dir_all(&bank_snapshot_dir)?;
 
     // the bank snapshot is stored as bank_snapshots_dir/slot/slot.BANK_SNAPSHOT_PRE_FILENAME_EXTENSION
@@ -1287,7 +1300,7 @@ pub fn add_bank_snapshot(
 
     // We are constructing the snapshot directory to contain the full snapshot state information to allow
     // constructing a bank from this directory.  It acts like an archive to include the full state.
-    // The set of the account appendvec files is the necessary part of this snapshot state.  Hard-link them
+    // The set of the account storages files is the necessary part of this snapshot state.  Hard-link them
     // from the operational accounts/ directory to here.
     hard_link_storages_to_snapshot(&bank_snapshot_dir, slot, snapshot_storages)?;
 

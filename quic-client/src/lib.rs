@@ -19,7 +19,7 @@ use {
     solana_connection_cache::{
         connection_cache::{
             BaseClientConnection, ClientError, ConnectionManager, ConnectionPool,
-            ConnectionPoolError, NewConnectionConfig, Protocol,
+            ConnectionPoolError, Protocol,
         },
         connection_cache_stats::ConnectionCacheStats,
     },
@@ -79,6 +79,7 @@ impl ConnectionPool for QuicPool {
     }
 }
 
+#[derive(Clone)]
 pub struct QuicConfig {
     client_certificate: Arc<QuicClientCertificate>,
     maybe_staked_nodes: Option<Arc<RwLock<StakedNodes>>>,
@@ -89,8 +90,8 @@ pub struct QuicConfig {
     client_endpoint: Option<Endpoint>,
 }
 
-impl NewConnectionConfig for QuicConfig {
-    fn new() -> Result<Self, ClientError> {
+impl QuicConfig {
+    pub fn new() -> Result<Self, ClientError> {
         let (cert, priv_key) =
             new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))?;
         Ok(Self {
@@ -186,9 +187,8 @@ impl BaseClientConnection for Quic {
     }
 }
 
-#[derive(Default)]
 pub struct QuicConnectionManager {
-    connection_config: Option<QuicConfig>,
+    connection_config: QuicConfig,
 }
 
 impl ConnectionManager for QuicConnectionManager {
@@ -200,26 +200,18 @@ impl ConnectionManager for QuicConnectionManager {
     fn new_connection_pool(&self) -> Self::ConnectionPool {
         QuicPool {
             connections: Vec::default(),
-            endpoint: Arc::new(
-                self.connection_config
-                    .as_ref()
-                    .map_or(QuicLazyInitializedEndpoint::default(), |config| {
-                        config.create_endpoint()
-                    }),
-            ),
+            endpoint: Arc::new(self.connection_config.create_endpoint()),
         }
     }
 
     fn new_connection_config(&self) -> QuicConfig {
-        QuicConfig::new().unwrap()
+        self.connection_config.clone()
     }
 }
 
 impl QuicConnectionManager {
-    pub fn new_with_connection_config(config: QuicConfig) -> Self {
-        Self {
-            connection_config: Some(config),
-        }
+    pub fn new_with_connection_config(connection_config: QuicConfig) -> Self {
+        Self { connection_config }
     }
 }
 #[cfg(test)]

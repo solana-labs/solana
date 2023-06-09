@@ -612,7 +612,7 @@ pub fn process_instruction_inner(
             .ix_usage_counter
             .fetch_add(1, Ordering::Relaxed);
         match &loaded_program.program {
-            LoadedProgramType::FailedVerification
+            LoadedProgramType::FailedVerification(_)
             | LoadedProgramType::Closed
             | LoadedProgramType::DelayVisibility => {
                 Err(Box::new(InstructionError::InvalidAccountData) as Box<dyn std::error::Error>)

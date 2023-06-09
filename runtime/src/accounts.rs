@@ -26,16 +26,15 @@ use {
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget},
-        loaded_programs::{LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch},
+        loaded_programs::LoadedProgramsForTxBatch,
     },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
-        bpf_loader_upgradeable,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
-            self, add_set_tx_loaded_accounts_data_size_instruction,
-            delay_visibility_of_program_deployment, enable_request_heap_frame_ix,
+            self, add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
             include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
             simplify_writable_program_account_check, use_default_units_in_fee_calculation,
@@ -84,8 +83,11 @@ pub struct AccountLocks {
     readonly_locks: HashMap<Pubkey, u64>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub(crate) enum RewardInterval {
+    /// the slot within the epoch is INSIDE the reward distribution interval
+    InsideInterval,
     /// the slot within the epoch is OUTSIDE the reward distribution interval
     OutsideInterval,
 }
@@ -292,27 +294,8 @@ impl Accounts {
 
     fn account_shared_data_from_program(
         key: &Pubkey,
-        feature_set: &FeatureSet,
-        program: &LoadedProgram,
         program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     ) -> Result<AccountSharedData> {
-        // Check for tombstone
-        let result = match &program.program {
-            LoadedProgramType::FailedVerification | LoadedProgramType::Closed => {
-                Err(TransactionError::InvalidProgramForExecution)
-            }
-            LoadedProgramType::DelayVisibility => {
-                debug_assert!(feature_set.is_active(&delay_visibility_of_program_deployment::id()));
-                Err(TransactionError::InvalidProgramForExecution)
-            }
-            _ => Ok(()),
-        };
-        if feature_set.is_active(&simplify_writable_program_account_check::id()) {
-            // Currently CPI only fails if an execution is actually attempted. With this check it
-            // would also fail if a transaction just references an invalid program. So the checking
-            // of the result is being feature gated.
-            result?;
-        }
         // It's an executable program account. The program is already loaded in the cache.
         // So the account data is not needed. Return a dummy AccountSharedData with meta
         // information.
@@ -335,10 +318,12 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
-        _reward_interval: RewardInterval,
+        reward_interval: RewardInterval,
         program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Result<LoadedTransaction> {
+        let in_reward_interval = reward_interval == RewardInterval::InsideInterval;
+
         // NOTE: this check will never fail because `tx` is sanitized
         if tx.signatures().is_empty() && fee != 0 {
             return Err(TransactionError::MissingSignatureForFee);
@@ -384,9 +369,12 @@ impl Accounts {
                         account_overrides.and_then(|overrides| overrides.get(key))
                     {
                         (account_override.data().len(), account_override.clone(), 0)
-                    } else if let Some(program) = (!instruction_account && !message.is_writable(i))
-                        .then_some(())
-                        .and_then(|_| loaded_programs.find(key))
+                    } else if let Some(program) = (feature_set
+                        .is_active(&simplify_writable_program_account_check::id())
+                        && !instruction_account
+                        && !message.is_writable(i))
+                    .then_some(())
+                    .and_then(|_| loaded_programs.find(key))
                     {
                         // This condition block does special handling for accounts that are passed
                         // as instruction account to any of the instructions in the transaction.
@@ -394,13 +382,8 @@ impl Accounts {
                         // (that are passed to the program as instruction accounts). So such accounts
                         // are needed to be loaded even though corresponding compiled program may
                         // already be present in the cache.
-                        Self::account_shared_data_from_program(
-                            key,
-                            feature_set,
-                            program.as_ref(),
-                            program_accounts,
-                        )
-                        .map(|program_account| (program.account_size, program_account, 0))?
+                        Self::account_shared_data_from_program(key, program_accounts)
+                            .map(|program_account| (program.account_size, program_account, 0))?
                     } else {
                         self.accounts_db
                             .load_with_fixed_root(ancestors, key)
@@ -456,17 +439,46 @@ impl Accounts {
                         validated_fee_payer = true;
                     }
 
-                    if bpf_loader_upgradeable::check_id(account.owner()) {
-                        if !feature_set.is_active(&simplify_writable_program_account_check::id())
-                            && message.is_writable(i)
-                            && !message.is_upgradeable_loader_present()
-                        {
+                    if !feature_set.is_active(&simplify_writable_program_account_check::id()) {
+                        if bpf_loader_upgradeable::check_id(account.owner()) {
+                            if message.is_writable(i) && !message.is_upgradeable_loader_present() {
+                                error_counters.invalid_writable_account += 1;
+                                return Err(TransactionError::InvalidWritableAccount);
+                            }
+
+                            if account.executable() {
+                                // The upgradeable loader requires the derived ProgramData account
+                                if let Ok(UpgradeableLoaderState::Program {
+                                    programdata_address,
+                                }) = account.state()
+                                {
+                                    if self
+                                        .accounts_db
+                                        .load_with_fixed_root(ancestors, &programdata_address)
+                                        .is_none()
+                                    {
+                                        error_counters.account_not_found += 1;
+                                        return Err(TransactionError::ProgramAccountNotFound);
+                                    }
+                                } else {
+                                    error_counters.invalid_program_for_execution += 1;
+                                    return Err(TransactionError::InvalidProgramForExecution);
+                                }
+                            }
+                        } else if account.executable() && message.is_writable(i) {
                             error_counters.invalid_writable_account += 1;
                             return Err(TransactionError::InvalidWritableAccount);
                         }
-                    } else if account.executable() && message.is_writable(i) {
-                        error_counters.invalid_writable_account += 1;
-                        return Err(TransactionError::InvalidWritableAccount);
+                    }
+
+                    if in_reward_interval
+                        && message.is_writable(i)
+                        && solana_stake_program::check_id(account.owner())
+                    {
+                        error_counters.program_execution_temporarily_restricted += 1;
+                        return Err(TransactionError::ProgramExecutionTemporarilyRestricted {
+                            account_index: i as u8,
+                        });
                     }
 
                     tx_rent += rent;
@@ -1478,7 +1490,6 @@ mod tests {
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
-            bpf_loader_upgradeable::UpgradeableLoaderState,
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::EpochSchedule,
             genesis_config::ClusterType,
@@ -2477,8 +2488,12 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[simplify_writable_program_account_check::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2491,8 +2506,12 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // mark both executables as readonly
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[simplify_writable_program_account_check::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);

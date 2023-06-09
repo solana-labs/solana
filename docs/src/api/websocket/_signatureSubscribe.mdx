@@ -12,8 +12,16 @@ import {
 
 ## signatureSubscribe
 
-Subscribe to a transaction signature to receive notification when a given transaction is committed. On `signatureNotification` - the subscription is automatically cancelled.
-The signature must be a [txid](/terminology#transaction-id), the first signature of a transaction.
+Subscribe to a transaction signature, to receive notification when the given
+transaction reaches the specified commitment level.
+
+:::caution
+
+This is a subscription to a single notification. It is automatically cancelled
+by the server once the notification, `signatureNotification`, is sent by the
+RPC.
+
+:::
 
 <DocSideBySide>
 <CodeParams>
@@ -21,7 +29,16 @@ The signature must be a [txid](/terminology#transaction-id), the first signature
 ### Parameters:
 
 <Parameter type={"string"} required={true}>
-  Transaction Signature, as base-58 encoded string
+
+transaction signature, as base-58 encoded string
+
+:::info
+
+The transaction signature must be the first signature from the transaction (see
+[transaction id](/terminology#transaction-id) for more details).
+
+:::
+
 </Parameter>
 
 <Parameter type={"object"} optional={true}>
@@ -34,6 +51,13 @@ Configuration object containing the following fields:
   optional={true}
   href="/api/http#configuring-state-commitment"
 ></Field>
+
+<Field name="enableReceivedNotification" type="bool" optional={true}>
+
+Whether or not to recieve notifications when signatures are recieved by the RPC,
+in addition to when they are processed.
+
+</Field>
 
 </Parameter>
 
@@ -55,7 +79,8 @@ Configuration object containing the following fields:
   "params": [
     "2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b",
     {
-      "commitment": "finalized"
+      "commitment": "finalized",
+      "enableReceivedNotification": false
     }
   ]
 }
@@ -72,11 +97,26 @@ Configuration object containing the following fields:
 
 #### Notification Format:
 
-The notification will be an RpcResponse JSON object with value containing an object with:
+The notification will be an RpcResponse JSON object with value containing an
+object with:
 
-- `err: <object|null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
+- `slot: <u64>` - The corresponding slot.
+- `value: <object|string>` - notification response value of:
+  - `err: <object|null>`: a
+    [`RpcSignatureResult`](https://github.com/solana-labs/solana/blob/6d28fd455b07e3557fc6c0c3ddf3ba03e3fe8482/rpc-client-api/src/response.rs#L265)
+    with a value of either:
+    - `null` if transaction succeeded in being processed at the specified
+      commitment level, or
+    - a
+      [`TransactionError`](https://github.com/solana-labs/solana/blob/6d28fd455b07e3557fc6c0c3ddf3ba03e3fe8482/sdk/src/transaction/error.rs#L15),
+      if the transaction failed
+  - when `enableReceivedNotification` is true,
+    [`ReceivedSignatureResult`](https://github.com/solana-labs/solana/blob/6d28fd455b07e3557fc6c0c3ddf3ba03e3fe8482/rpc-client-api/src/response.rs#L286)
 
-Example:
+#### Example responses:
+
+The following is an example response of a notification from a successfully
+**processed** transactions:
 
 ```json
 {
@@ -90,6 +130,25 @@ Example:
       "value": {
         "err": null
       }
+    },
+    "subscription": 24006
+  }
+}
+```
+
+The following is an example response of a notification from a successfully
+**recieved** transaction signature:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "signatureNotification",
+  "params": {
+    "result": {
+      "context": {
+        "slot": 5207624
+      },
+      "value": "receivedSignature"
     },
     "subscription": 24006
   }

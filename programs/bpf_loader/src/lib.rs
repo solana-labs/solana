@@ -570,7 +570,7 @@ fn process_instruction_inner(
 
     executor.ix_usage_counter.fetch_add(1, Ordering::Relaxed);
     match &executor.program {
-        LoadedProgramType::FailedVerification
+        LoadedProgramType::FailedVerification(_)
         | LoadedProgramType::Closed
         | LoadedProgramType::DelayVisibility => {
             Err(Box::new(InstructionError::InvalidAccountData) as Box<dyn std::error::Error>)

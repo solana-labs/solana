@@ -1,5 +1,5 @@
 use {
-    crate::immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
+    super::immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     min_max_heap::MinMaxHeap,
     solana_perf::packet::Packet,
     solana_sdk::hash::Hash,

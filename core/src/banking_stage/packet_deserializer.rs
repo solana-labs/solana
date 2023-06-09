@@ -1,9 +1,9 @@
 //! Deserializes packets from sigverify stage. Owned by banking stage.
 
 use {
+    super::immutable_deserialized_packet::ImmutableDeserializedPacket,
     crate::{
         banking_trace::{BankingPacketBatch, BankingPacketReceiver},
-        immutable_deserialized_packet::ImmutableDeserializedPacket,
         sigverify::SigverifyTracerPacketStats,
     },
     crossbeam_channel::RecvTimeoutError,

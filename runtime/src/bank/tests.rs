@@ -6914,7 +6914,7 @@ fn test_shrink_candidate_slots_cached() {
     // No more slots should be shrunk
     assert_eq!(bank2.shrink_candidate_slots(), 0);
     // alive_counts represents the count of alive accounts in the three slots 0,1,2
-    assert_eq!(alive_counts, vec![16, 1, 7]);
+    assert_eq!(alive_counts, vec![15, 1, 7]);
 }
 
 #[test]
@@ -7299,61 +7299,17 @@ fn test_add_precompiled_account_after_frozen() {
 fn test_reconfigure_token2_native_mint() {
     solana_logger::setup();
 
-    let mut genesis_config =
+    let genesis_config =
         create_genesis_config_with_leader(5, &solana_sdk::pubkey::new_rand(), 0).genesis_config;
-
-    // ClusterType::Development - Native mint exists immediately
-    assert_eq!(genesis_config.cluster_type, ClusterType::Development);
     let bank = Arc::new(Bank::new_for_tests(&genesis_config));
     assert_eq!(
         bank.get_balance(&inline_spl_token::native_mint::id()),
         1000000000
     );
-
-    // Testnet - Native mint blinks into existence at epoch 93
-    genesis_config.cluster_type = ClusterType::Testnet;
-    let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-    assert_eq!(bank.get_balance(&inline_spl_token::native_mint::id()), 0);
-    bank.deposit(&inline_spl_token::native_mint::id(), 4200000000)
-        .unwrap();
-
-    let bank = Bank::new_from_parent(
-        &bank,
-        &Pubkey::default(),
-        genesis_config.epoch_schedule.get_first_slot_in_epoch(93),
-    );
-
     let native_mint_account = bank
         .get_account(&inline_spl_token::native_mint::id())
         .unwrap();
     assert_eq!(native_mint_account.data().len(), 82);
-    assert_eq!(
-        bank.get_balance(&inline_spl_token::native_mint::id()),
-        4200000000
-    );
-    assert_eq!(native_mint_account.owner(), &inline_spl_token::id());
-
-    // MainnetBeta - Native mint blinks into existence at epoch 75
-    genesis_config.cluster_type = ClusterType::MainnetBeta;
-    let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-    assert_eq!(bank.get_balance(&inline_spl_token::native_mint::id()), 0);
-    bank.deposit(&inline_spl_token::native_mint::id(), 4200000000)
-        .unwrap();
-
-    let bank = Bank::new_from_parent(
-        &bank,
-        &Pubkey::default(),
-        genesis_config.epoch_schedule.get_first_slot_in_epoch(75),
-    );
-
-    let native_mint_account = bank
-        .get_account(&inline_spl_token::native_mint::id())
-        .unwrap();
-    assert_eq!(native_mint_account.data().len(), 82);
-    assert_eq!(
-        bank.get_balance(&inline_spl_token::native_mint::id()),
-        4200000000
-    );
     assert_eq!(native_mint_account.owner(), &inline_spl_token::id());
 }
 
@@ -7397,8 +7353,6 @@ fn test_bank_load_program() {
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
     let program = bank.load_program(&key1);
-    assert!(program.is_ok());
-    let program = program.unwrap();
     assert!(matches!(program.program, LoadedProgramType::LegacyV1(_)));
     assert_eq!(
         program.account_size,
@@ -7412,7 +7366,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     let mut bank = Bank::new_for_tests(&genesis_config);
     bank.feature_set = Arc::new(FeatureSet::all_enabled());
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     // Setup keypairs and addresses
     let payer_keypair = Keypair::new();
@@ -7553,9 +7507,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         assert_eq!(*elf.get(i).unwrap(), *byte);
     }
 
-    let loaded_program = bank
-        .load_program(&program_keypair.pubkey())
-        .expect("Failed to load the program");
+    let loaded_program = bank.load_program(&program_keypair.pubkey());
 
     // Invoke deployed program
     mock_process_instruction(
@@ -7583,6 +7535,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     // Test initialized program account
     bank.clear_signatures();
     bank.store_account(&buffer_address, &buffer_account);
+    let bank = bank_client.advance_slot(1, &mint_keypair.pubkey()).unwrap();
     let message = Message::new(
         &[Instruction::new_with_bincode(
             bpf_loader_upgradeable::id(),
@@ -12469,42 +12422,6 @@ fn test_bank_verify_accounts_hash_with_base() {
             ..VerifyAccountsHashConfig::default_for_test()
         },
     ));
-}
-
-#[allow(clippy::field_reassign_with_default)]
-#[test]
-fn test_calculate_loaded_accounts_data_size_cost() {
-    let mut compute_budget = ComputeBudget::default();
-
-    // accounts data size are priced in block of 32K, ...
-
-    // ... requesting less than 32K should still be charged as one block
-    compute_budget.loaded_accounts_data_size_limit = 31_usize * 1024;
-    assert_eq!(
-        compute_budget.heap_cost,
-        Bank::calculate_loaded_accounts_data_size_cost(&compute_budget)
-    );
-
-    // ... requesting exact 32K should be charged as one block
-    compute_budget.loaded_accounts_data_size_limit = 32_usize * 1024;
-    assert_eq!(
-        compute_budget.heap_cost,
-        Bank::calculate_loaded_accounts_data_size_cost(&compute_budget)
-    );
-
-    // ... requesting slightly above 32K should be charged as 2 block
-    compute_budget.loaded_accounts_data_size_limit = 33_usize * 1024;
-    assert_eq!(
-        compute_budget.heap_cost * 2,
-        Bank::calculate_loaded_accounts_data_size_cost(&compute_budget)
-    );
-
-    // ... requesting exact 64K should be charged as 2 block
-    compute_budget.loaded_accounts_data_size_limit = 64_usize * 1024;
-    assert_eq!(
-        compute_budget.heap_cost * 2,
-        Bank::calculate_loaded_accounts_data_size_cost(&compute_budget)
-    );
 }
 
 #[test]
