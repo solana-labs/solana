@@ -5538,9 +5538,9 @@ impl AccountsDb {
                     drop(recycle_stores);
                     let old_id = ret.append_vec_id();
                     ret.recycle(slot, self.next_id());
-                    // This info show the appendvec history change history.  It helps debugging
+                    // This info shows the appendvec change history.  It helps debugging
                     // the appendvec data corrupution issues related to recycling.
-                    error!(
+                    debug!(
                         "recycling store: old slot {}, old_id: {}, new slot {}, new id{}, path {:?} ",
                         slot,
                         old_id,
