@@ -423,6 +423,21 @@ pub enum VerifySlotDeltasError {
     BadSlotHistory,
 }
 
+/// Creates directories if they do not exist, and canonicalizes the paths.
+pub fn create_and_canonicalize_directories(directories: &[PathBuf]) -> Result<Vec<PathBuf>> {
+    directories
+        .iter()
+        .map(|path| {
+            std::fs::create_dir_all(path).map_err(|err| {
+                SnapshotError::IoWithSourceAndFile(err, "create_dir_all", path.clone())
+            })?;
+            path.canonicalize().map_err(|err| {
+                SnapshotError::IoWithSourceAndFile(err, "canonicalize", path.clone())
+            })
+        })
+        .collect()
+}
+
 /// Delete the files and subdirectories in a directory.
 /// This is useful if the process does not have permission
 /// to delete the top level directory it might be able to
