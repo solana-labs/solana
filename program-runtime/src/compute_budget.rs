@@ -1,7 +1,5 @@
 use {
-    crate::prioritization_fee::{
-        PrioritizationFeeDetails, PrioritizationFeeType, MICRO_LAMPORTS_PER_LAMPORT,
-    },
+    crate::prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
     solana_sdk::{
         borsh::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
@@ -287,11 +285,11 @@ impl ComputeBudget {
 
     // https://github.com/solana-labs/solana/issues/31453 to round compute-unit-price, in micro-lamports,
     // down to its nearest 1_000 micro-lamport.
+    const ROUND_DOWN_FACTOR: u64 = 1_000;
     fn round_prioritization_fee(micro_lamports: u64) -> u64 {
-        let round_down_factor = MICRO_LAMPORTS_PER_LAMPORT.saturating_div(1_000);
         micro_lamports
-            .saturating_div(round_down_factor)
-            .saturating_mul(round_down_factor)
+            .saturating_div(Self::ROUND_DOWN_FACTOR)
+            .saturating_mul(Self::ROUND_DOWN_FACTOR)
     }
 }
 
@@ -737,7 +735,7 @@ mod tests {
         }
 
         for support_round_compute_unit_price in [true, false] {
-            let cu_price = MICRO_LAMPORTS_PER_LAMPORT / 1_000 - 1;
+            let cu_price = ComputeBudget::ROUND_DOWN_FACTOR - 1;
             let expected_cu_price = if support_round_compute_unit_price {
                 0
             } else {
@@ -756,10 +754,10 @@ mod tests {
         for support_round_compute_unit_price in [true, false] {
             test_set_compute_unit_price(
                 &[ComputeBudgetInstruction::set_compute_unit_price(
-                    MICRO_LAMPORTS_PER_LAMPORT / 1_000,
+                    ComputeBudget::ROUND_DOWN_FACTOR,
                 )],
                 Ok(PrioritizationFeeDetails::new(
-                    PrioritizationFeeType::ComputeUnitPrice(MICRO_LAMPORTS_PER_LAMPORT / 1_000),
+                    PrioritizationFeeType::ComputeUnitPrice(ComputeBudget::ROUND_DOWN_FACTOR),
                     0,
                 )),
                 support_round_compute_unit_price,
@@ -767,9 +765,9 @@ mod tests {
         }
 
         for support_round_compute_unit_price in [true, false] {
-            let cu_price = MICRO_LAMPORTS_PER_LAMPORT / 1_000 + 1;
+            let cu_price = ComputeBudget::ROUND_DOWN_FACTOR + 1;
             let expected_cu_price = if support_round_compute_unit_price {
-                MICRO_LAMPORTS_PER_LAMPORT / 1_000
+                ComputeBudget::ROUND_DOWN_FACTOR
             } else {
                 cu_price
             };
@@ -784,9 +782,9 @@ mod tests {
         }
 
         for support_round_compute_unit_price in [true, false] {
-            let cu_price = 3 * (MICRO_LAMPORTS_PER_LAMPORT / 1_000) - 1;
+            let cu_price = 3 * ComputeBudget::ROUND_DOWN_FACTOR - 1;
             let expected_cu_price = if support_round_compute_unit_price {
-                2 * (MICRO_LAMPORTS_PER_LAMPORT / 1_000)
+                2 * ComputeBudget::ROUND_DOWN_FACTOR
             } else {
                 cu_price
             };
@@ -972,26 +970,26 @@ mod tests {
         );
 
         assert_eq!(
-            ComputeBudget::round_prioritization_fee(MICRO_LAMPORTS_PER_LAMPORT / 1_000 - 1),
+            ComputeBudget::round_prioritization_fee(ComputeBudget::ROUND_DOWN_FACTOR - 1),
             0,
             "less than 1_000 MICRO_LAMPORTS should round down to zero"
         );
 
         assert_eq!(
-            ComputeBudget::round_prioritization_fee(MICRO_LAMPORTS_PER_LAMPORT / 1_000),
-            MICRO_LAMPORTS_PER_LAMPORT / 1_000,
+            ComputeBudget::round_prioritization_fee(ComputeBudget::ROUND_DOWN_FACTOR),
+            ComputeBudget::ROUND_DOWN_FACTOR,
             "1_000 MICRO_LAMPORTS should round to itself"
         );
 
         assert_eq!(
-            ComputeBudget::round_prioritization_fee(MICRO_LAMPORTS_PER_LAMPORT / 1_000 + 1),
-            MICRO_LAMPORTS_PER_LAMPORT / 1_000,
+            ComputeBudget::round_prioritization_fee(ComputeBudget::ROUND_DOWN_FACTOR + 1),
+            ComputeBudget::ROUND_DOWN_FACTOR,
             "more than 1_000 MICRO_LAMPORTS should round down to the nearest"
         );
 
         assert_eq!(
-            ComputeBudget::round_prioritization_fee((MICRO_LAMPORTS_PER_LAMPORT / 1_000) * 3 - 1),
-            (MICRO_LAMPORTS_PER_LAMPORT / 1_000) * 2,
+            ComputeBudget::round_prioritization_fee(ComputeBudget::ROUND_DOWN_FACTOR * 3 - 1),
+            ComputeBudget::ROUND_DOWN_FACTOR * 2,
             "more than 1_000 MICRO_LAMPORTS should round down to the nearest"
         );
     }
