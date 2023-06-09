@@ -66,7 +66,7 @@ pub enum Error {
     UnusedIpAddr(IpAddr),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, AbiExample, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ContactInfo {
     pubkey: Pubkey,
     #[serde(with = "serde_varint")]
@@ -82,6 +82,8 @@ pub struct ContactInfo {
     // All sockets have a unique key and a valid IP address index.
     #[serde(with = "short_vec")]
     sockets: Vec<SocketEntry>,
+    #[serde(with = "short_vec")]
+    extensions: Vec<Extension>,
     #[serde(skip_serializing)]
     cache: [SocketAddr; SOCKET_CACHE_SIZE],
 }
@@ -93,6 +95,9 @@ struct SocketEntry {
     #[serde(with = "serde_varint")]
     offset: u16, // Port offset with respect to the previous entry.
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+enum Extension {}
 
 // As part of deserialization, self.addrs and self.sockets should be cross
 // verified and self.cache needs to be populated. This type serves as a
@@ -110,6 +115,8 @@ struct ContactInfoLite {
     addrs: Vec<IpAddr>,
     #[serde(with = "short_vec")]
     sockets: Vec<SocketEntry>,
+    #[serde(with = "short_vec")]
+    extensions: Vec<Extension>,
 }
 
 macro_rules! get_socket {
@@ -183,6 +190,7 @@ impl ContactInfo {
             version: solana_version::Version::default(),
             addrs: Vec::<IpAddr>::default(),
             sockets: Vec::<SocketEntry>::default(),
+            extensions: Vec::<Extension>::default(),
             cache: [SOCKET_ADDR_UNSPECIFIED; SOCKET_CACHE_SIZE],
         }
     }
@@ -415,6 +423,7 @@ impl TryFrom<ContactInfoLite> for ContactInfo {
             version,
             addrs,
             sockets,
+            extensions,
         } = node;
         sanitize_entries(&addrs, &sockets)?;
         let mut node = ContactInfo {
@@ -425,6 +434,7 @@ impl TryFrom<ContactInfoLite> for ContactInfo {
             version,
             addrs,
             sockets,
+            extensions,
             cache: [SOCKET_ADDR_UNSPECIFIED; SOCKET_CACHE_SIZE],
         };
         // Populate node.cache.
@@ -538,6 +548,23 @@ pub(crate) fn get_quic_socket(socket: &SocketAddr) -> Result<SocketAddr, Error> 
             .checked_add(QUIC_PORT_OFFSET)
             .ok_or_else(|| Error::InvalidPort(socket.port()))?,
     ))
+}
+
+#[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+impl solana_frozen_abi::abi_example::AbiExample for ContactInfo {
+    fn example() -> Self {
+        Self {
+            pubkey: Pubkey::example(),
+            wallclock: u64::example(),
+            outset: u64::example(),
+            shred_version: u16::example(),
+            version: solana_version::Version::example(),
+            addrs: Vec::<IpAddr>::example(),
+            sockets: Vec::<SocketEntry>::example(),
+            extensions: vec![],
+            cache: <[SocketAddr; SOCKET_CACHE_SIZE]>::example(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -679,6 +706,7 @@ mod tests {
             version: solana_version::Version::default(),
             addrs: Vec::default(),
             sockets: Vec::default(),
+            extensions: Vec::default(),
             cache: [SOCKET_ADDR_UNSPECIFIED; SOCKET_CACHE_SIZE],
         };
         let mut sockets = HashMap::<u8, SocketAddr>::new();
