@@ -56,11 +56,11 @@ pub trait TranscriptProtocol {
     /// Append a domain separator for zero-balance proof.
     fn zero_balance_proof_domain_sep(&mut self);
 
-    /// Append a domain separator for validity proof.
-    fn validity_proof_domain_sep(&mut self);
+    /// Append a domain separator for grouped ciphertext validity proof.
+    fn grouped_ciphertext_validity_proof_domain_sep(&mut self);
 
-    /// Append a domain separator for aggregated validity proof.
-    fn aggregated_validity_proof_domain_sep(&mut self);
+    /// Append a domain separator for batched grouped ciphertext validity proof.
+    fn batched_grouped_ciphertext_validity_proof_domain_sep(&mut self);
 
     /// Append a domain separator for fee sigma proof.
     fn fee_sigma_proof_domain_sep(&mut self);
@@ -168,12 +168,12 @@ impl TranscriptProtocol for Transcript {
         self.append_message(b"dom-sep", b"zero-balance-proof")
     }
 
-    fn validity_proof_domain_sep(&mut self) {
+    fn grouped_ciphertext_validity_proof_domain_sep(&mut self) {
         self.append_message(b"dom-sep", b"validity-proof")
     }
 
-    fn aggregated_validity_proof_domain_sep(&mut self) {
-        self.append_message(b"dom-sep", b"aggregated-validity-proof")
+    fn batched_grouped_ciphertext_validity_proof_domain_sep(&mut self) {
+        self.append_message(b"dom-sep", b"batched-validity-proof")
     }
 
     fn fee_sigma_proof_domain_sep(&mut self) {
