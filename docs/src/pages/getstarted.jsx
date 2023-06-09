@@ -58,6 +58,20 @@ function GetStartedPage() {
               />
 
               <Card
+                to="/getstarted/cli-sdk"
+                header={{
+                  label: "CLI & SDK quickstart",
+                  translateId: "getstarted-cli-sdk",
+                }}
+                
+                body={{
+                  label:
+                    "Learn how to use the Solana CLI and SDK to send SOL.",
+                  translateId: "getstarted-cli-sdk-body",
+                }}
+              />
+
+              <Card
                 to="/getstarted/rust"
                 header={{
                   label: "Native Rust Program",

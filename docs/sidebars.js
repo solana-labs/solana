@@ -104,8 +104,13 @@ module.exports = {
         },
         {
           type: "doc",
+          id: "getstarted/cli-sdk",
+          label: "CLI & SDK quickstart",
+        },
+        {
+          type: "doc",
           id: "getstarted/rust",
-          label: "Rust program",
+          label: "Create and deploy a Rust program",
         },
         // {
         //   type: "doc",
