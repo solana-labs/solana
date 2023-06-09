@@ -964,10 +964,13 @@ pub fn main() {
         .map(BlockstoreRecoveryMode::from);
 
     // Canonicalize ledger path to avoid issues with symlink creation
-    let ledger_path = create_and_canonicalize_directories(&[ledger_path]).unwrap_or_else(|err| {
-        eprintln!("Unable to access ledger path: {err}");
-        exit(1);
-    });
+    let ledger_path = create_and_canonicalize_directories(&[ledger_path])
+        .unwrap_or_else(|err| {
+            eprintln!("Unable to access ledger path: {err}");
+            exit(1);
+        })
+        .pop()
+        .unwrap();
 
     let debug_keys: Option<Arc<HashSet<_>>> = if matches.is_present("debug_key") {
         Some(Arc::new(
