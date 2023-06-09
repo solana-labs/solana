@@ -965,7 +965,7 @@ pub fn main() {
 
     // Canonicalize ledger path to avoid issues with symlink creation
     let ledger_path = create_and_canonicalize_directories(&[ledger_path]).unwrap_or_else(|err| {
-        eprintln!("Unable to access ledger path: {err:?}");
+        eprintln!("Unable to access ledger path: {err}");
         exit(1);
     });
 
@@ -1398,7 +1398,7 @@ pub fn main() {
         };
     let account_paths = snapshot_utils::create_and_canonicalize_directories(&account_paths)
         .unwrap_or_else(|err| {
-            eprintln!("Unable to access account path: {err:?}");
+            eprintln!("Unable to access account path: {err}");
             exit(1);
         });
 
@@ -1420,7 +1420,7 @@ pub fn main() {
 
     validator_config.account_shrink_paths = account_shrink_paths.map(|paths| {
         create_and_canonicalize_directories(&paths).unwrap_or_else(|err| {
-            eprintln!("Unable to access account shrink path: {err:?}");
+            eprintln!("Unable to access account shrink path: {err}");
             exit(1);
         })
     });
