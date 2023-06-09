@@ -39,6 +39,7 @@ pub mod contains;
 pub mod cost_model;
 pub mod cost_tracker;
 pub mod epoch_accounts_hash;
+mod epoch_rewards_hasher;
 pub mod epoch_stakes;
 pub mod genesis_utils;
 pub mod hardened_unpack;

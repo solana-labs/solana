@@ -119,6 +119,46 @@ use {
     test_case::test_case,
 };
 
+impl StakeReward {
+    pub fn new_random() -> Self {
+        let mut rng = rand::thread_rng();
+
+        let rent = Rent::free();
+
+        let validator_pubkey = solana_sdk::pubkey::new_rand();
+        let validator_stake_lamports = 20;
+        let validator_staking_keypair = Keypair::new();
+        let validator_voting_keypair = Keypair::new();
+
+        let validator_vote_account = vote_state::create_account(
+            &validator_voting_keypair.pubkey(),
+            &validator_pubkey,
+            10,
+            validator_stake_lamports,
+        );
+
+        let validator_stake_account = stake_state::create_account(
+            &validator_staking_keypair.pubkey(),
+            &validator_voting_keypair.pubkey(),
+            &validator_vote_account,
+            &rent,
+            validator_stake_lamports,
+        );
+
+        Self {
+            stake_pubkey: Pubkey::new_unique(),
+            stake_reward_info: RewardInfo {
+                reward_type: RewardType::Staking,
+                lamports: rng.gen_range(1, 200),
+                post_balance: 0,  /* unused atm */
+                commission: None, /* unused atm */
+            },
+
+            stake_account: validator_stake_account,
+        }
+    }
+}
+
 #[test]
 fn test_race_register_tick_freeze() {
     solana_logger::setup();
