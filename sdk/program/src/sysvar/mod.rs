@@ -87,6 +87,7 @@ use {
 };
 
 pub mod clock;
+pub mod epoch_rewards;
 pub mod epoch_schedule;
 pub mod fees;
 pub mod instructions;
@@ -111,6 +112,7 @@ lazy_static! {
         slot_history::id(),
         stake_history::id(),
         instructions::id(),
+        epoch_rewards::id(),
     ];
 }
 
