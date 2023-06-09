@@ -42,7 +42,7 @@ fn hash_to_partition(hash: u64, partitions: usize) -> usize {
 
 #[allow(dead_code)]
 fn hash_rewards_into_partitions(
-    stake_rewards: &StakeRewards,
+    stake_rewards: StakeRewards,
     parent_block_hash: &Hash,
     num_partitions: usize,
 ) -> Vec<StakeRewards> {
@@ -56,7 +56,7 @@ fn hash_rewards_into_partitions(
         let partition_index = hasher
             .clone()
             .hash_address_to_partition(&reward.stake_pubkey);
-        result[partition_index].push(reward.clone());
+        result[partition_index].push(reward);
     }
     result
 }
@@ -221,7 +221,7 @@ mod tests {
             .sum::<i64>();
 
         let stake_rewards_in_bucket =
-            hash_rewards_into_partitions(&stake_rewards, &Hash::default(), 5);
+            hash_rewards_into_partitions(stake_rewards.clone(), &Hash::default(), 5);
 
         let stake_rewards_in_bucket_clone =
             stake_rewards_in_bucket.iter().flatten().cloned().collect();
@@ -248,7 +248,7 @@ mod tests {
 
         let num_partitions = 5;
         let stake_rewards_in_bucket =
-            hash_rewards_into_partitions(&stake_rewards, &Hash::default(), num_partitions);
+            hash_rewards_into_partitions(stake_rewards, &Hash::default(), num_partitions);
 
         let total_after_hash_partition = stake_rewards_in_bucket
             .iter()
