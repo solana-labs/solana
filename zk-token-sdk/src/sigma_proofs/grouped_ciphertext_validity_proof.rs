@@ -239,7 +239,7 @@ mod test {
     };
 
     #[test]
-    fn test_validity_proof_correctness() {
+    fn test_grouped_ciphertext_validity_proof_correctness() {
         let destination_pubkey = ElGamalKeypair::new_rand().public;
         let auditor_pubkey = ElGamalKeypair::new_rand().public;
 
@@ -270,7 +270,7 @@ mod test {
     }
 
     #[test]
-    fn test_validity_proof_edge_cases() {
+    fn test_grouped_ciphertext_validity_proof_edge_cases() {
         // if destination public key zeroed, then the proof should always reject
         let destination_pubkey = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
         let auditor_pubkey = ElGamalKeypair::new_rand().public;

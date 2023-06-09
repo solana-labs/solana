@@ -116,7 +116,7 @@ mod test {
     };
 
     #[test]
-    fn test_aggregated_validity_proof() {
+    fn test_batched_grouped_ciphertext_validity_proof() {
         let destination_pubkey = ElGamalKeypair::new_rand().public;
         let auditor_pubkey = ElGamalKeypair::new_rand().public;
 
