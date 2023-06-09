@@ -231,23 +231,23 @@ impl GroupedCiphertext2HandlesValidityProof {
     }
 }
 
-/// Aggregated ciphertext validity proof.
+/// Batched grouped ciphertext validity proof with two handles.
 ///
-/// An aggregated ciphertext validity proof certifies the validity of two instances of a standard
-/// ciphertext validity proof. An instance of a standard validity proof consist of one ciphertext
-/// and two decryption handles `(commitment, destination_handle, auditor_handle)`. An instance of an
-/// aggregated ciphertext validity proof is a pair `(commitment_0, destination_handle_0,
-/// auditor_handle_0)` and `(commitment_1, destination_handle_1, auditor_handle_1)`. The proof certifies
-/// the analogous decryptable properties for each one of these pair of commitment and decryption
-/// handles.
+/// An batched grouped ciphertext validity proof certifies the validity of two instances of a
+/// standard ciphertext validity proof. An instance of a standard validity proof consist of one
+/// ciphertext and two decryption handles `(commitment, destination_handle, auditor_handle)`. An
+/// instance of an aggregated ciphertext validity proof is a pair `(commitment_0,
+/// destination_handle_0, auditor_handle_0)` and `(commitment_1, destination_handle_1,
+/// auditor_handle_1)`. The proof certifies the analogous decryptable properties for each one of
+/// these pair of commitment and decryption handles.
 #[allow(non_snake_case)]
 #[derive(Clone)]
-pub struct AggregatedValidityProof(GroupedCiphertext2HandlesValidityProof);
+pub struct BatchedGroupedCiphertext2HandlesValidityProof(GroupedCiphertext2HandlesValidityProof);
 
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
-impl AggregatedValidityProof {
-    /// Aggregated ciphertext validity proof constructor.
+impl BatchedGroupedCiphertext2HandlesValidityProof {
+    /// Batched grouped ciphertext validity proof constructor.
     ///
     /// The function simples aggregates the input openings and invokes the standard ciphertext
     /// validity proof constructor.
@@ -264,7 +264,7 @@ impl AggregatedValidityProof {
         let aggregated_message = amount_lo.into() + amount_hi.into() * t;
         let aggregated_opening = opening_lo + &(opening_hi * &t);
 
-        AggregatedValidityProof(GroupedCiphertext2HandlesValidityProof::new(
+        BatchedGroupedCiphertext2HandlesValidityProof(GroupedCiphertext2HandlesValidityProof::new(
             (destination_pubkey, auditor_pubkey),
             aggregated_message,
             &aggregated_opening,
@@ -272,7 +272,7 @@ impl AggregatedValidityProof {
         ))
     }
 
-    /// Aggregated ciphertext validity proof verifier.
+    /// Batched grouped ciphertext validity proof verifier.
     ///
     /// The function does *not* hash the public keys, commitment, or decryption handles into the
     /// transcript. For security, the caller (the main protocol) should hash these public
@@ -295,7 +295,7 @@ impl AggregatedValidityProof {
         let destination_aggregated_handle = destination_handle_lo + destination_handle_hi * t;
         let auditor_aggregated_handle = auditor_handle_lo + auditor_handle_hi * t;
 
-        let AggregatedValidityProof(validity_proof) = self;
+        let BatchedGroupedCiphertext2HandlesValidityProof(validity_proof) = self;
 
         validity_proof.verify(
             &aggregated_commitment,
@@ -492,7 +492,7 @@ mod test {
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
-        let proof = AggregatedValidityProof::new(
+        let proof = BatchedGroupedCiphertext2HandlesValidityProof::new(
             (&destination_pubkey, &auditor_pubkey),
             (amount_lo, amount_hi),
             (&open_lo, &open_hi),

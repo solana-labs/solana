@@ -23,7 +23,7 @@ pub use {
     pedersen::PedersenCommitment,
     range_proof::{RangeProofU128, RangeProofU256, RangeProofU64},
     sigma_proofs::{
-        AggregatedValidityProof, CiphertextCiphertextEqualityProof,
+        BatchedGroupedCiphertext2HandlesValidityProof, CiphertextCiphertextEqualityProof,
         CiphertextCommitmentEqualityProof, FeeSigmaProof, GroupedCiphertext2HandlesValidityProof,
         PubkeyValidityProof, ZeroBalanceProof,
     },

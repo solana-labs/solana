@@ -8,7 +8,7 @@ use crate::sigma_proofs::{
     fee_proof::FeeSigmaProof as DecodedFeeSigmaProof,
     pubkey_proof::PubkeyValidityProof as DecodedPubkeyValidityProof,
     validity_proof::{
-        AggregatedValidityProof as DecodedAggregatedValidityProof,
+        BatchedGroupedCiphertext2HandlesValidityProof as DecodedBatchedGroupedCiphertext2HandlesValidityProof,
         GroupedCiphertext2HandlesValidityProof as DecodedGroupedCiphertext2HandlesValidityProof,
     },
     zero_balance_proof::ZeroBalanceProof as DecodedZeroBalanceProof,
@@ -82,23 +82,29 @@ impl TryFrom<GroupedCiphertext2HandlesValidityProof>
     }
 }
 
-/// The `AggregatedValidityProof` type as a `Pod`.
+/// The `BatchedGroupedCiphertext2HandlesValidityProof` type as a `Pod`.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct AggregatedValidityProof(pub [u8; 160]);
+pub struct BatchedGroupedCiphertext2HandlesValidityProof(pub [u8; 160]);
 
 #[cfg(not(target_os = "solana"))]
-impl From<DecodedAggregatedValidityProof> for AggregatedValidityProof {
-    fn from(decoded_proof: DecodedAggregatedValidityProof) -> Self {
+impl From<DecodedBatchedGroupedCiphertext2HandlesValidityProof>
+    for BatchedGroupedCiphertext2HandlesValidityProof
+{
+    fn from(decoded_proof: DecodedBatchedGroupedCiphertext2HandlesValidityProof) -> Self {
         Self(decoded_proof.to_bytes())
     }
 }
 
 #[cfg(not(target_os = "solana"))]
-impl TryFrom<AggregatedValidityProof> for DecodedAggregatedValidityProof {
+impl TryFrom<BatchedGroupedCiphertext2HandlesValidityProof>
+    for DecodedBatchedGroupedCiphertext2HandlesValidityProof
+{
     type Error = ValidityProofError;
 
-    fn try_from(pod_proof: AggregatedValidityProof) -> Result<Self, Self::Error> {
+    fn try_from(
+        pod_proof: BatchedGroupedCiphertext2HandlesValidityProof,
+    ) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)
     }
 }
@@ -178,8 +184,8 @@ unsafe impl Pod for CiphertextCiphertextEqualityProof {}
 unsafe impl Zeroable for GroupedCiphertext2HandlesValidityProof {}
 unsafe impl Pod for GroupedCiphertext2HandlesValidityProof {}
 
-unsafe impl Zeroable for AggregatedValidityProof {}
-unsafe impl Pod for AggregatedValidityProof {}
+unsafe impl Zeroable for BatchedGroupedCiphertext2HandlesValidityProof {}
+unsafe impl Pod for BatchedGroupedCiphertext2HandlesValidityProof {}
 
 unsafe impl Zeroable for ZeroBalanceProof {}
 unsafe impl Pod for ZeroBalanceProof {}
