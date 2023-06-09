@@ -101,7 +101,7 @@ proofs.
 
 - `VerifyZeroBalance`:
 
-  - The zero-balance proof certifies that an ElBamal ciphertext encrypts the
+  - The zero-balance proof certifies that an ElGamal ciphertext encrypts the
     number zero.
   - Mathematical description and proof of security:
     [[Notes]](./zk-docs/zero_proof.pdf)
@@ -118,6 +118,6 @@ proofs.
 - `VerifyCiphertextCiphertextEquality`:
 
   - The ciphertext-ciphertext equality proof certifies that two ElGamal
-    ciphertexts encrypt the same message. the number zero.
+    ciphertexts encrypt the same message.
   - Mathematical description and proof of security:
     [[Notes]](./zk-docs/ciphertext_ciphertext_equality.pdf)
