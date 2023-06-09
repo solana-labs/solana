@@ -30,7 +30,7 @@ use {
 /// An batched grouped ciphertext validity proof certifies the validity of two instances of a
 /// standard ciphertext validity proof. An instance of a standard validity proof consist of one
 /// ciphertext and two decryption handles `(commitment, destination_handle, auditor_handle)`. An
-/// instance of an aggregated ciphertext validity proof is a pair `(commitment_0,
+/// instance of an batched ciphertext validity proof is a pair `(commitment_0,
 /// destination_handle_0, auditor_handle_0)` and `(commitment_1, destination_handle_1,
 /// auditor_handle_1)`. The proof certifies the analogous decryptable properties for each one of
 /// these pair of commitment and decryption handles.
@@ -43,7 +43,7 @@ pub struct BatchedGroupedCiphertext2HandlesValidityProof(GroupedCiphertext2Handl
 impl BatchedGroupedCiphertext2HandlesValidityProof {
     /// Batched grouped ciphertext validity proof constructor.
     ///
-    /// The function simples aggregates the input openings and invokes the standard ciphertext
+    /// The function simply batches the input openings and invokes the standard grouped ciphertext
     /// validity proof constructor.
     pub fn new<T: Into<Scalar>>(
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
@@ -55,13 +55,13 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
 
         let t = transcript.challenge_scalar(b"t");
 
-        let aggregated_message = amount_lo.into() + amount_hi.into() * t;
-        let aggregated_opening = opening_lo + &(opening_hi * &t);
+        let batched_message = amount_lo.into() + amount_hi.into() * t;
+        let batched_opening = opening_lo + &(opening_hi * &t);
 
         BatchedGroupedCiphertext2HandlesValidityProof(GroupedCiphertext2HandlesValidityProof::new(
             (destination_pubkey, auditor_pubkey),
-            aggregated_message,
-            &aggregated_opening,
+            batched_message,
+            &batched_opening,
             transcript,
         ))
     }
@@ -85,16 +85,16 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
 
         let t = transcript.challenge_scalar(b"t");
 
-        let aggregated_commitment = commitment_lo + commitment_hi * t;
-        let destination_aggregated_handle = destination_handle_lo + destination_handle_hi * t;
-        let auditor_aggregated_handle = auditor_handle_lo + auditor_handle_hi * t;
+        let batched_commitment = commitment_lo + commitment_hi * t;
+        let destination_batched_handle = destination_handle_lo + destination_handle_hi * t;
+        let auditor_batched_handle = auditor_handle_lo + auditor_handle_hi * t;
 
         let BatchedGroupedCiphertext2HandlesValidityProof(validity_proof) = self;
 
         validity_proof.verify(
-            &aggregated_commitment,
+            &batched_commitment,
             (destination_pubkey, auditor_pubkey),
-            (&destination_aggregated_handle, &auditor_aggregated_handle),
+            (&destination_batched_handle, &auditor_batched_handle),
             transcript,
         )
     }
