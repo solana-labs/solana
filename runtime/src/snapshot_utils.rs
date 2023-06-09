@@ -1279,32 +1279,12 @@ pub fn add_bank_snapshot(
 ) -> Result<BankSnapshotInfo> {
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     let slot = bank.slot();
-    // bank_snapshots_dir/slot
     let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
-    if bank_snapshot_dir.is_dir() {
-        // There is a time window from when a snapshot directory is created to when its content
-        // is fully filled to become a full state good to construct a bank from.  At the init time,
-        // the system may not be booted from the latest snapshot directory, but an older and complete
-        // directory.  Then, when adding new snapshots, the newer incomplete snapshot directory could
-        // be found.  If so, it should be removed.
-        purge_bank_snapshot(&bank_snapshot_dir)?;
-    } else {
-        // Even the snapshot directory is not found, still ensure the account snapshot directory
-        // is also clean.  hardlink failure will happen if an old file exists.
-        let account_paths = &bank.accounts().accounts_db.paths;
-        let slot_str = slot.to_string();
-        for account_path in account_paths {
-            let account_snapshot_path = account_path
-                .parent()
-                .ok_or(SnapshotError::InvalidAccountPath(account_path.clone()))?
-                .join("snapshot")
-                .join(&slot_str);
-            if account_snapshot_path.is_dir() {
-                // remove the account snapshot directory
-                move_and_async_delete_path(&account_snapshot_path);
-            }
-        }
-    }
+    assert!(
+        !bank_snapshot_dir.exists(),
+        "A bank snapshot already exists for slot {slot}!? Path: {}",
+        bank_snapshot_dir.display()
+    );
     fs::create_dir_all(&bank_snapshot_dir)?;
 
     // the bank snapshot is stored as bank_snapshots_dir/slot/slot.BANK_SNAPSHOT_PRE_FILENAME_EXTENSION
@@ -1320,7 +1300,7 @@ pub fn add_bank_snapshot(
 
     // We are constructing the snapshot directory to contain the full snapshot state information to allow
     // constructing a bank from this directory.  It acts like an archive to include the full state.
-    // The set of the account appendvec files is the necessary part of this snapshot state.  Hard-link them
+    // The set of the account storages files is the necessary part of this snapshot state.  Hard-link them
     // from the operational accounts/ directory to here.
     hard_link_storages_to_snapshot(&bank_snapshot_dir, slot, snapshot_storages)?;
 
