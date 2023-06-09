@@ -114,7 +114,7 @@ use {
 };
 
 const PAGE_SIZE: u64 = 4 * 1024;
-const MAX_RECYCLE_STORES: usize = 1000;
+pub(crate) const MAX_RECYCLE_STORES: usize = 1000;
 // when the accounts write cache exceeds this many bytes, we will flush it
 // this can be specified on the command line, too (--accounts-db-cache-limit-mb)
 const WRITE_CACHE_LIMIT_BYTES_DEFAULT: u64 = 15_000_000_000;
@@ -4626,6 +4626,16 @@ impl AccountsDb {
             bank_hash_stats.remove(&slot);
             // the storage has been removed from this slot and recycled or dropped
             assert!(self.storage.remove(&slot, false).is_none());
+            debug_assert!(
+                !self
+                    .accounts_index
+                    .roots_tracker
+                    .read()
+                    .unwrap()
+                    .alive_roots
+                    .contains(&slot),
+                "slot: {slot}"
+            );
         });
     }
 
@@ -5527,7 +5537,7 @@ impl AccountsDb {
                     drop(recycle_stores);
                     let old_id = ret.append_vec_id();
                     ret.recycle(slot, self.next_id());
-                    // This info show the appendvec history change history.  It helps debugging
+                    // This info shows the appendvec change history.  It helps debugging
                     // the appendvec data corrupution issues related to recycling.
                     debug!(
                         "recycling store: old slot {}, old_id: {}, new slot {}, new id{}, path {:?} ",

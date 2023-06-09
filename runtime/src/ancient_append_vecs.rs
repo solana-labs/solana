@@ -913,7 +913,7 @@ pub mod tests {
                     create_db_with_storages_and_index, create_storages_and_update_index,
                     get_all_accounts, remove_account_for_tests, CAN_RANDOMLY_SHRINK_FALSE,
                 },
-                INCLUDE_SLOT_IN_HASH_TESTS,
+                INCLUDE_SLOT_IN_HASH_TESTS, MAX_RECYCLE_STORES,
             },
             accounts_index::UpsertReclaim,
             append_vec::{aligned_stored_size, AppendVec, AppendVecStoredAccountMeta},
@@ -3005,13 +3005,37 @@ pub mod tests {
     fn test_shrink_packed_ancient() {
         solana_logger::setup();
 
-        for num_normal_slots in 1..4 {
-            // build an ancient append vec at slot 'ancient_slot'
-            let (db, ancient_slot) =
-                get_one_packed_ancient_append_vec_and_others(true, num_normal_slots);
+        // When we pack ancient append vecs, the packed append vecs are recycled first if possible. This means they aren't dropped directly.
+        // This test tests that we are releasing Arc refcounts for storages when we pack them into ancient append vecs.
+        let db = AccountsDb::new_single_for_tests();
+        let initial_slot = 0;
+        // create append vecs that we'll fill the recycler with when we pack them into 1 packed append vec
+        create_storages_and_update_index(&db, None, initial_slot, MAX_RECYCLE_STORES, true, None);
+        let max_slot_inclusive = initial_slot + (MAX_RECYCLE_STORES as Slot) - 1;
+        let range = initial_slot..(max_slot_inclusive + 1);
+        // storages with Arc::strong_count > 1 cannot be pulled out of the recycling bin, so hold refcounts so these storages are never re-used by the actual test code
+        let _storages_hold_to_prevent_recycling = range
+            .filter_map(|slot| db.storage.get_slot_storage_entry(slot))
+            .collect::<Vec<_>>();
 
+        // fill up the recycler with storages
+        combine_ancient_slots_packed_for_tests(&db, (initial_slot..=max_slot_inclusive).collect());
+
+        let mut starting_slot = max_slot_inclusive + 1;
+        for num_normal_slots in 1..4 {
+            let mut storages = vec![];
+            // build an ancient append vec at slot 'ancient_slot'
+            let ancient_slot = starting_slot;
+            create_storages_and_update_index(&db, None, ancient_slot, num_normal_slots, true, None);
             let max_slot_inclusive = ancient_slot + (num_normal_slots as Slot);
-            let initial_accounts = get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1));
+            let range = ancient_slot..(max_slot_inclusive + 1);
+            storages.extend(
+                range
+                    .clone()
+                    .filter_map(|slot| db.storage.get_slot_storage_entry(slot)),
+            );
+
+            let initial_accounts = get_all_accounts(&db, range);
             compare_all_accounts(
                 &initial_accounts,
                 &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
@@ -3026,24 +3050,42 @@ pub mod tests {
                 &initial_accounts,
                 &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
             );
+            // verify only `storages` is holding a refcount to each storage we packed
+            storages
+                .iter()
+                .for_each(|storage| assert_eq!(Arc::strong_count(storage), 1));
 
             // create a 2nd ancient append vec at 'next_slot'
             let next_slot = max_slot_inclusive + 1;
             create_storages_and_update_index(&db, None, next_slot, num_normal_slots, true, None);
             let max_slot_inclusive = next_slot + (num_normal_slots as Slot);
-
-            let initial_accounts = get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1));
-            compare_all_accounts(
-                &initial_accounts,
-                &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
+            let range_all = ancient_slot..(max_slot_inclusive + 1);
+            let range = next_slot..(max_slot_inclusive + 1);
+            storages = vec![];
+            storages.extend(
+                range
+                    .clone()
+                    .filter_map(|slot| db.storage.get_slot_storage_entry(slot)),
             );
-
-            combine_ancient_slots_packed_for_tests(&db, (next_slot..=max_slot_inclusive).collect());
-
+            let initial_accounts_all = get_all_accounts(&db, range_all.clone());
+            let initial_accounts = get_all_accounts(&db, range.clone());
             compare_all_accounts(
-                &initial_accounts,
-                &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
+                &initial_accounts_all,
+                &get_all_accounts(&db, range_all.clone()),
             );
+            compare_all_accounts(&initial_accounts, &get_all_accounts(&db, range.clone()));
+
+            combine_ancient_slots_packed_for_tests(&db, range.clone().collect());
+
+            compare_all_accounts(&initial_accounts_all, &get_all_accounts(&db, range_all));
+            compare_all_accounts(&initial_accounts, &get_all_accounts(&db, range));
+
+            // verify only `storages` is holding a refcount to each storage we packed
+            storages
+                .iter()
+                .for_each(|storage| assert_eq!(Arc::strong_count(storage), 1));
+
+            starting_slot = max_slot_inclusive + 1;
         }
     }
 
