@@ -257,10 +257,6 @@ impl BankWithScheduler {
         self.inner.scheduler.read().unwrap().is_some()
     }
 
-    pub(crate) fn into_bank(self) -> Arc<Bank> {
-        self.inner.bank.clone()
-    }
-
     #[must_use]
     pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
         self.inner

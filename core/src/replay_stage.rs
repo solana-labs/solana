@@ -1453,7 +1453,7 @@ impl ReplayStage {
                     let bank = w_bank_forks
                         .remove(*slot)
                         .expect("BankForks should not have been purged yet");
-                    ((*slot, bank.bank_id()), bank)
+                    ((*slot, bank.bank_id()), bank.clone())
                 })
                 .unzip()
         };

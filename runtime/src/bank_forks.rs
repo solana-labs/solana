@@ -203,26 +203,24 @@ impl BankForks {
 
     pub fn insert(&mut self, bank: Bank) -> BankWithScheduler {
         let bank = Arc::new(bank);
-        let bank_with_scheduler = if let Some(scheduler_pool) = &self.scheduler_pool {
+        let bank = if let Some(scheduler_pool) = &self.scheduler_pool {
             let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
             let scheduler = scheduler_pool.take_from_pool(context);
-            BankWithScheduler::new(bank.clone(), Some(scheduler))
+            BankWithScheduler::new(bank, Some(scheduler))
         } else {
-            BankWithScheduler::new(bank.clone(), None)
+            BankWithScheduler::new(bank, None)
         };
-        let prev = self
-            .banks
-            .insert(bank.slot(), bank_with_scheduler.clone_with_scheduler());
+        let prev = self.banks.insert(bank.slot(), bank.clone_with_scheduler());
         assert!(prev.is_none());
         let slot = bank.slot();
         self.descendants.entry(slot).or_default();
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        bank_with_scheduler
+        bank
     }
 
-    pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
+    pub fn remove(&mut self, slot: Slot) -> Option<BankWithScheduler> {
         let bank = self.banks.remove(&slot)?;
         for parent in bank.proper_ancestors() {
             let mut entry = match self.descendants.entry(parent) {
@@ -241,7 +239,7 @@ impl BankForks {
         if entry.get().is_empty() {
             entry.remove_entry();
         }
-        Some(bank.into_bank())
+        Some(bank)
     }
 
     pub fn highest_slot(&self) -> Slot {
@@ -626,7 +624,7 @@ impl BankForks {
         let mut prune_remove_time = Measure::start("prune_slots");
         let removed_banks = prune_slots
             .into_iter()
-            .filter_map(|slot| self.remove(slot))
+            .filter_map(|slot| self.remove(slot).map(|b| b.clone()))
             .collect();
         prune_remove_time.stop();
 
