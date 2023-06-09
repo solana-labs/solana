@@ -964,8 +964,7 @@ pub fn main() {
         .map(BlockstoreRecoveryMode::from);
 
     // Canonicalize ledger path to avoid issues with symlink creation
-    let _ = fs::create_dir_all(&ledger_path);
-    let ledger_path = fs::canonicalize(&ledger_path).unwrap_or_else(|err| {
+    let ledger_path = create_and_canonicalize_directories(&[ledger_path]).unwrap_or_else(|err| {
         eprintln!("Unable to access ledger path: {err:?}");
         exit(1);
     });
