@@ -32,7 +32,6 @@ use {
 
 /// ancient packing algorithm tuning per pass
 #[derive(Debug)]
-#[allow(dead_code)]
 struct PackedAncientStorageTuning {
     /// shrink enough of these ancient append vecs to realize this% of the total dead data that needs to be shrunk
     /// Doing too much burns too much time and disk i/o.
@@ -49,7 +48,6 @@ struct PackedAncientStorageTuning {
 /// info about a storage eligible to be combined into an ancient append vec.
 /// Useful to help sort vecs of storages.
 #[derive(Debug)]
-#[allow(dead_code)]
 struct SlotInfo {
     storage: Arc<AccountStorageEntry>,
     /// slot of storage
@@ -126,7 +124,6 @@ impl AncientSlotInfos {
 
     /// modify 'self' to contain only the slot infos for the slots that should be combined
     /// (and in this process effectively shrunk)
-    #[allow(dead_code)]
     fn filter_ancient_slots(&mut self, tuning: &PackedAncientStorageTuning) {
         // figure out which slots to combine
         // 1. should_shrink: largest bytes saved above some cutoff of ratio
@@ -136,7 +133,6 @@ impl AncientSlotInfos {
     }
 
     // sort 'shrink_indexes' by most bytes saved, highest to lowest
-    #[allow(dead_code)]
     fn sort_shrink_indexes_by_bytes_saved(&mut self) {
         self.shrink_indexes.sort_unstable_by(|l, r| {
             let amount_shrunk = |index: &usize| {
@@ -148,7 +144,6 @@ impl AncientSlotInfos {
     }
 
     /// clear 'should_shrink' for storages after a cutoff to limit how many storages we shrink
-    #[allow(dead_code)]
     fn clear_should_shrink_after_cutoff(&mut self, percent_of_alive_shrunk_data: u64) {
         let mut bytes_to_shrink_due_to_ratio = 0;
         // shrink enough slots to write 'percent_of_alive_shrunk_data'% of the total alive data
@@ -171,7 +166,6 @@ impl AncientSlotInfos {
     /// after this function, only slots that were chosen to shrink are marked with
     /// 'should_shrink'
     /// There are likely more candidates to shrink than will be chosen.
-    #[allow(dead_code)]
     fn choose_storages_to_shrink(&mut self, percent_of_alive_shrunk_data: u64) {
         // sort the shrink_ratio_slots by most bytes saved to fewest
         // most bytes saved is more valuable to shrink
@@ -184,7 +178,6 @@ impl AncientSlotInfos {
     /// 'all_infos' are combined, the total number of storages <= 'max_storages'
     /// The idea is that 'all_infos' is sorted from smallest capacity to largest,
     /// but that isn't required for this function to be 'correct'.
-    #[allow(dead_code)]
     fn truncate_to_max_storages(&mut self, max_storages: usize, ideal_storage_size: NonZeroU64) {
         // these indexes into 'all_infos' are useless once we truncate 'all_infos', so make sure they're cleared out to avoid any issues
         self.shrink_indexes.clear();
@@ -212,7 +205,6 @@ impl AncientSlotInfos {
     /// Combining too many storages costs i/o and cpu so the goal is to find the sweet spot so
     /// that we make progress in cleaning/shrinking/combining but that we don't cause unnecessary
     /// churn.
-    #[allow(dead_code)]
     fn filter_by_smallest_capacity(&mut self, max_storages: usize, ideal_storage_size: NonZeroU64) {
         let total_storages = self.all_infos.len();
         if total_storages <= max_storages {
@@ -238,7 +230,6 @@ impl AncientSlotInfos {
 /// Used to hold the result of writing a single ancient storage
 /// and results of writing multiple ancient storages
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 struct WriteAncientAccounts<'a> {
     /// 'ShrinkInProgress' instances created by starting a shrink operation
     shrinks_in_progress: HashMap<Slot, ShrinkInProgress<'a>>,
@@ -247,7 +238,6 @@ struct WriteAncientAccounts<'a> {
 }
 
 impl AccountsDb {
-    #[allow(dead_code)]
     /// Combine account data from storages in 'sorted_slots' into packed storages.
     /// This keeps us from accumulating storages for each slot older than an epoch.
     /// Ater this function the number of alive roots is <= # alive roots when it was called.
@@ -289,7 +279,6 @@ impl AccountsDb {
         }
     }
 
-    #[allow(dead_code)]
     fn combine_ancient_slots_packed_internal(
         &self,
         sorted_slots: Vec<Slot>,
@@ -358,7 +347,6 @@ impl AccountsDb {
 
     /// calculate all storage info for the storages in slots
     /// Then, apply 'tuning' to filter out slots we do NOT want to combine.
-    #[allow(dead_code)]
     fn collect_sort_filter_ancient_slots(
         &self,
         slots: Vec<Slot>,
@@ -373,7 +361,6 @@ impl AccountsDb {
     /// create append vec of size 'bytes'
     /// write 'accounts_to_write' into it
     /// return shrink_in_progress and some metrics
-    #[allow(dead_code)]
     fn write_ancient_accounts<'a, 'b: 'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &'b self,
         bytes: u64,
@@ -402,7 +389,6 @@ impl AccountsDb {
     }
     /// go through all slots and populate 'SlotInfo', per slot
     /// This provides the list of possible ancient slots to sort, filter, and then combine.
-    #[allow(dead_code)]
     fn calc_ancient_slot_info(
         &self,
         slots: Vec<Slot>,
@@ -433,7 +419,6 @@ impl AccountsDb {
 
     /// write packed storages as described in 'accounts_to_combine'
     /// and 'packed_contents'
-    #[allow(dead_code)]
     fn write_packed_storages<'a, 'b>(
         &'a self,
         accounts_to_combine: &'b AccountsToCombine<'b>,
@@ -493,7 +478,6 @@ impl AccountsDb {
 
     /// for each slot in 'ancient_slots', collect all accounts in that slot
     /// return the collection of accounts by slot
-    #[allow(dead_code)]
     fn get_unique_accounts_from_storage_for_combining_ancient_slots<'a>(
         &self,
         ancient_slots: &'a [SlotInfo],
@@ -513,7 +497,6 @@ impl AccountsDb {
 
     /// finish shrink operation on slots where a new storage was created
     /// drop root and storage for all original slots whose contents were combined into other storages
-    #[allow(dead_code)]
     fn finish_combine_ancient_slots_packed_internal(
         &self,
         accounts_to_combine: AccountsToCombine<'_>,
@@ -549,7 +532,6 @@ impl AccountsDb {
     /// 2b. pubkeys with refcount > 1
     /// Note that the return value can contain fewer items than 'accounts_per_storage' if we find storages which won't be affected.
     /// 'accounts_per_storage' should be sorted by slot
-    #[allow(dead_code)]
     fn calc_accounts_to_combine<'a>(
         &self,
         accounts_per_storage: &'a Vec<(&'a SlotInfo, GetUniqueAccountsResult<'a>)>,
@@ -671,7 +653,6 @@ impl AccountsDb {
 
     /// create packed storage and write contents of 'packed' to it.
     /// accumulate results in 'write_ancient_accounts'
-    #[allow(dead_code)]
     fn write_one_packed_storage<'a, 'b: 'a>(
         &'b self,
         packed: &'a PackedAncientStorage<'a>,
@@ -697,7 +678,6 @@ impl AccountsDb {
     /// These accounts need to be rewritten in their same slot, Ideally with no other accounts in the slot.
     /// Other accounts would have ref_count = 1.
     /// ref_count = 1 accounts will be combined together with other slots into larger append vecs elsewhere.
-    #[allow(dead_code)]
     fn write_ancient_accounts_to_same_slot_multiple_refs<'a, 'b: 'a>(
         &'b self,
         accounts_to_combine: impl Iterator<Item = &'a AliveAccounts<'a>>,
@@ -715,7 +695,6 @@ impl AccountsDb {
 }
 
 /// hold all alive accounts to be shrunk and/or combined
-#[allow(dead_code)]
 #[derive(Debug, Default)]
 struct AccountsToCombine<'a> {
     /// slots and alive accounts that must remain in the slot they are currently in
@@ -738,7 +717,6 @@ struct AccountsToCombine<'a> {
     target_slots_sorted: Vec<Slot>,
 }
 
-#[allow(dead_code)]
 #[derive(Default)]
 /// intended contents of a packed ancient storage
 struct PackedAncientStorage<'a> {
@@ -749,7 +727,6 @@ struct PackedAncientStorage<'a> {
 }
 
 impl<'a> PackedAncientStorage<'a> {
-    #[allow(dead_code)]
     /// return a minimal set of 'PackedAncientStorage's to contain all 'accounts_to_combine' with
     /// the new storages having a size guided by 'ideal_size'
     fn pack(
