@@ -100,7 +100,9 @@ pub fn spawn_server(
 ) -> Result<(Endpoint, Arc<StreamStats>, JoinHandle<()>), QuicServerError> {
     info!("Start {name} quic server on {sock:?}");
     let (mut config, _cert) = configure_server(keypair, gossip_host)?;
-    config.concurrent_connections(max_staked_connections.saturating_add(max_unstaked_connections) as u32);
+    config.concurrent_connections(
+        max_staked_connections.saturating_add(max_unstaked_connections) as u32,
+    );
     let endpoint = Endpoint::new(EndpointConfig::default(), Some(config), sock, TokioRuntime)
         .map_err(QuicServerError::EndpointFailed)?;
     let stats = Arc::<StreamStats>::default();
