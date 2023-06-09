@@ -17,7 +17,7 @@ The hardware recommendations below are provided as a guide.  Operators are encou
 
 - CPU
   - 12 cores / 24 threads, or more
-  - 2.8GHz, or faster
+  - 2.8GHz base clock speed, or faster
   - SHA extensions instruction support
     - AMD Gen 3 or newer
     - Intel Ice Lake or newer

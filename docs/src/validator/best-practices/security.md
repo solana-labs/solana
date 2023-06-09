@@ -16,9 +16,11 @@ sudo apt upgrade
 
 ## DO NOT Store Your Withdrawer Key On Your Validator Machine
 
-Your withdrawer key gives you full access to the vote account of your validator. It is highly sensitive information and should not be stored on the validator itself. Make sure the authorized withdrawer key is either stored on a hardware wallet or created on a trusted computer (other than your validator computer) and that you store it somewhere safe. Many operators choose to store the key in cold storage like a hardware wallet.
+Your withdrawer key gives the operator full control of the vote account. It is highly sensitive information and should not be stored on the validator itself.
 
-Again, this should never be stored on your validator at any time.
+There are a number of options for withdrawer key management.  Some operators choose to use hardware wallets or paper wallets for the withdrawer keypair.  Another option is a multisig where each key of the miltisig is a hardware wallet or paper wallet. Whichever option you choose, make sure the authorized withdrawer key is stored securely and that it has been generated on a trusted computer (other than your validator computer).
+
+To reiterate, the withdrawer keypair should never be stored on your validator at any time.
 
 ## DO NOT Run The Solana Validator as a Root User
 

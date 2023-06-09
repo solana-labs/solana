@@ -3,7 +3,7 @@ title: Validator Operations Best Practices
 sidebar_label: General Operations
 ---
 
-After you have successfully gotten a [validator running on testnet](../get-started/setup-a-validator.md) (or another cluster of your choice), you will want to become familiar with how to operate your validator on a day-to-day basis. During daily operations, you will be [monitoring your server](./monitoring.md), updating software regularly (both the Solana validator software and operating system packages), and managing your stake account and identity account.
+After you have successfully setup and started a [validator on testnet](../get-started/setup-a-validator.md) (or another cluster of your choice), you will want to become familiar with how to operate your validator on a day-to-day basis. During daily operations, you will be [monitoring your server](./monitoring.md), updating software regularly (both the Solana validator software and operating system packages), and managing your vote account and identity account.
 
 All of these skills are critical to practice. Maximizing your validator uptime is an important part of being a good operator.
 
@@ -29,7 +29,7 @@ To see the full leader schedule for an epoch, use the following command:
 solana leader-schedule
 ```
 
-Based on the current slot and the leader schedule, you and calculate open time windows where your validator is not expected to produce blocks.
+Based on the current slot and the leader schedule, you can calculate open time windows where your validator is not expected to produce blocks.
 
 Assuming you are ready to restart, you may use the `solana-validator exit` command.  The command exits your validator process when an appropriate idle time window is reached.  Assuming that you have systemd implemented for your validator process, the validator should restart automatically after the exit.  See the below help command for details:
 
@@ -130,9 +130,9 @@ solana balance validator-keypair.json
 
 > **Note** `solana-watchtower` can monitor for a minimum validator identity balance.  See [monitoring best practices](./monitoring.md) for details.
 
-## Regularly Withdraw From Vote Account
+## Withdrawing From The Vote Account
 
-As a reminder, your withdrawer's keypair should **_NEVER_** be stored on your server. It should be stored on a hardware wallet or another secure location that mitigates hacking and theft of funds.
+As a reminder, your withdrawer's keypair should **_NEVER_** be stored on your server. It should be stored on a hardware wallet, paper wallet, or multisig mitigates the risk of hacking and theft of funds.
 
 To withdraw your funds from your vote account, you will need to run `solana withdraw-from-vote-account` on a trusted computer. For example, on a trusted computer, you could withdraw all of the funds from your vote account (excluding the rent exempt minimum). The below example assumes you have a separate keypair to store your funds called `person-keypair.json`
 

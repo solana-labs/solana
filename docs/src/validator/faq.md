@@ -27,6 +27,10 @@ No, a Solana validator uses Proof of Stake. It does not use Proof of Work (often
 
 Anyone can operate a validator.  All Solana clusters are permissionless. A new operator can choose to join at any time.
 
+### Is there a validator set or limited number of validators that can operate?
+
+No, all Solana clusters are permissionless.  There is no limit to the number of active validators that can participate in consensus.  Validators participating in consensus (voting validators) incur transaction fees for each vote.  A voting validator can expect to incur up to 1.1 SOL per day in vote transaction fees.
+
 ### What are the hardware requirements for running a validator?
 
 See [validator requirements](../running-validator/validator-reqs.md).
