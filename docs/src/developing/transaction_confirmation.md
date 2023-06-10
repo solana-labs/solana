@@ -2,8 +2,6 @@
 title: "Transaction Confirmation"
 ---
 
-into to transaction confirmation?
-
 Problems relating to [transaction confirmation](./transaction_confirmation.md) are common with many newer developers while building applications. This article aims to boost the overall understanding of the confirmation mechanism used on the Solana blockchain, including some recommended best practices.
 
 ## Brief background on transactions
