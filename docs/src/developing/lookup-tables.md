@@ -84,10 +84,7 @@ Similar to requesting another account (or PDA) from the cluster, you can fetch a
 const lookupTableAddress = new web3.PublicKey("");
 
 // get the table from the cluster
-let lookupTableAccount;
-await connection
-  .getAddressLookupTable(lookupTableAddress)
-  .then((res) => lookupTableAccount = res.value);
+const lookupTableAccount (await connection.getAddressLookupTable(lookupTableAddress)).value;
 
 // `lookupTableAccount` will now be a `AddressLookupTableAccount` object
 
