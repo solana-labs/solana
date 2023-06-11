@@ -2918,7 +2918,7 @@ impl Bank {
                     if vote_account.owner() != &solana_vote_program {
                         return 0;
                     }
-                    let vote_state = match vote_account.vote_state().cloned() {
+                    let vote_state = match vote_account.vote_state() {
                         Ok(vote_state) => vote_state,
                         Err(_) => {
                             return 0;
@@ -2927,7 +2927,7 @@ impl Bank {
 
                     stake_state::calculate_points(
                         stake_account.stake_state(),
-                        &vote_state,
+                        vote_state,
                         Some(&stake_history),
                     )
                     .unwrap_or(0)
