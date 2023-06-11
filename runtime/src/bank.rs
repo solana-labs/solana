@@ -3085,6 +3085,22 @@ impl Bank {
             .for_each(|x| rewards.push((x.stake_pubkey, x.stake_reward_info)));
     }
 
+    #[allow(dead_code)]
+    /// insert non-zero stake rewards to self.rewards
+    /// Return the number of rewards inserted
+    fn update_reward_history_in_partition(&self, stake_rewards: &[StakeReward]) -> usize {
+        let mut rewards: RwLockWriteGuard<Vec<(Pubkey, RewardInfo)>> =
+            self.rewards.write().unwrap();
+        rewards.reserve(stake_rewards.len());
+        let initial_len = rewards.len();
+        stake_rewards
+            .iter()
+            .filter(|x| x.get_stake_reward() > 0)
+            .for_each(|x| rewards.push((x.stake_pubkey, x.stake_reward_info)));
+        rewards.len().saturating_sub(initial_len)
+    }
+
+    /// Process reward credits for a partition of rewards
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
         #[allow(deprecated)]
         self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |account| {
