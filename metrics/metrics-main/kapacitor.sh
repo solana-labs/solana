@@ -24,9 +24,11 @@ container=kapacitor
   exit 0
 )
 
+sed -i 's|$DISCORD_WEBHOOK_CANARIES_MONITORING|'"$DISCORD_WEBHOOK_CANARIES_MONITORING"'|g' "$PWD"/kapacitor.conf
+
 #running influx kapacitor service
 sudo docker run \
-  --memory=10g \
+  --memory=30g \
   --detach \
   --name=kapacitor \
   --env KAPACITOR_USERNAME="$KAPACITOR_USERNAME" \
