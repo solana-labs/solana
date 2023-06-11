@@ -12540,7 +12540,11 @@ fn test_rewards_point_calculation() {
     let mut rewards_metrics = RewardsMetrics::default();
     let expected_rewards = 100_000_000_000;
 
+    let stakes: RwLockReadGuard<Stakes<StakeAccount<Delegation>>> = bank.stakes_cache.stakes();
+    let reward_calculate_param = bank.get_epoch_reward_calculate_param_info(&stakes);
+
     let point_value = bank.calculate_reward_points_partitioned(
+        &reward_calculate_param,
         expected_rewards,
         &thread_pool,
         &mut rewards_metrics,
@@ -12562,8 +12566,11 @@ fn test_rewards_point_calculation_empty() {
     let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
     let mut rewards_metrics: RewardsMetrics = RewardsMetrics::default();
     let expected_rewards = 100_000_000_000;
+    let stakes: RwLockReadGuard<Stakes<StakeAccount<Delegation>>> = bank.stakes_cache.stakes();
+    let reward_calculate_param = bank.get_epoch_reward_calculate_param_info(&stakes);
 
     let point_value = bank.calculate_reward_points_partitioned(
+        &reward_calculate_param,
         expected_rewards,
         &thread_pool,
         &mut rewards_metrics,
