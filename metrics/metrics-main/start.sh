@@ -12,7 +12,6 @@ echo "HOST: $HOST"
 
 : "${INFLUXDB_IMAGE:=influxdb:1.7}"
 : "${CHRONOGRAF_IMAGE:=chronograf:1.9.4}"
-: "${KAPACITOR_IMAGE:=kapacitor:1.6.5}"
 : "${GRAFANA_IMAGE:=grafana/grafana:9.4.7}"
 : "${PROMETHEUS_IMAGE:=prom/prometheus:v2.28.0}"
 : "${ALERTMANAGER_IMAGE:=prom/alertmanager:v0.23.0}"
@@ -20,7 +19,6 @@ echo "HOST: $HOST"
 
 docker pull $INFLUXDB_IMAGE
 docker pull $CHRONOGRAF_IMAGE
-docker pull $KAPACITOR_IMAGE
 docker pull $GRAFANA_IMAGE
 docker pull $PROMETHEUS_IMAGE
 docker pull $ALERTMANAGER_IMAGE
@@ -140,19 +138,8 @@ sudo docker run \
   --log-opt max-file=5 \
   $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086 --auth-duration="720h" --inactivity-duration="48h"
 
-sudo docker run \
-  --memory=10g \
-  --detach \
-  --name=kapacitor \
-  --env KAPACITOR_USERNAME="$KAPACITOR_USERNAME" \
-  --env KAPACITOR_USERNAME="$KAPACITOR_PASSWORD" \
-  --publish 9092:9092 \
-  --volume "$PWD"/kapacitor.conf:/etc/kapacitor/kapacitor.conf \
-  --volume /var/lib/kapacitor:/var/lib/kapacitor \
-  --user "$(id -u):$(id -g)" \
-  --log-opt max-size=1g \
-  --log-opt max-file=5  \
-  $KAPACITOR_IMAGE
+#shellcheck source=metrics/metrics-main/kapacitor.sh
+source kapacitor.sh
 
 curl -h | sed -ne '/--tlsv/p'
 curl --retry 10 --retry-delay 5 -v --head https://"$HOST":8086/ping
