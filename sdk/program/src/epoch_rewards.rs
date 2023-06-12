@@ -56,14 +56,6 @@ mod tests {
     }
 
     #[test]
-    fn test_epoch_rewards_copy() {
-        let epoch_rewards = EpochRewards::new(100, 0, 64);
-        let epoch_rewards_copied = epoch_rewards;
-
-        assert_eq!(epoch_rewards, epoch_rewards_copied);
-    }
-
-    #[test]
     fn test_epoch_rewards_distribute() {
         let mut epoch_rewards = EpochRewards::new(100, 0, 64);
         epoch_rewards.distribute(100);
