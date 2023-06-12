@@ -1418,14 +1418,14 @@ pub fn main() {
 
     let (account_run_paths, account_snapshot_paths) =
         create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
-            eprintln!("Error: {err:?}");
+            eprintln!("Error: {err}");
             exit(1);
         });
 
     let (account_shrink_run_paths, account_shrink_snapshot_paths) =
         match account_shrink_paths.map(|paths| {
             create_all_accounts_run_and_snapshot_dirs(&paths).unwrap_or_else(|err| {
-                eprintln!("Error: {err:?}");
+                eprintln!("Error: {err}");
                 exit(1);
             })
         }) {
