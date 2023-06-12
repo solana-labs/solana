@@ -81,7 +81,7 @@ use {
         storable_accounts::StorableAccounts,
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
-        vote_account::{VoteAccount, VoteAccountsHashMap},
+        vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
@@ -1115,6 +1115,14 @@ struct VoteRewardsAccounts {
     /// None if to be skipped.
     accounts_to_store: Vec<Option<AccountSharedData>>,
 }
+
+/// hold reward calc info to avoid recalculation across functions
+struct EpochRewardCalculateParamInfo<'a> {
+    stake_history: StakeHistory,
+    stake_delegations: Vec<(&'a Pubkey, &'a StakeAccount<Delegation>)>,
+    cached_vote_accounts: &'a VoteAccounts,
+}
+
 pub(crate) type StakeRewards = Vec<StakeReward>;
 
 #[derive(Debug, Default)]
@@ -2803,6 +2811,25 @@ impl Bank {
         }
     }
 
+    #[allow(dead_code)]
+    /// calculate and return some reward calc info to avoid recalculation across functions
+    fn get_epoch_reward_calculate_param_info<'a>(
+        &self,
+        stakes: &'a Stakes<StakeAccount<Delegation>>,
+    ) -> EpochRewardCalculateParamInfo<'a> {
+        let stake_history = self.stakes_cache.stakes().history().clone();
+
+        let stake_delegations = self.filter_stake_delegations(stakes);
+
+        let cached_vote_accounts = stakes.vote_accounts();
+
+        EpochRewardCalculateParamInfo {
+            stake_history,
+            stake_delegations,
+            cached_vote_accounts,
+        }
+    }
+
     /// Load, calculate and payout epoch rewards for stake and vote accounts
     fn pay_validator_rewards_with_thread_pool(
         &mut self,
@@ -2894,14 +2921,16 @@ impl Bank {
     #[allow(dead_code)]
     fn calculate_reward_points_partitioned(
         &self,
+        reward_calculate_params: &EpochRewardCalculateParamInfo,
         rewards: u64,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) -> Option<PointValue> {
-        let stakes = self.stakes_cache.stakes();
-        let stake_history = stakes.history().clone();
-        let stake_delegations = self.filter_stake_delegations(&stakes);
-        let cached_vote_accounts = stakes.vote_accounts();
+        let EpochRewardCalculateParamInfo {
+            stake_history,
+            stake_delegations,
+            cached_vote_accounts,
+        } = reward_calculate_params;
 
         let solana_vote_program: Pubkey = solana_vote_program::id();
 
@@ -2943,7 +2972,7 @@ impl Bank {
                     stake_state::calculate_points(
                         stake_account.stake_state(),
                         vote_state,
-                        Some(&stake_history),
+                        Some(stake_history),
                     )
                     .unwrap_or(0)
                 })
