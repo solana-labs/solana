@@ -9,11 +9,7 @@ use {
         retransmit_stage::RetransmitStage,
     },
     solana_gossip::legacy_contact_info::LegacyContactInfo as ContactInfo,
-    solana_ledger::{
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        shred::{Shred, ShredFlags},
-    },
-    solana_runtime::bank::Bank,
+    solana_ledger::shred::{Shred, ShredFlags},
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     test::Bencher,
 };
@@ -33,7 +29,6 @@ fn get_retransmit_peers_deterministic(
     cluster_nodes: &ClusterNodes<RetransmitStage>,
     slot: Slot,
     slot_leader: &Pubkey,
-    root_bank: &Bank,
     num_simulated_shreds: usize,
 ) {
     let parent_offset = u16::from(slot != 0);
@@ -52,7 +47,6 @@ fn get_retransmit_peers_deterministic(
         let _retransmit_peers = cluster_nodes.get_retransmit_peers(
             slot_leader,
             &shred.id(),
-            root_bank,
             solana_gossip::cluster_info::DATA_PLANE_FANOUT,
         );
     }
@@ -60,19 +54,11 @@ fn get_retransmit_peers_deterministic(
 
 fn get_retransmit_peers_deterministic_wrapper(b: &mut Bencher, unstaked_ratio: Option<(u32, u32)>) {
     let mut rng = rand::thread_rng();
-    let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-    let bank = Bank::new_for_benches(&genesis_config);
     let (nodes, cluster_nodes) = make_cluster_nodes(&mut rng, unstaked_ratio);
     let slot_leader = *nodes[1..].choose(&mut rng).unwrap().pubkey();
     let slot = rand::random::<u64>();
     b.iter(|| {
-        get_retransmit_peers_deterministic(
-            &cluster_nodes,
-            slot,
-            &slot_leader,
-            &bank,
-            NUM_SIMULATED_SHREDS,
-        )
+        get_retransmit_peers_deterministic(&cluster_nodes, slot, &slot_leader, NUM_SIMULATED_SHREDS)
     });
 }
 
