@@ -12607,6 +12607,63 @@ fn test_store_stake_accounts_in_partition_empty() {
 }
 
 #[test]
+fn test_update_reward_history_in_partition() {
+    for zero_reward in [false, true] {
+        let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+        let bank = Bank::new_for_tests(&genesis_config);
+
+        let mut expected_num = 100;
+
+        let mut stake_rewards = (0..expected_num)
+            .map(|_| StakeReward::new_random())
+            .collect::<Vec<_>>();
+
+        let mut rng = rand::thread_rng();
+        let i_zero = rng.gen_range(0, expected_num);
+        if zero_reward {
+            // pick one entry to have zero rewards so it gets ignored
+            stake_rewards[i_zero].stake_reward_info.lamports = 0;
+        }
+
+        let num_in_history = bank.update_reward_history_in_partition(&stake_rewards);
+
+        if zero_reward {
+            stake_rewards.remove(i_zero);
+            // -1 because one of them had zero rewards and was ignored
+            expected_num -= 1;
+        }
+
+        bank.rewards
+            .read()
+            .unwrap()
+            .iter()
+            .zip(stake_rewards.iter())
+            .for_each(|((k, reward_info), expected_stake_reward)| {
+                assert_eq!(
+                    (
+                        &expected_stake_reward.stake_pubkey,
+                        &expected_stake_reward.stake_reward_info
+                    ),
+                    (k, reward_info)
+                );
+            });
+
+        assert_eq!(num_in_history, expected_num);
+    }
+}
+
+#[test]
+fn test_update_reward_history_in_partition_empty() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let stake_rewards = vec![];
+
+    let num_in_history = bank.update_reward_history_in_partition(&stake_rewards);
+    assert_eq!(num_in_history, 0);
+}
+
+#[test]
 fn test_system_instruction_allocate() {
     let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.0));
     let bank = Bank::new_for_tests(&genesis_config);
