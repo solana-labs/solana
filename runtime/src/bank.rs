@@ -883,7 +883,7 @@ pub(crate) struct StartBlockHeightAndRewards {
     /// the block height of the slot at which rewards distribution began
     pub(crate) start_block_height: u64,
     /// calculated epoch rewards pending distribution
-    pub(crate) calculated_epoch_stake_rewards: Arc<StakeRewards>,
+    pub(crate) calculated_epoch_stake_rewards: Arc<Vec<StakeRewards>>,
 }
 
 /// Represent whether bank is in the reward phase or not.
@@ -1438,7 +1438,7 @@ impl Bank {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn set_epoch_reward_status_active(&mut self, stake_rewards: StakeRewards) {
+    pub(crate) fn set_epoch_reward_status_active(&mut self, stake_rewards: Vec<StakeRewards>) {
         self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
             start_block_height: self.block_height,
             calculated_epoch_stake_rewards: Arc::new(stake_rewards),
