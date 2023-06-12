@@ -1,3 +1,5 @@
+#![feature(let_else)]
+
 extern crate proc_macro;
 
 // This file littered with these essential cfgs so ensure them.
