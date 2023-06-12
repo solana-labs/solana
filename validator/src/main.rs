@@ -1422,16 +1422,14 @@ pub fn main() {
             exit(1);
         });
 
-    let (account_shrink_run_paths, account_shrink_snapshot_paths) =
-        match account_shrink_paths.map(|paths| {
+    let (account_shrink_run_paths, account_shrink_snapshot_paths) = account_shrink_paths
+        .map(|paths| {
             create_all_accounts_run_and_snapshot_dirs(&paths).unwrap_or_else(|err| {
                 eprintln!("Error: {err}");
                 exit(1);
             })
-        }) {
-            Some((run_paths, snapshot_paths)) => (Some(run_paths), Some(snapshot_paths)),
-            None => (None, None),
-        };
+        })
+        .unzip();
 
     // From now on, use run/ paths in the same way as the previous account_paths.
     validator_config.account_paths = account_run_paths;
