@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic, dead_code)]
+#![allow(clippy::integer_arithmetic)]
 use {
     log::*,
     solana_core::{
