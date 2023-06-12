@@ -4,7 +4,7 @@ use {
         encryption::{elgamal::ElGamalKeypair, pedersen::Pedersen},
         instruction::{
             pubkey_validity::PubkeyValidityData, range_proof::RangeProofU64Data,
-            withdraw::WithdrawData, ZkProofData,
+            withdraw::WithdrawData, zero_balance::ZeroBalanceProofData, ZkProofData,
         },
     },
 };
@@ -52,10 +52,23 @@ fn bench_withdraw(c: &mut Criterion) {
     });
 }
 
+fn bench_zero_balance(c: &mut Criterion) {
+    let keypair = ElGamalKeypair::new_rand();
+    let ciphertext = keypair.public.encrypt(0_u64);
+    let proof_data = ZeroBalanceProofData::new(&keypair, &ciphertext).unwrap();
+
+    c.bench_function("zero_balance", |b| {
+        b.iter(|| {
+            proof_data.verify_proof().unwrap();
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_pubkey_validity,
     bench_range_proof_u64,
-    bench_withdraw
+    bench_withdraw,
+    bench_zero_balance,
 );
 criterion_main!(benches);
