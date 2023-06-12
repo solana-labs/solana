@@ -9,7 +9,7 @@ use {
         instruction::transfer::{
             combine_lo_hi_ciphertexts, combine_lo_hi_commitments, combine_lo_hi_openings,
             combine_lo_hi_u64,
-            encryption::{FeeEncryption, TransferAmountEncryption},
+            encryption::{FeeEncryption, TransferAmountCiphertext},
             split_u64, FeeParameters, Role,
         },
         range_proof::RangeProof,
@@ -80,10 +80,10 @@ pub struct TransferWithFeeData {
 #[repr(C)]
 pub struct TransferWithFeeProofContext {
     /// Group encryption of the low 16 bites of the transfer amount
-    pub ciphertext_lo: pod::TransferAmountEncryption, // 128 bytes
+    pub ciphertext_lo: pod::TransferAmountCiphertext, // 128 bytes
 
     /// Group encryption of the high 48 bits of the transfer amount
-    pub ciphertext_hi: pod::TransferAmountEncryption, // 128 bytes
+    pub ciphertext_hi: pod::TransferAmountCiphertext, // 128 bytes
 
     /// The public encryption keys associated with the transfer: source, dest, and auditor
     pub transfer_with_fee_pubkeys: pod::TransferWithFeePubkeys, // 128 bytes
@@ -114,13 +114,13 @@ impl TransferWithFeeData {
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS);
 
-        let (ciphertext_lo, opening_lo) = TransferAmountEncryption::new(
+        let (ciphertext_lo, opening_lo) = TransferAmountCiphertext::new(
             amount_lo,
             &source_keypair.public,
             destination_pubkey,
             auditor_pubkey,
         );
-        let (ciphertext_hi, opening_hi) = TransferAmountEncryption::new(
+        let (ciphertext_hi, opening_hi) = TransferAmountCiphertext::new(
             amount_hi,
             &source_keypair.public,
             destination_pubkey,
@@ -133,13 +133,13 @@ impl TransferWithFeeData {
             .ok_or(ProofError::Generation)?;
 
         let transfer_amount_lo_source = ElGamalCiphertext {
-            commitment: ciphertext_lo.commitment,
-            handle: ciphertext_lo.source_handle,
+            commitment: *ciphertext_lo.get_commitment(),
+            handle: *ciphertext_lo.get_source_handle(),
         };
 
         let transfer_amount_hi_source = ElGamalCiphertext {
-            commitment: ciphertext_hi.commitment,
-            handle: ciphertext_hi.source_handle,
+            commitment: *ciphertext_hi.get_commitment(),
+            handle: *ciphertext_hi.get_source_handle(),
         };
 
         let new_source_ciphertext = old_source_ciphertext
@@ -182,8 +182,8 @@ impl TransferWithFeeData {
             auditor_pubkey: (*auditor_pubkey).into(),
             withdraw_withheld_authority_pubkey: (*withdraw_withheld_authority_pubkey).into(),
         };
-        let pod_ciphertext_lo: pod::TransferAmountEncryption = ciphertext_lo.to_pod();
-        let pod_ciphertext_hi: pod::TransferAmountEncryption = ciphertext_hi.to_pod();
+        let pod_ciphertext_lo: pod::TransferAmountCiphertext = ciphertext_lo.into();
+        let pod_ciphertext_hi: pod::TransferAmountCiphertext = ciphertext_hi.into();
         let pod_new_source_ciphertext: pod::ElGamalCiphertext = new_source_ciphertext.into();
         let pod_fee_ciphertext_lo: pod::FeeEncryption = fee_ciphertext_lo.to_pod();
         let pod_fee_ciphertext_hi: pod::FeeEncryption = fee_ciphertext_hi.to_pod();
@@ -219,19 +219,19 @@ impl TransferWithFeeData {
 
     /// Extracts the lo ciphertexts associated with a transfer-with-fee data
     fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let ciphertext_lo: TransferAmountEncryption = self.context.ciphertext_lo.try_into()?;
+        let ciphertext_lo: TransferAmountCiphertext = self.context.ciphertext_lo.try_into()?;
 
         let handle_lo = match role {
-            Role::Source => Some(ciphertext_lo.source_handle),
-            Role::Destination => Some(ciphertext_lo.destination_handle),
-            Role::Auditor => Some(ciphertext_lo.auditor_handle),
+            Role::Source => Some(ciphertext_lo.get_source_handle()),
+            Role::Destination => Some(ciphertext_lo.get_destination_handle()),
+            Role::Auditor => Some(ciphertext_lo.get_auditor_handle()),
             Role::WithdrawWithheldAuthority => None,
         };
 
         if let Some(handle) = handle_lo {
             Ok(ElGamalCiphertext {
-                commitment: ciphertext_lo.commitment,
-                handle,
+                commitment: *ciphertext_lo.get_commitment(),
+                handle: *handle,
             })
         } else {
             Err(ProofError::MissingCiphertext)
@@ -240,19 +240,19 @@ impl TransferWithFeeData {
 
     /// Extracts the lo ciphertexts associated with a transfer-with-fee data
     fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let ciphertext_hi: TransferAmountEncryption = self.context.ciphertext_hi.try_into()?;
+        let ciphertext_hi: TransferAmountCiphertext = self.context.ciphertext_hi.try_into()?;
 
         let handle_hi = match role {
-            Role::Source => Some(ciphertext_hi.source_handle),
-            Role::Destination => Some(ciphertext_hi.destination_handle),
-            Role::Auditor => Some(ciphertext_hi.auditor_handle),
+            Role::Source => Some(ciphertext_hi.get_source_handle()),
+            Role::Destination => Some(ciphertext_hi.get_destination_handle()),
+            Role::Auditor => Some(ciphertext_hi.get_auditor_handle()),
             Role::WithdrawWithheldAuthority => None,
         };
 
         if let Some(handle) = handle_hi {
             Ok(ElGamalCiphertext {
-                commitment: ciphertext_hi.commitment,
-                handle,
+                commitment: *ciphertext_hi.get_commitment(),
+                handle: *handle,
             })
         } else {
             Err(ProofError::MissingCiphertext)
@@ -411,8 +411,8 @@ impl TransferWithFeeProof {
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::many_single_char_names)]
     pub fn new(
-        transfer_amount_lo_data: (u64, &TransferAmountEncryption, &PedersenOpening),
-        transfer_amount_hi_data: (u64, &TransferAmountEncryption, &PedersenOpening),
+        transfer_amount_lo_data: (u64, &TransferAmountCiphertext, &PedersenOpening),
+        transfer_amount_hi_data: (u64, &TransferAmountCiphertext, &PedersenOpening),
         source_keypair: &ElGamalKeypair,
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
         (source_new_balance, new_source_ciphertext): (u64, &ElGamalCiphertext),
@@ -456,8 +456,8 @@ impl TransferWithFeeProof {
         transcript.append_commitment(b"commitment-claimed", &pod_claimed_commitment);
 
         let combined_commitment = combine_lo_hi_commitments(
-            &ciphertext_lo.commitment,
-            &ciphertext_hi.commitment,
+            ciphertext_lo.get_commitment(),
+            ciphertext_hi.get_commitment(),
             TRANSFER_AMOUNT_LO_BITS,
         );
         let combined_opening =
@@ -549,8 +549,8 @@ impl TransferWithFeeProof {
 
     pub fn verify(
         &self,
-        ciphertext_lo: &TransferAmountEncryption,
-        ciphertext_hi: &TransferAmountEncryption,
+        ciphertext_lo: &TransferAmountCiphertext,
+        ciphertext_hi: &TransferAmountCiphertext,
         transfer_with_fee_pubkeys: &TransferWithFeePubkeys,
         new_spendable_ciphertext: &ElGamalCiphertext,
         // fee parameters
@@ -586,12 +586,18 @@ impl TransferWithFeeProof {
                 &transfer_with_fee_pubkeys.destination_pubkey,
                 &transfer_with_fee_pubkeys.auditor_pubkey,
             ),
-            (&ciphertext_lo.commitment, &ciphertext_hi.commitment),
             (
-                &ciphertext_lo.destination_handle,
-                &ciphertext_hi.destination_handle,
+                ciphertext_lo.get_commitment(),
+                ciphertext_hi.get_commitment(),
             ),
-            (&ciphertext_lo.auditor_handle, &ciphertext_hi.auditor_handle),
+            (
+                ciphertext_lo.get_destination_handle(),
+                ciphertext_hi.get_destination_handle(),
+            ),
+            (
+                ciphertext_lo.get_auditor_handle(),
+                ciphertext_hi.get_auditor_handle(),
+            ),
             transcript,
         )?;
 
@@ -599,8 +605,8 @@ impl TransferWithFeeProof {
         transcript.append_commitment(b"commitment-claimed", &self.claimed_commitment);
 
         let combined_commitment = combine_lo_hi_commitments(
-            &ciphertext_lo.commitment,
-            &ciphertext_hi.commitment,
+            ciphertext_lo.get_commitment(),
+            ciphertext_hi.get_commitment(),
             TRANSFER_AMOUNT_LO_BITS,
         );
         let combined_fee_commitment = combine_lo_hi_commitments(
@@ -652,8 +658,8 @@ impl TransferWithFeeProof {
         range_proof.verify(
             vec![
                 &new_source_commitment,
-                &ciphertext_lo.commitment,
-                &ciphertext_hi.commitment,
+                ciphertext_lo.get_commitment(),
+                ciphertext_hi.get_commitment(),
                 &claimed_commitment,
                 &claimed_commitment_negated,
                 &fee_ciphertext_lo.commitment,
