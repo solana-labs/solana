@@ -1110,7 +1110,7 @@ struct VoteRewardsAccounts {
     /// reward info for each vote account pubkey.
     /// This type is used by `update_reward_history()`
     rewards: Vec<(Pubkey, RewardInfo)>,
-    /// corresponds to pubkey in `vote_rewards`
+    /// corresponds to pubkey in `rewards`
     /// Some if account is to be stored.
     /// None if to be skipped.
     accounts_to_store: Vec<Option<AccountSharedData>>,
