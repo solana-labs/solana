@@ -54,8 +54,7 @@ mod target_arch {
             curve25519::scalar::PodScalar,
             errors::ProofError,
             instruction::transfer::{
-                FeeEncryption, FeeParameters, TransferAmountEncryption, TransferPubkeys,
-                TransferWithFeePubkeys,
+                FeeEncryption, FeeParameters, TransferPubkeys, TransferWithFeePubkeys,
             },
         },
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
@@ -132,30 +131,6 @@ mod target_arch {
                 withdraw_withheld_authority_pubkey: pod
                     .withdraw_withheld_authority_pubkey
                     .try_into()?,
-            })
-        }
-    }
-
-    impl From<TransferAmountEncryption> for pod::TransferAmountEncryption {
-        fn from(ciphertext: TransferAmountEncryption) -> Self {
-            Self {
-                commitment: ciphertext.commitment.into(),
-                source_handle: ciphertext.source_handle.into(),
-                destination_handle: ciphertext.destination_handle.into(),
-                auditor_handle: ciphertext.auditor_handle.into(),
-            }
-        }
-    }
-
-    impl TryFrom<pod::TransferAmountEncryption> for TransferAmountEncryption {
-        type Error = ProofError;
-
-        fn try_from(pod: pod::TransferAmountEncryption) -> Result<Self, Self::Error> {
-            Ok(Self {
-                commitment: pod.commitment.try_into()?,
-                source_handle: pod.source_handle.try_into()?,
-                destination_handle: pod.destination_handle.try_into()?,
-                auditor_handle: pod.auditor_handle.try_into()?,
             })
         }
     }
