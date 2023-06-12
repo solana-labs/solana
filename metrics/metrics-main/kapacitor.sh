@@ -3,7 +3,7 @@
 # (Re)starts the Kapacitor container
 #
 
-cd "$(dirname "$0")"
+here=$(dirname "$0")
 
 if [[ -z $HOST ]]; then
   HOST=metrics.solana.com
@@ -24,14 +24,16 @@ container=kapacitor
   exit 0
 )
 
+here_pwd="$(realpath "$here")"
+
 # shellcheck disable=SC2016
-sed -i 's|$DISCORD_WEBHOOK_CANARIES_MONITORING|'"$DISCORD_WEBHOOK_CANARIES_MONITORING"'|g' "$PWD"/kapacitor.conf
+sed -i 's|$DISCORD_WEBHOOK_CANARIES_MONITORING|'"$DISCORD_WEBHOOK_CANARIES_MONITORING"'|g' "$here_pwd"/kapacitor.conf
 # shellcheck disable=SC2016
-sed -i 's|$DISCORD_WEBHOOK_MB_PAGER_DUTY|'"$DISCORD_WEBHOOK_MB_PAGER_DUTY"'|g' "$PWD"/kapacitor.conf
+sed -i 's|$DISCORD_WEBHOOK_MB_PAGER_DUTY|'"$DISCORD_WEBHOOK_MB_PAGER_DUTY"'|g' "$here_pwd"/kapacitor.conf
 # shellcheck disable=SC2016
-sed -i 's|$DISCORD_WEBHOOK_TESTNET_PAGER_DUTY|'"$DISCORD_WEBHOOK_TESTNET_PAGER_DUTY"'|g' "$PWD"/kapacitor.conf
+sed -i 's|$DISCORD_WEBHOOK_TESTNET_PAGER_DUTY|'"$DISCORD_WEBHOOK_TESTNET_PAGER_DUTY"'|g' "$here_pwd"/kapacitor.conf
 # shellcheck disable=SC2016
-sed -i 's|$DISCORD_WEBHOOK_DEVNET_PAGER_DUTY|'"$DISCORD_WEBHOOK_DEVNET_PAGER_DUTY"'|g' "$PWD"/kapacitor.conf
+sed -i 's|$DISCORD_WEBHOOK_DEVNET_PAGER_DUTY|'"$DISCORD_WEBHOOK_DEVNET_PAGER_DUTY"'|g' "$here_pwd"/kapacitor.conf
 
 #running influx kapacitor service
 sudo docker run \
@@ -41,7 +43,7 @@ sudo docker run \
   --env KAPACITOR_USERNAME="$KAPACITOR_USERNAME" \
   --env KAPACITOR_PASSWORD="$KAPACITOR_PASSWORD" \
   --publish 9092:9092 \
-  --volume "$PWD"/kapacitor.conf:/etc/kapacitor/kapacitor.conf \
+  --volume "$here_pwd"/kapacitor.conf:/etc/kapacitor/kapacitor.conf \
   --volume /var/lib/kapacitor:/var/lib/kapacitor \
   --user "$(id -u):$(id -g)" \
   --log-opt max-size=1g \
