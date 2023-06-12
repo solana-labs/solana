@@ -1,0 +1,10 @@
+                                                                                        
+                                                                                        
+                             Stores the number of tokens    Stores info about the token.  
+    Someone's wallet         owned by the wallet + more       E.g. supply, authorities.
+.----------------------.      .----------------------.      .----------------------.    
+|                      |      |                      |      |                      |    
+|    Wallet account    +-----<|     Token Account    |>-----+     Mint account     |    
+|                      |      |                      |      |                      |    
+'----------------------'      '----------------------'      '----------------------'    
+    Owner: System               Owner: Token program          Owner: Token program
