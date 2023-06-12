@@ -1117,6 +1117,7 @@ impl Validator {
                 repair: node.sockets.repair,
                 retransmit: node.sockets.retransmit_sockets,
                 fetch: node.sockets.tvu,
+                fetch_quic: node.sockets.tvu_quic,
                 forwards: node.sockets.tvu_forwards,
                 ancestor_hashes_requests: node.sockets.ancestor_hashes_requests,
             },
@@ -1158,6 +1159,7 @@ impl Validator {
             &connection_cache,
             &prioritization_fee_cache,
             banking_tracer.clone(),
+            staked_nodes.clone(),
         )?;
 
         let tpu = Tpu::new(

@@ -50,6 +50,7 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
+    solana_streamer::streamer::StakedNodes,
     std::{
         collections::HashSet,
         net::UdpSocket,
@@ -75,6 +76,7 @@ pub struct Tvu {
 
 pub struct TvuSockets {
     pub fetch: Vec<UdpSocket>,
+    pub(crate) fetch_quic: UdpSocket,
     pub repair: UdpSocket,
     pub retransmit: Vec<UdpSocket>,
     pub forwards: Vec<UdpSocket>,
@@ -138,10 +140,12 @@ impl Tvu {
         connection_cache: &Arc<ConnectionCache>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         banking_tracer: Arc<BankingTracer>,
+        staked_nodes: Arc<RwLock<StakedNodes>>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
             fetch: fetch_sockets,
+            fetch_quic: fetch_quic_socket,
             retransmit: retransmit_sockets,
             forwards: tvu_forward_sockets,
             ancestor_hashes_requests: ancestor_hashes_socket,
@@ -156,12 +160,14 @@ impl Tvu {
             tvu_forward_sockets.into_iter().map(Arc::new).collect();
         let fetch_stage = ShredFetchStage::new(
             fetch_sockets,
+            fetch_quic_socket,
             forward_sockets,
             repair_socket.clone(),
             fetch_sender,
             tvu_config.shred_version,
             bank_forks.clone(),
             cluster_info.clone(),
+            staked_nodes,
             turbine_disabled,
             exit.clone(),
         );
@@ -441,6 +447,7 @@ pub mod tests {
                     repair: target1.sockets.repair,
                     retransmit: target1.sockets.retransmit_sockets,
                     fetch: target1.sockets.tvu,
+                    fetch_quic: target1.sockets.tvu_quic,
                     forwards: target1.sockets.tvu_forwards,
                     ancestor_hashes_requests: target1.sockets.ancestor_hashes_requests,
                 }
@@ -483,6 +490,7 @@ pub mod tests {
             &Arc::new(ConnectionCache::new("connection_cache_test")),
             &ignored_prioritization_fee_cache,
             BankingTracer::new_disabled(),
+            Arc::<RwLock<StakedNodes>>::default(),
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);
