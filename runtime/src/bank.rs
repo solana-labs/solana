@@ -7730,6 +7730,7 @@ impl Bank {
             feature_set::reject_callx_r10::id(),
             feature_set::switch_to_new_elf_parser::id(),
             feature_set::bpf_account_data_direct_mapping::id(),
+            feature_set::enable_alt_bn128_syscall::id(),
         ];
         if !only_apply_transitions_for_new_features
             || FEATURES_AFFECTING_RBPF
