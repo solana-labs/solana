@@ -12506,7 +12506,7 @@ fn create_reward_bank(expected_num_delegations: usize) -> Bank {
 
     // Fill bank_forks with banks with votes landing in the next slot
     // Create enough banks such that vote account will root
-    for validator_vote_keypairs in validator_keypairs.iter() {
+    for validator_vote_keypairs in validator_keypairs {
         let vote_id = validator_vote_keypairs.vote_keypair.pubkey();
         let mut vote_account = bank.get_account(&vote_id).unwrap();
         // generate some rewards
