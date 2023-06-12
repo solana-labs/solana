@@ -176,10 +176,11 @@ impl ClusterNodes<RetransmitStage> {
             addrs,
             frwds,
         } = self.get_retransmit_peers(slot_leader, shred, root_bank, fanout)?;
+        let protocol = get_broadcast_protocol(shred);
         if neighbors.is_empty() {
             let peers = children.into_iter().filter_map(|node| {
                 node.contact_info()?
-                    .tvu(Protocol::UDP)
+                    .tvu(protocol)
                     .ok()
                     .filter(|addr| addrs.get(addr) == Some(&node.pubkey()))
             });
@@ -209,7 +210,7 @@ impl ClusterNodes<RetransmitStage> {
             })
             .chain(children.into_iter().filter_map(|node| {
                 node.contact_info()?
-                    .tvu(Protocol::UDP)
+                    .tvu(protocol)
                     .ok()
                     .filter(|addr| addrs.get(addr) == Some(&node.pubkey()))
             }));
@@ -239,12 +240,13 @@ impl ClusterNodes<RetransmitStage> {
         let mut frwds = HashMap::<SocketAddr, Pubkey>::with_capacity(self.nodes.len());
         let mut rng = ChaChaRng::from_seed(shred_seed);
         let drop_redundant_turbine_path = drop_redundant_turbine_path(shred.slot(), root_bank);
+        let protocol = get_broadcast_protocol(shred);
         let nodes: Vec<_> = weighted_shuffle
             .shuffle(&mut rng)
             .map(|index| &self.nodes[index])
             .inspect(|node| {
                 if let Some(node) = node.contact_info() {
-                    if let Ok(addr) = node.tvu(Protocol::UDP) {
+                    if let Ok(addr) = node.tvu(protocol) {
                         addrs.entry(addr).or_insert(*node.pubkey());
                     }
                     if !drop_redundant_turbine_path {
@@ -467,6 +469,11 @@ impl From<Pubkey> for NodeId {
     fn from(pubkey: Pubkey) -> Self {
         NodeId::Pubkey(pubkey)
     }
+}
+
+#[inline]
+pub(crate) fn get_broadcast_protocol(_: &ShredId) -> Protocol {
+    Protocol::UDP
 }
 
 pub fn make_test_cluster<R: Rng>(

@@ -129,6 +129,8 @@ use {
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
+pub const TURBINE_QUIC_CONNECTION_POOL_SIZE: usize = 4;
+
 #[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
 pub enum BlockVerificationMethod {
@@ -1107,6 +1109,19 @@ impl Validator {
         let entry_notification_sender = entry_notifier_service
             .as_ref()
             .map(|service| service.sender_cloned());
+        let turbine_quic_connection_cache = Arc::new(
+            solana_quic_client::new_quic_connection_cache(
+                "connection_cache_tvu_quic",
+                &identity_keypair,
+                node.info
+                    .tvu(Protocol::QUIC)
+                    .expect("Operator must spin up node with valid TVU address")
+                    .ip(),
+                &staked_nodes,
+                TURBINE_QUIC_CONNECTION_POOL_SIZE,
+            )
+            .unwrap(),
+        );
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
@@ -1160,6 +1175,7 @@ impl Validator {
             &prioritization_fee_cache,
             banking_tracer.clone(),
             staked_nodes.clone(),
+            turbine_quic_connection_cache.clone(),
         )?;
 
         let tpu = Tpu::new(
@@ -1192,6 +1208,7 @@ impl Validator {
             config.tpu_coalesce,
             cluster_confirmed_slot_sender,
             &connection_cache,
+            turbine_quic_connection_cache,
             &identity_keypair,
             config.runtime_config.log_messages_bytes_limit,
             &staked_nodes,

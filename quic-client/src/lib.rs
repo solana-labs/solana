@@ -18,12 +18,15 @@ use {
     rcgen::RcgenError,
     solana_connection_cache::{
         connection_cache::{
-            BaseClientConnection, ClientError, ConnectionManager, ConnectionPool,
+            BaseClientConnection, ClientError, ConnectionCache, ConnectionManager, ConnectionPool,
             ConnectionPoolError, Protocol,
         },
         connection_cache_stats::ConnectionCacheStats,
     },
-    solana_sdk::{pubkey::Pubkey, signature::Keypair},
+    solana_sdk::{
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+    },
     solana_streamer::{
         nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
         streamer::StakedNodes,
@@ -214,6 +217,23 @@ impl QuicConnectionManager {
         Self { connection_config }
     }
 }
+
+pub type QuicConnectionCache = ConnectionCache<QuicPool, QuicConnectionManager, QuicConfig>;
+
+pub fn new_quic_connection_cache(
+    name: &'static str,
+    keypair: &Keypair,
+    ipaddr: IpAddr,
+    staked_nodes: &Arc<RwLock<StakedNodes>>,
+    connection_pool_size: usize,
+) -> Result<QuicConnectionCache, ClientError> {
+    let mut config = QuicConfig::new()?;
+    config.update_client_certificate(keypair, ipaddr)?;
+    config.set_staked_nodes(staked_nodes, &keypair.pubkey());
+    let connection_manager = QuicConnectionManager::new_with_connection_config(config);
+    ConnectionCache::new(name, connection_manager, connection_pool_size)
+}
+
 #[cfg(test)]
 mod tests {
     use {

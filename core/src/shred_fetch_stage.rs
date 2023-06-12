@@ -24,8 +24,8 @@ use {
 };
 
 const MAX_QUIC_CONNECTIONS_PER_PEER: usize = 8;
-const MAX_STAKED_QUIC_CONNECTIONS: usize = 2000;
-const MAX_UNSTAKED_QUIC_CONNECTIONS: usize = 1000;
+const MAX_STAKED_QUIC_CONNECTIONS: usize = 4000;
+const MAX_UNSTAKED_QUIC_CONNECTIONS: usize = 2000;
 const QUIC_WAIT_FOR_CHUNK_TIMEOUT: Duration = Duration::from_secs(5);
 const QUIC_COALESCE_WAIT: Duration = Duration::from_millis(10);
 
