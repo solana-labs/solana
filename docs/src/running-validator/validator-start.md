@@ -97,7 +97,7 @@ EOF"
 
 #### System Clock
 
-Large system clock drift can prevent a node from properly participating in Solana's gossip protocol.  Ensure that your system clock is accurate.  To check the current system clock, use:
+Large system clock drift can prevent a node from properly participating in Solana's [gossip protocol](../validator/gossip.md).  Ensure that your system clock is accurate.  To check the current system clock, use:
 
 ```bash
 timedatectl
