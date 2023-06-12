@@ -513,7 +513,7 @@ fn test_extra_fields_eof() {
     let sample_rewards = (0..2)
         .map(|_| StakeReward::new_random())
         .collect::<Vec<_>>();
-    for epoch_reward_status_active in [None, Some(vec![]), Some(sample_rewards)] {
+    for epoch_reward_status_active in [None, Some(vec![]), Some(vec![sample_rewards])] {
         let (genesis_config, _) = create_genesis_config(500);
 
         let bank0 = Arc::new(Bank::new_for_tests_with_config(
@@ -618,7 +618,7 @@ fn test_extra_fields_full_snapshot_archive() {
     let sample_rewards = (0..2)
         .map(|_| StakeReward::new_random())
         .collect::<Vec<_>>();
-    for epoch_reward_status_active in [None, Some(vec![]), Some(sample_rewards)] {
+    for epoch_reward_status_active in [None, Some(vec![]), Some(vec![sample_rewards])] {
         let (mut genesis_config, _) = create_genesis_config(500);
         activate_all_features(&mut genesis_config);
 
@@ -786,7 +786,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "8LhKH71kTwmagxUGJA6Es58p8fejJsSAdgEmtL3xZdoY")]
+    #[frozen_abi(digest = "E783LfT75MPc1A9bqVtq3HsSkv3MP8kbssyJVYHA3erG")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]
