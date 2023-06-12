@@ -31,7 +31,6 @@ use {
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::Slot,
-        genesis_config::ClusterType,
         hash::{Hash, HASH_BYTES},
         packet::PACKET_DATA_SIZE,
         pubkey::{Pubkey, PUBKEY_BYTES},
@@ -228,7 +227,7 @@ impl RepairRequestHeader {
 pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
-#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
+#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize, strum_macros::Display)]
 #[frozen_abi(digest = "6VyBwHjkAMXAN97fdhQgFv6VdPEnfJo9LdUAd2SFtwF3")]
 pub enum RepairProtocol {
     LegacyWindowIndex(LegacyContactInfo, Slot, u64),
@@ -425,8 +424,7 @@ impl ServeRepair {
                     header: RepairRequestHeader { nonce, .. },
                     slot,
                     shred_index,
-                }
-                | RepairProtocol::LegacyWindowIndexWithNonce(_, slot, shred_index, nonce) => {
+                } => {
                     stats.window_index += 1;
                     let batch = Self::run_window_request(
                         recycler,
@@ -445,13 +443,7 @@ impl ServeRepair {
                     header: RepairRequestHeader { nonce, .. },
                     slot,
                     shred_index: highest_index,
-                }
-                | RepairProtocol::LegacyHighestWindowIndexWithNonce(
-                    _,
-                    slot,
-                    highest_index,
-                    nonce,
-                ) => {
+                } => {
                     stats.highest_window_index += 1;
                     (
                         Self::run_highest_window_request(
@@ -468,8 +460,7 @@ impl ServeRepair {
                 RepairProtocol::Orphan {
                     header: RepairRequestHeader { nonce, .. },
                     slot,
-                }
-                | RepairProtocol::LegacyOrphanWithNonce(_, slot, nonce) => {
+                } => {
                     stats.orphan += 1;
                     (
                         Self::run_orphan(
@@ -486,8 +477,7 @@ impl ServeRepair {
                 RepairProtocol::AncestorHashes {
                     header: RepairRequestHeader { nonce, .. },
                     slot,
-                }
-                | RepairProtocol::LegacyAncestorHashes(_, slot, nonce) => {
+                } => {
                     stats.ancestor_hashes += 1;
                     (
                         Self::run_ancestor_hashes(recycler, from_addr, blockstore, *slot, *nonce),
@@ -500,8 +490,20 @@ impl ServeRepair {
                     (None, "Pong")
                 }
                 RepairProtocol::LegacyWindowIndex(_, _, _)
+                | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
                 | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
-                | RepairProtocol::LegacyOrphan(_, _) => (None, "Unsupported repair type"),
+                | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
+                | RepairProtocol::LegacyOrphan(_, _)
+                | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
+                | RepairProtocol::LegacyAncestorHashes(_, _, _) => {
+                    error!("Unexpected legacy request: {request:?}");
+                    debug_assert!(
+                        false,
+                        "Legacy requests should have been filtered out during signature
+                        verification. {request:?}"
+                    );
+                    (None, "Legacy")
+                }
             }
         };
         Self::report_time_spent(label, &now.elapsed(), "");
@@ -521,8 +523,6 @@ impl ServeRepair {
         whitelist: &HashSet<Pubkey>,
         my_id: &Pubkey,
         socket_addr_space: &SocketAddrSpace,
-        stats: &mut ServeRepairStats,
-        cluster_type: ClusterType,
     ) -> Result<RepairRequestWithMeta> {
         let request: RepairProtocol = match packet.deserialize_slice(..) {
             Ok(request) => request,
@@ -534,19 +534,9 @@ impl ServeRepair {
         if !ContactInfo::is_valid_address(&from_addr, socket_addr_space) {
             return Err(Error::from(RepairVerifyError::Malformed));
         }
-        match Self::verify_signed_packet(my_id, packet, &request) {
-            Ok(()) => (),
-            Err(Error::RepairVerify(RepairVerifyError::Unsigned)) => match cluster_type {
-                ClusterType::Testnet | ClusterType::Development => {
-                    return Err(Error::from(RepairVerifyError::Unsigned));
-                }
-                ClusterType::MainnetBeta | ClusterType::Devnet => {
-                    stats.err_unsigned += 1;
-                }
-            },
-            Err(e) => return Err(e),
-        }
+        Self::verify_signed_packet(my_id, packet, &request)?;
         if request.sender() == my_id {
+            error!("self repair: from_addr={from_addr} my_id={my_id} request={request}");
             return Err(Error::from(RepairVerifyError::SelfRepair));
         }
         let stake = *epoch_staked_nodes
@@ -597,7 +587,6 @@ impl ServeRepair {
         my_id: &Pubkey,
         socket_addr_space: &SocketAddrSpace,
         stats: &mut ServeRepairStats,
-        cluster_type: ClusterType,
     ) -> Vec<RepairRequestWithMeta> {
         let decode_packet = |packet| {
             let result = Self::decode_request(
@@ -606,8 +595,6 @@ impl ServeRepair {
                 whitelist,
                 my_id,
                 socket_addr_space,
-                stats,
-                cluster_type,
             );
             match &result {
                 Ok(req) => {
@@ -653,7 +640,6 @@ impl ServeRepair {
         let epoch_staked_nodes = root_bank.epoch_staked_nodes(root_bank.epoch());
         let identity_keypair = self.cluster_info.keypair().clone();
         let my_id = identity_keypair.pubkey();
-        let cluster_type = root_bank.cluster_type();
 
         let max_buffered_packets = if self.repair_whitelist.read().unwrap().len() > 0 {
             4 * MAX_REQUESTS_PER_ITERATION
@@ -692,7 +678,6 @@ impl ServeRepair {
                 &my_id,
                 &socket_addr_space,
                 stats,
-                cluster_type,
             )
         };
         let whitelisted_request_count = decoded_requests.iter().filter(|r| r.whitelisted).count();
@@ -714,7 +699,6 @@ impl ServeRepair {
             response_sender,
             stats,
             data_budget,
-            cluster_type,
         );
         stats.handle_requests_time_us += handle_requests_start.elapsed().as_micros() as u64;
 
@@ -936,24 +920,32 @@ impl ServeRepair {
             ping_cache.check(Instant::now(), (*request.sender(), *from_addr), &mut pingf);
         let ping_pkt = if let Some(ping) = ping {
             match request {
+                RepairProtocol::WindowIndex { .. }
+                | RepairProtocol::HighestWindowIndex { .. }
+                | RepairProtocol::Orphan { .. } => {
+                    let ping = RepairResponse::Ping(ping);
+                    Packet::from_data(Some(from_addr), ping).ok()
+                }
+                RepairProtocol::AncestorHashes { .. } => {
+                    let ping = AncestorHashesResponse::Ping(ping);
+                    Packet::from_data(Some(from_addr), ping).ok()
+                }
+                RepairProtocol::Pong(_) => None,
                 RepairProtocol::LegacyWindowIndex(_, _, _)
                 | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
                 | RepairProtocol::LegacyOrphan(_, _)
                 | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
                 | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
                 | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
-                | RepairProtocol::WindowIndex { .. }
-                | RepairProtocol::HighestWindowIndex { .. }
-                | RepairProtocol::Orphan { .. } => {
-                    let ping = RepairResponse::Ping(ping);
-                    Packet::from_data(Some(from_addr), ping).ok()
+                | RepairProtocol::LegacyAncestorHashes(_, _, _) => {
+                    error!("Unexpected legacy request: {request:?}");
+                    debug_assert!(
+                        false,
+                        "Legacy requests should have been filtered out during signature
+                        verification. {request:?}"
+                    );
+                    None
                 }
-                RepairProtocol::LegacyAncestorHashes(_, _, _)
-                | RepairProtocol::AncestorHashes { .. } => {
-                    let ping = AncestorHashesResponse::Ping(ping);
-                    Packet::from_data(Some(from_addr), ping).ok()
-                }
-                RepairProtocol::Pong(_) => None,
             }
         } else {
             None
@@ -970,7 +962,6 @@ impl ServeRepair {
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
-        cluster_type: ClusterType,
     ) {
         let identity_keypair = self.cluster_info.keypair().clone();
         let mut pending_pings = Vec::default();
@@ -994,10 +985,7 @@ impl ServeRepair {
                 }
                 if !check {
                     stats.ping_cache_check_failed += 1;
-                    match cluster_type {
-                        ClusterType::Testnet | ClusterType::Development => continue,
-                        ClusterType::MainnetBeta | ClusterType::Devnet => (),
-                    }
+                    continue;
                 }
             }
             stats.processed += 1;
