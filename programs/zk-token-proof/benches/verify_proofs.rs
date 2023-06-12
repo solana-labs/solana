@@ -7,12 +7,11 @@ use {
             pedersen::{Pedersen, PedersenOpening},
         },
         instruction::{
-            batched_grouped_ciphertext_validity::BatchedGroupedCiphertext2HandlesValidityProofData,
-            ciphertext_ciphertext_equality::CiphertextCiphertextEqualityProofData,
-            ciphertext_commitment_equality::CiphertextCommitmentEqualityProofData,
-            grouped_ciphertext_validity::GroupedCiphertext2HandlesValidityProofData,
-            pubkey_validity::PubkeyValidityData, range_proof::RangeProofU64Data,
-            withdraw::WithdrawData, zero_balance::ZeroBalanceProofData, ZkProofData,
+            BatchedGroupedCiphertext2HandlesValidityProofData, BatchedRangeProofU128Data,
+            BatchedRangeProofU256Data, BatchedRangeProofU64Data,
+            CiphertextCiphertextEqualityProofData, CiphertextCommitmentEqualityProofData,
+            GroupedCiphertext2HandlesValidityProofData, PubkeyValidityData, RangeProofU64Data,
+            WithdrawData, ZeroBalanceProofData, ZkProofData,
         },
     },
 };
@@ -189,6 +188,150 @@ fn bench_batched_grouped_ciphertext_validity(c: &mut Criterion) {
     });
 }
 
+fn bench_batched_range_proof_u64(c: &mut Criterion) {
+    let amount_1 = 255_u64;
+    let amount_2 = 77_u64;
+    let amount_3 = 99_u64;
+    let amount_4 = 99_u64;
+    let amount_5 = 11_u64;
+    let amount_6 = 33_u64;
+    let amount_7 = 99_u64;
+    let amount_8 = 99_u64;
+
+    let (commitment_1, opening_1) = Pedersen::new(amount_1);
+    let (commitment_2, opening_2) = Pedersen::new(amount_2);
+    let (commitment_3, opening_3) = Pedersen::new(amount_3);
+    let (commitment_4, opening_4) = Pedersen::new(amount_4);
+    let (commitment_5, opening_5) = Pedersen::new(amount_5);
+    let (commitment_6, opening_6) = Pedersen::new(amount_6);
+    let (commitment_7, opening_7) = Pedersen::new(amount_7);
+    let (commitment_8, opening_8) = Pedersen::new(amount_8);
+
+    let proof_data = BatchedRangeProofU64Data::new(
+        vec![
+            &commitment_1,
+            &commitment_2,
+            &commitment_3,
+            &commitment_4,
+            &commitment_5,
+            &commitment_6,
+            &commitment_7,
+            &commitment_8,
+        ],
+        vec![
+            amount_1, amount_2, amount_3, amount_4, amount_5, amount_6, amount_7, amount_8,
+        ],
+        vec![8, 8, 8, 8, 8, 8, 8, 8],
+        vec![
+            &opening_1, &opening_2, &opening_3, &opening_4, &opening_5, &opening_6, &opening_7,
+            &opening_8,
+        ],
+    )
+    .unwrap();
+
+    c.bench_function("batched_range_proof_u64", |b| {
+        b.iter(|| {
+            proof_data.verify_proof().unwrap();
+        })
+    });
+}
+
+fn bench_batched_range_proof_u128(c: &mut Criterion) {
+    let amount_1 = 65535_u64;
+    let amount_2 = 77_u64;
+    let amount_3 = 99_u64;
+    let amount_4 = 99_u64;
+    let amount_5 = 11_u64;
+    let amount_6 = 33_u64;
+    let amount_7 = 99_u64;
+    let amount_8 = 99_u64;
+
+    let (commitment_1, opening_1) = Pedersen::new(amount_1);
+    let (commitment_2, opening_2) = Pedersen::new(amount_2);
+    let (commitment_3, opening_3) = Pedersen::new(amount_3);
+    let (commitment_4, opening_4) = Pedersen::new(amount_4);
+    let (commitment_5, opening_5) = Pedersen::new(amount_5);
+    let (commitment_6, opening_6) = Pedersen::new(amount_6);
+    let (commitment_7, opening_7) = Pedersen::new(amount_7);
+    let (commitment_8, opening_8) = Pedersen::new(amount_8);
+
+    let proof_data = BatchedRangeProofU128Data::new(
+        vec![
+            &commitment_1,
+            &commitment_2,
+            &commitment_3,
+            &commitment_4,
+            &commitment_5,
+            &commitment_6,
+            &commitment_7,
+            &commitment_8,
+        ],
+        vec![
+            amount_1, amount_2, amount_3, amount_4, amount_5, amount_6, amount_7, amount_8,
+        ],
+        vec![16, 16, 16, 16, 16, 16, 16, 16],
+        vec![
+            &opening_1, &opening_2, &opening_3, &opening_4, &opening_5, &opening_6, &opening_7,
+            &opening_8,
+        ],
+    )
+    .unwrap();
+
+    c.bench_function("batched_range_proof_u128", |b| {
+        b.iter(|| {
+            proof_data.verify_proof().unwrap();
+        })
+    });
+}
+
+fn bench_batched_range_proof_u256(c: &mut Criterion) {
+    let amount_1 = 4294967295_u64;
+    let amount_2 = 77_u64;
+    let amount_3 = 99_u64;
+    let amount_4 = 99_u64;
+    let amount_5 = 11_u64;
+    let amount_6 = 33_u64;
+    let amount_7 = 99_u64;
+    let amount_8 = 99_u64;
+
+    let (commitment_1, opening_1) = Pedersen::new(amount_1);
+    let (commitment_2, opening_2) = Pedersen::new(amount_2);
+    let (commitment_3, opening_3) = Pedersen::new(amount_3);
+    let (commitment_4, opening_4) = Pedersen::new(amount_4);
+    let (commitment_5, opening_5) = Pedersen::new(amount_5);
+    let (commitment_6, opening_6) = Pedersen::new(amount_6);
+    let (commitment_7, opening_7) = Pedersen::new(amount_7);
+    let (commitment_8, opening_8) = Pedersen::new(amount_8);
+
+    let proof_data = BatchedRangeProofU256Data::new(
+        vec![
+            &commitment_1,
+            &commitment_2,
+            &commitment_3,
+            &commitment_4,
+            &commitment_5,
+            &commitment_6,
+            &commitment_7,
+            &commitment_8,
+        ],
+        vec![
+            amount_1, amount_2, amount_3, amount_4, amount_5, amount_6, amount_7, amount_8,
+        ],
+        vec![32, 32, 32, 32, 32, 32, 32, 32],
+        vec![
+            &opening_1, &opening_2, &opening_3, &opening_4, &opening_5, &opening_6, &opening_7,
+            &opening_8,
+        ],
+    )
+    .unwrap();
+
+    c.bench_function("batched_range_proof_u256", |b| {
+        b.iter(|| {
+            proof_data.verify_proof().unwrap();
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_pubkey_validity,
@@ -199,5 +342,8 @@ criterion_group!(
     bench_ciphertext_commitment_equality,
     bench_ciphertext_ciphertext_equality,
     bench_batched_grouped_ciphertext_validity,
+    bench_batched_range_proof_u64,
+    bench_batched_range_proof_u128,
+    bench_batched_range_proof_u256,
 );
 criterion_main!(benches);
