@@ -882,7 +882,7 @@ impl AbiExample for OptionalDropCallback {
 pub(crate) struct StartBlockHeightAndRewards {
     /// the block height of the slot at which rewards distribution began
     pub(crate) start_block_height: u64,
-    /// calculated epoch rewards pending distribution
+    /// calculated epoch rewards pending distribution, outer Vec is by partition (one partition per block)
     pub(crate) calculated_epoch_stake_rewards: Arc<Vec<StakeRewards>>,
 }
 
