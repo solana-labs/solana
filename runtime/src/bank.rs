@@ -1105,7 +1105,7 @@ struct VoteReward {
 
 type VoteRewards = DashMap<Pubkey, VoteReward>;
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct VoteRewardsAccounts {
     /// reward info for each vote account pubkey.
     /// This type is used by `update_reward_history()`
@@ -3162,6 +3162,33 @@ impl Bank {
             .iter()
             .map(|stake_reward| stake_reward.stake_reward_info.lamports)
             .sum::<i64>() as u64
+    }
+
+    #[allow(dead_code)]
+    fn store_vote_accounts_partitioned(
+        &self,
+        vote_account_rewards: VoteRewardsAccounts,
+        metrics: &mut RewardsMetrics,
+    ) -> Vec<(Pubkey, RewardInfo)> {
+        let (_, measure_us) = measure_us!({
+            // reformat data to make it not sparse.
+            // `StorableAccounts` does not efficiently handle sparse data.
+            // Not all entries in `vote_account_rewards.accounts_to_store` have a Some(account) to store.
+            let to_store = vote_account_rewards
+                .accounts_to_store
+                .iter()
+                .filter_map(|account| account.as_ref())
+                .enumerate()
+                .map(|(i, account)| (&vote_account_rewards.rewards[i].0, account))
+                .collect::<Vec<_>>();
+            self.store_accounts((self.slot(), &to_store[..], self.include_slot_in_hash()));
+        });
+
+        metrics
+            .store_vote_accounts_us
+            .fetch_add(measure_us, Relaxed);
+
+        vote_account_rewards.rewards
     }
 
     fn store_vote_accounts(

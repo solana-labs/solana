@@ -159,6 +159,30 @@ impl StakeReward {
     }
 }
 
+impl VoteReward {
+    pub fn new_random() -> Self {
+        let mut rng = rand::thread_rng();
+
+        let validator_pubkey = solana_sdk::pubkey::new_rand();
+        let validator_stake_lamports = rng.gen_range(1, 200);
+        let validator_voting_keypair = Keypair::new();
+
+        let validator_vote_account = vote_state::create_account(
+            &validator_voting_keypair.pubkey(),
+            &validator_pubkey,
+            rng.gen_range(1, 20),
+            validator_stake_lamports,
+        );
+
+        Self {
+            vote_account: validator_vote_account,
+            commission: rng.gen_range(1, 20),
+            vote_rewards: rng.gen_range(1, 200),
+            vote_needs_store: rng.gen_range(1, 20) > 10,
+        }
+    }
+}
+
 #[test]
 fn test_race_register_tick_freeze() {
     solana_logger::setup();
@@ -12659,6 +12683,62 @@ fn test_update_reward_history_in_partition_empty() {
 
     let num_in_history = bank.update_reward_history_in_partition(&stake_rewards);
     assert_eq!(num_in_history, 0);
+}
+
+#[test]
+fn test_store_vote_accounts_partitioned() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let expected_vote_rewards_num = 100;
+
+    let vote_rewards = (0..expected_vote_rewards_num)
+        .map(|_| Some((Pubkey::new_unique(), VoteReward::new_random())))
+        .collect::<Vec<_>>();
+
+    let mut vote_rewards_account = VoteRewardsAccounts::default();
+    vote_rewards.iter().for_each(|e| {
+        if let Some(p) = &e {
+            let info = RewardInfo {
+                reward_type: RewardType::Voting,
+                lamports: p.1.vote_rewards as i64,
+                post_balance: p.1.vote_rewards,
+                commission: Some(p.1.commission),
+            };
+            vote_rewards_account.rewards.push((p.0, info));
+            vote_rewards_account
+                .accounts_to_store
+                .push(e.as_ref().map(|p| p.1.vote_account.clone()));
+        }
+    });
+
+    let mut metrics = RewardsMetrics::default();
+
+    let stored_vote_accounts =
+        bank.store_vote_accounts_partitioned(vote_rewards_account, &mut metrics);
+    assert_eq!(expected_vote_rewards_num, stored_vote_accounts.len());
+
+    // load accounts to make sure they were stored correctly
+    vote_rewards.iter().for_each(|e| {
+        if let Some(p) = &e {
+            let (k, account) = (p.0, p.1.vote_account.clone());
+            let loaded_account = bank.load_slow_with_fixed_root(&bank.ancestors, &k).unwrap();
+            assert!(accounts_equal(&loaded_account.0, &account));
+        }
+    });
+}
+
+#[test]
+fn test_store_vote_accounts_partitioned_empty() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let expected = 0;
+    let vote_rewards = VoteRewardsAccounts::default();
+    let mut metrics = RewardsMetrics::default();
+
+    let stored_vote_accounts = bank.store_vote_accounts_partitioned(vote_rewards, &mut metrics);
+    assert_eq!(expected, stored_vote_accounts.len());
 }
 
 #[test]
