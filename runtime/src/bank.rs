@@ -3090,6 +3090,40 @@ impl Bank {
             .fetch_add(measure.as_us(), Relaxed);
     }
 
+    #[allow(dead_code)]
+    /// store stake rewards in partition
+    /// return the sum of all the stored rewards
+    ///
+    /// Note: even if staker's reward is 0, the stake account still needs to be stored because
+    /// credits observed has changed
+    fn store_stake_accounts_in_partition(&self, stake_rewards: &[StakeReward]) -> u64 {
+        // Verify that stake account `lamports + reward_amount` matches what we have in the
+        // rewarded account. This code will have a performance hit - an extra load and compare of
+        // the stake accounts. This is for debugging. Once we are confident, we can disable the
+        // check.
+        const VERIFY_REWARD_LAMPORT: bool = true;
+
+        if VERIFY_REWARD_LAMPORT {
+            for r in stake_rewards {
+                let stake_pubkey = r.stake_pubkey;
+                let reward_amount = r.get_stake_reward();
+                let post_stake_account = &r.stake_account;
+                if let Some(curr_stake_account) = self.get_account_with_fixed_root(&stake_pubkey) {
+                    let pre_lamport = curr_stake_account.lamports();
+                    let post_lamport = post_stake_account.lamports();
+                    assert_eq!(pre_lamport + u64::try_from(reward_amount).unwrap(), post_lamport,
+                        "stake account balance has changed since the reward calculation! account: {stake_pubkey}, pre balance: {pre_lamport}, post balance: {post_lamport}, rewards: {reward_amount}");
+                }
+            }
+        }
+
+        self.store_accounts((self.slot(), stake_rewards, self.include_slot_in_hash()));
+        stake_rewards
+            .iter()
+            .map(|stake_reward| stake_reward.stake_reward_info.lamports)
+            .sum::<i64>() as u64
+    }
+
     fn store_vote_accounts(
         &self,
         vote_account_rewards: VoteRewards,

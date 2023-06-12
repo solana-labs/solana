@@ -12574,6 +12574,39 @@ fn test_rewards_point_calculation_empty() {
 
 /// Test reward computation at epoch boundary
 #[test]
+fn test_store_stake_accounts_in_partition() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let expected_num = 100;
+
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    let expected_total = stake_rewards
+        .iter()
+        .map(|stake_reward| stake_reward.stake_reward_info.lamports)
+        .sum::<i64>() as u64;
+
+    let total_rewards_in_lamports = bank.store_stake_accounts_in_partition(&stake_rewards);
+    assert_eq!(expected_total, total_rewards_in_lamports);
+}
+
+#[test]
+fn test_store_stake_accounts_in_partition_empty() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let stake_rewards = vec![];
+
+    let expected_total = 0;
+
+    let total_rewards_in_lamports = bank.store_stake_accounts_in_partition(&stake_rewards);
+    assert_eq!(expected_total, total_rewards_in_lamports);
+}
+
+#[test]
 fn test_system_instruction_allocate() {
     let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.0));
     let bank = Bank::new_for_tests(&genesis_config);
