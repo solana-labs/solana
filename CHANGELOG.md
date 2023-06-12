@@ -8,8 +8,7 @@ and follows a [Backwards Compatability Policy]
 
 ## Adding to this Changelog
 ### Audience
-* Entries in this log are intended to be easily understood by consensus
-validators, rpc operators, and dapp developers.
+* Entries in this log are intended to be easily understood by core contributors, consensus validator operators, rpc operators, and dapp developers.
 
 ### Noteworthy
 * Changes that relate to a SIMD, or add a feature gate should add an entry to
