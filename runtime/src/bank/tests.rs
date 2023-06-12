@@ -12490,6 +12490,89 @@ fn test_squash_timing_add_assign() {
     assert!(t0 == expected);
 }
 
+/// Helper function to create a bank that pays some rewards
+fn create_reward_bank(expected_num_delegations: usize) -> Bank {
+    let validator_keypairs = (0..expected_num_delegations)
+        .map(|_| ValidatorVoteKeypairs::new_rand())
+        .collect::<Vec<_>>();
+
+    let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
+        1_000_000_000,
+        &validator_keypairs,
+        vec![2_000_000_000; expected_num_delegations],
+    );
+
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    // Fill bank_forks with banks with votes landing in the next slot
+    // Create enough banks such that vote account will root
+    for validator_vote_keypairs in validator_keypairs {
+        let vote_id = validator_vote_keypairs.vote_keypair.pubkey();
+        let mut vote_account = bank.get_account(&vote_id).unwrap();
+        // generate some rewards
+        let mut vote_state = Some(vote_state::from(&vote_account).unwrap());
+        for i in 0..MAX_LOCKOUT_HISTORY + 42 {
+            if let Some(v) = vote_state.as_mut() {
+                vote_state::process_slot_vote_unchecked(v, i as u64)
+            }
+            let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
+            vote_state::to(&versioned, &mut vote_account).unwrap();
+            match versioned {
+                VoteStateVersions::Current(v) => {
+                    vote_state = Some(*v);
+                }
+                _ => panic!("Has to be of type Current"),
+            };
+        }
+        bank.store_account_and_update_capitalization(&vote_id, &vote_account);
+    }
+    bank
+}
+
+#[test]
+fn test_rewards_point_calculation() {
+    solana_logger::setup();
+
+    let expected_num_delegations = 100;
+    let bank = create_reward_bank(expected_num_delegations);
+
+    let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+    let mut rewards_metrics = RewardsMetrics::default();
+    let expected_rewards = 100_000_000_000;
+
+    let point_value = bank.calculate_reward_points_partitioned(
+        expected_rewards,
+        &thread_pool,
+        &mut rewards_metrics,
+    );
+
+    assert!(point_value.is_some());
+    assert_eq!(point_value.as_ref().unwrap().rewards, expected_rewards);
+    assert_eq!(point_value.as_ref().unwrap().points, 8400000000000);
+}
+
+#[test]
+fn test_rewards_point_calculation_empty() {
+    solana_logger::setup();
+
+    // bank with no rewards to distribute
+    let (genesis_config, _mint_keypair) = create_genesis_config(sol_to_lamports(1.0));
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+    let mut rewards_metrics: RewardsMetrics = RewardsMetrics::default();
+    let expected_rewards = 100_000_000_000;
+
+    let point_value = bank.calculate_reward_points_partitioned(
+        expected_rewards,
+        &thread_pool,
+        &mut rewards_metrics,
+    );
+
+    assert!(point_value.is_none());
+}
+
+/// Test reward computation at epoch boundary
 #[test]
 fn test_system_instruction_allocate() {
     let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.0));

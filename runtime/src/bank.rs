@@ -2878,6 +2878,71 @@ impl Bank {
         vote_with_stake_delegations_map
     }
 
+    /// Calculates epoch reward points from stake/vote accounts.
+    /// Returns reward lamports and points for the epoch or none if points == 0.
+    #[allow(dead_code)]
+    fn calculate_reward_points_partitioned(
+        &self,
+        rewards: u64,
+        thread_pool: &ThreadPool,
+        metrics: &mut RewardsMetrics,
+    ) -> Option<PointValue> {
+        let stakes = self.stakes_cache.stakes();
+        let stake_history = stakes.history().clone();
+        let stake_delegations = self.filter_stake_delegations(&stakes);
+        let cached_vote_accounts = stakes.vote_accounts();
+
+        let solana_vote_program: Pubkey = solana_vote_program::id();
+
+        let get_vote_account = |vote_pubkey: &Pubkey| -> Option<VoteAccount> {
+            if let Some(vote_account) = cached_vote_accounts.get(vote_pubkey) {
+                return Some(vote_account.clone());
+            }
+            // If accounts-db contains a valid vote account, then it should
+            // already have been cached in cached_vote_accounts; so the code
+            // below is only for sanity checking, and can be removed once
+            // the cache is deemed to be reliable.
+            let account = self.get_account_with_fixed_root(vote_pubkey)?;
+            VoteAccount::try_from(account).ok()
+        };
+
+        let (points, measure_us) = measure_us!(thread_pool.install(|| {
+            stake_delegations
+                .par_iter()
+                .map(|(_stake_pubkey, stake_account)| {
+                    let delegation = stake_account.delegation();
+                    let vote_pubkey = delegation.voter_pubkey;
+
+                    let vote_account = match get_vote_account(&vote_pubkey) {
+                        Some(vote_account) => vote_account,
+                        None => {
+                            return 0;
+                        }
+                    };
+                    if vote_account.owner() != &solana_vote_program {
+                        return 0;
+                    }
+                    let vote_state = match vote_account.vote_state() {
+                        Ok(vote_state) => vote_state,
+                        Err(_) => {
+                            return 0;
+                        }
+                    };
+
+                    stake_state::calculate_points(
+                        stake_account.stake_state(),
+                        vote_state,
+                        Some(&stake_history),
+                    )
+                    .unwrap_or(0)
+                })
+                .sum::<u128>()
+        }));
+        metrics.calculate_points_us.fetch_add(measure_us, Relaxed);
+
+        (points > 0).then_some(PointValue { rewards, points })
+    }
+
     fn calculate_reward_points(
         &self,
         vote_with_stake_delegations_map: &VoteWithStakeDelegationsMap,
