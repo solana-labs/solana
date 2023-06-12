@@ -2,6 +2,7 @@
 
 use {
     byteorder::{ByteOrder, LittleEndian},
+    solana_program_runtime::invoke_context::SerializedAccountMetadata,
     solana_rbpf::{
         aligned_memory::{AlignedMemory, Pod},
         ebpf::{HOST_ALIGN, MM_INPUT_START},
@@ -175,7 +176,14 @@ pub fn serialize_parameters(
     instruction_context: &InstructionContext,
     should_cap_ix_accounts: bool,
     copy_account_data: bool,
-) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>, Vec<usize>), InstructionError> {
+) -> Result<
+    (
+        AlignedMemory<HOST_ALIGN>,
+        Vec<MemoryRegion>,
+        Vec<SerializedAccountMetadata>,
+    ),
+    InstructionError,
+> {
     let num_ix_accounts = instruction_context.get_number_of_instruction_accounts();
     if should_cap_ix_accounts && num_ix_accounts > MAX_INSTRUCTION_ACCOUNTS as IndexOfAccount {
         return Err(InstructionError::MaxAccountsExceeded);
@@ -232,13 +240,13 @@ pub fn deserialize_parameters(
     instruction_context: &InstructionContext,
     copy_account_data: bool,
     buffer: &[u8],
-    account_lengths: &[usize],
+    accounts_metadata: &[SerializedAccountMetadata],
 ) -> Result<(), InstructionError> {
     let is_loader_deprecated = *instruction_context
         .try_borrow_last_program_account(transaction_context)?
         .get_owner()
         == bpf_loader_deprecated::id();
-    let account_lengths = account_lengths.iter().copied();
+    let account_lengths = accounts_metadata.iter().map(|a| a.original_data_len);
     if is_loader_deprecated {
         deserialize_parameters_unaligned(
             transaction_context,
@@ -263,7 +271,14 @@ fn serialize_parameters_unaligned(
     instruction_data: &[u8],
     program_id: &Pubkey,
     copy_account_data: bool,
-) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>, Vec<usize>), InstructionError> {
+) -> Result<
+    (
+        AlignedMemory<HOST_ALIGN>,
+        Vec<MemoryRegion>,
+        Vec<SerializedAccountMetadata>,
+    ),
+    InstructionError,
+> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
     for account in &accounts {
@@ -291,16 +306,18 @@ fn serialize_parameters_unaligned(
 
     let mut s = Serializer::new(size, MM_INPUT_START, false, copy_account_data);
 
-    let mut account_lengths = Vec::with_capacity(accounts.len());
+    let mut accounts_metadata: Vec<SerializedAccountMetadata> = Vec::with_capacity(accounts.len());
     s.write::<u64>((accounts.len() as u64).to_le());
     for account in accounts {
         match account {
             SerializeAccount::Duplicate(position) => {
-                account_lengths.push(*account_lengths.get(position as usize).unwrap());
+                accounts_metadata.push(accounts_metadata.get(position as usize).unwrap().clone());
                 s.write(position as u8);
             }
             SerializeAccount::Account(_, mut account) => {
-                account_lengths.push(account.get_data().len());
+                accounts_metadata.push(SerializedAccountMetadata {
+                    original_data_len: account.get_data().len(),
+                });
                 s.write::<u8>(NON_DUP_MARKER);
                 s.write::<u8>(account.is_signer() as u8);
                 s.write::<u8>(account.is_writable() as u8);
@@ -319,7 +336,7 @@ fn serialize_parameters_unaligned(
     s.write_all(program_id.as_ref());
 
     let (mem, regions) = s.finish();
-    Ok((mem, regions, account_lengths))
+    Ok((mem, regions, accounts_metadata))
 }
 
 pub fn deserialize_parameters_unaligned<I: IntoIterator<Item = usize>>(
@@ -381,7 +398,14 @@ fn serialize_parameters_aligned(
     instruction_data: &[u8],
     program_id: &Pubkey,
     copy_account_data: bool,
-) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>, Vec<usize>), InstructionError> {
+) -> Result<
+    (
+        AlignedMemory<HOST_ALIGN>,
+        Vec<MemoryRegion>,
+        Vec<SerializedAccountMetadata>,
+    ),
+    InstructionError,
+> {
     let mut account_lengths = Vec::with_capacity(accounts.len());
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
@@ -420,7 +444,9 @@ fn serialize_parameters_aligned(
     for account in accounts {
         match account {
             SerializeAccount::Account(_, mut borrowed_account) => {
-                account_lengths.push(borrowed_account.get_data().len());
+                account_lengths.push(SerializedAccountMetadata {
+                    original_data_len: borrowed_account.get_data().len(),
+                });
                 s.write::<u8>(NON_DUP_MARKER);
                 s.write::<u8>(borrowed_account.is_signer() as u8);
                 s.write::<u8>(borrowed_account.is_writable() as u8);
@@ -434,7 +460,7 @@ fn serialize_parameters_aligned(
                 s.write::<u64>((borrowed_account.get_rent_epoch()).to_le());
             }
             SerializeAccount::Duplicate(position) => {
-                account_lengths.push(*account_lengths.get(position as usize).unwrap());
+                account_lengths.push(account_lengths.get(position as usize).unwrap().clone());
                 s.write::<u8>(position as u8);
                 s.write_all(&[0u8, 0, 0, 0, 0, 0, 0]);
             }
@@ -847,7 +873,7 @@ mod tests {
                 .unwrap();
 
             // check serialize_parameters_aligned
-            let (mut serialized, regions, account_lengths) = serialize_parameters(
+            let (mut serialized, regions, accounts_metadata) = serialize_parameters(
                 invoke_context.transaction_context,
                 instruction_context,
                 true,
@@ -912,7 +938,7 @@ mod tests {
                 instruction_context,
                 copy_account_data,
                 serialized.as_slice(),
-                &account_lengths,
+                &accounts_metadata,
             )
             .unwrap();
             for (index_in_transaction, (_key, original_account)) in

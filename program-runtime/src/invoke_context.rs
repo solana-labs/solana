@@ -146,8 +146,13 @@ impl BpfAllocator {
 
 pub struct SyscallContext {
     pub allocator: BpfAllocator,
-    pub orig_account_lengths: Vec<usize>,
+    pub accounts_metadata: Vec<SerializedAccountMetadata>,
     pub trace_log: Vec<[u64; 12]>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SerializedAccountMetadata {
+    pub original_data_len: usize,
 }
 
 pub struct InvokeContext<'a> {
