@@ -2830,7 +2830,6 @@ impl Bank {
         }
     }
 
-    /// Calculate epoch reward and return vote and stake rewards.
     /// Load, calculate and payout epoch rewards for stake and vote accounts
     fn pay_validator_rewards_with_thread_pool(
         &mut self,
