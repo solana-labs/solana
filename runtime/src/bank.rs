@@ -3089,8 +3089,7 @@ impl Bank {
     /// insert non-zero stake rewards to self.rewards
     /// Return the number of rewards inserted
     fn update_reward_history_in_partition(&self, stake_rewards: &[StakeReward]) -> usize {
-        let mut rewards: RwLockWriteGuard<Vec<(Pubkey, RewardInfo)>> =
-            self.rewards.write().unwrap();
+        let mut rewards = self.rewards.write().unwrap();
         rewards.reserve(stake_rewards.len());
         let initial_len = rewards.len();
         stake_rewards
