@@ -666,7 +666,7 @@ pub mod checked_arithmetic_in_fee_validation {
 }
 
 pub mod last_restart_slot_sysvar {
-    solana_sdk::declare_id!("C4QcP9KXjMLirtZGAW4AFzqLH99PaHjsxYx1N48V5LF");
+    solana_sdk::declare_id!("HooKD5NC9QNxk25QuzCssB8ecrEzGt6eXEPBUxWp1LaR");
 }
 
 lazy_static! {
