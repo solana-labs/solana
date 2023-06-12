@@ -25,6 +25,9 @@ container=kapacitor
 )
 
 sed -i 's|$DISCORD_WEBHOOK_CANARIES_MONITORING|'"$DISCORD_WEBHOOK_CANARIES_MONITORING"'|g' "$PWD"/kapacitor.conf
+sed -i 's|$DISCORD_WEBHOOK_MB_PAGER_DUTY|'"$DISCORD_WEBHOOK_MB_PAGER_DUTY"'|g' "$PWD"/kapacitor.conf
+sed -i 's|$DISCORD_WEBHOOK_TESTNET_PAGER_DUTY|'"$DISCORD_WEBHOOK_TESTNET_PAGER_DUTY"'|g' "$PWD"/kapacitor.conf
+sed -i 's|$DISCORD_WEBHOOK_DEVNET_PAGER_DUTY|'"$DISCORD_WEBHOOK_DEVNET_PAGER_DUTY"'|g' "$PWD"/kapacitor.conf
 
 #running influx kapacitor service
 sudo docker run \
