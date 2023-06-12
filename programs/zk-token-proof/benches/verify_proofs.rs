@@ -7,6 +7,7 @@ use {
             pedersen::{Pedersen, PedersenOpening},
         },
         instruction::{
+            ciphertext_commitment_equality::CiphertextCommitmentEqualityProofData,
             grouped_ciphertext_validity::GroupedCiphertext2HandlesValidityProofData,
             pubkey_validity::PubkeyValidityData, range_proof::RangeProofU64Data,
             withdraw::WithdrawData, zero_balance::ZeroBalanceProofData, ZkProofData,
@@ -94,6 +95,28 @@ fn bench_grouped_ciphertext_validity(c: &mut Criterion) {
     });
 }
 
+fn bench_ciphertext_commitment_equality(c: &mut Criterion) {
+    let keypair = ElGamalKeypair::new_rand();
+    let amount: u64 = 55;
+    let ciphertext = keypair.public.encrypt(amount);
+    let (commitment, opening) = Pedersen::new(amount);
+
+    let proof_data = CiphertextCommitmentEqualityProofData::new(
+        &keypair,
+        &ciphertext,
+        &commitment,
+        &opening,
+        amount,
+    )
+    .unwrap();
+
+    c.bench_function("ciphertext_commitment_equality", |b| {
+        b.iter(|| {
+            proof_data.verify_proof().unwrap();
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_pubkey_validity,
@@ -101,5 +124,6 @@ criterion_group!(
     bench_withdraw,
     bench_zero_balance,
     bench_grouped_ciphertext_validity,
+    bench_ciphertext_commitment_equality,
 );
 criterion_main!(benches);
