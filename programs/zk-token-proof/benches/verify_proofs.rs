@@ -7,11 +7,11 @@ use {
             pedersen::{Pedersen, PedersenOpening},
         },
         instruction::{
-            BatchedGroupedCiphertext2HandlesValidityProofData, BatchedRangeProofU128Data,
-            BatchedRangeProofU256Data, BatchedRangeProofU64Data,
+            transfer::FeeParameters, BatchedGroupedCiphertext2HandlesValidityProofData,
+            BatchedRangeProofU128Data, BatchedRangeProofU256Data, BatchedRangeProofU64Data,
             CiphertextCiphertextEqualityProofData, CiphertextCommitmentEqualityProofData,
             GroupedCiphertext2HandlesValidityProofData, PubkeyValidityData, RangeProofU64Data,
-            WithdrawData, ZeroBalanceProofData, ZkProofData,
+            TransferData, TransferWithFeeData, WithdrawData, ZeroBalanceProofData, ZkProofData,
         },
     },
 };
@@ -332,6 +332,63 @@ fn bench_batched_range_proof_u256(c: &mut Criterion) {
     });
 }
 
+fn bench_transfer(c: &mut Criterion) {
+    let source_keypair = ElGamalKeypair::new_rand();
+    let destination_pubkey = ElGamalKeypair::new_rand().public;
+    let auditor_pubkey = ElGamalKeypair::new_rand().public;
+
+    let spendable_balance: u64 = 77;
+    let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+    let transfer_amount: u64 = 55;
+
+    let proof_data = TransferData::new(
+        transfer_amount,
+        (spendable_balance, &spendable_ciphertext),
+        &source_keypair,
+        (&destination_pubkey, &auditor_pubkey),
+    )
+    .unwrap();
+
+    c.bench_function("transfer", |b| {
+        b.iter(|| {
+            proof_data.verify_proof().unwrap();
+        })
+    });
+}
+
+fn bench_transfer_with_fee(c: &mut Criterion) {
+    let source_keypair = ElGamalKeypair::new_rand();
+    let destination_pubkey = ElGamalKeypair::new_rand().public;
+    let auditor_pubkey = ElGamalKeypair::new_rand().public;
+    let withdraw_withheld_authority_pubkey = ElGamalKeypair::new_rand().public;
+
+    let spendable_balance: u64 = 120;
+    let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+
+    let transfer_amount: u64 = 100;
+
+    let fee_parameters = FeeParameters {
+        fee_rate_basis_points: 400,
+        maximum_fee: 3,
+    };
+
+    let proof_data = TransferWithFeeData::new(
+        transfer_amount,
+        (spendable_balance, &spendable_ciphertext),
+        &source_keypair,
+        (&destination_pubkey, &auditor_pubkey),
+        fee_parameters,
+        &withdraw_withheld_authority_pubkey,
+    )
+    .unwrap();
+
+    c.bench_function("transfer_with_fee", |b| {
+        b.iter(|| {
+            proof_data.verify_proof().unwrap();
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_pubkey_validity,
@@ -345,5 +402,7 @@ criterion_group!(
     bench_batched_range_proof_u64,
     bench_batched_range_proof_u128,
     bench_batched_range_proof_u256,
+    bench_transfer,
+    bench_transfer_with_fee,
 );
 criterion_main!(benches);
