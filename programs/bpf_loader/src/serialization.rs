@@ -238,6 +238,7 @@ pub fn deserialize_parameters(
         .try_borrow_last_program_account(transaction_context)?
         .get_owner()
         == bpf_loader_deprecated::id();
+    let account_lengths = account_lengths.iter().copied();
     if is_loader_deprecated {
         deserialize_parameters_unaligned(
             transaction_context,
@@ -321,16 +322,17 @@ fn serialize_parameters_unaligned(
     Ok((mem, regions, account_lengths))
 }
 
-pub fn deserialize_parameters_unaligned(
+pub fn deserialize_parameters_unaligned<I: IntoIterator<Item = usize>>(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     copy_account_data: bool,
     buffer: &[u8],
-    account_lengths: &[usize],
+    account_lengths: I,
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
-    for (instruction_account_index, pre_len) in
-        (0..instruction_context.get_number_of_instruction_accounts()).zip(account_lengths.iter())
+    for (instruction_account_index, pre_len) in (0..instruction_context
+        .get_number_of_instruction_accounts())
+        .zip(account_lengths.into_iter())
     {
         let duplicate =
             instruction_context.is_instruction_account_duplicate(instruction_account_index)?;
@@ -446,16 +448,17 @@ fn serialize_parameters_aligned(
     Ok((mem, regions, account_lengths))
 }
 
-pub fn deserialize_parameters_aligned(
+pub fn deserialize_parameters_aligned<I: IntoIterator<Item = usize>>(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     copy_account_data: bool,
     buffer: &[u8],
-    account_lengths: &[usize],
+    account_lengths: I,
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
-    for (instruction_account_index, pre_len) in
-        (0..instruction_context.get_number_of_instruction_accounts()).zip(account_lengths.iter())
+    for (instruction_account_index, pre_len) in (0..instruction_context
+        .get_number_of_instruction_accounts())
+        .zip(account_lengths.into_iter())
     {
         let duplicate =
             instruction_context.is_instruction_account_duplicate(instruction_account_index)?;
@@ -489,13 +492,13 @@ pub fn deserialize_parameters_aligned(
                     .ok_or(InstructionError::InvalidArgument)?,
             ) as usize;
             start += size_of::<u64>(); // data length
-            if post_len.saturating_sub(*pre_len) > MAX_PERMITTED_DATA_INCREASE
+            if post_len.saturating_sub(pre_len) > MAX_PERMITTED_DATA_INCREASE
                 || post_len > MAX_PERMITTED_DATA_LENGTH as usize
             {
                 return Err(InstructionError::InvalidRealloc);
             }
             // The redundant check helps to avoid the expensive data comparison if we can
-            let alignment_offset = (*pre_len as *const u8).align_offset(BPF_ALIGN_OF_U128);
+            let alignment_offset = (pre_len as *const u8).align_offset(BPF_ALIGN_OF_U128);
             if copy_account_data {
                 let data = buffer
                     .get(start..start + post_len)
@@ -508,7 +511,7 @@ pub fn deserialize_parameters_aligned(
                     Err(err) if borrowed_account.get_data() != data => return Err(err),
                     _ => {}
                 }
-                start += *pre_len; // data
+                start += pre_len; // data
             } else {
                 // See Serializer::write_account() as to why we have this
                 // padding before the realloc region here.
@@ -522,11 +525,11 @@ pub fn deserialize_parameters_aligned(
                 {
                     Ok(()) => {
                         borrowed_account.set_data_length(post_len)?;
-                        let allocated_bytes = post_len.saturating_sub(*pre_len);
+                        let allocated_bytes = post_len.saturating_sub(pre_len);
                         if allocated_bytes > 0 {
                             borrowed_account
                                 .get_data_mut()?
-                                .get_mut(*pre_len..pre_len.saturating_add(allocated_bytes))
+                                .get_mut(pre_len..pre_len.saturating_add(allocated_bytes))
                                 .ok_or(InstructionError::InvalidArgument)?
                                 .copy_from_slice(
                                     data.get(0..allocated_bytes)
