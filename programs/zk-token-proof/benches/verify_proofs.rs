@@ -7,6 +7,7 @@ use {
             pedersen::{Pedersen, PedersenOpening},
         },
         instruction::{
+            batched_grouped_ciphertext_validity::BatchedGroupedCiphertext2HandlesValidityProofData,
             ciphertext_ciphertext_equality::CiphertextCiphertextEqualityProofData,
             ciphertext_commitment_equality::CiphertextCommitmentEqualityProofData,
             grouped_ciphertext_validity::GroupedCiphertext2HandlesValidityProofData,
@@ -147,6 +148,47 @@ fn bench_ciphertext_ciphertext_equality(c: &mut Criterion) {
     });
 }
 
+fn bench_batched_grouped_ciphertext_validity(c: &mut Criterion) {
+    let destination_pubkey = ElGamalKeypair::new_rand().public;
+    let auditor_pubkey = ElGamalKeypair::new_rand().public;
+
+    let amount_lo: u64 = 11;
+    let amount_hi: u64 = 22;
+
+    let opening_lo = PedersenOpening::new_rand();
+    let opening_hi = PedersenOpening::new_rand();
+
+    let grouped_ciphertext_lo = GroupedElGamal::encrypt_with(
+        [&destination_pubkey, &auditor_pubkey],
+        amount_lo,
+        &opening_lo,
+    );
+
+    let grouped_ciphertext_hi = GroupedElGamal::encrypt_with(
+        [&destination_pubkey, &auditor_pubkey],
+        amount_hi,
+        &opening_hi,
+    );
+
+    let proof_data = BatchedGroupedCiphertext2HandlesValidityProofData::new(
+        &destination_pubkey,
+        &auditor_pubkey,
+        &grouped_ciphertext_lo,
+        &grouped_ciphertext_hi,
+        amount_lo,
+        amount_hi,
+        &opening_lo,
+        &opening_hi,
+    )
+    .unwrap();
+
+    c.bench_function("batched_grouped_ciphertext_validity", |b| {
+        b.iter(|| {
+            proof_data.verify_proof().unwrap();
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_pubkey_validity,
@@ -156,5 +198,6 @@ criterion_group!(
     bench_grouped_ciphertext_validity,
     bench_ciphertext_commitment_equality,
     bench_ciphertext_ciphertext_equality,
+    bench_batched_grouped_ciphertext_validity,
 );
 criterion_main!(benches);
