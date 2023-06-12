@@ -3256,15 +3256,26 @@ pub mod tests {
         let present_account = AccountSharedData::new(1, 10, &Pubkey::default());
         bank.store_account(&present_account_key.pubkey(), &present_account);
 
+        let compute_unit_limit = solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS
+            as u32
+            + solana_compute_budget_program::DEFAULT_COMPUTE_UNITS as u32;
         let entries: Vec<_> = (0..NUM_TRANSFERS)
             .step_by(NUM_TRANSFERS_PER_ENTRY)
             .map(|i| {
                 let mut transactions = (0..NUM_TRANSFERS_PER_ENTRY)
                     .map(|j| {
-                        system_transaction::transfer(
-                            &keypairs[i + j],
-                            &keypairs[i + j + NUM_TRANSFERS].pubkey(),
-                            1,
+                        // transactions should request compute_unit_limit
+                        Transaction::new_signed_with_payer(
+                            &[
+                                solana_sdk::system_instruction::transfer(
+                                        &keypairs[i + j].pubkey(),
+                                        &keypairs[i + j + NUM_TRANSFERS].pubkey(),
+                                        1,
+                                    ),
+                                solana_sdk::compute_budget::ComputeBudgetInstruction::set_compute_unit_limit(compute_unit_limit),
+                            ],
+                            Some(&keypairs[i + j].pubkey()),
+                            &[&keypairs[i + j]],
                             bank.last_blockhash(),
                         )
                     })

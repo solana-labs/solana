@@ -38,6 +38,7 @@ serde_bytes = { workspace = true }
 sha2 = { workspace = true }
 solana-account-decoder = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
+solana-compute-budget-program = { workspace = true }
 solana-entry = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
@@ -51,6 +52,7 @@ solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-storage-bigtable = { workspace = true }
 solana-storage-proto = { workspace = true }
+solana-system-program = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-vote-program = { workspace = true }
 spl-token = { workspace = true, features = ["no-entrypoint"] }

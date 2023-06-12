@@ -130,7 +130,9 @@ impl CostModel {
                     // if feature gate is activated, the requested compute_unit_limit covers both
                     // builtin and bpf programs
                     builtin_costs = compute_budget.compute_unit_limit.min(builtin_costs);
-                    bpf_costs = compute_budget.compute_unit_limit - builtin_costs;
+                    bpf_costs = compute_budget
+                        .compute_unit_limit
+                        .saturating_sub(builtin_costs);
                 } else {
                     // if tx contained user-space instructions and a more accurate estimate available correct it
                     if bpf_costs > 0 {
