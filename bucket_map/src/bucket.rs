@@ -906,7 +906,7 @@ mod tests {
                         .collect::<Vec<_>>();
                     let mut hashed = Bucket::index_entries(raw.clone().into_iter(), len, random);
                     let common_ix = 2; // both are put at same ix
-                    hashed.iter_mut().for_each(|mut v| {
+                    hashed.iter_mut().for_each(|v| {
                         v.0 = common_ix;
                     });
                     let hashed_raw = hashed.clone();
