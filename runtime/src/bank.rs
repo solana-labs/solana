@@ -3099,7 +3099,6 @@ impl Bank {
         rewards.len().saturating_sub(initial_len)
     }
 
-    /// Process reward credits for a partition of rewards
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
         #[allow(deprecated)]
         self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |account| {
