@@ -3,7 +3,8 @@ use {
     solana_zk_token_sdk::{
         encryption::{elgamal::ElGamalKeypair, pedersen::Pedersen},
         instruction::{
-            pubkey_validity::PubkeyValidityData, range_proof::RangeProofU64Data, ZkProofData,
+            pubkey_validity::PubkeyValidityData, range_proof::RangeProofU64Data,
+            withdraw::WithdrawData, ZkProofData,
         },
     },
 };
@@ -31,5 +32,30 @@ fn bench_range_proof_u64(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_pubkey_validity, bench_range_proof_u64);
+fn bench_withdraw(c: &mut Criterion) {
+    let keypair = ElGamalKeypair::new_rand();
+    let current_balance: u64 = 77;
+    let current_ciphertext = keypair.public.encrypt(current_balance);
+    let withdraw_amount: u64 = 55;
+    let proof_data = WithdrawData::new(
+        withdraw_amount,
+        &keypair,
+        current_balance,
+        &current_ciphertext,
+    )
+    .unwrap();
+
+    c.bench_function("withdraw", |b| {
+        b.iter(|| {
+            proof_data.verify_proof().unwrap();
+        })
+    });
+}
+
+criterion_group!(
+    benches,
+    bench_pubkey_validity,
+    bench_range_proof_u64,
+    bench_withdraw
+);
 criterion_main!(benches);
