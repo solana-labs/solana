@@ -24,9 +24,18 @@ container=kapacitor
   exit 0
 )
 
+# shellcheck disable=SC2016
+sed -i 's|$DISCORD_WEBHOOK_CANARIES_MONITORING|'"$DISCORD_WEBHOOK_CANARIES_MONITORING"'|g' "$PWD"/kapacitor.conf
+# shellcheck disable=SC2016
+sed -i 's|$DISCORD_WEBHOOK_MB_PAGER_DUTY|'"$DISCORD_WEBHOOK_MB_PAGER_DUTY"'|g' "$PWD"/kapacitor.conf
+# shellcheck disable=SC2016
+sed -i 's|$DISCORD_WEBHOOK_TESTNET_PAGER_DUTY|'"$DISCORD_WEBHOOK_TESTNET_PAGER_DUTY"'|g' "$PWD"/kapacitor.conf
+# shellcheck disable=SC2016
+sed -i 's|$DISCORD_WEBHOOK_DEVNET_PAGER_DUTY|'"$DISCORD_WEBHOOK_DEVNET_PAGER_DUTY"'|g' "$PWD"/kapacitor.conf
+
 #running influx kapacitor service
 sudo docker run \
-  --memory=10g \
+  --memory=30g \
   --detach \
   --name=kapacitor \
   --env KAPACITOR_USERNAME="$KAPACITOR_USERNAME" \
