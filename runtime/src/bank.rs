@@ -3046,14 +3046,8 @@ impl Bank {
                 if let Some(curr_stake_account) = self.get_account_with_fixed_root(&stake_pubkey) {
                     let pre_lamport = curr_stake_account.lamports();
                     let post_lamport = post_stake_account.lamports();
-
-                    if pre_lamport + u64::try_from(reward_amount).unwrap() != post_lamport {
-                        warn!(
-                            "LAMPORT MISMATCH: {} {} {} {} ",
-                            stake_pubkey, pre_lamport, post_lamport, reward_amount
-                        );
-                        panic!("stake account lamport has changed since the reward calculation!");
-                    }
+                    assert_eq!(pre_lamport + u64::try_from(reward_amount).unwrap(), post_lamport,
+                        "stake account balance has changed since the reward calculation! account: {stake_pubkey}, pre balance: {pre_lamport}, post balance: {post_lamport}, rewards: {reward_amount}");
                 }
             }
         }
