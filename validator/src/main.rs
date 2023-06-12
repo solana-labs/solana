@@ -1410,7 +1410,7 @@ pub fn main() {
             .map(|shrink_paths| shrink_paths.into_iter().map(PathBuf::from).collect())
             .ok();
     let account_shrink_paths = account_shrink_paths.as_ref().map(|paths| {
-        create_and_canonicalize_directories(&paths).unwrap_or_else(|err| {
+        create_and_canonicalize_directories(paths).unwrap_or_else(|err| {
             eprintln!("Unable to access account shrink path: {err}");
             exit(1);
         })
