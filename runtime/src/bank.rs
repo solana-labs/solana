@@ -3148,18 +3148,9 @@ impl Bank {
             let to_store = vote_account_rewards
                 .accounts_to_store
                 .iter()
+                .filter_map(|account| account.as_ref())
                 .enumerate()
-                .filter_map(|(i, account)| {
-                    if account.is_some() {
-                        // note these are refs we're writing
-                        Some((
-                            &vote_account_rewards.rewards[i].0,
-                            account.as_ref().unwrap(),
-                        ))
-                    } else {
-                        None
-                    }
-                })
+                .map(|(i, account)| (&vote_account_rewards.rewards[i].0, account))
                 .collect::<Vec<_>>();
             self.store_accounts((self.slot(), &to_store[..], self.include_slot_in_hash()));
         });

@@ -160,7 +160,7 @@ impl StakeReward {
 }
 
 impl VoteReward {
-    pub fn random() -> Self {
+    pub fn new_random() -> Self {
         let mut rng = rand::thread_rng();
 
         let validator_pubkey = solana_sdk::pubkey::new_rand();
@@ -12695,7 +12695,7 @@ fn test_store_vote_accounts_partitioned() {
     let expected_vote_rewards_num = 100;
 
     let vote_rewards = (0..expected_vote_rewards_num)
-        .map(|_| Some((Pubkey::new_unique(), VoteReward::random())))
+        .map(|_| Some((Pubkey::new_unique(), VoteReward::new_random())))
         .collect::<Vec<_>>();
 
     let mut vote_rewards_account = VoteRewardsAccounts::default();
