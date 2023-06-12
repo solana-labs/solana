@@ -19,5 +19,17 @@ fn bench_pubkey_validity(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_pubkey_validity);
+fn bench_range_proof_u64(c: &mut Criterion) {
+    let amount = std::u64::MAX;
+    let (commitment, opening) = Pedersen::new(amount);
+    let proof_data = RangeProofU64Data::new(&commitment, amount, &opening).unwrap();
+
+    c.bench_function("range_proof_u64", |b| {
+        b.iter(|| {
+            proof_data.verify_proof().unwrap();
+        })
+    });
+}
+
+criterion_group!(benches, bench_pubkey_validity, bench_range_proof_u64);
 criterion_main!(benches);
