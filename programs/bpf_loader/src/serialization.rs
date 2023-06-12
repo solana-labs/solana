@@ -180,49 +180,51 @@ pub fn serialize_parameters(
     if should_cap_ix_accounts && num_ix_accounts > MAX_INSTRUCTION_ACCOUNTS as IndexOfAccount {
         return Err(InstructionError::MaxAccountsExceeded);
     }
-    let is_loader_deprecated = *instruction_context
-        .try_borrow_last_program_account(transaction_context)?
-        .get_owner()
-        == bpf_loader_deprecated::id();
 
-    let num_accounts = instruction_context.get_number_of_instruction_accounts() as usize;
-    let mut accounts = Vec::with_capacity(num_accounts);
-    let mut account_lengths: Vec<usize> = Vec::with_capacity(num_accounts);
-    for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts() {
-        if let Some(index) =
-            instruction_context.is_instruction_account_duplicate(instruction_account_index)?
-        {
-            accounts.push(SerializeAccount::Duplicate(index));
-            // unwrap here is safe: if an account is a duplicate, we must have
-            // seen the original already
-            account_lengths.push(*account_lengths.get(index as usize).unwrap());
-        } else {
-            let account = instruction_context
-                .try_borrow_instruction_account(transaction_context, instruction_account_index)?;
-            account_lengths.push(account.get_data().len());
-            accounts.push(SerializeAccount::Account(
-                instruction_account_index,
-                account,
-            ));
-        };
-    }
+    let (program_id, is_loader_deprecated) = {
+        let program_account =
+            instruction_context.try_borrow_last_program_account(transaction_context)?;
+        (
+            *program_account.get_key(),
+            *program_account.get_owner() == bpf_loader_deprecated::id(),
+        )
+    };
+
+    let accounts = (0..instruction_context.get_number_of_instruction_accounts())
+        .map(|instruction_account_index| {
+            if let Some(index) = instruction_context
+                .is_instruction_account_duplicate(instruction_account_index)
+                .unwrap()
+            {
+                SerializeAccount::Duplicate(index)
+            } else {
+                let account = instruction_context
+                    .try_borrow_instruction_account(transaction_context, instruction_account_index)
+                    .unwrap();
+                SerializeAccount::Account(instruction_account_index, account)
+            }
+        })
+        // fun fact: jemalloc is good at caching tiny allocations like this one,
+        // so collecting here is actually faster than passing the iterator
+        // around, since the iterator does the work to produce its items each
+        // time it's iterated on.
+        .collect::<Vec<_>>();
 
     if is_loader_deprecated {
         serialize_parameters_unaligned(
-            transaction_context,
-            instruction_context,
             accounts,
+            instruction_context.get_instruction_data(),
+            &program_id,
             copy_account_data,
         )
     } else {
         serialize_parameters_aligned(
-            transaction_context,
-            instruction_context,
             accounts,
+            instruction_context.get_instruction_data(),
+            &program_id,
             copy_account_data,
         )
     }
-    .map(|(buffer, regions)| (buffer, regions, account_lengths))
 }
 
 pub fn deserialize_parameters(
@@ -256,11 +258,11 @@ pub fn deserialize_parameters(
 }
 
 fn serialize_parameters_unaligned(
-    transaction_context: &TransactionContext,
-    instruction_context: &InstructionContext,
     accounts: Vec<SerializeAccount>,
+    instruction_data: &[u8],
+    program_id: &Pubkey,
     copy_account_data: bool,
-) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>), InstructionError> {
+) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>, Vec<usize>), InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
     for account in &accounts {
@@ -283,16 +285,21 @@ fn serialize_parameters_unaligned(
         }
     }
     size += size_of::<u64>() // instruction data len
-         + instruction_context.get_instruction_data().len() // instruction data
+         + instruction_data.len() // instruction data
          + size_of::<Pubkey>(); // program id
 
     let mut s = Serializer::new(size, MM_INPUT_START, false, copy_account_data);
 
+    let mut account_lengths = Vec::with_capacity(accounts.len());
     s.write::<u64>((accounts.len() as u64).to_le());
     for account in accounts {
         match account {
-            SerializeAccount::Duplicate(position) => s.write(position as u8),
+            SerializeAccount::Duplicate(position) => {
+                account_lengths.push(*account_lengths.get(position as usize).unwrap());
+                s.write(position as u8);
+            }
             SerializeAccount::Account(_, mut account) => {
+                account_lengths.push(account.get_data().len());
                 s.write::<u8>(NON_DUP_MARKER);
                 s.write::<u8>(account.is_signer() as u8);
                 s.write::<u8>(account.is_writable() as u8);
@@ -306,16 +313,12 @@ fn serialize_parameters_unaligned(
             }
         };
     }
-    s.write::<u64>((instruction_context.get_instruction_data().len() as u64).to_le());
-    s.write_all(instruction_context.get_instruction_data());
-    s.write_all(
-        instruction_context
-            .try_borrow_last_program_account(transaction_context)?
-            .get_key()
-            .as_ref(),
-    );
+    s.write::<u64>((instruction_data.len() as u64).to_le());
+    s.write_all(instruction_data);
+    s.write_all(program_id.as_ref());
 
-    Ok(s.finish())
+    let (mem, regions) = s.finish();
+    Ok((mem, regions, account_lengths))
 }
 
 pub fn deserialize_parameters_unaligned(
@@ -372,11 +375,12 @@ pub fn deserialize_parameters_unaligned(
 }
 
 fn serialize_parameters_aligned(
-    transaction_context: &TransactionContext,
-    instruction_context: &InstructionContext,
     accounts: Vec<SerializeAccount>,
+    instruction_data: &[u8],
+    program_id: &Pubkey,
     copy_account_data: bool,
-) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>), InstructionError> {
+) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>, Vec<usize>), InstructionError> {
+    let mut account_lengths = Vec::with_capacity(accounts.len());
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
     for account in &accounts {
@@ -404,7 +408,7 @@ fn serialize_parameters_aligned(
         }
     }
     size += size_of::<u64>() // data len
-    + instruction_context.get_instruction_data().len()
+    + instruction_data.len()
     + size_of::<Pubkey>(); // program id;
 
     let mut s = Serializer::new(size, MM_INPUT_START, true, copy_account_data);
@@ -414,6 +418,7 @@ fn serialize_parameters_aligned(
     for account in accounts {
         match account {
             SerializeAccount::Account(_, mut borrowed_account) => {
+                account_lengths.push(borrowed_account.get_data().len());
                 s.write::<u8>(NON_DUP_MARKER);
                 s.write::<u8>(borrowed_account.is_signer() as u8);
                 s.write::<u8>(borrowed_account.is_writable() as u8);
@@ -427,21 +432,18 @@ fn serialize_parameters_aligned(
                 s.write::<u64>((borrowed_account.get_rent_epoch()).to_le());
             }
             SerializeAccount::Duplicate(position) => {
+                account_lengths.push(*account_lengths.get(position as usize).unwrap());
                 s.write::<u8>(position as u8);
                 s.write_all(&[0u8, 0, 0, 0, 0, 0, 0]);
             }
         };
     }
-    s.write::<u64>((instruction_context.get_instruction_data().len() as u64).to_le());
-    s.write_all(instruction_context.get_instruction_data());
-    s.write_all(
-        instruction_context
-            .try_borrow_last_program_account(transaction_context)?
-            .get_key()
-            .as_ref(),
-    );
+    s.write::<u64>((instruction_data.len() as u64).to_le());
+    s.write_all(instruction_data);
+    s.write_all(program_id.as_ref());
 
-    Ok(s.finish())
+    let (mem, regions) = s.finish();
+    Ok((mem, regions, account_lengths))
 }
 
 pub fn deserialize_parameters_aligned(
