@@ -1,8 +1,13 @@
 use {
     criterion::{criterion_group, criterion_main, Criterion},
     solana_zk_token_sdk::{
-        encryption::{elgamal::ElGamalKeypair, pedersen::Pedersen},
+        encryption::{
+            elgamal::ElGamalKeypair,
+            grouped_elgamal::GroupedElGamal,
+            pedersen::{Pedersen, PedersenOpening},
+        },
         instruction::{
+            grouped_ciphertext_validity::GroupedCiphertext2HandlesValidityProofData,
             pubkey_validity::PubkeyValidityData, range_proof::RangeProofU64Data,
             withdraw::WithdrawData, zero_balance::ZeroBalanceProofData, ZkProofData,
         },
@@ -64,11 +69,37 @@ fn bench_zero_balance(c: &mut Criterion) {
     });
 }
 
+fn bench_grouped_ciphertext_validity(c: &mut Criterion) {
+    let destination_pubkey = ElGamalKeypair::new_rand().public;
+    let auditor_pubkey = ElGamalKeypair::new_rand().public;
+
+    let amount: u64 = 55;
+    let opening = PedersenOpening::new_rand();
+    let grouped_ciphertext =
+        GroupedElGamal::encrypt_with([&destination_pubkey, &auditor_pubkey], amount, &opening);
+
+    let proof_data = GroupedCiphertext2HandlesValidityProofData::new(
+        &destination_pubkey,
+        &auditor_pubkey,
+        &grouped_ciphertext,
+        amount,
+        &opening,
+    )
+    .unwrap();
+
+    c.bench_function("grouped_ciphertext_validity", |b| {
+        b.iter(|| {
+            proof_data.verify_proof().unwrap();
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_pubkey_validity,
     bench_range_proof_u64,
     bench_withdraw,
     bench_zero_balance,
+    bench_grouped_ciphertext_validity,
 );
 criterion_main!(benches);
