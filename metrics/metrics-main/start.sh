@@ -44,8 +44,8 @@ mkdir -p "$here/certs"
 chmod 700 "$here/certs"
 sudo cp /etc/letsencrypt/live/"$HOST"/fullchain.pem "$here/certs/"
 sudo cp /etc/letsencrypt/live/"$HOST"/privkey.pem "$here/certs/"
-sudo chmod 0444 "$here/certs/*"
-sudo chown buildkite-agent:buildkite-agent "$here/certs"
+sudo chmod 0444 "$here"/certs/*
+sudo chown buildkite-agent:buildkite-agent "$here"/certs
 
 here_pwd="$(realpath "$here")"
 
