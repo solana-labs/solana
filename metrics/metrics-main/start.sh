@@ -39,9 +39,9 @@ done
 docker network remove influxdb || true
 docker network create influxdb
 pwd
-rm -rf certs
-mkdir -p certs
-chmod 700 certs
+rm -rf "$here/certs"
+mkdir -p "$here/certs"
+chmod 700 "$here/certs"
 sudo cp /etc/letsencrypt/live/"$HOST"/fullchain.pem "$here/certs/"
 sudo cp /etc/letsencrypt/live/"$HOST"/privkey.pem "$here/certs/"
 sudo chmod 0444 "$here/certs/*"
