@@ -144,13 +144,13 @@ and de-activations per epoch. It is updated at the start of every epoch.
 
 ## EpochRewards
 
-The EpochRewards sysvar tracks the progress of epoch reward distribution. The
+The EpochRewards sysvar tracks the progress of epoch rewards distribution. The
 sysvar is created in the first block of the epoch, and lasts for serval blocks
-for paying out the rewards. When all rewards have been distributed, the sysvar
-will be deleted. Unlike other sysvars, which almost always exist on-chain,
-EpochRewards sysvar only exists during reward period. Therefore, calling
-`EpochRewards::get()` on the blocks, which are outside of reward period, will
-get an error, i.e. `UnsupportedSysvar`. This can serve as a method for
+while paying out the rewards. When all rewards have been distributed, the sysvar
+is deleted. Unlike other sysvars, which almost always exist on-chain,
+EpochRewards sysvar only exists during the reward period. Therefore, calling
+`EpochRewards::get()` on blocks that are outside of the reward period will
+return an error, i.e. `UnsupportedSysvar`. This can serve as a method for
 determining whether epoch rewards distribution has finished.
 
 - Address: `SysvarEpochRewards1111111111111111111111111`

@@ -9,14 +9,14 @@
 use std::ops::AddAssign;
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone, Copy, AbiExample)]
 pub struct EpochRewards {
-    // total rewards for the current epoch, in lamports
+    /// total rewards for the current epoch, in lamports
     pub total_rewards: u64,
 
-    // distributed rewards for  the current epoch, in lamports
+    /// distributed rewards for the current epoch, in lamports
     pub distributed_rewards: u64,
 
-    // distribution of all staking rewards for the current
-    // epoch will be completed at this block height
+    /// distribution of all staking rewards for the current
+    /// epoch will be completed at this block height
     pub distribution_complete_block_height: u64,
 }
 
