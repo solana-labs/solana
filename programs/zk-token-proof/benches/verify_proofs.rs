@@ -7,6 +7,7 @@ use {
             pedersen::{Pedersen, PedersenOpening},
         },
         instruction::{
+            ciphertext_ciphertext_equality::CiphertextCiphertextEqualityProofData,
             ciphertext_commitment_equality::CiphertextCommitmentEqualityProofData,
             grouped_ciphertext_validity::GroupedCiphertext2HandlesValidityProofData,
             pubkey_validity::PubkeyValidityData, range_proof::RangeProofU64Data,
@@ -117,6 +118,35 @@ fn bench_ciphertext_commitment_equality(c: &mut Criterion) {
     });
 }
 
+fn bench_ciphertext_ciphertext_equality(c: &mut Criterion) {
+    let source_keypair = ElGamalKeypair::new_rand();
+    let destination_keypair = ElGamalKeypair::new_rand();
+
+    let amount: u64 = 0;
+    let source_ciphertext = source_keypair.public.encrypt(amount);
+
+    let destination_opening = PedersenOpening::new_rand();
+    let destination_ciphertext = destination_keypair
+        .public
+        .encrypt_with(amount, &destination_opening);
+
+    let proof_data = CiphertextCiphertextEqualityProofData::new(
+        &source_keypair,
+        &destination_keypair.public,
+        &source_ciphertext,
+        &destination_ciphertext,
+        &destination_opening,
+        amount,
+    )
+    .unwrap();
+
+    c.bench_function("ciphertext_ciphertext_equality", |b| {
+        b.iter(|| {
+            proof_data.verify_proof().unwrap();
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_pubkey_validity,
@@ -125,5 +155,6 @@ criterion_group!(
     bench_zero_balance,
     bench_grouped_ciphertext_validity,
     bench_ciphertext_commitment_equality,
+    bench_ciphertext_ciphertext_equality,
 );
 criterion_main!(benches);
