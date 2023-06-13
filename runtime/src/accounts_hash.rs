@@ -88,13 +88,28 @@ impl AccountHashesFile {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
             self.count_and_writer = Some((
                 0,
-                BufWriter::new(tempfile_in(&self.dir_for_temp_cache_files).unwrap()),
+                BufWriter::new(
+                    tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
+                        panic!(
+                            "Unable to create file within {}: {err}",
+                            self.dir_for_temp_cache_files.display()
+                        )
+                    }),
+                ),
             ));
         }
         let count_and_writer = self.count_and_writer.as_mut().unwrap();
         assert_eq!(
             std::mem::size_of::<Hash>(),
-            count_and_writer.1.write(hash.as_ref()).unwrap()
+            count_and_writer
+                .1
+                .write(hash.as_ref())
+                .unwrap_or_else(|err| {
+                    panic!(
+                        "Unable to write file within {}: {err}",
+                        self.dir_for_temp_cache_files.display()
+                    )
+                })
         );
         count_and_writer.0 += 1;
     }
