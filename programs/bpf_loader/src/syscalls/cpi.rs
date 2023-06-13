@@ -1,6 +1,7 @@
 use {
     super::*,
     crate::declare_syscall,
+    solana_program_runtime::invoke_context::SerializedAccountMetadata,
     solana_sdk::{
         feature_set::enable_bpf_loader_set_authority_checked_ix,
         stable_layout::stable_instruction::StableInstruction,
@@ -51,11 +52,11 @@ impl<'a> CallerAccount<'a> {
         is_loader_deprecated: bool,
         _vm_addr: u64,
         account_info: &AccountInfo,
-        original_data_len: usize,
+        account_metadata: &SerializedAccountMetadata,
     ) -> Result<CallerAccount<'a>, Error> {
+        let original_data_len = account_metadata.original_data_len;
         // account_info points to host memory. The addresses used internally are
         // in vm space so they need to be translated.
-
         let lamports = {
             // Double translate lamports out of RefCell
             let ptr = translate_type::<u64>(
@@ -161,8 +162,9 @@ impl<'a> CallerAccount<'a> {
         is_loader_deprecated: bool,
         vm_addr: u64,
         account_info: &SolAccountInfo,
-        original_data_len: usize,
+        account_metadata: &SerializedAccountMetadata,
     ) -> Result<CallerAccount<'a>, Error> {
+        let original_data_len = account_metadata.original_data_len;
         // account_info points to host memory. The addresses used internally are
         // in vm space so they need to be translated.
 
@@ -719,7 +721,14 @@ fn translate_and_update_accounts<'a, T, F>(
     do_translate: F,
 ) -> Result<TranslatedAccounts<'a>, Error>
 where
-    F: Fn(&InvokeContext, &MemoryMapping, bool, u64, &T, usize) -> Result<CallerAccount<'a>, Error>,
+    F: Fn(
+        &InvokeContext,
+        &MemoryMapping,
+        bool,
+        u64,
+        &T,
+        &SerializedAccountMetadata,
+    ) -> Result<CallerAccount<'a>, Error>,
 {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -768,7 +777,7 @@ where
         } else if let Some(caller_account_index) =
             account_info_keys.iter().position(|key| *key == account_key)
         {
-            let original_data_len = accounts_metadata
+            let serialized_metadata = accounts_metadata
                 .get(instruction_account.index_in_caller as usize)
                 .ok_or_else(|| {
                     ic_msg!(
@@ -777,8 +786,7 @@ where
                         account_key
                     );
                     Box::new(InstructionError::MissingAccount)
-                })?
-                .original_data_len;
+                })?;
 
             // build the CallerAccount corresponding to this account.
             let caller_account =
@@ -792,7 +800,7 @@ where
                     account_infos
                         .get(caller_account_index)
                         .ok_or(SyscallError::InvalidLength)?,
-                    original_data_len,
+                    serialized_metadata,
                 )?;
 
             // before initiating CPI, the caller may have modified the
@@ -1457,7 +1465,9 @@ mod tests {
             false,
             vm_addr,
             account_info,
-            account.data().len(),
+            &SerializedAccountMetadata {
+                original_data_len: account.data().len(),
+            },
         )
         .unwrap();
         assert_eq!(*caller_account.lamports, account.lamports());
