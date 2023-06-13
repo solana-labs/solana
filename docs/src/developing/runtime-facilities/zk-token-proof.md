@@ -75,8 +75,8 @@ The ZK Token proof program processes a proof instruction in two steps:
 The simplest way to use a proof instruction is to execute it without producing a
 context state account. In this case, the proof instruction can be included as
 part of a larger Solana transaction that contains instructions of other Solana
-programs. Programs such as the SPL Token 2022 program should directly access the
-context data from the proof instruction data and use it in its program logic.
+programs. Programs should directly access the context data from the proof
+instruction data and use it in its program logic.
 
 Alternatively, a proof instruction can be executed to produce a context state
 account. In this case, the context data associated with a proof instruction
