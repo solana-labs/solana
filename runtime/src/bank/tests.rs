@@ -12606,6 +12606,46 @@ fn test_rewards_point_calculation_empty() {
 
 /// Test reward computation at epoch boundary
 #[test]
+fn test_rewards_computation() {
+    solana_logger::setup();
+
+    let expected_num_delegations = 100;
+    let bank = create_reward_bank(expected_num_delegations).0;
+
+    // Calculate rewards
+    let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+    let mut rewards_metrics = RewardsMetrics::default();
+    let expected_rewards = 100_000_000_000;
+
+    let calculated_rewards = bank.calculate_validator_rewards(
+        1,
+        expected_rewards,
+        null_tracer(),
+        &thread_pool,
+        &mut rewards_metrics,
+    );
+
+    let vote_rewards = &calculated_rewards.as_ref().unwrap().0;
+    let stake_rewards = &calculated_rewards.as_ref().unwrap().1;
+
+    let total_vote_rewards: u64 = vote_rewards
+        .rewards
+        .iter()
+        .map(|reward| reward.1.lamports)
+        .sum::<i64>() as u64;
+
+    // assert that total rewards matches the sum of vote rewards and stake rewards
+    assert_eq!(
+        stake_rewards.total_stake_rewards_lamports + total_vote_rewards,
+        expected_rewards
+    );
+
+    // assert that number of stake rewards matches
+    assert_eq!(stake_rewards.stake_rewards.len(), expected_num_delegations);
+}
+
+/// Test rewards compuation and partitioned rewards distribution at the epoch boundary
+#[test]
 fn test_store_stake_accounts_in_partition() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
     let bank = Bank::new_for_tests(&genesis_config);
