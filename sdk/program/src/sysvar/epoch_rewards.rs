@@ -1,11 +1,11 @@
 //! Epoch rewards for current epoch
 //!
-//! The _epoch rewards_ sysvar provide access to the [`EpochRewards`] type,
+//! The _epoch rewards_ sysvar provides access to the [`EpochRewards`] type,
 //! which tracks the progress of epoch rewards distribution. It includes the
 //!   - total rewards for the current epoch, in lamports
-//!   - distributed rewards for the current epoch, in lamports, so far
-//!   - distribution completed block height, i.e. after this block height for distribution of all
-//!     staking rewards for the current epoch will be completed should have been completed.
+//!   - rewards for the current epoch distributed so far, in lamports
+//!   - distribution completed block height, i.e. distribution of all staking rewards for the current
+//!     epoch will be completed at this block height
 //!
 //! [`EpochRewards`] implements [`Sysvar::get`] and can be loaded efficiently without
 //! passing the sysvar account ID to the program.
@@ -117,7 +117,7 @@
 //! #       rent_epoch: 307,
 //! # });
 //! #
-//!     let epoch_rewards= client.get_account(&epoch_rewards::ID)?;
+//!     let epoch_rewards = client.get_account(&epoch_rewards::ID)?;
 //!     let data: EpochRewards = bincode::deserialize(&epoch_rewards.data)?;
 //!
 //!     Ok(())
