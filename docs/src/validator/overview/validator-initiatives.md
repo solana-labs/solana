@@ -16,7 +16,7 @@ Delegation program participants who operate a performant testnet node, may also 
 
 ## Solana Foundation Server Program
 
-Separately from the delegation program, The Solana Foundation offers a server program that provides servers in various data-centers all over the world. If you would like to run a consensus validator or RPC node, you may use this program to rent bare metal servers in various data-centers. The servers meet or exceed the Solana validator hardware specs. No long-term lease commitments are required. To find out more, visit the [Solana server program page](https://solana.org/server-program).
+Separately from the delegation program, The Solana Foundation offers a server program that provides servers in various data-centers all over the world. If you would like to run a consensus validator or RPC node, you may use this program to rent bare metal servers in various data-centers. The servers meet or exceed the [Solana validator hardware specs](../../running-validator/validator-reqs#hardware-recommendations). No long-term lease commitments are required. To find out more, visit the [Solana server program page](https://solana.org/server-program).
 
 ## Stake Pools
 
