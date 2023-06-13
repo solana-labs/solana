@@ -18,7 +18,7 @@ use {
             pedersen::PedersenOpening,
         },
         errors::ProofError,
-        sigma_proofs::validity_proof::ValidityProof,
+        sigma_proofs::grouped_ciphertext_validity_proof::GroupedCiphertext2HandlesValidityProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,
@@ -41,7 +41,7 @@ use {
 pub struct GroupedCiphertext2HandlesValidityProofData {
     pub context: GroupedCiphertext2HandlesValidityProofContext,
 
-    pub proof: pod::ValidityProof,
+    pub proof: pod::GroupedCiphertext2HandlesValidityProof,
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -75,7 +75,7 @@ impl GroupedCiphertext2HandlesValidityProofData {
 
         let mut transcript = context.new_transcript();
 
-        let proof = ValidityProof::new(
+        let proof = GroupedCiphertext2HandlesValidityProof::new(
             (destination_pubkey, auditor_pubkey),
             amount,
             opening,
@@ -108,7 +108,7 @@ impl ZkProofData<GroupedCiphertext2HandlesValidityProofContext>
         let destination_handle = grouped_ciphertext.handles.get(0).unwrap();
         let auditor_handle = grouped_ciphertext.handles.get(1).unwrap();
 
-        let proof: ValidityProof = self.proof.try_into()?;
+        let proof: GroupedCiphertext2HandlesValidityProof = self.proof.try_into()?;
 
         proof
             .verify(

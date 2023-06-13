@@ -32,12 +32,12 @@ use {
     merlin::Transcript,
 };
 
-/// The ciphertext validity proof.
+/// The grouped ciphertext validity proof for 2 handles.
 ///
 /// Contains all the elliptic curve and scalar components that make up the sigma protocol.
 #[allow(non_snake_case)]
 #[derive(Clone)]
-pub struct ValidityProof {
+pub struct GroupedCiphertext2HandlesValidityProof {
     Y_0: CompressedRistretto,
     Y_1: CompressedRistretto,
     Y_2: CompressedRistretto,
@@ -47,8 +47,8 @@ pub struct ValidityProof {
 
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
-impl ValidityProof {
-    /// The ciphertext validity proof constructor.
+impl GroupedCiphertext2HandlesValidityProof {
+    /// Creates a grouped ciphertext validity proof for 2 handles.
     ///
     /// The function does *not* hash the public keys, commitment, or decryption handles into the
     /// transcript. For security, the caller (the main protocol) should hash these public
@@ -70,7 +70,7 @@ impl ValidityProof {
         opening: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
-        transcript.validity_proof_domain_sep();
+        transcript.grouped_ciphertext_validity_proof_domain_sep();
 
         // extract the relevant scalar and Ristretto points from the inputs
         let P_dest = destination_pubkey.get_point();
@@ -111,7 +111,7 @@ impl ValidityProof {
         }
     }
 
-    /// The ciphertext validity proof verifier.
+    /// Verifies a grouped ciphertext validity proof for 2 handles.
     ///
     /// * `commitment` - The Pedersen commitment
     /// * `(destination_pubkey, auditor_pubkey)` - The ElGamal pubkeys associated with the decryption
@@ -125,7 +125,7 @@ impl ValidityProof {
         (destination_handle, auditor_handle): (&DecryptHandle, &DecryptHandle),
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofError> {
-        transcript.validity_proof_domain_sep();
+        transcript.grouped_ciphertext_validity_proof_domain_sep();
 
         // include Y_0, Y_1, Y_2 to transcript and extract challenges
         transcript.validate_and_append_point(b"Y_0", &self.Y_0)?;
@@ -221,96 +221,13 @@ impl ValidityProof {
         let z_x =
             Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
 
-        Ok(ValidityProof {
+        Ok(GroupedCiphertext2HandlesValidityProof {
             Y_0,
             Y_1,
             Y_2,
             z_r,
             z_x,
         })
-    }
-}
-
-/// Aggregated ciphertext validity proof.
-///
-/// An aggregated ciphertext validity proof certifies the validity of two instances of a standard
-/// ciphertext validity proof. An instance of a standard validity proof consist of one ciphertext
-/// and two decryption handles `(commitment, destination_handle, auditor_handle)`. An instance of an
-/// aggregated ciphertext validity proof is a pair `(commitment_0, destination_handle_0,
-/// auditor_handle_0)` and `(commitment_1, destination_handle_1, auditor_handle_1)`. The proof certifies
-/// the analogous decryptable properties for each one of these pair of commitment and decryption
-/// handles.
-#[allow(non_snake_case)]
-#[derive(Clone)]
-pub struct AggregatedValidityProof(ValidityProof);
-
-#[allow(non_snake_case)]
-#[cfg(not(target_os = "solana"))]
-impl AggregatedValidityProof {
-    /// Aggregated ciphertext validity proof constructor.
-    ///
-    /// The function simples aggregates the input openings and invokes the standard ciphertext
-    /// validity proof constructor.
-    pub fn new<T: Into<Scalar>>(
-        (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
-        (amount_lo, amount_hi): (T, T),
-        (opening_lo, opening_hi): (&PedersenOpening, &PedersenOpening),
-        transcript: &mut Transcript,
-    ) -> Self {
-        transcript.aggregated_validity_proof_domain_sep();
-
-        let t = transcript.challenge_scalar(b"t");
-
-        let aggregated_message = amount_lo.into() + amount_hi.into() * t;
-        let aggregated_opening = opening_lo + &(opening_hi * &t);
-
-        AggregatedValidityProof(ValidityProof::new(
-            (destination_pubkey, auditor_pubkey),
-            aggregated_message,
-            &aggregated_opening,
-            transcript,
-        ))
-    }
-
-    /// Aggregated ciphertext validity proof verifier.
-    ///
-    /// The function does *not* hash the public keys, commitment, or decryption handles into the
-    /// transcript. For security, the caller (the main protocol) should hash these public
-    /// components prior to invoking this constructor.
-    ///
-    /// This function is randomized. It uses `OsRng` internally to generate random scalars.
-    pub fn verify(
-        self,
-        (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
-        (commitment_lo, commitment_hi): (&PedersenCommitment, &PedersenCommitment),
-        (destination_handle_lo, destination_handle_hi): (&DecryptHandle, &DecryptHandle),
-        (auditor_handle_lo, auditor_handle_hi): (&DecryptHandle, &DecryptHandle),
-        transcript: &mut Transcript,
-    ) -> Result<(), ValidityProofError> {
-        transcript.aggregated_validity_proof_domain_sep();
-
-        let t = transcript.challenge_scalar(b"t");
-
-        let aggregated_commitment = commitment_lo + commitment_hi * t;
-        let destination_aggregated_handle = destination_handle_lo + destination_handle_hi * t;
-        let auditor_aggregated_handle = auditor_handle_lo + auditor_handle_hi * t;
-
-        let AggregatedValidityProof(validity_proof) = self;
-
-        validity_proof.verify(
-            &aggregated_commitment,
-            (destination_pubkey, auditor_pubkey),
-            (&destination_aggregated_handle, &auditor_aggregated_handle),
-            transcript,
-        )
-    }
-
-    pub fn to_bytes(&self) -> [u8; 160] {
-        self.0.to_bytes()
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ValidityProofError> {
-        ValidityProof::from_bytes(bytes).map(Self)
     }
 }
 
@@ -322,7 +239,7 @@ mod test {
     };
 
     #[test]
-    fn test_validity_proof_correctness() {
+    fn test_grouped_ciphertext_validity_proof_correctness() {
         let destination_pubkey = ElGamalKeypair::new_rand().public;
         let auditor_pubkey = ElGamalKeypair::new_rand().public;
 
@@ -335,7 +252,7 @@ mod test {
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
-        let proof = ValidityProof::new(
+        let proof = GroupedCiphertext2HandlesValidityProof::new(
             (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
@@ -353,7 +270,7 @@ mod test {
     }
 
     #[test]
-    fn test_validity_proof_edge_cases() {
+    fn test_grouped_ciphertext_validity_proof_edge_cases() {
         // if destination public key zeroed, then the proof should always reject
         let destination_pubkey = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
         let auditor_pubkey = ElGamalKeypair::new_rand().public;
@@ -367,7 +284,7 @@ mod test {
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
-        let proof = ValidityProof::new(
+        let proof = GroupedCiphertext2HandlesValidityProof::new(
             (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
@@ -396,7 +313,7 @@ mod test {
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
-        let proof = ValidityProof::new(
+        let proof = GroupedCiphertext2HandlesValidityProof::new(
             (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
@@ -426,7 +343,7 @@ mod test {
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
-        let proof = ValidityProof::new(
+        let proof = GroupedCiphertext2HandlesValidityProof::new(
             (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
@@ -455,7 +372,7 @@ mod test {
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
-        let proof = ValidityProof::new(
+        let proof = GroupedCiphertext2HandlesValidityProof::new(
             (&destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
@@ -467,44 +384,6 @@ mod test {
                 &commitment,
                 (&destination_pubkey, &auditor_pubkey),
                 (&destination_handle, &auditor_handle),
-                &mut verifier_transcript,
-            )
-            .is_ok());
-    }
-
-    #[test]
-    fn test_aggregated_validity_proof() {
-        let destination_pubkey = ElGamalKeypair::new_rand().public;
-        let auditor_pubkey = ElGamalKeypair::new_rand().public;
-
-        let amount_lo: u64 = 55;
-        let amount_hi: u64 = 77;
-
-        let (commitment_lo, open_lo) = Pedersen::new(amount_lo);
-        let (commitment_hi, open_hi) = Pedersen::new(amount_hi);
-
-        let destination_handle_lo = destination_pubkey.decrypt_handle(&open_lo);
-        let destination_handle_hi = destination_pubkey.decrypt_handle(&open_hi);
-
-        let auditor_handle_lo = auditor_pubkey.decrypt_handle(&open_lo);
-        let auditor_handle_hi = auditor_pubkey.decrypt_handle(&open_hi);
-
-        let mut prover_transcript = Transcript::new(b"Test");
-        let mut verifier_transcript = Transcript::new(b"Test");
-
-        let proof = AggregatedValidityProof::new(
-            (&destination_pubkey, &auditor_pubkey),
-            (amount_lo, amount_hi),
-            (&open_lo, &open_hi),
-            &mut prover_transcript,
-        );
-
-        assert!(proof
-            .verify(
-                (&destination_pubkey, &auditor_pubkey),
-                (&commitment_lo, &commitment_hi),
-                (&destination_handle_lo, &destination_handle_hi),
-                (&auditor_handle_lo, &auditor_handle_hi),
                 &mut verifier_transcript,
             )
             .is_ok());
