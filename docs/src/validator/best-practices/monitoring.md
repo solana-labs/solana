@@ -66,7 +66,9 @@ First, recall the chat message that you got from _@BotFather_. In the message, t
 export TELEGRAM_BOT_TOKEN=<HTTP API Token>
 ```
 
-Next, you need the chat id for your group so that `solana-watcher` knows where to send the message. First, send a message to your bot in the chat group that you created. Something like `@newvalidatorbot hello`. Next, in your browser, got to `https://api.telegram.org/bot<HTTP API Token>/getUpdates`. Make sure to replace `<HTTP API TOKEN>` with your API token that you got in the _@BotFather_ message. Also make sure that you include the word `bot` in the URL before the API token. Make the request in the browser.
+Next, you need the chat id for your group so that `solana-watcher` knows where to send the message. First, send a message to your bot in the chat group that you created. Something like `@newvalidatorbot hello`. 
+
+Next, in your browser, go to `https://api.telegram.org/bot<HTTP API Token>/getUpdates`. Make sure to replace `<HTTP API TOKEN>` with your API token that you got in the _@BotFather_ message. Also make sure that you include the word `bot` in the URL before the API token. Make the request in the browser.
 
 The response should be in JSON. Search for the string `"chat":` in the JSON. The `id` value of that chat is your `TELEGRAM_CHAT_ID`. It will be a negative number like: `-781559558`. Remember to include the negative sign! If you cannot find `"chat":` in the JSON, then you may have to remove the bot from your chat group and add it again.
 
