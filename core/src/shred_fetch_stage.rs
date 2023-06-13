@@ -171,7 +171,6 @@ impl ShredFetchStage {
     pub(crate) fn new(
         sockets: Vec<Arc<UdpSocket>>,
         quic_socket: UdpSocket,
-        forward_sockets: Vec<Arc<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
         sender: Sender<PacketBatch>,
         shred_version: u16,
@@ -196,19 +195,6 @@ impl ShredFetchStage {
             turbine_disabled.clone(),
         );
 
-        let (tvu_forwards_threads, fwd_thread_hdl) = Self::packet_modifier(
-            forward_sockets,
-            exit.clone(),
-            sender.clone(),
-            recycler.clone(),
-            bank_forks.clone(),
-            shred_version,
-            "shred_fetch_tvu_forwards",
-            PacketFlags::FORWARDED,
-            None, // repair_context
-            turbine_disabled.clone(),
-        );
-
         let (repair_receiver, repair_handler) = Self::packet_modifier(
             vec![repair_socket.clone()],
             exit.clone(),
@@ -222,10 +208,8 @@ impl ShredFetchStage {
             turbine_disabled.clone(),
         );
 
-        tvu_threads.extend(tvu_forwards_threads.into_iter());
         tvu_threads.extend(repair_receiver.into_iter());
         tvu_threads.push(tvu_filter);
-        tvu_threads.push(fwd_thread_hdl);
         tvu_threads.push(repair_handler);
 
         let keypair = cluster_info.keypair().clone();

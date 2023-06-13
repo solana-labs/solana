@@ -1135,7 +1135,6 @@ impl Validator {
                 retransmit: node.sockets.retransmit_sockets,
                 fetch: node.sockets.tvu,
                 fetch_quic: node.sockets.tvu_quic,
-                forwards: node.sockets.tvu_forwards,
                 ancestor_hashes_requests: node.sockets.ancestor_hashes_requests,
             },
             blockstore.clone(),
