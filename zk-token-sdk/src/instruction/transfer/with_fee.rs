@@ -14,8 +14,9 @@ use {
         },
         range_proof::RangeProof,
         sigma_proofs::{
+            batched_grouped_ciphertext_validity_proof::BatchedGroupedCiphertext2HandlesValidityProof,
             ciphertext_commitment_equality_proof::CiphertextCommitmentEqualityProof,
-            fee_proof::FeeSigmaProof, validity_proof::AggregatedValidityProof,
+            fee_proof::FeeSigmaProof,
         },
         transcript::TranscriptProtocol,
     },
@@ -399,9 +400,9 @@ pub struct TransferWithFeeProof {
     pub new_source_commitment: pod::PedersenCommitment,
     pub claimed_commitment: pod::PedersenCommitment,
     pub equality_proof: pod::CiphertextCommitmentEqualityProof,
-    pub ciphertext_amount_validity_proof: pod::AggregatedValidityProof,
+    pub ciphertext_amount_validity_proof: pod::BatchedGroupedCiphertext2HandlesValidityProof,
     pub fee_sigma_proof: pod::FeeSigmaProof,
-    pub fee_ciphertext_validity_proof: pod::AggregatedValidityProof,
+    pub fee_ciphertext_validity_proof: pod::BatchedGroupedCiphertext2HandlesValidityProof,
     pub range_proof: pod::RangeProofU256,
 }
 
@@ -443,7 +444,7 @@ impl TransferWithFeeProof {
         );
 
         // generate ciphertext validity proof
-        let ciphertext_amount_validity_proof = AggregatedValidityProof::new(
+        let ciphertext_amount_validity_proof = BatchedGroupedCiphertext2HandlesValidityProof::new(
             (destination_pubkey, auditor_pubkey),
             (transfer_amount_lo, transfer_amount_hi),
             (opening_lo, opening_hi),
@@ -496,7 +497,7 @@ impl TransferWithFeeProof {
         );
 
         // generate ciphertext validity proof for fee ciphertexts
-        let fee_ciphertext_validity_proof = AggregatedValidityProof::new(
+        let fee_ciphertext_validity_proof = BatchedGroupedCiphertext2HandlesValidityProof::new(
             (destination_pubkey, withdraw_withheld_authority_pubkey),
             (fee_amount_lo, fee_amount_hi),
             (opening_fee_lo, opening_fee_hi),
@@ -565,10 +566,10 @@ impl TransferWithFeeProof {
         let claimed_commitment: PedersenCommitment = self.claimed_commitment.try_into()?;
 
         let equality_proof: CiphertextCommitmentEqualityProof = self.equality_proof.try_into()?;
-        let ciphertext_amount_validity_proof: AggregatedValidityProof =
+        let ciphertext_amount_validity_proof: BatchedGroupedCiphertext2HandlesValidityProof =
             self.ciphertext_amount_validity_proof.try_into()?;
         let fee_sigma_proof: FeeSigmaProof = self.fee_sigma_proof.try_into()?;
-        let fee_ciphertext_validity_proof: AggregatedValidityProof =
+        let fee_ciphertext_validity_proof: BatchedGroupedCiphertext2HandlesValidityProof =
             self.fee_ciphertext_validity_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
 

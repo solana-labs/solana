@@ -11,8 +11,8 @@ use {
         },
         range_proof::RangeProof,
         sigma_proofs::{
+            batched_grouped_ciphertext_validity_proof::BatchedGroupedCiphertext2HandlesValidityProof,
             ciphertext_commitment_equality_proof::CiphertextCommitmentEqualityProof,
-            validity_proof::AggregatedValidityProof,
         },
         transcript::TranscriptProtocol,
     },
@@ -267,7 +267,7 @@ pub struct TransferProof {
     pub equality_proof: pod::CiphertextCommitmentEqualityProof,
 
     /// Associated ciphertext validity proof
-    pub validity_proof: pod::AggregatedValidityProof,
+    pub validity_proof: pod::BatchedGroupedCiphertext2HandlesValidityProof,
 
     // Associated range proof
     pub range_proof: pod::RangeProofU128,
@@ -301,7 +301,7 @@ impl TransferProof {
         );
 
         // generate ciphertext validity proof
-        let validity_proof = AggregatedValidityProof::new(
+        let validity_proof = BatchedGroupedCiphertext2HandlesValidityProof::new(
             (destination_pubkey, auditor_pubkey),
             (transfer_amount_lo, transfer_amount_hi),
             (opening_lo, opening_hi),
@@ -363,7 +363,8 @@ impl TransferProof {
 
         let commitment: PedersenCommitment = self.new_source_commitment.try_into()?;
         let equality_proof: CiphertextCommitmentEqualityProof = self.equality_proof.try_into()?;
-        let aggregated_validity_proof: AggregatedValidityProof = self.validity_proof.try_into()?;
+        let aggregated_validity_proof: BatchedGroupedCiphertext2HandlesValidityProof =
+            self.validity_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
 
         // verify equality proof
