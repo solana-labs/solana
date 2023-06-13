@@ -14,7 +14,7 @@ use {
         tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
     solana_geyser_plugin_manager::GeyserPluginManagerRequest,
-    solana_gossip::contact_info::{ContactInfo, Protocol},
+    solana_gossip::contact_info::{ContactInfo, Protocol, SOCKET_ADDR_UNSPECIFIED},
     solana_rpc::rpc::verify_pubkey,
     solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
     solana_runtime::accounts_index::AccountIndex,
@@ -27,7 +27,7 @@ use {
         collections::{HashMap, HashSet},
         error,
         fmt::{self, Display},
-        net::{IpAddr, Ipv4Addr, SocketAddr},
+        net::SocketAddr,
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
         thread::{self, Builder},
@@ -91,14 +91,10 @@ impl From<ContactInfo> for AdminRpcContactInfo {
     fn from(node: ContactInfo) -> Self {
         macro_rules! unwrap_socket {
             ($name:ident) => {
-                node.$name().unwrap_or_else(|_| {
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), /*port:*/ 0u16)
-                })
+                node.$name().unwrap_or(SOCKET_ADDR_UNSPECIFIED)
             };
             ($name:ident, $protocol:expr) => {
-                node.$name($protocol).unwrap_or_else(|_| {
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), /*port:*/ 0u16)
-                })
+                node.$name($protocol).unwrap_or(SOCKET_ADDR_UNSPECIFIED)
             };
         }
         Self {
