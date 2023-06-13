@@ -3057,6 +3057,10 @@ impl Bank {
             if let Some(vote_account) = cached_vote_accounts.get(vote_pubkey) {
                 return Some(vote_account.clone());
             }
+            // If accounts-db contains a valid vote account, then it should
+            // already have been cached in cached_vote_accounts; so the code
+            // below is only for sanity checking, and can be removed once
+            // the cache is deemed to be reliable.
             let account = self.get_account_with_fixed_root(vote_pubkey)?;
             VoteAccount::try_from(account).ok()
         };
