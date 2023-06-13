@@ -1,6 +1,16 @@
 //! The compute budget native program.
+//!
+//! WARNING: This file allows integer arithmetic. Borsh 0.11 performs safe integer
+//! arithmetic at compile-time, but clippy cannot properly detect that currently.
+//!
+//! With the resolution of https://github.com/rust-lang/rust-clippy/issues/6365,
+//! we can remove this `allow` statement.
+//!
+//! In the meantime, do not add any other logic to this file, to avoid adding
+//! potentially harmful integer math.
 
 #![cfg(feature = "full")]
+#![allow(clippy::integer_arithmetic)]
 
 use {
     crate::instruction::Instruction,
