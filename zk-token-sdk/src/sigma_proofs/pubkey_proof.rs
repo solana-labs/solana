@@ -54,7 +54,7 @@ impl PubkeyValidityProof {
     /// proved
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new(elgamal_keypair: &ElGamalKeypair, transcript: &mut Transcript) -> Self {
-        transcript.pubkey_proof_domain_sep();
+        transcript.pubkey_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the input
         let s = elgamal_keypair.secret.get_scalar();
@@ -87,7 +87,7 @@ impl PubkeyValidityProof {
         elgamal_pubkey: &ElGamalPubkey,
         transcript: &mut Transcript,
     ) -> Result<(), PubkeyValidityProofError> {
-        transcript.pubkey_proof_domain_sep();
+        transcript.pubkey_proof_domain_separator();
 
         // extract the relvant scalar and Ristretto points from the input
         let P = elgamal_pubkey.get_point();
