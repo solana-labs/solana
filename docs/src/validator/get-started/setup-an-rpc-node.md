@@ -65,6 +65,6 @@ The identities of the [known validators](../../running-validator/validator-start
 
 ## Examples for other clusters
 
-Additional examples of other Solana cluster specific validator commands can be found on the [Clusters](/clusters.md) page.
+Additional examples of other Solana cluster specific validator commands can be found on the [Clusters](../../clusters.md) page.
 
 Keep in mind, you will still need to customize these commands to operate as an RPC node, as well other operator specific configuration settings.
