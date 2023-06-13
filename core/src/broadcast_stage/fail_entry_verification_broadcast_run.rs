@@ -17,11 +17,12 @@ pub(super) struct FailEntryVerificationBroadcastRun {
     next_shred_index: u32,
     next_code_index: u32,
     cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
+    quic_connection_cache: Arc<QuicConnectionCache>,
     reed_solomon_cache: Arc<ReedSolomonCache>,
 }
 
 impl FailEntryVerificationBroadcastRun {
-    pub(super) fn new(shred_version: u16) -> Self {
+    pub(super) fn new(shred_version: u16, quic_connection_cache: Arc<QuicConnectionCache>) -> Self {
         let cluster_nodes_cache = Arc::new(ClusterNodesCache::<BroadcastStage>::new(
             CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
             CLUSTER_NODES_CACHE_TTL,
@@ -33,6 +34,7 @@ impl FailEntryVerificationBroadcastRun {
             next_shred_index: 0,
             next_code_index: 0,
             cluster_nodes_cache,
+            quic_connection_cache,
             reed_solomon_cache: Arc::<ReedSolomonCache>::default(),
         }
     }
@@ -168,6 +170,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             sock,
             &shreds,
             &self.cluster_nodes_cache,
+            &self.quic_connection_cache,
             &AtomicInterval::default(),
             &mut TransmitShredsStats::default(),
             cluster_info,

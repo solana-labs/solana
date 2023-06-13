@@ -42,8 +42,8 @@ use {
     },
     solana_sdk::{
         account::{
-            create_account_shared_data_with_fields as create_account, from_account, Account,
-            AccountSharedData, ReadableAccount, WritableAccount,
+            accounts_equal, create_account_shared_data_with_fields as create_account, from_account,
+            Account, AccountSharedData, ReadableAccount, WritableAccount,
         },
         account_utils::StateMut,
         bpf_loader,
@@ -57,7 +57,7 @@ use {
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
         epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
         feature::{self, Feature},
-        feature_set::{self, reject_callx_r10, FeatureSet},
+        feature_set::{self, FeatureSet},
         fee::FeeStructure,
         fee_calculator::FeeRateGovernor,
         genesis_config::{create_genesis_config, ClusterType, GenesisConfig},
@@ -118,6 +118,70 @@ use {
     },
     test_case::test_case,
 };
+
+impl StakeReward {
+    pub fn new_random() -> Self {
+        let mut rng = rand::thread_rng();
+
+        let rent = Rent::free();
+
+        let validator_pubkey = solana_sdk::pubkey::new_rand();
+        let validator_stake_lamports = 20;
+        let validator_staking_keypair = Keypair::new();
+        let validator_voting_keypair = Keypair::new();
+
+        let validator_vote_account = vote_state::create_account(
+            &validator_voting_keypair.pubkey(),
+            &validator_pubkey,
+            10,
+            validator_stake_lamports,
+        );
+
+        let validator_stake_account = stake_state::create_account(
+            &validator_staking_keypair.pubkey(),
+            &validator_voting_keypair.pubkey(),
+            &validator_vote_account,
+            &rent,
+            validator_stake_lamports,
+        );
+
+        Self {
+            stake_pubkey: Pubkey::new_unique(),
+            stake_reward_info: RewardInfo {
+                reward_type: RewardType::Staking,
+                lamports: rng.gen_range(1, 200),
+                post_balance: 0,  /* unused atm */
+                commission: None, /* unused atm */
+            },
+
+            stake_account: validator_stake_account,
+        }
+    }
+}
+
+impl VoteReward {
+    pub fn new_random() -> Self {
+        let mut rng = rand::thread_rng();
+
+        let validator_pubkey = solana_sdk::pubkey::new_rand();
+        let validator_stake_lamports = rng.gen_range(1, 200);
+        let validator_voting_keypair = Keypair::new();
+
+        let validator_vote_account = vote_state::create_account(
+            &validator_voting_keypair.pubkey(),
+            &validator_pubkey,
+            rng.gen_range(1, 20),
+            validator_stake_lamports,
+        );
+
+        Self {
+            vote_account: validator_vote_account,
+            commission: rng.gen_range(1, 20),
+            vote_rewards: rng.gen_range(1, 200),
+            vote_needs_store: rng.gen_range(1, 20) > 10,
+        }
+    }
+}
 
 #[test]
 fn test_race_register_tick_freeze() {
@@ -12308,7 +12372,6 @@ fn test_runtime_feature_enable_with_program_cache() {
 
     // Execute before feature is enabled to get program into the cache.
     let result_without_feature_enabled = bank.process_transaction(&transaction1);
-    // Should fail when executing here
     assert_eq!(
         result_without_feature_enabled,
         Err(TransactionError::InstructionError(
@@ -12318,31 +12381,23 @@ fn test_runtime_feature_enable_with_program_cache() {
     );
 
     // Activate feature
-    bank.activate_feature(&reject_callx_r10::id());
+    let feature_account_balance =
+        std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+    bank.store_account(
+        &feature_set::reject_callx_r10::id(),
+        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
 
-    // Execute after feature is enabled
+    // Execute after feature is enabled to check it was pruned and reverified.
     let result_with_feature_enabled = bank.process_transaction(&transaction2);
-    // Feature should have been activated thus causing the TX to fail at
-    // verification. It should fail here with new Executor Cache because feature
-    // activations should force the program to recompile with the new feature,
-    // and in this case the feature should cause the TX to fail at verification.
-    // Note: `ProgramFailedToComplete` error appearing again means the account
-    // was not recompiled by the cache upon feature activation and thus fails in
-    // the same way.
-    match &result_with_feature_enabled {
-        Err(x) => {
-            if *x
-                == TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
-            {
-                println!("ERROR: Program was not recompiled after runtime feature was enabled.");
-            }
-        }
-        Ok(_) => println!("ERROR: Program should fail during execution."),
-    }
-    // assert_eq!(
-    //     result_with_feature_enabled,
-    //     Err(TransactionError::InstructionError(0, InstructionError::InvalidAccountData))
-    // );
+    assert_eq!(
+        result_with_feature_enabled,
+        Err(TransactionError::InstructionError(
+            0,
+            InstructionError::InvalidAccountData
+        ))
+    );
 }
 
 #[test]
@@ -12448,6 +12503,242 @@ fn test_squash_timing_add_assign() {
     t0 += t1;
 
     assert!(t0 == expected);
+}
+
+/// Helper function to create a bank that pays some rewards
+fn create_reward_bank(expected_num_delegations: usize) -> Bank {
+    let validator_keypairs = (0..expected_num_delegations)
+        .map(|_| ValidatorVoteKeypairs::new_rand())
+        .collect::<Vec<_>>();
+
+    let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
+        1_000_000_000,
+        &validator_keypairs,
+        vec![2_000_000_000; expected_num_delegations],
+    );
+
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    // Fill bank_forks with banks with votes landing in the next slot
+    // Create enough banks such that vote account will root
+    for validator_vote_keypairs in validator_keypairs {
+        let vote_id = validator_vote_keypairs.vote_keypair.pubkey();
+        let mut vote_account = bank.get_account(&vote_id).unwrap();
+        // generate some rewards
+        let mut vote_state = Some(vote_state::from(&vote_account).unwrap());
+        for i in 0..MAX_LOCKOUT_HISTORY + 42 {
+            if let Some(v) = vote_state.as_mut() {
+                vote_state::process_slot_vote_unchecked(v, i as u64)
+            }
+            let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
+            vote_state::to(&versioned, &mut vote_account).unwrap();
+            match versioned {
+                VoteStateVersions::Current(v) => {
+                    vote_state = Some(*v);
+                }
+                _ => panic!("Has to be of type Current"),
+            };
+        }
+        bank.store_account_and_update_capitalization(&vote_id, &vote_account);
+    }
+    bank
+}
+
+#[test]
+fn test_rewards_point_calculation() {
+    solana_logger::setup();
+
+    let expected_num_delegations = 100;
+    let bank = create_reward_bank(expected_num_delegations);
+
+    let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+    let mut rewards_metrics = RewardsMetrics::default();
+    let expected_rewards = 100_000_000_000;
+
+    let stakes: RwLockReadGuard<Stakes<StakeAccount<Delegation>>> = bank.stakes_cache.stakes();
+    let reward_calculate_param = bank.get_epoch_reward_calculate_param_info(&stakes);
+
+    let point_value = bank.calculate_reward_points_partitioned(
+        &reward_calculate_param,
+        expected_rewards,
+        &thread_pool,
+        &mut rewards_metrics,
+    );
+
+    assert!(point_value.is_some());
+    assert_eq!(point_value.as_ref().unwrap().rewards, expected_rewards);
+    assert_eq!(point_value.as_ref().unwrap().points, 8400000000000);
+}
+
+#[test]
+fn test_rewards_point_calculation_empty() {
+    solana_logger::setup();
+
+    // bank with no rewards to distribute
+    let (genesis_config, _mint_keypair) = create_genesis_config(sol_to_lamports(1.0));
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+    let mut rewards_metrics: RewardsMetrics = RewardsMetrics::default();
+    let expected_rewards = 100_000_000_000;
+    let stakes: RwLockReadGuard<Stakes<StakeAccount<Delegation>>> = bank.stakes_cache.stakes();
+    let reward_calculate_param = bank.get_epoch_reward_calculate_param_info(&stakes);
+
+    let point_value = bank.calculate_reward_points_partitioned(
+        &reward_calculate_param,
+        expected_rewards,
+        &thread_pool,
+        &mut rewards_metrics,
+    );
+
+    assert!(point_value.is_none());
+}
+
+/// Test reward computation at epoch boundary
+#[test]
+fn test_store_stake_accounts_in_partition() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let expected_num = 100;
+
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    let expected_total = stake_rewards
+        .iter()
+        .map(|stake_reward| stake_reward.stake_reward_info.lamports)
+        .sum::<i64>() as u64;
+
+    let total_rewards_in_lamports = bank.store_stake_accounts_in_partition(&stake_rewards);
+    assert_eq!(expected_total, total_rewards_in_lamports);
+}
+
+#[test]
+fn test_store_stake_accounts_in_partition_empty() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let stake_rewards = vec![];
+
+    let expected_total = 0;
+
+    let total_rewards_in_lamports = bank.store_stake_accounts_in_partition(&stake_rewards);
+    assert_eq!(expected_total, total_rewards_in_lamports);
+}
+
+#[test]
+fn test_update_reward_history_in_partition() {
+    for zero_reward in [false, true] {
+        let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+        let bank = Bank::new_for_tests(&genesis_config);
+
+        let mut expected_num = 100;
+
+        let mut stake_rewards = (0..expected_num)
+            .map(|_| StakeReward::new_random())
+            .collect::<Vec<_>>();
+
+        let mut rng = rand::thread_rng();
+        let i_zero = rng.gen_range(0, expected_num);
+        if zero_reward {
+            // pick one entry to have zero rewards so it gets ignored
+            stake_rewards[i_zero].stake_reward_info.lamports = 0;
+        }
+
+        let num_in_history = bank.update_reward_history_in_partition(&stake_rewards);
+
+        if zero_reward {
+            stake_rewards.remove(i_zero);
+            // -1 because one of them had zero rewards and was ignored
+            expected_num -= 1;
+        }
+
+        bank.rewards
+            .read()
+            .unwrap()
+            .iter()
+            .zip(stake_rewards.iter())
+            .for_each(|((k, reward_info), expected_stake_reward)| {
+                assert_eq!(
+                    (
+                        &expected_stake_reward.stake_pubkey,
+                        &expected_stake_reward.stake_reward_info
+                    ),
+                    (k, reward_info)
+                );
+            });
+
+        assert_eq!(num_in_history, expected_num);
+    }
+}
+
+#[test]
+fn test_update_reward_history_in_partition_empty() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let stake_rewards = vec![];
+
+    let num_in_history = bank.update_reward_history_in_partition(&stake_rewards);
+    assert_eq!(num_in_history, 0);
+}
+
+#[test]
+fn test_store_vote_accounts_partitioned() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let expected_vote_rewards_num = 100;
+
+    let vote_rewards = (0..expected_vote_rewards_num)
+        .map(|_| Some((Pubkey::new_unique(), VoteReward::new_random())))
+        .collect::<Vec<_>>();
+
+    let mut vote_rewards_account = VoteRewardsAccounts::default();
+    vote_rewards.iter().for_each(|e| {
+        if let Some(p) = &e {
+            let info = RewardInfo {
+                reward_type: RewardType::Voting,
+                lamports: p.1.vote_rewards as i64,
+                post_balance: p.1.vote_rewards,
+                commission: Some(p.1.commission),
+            };
+            vote_rewards_account.rewards.push((p.0, info));
+            vote_rewards_account
+                .accounts_to_store
+                .push(e.as_ref().map(|p| p.1.vote_account.clone()));
+        }
+    });
+
+    let mut metrics = RewardsMetrics::default();
+
+    let stored_vote_accounts =
+        bank.store_vote_accounts_partitioned(vote_rewards_account, &mut metrics);
+    assert_eq!(expected_vote_rewards_num, stored_vote_accounts.len());
+
+    // load accounts to make sure they were stored correctly
+    vote_rewards.iter().for_each(|e| {
+        if let Some(p) = &e {
+            let (k, account) = (p.0, p.1.vote_account.clone());
+            let loaded_account = bank.load_slow_with_fixed_root(&bank.ancestors, &k).unwrap();
+            assert!(accounts_equal(&loaded_account.0, &account));
+        }
+    });
+}
+
+#[test]
+fn test_store_vote_accounts_partitioned_empty() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let expected = 0;
+    let vote_rewards = VoteRewardsAccounts::default();
+    let mut metrics = RewardsMetrics::default();
+
+    let stored_vote_accounts = bank.store_vote_accounts_partitioned(vote_rewards, &mut metrics);
+    assert_eq!(expected, stored_vote_accounts.len());
 }
 
 #[test]
@@ -12646,4 +12937,127 @@ fn test_system_instruction_unsigned_transaction() {
         sol_to_lamports(1.0) - amount
     );
     assert_eq!(bank_client.get_balance(&mallory_pubkey).unwrap(), amount);
+}
+
+#[test]
+fn test_calc_vote_accounts_to_store_empty() {
+    let vote_account_rewards = DashMap::default();
+    let result = Bank::calc_vote_accounts_to_store(vote_account_rewards);
+    assert_eq!(result.rewards.len(), result.accounts_to_store.len());
+    assert!(result.rewards.is_empty());
+}
+
+#[test]
+fn test_calc_vote_accounts_to_store_overflow() {
+    let vote_account_rewards = DashMap::default();
+    let pubkey = solana_sdk::pubkey::new_rand();
+    let mut vote_account = AccountSharedData::default();
+    vote_account.set_lamports(u64::MAX);
+    vote_account_rewards.insert(
+        pubkey,
+        VoteReward {
+            vote_account,
+            commission: 0,
+            vote_rewards: 1, // enough to overflow
+            vote_needs_store: false,
+        },
+    );
+    let result = Bank::calc_vote_accounts_to_store(vote_account_rewards);
+    assert_eq!(result.rewards.len(), result.accounts_to_store.len());
+    assert!(result.rewards.is_empty());
+}
+
+#[test]
+fn test_calc_vote_accounts_to_store_three() {
+    let vote_account_rewards = DashMap::default();
+    let pubkey = solana_sdk::pubkey::new_rand();
+    let pubkey2 = solana_sdk::pubkey::new_rand();
+    let pubkey3 = solana_sdk::pubkey::new_rand();
+    let mut vote_account = AccountSharedData::default();
+    vote_account.set_lamports(u64::MAX);
+    vote_account_rewards.insert(
+        pubkey,
+        VoteReward {
+            vote_account: vote_account.clone(),
+            commission: 0,
+            vote_rewards: 0,
+            vote_needs_store: false, // don't store
+        },
+    );
+    vote_account_rewards.insert(
+        pubkey2,
+        VoteReward {
+            vote_account: vote_account.clone(),
+            commission: 0,
+            vote_rewards: 0,
+            vote_needs_store: true, // this one needs storing
+        },
+    );
+    vote_account_rewards.insert(
+        pubkey3,
+        VoteReward {
+            vote_account: vote_account.clone(),
+            commission: 0,
+            vote_rewards: 0,
+            vote_needs_store: false, // don't store
+        },
+    );
+    let result = Bank::calc_vote_accounts_to_store(vote_account_rewards);
+    assert_eq!(result.rewards.len(), result.accounts_to_store.len());
+    assert_eq!(result.rewards.len(), 3);
+    result.rewards.iter().enumerate().for_each(|(i, (k, _))| {
+        // pubkey2 is some(account), others should be none
+        if k == &pubkey2 {
+            assert!(accounts_equal(
+                result.accounts_to_store[i].as_ref().unwrap(),
+                &vote_account
+            ));
+        } else {
+            assert!(result.accounts_to_store[i].is_none());
+        }
+    });
+}
+
+#[test]
+fn test_calc_vote_accounts_to_store_normal() {
+    let pubkey = solana_sdk::pubkey::new_rand();
+    for commission in 0..2 {
+        for vote_rewards in 0..2 {
+            for vote_needs_store in [false, true] {
+                let vote_account_rewards = DashMap::default();
+                let mut vote_account = AccountSharedData::default();
+                vote_account.set_lamports(1);
+                vote_account_rewards.insert(
+                    pubkey,
+                    VoteReward {
+                        vote_account: vote_account.clone(),
+                        commission,
+                        vote_rewards,
+                        vote_needs_store,
+                    },
+                );
+                let result = Bank::calc_vote_accounts_to_store(vote_account_rewards);
+                assert_eq!(result.rewards.len(), result.accounts_to_store.len());
+                assert_eq!(result.rewards.len(), 1);
+                let rewards = &result.rewards[0];
+                let account = &result.accounts_to_store[0];
+                _ = vote_account.checked_add_lamports(vote_rewards);
+                if vote_needs_store {
+                    assert!(accounts_equal(account.as_ref().unwrap(), &vote_account));
+                } else {
+                    assert!(account.is_none());
+                }
+                assert_eq!(
+                    rewards.1,
+                    RewardInfo {
+                        reward_type: RewardType::Voting,
+                        lamports: vote_rewards as i64,
+                        post_balance: vote_account.lamports(),
+                        commission: Some(commission),
+                    }
+                );
+                assert_eq!(rewards.0, pubkey);
+            }
+        }
+    }
 }

@@ -33,6 +33,7 @@ pub struct StandardBroadcastRun {
     last_datapoint_submit: Arc<AtomicInterval>,
     num_batches: usize,
     cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
+    quic_connection_cache: Arc<QuicConnectionCache>,
     reed_solomon_cache: Arc<ReedSolomonCache>,
 }
 
@@ -42,7 +43,7 @@ enum BroadcastError {
 }
 
 impl StandardBroadcastRun {
-    pub(super) fn new(shred_version: u16) -> Self {
+    pub(super) fn new(shred_version: u16, quic_connection_cache: Arc<QuicConnectionCache>) -> Self {
         let cluster_nodes_cache = Arc::new(ClusterNodesCache::<BroadcastStage>::new(
             CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
             CLUSTER_NODES_CACHE_TTL,
@@ -58,6 +59,7 @@ impl StandardBroadcastRun {
             last_datapoint_submit: Arc::default(),
             num_batches: 0,
             cluster_nodes_cache,
+            quic_connection_cache,
             reed_solomon_cache: Arc::<ReedSolomonCache>::default(),
         }
     }
@@ -413,6 +415,7 @@ impl StandardBroadcastRun {
             sock,
             &shreds,
             &self.cluster_nodes_cache,
+            &self.quic_connection_cache,
             &self.last_datapoint_submit,
             &mut transmit_stats,
             cluster_info,
@@ -506,6 +509,7 @@ fn should_use_merkle_variant(slot: Slot, cluster_type: ClusterType, shred_versio
 mod test {
     use {
         super::*,
+        crate::validator::TURBINE_QUIC_CONNECTION_POOL_SIZE,
         solana_entry::entry::create_ticks,
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
@@ -517,8 +521,13 @@ mod test {
             genesis_config::GenesisConfig,
             signature::{Keypair, Signer},
         },
-        solana_streamer::socket::SocketAddrSpace,
-        std::{ops::Deref, sync::Arc, time::Duration},
+        solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
+        std::{
+            net::{IpAddr, Ipv4Addr},
+            ops::Deref,
+            sync::Arc,
+            time::Duration,
+        },
     };
 
     #[allow(clippy::type_complexity)]
@@ -564,10 +573,24 @@ mod test {
         )
     }
 
+    fn new_quic_connection_cache(keypair: &Keypair) -> Arc<QuicConnectionCache> {
+        Arc::new(
+            solana_quic_client::new_quic_connection_cache(
+                "connection_cache_test",
+                keypair,
+                IpAddr::V4(Ipv4Addr::LOCALHOST),
+                &Arc::<RwLock<StakedNodes>>::default(),
+                TURBINE_QUIC_CONNECTION_POOL_SIZE,
+            )
+            .unwrap(),
+        )
+    }
+
     #[test]
     fn test_interrupted_slot_last_shred() {
         let keypair = Arc::new(Keypair::new());
-        let mut run = StandardBroadcastRun::new(0);
+        let quic_connection_cache = new_quic_connection_cache(&keypair);
+        let mut run = StandardBroadcastRun::new(0, quic_connection_cache);
 
         // Set up the slot to be interrupted
         let next_shred_index = 10;
@@ -609,6 +632,7 @@ mod test {
         let num_shreds_per_slot = 2;
         let (blockstore, genesis_config, cluster_info, bank0, leader_keypair, socket, bank_forks) =
             setup(num_shreds_per_slot);
+        let quic_connection_cache = new_quic_connection_cache(&leader_keypair);
 
         // Insert 1 less than the number of ticks needed to finish the slot
         let ticks0 = create_ticks(genesis_config.ticks_per_slot - 1, 0, genesis_config.hash());
@@ -621,7 +645,7 @@ mod test {
         };
 
         // Step 1: Make an incomplete transmission for slot 0
-        let mut standard_broadcast_run = StandardBroadcastRun::new(0);
+        let mut standard_broadcast_run = StandardBroadcastRun::new(0, quic_connection_cache);
         standard_broadcast_run
             .test_process_receive_results(
                 &leader_keypair,
@@ -739,10 +763,11 @@ mod test {
         let num_shreds_per_slot = 2;
         let (blockstore, genesis_config, _cluster_info, bank, leader_keypair, _socket, _bank_forks) =
             setup(num_shreds_per_slot);
+        let quic_connection_cache = new_quic_connection_cache(&leader_keypair);
         let (bsend, brecv) = unbounded();
         let (ssend, _srecv) = unbounded();
         let mut last_tick_height = 0;
-        let mut standard_broadcast_run = StandardBroadcastRun::new(0);
+        let mut standard_broadcast_run = StandardBroadcastRun::new(0, quic_connection_cache);
         let mut process_ticks = |num_ticks| {
             let ticks = create_ticks(num_ticks, 0, genesis_config.hash());
             last_tick_height += (ticks.len() - 1) as u64;
@@ -787,6 +812,7 @@ mod test {
         let num_shreds_per_slot = 2;
         let (blockstore, genesis_config, cluster_info, bank0, leader_keypair, socket, bank_forks) =
             setup(num_shreds_per_slot);
+        let quic_connection_cache = new_quic_connection_cache(&leader_keypair);
 
         // Insert complete slot of ticks needed to finish the slot
         let ticks = create_ticks(genesis_config.ticks_per_slot, 0, genesis_config.hash());
@@ -798,7 +824,7 @@ mod test {
             last_tick_height: ticks.len() as u64,
         };
 
-        let mut standard_broadcast_run = StandardBroadcastRun::new(0);
+        let mut standard_broadcast_run = StandardBroadcastRun::new(0, quic_connection_cache);
         standard_broadcast_run
             .test_process_receive_results(
                 &leader_keypair,
@@ -815,9 +841,10 @@ mod test {
     #[test]
     fn entries_to_shreds_max() {
         solana_logger::setup();
-        let mut bs = StandardBroadcastRun::new(0);
-        bs.current_slot_and_parent = Some((1, 0));
         let keypair = Keypair::new();
+        let quic_connection_cache = new_quic_connection_cache(&keypair);
+        let mut bs = StandardBroadcastRun::new(0, quic_connection_cache);
+        bs.current_slot_and_parent = Some((1, 0));
         let entries = create_ticks(10_000, 1, solana_sdk::hash::Hash::default());
 
         let ledger_path = get_tmp_ledger_path!();

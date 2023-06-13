@@ -9,11 +9,12 @@ use {
         standard_broadcast_run::StandardBroadcastRun,
     },
     crate::{
-        cluster_nodes::{ClusterNodes, ClusterNodesCache},
+        cluster_nodes::{self, ClusterNodes, ClusterNodesCache},
         result::{Error, Result},
     },
     crossbeam_channel::{unbounded, Receiver, RecvError, RecvTimeoutError, Sender},
-    itertools::Itertools,
+    itertools::{Either, Itertools},
+    solana_client::tpu_connection::TpuConnection,
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
         contact_info::Protocol,
@@ -22,6 +23,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_error, inc_new_counter_info},
     solana_poh::poh_recorder::WorkingBankEntry,
+    solana_quic_client::QuicConnectionCache,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::Slot,
@@ -87,6 +89,7 @@ impl BroadcastStageType {
         blockstore: Arc<Blockstore>,
         bank_forks: Arc<RwLock<BankForks>>,
         shred_version: u16,
+        quic_connection_cache: Arc<QuicConnectionCache>,
     ) -> BroadcastStage {
         match self {
             BroadcastStageType::Standard => BroadcastStage::new(
@@ -97,7 +100,7 @@ impl BroadcastStageType {
                 exit_sender,
                 blockstore,
                 bank_forks,
-                StandardBroadcastRun::new(shred_version),
+                StandardBroadcastRun::new(shred_version, quic_connection_cache),
             ),
 
             BroadcastStageType::FailEntryVerification => BroadcastStage::new(
@@ -108,7 +111,7 @@ impl BroadcastStageType {
                 exit_sender,
                 blockstore,
                 bank_forks,
-                FailEntryVerificationBroadcastRun::new(shred_version),
+                FailEntryVerificationBroadcastRun::new(shred_version, quic_connection_cache),
             ),
 
             BroadcastStageType::BroadcastFakeShreds => BroadcastStage::new(
@@ -392,6 +395,7 @@ pub fn broadcast_shreds(
     s: &UdpSocket,
     shreds: &[Shred],
     cluster_nodes_cache: &ClusterNodesCache<BroadcastStage>,
+    quic_connection_cache: &QuicConnectionCache,
     last_datapoint_submit: &AtomicInterval,
     transmit_stats: &mut TransmitShredsStats,
     cluster_info: &ClusterInfo,
@@ -404,7 +408,7 @@ pub fn broadcast_shreds(
         let bank_forks = bank_forks.read().unwrap();
         (bank_forks.root_bank(), bank_forks.working_bank())
     };
-    let packets: Vec<_> = shreds
+    let (packets, quic_packets): (Vec<_>, Vec<_>) = shreds
         .iter()
         .group_by(|shred| shred.slot())
         .into_iter()
@@ -413,26 +417,40 @@ pub fn broadcast_shreds(
                 cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);
             update_peer_stats(&cluster_nodes, last_datapoint_submit);
             shreds.filter_map(move |shred| {
+                let key = shred.id();
+                let protocol = cluster_nodes::get_broadcast_protocol(&key);
                 cluster_nodes
-                    .get_broadcast_peer(&shred.id())?
-                    .tvu(Protocol::UDP)
+                    .get_broadcast_peer(&key)?
+                    .tvu(protocol)
                     .ok()
                     .filter(|addr| socket_addr_space.check(addr))
-                    .map(|addr| (shred.payload(), addr))
+                    .map(|addr| {
+                        (match protocol {
+                            Protocol::QUIC => Either::Right,
+                            Protocol::UDP => Either::Left,
+                        })((shred.payload(), addr))
+                    })
             })
         })
-        .collect();
+        .partition_map(std::convert::identity);
     shred_select.stop();
     transmit_stats.shred_select += shred_select.as_us();
 
     let mut send_mmsg_time = Measure::start("send_mmsg");
     if let Err(SendPktsError::IoError(ioerr, num_failed)) = batch_send(s, &packets[..]) {
-        transmit_stats.dropped_packets += num_failed;
+        transmit_stats.dropped_packets_udp += num_failed;
         result = Err(Error::Io(ioerr));
     }
     send_mmsg_time.stop();
     transmit_stats.send_mmsg_elapsed += send_mmsg_time.as_us();
-    transmit_stats.total_packets += packets.len();
+    for (shred, addr) in &quic_packets {
+        let conn = quic_connection_cache.get_connection(addr);
+        if let Err(err) = conn.send_data(shred) {
+            transmit_stats.dropped_packets_quic += 1;
+            result = Err(Error::from(err));
+        }
+    }
+    transmit_stats.total_packets += packets.len() + quic_packets.len();
     result
 }
 
@@ -440,6 +458,7 @@ pub fn broadcast_shreds(
 pub mod test {
     use {
         super::*,
+        crate::validator::TURBINE_QUIC_CONNECTION_POOL_SIZE,
         crossbeam_channel::unbounded,
         solana_entry::entry::create_ticks,
         solana_gossip::cluster_info::{ClusterInfo, Node},
@@ -454,7 +473,9 @@ pub mod test {
             hash::Hash,
             signature::{Keypair, Signer},
         },
+        solana_streamer::streamer::StakedNodes,
         std::{
+            net::{IpAddr, Ipv4Addr},
             path::Path,
             sync::{atomic::AtomicBool, Arc},
             thread::sleep,
@@ -586,6 +607,16 @@ pub mod test {
     ) -> MockBroadcastStage {
         // Make the database ledger
         let blockstore = Arc::new(Blockstore::open(ledger_path).unwrap());
+        let quic_connection_cache = Arc::new(
+            solana_quic_client::new_quic_connection_cache(
+                "connection_cache_test",
+                &leader_keypair,
+                IpAddr::V4(Ipv4Addr::LOCALHOST),
+                &Arc::<RwLock<StakedNodes>>::default(),
+                TURBINE_QUIC_CONNECTION_POOL_SIZE,
+            )
+            .unwrap(),
+        );
 
         // Make the leader node and scheduler
         let leader_info = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
@@ -619,7 +650,7 @@ pub mod test {
             exit_sender,
             blockstore.clone(),
             bank_forks,
-            StandardBroadcastRun::new(0),
+            StandardBroadcastRun::new(0, quic_connection_cache),
         );
 
         MockBroadcastStage {

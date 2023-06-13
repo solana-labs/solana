@@ -40,6 +40,7 @@ use {
         entry_notifier_service::EntryNotifierSender, leader_schedule_cache::LeaderScheduleCache,
     },
     solana_poh::poh_recorder::PohRecorder,
+    solana_quic_client::QuicConnectionCache,
     solana_rpc::{
         max_slots::MaxSlots, optimistically_confirmed_bank_tracker::BankNotificationSenderConfig,
         rpc_subscriptions::RpcSubscriptions,
@@ -50,6 +51,7 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
+    solana_streamer::streamer::StakedNodes,
     std::{
         collections::HashSet,
         net::UdpSocket,
@@ -75,6 +77,7 @@ pub struct Tvu {
 
 pub struct TvuSockets {
     pub fetch: Vec<UdpSocket>,
+    pub(crate) fetch_quic: UdpSocket,
     pub repair: UdpSocket,
     pub retransmit: Vec<UdpSocket>,
     pub forwards: Vec<UdpSocket>,
@@ -138,10 +141,13 @@ impl Tvu {
         connection_cache: &Arc<ConnectionCache>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         banking_tracer: Arc<BankingTracer>,
+        staked_nodes: Arc<RwLock<StakedNodes>>,
+        quic_connection_cache: Arc<QuicConnectionCache>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
             fetch: fetch_sockets,
+            fetch_quic: fetch_quic_socket,
             retransmit: retransmit_sockets,
             forwards: tvu_forward_sockets,
             ancestor_hashes_requests: ancestor_hashes_socket,
@@ -156,12 +162,14 @@ impl Tvu {
             tvu_forward_sockets.into_iter().map(Arc::new).collect();
         let fetch_stage = ShredFetchStage::new(
             fetch_sockets,
+            fetch_quic_socket,
             forward_sockets,
             repair_socket.clone(),
             fetch_sender,
             tvu_config.shred_version,
             bank_forks.clone(),
             cluster_info.clone(),
+            staked_nodes,
             turbine_disabled,
             exit.clone(),
         );
@@ -182,6 +190,7 @@ impl Tvu {
             leader_schedule_cache.clone(),
             cluster_info.clone(),
             Arc::new(retransmit_sockets),
+            quic_connection_cache,
             retransmit_receiver,
             max_slots.clone(),
             Some(rpc_subscriptions.clone()),
@@ -368,6 +377,7 @@ impl Tvu {
 pub mod tests {
     use {
         super::*,
+        crate::validator::TURBINE_QUIC_CONNECTION_POOL_SIZE,
         serial_test::serial,
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
@@ -381,7 +391,10 @@ pub mod tests {
         solana_runtime::bank::Bank,
         solana_sdk::signature::{Keypair, Signer},
         solana_streamer::socket::SocketAddrSpace,
-        std::sync::atomic::{AtomicU64, Ordering},
+        std::{
+            net::{IpAddr, Ipv4Addr},
+            sync::atomic::{AtomicU64, Ordering},
+        },
     };
 
     #[ignore]
@@ -398,12 +411,20 @@ pub mod tests {
 
         let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
 
-        //start cluster_info1
-        let cluster_info1 = ClusterInfo::new(
-            target1.info.clone(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
+        let keypair = Arc::new(Keypair::new());
+        let quic_connection_cache = Arc::new(
+            solana_quic_client::new_quic_connection_cache(
+                "connection_cache_test",
+                &keypair,
+                IpAddr::V4(Ipv4Addr::LOCALHOST),
+                &Arc::<RwLock<StakedNodes>>::default(),
+                TURBINE_QUIC_CONNECTION_POOL_SIZE,
+            )
+            .unwrap(),
         );
+        //start cluster_info1
+        let cluster_info1 =
+            ClusterInfo::new(target1.info.clone(), keypair, SocketAddrSpace::Unspecified);
         cluster_info1.insert_info(leader.info);
         let cref1 = Arc::new(cluster_info1);
 
@@ -441,6 +462,7 @@ pub mod tests {
                     repair: target1.sockets.repair,
                     retransmit: target1.sockets.retransmit_sockets,
                     fetch: target1.sockets.tvu,
+                    fetch_quic: target1.sockets.tvu_quic,
                     forwards: target1.sockets.tvu_forwards,
                     ancestor_hashes_requests: target1.sockets.ancestor_hashes_requests,
                 }
@@ -483,6 +505,8 @@ pub mod tests {
             &Arc::new(ConnectionCache::new("connection_cache_test")),
             &ignored_prioritization_fee_cache,
             BankingTracer::new_disabled(),
+            Arc::<RwLock<StakedNodes>>::default(),
+            quic_connection_cache,
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);
