@@ -46,7 +46,7 @@ To send validator health notifications to your Telegram account, we are going to
 
 In Telegram, search for `@BotFather`. Send the following message to _@BotFather_: `/newbot`.
 
-Now you will have to come up with a name for the bot. The only requirement is that it cannot have dashes or spaces and it but end in the word bot. Many names have already been taken, so you may have to try a few. Once you find an available name, you will get a response for _@BotFather_ that includes a link to chat with the bot as well as a token for the bot. Take note of the token. You will need it when you setup your environment variables.
+Now you will have to come up with a name for the bot. The only requirement is that it cannot have dashes or spaces, and it **must** end in the word `bot`. Many names have already been taken, so you may have to try a few. Once you find an available name, you will get a response from _@BotFather_ that includes a link to chat with the bot as well as a token for the bot. Take note of the token. You will need it when you setup your environment variables.
 
 #### Send a Message to The Bot
 
