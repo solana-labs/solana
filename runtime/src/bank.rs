@@ -1123,6 +1123,40 @@ struct EpochRewardCalculateParamInfo<'a> {
     cached_vote_accounts: &'a VoteAccounts,
 }
 
+#[allow(dead_code)]
+/// Hold all results from calculating the rewards for partitioned distribution.
+/// This struct exists so we can have a function which does all the calculation with no
+/// side effects.
+struct PartitionedRewardsCalculation {
+    vote_account_rewards: VoteRewardsAccounts,
+    stake_rewards_by_partition: StakeRewardCalculationPartitioned,
+    old_vote_balance_and_staked: u64,
+    validator_rewards: u64,
+    validator_rate: f64,
+    foundation_rate: f64,
+    prev_epoch_duration_in_years: f64,
+    capitalization: u64,
+}
+
+#[allow(dead_code)]
+#[derive(Default)]
+/// result of calculating the stake rewards at end of epoch
+struct StakeRewardCalculation {
+    /// each individual stake account to reward
+    stake_rewards: StakeRewards,
+    /// total lamports across all `stake_rewards`
+    total_stake_rewards_lamports: u64,
+}
+
+#[allow(dead_code)]
+/// result of calculating the stake rewards at end of epoch
+struct StakeRewardCalculationPartitioned {
+    /// each individual stake account to reward, grouped by partition
+    stake_rewards: Vec<StakeRewards>,
+    /// total lamports across all `stake_rewards`
+    total_stake_rewards_lamports: u64,
+}
+
 pub(crate) type StakeRewards = Vec<StakeReward>;
 
 #[derive(Debug, Default)]
@@ -2873,6 +2907,75 @@ impl Bank {
             let vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
             self.update_reward_history(stake_rewards, vote_rewards);
         }
+    }
+
+    #[allow(dead_code)]
+    /// compare the vote and stake accounts between the normal rewards calculation code
+    /// and the partitioned rewards calculation code
+    /// `stake_rewards_expected` and `vote_rewards_expected` are the results of the normal rewards calculation code
+    /// This fn should have NO side effects.
+    /// This fn is only called in tests or with a debug cli arg prior to partitioned rewards feature activation.
+    fn compare_with_partitioned_rewards_results(
+        stake_rewards_expected: &[StakeReward],
+        vote_rewards_expected: &DashMap<Pubkey, VoteReward>,
+        partitioned_rewards: PartitionedRewardsCalculation,
+    ) {
+        // put partitioned stake rewards in a hashmap
+        let mut stake_rewards: HashMap<Pubkey, &StakeReward> = HashMap::default();
+        partitioned_rewards
+            .stake_rewards_by_partition
+            .stake_rewards
+            .iter()
+            .flatten()
+            .for_each(|stake_reward| {
+                stake_rewards.insert(stake_reward.stake_pubkey, stake_reward);
+            });
+
+        // verify stake rewards match expected
+        stake_rewards_expected.iter().for_each(|stake_reward| {
+            let partitioned = stake_rewards.remove(&stake_reward.stake_pubkey).unwrap();
+            assert_eq!(partitioned, stake_reward);
+        });
+        assert!(stake_rewards.is_empty(), "{stake_rewards:?}");
+
+        let mut vote_rewards: HashMap<Pubkey, (RewardInfo, AccountSharedData)> = HashMap::default();
+        partitioned_rewards
+            .vote_account_rewards
+            .accounts_to_store
+            .iter()
+            .enumerate()
+            .for_each(|(i, account)| {
+                if let Some(account) = account {
+                    let reward = &partitioned_rewards.vote_account_rewards.rewards[i];
+                    vote_rewards.insert(reward.0, (reward.1, account.clone()));
+                }
+            });
+
+        // verify vote rewards match expected
+        vote_rewards_expected.iter().for_each(|entry| {
+            if entry.value().vote_needs_store {
+                let partitioned = vote_rewards.remove(entry.key()).unwrap();
+                let mut to_store_partitioned = partitioned.1.clone();
+                to_store_partitioned.set_lamports(partitioned.0.post_balance);
+                let mut to_store_normal = entry.value().vote_account.clone();
+                _ = to_store_normal.checked_add_lamports(entry.value().vote_rewards);
+                assert_eq!(to_store_partitioned, to_store_normal, "{:?}", entry.key());
+            }
+        });
+        assert!(vote_rewards.is_empty(), "{vote_rewards:?}");
+        info!(
+            "verified partitioned rewards calculation matching: {}, {}",
+            partitioned_rewards
+                .stake_rewards_by_partition
+                .stake_rewards
+                .iter()
+                .map(|rewards| rewards.len())
+                .sum::<usize>(),
+            partitioned_rewards
+                .vote_account_rewards
+                .accounts_to_store
+                .len()
+        );
     }
 
     fn load_vote_and_stake_accounts(
