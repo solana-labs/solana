@@ -111,7 +111,7 @@ impl GroupedCiphertext2HandlesValidityProof {
         }
     }
 
-    /// The grouped ciphertext validity proof for 2 handles verifier.
+    /// Verifies a grouped ciphertext validity proof for 2 handles.
     ///
     /// * `commitment` - The Pedersen commitment
     /// * `(destination_pubkey, auditor_pubkey)` - The ElGamal pubkeys associated with the decryption
