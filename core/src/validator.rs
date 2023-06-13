@@ -77,6 +77,7 @@ use {
         transaction_status_service::TransactionStatusService,
     },
     solana_runtime::{
+        account_directory::AccountDirectory,
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
@@ -190,9 +191,8 @@ pub struct ValidatorConfig {
     pub expected_bank_hash: Option<Hash>,
     pub expected_shred_version: Option<u16>,
     pub voting_disabled: bool,
-    pub account_paths: Vec<PathBuf>,
-    pub account_snapshot_paths: Vec<PathBuf>,
-    pub account_shrink_paths: Option<Vec<PathBuf>>,
+    pub account_paths: Vec<AccountDirectory>,
+    pub account_shrink_paths: Option<Vec<AccountDirectory>>,
     pub rpc_config: JsonRpcConfig,
     /// Specifies which plugins to start up with
     pub on_start_geyser_plugin_config_files: Option<Vec<PathBuf>>,
@@ -261,7 +261,6 @@ impl Default for ValidatorConfig {
             voting_disabled: false,
             max_ledger_shreds: None,
             account_paths: Vec::new(),
-            account_snapshot_paths: Vec::new(),
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
             on_start_geyser_plugin_config_files: None,
@@ -573,7 +572,8 @@ impl Validator {
         info!("Cleaning orphaned account snapshot directories..");
         if let Err(e) = clean_orphaned_account_snapshot_dirs(
             &config.snapshot_config.bank_snapshots_dir,
-            &config.account_snapshot_paths,
+            &config.account_paths,
+            &config.account_shrink_paths,
         ) {
             return Err(format!(
                 "Failed to clean orphaned account snapshot directories: {e:?}"
@@ -2245,11 +2245,11 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 
 fn cleanup_accounts_paths(config: &ValidatorConfig) {
     for accounts_path in &config.account_paths {
-        move_and_async_delete_path_contents(accounts_path);
+        move_and_async_delete_path_contents(accounts_path.run_dir());
     }
     if let Some(ref shrink_paths) = config.account_shrink_paths {
         for accounts_path in shrink_paths {
-            move_and_async_delete_path_contents(accounts_path);
+            move_and_async_delete_path_contents(accounts_path.run_dir());
         }
     }
 }

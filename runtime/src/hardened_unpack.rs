@@ -1,4 +1,5 @@
 use {
+    crate::account_directory::AccountDirectory,
     bzip2::bufread::BzDecoder,
     log::*,
     rand::{thread_rng, Rng},
@@ -308,7 +309,7 @@ impl ParallelSelector {
 pub fn unpack_snapshot<A: Read>(
     archive: &mut Archive<A>,
     ledger_dir: &Path,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     parallel_selector: Option<ParallelSelector>,
 ) -> Result<UnpackedAppendVecMap> {
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
@@ -330,7 +331,7 @@ pub fn unpack_snapshot<A: Read>(
 pub fn streaming_unpack_snapshot<A: Read>(
     archive: &mut Archive<A>,
     ledger_dir: &Path,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     parallel_selector: Option<ParallelSelector>,
     sender: &crossbeam_channel::Sender<PathBuf>,
 ) -> Result<()> {
@@ -351,7 +352,7 @@ pub fn streaming_unpack_snapshot<A: Read>(
 fn unpack_snapshot_with_processors<A, F, G>(
     archive: &mut Archive<A>,
     ledger_dir: &Path,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     parallel_selector: Option<ParallelSelector>,
     mut accounts_path_processor: F,
     entry_processor: G,
@@ -385,7 +386,7 @@ where
                     let path_index = thread_rng().gen_range(0, account_paths.len());
                     match account_paths
                         .get(path_index)
-                        .map(|path_buf| path_buf.as_path())
+                        .map(|account_dir| account_dir.run_dir())
                     {
                         Some(path) => {
                             accounts_path_processor(file, path);
@@ -543,6 +544,7 @@ mod tests {
         super::*,
         assert_matches::assert_matches,
         tar::{Builder, Header},
+        tempfile::TempDir,
     };
 
     #[test]
@@ -787,7 +789,9 @@ mod tests {
 
     fn finalize_and_unpack_snapshot(archive: tar::Builder<Vec<u8>>) -> Result<()> {
         with_finalize_and_unpack(archive, |a, b| {
-            unpack_snapshot_with_processors(a, b, &[PathBuf::new()], None, |_, _| {}, |_| {})
+            let temp = TempDir::new().unwrap();
+            let temp_account_dir = AccountDirectory::new(&temp).unwrap();
+            unpack_snapshot_with_processors(a, b, &[temp_account_dir], None, |_, _| {}, |_| {})
         })
     }
 

@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     log::*,
     solana_core::{
@@ -21,9 +22,7 @@ use {
         validator_configs::*,
     },
     solana_rpc_client::rpc_client::RpcClient,
-    solana_runtime::{
-        snapshot_config::SnapshotConfig, snapshot_utils::create_accounts_run_and_snapshot_dirs,
-    },
+    solana_runtime::{account_directory::AccountDirectory, snapshot_config::SnapshotConfig},
     solana_sdk::{
         account::AccountSharedData,
         clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
@@ -449,13 +448,13 @@ pub fn farf_dir() -> PathBuf {
         .into()
 }
 
-pub fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, Vec<PathBuf>) {
+pub fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, Vec<AccountDirectory>) {
     let account_storage_dirs: Vec<TempDir> = (0..num_account_paths)
         .map(|_| tempfile::tempdir_in(farf_dir()).unwrap())
         .collect();
     let account_storage_paths: Vec<_> = account_storage_dirs
         .iter()
-        .map(|a| create_accounts_run_and_snapshot_dirs(a.path()).unwrap().0)
+        .map(|a| AccountDirectory::new(a.path()).unwrap())
         .collect();
     (account_storage_dirs, account_storage_paths)
 }

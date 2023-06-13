@@ -1,6 +1,8 @@
 #![feature(test)]
 #![allow(clippy::integer_arithmetic)]
 
+use solana_runtime::account_directory::AccountDirectory;
+
 extern crate test;
 
 use {
@@ -51,7 +53,10 @@ fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) -> Result<()
 #[bench]
 fn test_accounts_create(bencher: &mut Bencher) {
     let (genesis_config, _) = create_genesis_config(10_000);
-    let bank0 = Bank::new_with_paths_for_benches(&genesis_config, vec![PathBuf::from("bench_a0")]);
+    let bank0 = Bank::new_with_paths_for_benches(
+        &genesis_config,
+        vec![AccountDirectory::new("bench_a0").unwrap()],
+    );
     bencher.iter(|| {
         let mut pubkeys: Vec<Pubkey> = vec![];
         deposit_many(&bank0, &mut pubkeys, 1000).unwrap();
@@ -64,7 +69,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
     genesis_config.rent.burn_percent = 100; // Avoid triggering an assert in Bank::distribute_rent_to_validators()
     let mut prev_bank = Arc::new(Bank::new_with_paths_for_benches(
         &genesis_config,
-        vec![PathBuf::from("bench_a1")],
+        vec![AccountDirectory::new("bench_a1").unwrap()],
     ));
     let mut pubkeys: Vec<Pubkey> = vec![];
     deposit_many(&prev_bank, &mut pubkeys, 250_000).unwrap();
@@ -86,7 +91,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
 #[bench]
 fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let accounts = Accounts::new_with_config_for_benches(
-        vec![PathBuf::from("bench_accounts_hash_internal")],
+        vec![AccountDirectory::new("bench_accounts_hash_internal").unwrap()],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
@@ -124,7 +129,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
 fn test_update_accounts_hash(bencher: &mut Bencher) {
     solana_logger::setup();
     let accounts = Accounts::new_with_config_for_benches(
-        vec![PathBuf::from("update_accounts_hash")],
+        vec![AccountDirectory::new("update_accounts_hash").unwrap()],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
@@ -143,7 +148,7 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
 fn test_accounts_delta_hash(bencher: &mut Bencher) {
     solana_logger::setup();
     let accounts = Accounts::new_with_config_for_benches(
-        vec![PathBuf::from("accounts_delta_hash")],
+        vec![AccountDirectory::new("accounts_delta_hash").unwrap()],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
@@ -159,7 +164,7 @@ fn test_accounts_delta_hash(bencher: &mut Bencher) {
 fn bench_delete_dependencies(bencher: &mut Bencher) {
     solana_logger::setup();
     let accounts = Accounts::new_with_config_for_benches(
-        vec![PathBuf::from("accounts_delete_deps")],
+        vec![AccountDirectory::new("accounts_delete_deps").unwrap()],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
@@ -188,10 +193,11 @@ fn store_accounts_with_possible_contention<F: 'static>(
 {
     let num_readers = 5;
     let accounts = Arc::new(Accounts::new_with_config_for_benches(
-        vec![
+        vec![AccountDirectory::new(
             PathBuf::from(std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string()))
                 .join(bench_name),
-        ],
+        )
+        .unwrap()],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
@@ -324,10 +330,11 @@ fn bench_rwlock_hashmap_single_reader_with_n_writers(bencher: &mut Bencher) {
 
 fn setup_bench_dashmap_iter() -> (Arc<Accounts>, DashMap<Pubkey, (AccountSharedData, Hash)>) {
     let accounts = Arc::new(Accounts::new_with_config_for_benches(
-        vec![
+        vec![AccountDirectory::new(
             PathBuf::from(std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string()))
                 .join("bench_dashmap_par_iter"),
-        ],
+        )
+        .unwrap()],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),

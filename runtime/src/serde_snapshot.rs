@@ -59,6 +59,7 @@ mod types;
 mod utils;
 
 // a number of test cases in accounts_db use this
+use crate::account_directory::AccountDirectory;
 #[cfg(test)]
 pub(crate) use tests::reconstruct_accounts_db_via_serialization;
 pub(crate) use {
@@ -350,7 +351,7 @@ pub(crate) fn fields_from_streams(
 pub(crate) fn bank_from_streams<R>(
     serde_style: SerdeStyle,
     snapshot_streams: &mut SnapshotStreams<R>,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     storage_and_next_append_vec_id: StorageAndNextAppendVecId,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
@@ -562,7 +563,7 @@ fn reconstruct_bank_from_fields<E>(
     snapshot_accounts_db_fields: SnapshotAccountsDbFields<E>,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     storage_and_next_append_vec_id: StorageAndNextAppendVecId,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&[BuiltinPrototype]>,
@@ -710,7 +711,7 @@ struct ReconstructedAccountsDbInfo {
 #[allow(clippy::too_many_arguments)]
 fn reconstruct_accountsdb_from_fields<E>(
     snapshot_accounts_db_fields: SnapshotAccountsDbFields<E>,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     storage_and_next_append_vec_id: StorageAndNextAppendVecId,
     genesis_config: &GenesisConfig,
     account_secondary_indexes: AccountSecondaryIndexes,
@@ -823,12 +824,6 @@ where
         _snapshot_historical_roots,
         _snapshot_historical_roots_with_hash,
     ) = snapshot_accounts_db_fields.collapse_into()?;
-
-    // Ensure all account paths exist
-    for path in &accounts_db.paths {
-        std::fs::create_dir_all(path)
-            .unwrap_or_else(|err| panic!("Failed to create directory {}: {}", path.display(), err));
-    }
 
     let StorageAndNextAppendVecId {
         storage,

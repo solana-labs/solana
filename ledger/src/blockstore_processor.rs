@@ -23,6 +23,7 @@ use {
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
+        account_directory::AccountDirectory,
         accounts_background_service::{AbsRequestSender, SnapshotRequestType},
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
@@ -61,7 +62,6 @@ use {
     std::{
         borrow::Cow,
         collections::{HashMap, HashSet},
-        path::PathBuf,
         result,
         sync::{
             atomic::{AtomicBool, Ordering::Relaxed},
@@ -708,7 +708,7 @@ pub fn test_process_blockstore(
 pub(crate) fn process_blockstore_for_bank_0(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
-    account_paths: Vec<PathBuf>,
+    account_paths: Vec<AccountDirectory>,
     opts: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     entry_notification_sender: Option<&EntryNotifierSender>,
@@ -1862,6 +1862,7 @@ pub mod tests {
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
         solana_program_runtime::declare_process_instruction,
         solana_runtime::{
+            account_directory::AccountDirectory,
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
             },
@@ -3787,7 +3788,7 @@ pub mod tests {
 
     fn get_epoch_schedule(
         genesis_config: &GenesisConfig,
-        account_paths: Vec<PathBuf>,
+        account_paths: Vec<AccountDirectory>,
     ) -> EpochSchedule {
         let bank = Bank::new_with_paths_for_tests(
             genesis_config,

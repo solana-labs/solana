@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use {
+    crate::snapshot_utils::move_and_async_delete_path_contents,
+    std::path::{Path, PathBuf},
+};
 
 /// Many functions in snapshot-utils expect the `account_paths` directories
 /// to have a specific structure:
@@ -13,10 +16,9 @@ use std::path::{Path, PathBuf};
 ///
 /// This type is meant to provide a type-safe and convenient way to access and store
 /// these account directories.
+#[derive(Debug, Clone)]
 pub struct AccountDirectory {
-    /// The path to the `run` directory.
     run: PathBuf,
-    /// The path to the `snapshot` directory.
     snapshot: PathBuf,
 }
 
@@ -36,13 +38,24 @@ impl AccountDirectory {
         Ok(Self { run, snapshot })
     }
 
+    /// Return the root of the account directory.
+    pub fn root_dir(&self) -> &Path {
+        self.run.parent().unwrap()
+    }
+
     /// Return the path to the directory containing the current account state.
-    pub fn current_state_dir(&self) -> &Path {
+    pub fn run_dir(&self) -> &Path {
         &self.run
     }
 
     /// Return the path to the directory containing the snapshots.
     pub fn snapshot_dir(&self) -> &Path {
         &self.snapshot
+    }
+
+    /// Clean entire directory.
+    pub fn clean(&self) {
+        move_and_async_delete_path_contents(self.run_dir());
+        move_and_async_delete_path_contents(self.snapshot_dir());
     }
 }

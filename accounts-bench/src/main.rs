@@ -1,5 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 
+use solana_runtime::account_directory::AccountDirectory;
+
 #[macro_use]
 extern crate log;
 use {
@@ -19,7 +21,7 @@ use {
     solana_sdk::{
         genesis_config::ClusterType, pubkey::Pubkey, sysvar::epoch_schedule::EpochSchedule,
     },
-    std::{env, fs, path::PathBuf},
+    std::{env, path::PathBuf},
 };
 
 fn main() {
@@ -63,12 +65,13 @@ fn main() {
     let clean = matches.is_present("clean");
     println!("clean: {clean:?}");
 
-    let path = PathBuf::from(env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_owned()))
-        .join("accounts-bench");
-    println!("cleaning file system: {path:?}");
-    if fs::remove_dir_all(path.clone()).is_err() {
-        println!("Warning: Couldn't remove {path:?}");
-    }
+    let path = AccountDirectory::new(
+        PathBuf::from(env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_owned()))
+            .join("accounts-bench"),
+    )
+    .unwrap();
+    path.clean();
+
     let accounts = Accounts::new_with_config_for_benches(
         vec![path],
         &ClusterType::Testnet,

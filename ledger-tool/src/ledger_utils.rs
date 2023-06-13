@@ -24,6 +24,7 @@ use {
         transaction_status_service::TransactionStatusService,
     },
     solana_runtime::{
+        account_directory::AccountDirectory,
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
@@ -34,8 +35,7 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
-            self, clean_orphaned_account_snapshot_dirs, create_all_accounts_run_and_snapshot_dirs,
-            move_and_async_delete_path_contents,
+            self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
         },
     },
     solana_sdk::{
@@ -177,21 +177,27 @@ pub fn load_and_process_ledger(
         vec![non_primary_accounts_path]
     };
 
-    let (account_run_paths, account_snapshot_paths) =
-        create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
-            eprintln!("Error: {err}");
-            exit(1);
-        });
-
-    // From now on, use run/ paths in the same way as the previous account_paths.
-    let account_paths = account_run_paths;
+    let account_paths: Vec<_> = account_paths
+        .into_iter()
+        .map(|p| {
+            AccountDirectory::new(&p).unwrap_or_else(|err| {
+                eprintln!(
+                    "Failed to create account directory: {} err: {}",
+                    p.display(),
+                    err
+                );
+                exit(1);
+            })
+        })
+        .collect();
 
     let (_, measure_clean_account_paths) = measure!(
         account_paths.iter().for_each(|path| {
-            if path.exists() {
-                info!("Cleaning contents of account path: {}", path.display());
-                move_and_async_delete_path_contents(path);
-            }
+            info!(
+                "Cleaning contents of account path run directory: {}",
+                path.run_dir().display()
+            );
+            move_and_async_delete_path_contents(path.run_dir());
         }),
         "Cleaning account paths"
     );
@@ -199,9 +205,9 @@ pub fn load_and_process_ledger(
 
     snapshot_utils::purge_incomplete_bank_snapshots(&bank_snapshots_dir);
 
-    info!("Cleaning contents of account snapshot paths: {account_snapshot_paths:?}");
+    info!("Cleaning contents of account snapshot paths: {account_paths:?}");
     if let Err(err) =
-        clean_orphaned_account_snapshot_dirs(&bank_snapshots_dir, &account_snapshot_paths)
+        clean_orphaned_account_snapshot_dirs(&bank_snapshots_dir, &account_paths, &None)
     {
         eprintln!("Failed to clean orphaned account snapshot dirs: {err}");
         exit(1);

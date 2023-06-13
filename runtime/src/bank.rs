@@ -177,7 +177,6 @@ use {
         convert::{TryFrom, TryInto},
         fmt, mem,
         ops::{AddAssign, RangeInclusive},
-        path::PathBuf,
         rc::Rc,
         sync::{
             atomic::{
@@ -260,6 +259,7 @@ pub struct BankRc {
     pub(crate) bank_id_generator: Arc<AtomicU64>,
 }
 
+use crate::account_directory::AccountDirectory;
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
 
@@ -1316,7 +1316,7 @@ impl Bank {
     pub fn new_with_paths_for_tests(
         genesis_config: &GenesisConfig,
         runtime_config: Arc<RuntimeConfig>,
-        paths: Vec<PathBuf>,
+        paths: Vec<AccountDirectory>,
         account_indexes: AccountSecondaryIndexes,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
@@ -1335,7 +1335,10 @@ impl Bank {
         )
     }
 
-    pub fn new_with_paths_for_benches(genesis_config: &GenesisConfig, paths: Vec<PathBuf>) -> Self {
+    pub fn new_with_paths_for_benches(
+        genesis_config: &GenesisConfig,
+        paths: Vec<AccountDirectory>,
+    ) -> Self {
         Self::new_with_paths(
             genesis_config,
             Arc::<RuntimeConfig>::default(),
@@ -1355,7 +1358,7 @@ impl Bank {
     pub fn new_with_paths(
         genesis_config: &GenesisConfig,
         runtime_config: Arc<RuntimeConfig>,
-        paths: Vec<PathBuf>,
+        account_paths: Vec<AccountDirectory>,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&[BuiltinPrototype]>,
         account_indexes: AccountSecondaryIndexes,
@@ -1366,7 +1369,7 @@ impl Bank {
         exit: Arc<AtomicBool>,
     ) -> Self {
         let accounts = Accounts::new_with_config(
-            paths,
+            account_paths,
             &genesis_config.cluster_type,
             account_indexes,
             shrink_ratio,
@@ -4130,7 +4133,7 @@ impl Bank {
         self.rc.accounts.accounts_db.remove_unrooted_slots(slots)
     }
 
-    pub fn set_shrink_paths(&self, paths: Vec<PathBuf>) {
+    pub fn set_shrink_paths(&self, paths: Vec<AccountDirectory>) {
         self.rc.accounts.accounts_db.set_shrink_paths(paths);
     }
 

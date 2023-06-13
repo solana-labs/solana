@@ -18,12 +18,12 @@ use {
     },
     solana_ledger::create_new_tmp_ledger,
     solana_runtime::{
+        account_directory::AccountDirectory,
         genesis_utils::{
             create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,
             ValidatorVoteKeypairs,
         },
         snapshot_config::SnapshotConfig,
-        snapshot_utils::create_accounts_run_and_snapshot_dirs,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -150,11 +150,7 @@ impl LocalCluster {
         config: &mut ValidatorConfig,
         ledger_path: &Path,
     ) {
-        config.account_paths = vec![
-            create_accounts_run_and_snapshot_dirs(ledger_path.join("accounts"))
-                .unwrap()
-                .0,
-        ];
+        config.account_paths = vec![AccountDirectory::new(ledger_path.join("accounts")).unwrap()];
         config.tower_storage = Arc::new(FileTowerStorage::new(ledger_path.to_path_buf()));
 
         let snapshot_config = &mut config.snapshot_config;

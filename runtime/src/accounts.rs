@@ -1,5 +1,6 @@
 use {
     crate::{
+        account_directory::AccountDirectory,
         account_overrides::AccountOverrides,
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
@@ -67,7 +68,6 @@ use {
         },
         num::NonZeroUsize,
         ops::RangeBounds,
-        path::PathBuf,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc, Mutex,
@@ -164,7 +164,7 @@ impl Accounts {
     }
 
     pub fn new_with_config_for_tests(
-        paths: Vec<PathBuf>,
+        paths: Vec<AccountDirectory>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
         shrink_ratio: AccountShrinkThreshold,
@@ -181,7 +181,7 @@ impl Accounts {
     }
 
     pub fn new_with_config_for_benches(
-        paths: Vec<PathBuf>,
+        paths: Vec<AccountDirectory>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
         shrink_ratio: AccountShrinkThreshold,
@@ -198,7 +198,7 @@ impl Accounts {
     }
 
     pub fn new_with_config(
-        paths: Vec<PathBuf>,
+        account_paths: Vec<AccountDirectory>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
         shrink_ratio: AccountShrinkThreshold,
@@ -207,7 +207,7 @@ impl Accounts {
         exit: Arc<AtomicBool>,
     ) -> Self {
         Self::new_empty(AccountsDb::new_with_config(
-            paths,
+            account_paths,
             cluster_type,
             account_indexes,
             shrink_ratio,

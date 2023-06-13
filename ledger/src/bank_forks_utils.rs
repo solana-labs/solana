@@ -10,6 +10,7 @@ use {
     },
     log::*,
     solana_runtime::{
+        account_directory::AccountDirectory,
         accounts_background_service::AbsRequestSender,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank_forks::BankForks,
@@ -20,9 +21,7 @@ use {
     },
     solana_sdk::genesis_config::GenesisConfig,
     std::{
-        fs,
-        path::PathBuf,
-        process, result,
+        fs, process, result,
         sync::{atomic::AtomicBool, Arc, RwLock},
     },
 };
@@ -44,8 +43,8 @@ pub type LoadResult = result::Result<
 pub fn load(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
-    account_paths: Vec<PathBuf>,
-    shrink_paths: Option<Vec<PathBuf>>,
+    account_paths: Vec<AccountDirectory>,
+    shrink_paths: Option<Vec<AccountDirectory>>,
     snapshot_config: Option<&SnapshotConfig>,
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
@@ -84,8 +83,8 @@ pub fn load(
 pub fn load_bank_forks(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
-    account_paths: Vec<PathBuf>,
-    shrink_paths: Option<Vec<PathBuf>>,
+    account_paths: Vec<AccountDirectory>,
+    shrink_paths: Option<Vec<AccountDirectory>>,
     snapshot_config: Option<&SnapshotConfig>,
     process_options: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
@@ -191,8 +190,8 @@ pub fn load_bank_forks(
 #[allow(clippy::too_many_arguments)]
 fn bank_forks_from_snapshot(
     genesis_config: &GenesisConfig,
-    account_paths: Vec<PathBuf>,
-    shrink_paths: Option<Vec<PathBuf>>,
+    account_paths: Vec<AccountDirectory>,
+    shrink_paths: Option<Vec<AccountDirectory>>,
     snapshot_config: &SnapshotConfig,
     process_options: &ProcessOptions,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,

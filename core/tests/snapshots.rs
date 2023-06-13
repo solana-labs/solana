@@ -12,6 +12,7 @@ use {
     },
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_runtime::{
+        account_directory::AccountDirectory,
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
@@ -51,7 +52,6 @@ use {
         collections::HashSet,
         fs,
         io::{Error, ErrorKind},
-        path::PathBuf,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -69,7 +69,7 @@ struct SnapshotTestConfig {
     incremental_snapshot_archives_dir: TempDir,
     full_snapshot_archives_dir: TempDir,
     bank_snapshots_dir: TempDir,
-    accounts_dir: PathBuf,
+    accounts_dir: AccountDirectory,
     // as the underscore prefix indicates, this isn't explictly used; but it's needed to keep
     // TempDir::drop from running to retain that dir for the duration of test
     _accounts_tmp_dir: TempDir,
@@ -138,7 +138,7 @@ fn restore_from_snapshot(
     old_bank_forks: &BankForks,
     old_last_slot: Slot,
     old_genesis_config: &GenesisConfig,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
 ) {
     let full_snapshot_archives_dir = old_bank_forks
         .snapshot_config
@@ -712,7 +712,7 @@ fn test_bank_forks_incremental_snapshot(
         INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
     );
     trace!("SnapshotTestConfig:\naccounts_dir: {}\nbank_snapshots_dir: {}\nfull_snapshot_archives_dir: {}\nincremental_snapshot_archives_dir: {}",
-            snapshot_test_config.accounts_dir.display(), snapshot_test_config.bank_snapshots_dir.path().display(), snapshot_test_config.full_snapshot_archives_dir.path().display(), snapshot_test_config.incremental_snapshot_archives_dir.path().display());
+            snapshot_test_config.accounts_dir.run_dir().display(), snapshot_test_config.bank_snapshots_dir.path().display(), snapshot_test_config.full_snapshot_archives_dir.path().display(), snapshot_test_config.incremental_snapshot_archives_dir.path().display());
 
     let bank_forks = &mut snapshot_test_config.bank_forks;
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
@@ -875,7 +875,7 @@ fn make_incremental_snapshot_archive(
 fn restore_from_snapshots_and_check_banks_are_equal(
     bank: &Bank,
     snapshot_config: &SnapshotConfig,
-    accounts_dir: PathBuf,
+    accounts_dir: AccountDirectory,
     genesis_config: &GenesisConfig,
 ) -> snapshot_utils::Result<()> {
     let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(

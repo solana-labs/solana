@@ -73,7 +73,7 @@ use {
 mod archive_format;
 mod snapshot_storage_rebuilder;
 pub use archive_format::*;
-use std::sync::Mutex;
+use {crate::account_directory::AccountDirectory, std::sync::Mutex};
 
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
 pub const SNAPSHOT_VERSION_FILENAME: &str = "version";
@@ -572,7 +572,8 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
 /// snapshot dirs, to ensure proper snapshot operations.
 pub fn clean_orphaned_account_snapshot_dirs(
     bank_snapshots_dir: impl AsRef<Path>,
-    account_snapshot_paths: &[PathBuf],
+    account_snapshot_paths: &[AccountDirectory],
+    account_shrink_paths: &Option<Vec<AccountDirectory>>,
 ) -> Result<()> {
     // Create the HashSet of the account snapshot hardlink directories referenced by the snapshot dirs.
     // This is used to clean up any hardlinks that are no longer referenced by the snapshot dirs.
@@ -589,7 +590,12 @@ pub fn clean_orphaned_account_snapshot_dirs(
     }
 
     // loop through the account snapshot hardlink directories, if the directory is not in the account_snapshot_dirs_referenced set, delete it
-    for account_snapshot_path in account_snapshot_paths {
+    for account_directory in account_snapshot_paths.iter().chain(
+        account_shrink_paths
+            .iter()
+            .flat_map(|account_shrink_paths| account_shrink_paths.iter()),
+    ) {
+        let account_snapshot_path = account_directory.snapshot_dir();
         for entry in fs::read_dir(account_snapshot_path)? {
             let path = entry?.path();
             if !account_snapshot_dirs_referenced.contains(&path) {
@@ -1417,7 +1423,7 @@ fn verify_and_unarchive_snapshots(
     bank_snapshots_dir: impl AsRef<Path>,
     full_snapshot_archive_info: &FullSnapshotArchiveInfo,
     incremental_snapshot_archive_info: Option<&IncrementalSnapshotArchiveInfo>,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
 ) -> Result<(UnarchivedSnapshot, Option<UnarchivedSnapshot>, AtomicU32)> {
     check_are_snapshots_compatible(
         full_snapshot_archive_info,
@@ -1480,7 +1486,7 @@ pub fn bank_fields_from_snapshot_archives(
     let temp_unpack_dir = TempDir::new()?;
     let temp_accounts_dir = TempDir::new()?;
 
-    let account_paths = vec![temp_accounts_dir.path().to_path_buf()];
+    let account_paths = vec![AccountDirectory::new(&temp_accounts_dir).unwrap()];
 
     let (unarchived_full_snapshot, unarchived_incremental_snapshot, _next_append_vec_id) =
         verify_and_unarchive_snapshots(
@@ -1504,7 +1510,7 @@ pub fn bank_fields_from_snapshot_archives(
 /// snapshot and an incremental snapshot.
 #[allow(clippy::too_many_arguments)]
 pub fn bank_from_snapshot_archives(
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     bank_snapshots_dir: impl AsRef<Path>,
     full_snapshot_archive_info: &FullSnapshotArchiveInfo,
     incremental_snapshot_archive_info: Option<&IncrementalSnapshotArchiveInfo>,
@@ -1626,7 +1632,7 @@ pub fn bank_from_latest_snapshot_archives(
     bank_snapshots_dir: impl AsRef<Path>,
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -1720,7 +1726,7 @@ pub fn bank_from_latest_snapshot_archives(
 /// Build bank from a snapshot (a snapshot directory, not a snapshot archive)
 #[allow(clippy::too_many_arguments)]
 pub fn bank_from_snapshot_dir(
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     bank_snapshot: &BankSnapshotInfo,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
@@ -1737,7 +1743,7 @@ pub fn bank_from_snapshot_dir(
     // Clear the contents of the account paths run directories.  When constructing the bank, the appendvec
     // files will be extracted from the snapshot hardlink directories into these run/ directories.
     for path in account_paths {
-        delete_contents_of_path(path);
+        delete_contents_of_path(path.run_dir());
     }
 
     let next_append_vec_id = Arc::new(AtomicAppendVecId::new(0));
@@ -1791,7 +1797,7 @@ pub fn bank_from_latest_snapshot_dir(
     bank_snapshots_dir: impl AsRef<Path>,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&[BuiltinPrototype]>,
     account_secondary_indexes: AccountSecondaryIndexes,
@@ -1862,7 +1868,7 @@ fn verify_bank_against_expected_slot_hash(
 /// Spawns a thread for unpacking a snapshot
 fn spawn_unpack_snapshot_thread(
     file_sender: Sender<PathBuf>,
-    account_paths: Arc<Vec<PathBuf>>,
+    account_paths: Arc<Vec<AccountDirectory>>,
     ledger_dir: Arc<PathBuf>,
     mut archive: Archive<SharedBufferReader>,
     parallel_selector: Option<ParallelSelector>,
@@ -1886,7 +1892,7 @@ fn spawn_unpack_snapshot_thread(
 /// Streams unpacked files across channel
 fn streaming_unarchive_snapshot(
     file_sender: Sender<PathBuf>,
-    account_paths: Vec<PathBuf>,
+    account_paths: Vec<AccountDirectory>,
     ledger_dir: PathBuf,
     snapshot_archive_path: PathBuf,
     archive_format: ArchiveFormat,
@@ -1967,7 +1973,7 @@ fn unarchive_snapshot(
     unpacked_snapshots_dir_prefix: &'static str,
     snapshot_archive_path: impl AsRef<Path>,
     measure_name: &'static str,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     archive_format: ArchiveFormat,
     parallel_divisions: usize,
     next_append_vec_id: Arc<AtomicAppendVecId>,
@@ -2024,13 +2030,13 @@ fn streaming_snapshot_dir_files(
     file_sender: Sender<PathBuf>,
     snapshot_file_path: impl Into<PathBuf>,
     snapshot_version_path: impl Into<PathBuf>,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
 ) -> Result<()> {
     file_sender.send(snapshot_file_path.into())?;
     file_sender.send(snapshot_version_path.into())?;
 
     for account_path in account_paths {
-        for file in fs::read_dir(account_path)? {
+        for file in fs::read_dir(account_path.run_dir())? {
             file_sender.send(file?.path())?;
         }
     }
@@ -2042,7 +2048,7 @@ fn streaming_snapshot_dir_files(
 /// and then returning those fields plus the rebuilt storage
 fn build_storage_from_snapshot_dir(
     snapshot_info: &BankSnapshotInfo,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     next_append_vec_id: Arc<AtomicAppendVecId>,
 ) -> Result<AccountStorageMap> {
     let bank_snapshot_dir = &snapshot_info.snapshot_dir;
@@ -2052,7 +2058,8 @@ fn build_storage_from_snapshot_dir(
 
     let accounts_hardlinks = bank_snapshot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
 
-    let account_paths_set: HashSet<_> = HashSet::from_iter(account_paths.iter());
+    let account_paths_set: HashSet<_> =
+        HashSet::from_iter(account_paths.iter().map(|p| p.run_dir().to_path_buf()));
 
     for dir_entry in fs::read_dir(&accounts_hardlinks).map_err(|err| {
         SnapshotError::IoWithSourceAndFile(
@@ -2483,7 +2490,7 @@ pub fn purge_old_snapshot_archives(
 fn unpack_snapshot_local(
     shared_buffer: SharedBuffer,
     ledger_dir: &Path,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     parallel_divisions: usize,
 ) -> Result<UnpackedAppendVecMap> {
     assert!(parallel_divisions > 0);
@@ -2536,7 +2543,7 @@ fn untar_snapshot_create_shared_buffer(
 fn untar_snapshot_in(
     snapshot_tar: impl AsRef<Path>,
     unpack_dir: &Path,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     archive_format: ArchiveFormat,
     parallel_divisions: usize,
 ) -> Result<UnpackedAppendVecMap> {
@@ -2630,7 +2637,7 @@ fn rebuild_bank_from_unarchived_snapshots(
     incremental_snapshot_unpacked_snapshots_dir_and_version: Option<
         &UnpackedSnapshotsDirAndVersion,
     >,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     storage_and_next_append_vec_id: StorageAndNextAppendVecId,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
@@ -2726,7 +2733,7 @@ fn rebuild_bank_from_unarchived_snapshots(
 #[allow(clippy::too_many_arguments)]
 fn rebuild_bank_from_snapshot(
     bank_snapshot: &BankSnapshotInfo,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     storage_and_next_append_vec_id: StorageAndNextAppendVecId,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
@@ -2919,7 +2926,7 @@ pub fn verify_snapshot_archive(
 ) {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
-    let unpack_account_dir = create_accounts_run_and_snapshot_dirs(unpack_dir).unwrap().0;
+    let unpack_account_dir = AccountDirectory::new(unpack_dir).unwrap();
     untar_snapshot_in(
         snapshot_archive,
         unpack_dir,
@@ -2998,9 +3005,9 @@ pub fn verify_snapshot_archive(
     // Remove the empty "accounts" directory for the directory comparison below.
     // In some test cases the directory to compare do not come from unarchiving.
     // Ignore the error when this directory does not exist.
-    _ = std::fs::remove_dir(unpack_account_dir.join("accounts"));
+    _ = std::fs::remove_dir(unpack_account_dir.run_dir().join("accounts"));
     // Check the account entries are the same
-    assert!(!dir_diff::is_different(&storages_to_verify, unpack_account_dir).unwrap());
+    assert!(!dir_diff::is_different(&storages_to_verify, unpack_account_dir.run_dir()).unwrap());
 }
 
 /// Purges bank snapshots, retaining the newest `num_bank_snapshots_to_retain`
@@ -3351,9 +3358,9 @@ pub fn should_take_incremental_snapshot(
         && last_full_snapshot_slot.is_some()
 }
 
-pub fn create_tmp_accounts_dir_for_tests() -> (TempDir, PathBuf) {
+pub fn create_tmp_accounts_dir_for_tests() -> (TempDir, AccountDirectory) {
     let tmp_dir = tempfile::TempDir::new().unwrap();
-    let account_dir = create_accounts_run_and_snapshot_dirs(&tmp_dir).unwrap().0;
+    let account_dir = AccountDirectory::new(&tmp_dir).unwrap();
     (tmp_dir, account_dir)
 }
 
@@ -5235,7 +5242,7 @@ mod tests {
 
         let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let appendvec_filename = format!("{slot}.0");
-        let appendvec_path = accounts_dir.join(appendvec_filename);
+        let appendvec_path = accounts_dir.run_dir().join(appendvec_filename);
 
         let ret = get_snapshot_accounts_hardlink_dir(
             &appendvec_path,
@@ -5362,12 +5369,14 @@ mod tests {
             .iter()
             .all(|dir| fs::metadata(dir).is_ok()));
 
-        let account_snapshot_paths: Vec<PathBuf> = hardlink_dirs_slot_2
+        let account_snapshot_paths: Vec<AccountDirectory> = hardlink_dirs_slot_2
             .iter()
-            .map(|dir| dir.parent().unwrap().parent().unwrap().to_path_buf())
+            .map(|dir| dir.parent().unwrap().parent().unwrap())
+            .map(|dir| AccountDirectory::new(dir).unwrap())
             .collect();
         // clean the orphaned hardlink directories
-        clean_orphaned_account_snapshot_dirs(&bank_snapshots_dir, &account_snapshot_paths).unwrap();
+        clean_orphaned_account_snapshot_dirs(&bank_snapshots_dir, &account_snapshot_paths, &None)
+            .unwrap();
 
         // verify the hardlink directories are gone
         assert!(hardlink_dirs_slot_2
@@ -5498,10 +5507,11 @@ mod tests {
             .unwrap();
 
         // reconstruct a bank from the snapshots
-        let other_accounts_dir = tempfile::TempDir::new().unwrap();
+        let other_accounts_dir_temp_dir = tempfile::TempDir::new().unwrap();
+        let other_accounts_dir = AccountDirectory::new(other_accounts_dir_temp_dir).unwrap();
         let other_bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let (deserialized_bank, _) = bank_from_snapshot_archives(
-            &[other_accounts_dir.path().to_path_buf()],
+            &[other_accounts_dir],
             &other_bank_snapshots_dir,
             &full_snapshot_archive,
             Some(&incremental_snapshot_archive),
@@ -5575,7 +5585,7 @@ mod tests {
         let bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 3, 0);
 
         let bank_snapshot = get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
-        let account_paths = &bank.rc.accounts.accounts_db.paths;
+        let account_paths = &bank.rc.accounts.accounts_db.account_paths;
 
         let (bank_constructed, ..) = bank_from_snapshot_dir(
             account_paths,
@@ -5600,7 +5610,7 @@ mod tests {
         // Verify that the next_append_vec_id tracking is correct
         let mut max_id = 0;
         for path in account_paths {
-            fs::read_dir(path).unwrap().for_each(|entry| {
+            fs::read_dir(path.run_dir()).unwrap().for_each(|entry| {
                 let path = entry.unwrap().path();
                 let filename = path.file_name().unwrap();
                 let (_slot, append_vec_id) = get_slot_and_append_vec_id(filename.to_str().unwrap());
@@ -5617,7 +5627,7 @@ mod tests {
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 3, 3);
 
-        let account_paths = &bank.rc.accounts.accounts_db.paths;
+        let account_paths = &bank.rc.accounts.accounts_db.account_paths;
 
         let deserialized_bank = bank_from_latest_snapshot_dir(
             &bank_snapshots_dir,

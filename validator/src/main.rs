@@ -32,6 +32,7 @@ use {
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::config::RpcLeaderScheduleConfig,
     solana_runtime::{
+        account_directory::AccountDirectory,
         accounts_db::{
             AccountShrinkThreshold, AccountsDb, AccountsDbConfig, CreateAncientStorage,
             FillerAccountsConfig,
@@ -44,8 +45,7 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
-            self, create_all_accounts_run_and_snapshot_dirs, create_and_canonicalize_directories,
-            ArchiveFormat, SnapshotVersion,
+            self, create_and_canonicalize_directories, ArchiveFormat, SnapshotVersion,
         },
     },
     solana_sdk::{
@@ -1399,34 +1399,37 @@ pub fn main() {
         } else {
             vec![ledger_path.join("accounts")]
         };
-    let account_paths = snapshot_utils::create_and_canonicalize_directories(&account_paths)
-        .unwrap_or_else(|err| {
-            eprintln!("Unable to access account path: {err}");
-            exit(1);
-        });
+    let account_paths = account_paths
+        .into_iter()
+        .map(|path| {
+            AccountDirectory::new(&path).unwrap_or_else(|err| {
+                eprintln!(
+                    "Failed to verify account directory {}: {}",
+                    path.display(),
+                    err
+                );
+                exit(1);
+            })
+        })
+        .collect();
 
-    let account_shrink_paths: Option<Vec<PathBuf>> =
+    let account_shrink_paths: Option<Vec<AccountDirectory>> =
         values_t!(matches, "account_shrink_path", String)
-            .map(|shrink_paths| shrink_paths.into_iter().map(PathBuf::from).collect())
+            .map(|shrink_paths| {
+                shrink_paths
+                    .into_iter()
+                    .map(|path| {
+                        AccountDirectory::new(&path).unwrap_or_else(|err| {
+                            eprintln!("Failed to verify account shrink directory {path}: {err}",);
+                            exit(1);
+                        })
+                    })
+                    .collect()
+            })
             .ok();
 
-    let (account_run_paths, account_snapshot_paths) =
-        create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
-            eprintln!("Error: {err:?}");
-            exit(1);
-        });
-
-    // From now on, use run/ paths in the same way as the previous account_paths.
-    validator_config.account_paths = account_run_paths;
-
-    validator_config.account_snapshot_paths = account_snapshot_paths;
-
-    validator_config.account_shrink_paths = account_shrink_paths.map(|paths| {
-        create_and_canonicalize_directories(&paths).unwrap_or_else(|err| {
-            eprintln!("Unable to access account shrink path: {err}");
-            exit(1);
-        })
-    });
+    validator_config.account_paths = account_paths;
+    validator_config.account_shrink_paths = account_shrink_paths;
 
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
     let maximum_full_snapshot_archives_to_retain =

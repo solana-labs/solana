@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     assert_matches::assert_matches,
     common::*,
@@ -39,14 +40,13 @@ use {
         response::RpcSignatureResult,
     },
     solana_runtime::{
+        account_directory::AccountDirectory,
         commitment::VOTE_THRESHOLD_SIZE,
         hardened_unpack::open_genesis_config,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_package::SnapshotType,
-        snapshot_utils::{
-            self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
-        },
+        snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
         vote_parser,
     },
     solana_sdk::{
@@ -2177,11 +2177,7 @@ fn create_snapshot_to_hard_fork(
     let (bank_forks, ..) = bank_forks_utils::load(
         &genesis_config,
         blockstore,
-        vec![
-            create_accounts_run_and_snapshot_dirs(ledger_path.join("accounts"))
-                .unwrap()
-                .0,
-        ],
+        vec![AccountDirectory::new(ledger_path.join("accounts")).unwrap()],
         None,
         snapshot_config.as_ref(),
         process_options,

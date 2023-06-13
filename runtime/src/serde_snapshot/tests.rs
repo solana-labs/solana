@@ -96,7 +96,7 @@ fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
 
 fn context_accountsdb_from_stream<'a, C, R>(
     stream: &mut BufReader<R>,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     storage_and_next_append_vec_id: StorageAndNextAppendVecId,
 ) -> Result<AccountsDb, Error>
 where
@@ -134,7 +134,7 @@ where
 fn accountsdb_from_stream<R>(
     serde_style: SerdeStyle,
     stream: &mut BufReader<R>,
-    account_paths: &[PathBuf],
+    account_paths: &[AccountDirectory],
     storage_and_next_append_vec_id: StorageAndNextAppendVecId,
 ) -> Result<AccountsDb, Error>
 where

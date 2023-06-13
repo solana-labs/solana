@@ -20,6 +20,7 @@
 
 use {
     crate::{
+        account_directory::AccountDirectory,
         account_info::{AccountInfo, StorageLocation},
         account_storage::{
             meta::{
@@ -64,7 +65,6 @@ use {
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
         serde_snapshot::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
-        snapshot_utils::create_accounts_run_and_snapshot_dirs,
         sorted_storages::SortedStorages,
         storable_accounts::StorableAccounts,
         verify_accounts_hash_in_background::VerifyAccountsHashInBackground,
@@ -1045,9 +1045,9 @@ pub struct AccountStorageEntry {
 }
 
 impl AccountStorageEntry {
-    pub fn new(path: &Path, slot: Slot, id: AppendVecId, file_size: u64) -> Self {
+    pub fn new(path: impl AsRef<Path>, slot: Slot, id: AppendVecId, file_size: u64) -> Self {
         let tail = AccountsFile::file_name(slot, id);
-        let path = Path::new(path).join(tail);
+        let path = path.as_ref().join(tail);
         let accounts = AccountsFile::AppendVec(AppendVec::new(&path, true, file_size as usize));
 
         Self {
@@ -1214,15 +1214,13 @@ impl AccountStorageEntry {
     }
 }
 
-pub fn get_temp_accounts_paths(count: u32) -> IoResult<(Vec<TempDir>, Vec<PathBuf>)> {
+pub fn get_temp_accounts_paths(count: u32) -> IoResult<(Vec<TempDir>, Vec<AccountDirectory>)> {
     let temp_dirs: IoResult<Vec<TempDir>> = (0..count).map(|_| TempDir::new()).collect();
     let temp_dirs = temp_dirs?;
 
     let paths: IoResult<Vec<_>> = temp_dirs
         .iter()
-        .map(|temp_dir| {
-            create_accounts_run_and_snapshot_dirs(temp_dir).map(|(run_dir, _snapshot_dir)| run_dir)
-        })
+        .map(|temp_dir| AccountDirectory::new(temp_dir.path()))
         .collect();
     let paths = paths?;
     Ok((temp_dirs, paths))
@@ -1401,7 +1399,7 @@ pub struct AccountsDb {
     pub(crate) write_version: AtomicU64,
 
     /// Set of storage paths to pick from
-    pub(crate) paths: Vec<PathBuf>,
+    pub(crate) account_paths: Vec<AccountDirectory>,
 
     full_accounts_hash_cache_path: PathBuf,
     incremental_accounts_hash_cache_path: PathBuf,
@@ -1412,7 +1410,7 @@ pub struct AccountsDb {
     #[allow(dead_code)]
     temp_accounts_hash_cache_path: Option<TempDir>,
 
-    pub shrink_paths: RwLock<Option<Vec<PathBuf>>>,
+    pub shrink_paths: RwLock<Option<Vec<AccountDirectory>>>,
 
     /// Directory of paths this accounts_db needs to hold/remove
     #[allow(dead_code)]
@@ -2409,7 +2407,7 @@ impl AccountsDb {
             shrink_candidate_slots: Mutex::new(HashMap::new()),
             write_cache_limit_bytes: None,
             write_version: AtomicU64::new(0),
-            paths: vec![],
+            account_paths: vec![],
             full_accounts_hash_cache_path: accounts_hash_cache_path.join("full"),
             incremental_accounts_hash_cache_path: accounts_hash_cache_path.join("incremental"),
             transient_accounts_hash_cache_path: accounts_hash_cache_path.join("transient"),
@@ -2454,7 +2452,7 @@ impl AccountsDb {
         }
     }
 
-    pub fn new_for_tests(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
+    pub fn new_for_tests(paths: Vec<AccountDirectory>, cluster_type: &ClusterType) -> Self {
         AccountsDb::new_with_config(
             paths,
             cluster_type,
@@ -2466,7 +2464,10 @@ impl AccountsDb {
         )
     }
 
-    pub fn new_for_tests_with_caching(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
+    pub fn new_for_tests_with_caching(
+        paths: Vec<AccountDirectory>,
+        cluster_type: &ClusterType,
+    ) -> Self {
         AccountsDb::new_with_config(
             paths,
             cluster_type,
@@ -2479,7 +2480,7 @@ impl AccountsDb {
     }
 
     pub fn new_with_config(
-        paths: Vec<PathBuf>,
+        account_paths: Vec<AccountDirectory>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
         shrink_ratio: AccountShrinkThreshold,
@@ -2537,9 +2538,9 @@ impl AccountsDb {
         } else {
             None
         };
-        let paths_is_empty = paths.is_empty();
+        let paths_is_empty = account_paths.is_empty();
         let mut new = Self {
-            paths,
+            account_paths,
             skip_initial_hash_calc,
             ancient_append_vec_offset,
             cluster_type: Some(*cluster_type),
@@ -2560,18 +2561,13 @@ impl AccountsDb {
         if paths_is_empty {
             // Create a temporary set of accounts directories, used primarily
             // for testing
-            let (temp_dirs, paths) = get_temp_accounts_paths(DEFAULT_NUM_DIRS).unwrap();
+            let (temp_dirs, account_paths) = get_temp_accounts_paths(DEFAULT_NUM_DIRS).unwrap();
             new.accounts_update_notifier = None;
-            new.paths = paths;
+            new.account_paths = account_paths;
             new.temp_paths = Some(temp_dirs);
         };
 
         new.start_background_hasher();
-        {
-            for path in new.paths.iter() {
-                std::fs::create_dir_all(path).expect("Create directory failed.");
-            }
-        }
         new
     }
 
@@ -2589,12 +2585,9 @@ impl AccountsDb {
         }
     }
 
-    pub fn set_shrink_paths(&self, paths: Vec<PathBuf>) {
+    pub fn set_shrink_paths(&self, paths: Vec<AccountDirectory>) {
         assert!(!paths.is_empty());
         let mut shrink_paths = self.shrink_paths.write().unwrap();
-        for path in &paths {
-            std::fs::create_dir_all(path).expect("Create directory failed.");
-        }
         *shrink_paths = Some(paths);
     }
 
@@ -4157,7 +4150,7 @@ impl AccountsDb {
                 let (shrink_paths, from) = maybe_shrink_paths
                     .as_ref()
                     .map(|paths| (paths, "shrink-w-path"))
-                    .unwrap_or_else(|| (&self.paths, "shrink"));
+                    .unwrap_or_else(|| (&self.account_paths, "shrink"));
                 self.create_store(slot, aligned_total, from, shrink_paths)
             });
         self.storage.shrinking_in_progress(slot, shrunken_store)
@@ -5593,7 +5586,7 @@ impl AccountsDb {
         let store = if let Some(store) = self.try_recycle_store(slot, size as u64, std::u64::MAX) {
             store
         } else {
-            self.create_store(slot, self.file_size, "store", &self.paths)
+            self.create_store(slot, self.file_size, "store", &self.account_paths)
         };
 
         // try_available is like taking a lock on the store,
@@ -5624,7 +5617,7 @@ impl AccountsDb {
         slot: Slot,
         size: u64,
         from: &str,
-        paths: &[PathBuf],
+        paths: &[AccountDirectory],
     ) -> Arc<AccountStorageEntry> {
         self.stats
             .create_store_count
@@ -5632,7 +5625,7 @@ impl AccountsDb {
         let path_index = thread_rng().gen_range(0, paths.len());
         let store = Arc::new(self.new_storage_entry(
             slot,
-            Path::new(&paths[path_index]),
+            paths[path_index].run_dir(),
             Self::page_align(size),
         ));
 
@@ -5655,7 +5648,7 @@ impl AccountsDb {
         size: u64,
         from: &str,
     ) -> Arc<AccountStorageEntry> {
-        self.create_and_insert_store_with_paths(slot, size, from, &self.paths)
+        self.create_and_insert_store_with_paths(slot, size, from, &self.account_paths)
     }
 
     fn create_and_insert_store_with_paths(
@@ -5663,7 +5656,7 @@ impl AccountsDb {
         slot: Slot,
         size: u64,
         from: &str,
-        paths: &[PathBuf],
+        paths: &[AccountDirectory],
     ) -> Arc<AccountStorageEntry> {
         let store = self.create_store(slot, size, from, paths);
         let store_for_index = store.clone();
@@ -9438,12 +9431,12 @@ pub(crate) enum UpdateIndexThreadSelection {
 
 #[cfg(test)]
 impl AccountsDb {
-    pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
+    pub fn new(paths: Vec<AccountDirectory>, cluster_type: &ClusterType) -> Self {
         Self::new_for_tests(paths, cluster_type)
     }
 
     pub fn new_with_config_for_tests(
-        paths: Vec<PathBuf>,
+        paths: Vec<AccountDirectory>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
         shrink_ratio: AccountShrinkThreshold,
@@ -9459,21 +9452,21 @@ impl AccountsDb {
         )
     }
 
-    pub fn new_sized(paths: Vec<PathBuf>, file_size: u64) -> Self {
+    pub fn new_sized(paths: Vec<AccountDirectory>, file_size: u64) -> Self {
         AccountsDb {
             file_size,
             ..AccountsDb::new(paths, &ClusterType::Development)
         }
     }
 
-    pub fn new_sized_caching(paths: Vec<PathBuf>, file_size: u64) -> Self {
+    pub fn new_sized_caching(paths: Vec<AccountDirectory>, file_size: u64) -> Self {
         AccountsDb {
             file_size,
             ..AccountsDb::new(paths, &ClusterType::Development)
         }
     }
 
-    pub fn new_sized_no_extra_stores(paths: Vec<PathBuf>, file_size: u64) -> Self {
+    pub fn new_sized_no_extra_stores(paths: Vec<AccountDirectory>, file_size: u64) -> Self {
         AccountsDb {
             file_size,
             ..AccountsDb::new(paths, &ClusterType::Development)
@@ -10631,7 +10624,7 @@ pub mod tests {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let slot_expected: Slot = 0;
         let size: usize = 123;
-        let data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
+        let data = AccountStorageEntry::new(paths[0].run_dir(), slot_expected, 0, size as u64);
 
         let arc = Arc::new(data);
         let storages = vec![arc];
@@ -10688,7 +10681,7 @@ pub mod tests {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let slot_expected: Slot = 0;
         let size: usize = 123;
-        let mut data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
+        let mut data = AccountStorageEntry::new(paths[0].run_dir(), slot_expected, 0, size as u64);
         let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, 1024 * 1024));
         data.accounts = av;
 
@@ -10800,7 +10793,7 @@ pub mod tests {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let slot_expected: Slot = 0;
         let size: usize = 123;
-        let mut data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
+        let mut data = AccountStorageEntry::new(paths[0].run_dir(), slot_expected, 0, size as u64);
         let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, 1024 * 1024));
         data.accounts = av;
 
@@ -10877,7 +10870,7 @@ pub mod tests {
     ) -> Arc<AccountStorageEntry> {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let size: usize = aligned_stored_size(account_data_size.unwrap_or(123) as usize);
-        let mut data = AccountStorageEntry::new(&paths[0], slot, id, size as u64);
+        let mut data = AccountStorageEntry::new(paths[0].run_dir(), slot, id, size as u64);
         let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, (1024 * 1024).max(size)));
         data.accounts = av;
 
