@@ -1512,8 +1512,8 @@ impl Bank {
     }
 
     #[allow(dead_code)]
-    /// Calculate the number of blocks required to store rewards in all accounts.
-    fn get_reward_credit_num_blocks(&self, total_stake_accounts: usize) -> u64 {
+    /// Calculate the number of blocks required to distribute rewards to all stake accounts.
+    fn get_reward_distribution_num_blocks(&self, total_stake_accounts: usize) -> u64 {
         if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
             1
         } else {
@@ -1531,7 +1531,7 @@ impl Bank {
     /// Return the total number of blocks in reward interval (including both calculation and crediting).
     fn get_reward_total_num_blocks(&self, total_stake_accounts: usize) -> u64 {
         self.get_reward_calculation_num_blocks()
-            + self.get_reward_credit_num_blocks(total_stake_accounts)
+            + self.get_reward_distribution_num_blocks(total_stake_accounts)
     }
 
     #[allow(dead_code)]
