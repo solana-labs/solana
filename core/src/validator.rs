@@ -1798,6 +1798,25 @@ impl<'a> ProcessBlockStore<'a> {
                 blockstore_root_scan.join();
             }
 
+            // Waiting for supermajority at a given slot implicitly means that slot
+            // is/will be rooted. Mark it as such to remove other banks; additionally,
+            // this will enable post_process_restored_tower() to properly evaluate
+            // if a restored tower is valid as it relates to a potential hard fork.
+            if let Some(wait_for_supermajority_slot) = self.config.wait_for_supermajority {
+                let mut bank_forks = self.bank_forks.write().unwrap();
+                assert_eq!(
+                    bank_forks.working_bank().slot(),
+                    wait_for_supermajority_slot
+                );
+                if bank_forks.root() != wait_for_supermajority_slot {
+                    bank_forks.set_root(
+                        wait_for_supermajority_slot,
+                        &self.accounts_background_request_sender,
+                        None,
+                    );
+                }
+            }
+
             self.tower = Some({
                 let restored_tower = Tower::restore(self.config.tower_storage.as_ref(), self.id);
                 if let Ok(tower) = &restored_tower {
