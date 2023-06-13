@@ -469,7 +469,7 @@ tail -f /home/sol/solana-validator*.log
 
 ### Out of disk space
 
-Make sure your ledger is on drive with at least `1TB` of space.
+Make sure your ledger is on drive with at least `2TB` of space.
 
 ### Validator not catching up
 
