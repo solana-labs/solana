@@ -93,7 +93,11 @@ impl RepairStatsGroup {
         // Update the max requested shred index for this slot
         slot_repairs.highest_shred_index =
             std::cmp::max(slot_repairs.highest_shred_index, shred_index);
-        self.min = std::cmp::min(self.min, slot);
+        if self.min == 0 {
+            self.min = slot;
+        } else {
+            self.min = std::cmp::min(self.min, slot);
+        }
         self.max = std::cmp::max(self.max, slot);
     }
 }
@@ -479,14 +483,21 @@ impl RepairService {
                     .collect();
                 info!("repair_stats: {:?}", slot_to_count);
                 if repair_total > 0 {
+                    let nonzero_num = |x| if x == 0 { None } else { Some(x) };
                     datapoint_info!(
                         "repair_service-my_requests",
                         ("repair-total", repair_total, i64),
                         ("shred-count", repair_stats.shred.count, i64),
                         ("highest-shred-count", repair_stats.highest_shred.count, i64),
                         ("orphan-count", repair_stats.orphan.count, i64),
-                        ("repair-highest-slot", repair_stats.highest_shred.max, i64),
-                        ("repair-orphan", repair_stats.orphan.max, i64),
+                        ("shred-slot-max", nonzero_num(repair_stats.shred.max), Option<i64>),
+                        ("shred-slot-min", nonzero_num(repair_stats.shred.min), Option<i64>),
+                        ("repair-highest-slot", repair_stats.highest_shred.max, i64), // deprecated
+                        ("highest-shred-slot-max", nonzero_num(repair_stats.highest_shred.max), Option<i64>),
+                        ("highest-shred-slot-min", nonzero_num(repair_stats.highest_shred.min), Option<i64>),
+                        ("repair-orphan", repair_stats.orphan.max, i64), // deprecated
+                        ("orphan-slot-max", nonzero_num(repair_stats.orphan.max), Option<i64>),
+                        ("orphan-slot-min", nonzero_num(repair_stats.orphan.min), Option<i64>),
                     );
                 }
                 datapoint_info!(
