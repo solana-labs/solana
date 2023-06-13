@@ -104,9 +104,9 @@ object with:
 - `value: <object|string>` - a notification value of
   [`RpcSignatureResult`](https://github.com/solana-labs/solana/blob/6d28fd455b07e3557fc6c0c3ddf3ba03e3fe8482/rpc-client-api/src/response.rs#L265-L268),
   resulting in either:
-  - when `enableReceivedNotification` is true and the signature is recieved: the
-    string value of
-    [`receivedSignature`](https://github.com/solana-labs/solana/blob/6d28fd455b07e3557fc6c0c3ddf3ba03e3fe8482/rpc-client-api/src/response.rs#L286-L288),
+  - when `enableReceivedNotification` is `true` and the signature is received: the
+    literal string
+    [`"receivedSignature"`](https://github.com/solana-labs/solana/blob/6d28fd455b07e3557fc6c0c3ddf3ba03e3fe8482/rpc-client-api/src/response.rs#L286-L288),
     or
   - when the signature is processed: `err: <object|null>`:
     - `null` if the transaction succeeded in being processed at the specified
