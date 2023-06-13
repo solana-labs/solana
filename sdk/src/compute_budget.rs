@@ -2,6 +2,16 @@
 
 #![cfg(feature = "full")]
 
+/// WARNING: This is required for borsh 0.11, which performs safe integer arithmetic
+/// at compile-time.
+///
+/// With the resolution of https://github.com/rust-lang/rust-clippy/issues/6365,
+/// we can remove this `allow` statement.
+///
+/// In the meantime, do not add any other logic to this file, to avoid adding
+/// potentially harmful integer math.
+#![allow(clippy::integer_arithmetic)]
+
 use {
     crate::instruction::Instruction,
     borsh::{BorshDeserialize, BorshSerialize},
