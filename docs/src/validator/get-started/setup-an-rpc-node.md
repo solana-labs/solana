@@ -5,7 +5,7 @@ sidebar_label: Setup an RPC Node
 
 Since a Solana RPC server runs the same process as a consensus validator, first follow the instructions on [how to setup a Solana validator](./setup-a-validator.md) to get started. Note, that you do not need to create a vote account if you are operating an RPC node.  An RPC node typically does not vote.
 
-After you validator is running, you can refer to this section for the RPC node specific setup instructions.
+After your validator is running, you can refer to this section for the RPC node specific setup instructions.
 
 ## Sample RPC Node
 
