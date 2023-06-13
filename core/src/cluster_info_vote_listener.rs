@@ -36,6 +36,7 @@ use {
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
+        feature_set::allow_votes_to_directly_update_vote_state,
         hash::Hash,
         pubkey::Pubkey,
         signature::Signature,
@@ -386,6 +387,12 @@ impl ClusterInfoVoteListener {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
         let mut bank_vote_sender_state_option: Option<BankVoteSenderState> = None;
+        let mut is_tower_full_vote_enabled = bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .feature_set
+            .is_active(&allow_votes_to_directly_update_vote_state::id());
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -396,12 +403,11 @@ impl ClusterInfoVoteListener {
                 .read()
                 .unwrap()
                 .would_be_leader(3 * slot_hashes::MAX_ENTRIES as u64 * DEFAULT_TICKS_PER_SLOT);
-            let feature_set = Some(bank_forks.read().unwrap().root_bank().feature_set.clone());
 
             if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
                 would_be_leader,
-                feature_set,
+                is_tower_full_vote_enabled,
             ) {
                 match e {
                     Error::RecvTimeout(RecvTimeoutError::Disconnected)
@@ -424,6 +430,15 @@ impl ClusterInfoVoteListener {
                         verified_packets_sender,
                         &verified_vote_packets,
                     )?;
+                }
+                // Check if we've crossed the feature boundary
+                if !is_tower_full_vote_enabled {
+                    is_tower_full_vote_enabled = bank_forks
+                        .read()
+                        .unwrap()
+                        .root_bank()
+                        .feature_set
+                        .is_active(&allow_votes_to_directly_update_vote_state::id());
                 }
             }
         }
