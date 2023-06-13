@@ -86,7 +86,7 @@ do with a bunch of instructions, and if they're valid, the program will execute
 them and update the state of the blockchain. Think of it like a write command
 that can be rejected if certain conditions aren't met.
 
-Here's a visual representation of what a transaction contains:  
+Here's a visual representation of what a transaction contains:
 ![Visual layout of a transaction](/img/transaction.svg)
 
 - Signatures: An array of digital signatures from the transaction's signers.
