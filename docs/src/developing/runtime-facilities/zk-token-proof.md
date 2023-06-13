@@ -64,7 +64,7 @@ logically divided into two parts:
   number. The context component for a `VerifyPubkeyValidity` instruction data is
   the ElGamal public key that is properly formed.
 - The <em>proof</em> component contains the actual mathematical pieces that
-  certifies different properties of the context data.
+  certify different properties of the context data.
 
 The ZK Token proof program processes a proof instruction in two steps:
 
@@ -87,7 +87,7 @@ too large to fit inside a single transaction.
 
 ## Proof Instructions
 
-The ZK Token proof program supports the following the list of zero-knowledge
+The ZK Token proof program supports the following list of zero-knowledge
 proofs.
 
 #### Proofs on ElGamal encryption
