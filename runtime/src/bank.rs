@@ -1139,16 +1139,6 @@ struct PartitionedRewardsCalculation {
 }
 
 #[allow(dead_code)]
-#[derive(Default)]
-/// result of calculating the stake rewards at beginning of new epoch
-struct StakeRewardCalculation {
-    /// each individual stake account to reward
-    stake_rewards: StakeRewards,
-    /// total lamports across all `stake_rewards`
-    total_stake_rewards_lamports: u64,
-}
-
-#[allow(dead_code)]
 /// result of calculating the stake rewards at beginning of new epoch
 struct StakeRewardCalculationPartitioned {
     /// each individual stake account to reward, grouped by partition
