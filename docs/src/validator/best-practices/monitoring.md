@@ -20,7 +20,7 @@ solana-watchtower --monitor-active-stake --validator-identity \
   2uTk98rqqwENevkPH2AHHzGHXgeGc1h6ku8hQUqWeXZp
 ```
 
-The command will monitor your validator, but you will not get notifications unless you added the environment variables mentioned in `solana-watchtower --help`. Since getting each of these services setup for notifications is not straight forward, the next section will walk through setting up watchtower notifications on Telegram.
+The command will monitor your validator, but you will not get notifications unless you added the environment variables mentioned in `solana-watchtower --help`. Since getting each of these services setup for notifications is not straight forward, the next section will walk through [setting up watchtower notifications on Telegram](#setup-telegram-notifications).
 
 ### Best Practices
 
