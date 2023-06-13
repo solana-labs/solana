@@ -5720,6 +5720,7 @@ name = "solana-geyser-plugin-interface"
 version = "1.17.0"
 dependencies = [
  "log",
+ "solana-runtime",
  "solana-sdk",
  "solana-transaction-status",
  "thiserror",

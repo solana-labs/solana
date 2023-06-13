@@ -3,13 +3,14 @@
 /// In addition, the dynamic library must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
 use {
+    solana_runtime::bank::Bank,
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         signature::Signature,
         transaction::SanitizedTransaction,
     },
     solana_transaction_status::{Reward, TransactionStatusMeta},
-    std::{any::Any, error, io},
+    std::{any::Any, error, io, sync::Arc},
     thiserror::Error,
 };
 
@@ -315,6 +316,12 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
         parent: Option<u64>,
         status: SlotStatus,
     ) -> Result<()> {
+        Ok(())
+    }
+
+    /// Called when a bank is updated
+    #[allow(unused_variables)]
+    fn update_bank(&self, bank: Option<Arc<Bank>>, status: SlotStatus) -> Result<()> {
         Ok(())
     }
 

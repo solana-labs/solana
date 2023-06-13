@@ -55,16 +55,13 @@ impl SlotStatusObserver {
                         let notifier = slot_status_notifier.read().unwrap();
                         match slot {
                             SlotNotification::OptimisticallyConfirmed(bank) => {
-                                notifier
-                                    .notify_slot_confirmed(bank.slot(), Some(bank.parent_slot()));
+                                notifier.notify_slot_confirmed(bank.slot(), Some(bank));
                             }
                             SlotNotification::Frozen(bank) => {
-                                notifier
-                                    .notify_slot_processed(bank.slot(), Some(bank.parent_slot()));
+                                notifier.notify_slot_processed(bank.slot(), Some(bank));
                             }
                             SlotNotification::Root((slot, bank)) => {
-                                notifier
-                                    .notify_slot_rooted(slot, bank.map(|bank| bank.parent_slot()));
+                                notifier.notify_slot_rooted(slot, bank);
                             }
                         }
                     }
