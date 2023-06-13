@@ -41,7 +41,7 @@ fn hash_to_partition(hash: u64, partitions: usize) -> usize {
 }
 
 #[allow(dead_code)]
-fn hash_rewards_into_partitions(
+pub(crate) fn hash_rewards_into_partitions(
     stake_rewards: StakeRewards,
     parent_block_hash: &Hash,
     num_partitions: usize,

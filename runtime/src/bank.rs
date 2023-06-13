@@ -60,6 +60,7 @@ use {
         cost_model::CostModel,
         cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
+        epoch_rewards_hasher::hash_rewards_into_partitions,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         message_processor::MessageProcessor,
         partitioned_rewards::PartitionedEpochRewardsConfig,
@@ -2468,6 +2469,58 @@ impl Bank {
             prev_epoch_duration_in_years,
             validator_rate,
             foundation_rate,
+        }
+    }
+
+    #[allow(dead_code)]
+    /// Calculate rewards from previous epoch to prepare for partitioned distribution.
+    fn calculate_rewards_for_partitioning(
+        &self,
+        prev_epoch: Epoch,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        thread_pool: &ThreadPool,
+        metrics: &mut RewardsMetrics,
+    ) -> PartitionedRewardsCalculation {
+        let capitalization = self.capitalization();
+        let PrevEpochInflationRewards {
+            validator_rewards,
+            prev_epoch_duration_in_years,
+            validator_rate,
+            foundation_rate,
+        } = self.calculate_previous_epoch_inflation_rewards(capitalization, prev_epoch);
+
+        let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
+
+        let (vote_account_rewards, mut stake_rewards) = self
+            .calculate_validator_rewards(
+                prev_epoch,
+                validator_rewards,
+                reward_calc_tracer,
+                thread_pool,
+                metrics,
+            )
+            .unwrap_or_default();
+
+        let num_partitions =
+            self.get_reward_distribution_num_blocks(stake_rewards.stake_rewards.len());
+        let stake_rewards_by_partition = hash_rewards_into_partitions(
+            std::mem::take(&mut stake_rewards.stake_rewards),
+            &self.parent_hash(),
+            num_partitions as usize,
+        );
+
+        PartitionedRewardsCalculation {
+            vote_account_rewards,
+            stake_rewards_by_partition: StakeRewardCalculationPartitioned {
+                stake_rewards: stake_rewards_by_partition,
+                total_stake_rewards_lamports: stake_rewards.total_stake_rewards_lamports,
+            },
+            old_vote_balance_and_staked,
+            validator_rewards,
+            validator_rate,
+            foundation_rate,
+            prev_epoch_duration_in_years,
+            capitalization,
         }
     }
 
