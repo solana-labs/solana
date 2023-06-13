@@ -68,7 +68,7 @@ impl CiphertextCiphertextEqualityProof {
         amount: u64,
         transcript: &mut Transcript,
     ) -> Self {
-        transcript.equality_proof_domain_sep();
+        transcript.equality_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
         let P_source = source_keypair.public.get_point();
@@ -136,7 +136,7 @@ impl CiphertextCiphertextEqualityProof {
         destination_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), EqualityProofError> {
-        transcript.equality_proof_domain_sep();
+        transcript.equality_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
         let P_source = source_pubkey.get_point();

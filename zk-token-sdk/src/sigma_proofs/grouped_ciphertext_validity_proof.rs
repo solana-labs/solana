@@ -70,7 +70,7 @@ impl GroupedCiphertext2HandlesValidityProof {
         opening: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
-        transcript.grouped_ciphertext_validity_proof_domain_sep();
+        transcript.grouped_ciphertext_validity_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
         let P_dest = destination_pubkey.get_point();
@@ -125,7 +125,7 @@ impl GroupedCiphertext2HandlesValidityProof {
         (destination_handle, auditor_handle): (&DecryptHandle, &DecryptHandle),
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofError> {
-        transcript.grouped_ciphertext_validity_proof_domain_sep();
+        transcript.grouped_ciphertext_validity_proof_domain_separator();
 
         // include Y_0, Y_1, Y_2 to transcript and extract challenges
         transcript.validate_and_append_point(b"Y_0", &self.Y_0)?;
