@@ -60,7 +60,7 @@ impl ZeroBalanceProof {
         ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Self {
-        transcript.zero_balance_proof_domain_sep();
+        transcript.zero_balance_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_keypair.public.get_point();
@@ -99,7 +99,7 @@ impl ZeroBalanceProof {
         ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ZeroBalanceProofError> {
-        transcript.zero_balance_proof_domain_sep();
+        transcript.zero_balance_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_pubkey.get_point();
