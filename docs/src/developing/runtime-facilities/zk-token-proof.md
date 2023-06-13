@@ -80,15 +80,14 @@ context data from the proof instruction data and use it in its program logic.
 
 Alternatively, a proof instruction can be executed to produce a context state
 account. In this case, the context data associated with a proof instruction
-persists even after the a transaction containing the proof instruction is
-finished with its execution. The creation of context state accounts can be
-useful in settings where ZK proofs are required from PDAs or when proof data is
-too large to fit inside a single transaction.
+persists even after the transaction containing the proof instruction is finished
+with its execution. The creation of context state accounts can be useful in
+settings where ZK proofs are required from PDAs or when proof data is too large
+to fit inside a single transaction.
 
 ## Proof Instructions
 
-The ZK Token proof program supports the following list of zero-knowledge
-proofs.
+The ZK Token proof program supports the following list of zero-knowledge proofs.
 
 #### Proofs on ElGamal encryption
 
