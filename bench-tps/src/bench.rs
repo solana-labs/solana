@@ -62,6 +62,10 @@ pub fn max_lamports_for_prioritization(use_randomized_compute_unit_price: bool) 
     }
 }
 
+// set transfer transaction's loaded account data size to 30K - large enough yet smaller than
+// 32K page size, so it'd cost 0 extra CU.
+const TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE: u32 = 30 * 1024;
+
 pub type TimestampedTransaction = (Transaction, Option<u64>);
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<TimestampedTransaction>>>>;
 
@@ -592,6 +596,11 @@ fn transfer_with_compute_unit_price_and_padding(
             ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
         ])
     }
+    instructions.extend_from_slice(&[
+        ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(
+            TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
+        ),
+    ]);
     let message = Message::new(&instructions, Some(&from_pubkey));
     Transaction::new(&[from_keypair], message, recent_blockhash)
 }
@@ -678,8 +687,14 @@ fn nonced_transfer_with_padding(
     } else {
         transfer_instruction
     };
+    let mut instructions = vec![instruction];
+    instructions.extend_from_slice(&[
+        ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(
+            TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
+        ),
+    ]);
     let message = Message::new_with_nonce(
-        vec![instruction],
+        instructions,
         Some(&from_pubkey),
         nonce_account,
         &nonce_authority.pubkey(),
