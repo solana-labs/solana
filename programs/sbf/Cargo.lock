@@ -629,13 +629,8 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "300ca295b46d7c8a955a4b07436b5d308c9b2842885642ed17d91f22215e5f44"
 dependencies = [
-<<<<<<< HEAD
- "borsh-derive 0.10.3",
- "hashbrown 0.11.2",
-=======
  "borsh-derive 0.11.0",
- "hashbrown 0.13.2",
->>>>>>> 902d8b73f (Bump borsh from 0.10.3 to 0.11.0 (#31964))
+ "hashbrown 0.11.2",
 ]
 
 [[package]]
