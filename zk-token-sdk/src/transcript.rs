@@ -169,6 +169,8 @@ impl TranscriptProtocol for Transcript {
     }
 
     fn grouped_ciphertext_validity_proof_domain_separator(&mut self) {
+        self.append_message(b"dom-sep", b"validity-proof")
+    }
 
     fn batched_grouped_ciphertext_validity_proof_domain_separator(&mut self) {
         self.append_message(b"dom-sep", b"batched-validity-proof")
