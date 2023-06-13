@@ -13072,6 +13072,76 @@ fn test_calc_vote_accounts_to_store_normal() {
     }
 }
 
+/// Test get_reward_distribution_num_blocks, get_reward_calculation_num_blocks, get_reward_total_num_blocks during normal epoch gives the expected result
+#[test]
+fn test_get_reward_distribution_num_blocks_normal() {
+    solana_logger::setup();
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
+
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    // Given 8k rewards, it will take 2 blocks to credit all the rewards
+    let expected_num = 8192;
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        bank.get_reward_distribution_num_blocks(stake_rewards.len()),
+        2
+    );
+    assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
+    assert_eq!(
+        bank.get_reward_total_num_blocks(stake_rewards.len()),
+        bank.get_reward_distribution_num_blocks(stake_rewards.len())
+            + bank.get_reward_calculation_num_blocks(),
+    );
+}
+
+/// Test get_reward_distribution_num_blocks, get_reward_calculation_num_blocks, get_reward_total_num_blocks during small epoch
+/// The num_credit_blocks should be cap to 5% of the total number of blocks in the epoch.
+#[test]
+fn test_get_reward_distribution_num_blocks_cap() {
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(32, 32, false);
+
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    // Given 8k rewards, normally it will take 2 blocks to credit all the rewards. However, because of
+    // the short epoch, i.e. 32 slots, we should cap the number of credit blocks to 32/20 = 1.
+    let expected_num = 8192;
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        bank.get_reward_distribution_num_blocks(stake_rewards.len()),
+        1
+    );
+    assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
+    assert_eq!(
+        bank.get_reward_total_num_blocks(stake_rewards.len()),
+        bank.get_reward_distribution_num_blocks(stake_rewards.len())
+            + bank.get_reward_calculation_num_blocks(),
+    );
+}
+
+/// Test get_reward_distribution_num_blocks, get_reward_calculation_num_blocks, get_reward_total_num_blocks during warm up epoch gives the expected result.
+/// The num_credit_blocks should be 1 during warm up epoch.
+#[test]
+fn test_get_reward_distribution_num_blocks_warmup() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+
+    let bank = Bank::new_for_tests(&genesis_config);
+    assert_eq!(bank.get_reward_distribution_num_blocks(0), 1);
+    assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
+    assert_eq!(
+        bank.get_reward_total_num_blocks(0),
+        bank.get_reward_distribution_num_blocks(0) + bank.get_reward_calculation_num_blocks(),
+    );
+}
+
 #[test]
 fn test_calculate_stake_vote_rewards() {
     solana_logger::setup();

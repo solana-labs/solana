@@ -1511,6 +1511,38 @@ impl Bank {
             .reward_calculation_num_blocks
     }
 
+    #[allow(dead_code)]
+    /// Calculate the number of blocks required to distribute rewards to all stake accounts.
+    fn get_reward_distribution_num_blocks(&self, total_stake_accounts: usize) -> u64 {
+        if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
+            1
+        } else {
+            let num_chunks = crate::accounts_hash::AccountsHasher::div_ceil(
+                total_stake_accounts,
+                self.partitioned_rewards_stake_account_stores_per_block() as usize,
+            ) as u64;
+
+            // Limit the reward credit interval to 5% of the total number of slots in a epoch
+            num_chunks.clamp(1, (self.epoch_schedule.slots_per_epoch / 20).max(1))
+        }
+    }
+
+    #[allow(dead_code)]
+    /// Return the total number of blocks in reward interval (including both calculation and crediting).
+    fn get_reward_total_num_blocks(&self, total_stake_accounts: usize) -> u64 {
+        self.get_reward_calculation_num_blocks()
+            + self.get_reward_distribution_num_blocks(total_stake_accounts)
+    }
+
+    #[allow(dead_code)]
+    /// Return `RewardInterval` enum for current bank
+    fn get_reward_interval(&self) -> RewardInterval {
+        if matches!(self.epoch_reward_status, EpochRewardStatus::Active(_)) {
+            RewardInterval::InsideInterval
+        } else {
+            RewardInterval::OutsideInterval
+        }
+    }
     fn _new_from_parent(
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
