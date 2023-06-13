@@ -1409,24 +1409,42 @@ pub fn main() {
         values_t!(matches, "account_shrink_path", String)
             .map(|shrink_paths| shrink_paths.into_iter().map(PathBuf::from).collect())
             .ok();
-
-    let (account_run_paths, account_snapshot_paths) =
-        create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
-            eprintln!("Error: {err:?}");
-            exit(1);
-        });
-
-    // From now on, use run/ paths in the same way as the previous account_paths.
-    validator_config.account_paths = account_run_paths;
-
-    validator_config.account_snapshot_paths = account_snapshot_paths;
-
-    validator_config.account_shrink_paths = account_shrink_paths.map(|paths| {
-        create_and_canonicalize_directories(&paths).unwrap_or_else(|err| {
+    let account_shrink_paths = account_shrink_paths.as_ref().map(|paths| {
+        create_and_canonicalize_directories(paths).unwrap_or_else(|err| {
             eprintln!("Unable to access account shrink path: {err}");
             exit(1);
         })
     });
+
+    let (account_run_paths, account_snapshot_paths) =
+        create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
+            eprintln!("Error: {err}");
+            exit(1);
+        });
+
+    let (account_shrink_run_paths, account_shrink_snapshot_paths) = account_shrink_paths
+        .map(|paths| {
+            create_all_accounts_run_and_snapshot_dirs(&paths).unwrap_or_else(|err| {
+                eprintln!("Error: {err}");
+                exit(1);
+            })
+        })
+        .unzip();
+
+    // From now on, use run/ paths in the same way as the previous account_paths.
+    validator_config.account_paths = account_run_paths;
+    validator_config.account_shrink_paths = account_shrink_run_paths;
+
+    // These snapshot paths are only used for initial clean up, add in shrink paths if they exist.
+    validator_config.account_snapshot_paths =
+        if let Some(account_shrink_snapshot_paths) = account_shrink_snapshot_paths {
+            account_snapshot_paths
+                .into_iter()
+                .chain(account_shrink_snapshot_paths.into_iter())
+                .collect()
+        } else {
+            account_snapshot_paths
+        };
 
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
     let maximum_full_snapshot_archives_to_retain =
