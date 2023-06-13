@@ -5082,7 +5082,7 @@ impl Bank {
             &self.feature_set,
             &self.fee_structure,
             account_overrides,
-            RewardInterval::OutsideInterval,
+            self.get_reward_interval(),
             &program_accounts_map,
             &programs_loaded_for_tx_batch.borrow(),
         );
