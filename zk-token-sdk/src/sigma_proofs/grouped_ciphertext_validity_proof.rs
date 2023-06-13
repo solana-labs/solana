@@ -48,7 +48,7 @@ pub struct GroupedCiphertext2HandlesValidityProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
 impl GroupedCiphertext2HandlesValidityProof {
-    /// The grouped ciphertext validity proof for 2 handles.
+    /// Creates a grouped ciphertext validity proof for 2 handles.
     ///
     /// The function does *not* hash the public keys, commitment, or decryption handles into the
     /// transcript. For security, the caller (the main protocol) should hash these public
