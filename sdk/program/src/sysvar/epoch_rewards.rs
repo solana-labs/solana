@@ -23,11 +23,11 @@
 //! #    account_info::{AccountInfo, next_account_info},
 //! #    entrypoint::ProgramResult,
 //! #    msg,
+//! #    program_error::ProgramError,
 //! #    pubkey::Pubkey,
 //! #    sysvar::epoch_rewards::{self, EpochRewards},
 //! #    sysvar::Sysvar,
 //! # };
-//! # use solana_program::program_error::ProgramError;
 //! #
 //! fn process_instruction(
 //!     program_id: &Pubkey,
