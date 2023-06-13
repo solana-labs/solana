@@ -13,16 +13,21 @@ transaction for each block the validator agrees with, which can cost up to
 
 ## Hardware Recommendations
 
+The hardware recommendations below are provided as a guide.  Operators are encouraged to do their own performance testing.
+
 - CPU
   - 12 cores / 24 threads, or more
-  - 2.8GHz, or faster
+  - 2.8GHz base clock speed, or faster
+  - SHA extensions instruction support
+    - AMD Gen 3 or newer
+    - Intel Ice Lake or newer
   - AVX2 instruction support (to use official release binaries, self-compile
     otherwise)
-  - Support for AVX512f and/or SHA-NI instructions is helpful
-  - The AMD Zen3 series is popular with the validator community
+  - Support for AVX512f is helpful
 - RAM
-  - 128GB, or more
-  - Motherboard with 256GB capacity suggested
+  - 256GB or more
+  - Error Correction Code (ECC) memory is suggested
+  - Motherboard with 512GB capacity suggested
 - Disk
   - PCIe Gen3 x4 NVME SSD, or better
   - Accounts: 500GB, or larger. High TBW (Total Bytes Written)
@@ -34,11 +39,11 @@ transaction for each block the validator agrees with, which can cost up to
     IOPS, this is not recommended
   - The Samsung 970 and 980 Pro series SSDs are popular with the validator community
 - GPUs
-  - Not strictly necessary at this time
-  - Motherboard and power supply speced to add one or more high-end GPUs in the
-    future suggested
+  - Not necessary at this time
+  - Operators in the validator community do no use GPUs currently
 
 ### RPC Node Recommendations
+
 The [hardware recommendations](#hardware-recommendations) above should be considered
 bare minimums if the validator is intended to be employed as an RPC node. To provide
 full functionality and improved reliability, the following adjustments should be
@@ -47,7 +52,7 @@ made.
 - CPU
   - 16 cores / 32 threads, or more
 - RAM
-  - 256 GB, or more
+  - 512 GB or more if `account-index` is used
 - Disk
   - Consider a larger ledger disk if longer transaction history is required
   - Accounts and ledger should not be stored on the same disk
@@ -89,7 +94,7 @@ Prebuilt binaries are available for Linux x86_64 on CPUs supporting AVX2 \(Ubunt
 MacOS or WSL users may build from source.
 
 ## Networking
-Internet service should be at least 300Mbit/s symmetric, commercial. 1GBit/s preferred
+Internet service should be at least 1GBbit/s symmetric, commercial. 10GBit/s preferred.
 
 ### Port Forwarding
 The following ports need to be open to the internet for both inbound and outbound
@@ -107,9 +112,3 @@ For security purposes, it is not suggested that the following ports be open to
 the internet on staked, mainnet-beta validators.
 - 8899 TCP - JSONRPC over HTTP. Change with `--rpc-port RPC_PORT``
 - 8900 TCP - JSONRPC over Websockets. Derived. Uses `RPC_PORT + 1`
-
-## GPU Requirements
-
-CUDA is required to make use of the GPU on your system. The provided Solana
-release binaries are built on Ubuntu 20.04 with [CUDA Toolkit 10.1 update 1](https://developer.nvidia.com/cuda-toolkit-archive). If your machine is using
-a different CUDA version then you will need to rebuild from source.
