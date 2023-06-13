@@ -3034,26 +3034,17 @@ impl Bank {
 
     #[allow(dead_code)]
     /// Calculates epoch rewards for stake/vote accounts
-    ///
-    /// * reward_calculate_params: reward calculate parameter struct - stake history, delegation and vote accounts.
-    /// * rewarded_epoch: reward epoch
-    /// * point_value: reward PointValue
-    /// * credits_auto_rewind: boolean flag for auto rewind vote credits during reward calculation
-    /// * thread_pool: instance of thread_pool for parallel processing
-    /// * reward_calc_tracer: tracer fn for reward calculation
-    /// * metrics: reward metrics
-    ///
     /// Returns vote rewards, stake rewards, and the sum of all stake rewards in lamports
     fn calculate_stake_vote_rewards(
         &self,
         reward_calculate_params: &EpochRewardCalculateParamInfo,
         rewarded_epoch: Epoch,
         point_value: PointValue,
-        credits_auto_rewind: bool,
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
     ) -> (VoteRewardsAccounts, StakeRewardCalculation) {
+        let credits_auto_rewind = self.credits_auto_rewind();
         let EpochRewardCalculateParamInfo {
             stake_history,
             stake_delegations,
@@ -3124,7 +3115,7 @@ impl Bank {
 
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
                         debug!(
-                            "CALCULATED REWARD: {} {} {} {}",
+                            "calculated reward: {} {} {} {}",
                             stake_pubkey, pre_lamport, post_lamport, stakers_reward
                         );
 

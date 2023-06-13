@@ -13098,7 +13098,6 @@ fn test_calculate_stake_vote_rewards() {
         rewards: 100000, // lamports to split
         points: 1000,    // over these points
     };
-    let credits_auto_rewind = true; // what is this? false;
     let tracer = |_event: &RewardCalculationEvent| {};
     let reward_calc_tracer = Some(tracer);
     let rewarded_epoch = bank.epoch();
@@ -13108,7 +13107,6 @@ fn test_calculate_stake_vote_rewards() {
         &reward_calculate_param,
         rewarded_epoch,
         point_value,
-        credits_auto_rewind,
         &thread_pool,
         reward_calc_tracer,
         &mut rewards_metrics,
