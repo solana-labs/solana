@@ -15,10 +15,11 @@
 //! We refer to the zk-token paper for the formal details and security proofs of these argument
 //! systems.
 
+pub mod batched_grouped_ciphertext_validity_proof;
 pub mod ciphertext_ciphertext_equality_proof;
 pub mod ciphertext_commitment_equality_proof;
 pub mod errors;
 pub mod fee_proof;
+pub mod grouped_ciphertext_validity_proof;
 pub mod pubkey_proof;
-pub mod validity_proof;
 pub mod zero_balance_proof;

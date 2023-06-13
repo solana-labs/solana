@@ -20,7 +20,7 @@ use {
             pedersen::PedersenOpening,
         },
         errors::ProofError,
-        sigma_proofs::validity_proof::AggregatedValidityProof,
+        sigma_proofs::batched_grouped_ciphertext_validity_proof::BatchedGroupedCiphertext2HandlesValidityProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,
@@ -43,7 +43,7 @@ use {
 pub struct BatchedGroupedCiphertext2HandlesValidityProofData {
     pub context: BatchedGroupedCiphertext2HandlesValidityProofContext,
 
-    pub proof: pod::AggregatedValidityProof,
+    pub proof: pod::BatchedGroupedCiphertext2HandlesValidityProof,
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -84,7 +84,7 @@ impl BatchedGroupedCiphertext2HandlesValidityProofData {
 
         let mut transcript = context.new_transcript();
 
-        let proof = AggregatedValidityProof::new(
+        let proof = BatchedGroupedCiphertext2HandlesValidityProof::new(
             (destination_pubkey, auditor_pubkey),
             (amount_lo, amount_hi),
             (opening_lo, opening_hi),
@@ -122,7 +122,7 @@ impl ZkProofData<BatchedGroupedCiphertext2HandlesValidityProofContext>
         let destination_handle_hi = grouped_ciphertext_hi.handles.get(0).unwrap();
         let auditor_handle_hi = grouped_ciphertext_hi.handles.get(1).unwrap();
 
-        let proof: AggregatedValidityProof = self.proof.try_into()?;
+        let proof: BatchedGroupedCiphertext2HandlesValidityProof = self.proof.try_into()?;
 
         proof
             .verify(
