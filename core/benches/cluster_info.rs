@@ -9,6 +9,7 @@ use {
             broadcast_metrics::TransmitShredsStats, broadcast_shreds, BroadcastStage,
         },
         cluster_nodes::ClusterNodesCache,
+        validator::TURBINE_QUIC_CONNECTION_POOL_SIZE,
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
@@ -18,16 +19,17 @@ use {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         shred::{Shred, ShredFlags},
     },
+    solana_quic_client::new_quic_connection_cache,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         pubkey,
         signature::{Keypair, Signer},
         timing::{timestamp, AtomicInterval},
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     std::{
         collections::HashMap,
-        net::UdpSocket,
+        net::{IpAddr, Ipv4Addr, UdpSocket},
         sync::{Arc, RwLock},
         time::Duration,
     },
@@ -38,6 +40,14 @@ use {
 fn broadcast_shreds_bench(bencher: &mut Bencher) {
     solana_logger::setup();
     let leader_keypair = Arc::new(Keypair::new());
+    let quic_connection_cache = new_quic_connection_cache(
+        "connection_cache_test",
+        &leader_keypair,
+        IpAddr::V4(Ipv4Addr::LOCALHOST),
+        &Arc::<RwLock<StakedNodes>>::default(),
+        TURBINE_QUIC_CONNECTION_POOL_SIZE,
+    )
+    .unwrap();
     let leader_info = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
     let cluster_info = ClusterInfo::new(
         leader_info.info,
@@ -45,7 +55,6 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
         SocketAddrSpace::Unspecified,
     );
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
     let bank = Bank::new_for_benches(&genesis_config);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -74,6 +83,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
             &socket,
             &shreds,
             &cluster_nodes_cache,
+            &quic_connection_cache,
             &last_datapoint,
             &mut TransmitShredsStats::default(),
             &cluster_info,

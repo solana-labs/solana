@@ -3,7 +3,7 @@
 # (Re)starts the InfluxDB/Chronograf containers
 #
 
-cd "$(dirname "$0")"
+here=$(dirname "$0")
 
 if [[ -z $HOST ]]; then
   HOST=metrics.solana.com
@@ -12,7 +12,6 @@ echo "HOST: $HOST"
 
 : "${INFLUXDB_IMAGE:=influxdb:1.7}"
 : "${CHRONOGRAF_IMAGE:=chronograf:1.9.4}"
-: "${KAPACITOR_IMAGE:=kapacitor:1.6.5}"
 : "${GRAFANA_IMAGE:=grafana/grafana:9.4.7}"
 : "${PROMETHEUS_IMAGE:=prom/prometheus:v2.28.0}"
 : "${ALERTMANAGER_IMAGE:=prom/alertmanager:v0.23.0}"
@@ -20,7 +19,6 @@ echo "HOST: $HOST"
 
 docker pull $INFLUXDB_IMAGE
 docker pull $CHRONOGRAF_IMAGE
-docker pull $KAPACITOR_IMAGE
 docker pull $GRAFANA_IMAGE
 docker pull $PROMETHEUS_IMAGE
 docker pull $ALERTMANAGER_IMAGE
@@ -41,21 +39,23 @@ done
 docker network remove influxdb || true
 docker network create influxdb
 pwd
-rm -rf certs
-mkdir -p certs
-chmod 700 certs
-sudo cp /etc/letsencrypt/live/"$HOST"/fullchain.pem certs/
-sudo cp /etc/letsencrypt/live/"$HOST"/privkey.pem certs/
-sudo chmod 0444 certs/*
-sudo chown buildkite-agent:buildkite-agent certs
+rm -rf "$here/certs"
+mkdir -p "$here/certs"
+chmod 700 "$here/certs"
+sudo cp /etc/letsencrypt/live/"$HOST"/fullchain.pem "$here/certs/"
+sudo cp /etc/letsencrypt/live/"$HOST"/privkey.pem "$here/certs/"
+sudo chmod 0444 "$here"/certs/*
+sudo chown buildkite-agent:buildkite-agent "$here"/certs
+
+here_pwd="$(realpath "$here")"
 
 sudo docker run -it -d \
   --memory=10g \
   --user root:root \
   --publish 9090:9090 \
   --name=prometheus \
-  --volume "$PWD"/prometheus.yml:/etc/prometheus/prometheus.yml \
-  --volume "$PWD"/first_rules.yml:/etc/prometheus/first_rules.yml \
+  --volume "$here_pwd"/prometheus.yml:/etc/prometheus/prometheus.yml \
+  --volume "$here_pwd"/first_rules.yml:/etc/prometheus/first_rules.yml \
   --volume /prometheus/prometheus/data:/prometheus \
   --volume /etc/hosts:/etc/hosts \
   $PROMETHEUS_IMAGE
@@ -65,7 +65,7 @@ sudo docker run -it -d \
   --user root:root \
   --publish 9093:9093 \
   --name=alertmanager \
-  --volume "$PWD"/alertmanager.yml:/etc/alertmanager/alertmanager.yml \
+  --volume "$here_pwd"/alertmanager.yml:/etc/alertmanager/alertmanager.yml \
   --volume /etc/hosts:/etc/hosts \
   $ALERTMANAGER_IMAGE
 
@@ -88,8 +88,8 @@ sudo docker run \
   --env GF_AUTH_GITHUB_CLIENT_SECRET="$GITHUB_CLIENT_SECRET" \
   --env GF_SECURITY_ADMIN_USER="$ADMIN_USER_GRAFANA" \
   --env GF_SECURITY_ADMIN_PASSWORD="$ADMIN_PASSWORD_GRAFANA" \
-  --volume "$PWD"/certs:/certs:ro \
-  --volume "$PWD"/grafana-"$HOST".ini:/grafana.ini:ro \
+  --volume "$here_pwd"/certs:/certs:ro \
+  --volume "$here_pwd"/grafana-"$HOST".ini:/grafana.ini:ro \
   --volume /var/lib/grafana:/var/lib/grafana \
   --log-opt max-size=1g \
   --log-opt max-file=5 \
@@ -112,7 +112,7 @@ sudo docker run \
   --env inactivity-duration=48h \
   --publish 8889:8888 \
   --user "$(id -u):$(id -g)" \
-  --volume "$PWD"/certs:/certs \
+  --volume "$here_pwd"/certs:/certs \
   --volume /var/lib/chronograf_8889:/var/lib/chronograf \
   --log-opt max-size=1g \
   --log-opt max-file="5" \
@@ -134,25 +134,14 @@ sudo docker run \
   --net=influxdb \
   --publish 8888:8888 \
   --user 0:0 \
-  --volume "$PWD"/certs:/certs \
+  --volume "$here_pwd"/certs:/certs \
   --volume /var/lib/chronograf:/var/lib/chronograf \
   --log-opt max-size=1g \
   --log-opt max-file=5 \
   $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086 --auth-duration="720h" --inactivity-duration="48h"
 
-sudo docker run \
-  --memory=10g \
-  --detach \
-  --name=kapacitor \
-  --env KAPACITOR_USERNAME="$KAPACITOR_USERNAME" \
-  --env KAPACITOR_USERNAME="$KAPACITOR_PASSWORD" \
-  --publish 9092:9092 \
-  --volume "$PWD"/kapacitor.conf:/etc/kapacitor/kapacitor.conf \
-  --volume /var/lib/kapacitor:/var/lib/kapacitor \
-  --user "$(id -u):$(id -g)" \
-  --log-opt max-size=1g \
-  --log-opt max-file=5  \
-  $KAPACITOR_IMAGE
+#shellcheck source=metrics/metrics-main/kapacitor.sh
+source "$here/kapacitor.sh"
 
 curl -h | sed -ne '/--tlsv/p'
 curl --retry 10 --retry-delay 5 -v --head https://"$HOST":8086/ping

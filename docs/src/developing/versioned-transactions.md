@@ -64,7 +64,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d \
 }]}'
 ```
 
-## How create a Versioned Transaction
+## How to create a Versioned Transaction
 
 Versioned transactions can be created similar to the older method of creating transactions. There are differences in using certain libraries that should be noted.
 

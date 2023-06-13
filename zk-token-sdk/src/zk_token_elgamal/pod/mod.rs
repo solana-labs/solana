@@ -17,15 +17,15 @@ pub use {
     elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
     grouped_elgamal::{GroupedElGamalCiphertext2Handles, GroupedElGamalCiphertext3Handles},
     instruction::{
-        FeeEncryption, FeeParameters, TransferAmountEncryption, TransferPubkeys,
+        FeeEncryption, FeeParameters, TransferAmountCiphertext, TransferPubkeys,
         TransferWithFeePubkeys,
     },
     pedersen::PedersenCommitment,
     range_proof::{RangeProofU128, RangeProofU256, RangeProofU64},
     sigma_proofs::{
-        AggregatedValidityProof, CiphertextCiphertextEqualityProof,
-        CiphertextCommitmentEqualityProof, FeeSigmaProof, PubkeyValidityProof, ValidityProof,
-        ZeroBalanceProof,
+        BatchedGroupedCiphertext2HandlesValidityProof, CiphertextCiphertextEqualityProof,
+        CiphertextCommitmentEqualityProof, FeeSigmaProof, GroupedCiphertext2HandlesValidityProof,
+        PubkeyValidityProof, ZeroBalanceProof,
     },
 };
 

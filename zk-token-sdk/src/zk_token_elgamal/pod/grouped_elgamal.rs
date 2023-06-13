@@ -57,7 +57,7 @@ impl Default for GroupedElGamalCiphertext3Handles {
 }
 
 #[cfg(not(target_os = "solana"))]
-impl From<GroupedElGamalCiphertext<3>> for GroupedElGamalCiphertext2Handles {
+impl From<GroupedElGamalCiphertext<3>> for GroupedElGamalCiphertext3Handles {
     fn from(decoded_ciphertext: GroupedElGamalCiphertext<3>) -> Self {
         Self(decoded_ciphertext.to_bytes().try_into().unwrap())
     }

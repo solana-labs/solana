@@ -33,7 +33,8 @@ use {
     },
 };
 
-pub const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 64;
+/// Consumer will create chunks of transactions from buffer with up to this size.
+pub const TARGET_NUM_TRANSACTIONS_PER_BATCH: usize = 64;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
@@ -285,7 +286,7 @@ impl Consumer {
         while chunk_start != transactions.len() {
             let chunk_end = std::cmp::min(
                 transactions.len(),
-                chunk_start + MAX_NUM_TRANSACTIONS_PER_BATCH,
+                chunk_start + TARGET_NUM_TRANSACTIONS_PER_BATCH,
             );
             let process_transaction_batch_output = self.process_and_record_transactions(
                 bank,
@@ -1349,7 +1350,7 @@ mod tests {
                 lamports + 1,
                 genesis_config.hash(),
             );
-            MAX_NUM_TRANSACTIONS_PER_BATCH
+            TARGET_NUM_TRANSACTIONS_PER_BATCH
         ];
 
         // Make one transaction that will succeed.
@@ -1407,7 +1408,7 @@ mod tests {
                 1,
                 genesis_config.hash()
             );
-            MAX_NUM_TRANSACTIONS_PER_BATCH
+            TARGET_NUM_TRANSACTIONS_PER_BATCH
         ];
 
         // Make one more in separate batch that also conflicts, but because it's in a separate batch, it

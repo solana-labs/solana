@@ -15,7 +15,7 @@ use {
         feature_set::{
             add_set_tx_loaded_accounts_data_size_instruction,
             include_loaded_accounts_data_size_in_fee_calculation,
-            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
+            remove_deprecated_request_unit_ix, FeatureSet,
         },
         instruction::CompiledInstruction,
         program_utils::limited_deserialize,
@@ -116,7 +116,7 @@ impl CostModel {
         let enable_request_heap_frame_ix = true;
         let result = compute_budget.process_instructions(
             transaction.message().program_instructions_iter(),
-            feature_set.is_active(&use_default_units_in_fee_calculation::id()),
+            true, // default_units_per_instruction has enabled in MNB
             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
             enable_request_heap_frame_ix,
             feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd "$(dirname "$0")" || exit
+here=$(dirname "$0")
 
 if [[ -z $HOST ]]; then
   HOST=metrics.solana.com
@@ -30,8 +30,8 @@ for container in "${containers[@]}"; do
     send_discord_message "$container is down and it's being redeployed..."
 
     # Run the container.sh script to redeploy the container
-    chmod +x "$container.sh"
-    ./"$container.sh"
+    chmod +x "$here/$container.sh"
+    "$here/$container.sh"
     sleep 10
 
     # Check the container status again

@@ -21,7 +21,8 @@ pub struct TransmitShredsStats {
     pub shred_select: u64,
     pub num_shreds: usize,
     pub total_packets: usize,
-    pub dropped_packets: usize,
+    pub(crate) dropped_packets_udp: usize,
+    pub(crate) dropped_packets_quic: usize,
 }
 
 impl BroadcastStats for TransmitShredsStats {
@@ -32,7 +33,8 @@ impl BroadcastStats for TransmitShredsStats {
         self.num_shreds += new_stats.num_shreds;
         self.shred_select += new_stats.shred_select;
         self.total_packets += new_stats.total_packets;
-        self.dropped_packets += new_stats.dropped_packets;
+        self.dropped_packets_udp += new_stats.dropped_packets_udp;
+        self.dropped_packets_quic += new_stats.dropped_packets_quic;
     }
     fn report_stats(&mut self, slot: Slot, slot_start: Instant, was_interrupted: bool) {
         if was_interrupted {
@@ -45,7 +47,12 @@ impl BroadcastStats for TransmitShredsStats {
                 ("num_shreds", self.num_shreds as i64, i64),
                 ("shred_select", self.shred_select as i64, i64),
                 ("total_packets", self.total_packets as i64, i64),
-                ("dropped_packets", self.dropped_packets as i64, i64),
+                ("dropped_packets_udp", self.dropped_packets_udp as i64, i64),
+                (
+                    "dropped_packets_quic",
+                    self.dropped_packets_quic as i64,
+                    i64
+                ),
             );
         } else {
             datapoint_info!(
@@ -64,7 +71,12 @@ impl BroadcastStats for TransmitShredsStats {
                 ("num_shreds", self.num_shreds as i64, i64),
                 ("shred_select", self.shred_select as i64, i64),
                 ("total_packets", self.total_packets as i64, i64),
-                ("dropped_packets", self.dropped_packets as i64, i64),
+                ("dropped_packets_udp", self.dropped_packets_udp as i64, i64),
+                (
+                    "dropped_packets_quic",
+                    self.dropped_packets_quic as i64,
+                    i64
+                ),
             );
         }
     }
@@ -210,7 +222,8 @@ mod test {
                 shred_select: 4,
                 num_shreds: 5,
                 total_packets: 6,
-                dropped_packets: 7,
+                dropped_packets_udp: 7,
+                dropped_packets_quic: 8,
             },
             &Some(BroadcastShredBatchInfo {
                 slot: 0,
@@ -230,7 +243,8 @@ mod test {
         assert_eq!(slot_0_stats.broadcast_shred_stats.shred_select, 4);
         assert_eq!(slot_0_stats.broadcast_shred_stats.num_shreds, 5);
         assert_eq!(slot_0_stats.broadcast_shred_stats.total_packets, 6);
-        assert_eq!(slot_0_stats.broadcast_shred_stats.dropped_packets, 7);
+        assert_eq!(slot_0_stats.broadcast_shred_stats.dropped_packets_udp, 7);
+        assert_eq!(slot_0_stats.broadcast_shred_stats.dropped_packets_quic, 8);
 
         slot_broadcast_stats.update(
             &TransmitShredsStats {
@@ -240,7 +254,8 @@ mod test {
                 shred_select: 14,
                 num_shreds: 15,
                 total_packets: 16,
-                dropped_packets: 17,
+                dropped_packets_udp: 17,
+                dropped_packets_quic: 18,
             },
             &None,
         );
@@ -255,7 +270,8 @@ mod test {
         assert_eq!(slot_0_stats.broadcast_shred_stats.shred_select, 4);
         assert_eq!(slot_0_stats.broadcast_shred_stats.num_shreds, 5);
         assert_eq!(slot_0_stats.broadcast_shred_stats.total_packets, 6);
-        assert_eq!(slot_0_stats.broadcast_shred_stats.dropped_packets, 7);
+        assert_eq!(slot_0_stats.broadcast_shred_stats.dropped_packets_udp, 7);
+        assert_eq!(slot_0_stats.broadcast_shred_stats.dropped_packets_quic, 8);
 
         // If another batch is given, then total number of batches == num_expected_batches == 2,
         // so the batch should be purged from the HashMap
@@ -267,7 +283,8 @@ mod test {
                 shred_select: 1,
                 num_shreds: 1,
                 total_packets: 1,
-                dropped_packets: 1,
+                dropped_packets_udp: 1,
+                dropped_packets_quic: 1,
             },
             &Some(BroadcastShredBatchInfo {
                 slot: 0,
