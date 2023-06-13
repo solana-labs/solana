@@ -95,6 +95,16 @@ EOF"
 ### Close all open sessions (log out then, in again) ###
 ```
 
+#### System Clock
+
+Large system clock drift can prevent a node from properly participating in Solana's [gossip protocol](../validator/gossip.md).  Ensure that your system clock is accurate.  To check the current system clock, use:
+
+```bash
+timedatectl
+```
+
+Operators commonly use an ntp server to maintain an accurate system clock.
+
 ## Generate identity
 
 Create an identity keypair for your validator by running:
