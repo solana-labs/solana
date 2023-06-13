@@ -27,13 +27,13 @@ use {
 
 /// Batched grouped ciphertext validity proof with two handles.
 ///
-/// An batched grouped ciphertext validity proof certifies the validity of two instances of a
-/// standard ciphertext validity proof. An instance of a standard validity proof consist of one
-/// ciphertext and two decryption handles `(commitment, destination_handle, auditor_handle)`. An
-/// instance of an batched ciphertext validity proof is a pair `(commitment_0,
+/// A batched grouped ciphertext validity proof certifies the validity of two instances of a
+/// standard ciphertext validity proof. An instance of a standard validity proof consists of one
+/// ciphertext and two decryption handles: `(commitment, destination_handle, auditor_handle)`. An
+/// instance of a batched ciphertext validity proof is a pair `(commitment_0,
 /// destination_handle_0, auditor_handle_0)` and `(commitment_1, destination_handle_1,
 /// auditor_handle_1)`. The proof certifies the analogous decryptable properties for each one of
-/// these pair of commitment and decryption handles.
+/// these pairs of commitment and decryption handles.
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct BatchedGroupedCiphertext2HandlesValidityProof(GroupedCiphertext2HandlesValidityProof);
