@@ -12506,7 +12506,7 @@ fn test_squash_timing_add_assign() {
 }
 
 /// Helper function to create a bank that pays some rewards
-fn create_reward_bank(expected_num_delegations: usize) -> Bank {
+fn create_reward_bank(expected_num_delegations: usize) -> (Bank, Vec<Pubkey>, Vec<Pubkey>) {
     let validator_keypairs = (0..expected_num_delegations)
         .map(|_| ValidatorVoteKeypairs::new_rand())
         .collect::<Vec<_>>();
@@ -12521,7 +12521,7 @@ fn create_reward_bank(expected_num_delegations: usize) -> Bank {
 
     // Fill bank_forks with banks with votes landing in the next slot
     // Create enough banks such that vote account will root
-    for validator_vote_keypairs in validator_keypairs {
+    for validator_vote_keypairs in &validator_keypairs {
         let vote_id = validator_vote_keypairs.vote_keypair.pubkey();
         let mut vote_account = bank.get_account(&vote_id).unwrap();
         // generate some rewards
@@ -12541,7 +12541,17 @@ fn create_reward_bank(expected_num_delegations: usize) -> Bank {
         }
         bank.store_account_and_update_capitalization(&vote_id, &vote_account);
     }
-    bank
+    (
+        bank,
+        validator_keypairs
+            .iter()
+            .map(|k| k.vote_keypair.pubkey())
+            .collect(),
+        validator_keypairs
+            .iter()
+            .map(|k| k.stake_keypair.pubkey())
+            .collect(),
+    )
 }
 
 #[test]
@@ -12549,7 +12559,7 @@ fn test_rewards_point_calculation() {
     solana_logger::setup();
 
     let expected_num_delegations = 100;
-    let bank = create_reward_bank(expected_num_delegations);
+    let (bank, _, _) = create_reward_bank(expected_num_delegations);
 
     let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
     let mut rewards_metrics = RewardsMetrics::default();
@@ -13060,4 +13070,92 @@ fn test_calc_vote_accounts_to_store_normal() {
             }
         }
     }
+}
+
+#[test]
+fn test_calculate_stake_vote_rewards() {
+    solana_logger::setup();
+
+    let expected_num_delegations = 1;
+    let (bank, voters, stakers) = create_reward_bank(expected_num_delegations);
+
+    let vote_pubkey = voters.first().unwrap();
+    let mut vote_account = bank
+        .load_slow_with_fixed_root(&bank.ancestors, vote_pubkey)
+        .unwrap()
+        .0;
+
+    let stake_pubkey = stakers.first().unwrap();
+    let stake_account = bank
+        .load_slow_with_fixed_root(&bank.ancestors, stake_pubkey)
+        .unwrap()
+        .0;
+
+    let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+    let mut rewards_metrics = RewardsMetrics::default();
+
+    let point_value = PointValue {
+        rewards: 100000, // lamports to split
+        points: 1000,    // over these points
+    };
+    let tracer = |_event: &RewardCalculationEvent| {};
+    let reward_calc_tracer = Some(tracer);
+    let rewarded_epoch = bank.epoch();
+    let stakes: RwLockReadGuard<Stakes<StakeAccount<Delegation>>> = bank.stakes_cache.stakes();
+    let reward_calculate_param = bank.get_epoch_reward_calculate_param_info(&stakes);
+    let (vote_rewards_accounts, stake_reward_calculation) = bank.calculate_stake_vote_rewards(
+        &reward_calculate_param,
+        rewarded_epoch,
+        point_value,
+        &thread_pool,
+        reward_calc_tracer,
+        &mut rewards_metrics,
+    );
+
+    assert_eq!(
+        vote_rewards_accounts.rewards.len(),
+        vote_rewards_accounts.accounts_to_store.len()
+    );
+    assert_eq!(vote_rewards_accounts.rewards.len(), 1);
+    let rewards = &vote_rewards_accounts.rewards[0];
+    let account = &vote_rewards_accounts.accounts_to_store[0];
+    let vote_rewards = 0;
+    let commision = 0;
+    _ = vote_account.checked_add_lamports(vote_rewards);
+    assert_eq!(
+        account.as_ref().unwrap().lamports(),
+        vote_account.lamports()
+    );
+    assert!(accounts_equal(account.as_ref().unwrap(), &vote_account));
+    assert_eq!(
+        rewards.1,
+        RewardInfo {
+            reward_type: RewardType::Voting,
+            lamports: vote_rewards as i64,
+            post_balance: vote_account.lamports(),
+            commission: Some(commision),
+        }
+    );
+    assert_eq!(&rewards.0, vote_pubkey);
+
+    assert_eq!(stake_reward_calculation.stake_rewards.len(), 1);
+    assert_eq!(
+        &stake_reward_calculation.stake_rewards[0].stake_pubkey,
+        stake_pubkey
+    );
+
+    let original_stake_lamport = stake_account.lamports();
+    let rewards = stake_reward_calculation.stake_rewards[0]
+        .stake_reward_info
+        .lamports;
+    let expected_reward_info = RewardInfo {
+        reward_type: RewardType::Staking,
+        lamports: rewards,
+        post_balance: original_stake_lamport + rewards as u64,
+        commission: Some(commision),
+    };
+    assert_eq!(
+        stake_reward_calculation.stake_rewards[0].stake_reward_info,
+        expected_reward_info,
+    );
 }
