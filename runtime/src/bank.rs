@@ -3094,6 +3094,32 @@ impl Bank {
         );
     }
 
+    #[allow(dead_code)]
+    /// compare the vote and stake accounts between the normal rewards calculation code
+    /// and the partitioned rewards calculation code
+    /// `stake_rewards_expected` and `vote_rewards_expected` are the results of the normal rewards calculation code
+    /// This fn should have NO side effects.
+    fn compare_with_partitioned_rewards(
+        &self,
+        stake_rewards_expected: &[StakeReward],
+        vote_rewards_expected: &DashMap<Pubkey, VoteReward>,
+        rewarded_epoch: Epoch,
+        thread_pool: &ThreadPool,
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
+    ) {
+        let partitioned_rewards = self.calculate_rewards_for_partitioning(
+            rewarded_epoch,
+            reward_calc_tracer,
+            thread_pool,
+            &mut RewardsMetrics::default(),
+        );
+        Self::compare_with_partitioned_rewards_results(
+            stake_rewards_expected,
+            vote_rewards_expected,
+            partitioned_rewards,
+        );
+    }
+
     fn load_vote_and_stake_accounts(
         &mut self,
         thread_pool: &ThreadPool,
