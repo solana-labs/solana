@@ -1503,7 +1503,6 @@ impl Bank {
         });
     }
 
-    #[allow(dead_code)]
     fn partitioned_epoch_rewards_config(&self) -> &PartitionedEpochRewardsConfig {
         &self
             .rc
@@ -1559,6 +1558,12 @@ impl Bank {
             RewardInterval::OutsideInterval
         }
     }
+
+    /// For testing only
+    pub fn force_reward_interval_end_for_tests(&mut self) {
+        self.epoch_reward_status = EpochRewardStatus::Inactive;
+    }
+
     fn _new_from_parent(
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
