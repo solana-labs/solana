@@ -673,29 +673,39 @@ impl LoadedPrograms {
         })
     }
 
-    /// Unloads programs which were used infrequently
-    pub fn sort_and_unload(&mut self, shrink_to: PercentageInteger) {
-        let sorted_candidates: Vec<(Pubkey, Arc<LoadedProgram>)> = self
-            .entries
+    /// Returns the list of loaded programs which are verified and compiled sorted by `tx_usage_counter`.
+    ///
+    /// Entries from program runtime v1 and v2 can be individually filtered.
+    pub fn get_entries_sorted_by_tx_usage(
+        &self,
+        include_program_runtime_v1: bool,
+        include_program_runtime_v2: bool,
+    ) -> Vec<(Pubkey, Arc<LoadedProgram>)> {
+        self.entries
             .iter()
             .flat_map(|(id, list)| {
                 list.iter()
                     .filter_map(move |program| match program.program {
-                        LoadedProgramType::LegacyV0(_)
-                        | LoadedProgramType::LegacyV1(_)
-                        | LoadedProgramType::Typed(_) => Some((*id, program.clone())),
+                        LoadedProgramType::LegacyV0(_) | LoadedProgramType::LegacyV1(_)
+                            if include_program_runtime_v1 =>
+                        {
+                            Some((*id, program.clone()))
+                        }
+                        LoadedProgramType::Typed(_) if include_program_runtime_v2 => {
+                            Some((*id, program.clone()))
+                        }
                         #[cfg(test)]
                         LoadedProgramType::TestLoaded(_) => Some((*id, program.clone())),
-                        LoadedProgramType::Unloaded(_)
-                        | LoadedProgramType::FailedVerification(_)
-                        | LoadedProgramType::Closed
-                        | LoadedProgramType::DelayVisibility
-                        | LoadedProgramType::Builtin(_) => None,
+                        _ => None,
                     })
             })
             .sorted_by_cached_key(|(_id, program)| program.tx_usage_counter.load(Ordering::Relaxed))
-            .collect();
+            .collect()
+    }
 
+    /// Unloads programs which were used infrequently
+    pub fn sort_and_unload(&mut self, shrink_to: PercentageInteger) {
+        let sorted_candidates = self.get_entries_sorted_by_tx_usage(true, true);
         let num_to_unload = sorted_candidates
             .len()
             .saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));
