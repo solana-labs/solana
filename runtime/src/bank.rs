@@ -4831,7 +4831,7 @@ impl Bank {
                 );
             }
         }
-        return ProgramAccountLoadResult::InvalidAccountData;
+        ProgramAccountLoadResult::InvalidAccountData
     }
 
     pub fn load_program(&self, pubkey: &Pubkey) -> Arc<LoadedProgram> {
@@ -4862,7 +4862,7 @@ impl Bank {
                     &self.feature_set,
                     None,
                     &mut load_program_metrics,
-                    program_account.data().as_ref(),
+                    program_account.data(),
                     program_account.owner(),
                     program_account.data().len(),
                     0,
