@@ -59,7 +59,7 @@ static CHECK_MARK: Emoji = Emoji("✅ ", "");
 static CROSS_MARK: Emoji = Emoji("❌ ", "");
 static WARNING: Emoji = Emoji("⚠️", "!");
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OutputFormat {
     Display,
     Json,
