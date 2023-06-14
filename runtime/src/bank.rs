@@ -2602,7 +2602,7 @@ impl Bank {
             0
         };
 
-        datapoint_warn!(
+        datapoint_info!(
             "epoch_rewards",
             ("slot", self.slot, i64),
             ("epoch", prev_epoch, i64),
