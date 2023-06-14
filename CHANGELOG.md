@@ -17,7 +17,7 @@ and follows a [Backwards Compatability Policy]
 
 ## Adding to this Changelog
 ### Audience
-* Entries in this log are intended to be easily understood by core contributors,
+* Entries in this log are intended to be easily understood by contributors,
 consensus validator operators, rpc operators, and dapp developers.
 
 ### Noteworthy
