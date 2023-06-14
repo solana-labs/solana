@@ -24,7 +24,7 @@ consensus validator operators, rpc operators, and dapp developers.
 * A change is noteworthy if it:
   * Adds a feature gate, or
   * Implements a SIMD, or
-  * Modifies API or ABI, or
+  * Modifies a public API, or
   * Changes normal validator / rpc run configurations, or
   * Changes command line arguments, or
   * Fixes a bug that has received public attention, or
