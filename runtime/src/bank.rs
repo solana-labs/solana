@@ -1854,6 +1854,41 @@ impl Bank {
         self.epoch_reward_status = EpochRewardStatus::Inactive;
     }
 
+    #[allow(dead_code)]
+    /// Begin the process of calculating and distributing rewards.
+    /// This process can take multiple slots.
+    fn begin_partitioned_rewards(
+        &mut self,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        thread_pool: &ThreadPool,
+        parent_epoch: Epoch,
+        parent_slot: Slot,
+        parent_block_height: u64,
+        rewards_metrics: &mut RewardsMetrics,
+    ) {
+        let CalculateRewardsAndDistributeVoteRewardsResult {
+            stake_rewards_by_partition,
+            ..
+        } = self.calculate_rewards_and_distribute_vote_rewards(
+            parent_epoch,
+            reward_calc_tracer,
+            thread_pool,
+            rewards_metrics,
+        );
+
+        let slot = self.slot();
+        self.set_epoch_reward_status_active(stake_rewards_by_partition);
+
+        datapoint_info!(
+            "epoch-reward-status-update",
+            ("start_slot", slot, i64),
+            ("start_block_height", self.block_height(), i64),
+            ("activate", 1, i64),
+            ("parent_slot", parent_slot, i64),
+            ("parent_block_height", parent_block_height, i64),
+        );
+    }
+
     pub fn byte_limit_for_scans(&self) -> Option<usize> {
         self.rc
             .accounts
