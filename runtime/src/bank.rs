@@ -1824,6 +1824,16 @@ impl Bank {
         );
     }
 
+    #[allow(dead_code)]
+    /// partitioned reward distribution is complete.
+    fn deactivate_epoch_reward_status(&mut self) {
+        assert!(matches!(
+            self.epoch_reward_status,
+            EpochRewardStatus::Active(_)
+        ));
+        self.epoch_reward_status = EpochRewardStatus::Inactive;
+    }
+
     pub fn byte_limit_for_scans(&self) -> Option<usize> {
         self.rc
             .accounts
