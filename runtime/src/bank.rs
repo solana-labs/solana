@@ -1491,7 +1491,7 @@ impl Bank {
     }
 
     #[allow(dead_code)]
-    fn partitioned_rewards_feature_enabled(&self) -> bool {
+    fn is_partitioned_rewards_feature_enabled(&self) -> bool {
         false // Will be feature later. It is convenient to have a constant fn at the moment.
     }
 
@@ -3887,6 +3887,16 @@ impl Bank {
         };
 
         report_partitioned_reward_metrics(self, metrics);
+    }
+
+    #[allow(dead_code)]
+    /// true if it is ok to run partitioned rewards code.
+    /// This means the feature is activated or certain testing situations.
+    fn is_partitioned_rewards_code_enabled(&self) -> bool {
+        self.is_partitioned_rewards_feature_enabled()
+            || self
+                .partitioned_epoch_rewards_config()
+                .test_enable_partitioned_rewards
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
@@ -7330,7 +7340,7 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         let slot = self.slot();
-        let ignore = (!self.partitioned_rewards_feature_enabled()
+        let ignore = (!self.is_partitioned_rewards_feature_enabled()
             && (self
                 .partitioned_epoch_rewards_config()
                 .test_enable_partitioned_rewards
