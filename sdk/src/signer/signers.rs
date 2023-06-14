@@ -51,7 +51,7 @@ macro_rules! default_keypairs_impl {
     };
 }
 
-impl<T: Signer> Signers for [&T] {
+impl<T: Signer + ?Sized> Signers for [&T] {
     default_keypairs_impl!();
 }
 
@@ -71,55 +71,27 @@ impl Signers for Vec<Arc<dyn Signer>> {
     default_keypairs_impl!();
 }
 
-impl Signers for Vec<&dyn Signer> {
+impl<T: Signer + ?Sized> Signers for [&T; 0] {
     default_keypairs_impl!();
 }
 
-impl Signers for [&dyn Signer] {
+impl<T: Signer + ?Sized> Signers for [&T; 1] {
     default_keypairs_impl!();
 }
 
-impl Signers for [&dyn Signer; 0] {
+impl<T: Signer + ?Sized> Signers for [&T; 2] {
     default_keypairs_impl!();
 }
 
-impl Signers for [&dyn Signer; 1] {
+impl<T: Signer + ?Sized> Signers for [&T; 3] {
     default_keypairs_impl!();
 }
 
-impl Signers for [&dyn Signer; 2] {
+impl<T: Signer + ?Sized> Signers for [&T; 4] {
     default_keypairs_impl!();
 }
 
-impl Signers for [&dyn Signer; 3] {
-    default_keypairs_impl!();
-}
-
-impl Signers for [&dyn Signer; 4] {
-    default_keypairs_impl!();
-}
-
-impl<T: Signer> Signers for [&T; 0] {
-    default_keypairs_impl!();
-}
-
-impl<T: Signer> Signers for [&T; 1] {
-    default_keypairs_impl!();
-}
-
-impl<T: Signer> Signers for [&T; 2] {
-    default_keypairs_impl!();
-}
-
-impl<T: Signer> Signers for [&T; 3] {
-    default_keypairs_impl!();
-}
-
-impl<T: Signer> Signers for [&T; 4] {
-    default_keypairs_impl!();
-}
-
-impl<T: Signer> Signers for Vec<&T> {
+impl<T: Signer + ?Sized> Signers for Vec<&T> {
     default_keypairs_impl!();
 }
 
@@ -183,6 +155,28 @@ mod tests {
         let xs_ref: &[&dyn Signer] = &xs;
         assert_eq!(
             Signers::sign_message(xs_ref, b""),
+            vec![Signature::default(), Signature::default()],
+        );
+    }
+
+    #[test]
+    fn test_dyn_keypairs_by_arc_compile() {
+        let xs: Vec<Arc<dyn Signer>> = vec![Arc::new(Foo {}), Arc::new(Bar {})];
+        assert_eq!(
+            xs.sign_message(b""),
+            vec![Signature::default(), Signature::default()],
+        );
+
+        // Same as above, but less compiler magic.
+        let xs_ref: &[Arc<dyn Signer>] = &xs;
+        assert_eq!(
+            Signers::sign_message(xs_ref, b""),
+            vec![Signature::default(), Signature::default()],
+        );
+
+        let xs: [Arc<dyn Signer>; 2] = [Arc::new(Foo {}), Arc::new(Bar {})];
+        assert_eq!(
+            xs.sign_message(b""),
             vec![Signature::default(), Signature::default()],
         );
     }
