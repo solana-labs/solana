@@ -1854,9 +1854,9 @@ impl Bank {
     /// This process can take multiple slots.
     fn begin_partitioned_rewards(
         &mut self,
-        parent_epoch: Epoch,
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         thread_pool: &ThreadPool,
+        parent_epoch: Epoch,
         parent_slot: Slot,
         parent_height: u64,
         rewards_metrics: &mut RewardsMetrics,
@@ -1877,7 +1877,7 @@ impl Bank {
         datapoint_info!(
             "reward-status-update",
             ("slot", slot, i64),
-            ("height", self.block_height(), i64),
+            ("block_height", self.block_height(), i64),
             ("activate", 1, i64),
             ("parent_start_slot", parent_slot, i64),
             ("parent_start_height", parent_height, i64),
