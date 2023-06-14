@@ -1100,6 +1100,7 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
             total,
             max_fee,
             lamports_per_account,
+            TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
         );
     }
     Ok(())
