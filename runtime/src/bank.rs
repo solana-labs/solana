@@ -1858,7 +1858,7 @@ impl Bank {
         thread_pool: &ThreadPool,
         parent_epoch: Epoch,
         parent_slot: Slot,
-        parent_height: u64,
+        parent_block_height: u64,
         rewards_metrics: &mut RewardsMetrics,
     ) {
         let CalculateRewardsAndDistributeVoteRewardsResult {
@@ -1875,12 +1875,12 @@ impl Bank {
         self.set_epoch_reward_status_active(stake_rewards_by_partition);
 
         datapoint_info!(
-            "reward-status-update",
-            ("slot", slot, i64),
-            ("block_height", self.block_height(), i64),
+            "epoch-reward-status-update",
+            ("start_slot", slot, i64),
+            ("start_block_height", self.block_height(), i64),
             ("activate", 1, i64),
-            ("parent_start_slot", parent_slot, i64),
-            ("parent_start_height", parent_height, i64),
+            ("parent_slot", parent_slot, i64),
+            ("parent_block_height", parent_block_height, i64),
         );
     }
 
