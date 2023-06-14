@@ -1143,9 +1143,19 @@ struct PartitionedRewardsCalculation {
 /// result of calculating the stake rewards at beginning of new epoch
 struct StakeRewardCalculationPartitioned {
     /// each individual stake account to reward, grouped by partition
-    stake_rewards: Vec<StakeRewards>,
+    stake_rewards_by_partition: Vec<StakeRewards>,
     /// total lamports across all `stake_rewards`
     total_stake_rewards_lamports: u64,
+}
+
+#[allow(dead_code)]
+struct CalculateRewardsAndDistributeVoteRewardsResult {
+    /// total rewards for the epoch (including both vote rewards and stake rewards)
+    total_rewards: u64,
+    /// distributed vote rewards
+    distributed_rewards: u64,
+    /// stake rewards that still need to be distributed, grouped by partition
+    stake_rewards_by_partition: Vec<StakeRewards>,
 }
 
 pub(crate) type StakeRewards = Vec<StakeReward>;
@@ -2527,7 +2537,7 @@ impl Bank {
         PartitionedRewardsCalculation {
             vote_account_rewards,
             stake_rewards_by_partition: StakeRewardCalculationPartitioned {
-                stake_rewards: stake_rewards_by_partition,
+                stake_rewards_by_partition,
                 total_stake_rewards_lamports: stake_rewards.total_stake_rewards_lamports,
             },
             old_vote_balance_and_staked,
@@ -2537,6 +2547,117 @@ impl Bank {
             prev_epoch_duration_in_years,
             capitalization,
         }
+    }
+
+    #[allow(dead_code)]
+    // Calculate rewards from previous epoch and distribute vote rewards
+    fn calculate_rewards_and_distribute_vote_rewards(
+        &self,
+        prev_epoch: Epoch,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        thread_pool: &ThreadPool,
+        metrics: &mut RewardsMetrics,
+    ) -> CalculateRewardsAndDistributeVoteRewardsResult {
+        let PartitionedRewardsCalculation {
+            vote_account_rewards,
+            stake_rewards_by_partition,
+            old_vote_balance_and_staked,
+            validator_rewards,
+            validator_rate,
+            foundation_rate,
+            prev_epoch_duration_in_years,
+            capitalization,
+        } = self.calculate_rewards_for_partitioning(
+            prev_epoch,
+            reward_calc_tracer,
+            thread_pool,
+            metrics,
+        );
+        let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
+
+        // update reward history of JUST vote_rewards, stake_rewards is vec![] here
+        self.update_reward_history(vec![], vote_rewards);
+
+        let StakeRewardCalculationPartitioned {
+            stake_rewards_by_partition,
+            total_stake_rewards_lamports,
+        } = stake_rewards_by_partition;
+
+        // the remaining code mirrors `update_rewards_with_thread_pool()`
+
+        let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
+
+        // This is for vote rewards only.
+        let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
+        self.assert_validator_rewards_paid(validator_rewards_paid);
+
+        // verify that we didn't pay any more than we expected to
+        assert!(validator_rewards >= validator_rewards_paid + total_stake_rewards_lamports);
+
+        info!(
+            "distributed vote rewards: {} out of {}, remaining {}",
+            validator_rewards_paid, validator_rewards, total_stake_rewards_lamports
+        );
+
+        let (num_stake_accounts, num_vote_accounts) = {
+            let stakes = self.stakes_cache.stakes();
+            (
+                stakes.stake_delegations().len(),
+                stakes.vote_accounts().len(),
+            )
+        };
+        self.capitalization
+            .fetch_add(validator_rewards_paid, Relaxed);
+
+        let active_stake = if let Some(stake_history_entry) =
+            self.stakes_cache.stakes().history().get(prev_epoch)
+        {
+            stake_history_entry.effective
+        } else {
+            0
+        };
+
+        datapoint_info!(
+            "epoch_rewards",
+            ("slot", self.slot, i64),
+            ("epoch", prev_epoch, i64),
+            ("validator_rate", validator_rate, f64),
+            ("foundation_rate", foundation_rate, f64),
+            ("epoch_duration_in_years", prev_epoch_duration_in_years, f64),
+            ("validator_rewards", validator_rewards_paid, i64),
+            ("active_stake", active_stake, i64),
+            ("pre_capitalization", capitalization, i64),
+            ("post_capitalization", self.capitalization(), i64),
+            ("num_stake_accounts", num_stake_accounts, i64),
+            ("num_vote_accounts", num_vote_accounts, i64),
+        );
+
+        CalculateRewardsAndDistributeVoteRewardsResult {
+            total_rewards: validator_rewards_paid + total_stake_rewards_lamports,
+            distributed_rewards: validator_rewards_paid,
+            stake_rewards_by_partition,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn assert_validator_rewards_paid(&self, validator_rewards_paid: u64) {
+        assert_eq!(
+            validator_rewards_paid,
+            u64::try_from(
+                self.rewards
+                    .read()
+                    .unwrap()
+                    .par_iter()
+                    .map(|(_address, reward_info)| {
+                        match reward_info.reward_type {
+                            RewardType::Voting | RewardType::Staking => reward_info.lamports,
+                            _ => 0,
+                        }
+                    })
+                    .sum::<i64>()
+            )
+            .unwrap()
+        );
     }
 
     // update rewards based on the previous epoch
@@ -3055,7 +3176,7 @@ impl Bank {
         let mut stake_rewards: HashMap<Pubkey, &StakeReward> = HashMap::default();
         partitioned_rewards
             .stake_rewards_by_partition
-            .stake_rewards
+            .stake_rewards_by_partition
             .iter()
             .flatten()
             .for_each(|stake_reward| {
@@ -3098,7 +3219,7 @@ impl Bank {
             "verified partitioned rewards calculation matching: {}, {}",
             partitioned_rewards
                 .stake_rewards_by_partition
-                .stake_rewards
+                .stake_rewards_by_partition
                 .iter()
                 .map(|rewards| rewards.len())
                 .sum::<usize>(),
