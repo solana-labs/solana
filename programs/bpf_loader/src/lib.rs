@@ -99,73 +99,6 @@ pub fn load_program_from_bytes(
     Ok(loaded_program)
 }
 
-pub fn load_program_from_account(
-    feature_set: &FeatureSet,
-    log_collector: Option<Rc<RefCell<LogCollector>>>,
-    program: &BorrowedAccount,
-    programdata: &BorrowedAccount,
-    program_runtime_environment: Arc<BuiltinProgram<InvokeContext<'static>>>,
-) -> Result<(Arc<LoadedProgram>, LoadProgramMetrics), InstructionError> {
-    if !check_loader_id(program.get_owner()) {
-        ic_logger_msg!(
-            log_collector,
-            "Executable account not owned by the BPF loader"
-        );
-        return Err(InstructionError::IncorrectProgramId);
-    }
-
-    let (programdata_offset, deployment_slot) =
-        if bpf_loader_upgradeable::check_id(program.get_owner()) {
-            if let UpgradeableLoaderState::Program {
-                programdata_address: _,
-            } = program.get_state()?
-            {
-                if let UpgradeableLoaderState::ProgramData {
-                    slot,
-                    upgrade_authority_address: _,
-                } = programdata.get_state()?
-                {
-                    (UpgradeableLoaderState::size_of_programdata_metadata(), slot)
-                } else {
-                    ic_logger_msg!(log_collector, "Program has been closed");
-                    return Err(InstructionError::InvalidAccountData);
-                }
-            } else {
-                ic_logger_msg!(log_collector, "Invalid Program account");
-                return Err(InstructionError::InvalidAccountData);
-            }
-        } else {
-            (0, 0)
-        };
-
-    let programdata_size = if programdata_offset != 0 {
-        programdata.get_data().len()
-    } else {
-        0
-    };
-
-    let mut load_program_metrics = LoadProgramMetrics {
-        program_id: program.get_key().to_string(),
-        ..LoadProgramMetrics::default()
-    };
-
-    let loaded_program = Arc::new(load_program_from_bytes(
-        feature_set,
-        log_collector,
-        &mut load_program_metrics,
-        programdata
-            .get_data()
-            .get(programdata_offset..)
-            .ok_or(InstructionError::AccountDataTooSmall)?,
-        program.get_owner(),
-        program.get_data().len().saturating_add(programdata_size),
-        deployment_slot,
-        program_runtime_environment,
-    )?);
-
-    Ok((loaded_program, load_program_metrics))
-}
-
 fn find_program_in_cache(
     invoke_context: &InvokeContext,
     pubkey: &Pubkey,
@@ -246,7 +179,7 @@ fn write_program_data(
     Ok(())
 }
 
-fn check_loader_id(id: &Pubkey) -> bool {
+pub fn check_loader_id(id: &Pubkey) -> bool {
     bpf_loader::check_id(id)
         || bpf_loader_deprecated::check_id(id)
         || bpf_loader_upgradeable::check_id(id)
