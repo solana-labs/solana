@@ -747,15 +747,43 @@ where
     {
         let AccountsDbFields(_, _, slot, bank_hash_info, _, _) =
             &snapshot_accounts_db_fields.full_snapshot_accounts_db_fields;
-        let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
-            *slot,
-            bank_hash_info.accounts_hash.clone(),
-            capitalizations.0,
-        );
-        assert!(
-            old_accounts_hash.is_none(),
-            "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
-        );
+
+        if let Some(incremental_snapshot_persistence) = incremental_snapshot_persistence {
+            // If we've booted from local state that was originally intended to be an incremental
+            // snapshot, then we will use the incremental snapshot persistence field to set the
+            // initial accounts hashes in accounts db.
+            let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
+                incremental_snapshot_persistence.full_slot,
+                incremental_snapshot_persistence.full_hash.clone(),
+                incremental_snapshot_persistence.full_capitalization,
+            );
+            assert!(
+                old_accounts_hash.is_none(),
+                "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
+            );
+            let old_incremental_accounts_hash = accounts_db
+                .set_incremental_accounts_hash_from_snapshot(
+                    *slot,
+                    incremental_snapshot_persistence.incremental_hash.clone(),
+                    incremental_snapshot_persistence.incremental_capitalization,
+                );
+            assert!(
+                old_incremental_accounts_hash.is_none(),
+                "There should not already be an IncrementalAccountsHash at slot {slot}: {old_incremental_accounts_hash:?}",
+            );
+        } else {
+            // Otherwise, we've booted from a snapshot archive, or from local state that was *not*
+            // intended to be an incremental snapshot.
+            let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
+                *slot,
+                bank_hash_info.accounts_hash.clone(),
+                capitalizations.0,
+            );
+            assert!(
+                old_accounts_hash.is_none(),
+                "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
+            );
+        }
     }
 
     // Store the accounts hash & capitalization, from the incremental snapshot, in the new AccountsDb
