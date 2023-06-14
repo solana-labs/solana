@@ -3857,6 +3857,38 @@ impl Bank {
         rewards.len().saturating_sub(initial_len)
     }
 
+    #[allow(dead_code)]
+    /// Process reward credits for a partition of rewards
+    /// Store the rewards to AccountsDB, update reward history record and total capitalization.
+    fn distribute_epoch_rewards_in_partition(
+        &self,
+        all_stake_rewards: &[Vec<StakeReward>],
+        partition_index: u64,
+    ) {
+        let pre_capitalization = self.capitalization();
+        let this_partition_stake_rewards = &all_stake_rewards[partition_index as usize];
+
+        let (total_rewards_in_lamports, store_stake_accounts_us) =
+            measure_us!(self.store_stake_accounts_in_partition(this_partition_stake_rewards));
+
+        self.update_reward_history_in_partition(this_partition_stake_rewards);
+
+        // increase total capitalization by the distributed rewards
+        self.capitalization
+            .fetch_add(total_rewards_in_lamports, Relaxed);
+
+        let metrics = RewardsStoreMetrics {
+            pre_capitalization,
+            post_capitalization: self.capitalization(),
+            total_stake_accounts_count: all_stake_rewards.len(),
+            partition_index,
+            store_stake_accounts_us,
+            store_stake_accounts_count: this_partition_stake_rewards.len(),
+        };
+
+        report_partitioned_reward_metrics(self, metrics);
+    }
+
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
         #[allow(deprecated)]
         self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |account| {
