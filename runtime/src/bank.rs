@@ -2292,16 +2292,12 @@ impl Bank {
                     .map(|(slot, _)| *slot)
                     .unwrap_or(0)
             };
-            let slot = self.slot;
-
-            if last_restart_slot <= slot {
-                self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
-                    create_account(
-                        &LastRestartSlot { last_restart_slot },
-                        self.inherit_specially_retained_account_fields(account),
-                    )
-                });
-            }
+            self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
+                create_account(
+                    &LastRestartSlot { last_restart_slot },
+                    self.inherit_specially_retained_account_fields(account),
+                )
+            });
         }
     }
 
