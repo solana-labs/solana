@@ -1481,6 +1481,11 @@ impl Bank {
     }
 
     #[allow(dead_code)]
+    fn partitioned_rewards_feature_enabled(&self) -> bool {
+        false // Will be feature later. It is convenient to have a constant fn at the moment.
+    }
+
+    #[allow(dead_code)]
     pub(crate) fn set_epoch_reward_status_active(&mut self, stake_rewards: Vec<StakeRewards>) {
         self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
             start_block_height: self.block_height,
