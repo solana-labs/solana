@@ -2282,21 +2282,26 @@ impl Bank {
 
         if feature_flag {
             let last_restart_slot = {
+                let slot = self.slot;
                 let hard_forks = self.hard_forks();
                 let hard_forks_r = hard_forks.read().unwrap();
                 hard_forks_r
                     .iter()
-                    .last()
+                    .rev()
+                    .find(|(hard_fork, _)| *hard_fork <= slot)
                     .map(|(slot, _)| *slot)
                     .unwrap_or(0)
             };
+            let slot = self.slot;
 
-            self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
-                create_account(
-                    &LastRestartSlot { last_restart_slot },
-                    self.inherit_specially_retained_account_fields(account),
-                )
-            });
+            if last_restart_slot <= slot {
+                self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
+                    create_account(
+                        &LastRestartSlot { last_restart_slot },
+                        self.inherit_specially_retained_account_fields(account),
+                    )
+                });
+            }
         }
     }
 
