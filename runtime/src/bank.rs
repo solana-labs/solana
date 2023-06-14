@@ -3889,6 +3889,16 @@ impl Bank {
         report_partitioned_reward_metrics(self, metrics);
     }
 
+    #[allow(dead_code)]
+    /// true if it is ok to run partitioned rewards code.
+    /// This means the feature is activated or certain testing situations.
+    fn partitioned_rewards_code_enabled(&self) -> bool {
+        self.partitioned_rewards_feature_enabled()
+            || self
+                .partitioned_epoch_rewards_config()
+                .test_enable_partitioned_rewards
+    }
+
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
         #[allow(deprecated)]
         self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |account| {
