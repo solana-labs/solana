@@ -108,7 +108,7 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 //   warning: the following explicit lifetimes could be elided: 'a
 #[allow(unused_attributes, clippy::needless_lifetimes)]
 // Send + Sync is needed to be a field of Bank
-pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
+pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + 'static {
     fn id(&self) -> SchedulerId;
     fn pool(&self) -> InstalledSchedulerPoolArc;
 
@@ -143,7 +143,7 @@ impl<
     }
 }
 
-pub trait ScheduleExecutionArg: Send + Sync + Debug {
+pub trait ScheduleExecutionArg: Send + Sync + Debug + 'static {
     // GAT is used to make schedule_execution parametric even supporting references
     // under the object-safety req. of InstalledScheduler trait...
     type TransactionWithIndex<'tx>: WithTransactionAndIndex;
@@ -226,6 +226,11 @@ pub const NO_INSTALLED_SCHEDULER_RW_LOCK: InstalledSchedulerRwLock = RwLock::new
 
 impl BankWithScheduler {
     pub(crate) fn new(bank: Arc<Bank>, scheduler: Option<InstalledSchedulerBox>) -> Self {
+        if let Some(bank_in_context) = scheduler.as_ref().and_then(|scheduler| scheduler.context())
+        {
+            assert_eq!(bank.slot(), bank_in_context.slot());
+        }
+
         Self {
             inner: Arc::new(BankWithSchedulerInner {
                 bank,
@@ -353,6 +358,14 @@ impl BankWithSchedulerInner {
     }
 
     fn drop_scheduler(&self) {
+        if std::thread::panicking() {
+            error!(
+                "BankWithSchedulerInner::drop(): slot: {} skipping due to already panicking...",
+                self.bank.slot(),
+            );
+            return;
+        }
+
         if let Some(Err(err)) = self.wait_for_completed_scheduler_from_drop() {
             warn!(
                 "BankWithSchedulerInner::drop(): slot: {} discarding error from scheduler: {:?}",
@@ -414,6 +427,11 @@ mod tests {
     ) -> InstalledSchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         let mut seq = Sequence::new();
+
+        mock.expect_context()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(|| None);
 
         for wait_reason in wait_reasons {
             mock.expect_wait_for_termination()

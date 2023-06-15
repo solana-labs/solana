@@ -234,9 +234,7 @@ mod nonblocking {
         }
     }
 
-    impl<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench> + Clone + 'static>
-        NonblockingScheduler<H>
-    {
+    impl<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench> + Clone> NonblockingScheduler<H> {
         pub(super) fn spawn(
             pool: Arc<SchedulerPool>,
             initial_context: SchedulingContext,

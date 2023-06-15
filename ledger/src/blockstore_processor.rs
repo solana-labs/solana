@@ -4595,6 +4595,10 @@ pub mod tests {
 
         let mut mocked_scheduler = MockInstalledScheduler::new();
         mocked_scheduler
+            .expect_context()
+            .times(1)
+            .returning(|| None);
+        mocked_scheduler
             .expect_schedule_execution()
             .times(txs.len())
             .returning(|_| ());

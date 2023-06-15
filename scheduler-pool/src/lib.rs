@@ -43,7 +43,7 @@ pub struct SchedulerPool {
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
     prioritization_fee_cache: Arc<PrioritizationFeeCache>,
-    weak_self: Weak<SchedulerPool>,
+    weak_self: Weak<Self>,
 }
 
 impl SchedulerPool {
@@ -112,7 +112,9 @@ impl InstalledSchedulerPool for SchedulerPool {
     }
 }
 
-pub trait ScheduledTransactionHandler<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
+pub trait ScheduledTransactionHandler<SEA: ScheduleExecutionArg>:
+    Send + Sync + Debug + 'static
+{
     fn handle(
         &self,
         result: &mut Result<()>,
@@ -197,7 +199,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
     }
 
     fn schedule_execution(&self, with_transaction_and_index: SEA::TransactionWithIndex<'_>) {
-        let context = self.context.as_ref().expect("active context");
+        let context = self.context.as_ref().expect("active context should exist");
 
         let fail_fast = match context.mode() {
             // this should be false, for (upcoming) BlockProduction variant.
@@ -228,15 +230,13 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
             WaitReason::TerminatedToFreeze | WaitReason::DroppedFromBankForks => false,
         };
 
-        drop::<Option<SchedulingContext>>(self.context.take());
-
-        // current simplest form of this trait impl doesn't block the current thread materially
-        // just with the following single mutex lock. Suppose more elaborated synchronization
-        // across worker threads here in the future...
-
         if keep_result_with_timings {
             None
         } else {
+            drop::<Option<SchedulingContext>>(self.context.take());
+            // current simplest form of this trait impl doesn't block the current thread materially
+            // just with the following single mutex lock. Suppose more elaborated synchronization
+            // across worker threads here in the future...
             self.result_with_timings
                 .lock()
                 .expect("not poisoned")
@@ -335,7 +335,7 @@ mod tests {
     }
 
     #[test]
-    fn test_scheduler_pool_implicit_schedule_termination() {
+    fn test_scheduler_pool_context_drop_unless_reinitialized() {
         solana_logger::setup();
 
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
@@ -348,6 +348,11 @@ mod tests {
         assert!(scheduler.context().is_some());
         assert_matches!(
             scheduler.wait_for_termination(&WaitReason::ReinitializedForRecentBlockhash),
+            None
+        );
+        assert!(scheduler.context().is_some());
+        assert_matches!(
+            scheduler.wait_for_termination(&WaitReason::TerminatedToFreeze),
             None
         );
         assert!(scheduler.context().is_none());
