@@ -94,6 +94,11 @@ module.exports = {
         },
         {
           type: "doc",
+          id: "getstarted/overview",
+          label: "Overview",
+        },
+        {
+          type: "doc",
           id: "getstarted/hello-world",
           label: "Hello world",
         },
