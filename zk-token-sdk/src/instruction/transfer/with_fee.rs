@@ -572,6 +572,7 @@ impl TransferWithFeeProof {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn verify(
         &self,
         source_pubkey: &ElGamalPubkey,
