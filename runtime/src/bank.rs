@@ -3678,9 +3678,8 @@ impl Bank {
         blockhash: &Hash,
         scheduler: &InstalledSchedulerRwLock,
     ) {
-        // This is needed until we activate fix_recent_blockhashes because intra-slot
-        // recent_blockhash updates necessitates synchronization for consistent tx check_age
-        // handling.
+        // This is needed because recent_blockhash updates necessitate synchronizations for
+        // consistent tx check_age handling.
         BankWithScheduler::wait_for_reusable_scheduler(self, scheduler);
 
         // Only acquire the write lock for the blockhash queue on block boundaries because
@@ -7823,13 +7822,14 @@ impl Bank {
     }
 
     pub fn fill_bank_with_ticks_for_tests(&self) {
+        self.do_fill_bank_with_ticks_for_tests(&BankWithScheduler::no_scheduler_available());
+    }
+
+    pub(crate) fn do_fill_bank_with_ticks_for_tests(&self, scheduler: &InstalledSchedulerRwLock) {
         if self.tick_height.load(Relaxed) < self.max_tick_height {
             let last_blockhash = self.last_blockhash();
             while self.last_blockhash() == last_blockhash {
-                self.register_tick(
-                    &Hash::new_unique(),
-                    &BankWithScheduler::no_scheduler_available(),
-                )
+                self.register_tick(&Hash::new_unique(), scheduler)
             }
         } else {
             warn!("Bank already reached max tick height, cannot fill it with more ticks");

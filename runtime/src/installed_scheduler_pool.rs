@@ -45,9 +45,9 @@ use {
 
 // Send + Sync is needed to be a field of BankForks
 #[cfg_attr(any(test, feature = "test-in-workspace"), automock)]
-pub trait InstalledSchedulerPool: Send + Sync + Debug {
-    fn take_from_pool(&self, context: SchedulingContext) -> InstalledSchedulerBox;
-    fn return_to_pool(&self, scheduler: InstalledSchedulerBox);
+pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
+    fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>>;
+    fn return_to_pool(&self, scheduler: Box<dyn InstalledScheduler<SEA>>);
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -110,7 +110,7 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 // Send + Sync is needed to be a field of Bank
 pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + 'static {
     fn id(&self) -> SchedulerId;
-    fn pool(&self) -> InstalledSchedulerPoolArc;
+    fn pool(&self) -> InstalledSchedulerPoolArc<SEA>;
 
     // Calling this is illegal as soon as schedule_termiantion is called on &self.
     fn schedule_execution<'a>(&'a self, transaction_with_index: SEA::TransactionWithIndex<'a>);
@@ -122,7 +122,7 @@ pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + '
     fn replace_context(&mut self, context: SchedulingContext);
 }
 
-pub type InstalledSchedulerPoolArc = Arc<dyn InstalledSchedulerPool>;
+pub type InstalledSchedulerPoolArc<SEA> = Arc<dyn InstalledSchedulerPool<SEA>>;
 
 pub type SchedulerId = u64;
 
@@ -166,7 +166,7 @@ pub enum WaitReason {
     ReinitializedForRecentBlockhash,
 }
 
-pub type InstalledSchedulerBox = Box<dyn InstalledScheduler<DefaultScheduleExecutionArg>>;
+pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler<DefaultScheduleExecutionArg>>;
 
 #[derive(Clone, Debug)]
 pub struct SchedulingContext {
@@ -219,13 +219,13 @@ pub struct BankWithSchedulerInner {
     bank: Arc<Bank>,
     scheduler: InstalledSchedulerRwLock,
 }
-pub type InstalledSchedulerRwLock = RwLock<Option<InstalledSchedulerBox>>;
+pub type InstalledSchedulerRwLock = RwLock<Option<DefaultInstalledSchedulerBox>>;
 
 #[allow(clippy::declare_interior_mutable_const)]
 pub const NO_INSTALLED_SCHEDULER_RW_LOCK: InstalledSchedulerRwLock = RwLock::new(None);
 
 impl BankWithScheduler {
-    pub(crate) fn new(bank: Arc<Bank>, scheduler: Option<InstalledSchedulerBox>) -> Self {
+    pub(crate) fn new(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
         if let Some(bank_in_context) = scheduler.as_ref().and_then(|scheduler| scheduler.context())
         {
             assert_eq!(bank.slot(), bank_in_context.slot());
@@ -240,7 +240,7 @@ impl BankWithScheduler {
     }
 
     #[cfg(any(test, feature = "test-in-workspace"))]
-    pub fn new_for_test(bank: Arc<Bank>, scheduler: Option<InstalledSchedulerBox>) -> Self {
+    pub fn new_for_test(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
         Self::new(bank, scheduler)
     }
 
@@ -256,6 +256,10 @@ impl BankWithScheduler {
 
     pub fn register_tick(&self, hash: &Hash) {
         self.inner.bank.register_tick(hash, &self.inner.scheduler);
+    }
+
+    pub fn fill_bank_with_ticks_for_tests(&self) {
+        self.do_fill_bank_with_ticks_for_tests(&self.inner.scheduler);
     }
 
     pub fn has_installed_scheduler(&self) -> bool {
@@ -391,7 +395,10 @@ impl Deref for BankWithScheduler {
 }
 
 impl BankForks {
-    pub fn install_scheduler_pool(&mut self, pool: InstalledSchedulerPoolArc) {
+    pub fn install_scheduler_pool(
+        &mut self,
+        pool: InstalledSchedulerPoolArc<DefaultScheduleExecutionArg>,
+    ) {
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
         assert!(
             self.scheduler_pool.replace(pool).is_none(),
@@ -412,7 +419,9 @@ mod tests {
         solana_sdk::system_transaction,
     };
 
-    fn setup_mocked_scheduler_pool(seq: &mut Sequence) -> InstalledSchedulerPoolArc {
+    fn setup_mocked_scheduler_pool(
+        seq: &mut Sequence,
+    ) -> InstalledSchedulerPoolArc<DefaultScheduleExecutionArg> {
         let mut mock = MockInstalledSchedulerPool::new();
         mock.expect_return_to_pool()
             .times(1)
@@ -424,7 +433,7 @@ mod tests {
     fn setup_mocked_scheduler_with_extra(
         wait_reasons: impl Iterator<Item = WaitReason>,
         f: Option<impl Fn(&mut MockInstalledScheduler<DefaultScheduleExecutionArg>)>,
-    ) -> InstalledSchedulerBox {
+    ) -> DefaultInstalledSchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         let mut seq = Sequence::new();
 
@@ -454,7 +463,7 @@ mod tests {
 
     fn setup_mocked_scheduler(
         wait_reasons: impl Iterator<Item = WaitReason>,
-    ) -> InstalledSchedulerBox {
+    ) -> DefaultInstalledSchedulerBox {
         setup_mocked_scheduler_with_extra(
             wait_reasons,
             None::<fn(&mut MockInstalledScheduler<DefaultScheduleExecutionArg>) -> ()>,

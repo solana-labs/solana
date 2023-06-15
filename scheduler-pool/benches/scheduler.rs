@@ -21,7 +21,9 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
     },
     solana_scheduler::SchedulingMode,
-    solana_scheduler_pool::{PooledScheduler, ScheduledTransactionHandler, SchedulerPool},
+    solana_scheduler_pool::{
+        PooledScheduler, ScheduledTransactionHandler, SchedulerPool, SpawnableScheduler,
+    },
     solana_sdk::{
         system_transaction,
         transaction::{Result, SanitizedTransaction},
@@ -56,13 +58,17 @@ struct BenchFriendlyHandler<SEA: ScheduleExecutionArg + Clone, const MUTATE_ARC:
 impl<SEA: ScheduleExecutionArg + Clone, const MUTATE_ARC: bool> ScheduledTransactionHandler<SEA>
     for BenchFriendlyHandler<SEA, MUTATE_ARC>
 {
-    fn handle(
+    fn create<T: SpawnableScheduler<Self, SEA>>(_pool: &SchedulerPool<T, Self, SEA>) -> Self {
+        Self(PhantomData)
+    }
+
+    fn handle<T: SpawnableScheduler<Self, SEA>>(
         &self,
         _result: &mut Result<()>,
         _timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
         transaction_with_index: SEA::TransactionWithIndex<'_>,
-        _pool: &SchedulerPool,
+        _pool: &SchedulerPool<T, Self, SEA>,
     ) {
         //std::hint::black_box(bank.clone());
         let mut i = 0;
@@ -87,8 +93,9 @@ type BenchFriendlyHandlerWithoutArcMutation =
     BenchFriendlyHandler<ScheduleExecutionArgForBench, false>;
 
 fn run_bench<
-    F: FnOnce(Arc<SchedulerPool>, SchedulingContext) -> I,
-    I: InstalledScheduler<ScheduleExecutionArgForBench>,
+    F: FnOnce(Arc<SchedulerPool<I, TH, ScheduleExecutionArgForBench>>, SchedulingContext) -> I,
+    I: SpawnableScheduler<TH, ScheduleExecutionArgForBench>,
+    TH: ScheduledTransactionHandler<ScheduleExecutionArgForBench>,
 >(
     bencher: &mut Bencher,
     create_scheduler: F,
@@ -200,10 +207,10 @@ mod nonblocking {
 
     #[derive(Debug)]
     pub(super) struct NonblockingScheduler<
-        H: ScheduledTransactionHandler<ScheduleExecutionArgForBench>,
+        H: ScheduledTransactionHandler<ScheduleExecutionArgForBench> + Clone,
     > {
         id: SchedulerId,
-        pool: Arc<SchedulerPool>,
+        pool: Arc<SchedulerPool<Self, H, ScheduleExecutionArgForBench>>,
         transaction_sender: crossbeam_channel::Sender<ChainedChannel>,
         result_receiver: crossbeam_channel::Receiver<(Result<()>, ExecuteTimings, usize)>,
         lane_count: usize,
@@ -234,9 +241,21 @@ mod nonblocking {
         }
     }
 
+    impl<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench> + Clone>
+        SpawnableScheduler<H, ScheduleExecutionArgForBench> for NonblockingScheduler<H>
+    {
+        fn spawn_boxed(
+            _pool: Arc<SchedulerPool<Self, H, ScheduleExecutionArgForBench>>,
+            _initial_context: SchedulingContext,
+            _handler: H,
+        ) -> Box<dyn InstalledScheduler<ScheduleExecutionArgForBench>> {
+            unimplemented!();
+        }
+    }
+
     impl<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench> + Clone> NonblockingScheduler<H> {
         pub(super) fn spawn(
-            pool: Arc<SchedulerPool>,
+            pool: Arc<SchedulerPool<Self, H, ScheduleExecutionArgForBench>>,
             initial_context: SchedulingContext,
             lane_count: usize,
             handler: H,
@@ -300,14 +319,14 @@ mod nonblocking {
             }
         }
     }
-    impl<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench>>
+    impl<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench> + Clone>
         InstalledScheduler<ScheduleExecutionArgForBench> for NonblockingScheduler<H>
     {
         fn id(&self) -> SchedulerId {
             self.id
         }
 
-        fn pool(&self) -> InstalledSchedulerPoolArc {
+        fn pool(&self) -> InstalledSchedulerPoolArc<ScheduleExecutionArgForBench> {
             self.pool.clone()
         }
 
@@ -482,13 +501,17 @@ mod thread_utilization {
     struct SleepyHandler;
 
     impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for SleepyHandler {
-        fn handle(
+        fn create<T: SpawnableScheduler<Self, SEA>>(_pool: &SchedulerPool<T, Self, SEA>) -> Self {
+            Self
+        }
+
+        fn handle<T: SpawnableScheduler<Self, SEA>>(
             &self,
             _result: &mut Result<()>,
             _timings: &mut ExecuteTimings,
             _bank: &Arc<Bank>,
             transaction_with_index: SEA::TransactionWithIndex<'_>,
-            _pool: &SchedulerPool,
+            _pool: &SchedulerPool<T, Self, SEA>,
         ) {
             transaction_with_index.with_transaction_and_index(|transaction, _index| {
                 let Ok(Transfer{lamports: sleep_ms}) =
@@ -605,13 +628,18 @@ mod thread_utilization {
     impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA>
         for SleepyHandlerWithCompletionSignal
     {
-        fn handle(
+        fn create<T: SpawnableScheduler<Self, SEA>>(_pool: &SchedulerPool<T, Self, SEA>) -> Self {
+            // not needed for bench...
+            unimplemented!();
+        }
+
+        fn handle<T: SpawnableScheduler<Self, SEA>>(
             &self,
             _result: &mut Result<()>,
             _timings: &mut ExecuteTimings,
             _bank: &Arc<Bank>,
             transaction_with_index: SEA::TransactionWithIndex<'_>,
-            _pool: &SchedulerPool,
+            _pool: &SchedulerPool<T, Self, SEA>,
         ) {
             transaction_with_index.with_transaction_and_index(|transaction, _index| {
                 let Ok(Transfer{lamports: sleep_ms}) =
@@ -637,7 +665,7 @@ mod thread_utilization {
             self.inner_scheduelr.id()
         }
 
-        fn pool(&self) -> InstalledSchedulerPoolArc {
+        fn pool(&self) -> InstalledSchedulerPoolArc<ScheduleExecutionArgForBench> {
             self.inner_scheduelr.pool()
         }
 

@@ -81,7 +81,7 @@ use {
         },
         vote_sender_types::ReplayVoteSender,
     },
-    solana_scheduler_pool::SchedulerPool,
+    solana_scheduler_pool::DefaultSchedulerPool,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
@@ -1274,7 +1274,7 @@ fn load_bank_forks(
             bank_forks
                 .write()
                 .unwrap()
-                .install_scheduler_pool(SchedulerPool::new_dyn(
+                .install_scheduler_pool(DefaultSchedulerPool::new_dyn(
                     process_options.runtime_config.log_messages_bytes_limit,
                     no_transaction_status_sender,
                     no_replay_vote_sender,

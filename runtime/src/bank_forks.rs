@@ -6,7 +6,8 @@ use {
         bank::{Bank, SquashTiming},
         epoch_accounts_hash,
         installed_scheduler_pool::{
-            BankWithScheduler, InstalledSchedulerPoolArc, SchedulingContext,
+            BankWithScheduler, DefaultScheduleExecutionArg, InstalledSchedulerPoolArc,
+            SchedulingContext,
         },
         snapshot_config::SnapshotConfig,
     },
@@ -70,7 +71,7 @@ pub struct BankForks {
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
-    pub(crate) scheduler_pool: Option<InstalledSchedulerPoolArc>,
+    pub(crate) scheduler_pool: Option<InstalledSchedulerPoolArc<DefaultScheduleExecutionArg>>,
 }
 
 impl Index<u64> for BankForks {

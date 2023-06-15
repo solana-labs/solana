@@ -92,7 +92,7 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path},
     },
-    solana_scheduler_pool::SchedulerPool,
+    solana_scheduler_pool::DefaultSchedulerPool,
     solana_sdk::{
         clock::Slot,
         epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
@@ -760,7 +760,7 @@ impl Validator {
                 info!("not installing scheduler pool...");
             }
             BlockVerificationMethod::UnifiedScheduler => {
-                let scheduler_pool = SchedulerPool::new_dyn(
+                let scheduler_pool = DefaultSchedulerPool::new_dyn(
                     config.runtime_config.log_messages_bytes_limit,
                     transaction_status_sender.clone(),
                     Some(replay_vote_sender.clone()),
