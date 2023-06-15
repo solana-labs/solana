@@ -538,7 +538,10 @@ fn test_extra_fields_eof() {
 
         if let Some(rewards) = epoch_reward_status_active.as_ref() {
             assert_eq!(bank.block_height(), 1);
-            bank.set_epoch_reward_status_active(rewards.clone());
+            bank.set_epoch_reward_status_active(
+                rewards.clone(),
+                rewards.iter().map(|rewards| rewards.len()).sum::<usize>(),
+            );
         }
 
         // Serialize
@@ -598,10 +601,15 @@ fn test_extra_fields_eof() {
             if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
                 start_block_height,
                 calculated_epoch_stake_rewards: ref stake_rewards,
+                total_stake_accounts_to_reward,
             }) = epoch_reward_status
             {
                 assert_eq!(*start_block_height, 1);
                 assert_eq!(&rewards[..], &stake_rewards[..]);
+                assert_eq!(
+                    total_stake_accounts_to_reward,
+                    &rewards.iter().map(|rewards| rewards.len()).sum::<usize>()
+                );
             } else {
                 unreachable!("Epoch reward status should NOT be inactive.");
             }
@@ -633,7 +641,10 @@ fn test_extra_fields_full_snapshot_archive() {
 
         if let Some(rewards) = epoch_reward_status_active.as_ref() {
             assert_eq!(bank.block_height(), 1);
-            bank.set_epoch_reward_status_active(rewards.clone());
+            bank.set_epoch_reward_status_active(
+                rewards.clone(),
+                rewards.iter().map(|rewards| rewards.len()).sum(),
+            );
         }
 
         let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
@@ -690,10 +701,15 @@ fn test_extra_fields_full_snapshot_archive() {
             if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
                 start_block_height,
                 calculated_epoch_stake_rewards: ref stake_rewards,
+                total_stake_accounts_to_reward,
             }) = epoch_reward_status
             {
                 assert_eq!(*start_block_height, 1);
                 assert_eq!(&rewards[..], &stake_rewards[..]);
+                assert_eq!(
+                    total_stake_accounts_to_reward,
+                    &rewards.iter().map(|rewards| rewards.len()).sum::<usize>()
+                );
             } else {
                 unreachable!("Epoch reward status should NOT be inactive.");
             }
@@ -786,7 +802,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "E783LfT75MPc1A9bqVtq3HsSkv3MP8kbssyJVYHA3erG")]
+    #[frozen_abi(digest = "GiNpSvaNwvSRXSgNVqViiWzXubeDdUaY5tMGWfhfjK1B")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]

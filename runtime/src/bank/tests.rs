@@ -12615,7 +12615,7 @@ fn test_deactivate_epoch_reward_status() {
         .map(|_| StakeReward::new_random())
         .collect::<Vec<_>>();
 
-    bank.set_epoch_reward_status_active(vec![stake_rewards]);
+    bank.set_epoch_reward_status_active(vec![stake_rewards.clone()], stake_rewards.len());
 
     assert!(bank.get_reward_interval() == RewardInterval::InsideInterval);
     bank.deactivate_epoch_reward_status();
@@ -12633,9 +12633,10 @@ fn test_distribute_partitioned_epoch_rewards() {
         .map(|_| StakeReward::new_random())
         .collect::<Vec<_>>();
 
-    let stake_rewards = hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 100);
+    let stake_rewards_by_partition =
+        hash_rewards_into_partitions(stake_rewards.clone(), &Hash::new(&[1; 32]), 100);
 
-    bank.set_epoch_reward_status_active(stake_rewards);
+    bank.set_epoch_reward_status_active(stake_rewards_by_partition, stake_rewards.len());
 
     bank.distribute_partitioned_epoch_rewards();
 }
@@ -12645,7 +12646,7 @@ fn test_distribute_partitioned_epoch_rewards_empty() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
     let mut bank = Bank::new_for_tests(&genesis_config);
 
-    bank.set_epoch_reward_status_active(vec![]);
+    bank.set_epoch_reward_status_active(vec![], 0);
 
     bank.distribute_partitioned_epoch_rewards();
 }

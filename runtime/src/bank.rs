@@ -885,6 +885,8 @@ pub(crate) struct StartBlockHeightAndRewards {
     pub(crate) start_block_height: u64,
     /// calculated epoch rewards pending distribution, outer Vec is by partition (one partition per block)
     pub(crate) calculated_epoch_stake_rewards: Arc<Vec<StakeRewards>>,
+    /// # stake accounts in `calculated_epoch_stake_rewards`
+    pub(crate) total_stake_accounts_to_reward: usize,
 }
 
 /// Represent whether bank is in the reward phase or not.
@@ -1156,6 +1158,8 @@ struct CalculateRewardsAndDistributeVoteRewardsResult {
     distributed_rewards: u64,
     /// stake rewards that still need to be distributed, grouped by partition
     stake_rewards_by_partition: Vec<StakeRewards>,
+    /// # stake accounts in `calculated_epoch_stake_rewards`
+    pub(crate) total_stake_accounts_to_reward: usize,
 }
 
 pub(crate) type StakeRewards = Vec<StakeReward>;
@@ -1496,10 +1500,15 @@ impl Bank {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn set_epoch_reward_status_active(&mut self, stake_rewards: Vec<StakeRewards>) {
+    pub(crate) fn set_epoch_reward_status_active(
+        &mut self,
+        stake_rewards_by_partition: Vec<StakeRewards>,
+        total_stake_accounts_to_reward: usize,
+    ) {
         self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
             start_block_height: self.block_height,
-            calculated_epoch_stake_rewards: Arc::new(stake_rewards),
+            calculated_epoch_stake_rewards: Arc::new(stake_rewards_by_partition),
+            total_stake_accounts_to_reward,
         });
     }
 
@@ -1898,6 +1907,7 @@ impl Bank {
     ) {
         let CalculateRewardsAndDistributeVoteRewardsResult {
             stake_rewards_by_partition,
+            total_stake_accounts_to_reward,
             ..
         } = self.calculate_rewards_and_distribute_vote_rewards(
             parent_epoch,
@@ -1907,7 +1917,10 @@ impl Bank {
         );
 
         let slot = self.slot();
-        self.set_epoch_reward_status_active(stake_rewards_by_partition);
+        self.set_epoch_reward_status_active(
+            stake_rewards_by_partition,
+            total_stake_accounts_to_reward,
+        );
 
         datapoint_info!(
             "epoch-rewards-status-update",
@@ -1928,13 +1941,13 @@ impl Bank {
 
         assert!(
             self.epoch_schedule.get_slots_in_epoch(self.epoch)
-                > self.get_reward_total_num_blocks(status.calculated_epoch_stake_rewards.len())
+                > self.get_reward_total_num_blocks(status.total_stake_accounts_to_reward)
         );
         let height = self.block_height();
         let start_block_height = status.start_block_height;
         let credit_start = start_block_height + self.get_reward_calculation_num_blocks();
         let credit_end_exclusive = credit_start
-            + self.get_reward_distribution_num_blocks(status.calculated_epoch_stake_rewards.len());
+            + self.get_reward_distribution_num_blocks(status.total_stake_accounts_to_reward);
 
         if height >= credit_start && height < credit_end_exclusive {
             let partition_index = height - credit_start;
@@ -2744,6 +2757,7 @@ impl Bank {
             total_rewards: validator_rewards_paid + total_stake_rewards_lamports,
             distributed_rewards: validator_rewards_paid,
             stake_rewards_by_partition,
+            total_stake_accounts_to_reward: num_stake_accounts,
         }
     }
 
