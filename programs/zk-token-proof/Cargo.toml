@@ -18,7 +18,7 @@ solana-sdk = { workspace = true }
 solana-zk-token-sdk = { workspace = true }
 
 [dev-dependencies]
-criterion = "0.5.1"
+criterion = { workspace = true }
 
 [[bench]]
 name = "verify_proofs"
