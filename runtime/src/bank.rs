@@ -1895,10 +1895,10 @@ impl Bank {
         self.set_epoch_reward_status_active(stake_rewards_by_partition);
 
         datapoint_info!(
-            "epoch-reward-status-update",
+            "epoch-rewards-status-update",
             ("start_slot", slot, i64),
             ("start_block_height", self.block_height(), i64),
-            ("activate", 1, i64),
+            ("active", 1, i64),
             ("parent_slot", parent_slot, i64),
             ("parent_block_height", parent_block_height, i64),
         );
@@ -1931,10 +1931,10 @@ impl Bank {
 
         if height.saturating_add(1) >= credit_end_exclusive {
             datapoint_info!(
-                "epoch-reward-status-update",
+                "epoch-rewards-status-update",
                 ("slot", self.slot(), i64),
                 ("block_height", height, i64),
-                ("activate", 0, i64),
+                ("active", 0, i64),
                 ("start_block_height", start_block_height, i64),
             );
 
