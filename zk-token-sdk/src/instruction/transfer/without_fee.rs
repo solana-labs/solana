@@ -242,11 +242,11 @@ impl ZkProofData<TransferProofContext> for TransferData {
         let new_spendable_ciphertext = self.context.new_source_ciphertext.try_into()?;
 
         self.proof.verify(
-            &ciphertext_lo,
-            &ciphertext_hi,
             &source_pubkey,
             &destination_pubkey,
             &auditor_pubkey,
+            &ciphertext_lo,
+            &ciphertext_hi,
             &new_spendable_ciphertext,
             &mut transcript,
         )
@@ -366,11 +366,11 @@ impl TransferProof {
 
     pub fn verify(
         &self,
-        ciphertext_lo: &TransferAmountCiphertext,
-        ciphertext_hi: &TransferAmountCiphertext,
         source_pubkey: &ElGamalPubkey,
         destination_pubkey: &ElGamalPubkey,
         auditor_pubkey: &ElGamalPubkey,
+        ciphertext_lo: &TransferAmountCiphertext,
+        ciphertext_hi: &TransferAmountCiphertext,
         ciphertext_new_spendable: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ProofError> {

@@ -381,12 +381,12 @@ impl ZkProofData<TransferWithFeeProofContext> for TransferWithFeeData {
         let fee_parameters = self.context.fee_parameters.into();
 
         self.proof.verify(
-            &ciphertext_lo,
-            &ciphertext_hi,
             &source_pubkey,
             &destination_pubkey,
             &auditor_pubkey,
             &withdraw_withheld_authority_pubkey,
+            &ciphertext_lo,
+            &ciphertext_hi,
             &new_source_ciphertext,
             &fee_ciphertext_lo,
             &fee_ciphertext_hi,
@@ -574,12 +574,12 @@ impl TransferWithFeeProof {
 
     pub fn verify(
         &self,
-        ciphertext_lo: &TransferAmountCiphertext,
-        ciphertext_hi: &TransferAmountCiphertext,
         source_pubkey: &ElGamalPubkey,
         destination_pubkey: &ElGamalPubkey,
         auditor_pubkey: &ElGamalPubkey,
         withdraw_withheld_authority_pubkey: &ElGamalPubkey,
+        ciphertext_lo: &TransferAmountCiphertext,
+        ciphertext_hi: &TransferAmountCiphertext,
         new_spendable_ciphertext: &ElGamalCiphertext,
         // fee parameters
         fee_ciphertext_lo: &FeeEncryption,
