@@ -1730,6 +1730,9 @@ impl Bank {
                 let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
                 new.update_epoch_stakes(leader_schedule_epoch);
             }
+            if new.is_partitioned_rewards_code_enabled() {
+                new.distribute_partitioned_epoch_rewards();
+            }
         });
 
         // Update sysvars before processing transactions
@@ -1892,13 +1895,51 @@ impl Bank {
         self.set_epoch_reward_status_active(stake_rewards_by_partition);
 
         datapoint_info!(
-            "epoch-reward-status-update",
+            "epoch-rewards-status-update",
             ("start_slot", slot, i64),
             ("start_block_height", self.block_height(), i64),
-            ("activate", 1, i64),
+            ("active", 1, i64),
             ("parent_slot", parent_slot, i64),
             ("parent_block_height", parent_block_height, i64),
         );
+    }
+
+    /// Process reward distribution for the block if it is inside reward interval.
+    fn distribute_partitioned_epoch_rewards(&mut self) {
+        let EpochRewardStatus::Active(status) = &self.epoch_reward_status
+            else {
+                return;
+            };
+
+        assert!(
+            self.epoch_schedule.get_slots_in_epoch(self.epoch)
+                > self.get_reward_total_num_blocks(status.calculated_epoch_stake_rewards.len())
+        );
+        let height = self.block_height();
+        let start_block_height = status.start_block_height;
+        let credit_start = start_block_height + self.get_reward_calculation_num_blocks();
+        let credit_end_exclusive = credit_start
+            + self.get_reward_distribution_num_blocks(status.calculated_epoch_stake_rewards.len());
+
+        if height >= credit_start && height < credit_end_exclusive {
+            let partition_index = height - credit_start;
+            self.distribute_epoch_rewards_in_partition(
+                &status.calculated_epoch_stake_rewards,
+                partition_index,
+            );
+        }
+
+        if height.saturating_add(1) >= credit_end_exclusive {
+            datapoint_info!(
+                "epoch-rewards-status-update",
+                ("slot", self.slot(), i64),
+                ("block_height", height, i64),
+                ("active", 0, i64),
+                ("start_block_height", start_block_height, i64),
+            );
+
+            self.deactivate_epoch_reward_status();
+        }
     }
 
     pub fn byte_limit_for_scans(&self) -> Option<usize> {
