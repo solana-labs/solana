@@ -5,8 +5,8 @@ pub use self::{
     },
     mem_ops::{SyscallMemcmp, SyscallMemcpy, SyscallMemmove, SyscallMemset},
     sysvar::{
-        SyscallGetClockSysvar, SyscallGetEpochScheduleSysvar, SyscallGetFeesSysvar,
-        SyscallGetLastRestartSlotSysvar, SyscallGetRentSysvar,
+        SyscallGetClockSysvar, SyscallGetEpochRewardsSysvar, SyscallGetEpochScheduleSysvar,
+        SyscallGetFeesSysvar, SyscallGetLastRestartSlotSysvar, SyscallGetRentSysvar,
     },
 };
 #[allow(deprecated)]
@@ -36,7 +36,7 @@ use {
             self, blake3_syscall_enabled, curve25519_syscall_enabled,
             disable_cpi_setting_executable_and_rent_epoch, disable_deploy_of_alloc_free_syscall,
             disable_fees_sysvar, enable_alt_bn128_syscall, enable_big_mod_exp_syscall,
-            enable_early_verification_of_account_modifications,
+            enable_early_verification_of_account_modifications, enable_partitioned_epoch_reward,
             error_on_syscall_bpf_function_hash_collisions, last_restart_slot_sysvar,
             libsecp256k1_0_5_upgrade_enabled, reject_callx_r10,
             stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
@@ -186,6 +186,8 @@ pub fn create_program_runtime_environment<'a>(
     let blake3_syscall_enabled = feature_set.is_active(&blake3_syscall_enabled::id());
     let curve25519_syscall_enabled = feature_set.is_active(&curve25519_syscall_enabled::id());
     let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
+    let epoch_rewards_syscall_enabled =
+        feature_set.is_active(&enable_partitioned_epoch_reward::id());
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
     let last_restart_slot_syscall_enabled = feature_set.is_active(&last_restart_slot_sysvar::id());
@@ -270,6 +272,13 @@ pub fn create_program_runtime_environment<'a>(
         last_restart_slot_syscall_enabled,
         b"sol_get_last_restart_slot",
         SyscallGetLastRestartSlotSysvar::call,
+    )?;
+
+    register_feature_gated_function!(
+        result,
+        epoch_rewards_syscall_enabled,
+        b"sol_get_epoch_rewrds_sysvar",
+        SyscallGetEpochRewardsSysvar::call,
     )?;
 
     // Memory ops
@@ -1807,7 +1816,9 @@ mod tests {
             instruction::Instruction,
             program::check_type_assumptions,
             stable_layout::stable_instruction::StableInstruction,
-            sysvar::{self, clock::Clock, epoch_schedule::EpochSchedule},
+            sysvar::{
+                self, clock::Clock, epoch_rewards::EpochRewards, epoch_schedule::EpochSchedule,
+            },
         },
         std::{mem, str::FromStr},
     };
@@ -3177,11 +3188,17 @@ mod tests {
         src_rent.exemption_threshold = 2.0;
         src_rent.burn_percent = 3;
 
+        let mut src_rewards = create_filled_type::<EpochRewards>(false);
+        src_rewards.total_rewards = 100;
+        src_rewards.distributed_rewards = 10;
+        src_rewards.distribution_complete_block_height = 42;
+
         let mut sysvar_cache = SysvarCache::default();
         sysvar_cache.set_clock(src_clock.clone());
         sysvar_cache.set_epoch_schedule(src_epochschedule);
         sysvar_cache.set_fees(src_fees.clone());
         sysvar_cache.set_rent(src_rent);
+        sysvar_cache.set_epoch_rewards(src_rewards);
 
         let transaction_accounts = vec![
             (
@@ -3199,6 +3216,10 @@ mod tests {
             (
                 sysvar::rent::id(),
                 create_account_shared_data_for_test(&src_rent),
+            ),
+            (
+                sysvar::epoch_rewards::id(),
+                create_account_shared_data_for_test(&src_rewards),
             ),
         ];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
@@ -3344,6 +3365,42 @@ mod tests {
             clean_rent.exemption_threshold = src_rent.exemption_threshold;
             clean_rent.burn_percent = src_rent.burn_percent;
             assert!(are_bytes_equal(&got_rent, &clean_rent));
+        }
+
+        // Test epoch rewards sysvar
+        {
+            let mut got_rewards = create_filled_type::<EpochRewards>(true);
+            let got_rewards_va = 0x100000000;
+
+            let mut memory_mapping = MemoryMapping::new(
+                vec![MemoryRegion::new_writable(
+                    bytes_of_mut(&mut got_rewards),
+                    got_rewards_va,
+                )],
+                &config,
+            )
+            .unwrap();
+
+            let mut result = ProgramResult::Ok(0);
+            SyscallGetEpochRewardsSysvar::call(
+                &mut invoke_context,
+                got_rewards_va,
+                0,
+                0,
+                0,
+                0,
+                &mut memory_mapping,
+                &mut result,
+            );
+            result.unwrap();
+            assert_eq!(got_rewards, src_rewards);
+
+            let mut clean_rewards = create_filled_type::<EpochRewards>(true);
+            clean_rewards.total_rewards = src_rewards.total_rewards;
+            clean_rewards.distributed_rewards = src_rewards.distributed_rewards;
+            clean_rewards.distribution_complete_block_height =
+                src_rewards.distribution_complete_block_height;
+            assert!(are_bytes_equal(&got_rewards, &clean_rewards));
         }
     }
 
