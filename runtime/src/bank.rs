@@ -2362,7 +2362,8 @@ impl Bank {
                 let hard_forks = self.hard_forks();
                 let hard_forks_r = hard_forks.read().unwrap();
 
-                // Only consider hard forks <= this bank's slot to avoid prematurely
+                // Only consider hard forks <= this bank's slot to avoid prematurely applying
+                // a hard fork that is set to occur in the future.
                 hard_forks_r
                     .iter()
                     .rev()
