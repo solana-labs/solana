@@ -156,7 +156,7 @@ use {
         slot_history::{Check, SlotHistory},
         stake::state::Delegation,
         system_transaction,
-        sysvar::{self, Sysvar, SysvarId},
+        sysvar::{self, Sysvar, SysvarId, last_restart_slot::LastRestartSlot},
         timing::years_as_slots,
         transaction::{
             self, MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
@@ -263,7 +263,6 @@ pub struct BankRc {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
-use solana_sdk::sysvar::last_restart_slot::LastRestartSlot;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
@@ -2285,6 +2284,8 @@ impl Bank {
                 let slot = self.slot;
                 let hard_forks = self.hard_forks();
                 let hard_forks_r = hard_forks.read().unwrap();
+
+                // Only consider hard forks <= this bank's slot to avoid prematurely
                 hard_forks_r
                     .iter()
                     .rev()
