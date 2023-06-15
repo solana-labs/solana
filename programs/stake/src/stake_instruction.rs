@@ -408,15 +408,6 @@ declare_process_instruction!(
             }
             Ok(StakeInstruction::GetMinimumDelegation) => {
                 let feature_set = invoke_context.feature_set.as_ref();
-                if !feature_set.is_active(
-                    &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
-                ) {
-                    // Retain previous behavior of always checking that the first account
-                    // is a stake account until the feature is activated
-                    let _ = get_stake_account()?;
-                    return Err(InstructionError::InvalidInstructionData);
-                }
-
                 let minimum_delegation = crate::get_minimum_delegation(feature_set);
                 let minimum_delegation = Vec::from(minimum_delegation.to_le_bytes());
                 invoke_context
@@ -467,28 +458,7 @@ declare_process_instruction!(
                     Err(InstructionError::InvalidInstructionData)
                 }
             }
-            // In order to prevent consensus issues, any new StakeInstruction variant added before the
-            // `add_get_minimum_delegation_instruction_to_stake_program` is activated needs to check
-            // the validity of the stake account by calling the `get_stake_account()` method outside
-            // its own feature gate, as per the following pattern:
-            //  ```
-            //  Ok(StakeInstruction::Variant) -> {
-            //      let mut me = get_stake_account()?;
-            //      if invoke_context
-            //         .feature_set
-            //         .is_active(&feature_set::stake_variant_feature::id()) { .. }
-            //  }
-            // ```
-            // TODO: Remove this comment when `add_get_minimum_delegation_instruction_to_stake_program`
-            // is cleaned up
-            Err(err) => {
-                if !invoke_context.feature_set.is_active(
-                    &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
-                ) {
-                    let _ = get_stake_account()?;
-                }
-                Err(err)
-            }
+            Err(err) => Err(err),
         }
     }
 );
@@ -6375,23 +6345,7 @@ mod tests {
     //
     // The GetMinimumDelegation instruction does not take any accounts; so when it was added,
     // `process_instruction()` needed to be updated to *not* need a stake account passed in, which
-    // changes the error *ordering* conditions.  These changes shall only occur when the
-    // `add_get_minimum_delegation_instruction_to_stake_program` feature is enabled, and this test
-    // ensures it.
-    //
-    // For the following combinations of the feature enabled/disabled, if the instruction is
-    // valid/invalid, and if a stake account is passed in or not, assert the result:
-    //
-    //  feature | instruction | account || result
-    // ---------+-------------+---------++--------
-    //  enabled | good        | some    || Ok
-    //  enabled | bad         | some    || Err InvalidInstructionData
-    //  enabled | good        | none    || Err NotEnoughAccountKeys
-    //  enabled | bad         | none    || Err InvalidInstructionData
-    // disabled | good        | some    || Ok
-    // disabled | bad         | some    || Err InvalidInstructionData
-    // disabled | good        | none    || Err NotEnoughAccountKeys
-    // disabled | bad         | none    || Err NotEnoughAccountKeys
+    // changes the error *ordering* conditions.
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
     fn test_stake_process_instruction_error_ordering(feature_set: Arc<FeatureSet>) {
@@ -6432,60 +6386,26 @@ mod tests {
         let bad_instruction_accounts = Vec::default();
         let bad_accounts = (bad_transaction_accounts, bad_instruction_accounts);
 
-        for (
-            is_feature_enabled,
-            instruction,
-            (transaction_accounts, instruction_accounts),
-            expected_result,
-        ) in [
-            (true, &good_instruction, &good_accounts, Ok(())),
+        for (instruction, (transaction_accounts, instruction_accounts), expected_result) in [
+            (&good_instruction, &good_accounts, Ok(())),
             (
-                true,
                 &bad_instruction,
                 &good_accounts,
                 Err(InstructionError::InvalidInstructionData),
             ),
             (
-                true,
                 &good_instruction,
                 &bad_accounts,
                 Err(InstructionError::NotEnoughAccountKeys),
             ),
             (
-                true,
                 &bad_instruction,
                 &bad_accounts,
                 Err(InstructionError::InvalidInstructionData),
-            ),
-            (false, &good_instruction, &good_accounts, Ok(())),
-            (
-                false,
-                &bad_instruction,
-                &good_accounts,
-                Err(InstructionError::InvalidInstructionData),
-            ),
-            (
-                false,
-                &good_instruction,
-                &bad_accounts,
-                Err(InstructionError::NotEnoughAccountKeys),
-            ),
-            (
-                false,
-                &bad_instruction,
-                &bad_accounts,
-                Err(InstructionError::NotEnoughAccountKeys),
             ),
         ] {
-            let mut feature_set = Arc::new(FeatureSet::clone(&feature_set));
-            if !is_feature_enabled {
-                Arc::get_mut(&mut feature_set).unwrap().deactivate(
-                    &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
-                );
-            }
-
             process_instruction(
-                feature_set,
+                feature_set.clone(),
                 &instruction.data,
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),

@@ -41,17 +41,21 @@ use {
 const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) as u64;
 
 // Add prioritization fee to transfer transactions, when `--use-randomized-compute-unit-price`
-// is used, compute-unit-price is randomly generated in range of (0..MAX_COMPUTE_UNIT_PRICE).
+// is used, compute-unit-price is randomly generated in range of (0..MAX_COMPUTE_UNIT_PRICE)
+// multiplies by COMPUTE_UNIT_PRICE_MULTIPLIER;
 // It also sets transaction's compute-unit to TRANSFER_TRANSACTION_COMPUTE_UNIT. Therefore the
-// max additional cost is `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE / 1_000_000`
+// max additional cost is:
+// `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE * COMPUTE_UNIT_PRICE_MULTIPLIER / 1_000_000`
 const MAX_COMPUTE_UNIT_PRICE: u64 = 50;
-const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 450;
+const COMPUTE_UNIT_PRICE_MULTIPLIER: u64 = 1_000;
+const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 600; // 1 transfer is plus 3 compute_budget ixs
 /// calculate maximum possible prioritization fee, if `use-randomized-compute-unit-price` is
 /// enabled, round to nearest lamports.
 pub fn max_lamports_for_prioritization(use_randomized_compute_unit_price: bool) -> u64 {
     if use_randomized_compute_unit_price {
         const MICRO_LAMPORTS_PER_LAMPORT: u64 = 1_000_000;
         let micro_lamport_fee: u128 = (MAX_COMPUTE_UNIT_PRICE as u128)
+            .saturating_mul(COMPUTE_UNIT_PRICE_MULTIPLIER as u128)
             .saturating_mul(TRANSFER_TRANSACTION_COMPUTE_UNIT as u128);
         let fee = micro_lamport_fee
             .saturating_add(MICRO_LAMPORTS_PER_LAMPORT.saturating_sub(1) as u128)
@@ -61,6 +65,10 @@ pub fn max_lamports_for_prioritization(use_randomized_compute_unit_price: bool) 
         0u64
     }
 }
+
+// set transfer transaction's loaded account data size to 30K - large enough yet smaller than
+// 32K page size, so it'd cost 0 extra CU.
+const TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE: u32 = 30 * 1024;
 
 pub type TimestampedTransaction = (Transaction, Option<u64>);
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<TimestampedTransaction>>>>;
@@ -523,8 +531,13 @@ fn generate_system_txs(
     if use_randomized_compute_unit_price {
         let mut rng = rand::thread_rng();
         let range = Uniform::from(0..MAX_COMPUTE_UNIT_PRICE);
-        let compute_unit_prices: Vec<_> =
-            (0..pairs.len()).map(|_| range.sample(&mut rng)).collect();
+        let compute_unit_prices: Vec<_> = (0..pairs.len())
+            .map(|_| {
+                range
+                    .sample(&mut rng)
+                    .saturating_mul(COMPUTE_UNIT_PRICE_MULTIPLIER)
+            })
+            .collect();
         let pairs_with_compute_unit_prices: Vec<_> =
             pairs.iter().zip(compute_unit_prices.iter()).collect();
 
@@ -592,6 +605,11 @@ fn transfer_with_compute_unit_price_and_padding(
             ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
         ])
     }
+    instructions.extend_from_slice(&[
+        ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(
+            TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
+        ),
+    ]);
     let message = Message::new(&instructions, Some(&from_pubkey));
     Transaction::new(&[from_keypair], message, recent_blockhash)
 }
@@ -678,8 +696,14 @@ fn nonced_transfer_with_padding(
     } else {
         transfer_instruction
     };
+    let mut instructions = vec![instruction];
+    instructions.extend_from_slice(&[
+        ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(
+            TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
+        ),
+    ]);
     let message = Message::new_with_nonce(
-        vec![instruction],
+        instructions,
         Some(&from_pubkey),
         nonce_account,
         &nonce_authority.pubkey(),

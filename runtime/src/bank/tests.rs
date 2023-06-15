@@ -12604,7 +12604,25 @@ fn test_rewards_point_calculation_empty() {
     assert!(point_value.is_none());
 }
 
-/// Test reward computation at epoch boundary
+#[test]
+fn test_deactivate_epoch_reward_status() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+
+    let expected_num = 100;
+
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    bank.set_epoch_reward_status_active(vec![stake_rewards]);
+
+    assert!(bank.get_reward_interval() == RewardInterval::InsideInterval);
+    bank.deactivate_epoch_reward_status();
+    assert!(bank.get_reward_interval() == RewardInterval::OutsideInterval);
+}
+
+/// Test rewards compuation and partitioned rewards distribution at the epoch boundary
 #[test]
 fn test_rewards_computation() {
     solana_logger::setup();
