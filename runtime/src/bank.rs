@@ -1846,12 +1846,24 @@ impl Bank {
 
     #[allow(dead_code)]
     /// partitioned reward distribution is complete.
+    /// So, deactivate the epoch rewards sysvar.
     fn deactivate_epoch_reward_status(&mut self) {
         assert!(matches!(
             self.epoch_reward_status,
             EpochRewardStatus::Active(_)
         ));
         self.epoch_reward_status = EpochRewardStatus::Inactive;
+        if let Some(account) = self.get_account(&sysvar::epoch_rewards::id()) {
+            if account.lamports() > 0 {
+                info!(
+                    "burning {} extra lamports in EpochRewards sysvar account at slot {}",
+                    account.lamports(),
+                    self.slot()
+                );
+                self.log_epoch_rewards_sysvar("burn");
+                self.burn_and_purge_account(&sysvar::epoch_rewards::id(), account);
+            }
+        }
     }
 
     #[allow(dead_code)]
