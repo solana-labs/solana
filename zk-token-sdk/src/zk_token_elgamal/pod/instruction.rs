@@ -15,15 +15,6 @@ pub struct TransferPubkeys {
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-pub struct TransferWithFeePubkeys {
-    pub source_pubkey: ElGamalPubkey,
-    pub destination_pubkey: ElGamalPubkey,
-    pub auditor_pubkey: ElGamalPubkey,
-    pub withdraw_withheld_authority_pubkey: ElGamalPubkey,
-}
-
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
 pub struct TransferAmountCiphertext(pub GroupedElGamalCiphertext3Handles);
 
 #[cfg(not(target_os = "solana"))]

@@ -20,7 +20,6 @@ use {
         },
         transcript::TranscriptProtocol,
     },
-    arrayref::{array_ref, array_refs},
     bytemuck::bytes_of,
     curve25519_dalek::scalar::Scalar,
     merlin::Transcript,
@@ -87,7 +86,7 @@ pub struct TransferWithFeeProofContext {
     pub ciphertext_hi: pod::TransferAmountCiphertext, // 128 bytes
 
     /// The public encryption keys associated with the transfer: source, dest, and auditor
-    pub transfer_with_fee_pubkeys: pod::TransferWithFeePubkeys, // 128 bytes
+    pub transfer_with_fee_pubkeys: TransferWithFeePubkeys, // 128 bytes
 
     /// The final spendable ciphertext after the transfer,
     pub new_source_ciphertext: pod::ElGamalCiphertext, // 64 bytes
@@ -177,7 +176,7 @@ impl TransferWithFeeData {
         );
 
         // generate transcript and append all public inputs
-        let pod_transfer_with_fee_pubkeys = pod::TransferWithFeePubkeys {
+        let pod_transfer_with_fee_pubkeys = TransferWithFeePubkeys {
             source_pubkey: source_keypair.public.into(),
             destination_pubkey: (*destination_pubkey).into(),
             auditor_pubkey: (*auditor_pubkey).into(),
@@ -350,9 +349,29 @@ impl ZkProofData<TransferWithFeeProofContext> for TransferWithFeeData {
     fn verify_proof(&self) -> Result<(), ProofError> {
         let mut transcript = self.context.new_transcript();
 
+        let source_pubkey = self
+            .context
+            .transfer_with_fee_pubkeys
+            .source_pubkey
+            .try_into()?;
+        let destination_pubkey = self
+            .context
+            .transfer_with_fee_pubkeys
+            .destination_pubkey
+            .try_into()?;
+        let auditor_pubkey = self
+            .context
+            .transfer_with_fee_pubkeys
+            .auditor_pubkey
+            .try_into()?;
+        let withdraw_withheld_authority_pubkey = self
+            .context
+            .transfer_with_fee_pubkeys
+            .withdraw_withheld_authority_pubkey
+            .try_into()?;
+
         let ciphertext_lo = self.context.ciphertext_lo.try_into()?;
         let ciphertext_hi = self.context.ciphertext_hi.try_into()?;
-        let pubkeys_transfer_with_fee = self.context.transfer_with_fee_pubkeys.try_into()?;
         let new_source_ciphertext = self.context.new_source_ciphertext.try_into()?;
 
         let fee_ciphertext_lo = self.context.fee_ciphertext_lo.try_into()?;
@@ -362,7 +381,10 @@ impl ZkProofData<TransferWithFeeProofContext> for TransferWithFeeData {
         self.proof.verify(
             &ciphertext_lo,
             &ciphertext_hi,
-            &pubkeys_transfer_with_fee,
+            &source_pubkey,
+            &destination_pubkey,
+            &auditor_pubkey,
+            &withdraw_withheld_authority_pubkey,
             &new_source_ciphertext,
             &fee_ciphertext_lo,
             &fee_ciphertext_hi,
@@ -552,7 +574,10 @@ impl TransferWithFeeProof {
         &self,
         ciphertext_lo: &TransferAmountCiphertext,
         ciphertext_hi: &TransferAmountCiphertext,
-        transfer_with_fee_pubkeys: &TransferWithFeePubkeys,
+        source_pubkey: &ElGamalPubkey,
+        destination_pubkey: &ElGamalPubkey,
+        auditor_pubkey: &ElGamalPubkey,
+        withdraw_withheld_authority_pubkey: &ElGamalPubkey,
         new_spendable_ciphertext: &ElGamalCiphertext,
         // fee parameters
         fee_ciphertext_lo: &FeeEncryption,
@@ -575,7 +600,7 @@ impl TransferWithFeeProof {
 
         // verify equality proof
         equality_proof.verify(
-            &transfer_with_fee_pubkeys.source_pubkey,
+            source_pubkey,
             new_spendable_ciphertext,
             &new_source_commitment,
             transcript,
@@ -583,10 +608,7 @@ impl TransferWithFeeProof {
 
         // verify that the transfer amount is encrypted correctly
         ciphertext_amount_validity_proof.verify(
-            (
-                &transfer_with_fee_pubkeys.destination_pubkey,
-                &transfer_with_fee_pubkeys.auditor_pubkey,
-            ),
+            (destination_pubkey, auditor_pubkey),
             (
                 ciphertext_lo.get_commitment(),
                 ciphertext_hi.get_commitment(),
@@ -636,10 +658,7 @@ impl TransferWithFeeProof {
 
         // verify ciphertext validity proof for fee ciphertexts
         fee_ciphertext_validity_proof.verify(
-            (
-                &transfer_with_fee_pubkeys.destination_pubkey,
-                &transfer_with_fee_pubkeys.withdraw_withheld_authority_pubkey,
-            ),
+            (destination_pubkey, withdraw_withheld_authority_pubkey),
             (
                 fee_ciphertext_lo.get_commitment(),
                 fee_ciphertext_hi.get_commitment(),
@@ -686,49 +705,13 @@ impl TransferWithFeeProof {
 }
 
 /// The ElGamal public keys needed for a transfer with fee
-#[derive(Clone)]
+#[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-#[cfg(not(target_os = "solana"))]
 pub struct TransferWithFeePubkeys {
-    pub source_pubkey: ElGamalPubkey,
-    pub destination_pubkey: ElGamalPubkey,
-    pub auditor_pubkey: ElGamalPubkey,
-    pub withdraw_withheld_authority_pubkey: ElGamalPubkey,
-}
-
-#[cfg(not(target_os = "solana"))]
-impl TransferWithFeePubkeys {
-    pub fn to_bytes(&self) -> [u8; 128] {
-        let mut bytes = [0u8; 128];
-        bytes[..32].copy_from_slice(&self.source_pubkey.to_bytes());
-        bytes[32..64].copy_from_slice(&self.destination_pubkey.to_bytes());
-        bytes[64..96].copy_from_slice(&self.auditor_pubkey.to_bytes());
-        bytes[96..128].copy_from_slice(&self.withdraw_withheld_authority_pubkey.to_bytes());
-        bytes
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
-        let bytes = array_ref![bytes, 0, 128];
-        let (source_pubkey, destination_pubkey, auditor_pubkey, withdraw_withheld_authority_pubkey) =
-            array_refs![bytes, 32, 32, 32, 32];
-
-        let source_pubkey =
-            ElGamalPubkey::from_bytes(source_pubkey).ok_or(ProofError::PubkeyDeserialization)?;
-        let destination_pubkey = ElGamalPubkey::from_bytes(destination_pubkey)
-            .ok_or(ProofError::PubkeyDeserialization)?;
-        let auditor_pubkey =
-            ElGamalPubkey::from_bytes(auditor_pubkey).ok_or(ProofError::PubkeyDeserialization)?;
-        let withdraw_withheld_authority_pubkey =
-            ElGamalPubkey::from_bytes(withdraw_withheld_authority_pubkey)
-                .ok_or(ProofError::PubkeyDeserialization)?;
-
-        Ok(Self {
-            source_pubkey,
-            destination_pubkey,
-            auditor_pubkey,
-            withdraw_withheld_authority_pubkey,
-        })
-    }
+    pub source_pubkey: pod::ElGamalPubkey,
+    pub destination_pubkey: pod::ElGamalPubkey,
+    pub auditor_pubkey: pod::ElGamalPubkey,
+    pub withdraw_withheld_authority_pubkey: pod::ElGamalPubkey,
 }
 
 #[cfg(not(target_os = "solana"))]
