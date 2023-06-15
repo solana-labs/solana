@@ -124,9 +124,9 @@ impl TransferData {
 
         // generate transcript and append all public inputs
         let pod_transfer_pubkeys = TransferPubkeys {
-            source_pubkey: source_keypair.public.into(),
-            destination_pubkey: (*destination_pubkey).into(),
-            auditor_pubkey: (*auditor_pubkey).into(),
+            source: source_keypair.public.into(),
+            destination: (*destination_pubkey).into(),
+            auditor: (*auditor_pubkey).into(),
         };
         let pod_ciphertext_lo: pod::TransferAmountCiphertext = ciphertext_lo.into();
         let pod_ciphertext_hi: pod::TransferAmountCiphertext = ciphertext_hi.into();
@@ -224,13 +224,9 @@ impl ZkProofData<TransferProofContext> for TransferData {
         // generate transcript and append all public inputs
         let mut transcript = self.context.new_transcript();
 
-        let source_pubkey = self.context.transfer_pubkeys.source_pubkey.try_into()?;
-        let destination_pubkey = self
-            .context
-            .transfer_pubkeys
-            .destination_pubkey
-            .try_into()?;
-        let auditor_pubkey = self.context.transfer_pubkeys.auditor_pubkey.try_into()?;
+        let source_pubkey = self.context.transfer_pubkeys.source.try_into()?;
+        let destination_pubkey = self.context.transfer_pubkeys.destination.try_into()?;
+        let auditor_pubkey = self.context.transfer_pubkeys.auditor.try_into()?;
 
         let ciphertext_lo = self.context.ciphertext_lo.try_into()?;
         let ciphertext_hi = self.context.ciphertext_hi.try_into()?;
@@ -447,9 +443,9 @@ impl TransferProof {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferPubkeys {
-    pub source_pubkey: pod::ElGamalPubkey,
-    pub destination_pubkey: pod::ElGamalPubkey,
-    pub auditor_pubkey: pod::ElGamalPubkey,
+    pub source: pod::ElGamalPubkey,
+    pub destination: pod::ElGamalPubkey,
+    pub auditor: pod::ElGamalPubkey,
 }
 
 #[cfg(test)]
