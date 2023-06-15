@@ -884,7 +884,7 @@ pub(crate) struct StartBlockHeightAndRewards {
     /// the block height of the slot at which rewards distribution began
     pub(crate) start_block_height: u64,
     /// calculated epoch rewards pending distribution, outer Vec is by partition (one partition per block)
-    pub(crate) calculated_epoch_stake_rewards: Arc<Vec<StakeRewards>>,
+    pub(crate) stake_rewards_by_partition: Arc<Vec<StakeRewards>>,
 }
 
 /// Represent whether bank is in the reward phase or not.
@@ -1496,10 +1496,13 @@ impl Bank {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn set_epoch_reward_status_active(&mut self, stake_rewards: Vec<StakeRewards>) {
+    pub(crate) fn set_epoch_reward_status_active(
+        &mut self,
+        stake_rewards_by_partition: Vec<StakeRewards>,
+    ) {
         self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
             start_block_height: self.block_height,
-            calculated_epoch_stake_rewards: Arc::new(stake_rewards),
+            stake_rewards_by_partition: Arc::new(stake_rewards_by_partition),
         });
     }
 
@@ -1937,8 +1940,7 @@ impl Bank {
         let height = self.block_height();
         let start_block_height = status.start_block_height;
         let credit_start = start_block_height + self.get_reward_calculation_num_blocks();
-        let credit_end_exclusive =
-            credit_start + status.calculated_epoch_stake_rewards.len() as u64;
+        let credit_end_exclusive = credit_start + status.stake_rewards_by_partition.len() as u64;
         assert!(
             self.epoch_schedule.get_slots_in_epoch(self.epoch)
                 > credit_end_exclusive.saturating_sub(credit_start)
@@ -1947,7 +1949,7 @@ impl Bank {
         if height >= credit_start && height < credit_end_exclusive {
             let partition_index = height - credit_start;
             self.distribute_epoch_rewards_in_partition(
-                &status.calculated_epoch_stake_rewards,
+                &status.stake_rewards_by_partition,
                 partition_index,
             );
         }

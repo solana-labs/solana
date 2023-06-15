@@ -606,11 +606,11 @@ fn test_extra_fields_eof() {
             assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
             if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
                 start_block_height,
-                calculated_epoch_stake_rewards: ref stake_rewards,
+                ref stake_rewards_by_partition,
             }) = epoch_reward_status
             {
                 assert_eq!(*start_block_height, 1);
-                assert_eq!(&rewards[..], &stake_rewards[..]);
+                assert_eq!(&rewards[..], &stake_rewards_by_partition[..]);
             } else {
                 unreachable!("Epoch reward status should NOT be inactive.");
             }
@@ -698,11 +698,11 @@ fn test_extra_fields_full_snapshot_archive() {
             assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
             if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
                 start_block_height,
-                calculated_epoch_stake_rewards: ref stake_rewards,
+                ref stake_rewards_by_partition,
             }) = epoch_reward_status
             {
                 assert_eq!(*start_block_height, 1);
-                assert_eq!(&rewards[..], &stake_rewards[..]);
+                assert_eq!(&rewards[..], &stake_rewards_by_partition[..]);
             } else {
                 unreachable!("Epoch reward status should NOT be inactive.");
             }
@@ -795,7 +795,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "E783LfT75MPc1A9bqVtq3HsSkv3MP8kbssyJVYHA3erG")]
+    #[frozen_abi(digest = "A99zFXvqYm88n6EbtEFbroDbuFNnhw4K7AmqMh2wjJmh")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]
