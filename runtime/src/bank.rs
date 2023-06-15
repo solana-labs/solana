@@ -1503,6 +1503,12 @@ impl Bank {
         });
     }
 
+    #[allow(dead_code)]
+    #[cfg(test)]
+    pub(crate) fn set_partitioned_rewards_feature_enabled_for_tests(&mut self) {
+        self.activate_feature(&enable_partitioned_epoch_reward::id())
+    }
+
     fn partitioned_epoch_rewards_config(&self) -> &PartitionedEpochRewardsConfig {
         &self
             .rc
