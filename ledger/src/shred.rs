@@ -925,7 +925,7 @@ pub fn should_discard_shred(
     let slot = match layout::get_slot(shred) {
         Some(slot) => {
             if slot > max_slot {
-                stats.slot_out_of_range += 1;
+                stats.record_out_of_range_slot(slot);
                 return true;
             }
             slot
@@ -949,7 +949,7 @@ pub fn should_discard_shred(
                 return true;
             }
             if slot <= root {
-                stats.slot_out_of_range += 1;
+                stats.record_out_of_range_slot(slot);
                 return true;
             }
         }
@@ -973,7 +973,7 @@ pub fn should_discard_shred(
                 }
             };
             if !blockstore::verify_shred_slots(slot, parent, root) {
-                stats.slot_out_of_range += 1;
+                stats.record_out_of_range_slot(slot);
                 return true;
             }
         }
@@ -1190,7 +1190,16 @@ mod tests {
             |_| false, // should_drop_merkle_shreds
             &mut stats
         ));
-        assert_eq!(stats, ShredFetchStats::default());
+        assert_eq!(stats.index_overrun, 0);
+        assert_eq!(stats.num_shreds_merkle_code, 0);
+        assert_eq!(stats.num_shreds_merkle_data, 0);
+        assert_eq!(stats.index_bad_deserialize, 0);
+        assert_eq!(stats.index_out_of_bounds, 0);
+        assert_eq!(stats.slot_bad_deserialize, 0);
+        assert_eq!(stats.slot_out_of_range, 0);
+        assert_eq!(stats.bad_shred_type, 0);
+        assert_eq!(stats.shred_version_mismatch, 0);
+        assert_eq!(stats.bad_parent_offset, 0);
 
         packet.meta_mut().size = OFFSET_OF_SHRED_VARIANT;
         assert!(should_discard_shred(

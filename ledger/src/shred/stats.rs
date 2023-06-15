@@ -1,4 +1,5 @@
 use {
+    lru::LruCache,
     solana_sdk::clock::Slot,
     std::{
         ops::AddAssign,
@@ -28,7 +29,7 @@ pub struct ProcessShredsStats {
     pub num_merkle_coding_shreds: usize,
 }
 
-#[derive(Default, Debug, Eq, PartialEq)]
+#[derive(Debug, Default)]
 pub struct ShredFetchStats {
     pub index_overrun: usize,
     pub shred_count: usize,
@@ -40,6 +41,7 @@ pub struct ShredFetchStats {
     pub(crate) index_out_of_bounds: usize,
     pub(crate) slot_bad_deserialize: usize,
     pub slot_out_of_range: usize,
+    pub(crate) slot_out_of_range_slots: Option<LruCache<Slot, usize>>,
     pub(crate) bad_shred_type: usize,
     pub shred_version_mismatch: usize,
     pub(crate) bad_parent_offset: usize,
@@ -107,11 +109,31 @@ impl ProcessShredsStats {
 }
 
 impl ShredFetchStats {
+    pub fn record_out_of_range_slot(&mut self, slot: Slot) {
+        const OUT_OF_RANGE_CACHE_CAPACITY: usize = 100;
+        self.slot_out_of_range += 1;
+        if self.slot_out_of_range_slots.is_none() {
+            self.slot_out_of_range_slots = Some(LruCache::new(OUT_OF_RANGE_CACHE_CAPACITY));
+        }
+        let cache = self.slot_out_of_range_slots.as_mut().unwrap();
+        cache.get_or_insert(slot, || 0);
+        *cache.get_mut(&slot).unwrap() += 1;
+    }
+
     pub fn maybe_submit(&mut self, name: &'static str, cadence: Duration) {
         let elapsed = self.since.as_ref().map(Instant::elapsed);
         if elapsed.unwrap_or(Duration::MAX) < cadence {
             return;
         }
+        let mut top_slots_out_of_range = {
+            let mut slot_counts: Vec<_> = self
+                .slot_out_of_range_slots
+                .as_ref()
+                .map(|cache| cache.iter().collect())
+                .unwrap_or_default();
+            slot_counts.sort_unstable_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+            slot_counts.into_iter().map(|(slot, _)| *slot)
+        };
         datapoint_info!(
             name,
             ("index_overrun", self.index_overrun, i64),
@@ -124,6 +146,9 @@ impl ShredFetchStats {
             ("index_bad_deserialize", self.index_bad_deserialize, i64),
             ("index_out_of_bounds", self.index_out_of_bounds, i64),
             ("slot_out_of_range", self.slot_out_of_range, i64),
+            ("top_slot_out_of_range_1", top_slots_out_of_range.next(), Option<i64>),
+            ("top_slot_out_of_range_2", top_slots_out_of_range.next(), Option<i64>),
+            ("top_slot_out_of_range_3", top_slots_out_of_range.next(), Option<i64>),
             ("bad_shred_type", self.bad_shred_type, i64),
             ("shred_version_mismatch", self.shred_version_mismatch, i64),
             ("bad_parent_offset", self.bad_parent_offset, i64),
