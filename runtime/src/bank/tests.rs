@@ -12633,7 +12633,30 @@ fn test_distribute_partitioned_epoch_rewards() {
         .map(|_| StakeReward::new_random())
         .collect::<Vec<_>>();
 
-    let stake_rewards = hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 100);
+    let stake_rewards = hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 2);
+
+    bank.set_epoch_reward_status_active(stake_rewards);
+
+    bank.distribute_partitioned_epoch_rewards();
+}
+
+#[test]
+#[should_panic(expected = "assertion failed: self.epoch_schedule.get_slots_in_epoch")]
+fn test_distribute_partitioned_epoch_rewards_too_many_partitions() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+
+    let expected_num = 1;
+
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    let stake_rewards = hash_rewards_into_partitions(
+        stake_rewards,
+        &Hash::new(&[1; 32]),
+        bank.epoch_schedule().slots_per_epoch as usize + 1,
+    );
 
     bank.set_epoch_reward_status_active(stake_rewards);
 

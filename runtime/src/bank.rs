@@ -1934,15 +1934,15 @@ impl Bank {
                 return;
             };
 
-        assert!(
-            self.epoch_schedule.get_slots_in_epoch(self.epoch)
-                > self.get_reward_total_num_blocks(status.calculated_epoch_stake_rewards.len())
-        );
         let height = self.block_height();
         let start_block_height = status.start_block_height;
         let credit_start = start_block_height + self.get_reward_calculation_num_blocks();
-        let credit_end_exclusive = credit_start
-            + self.get_reward_distribution_num_blocks(status.calculated_epoch_stake_rewards.len());
+        let credit_end_exclusive =
+            credit_start + status.calculated_epoch_stake_rewards.len() as u64;
+        assert!(
+            self.epoch_schedule.get_slots_in_epoch(self.epoch)
+                > credit_end_exclusive.saturating_sub(credit_start)
+        );
 
         if height >= credit_start && height < credit_end_exclusive {
             let partition_index = height - credit_start;
