@@ -1135,20 +1135,9 @@ fn check_deserialize_file_consumed(
 }
 
 /// Return account path from the appendvec path after checking its format.
-fn get_account_path_from_appendvec_path(appendvec_path: &Path) -> Option<PathBuf> {
-    let run_path = appendvec_path.parent()?;
-    let run_file_name = run_path.file_name()?;
-    // All appendvec files should be under <account_path>/run/.
-    // When generating the bank snapshot directory, they are hardlinked to <account_path>/snapshot/<slot>/
-    if run_file_name != "run" {
-        error!(
-            "The account path {} does not have run/ as its immediate parent directory.",
-            run_path.display()
-        );
-        return None;
-    }
-    let account_path = run_path.parent()?;
-    Some(account_path.to_path_buf())
+fn get_account_path_from_appendvec_path(appendvec_path: &Path) -> Option<AccountDirectory> {
+    let base_account_path = appendvec_path.parent()?.parent()?;
+    AccountDirectory::existing(base_account_path).ok()
 }
 
 /// From an appendvec path, derive the snapshot hardlink path.  If the corresponding snapshot hardlink
@@ -1162,11 +1151,11 @@ fn get_snapshot_accounts_hardlink_dir(
     let account_path = get_account_path_from_appendvec_path(appendvec_path)
         .ok_or_else(|| SnapshotError::InvalidAppendVecPath(appendvec_path.to_path_buf()))?;
 
-    let snapshot_hardlink_dir = account_path.join("snapshot").join(bank_slot.to_string());
+    let snapshot_hardlink_dir = account_path.snapshot_dir().join(bank_slot.to_string());
 
     // Use the hashset to track, to avoid checking the file system.  Only set up the hardlink directory
     // and the symlink to it at the first time of seeing the account_path.
-    if !account_paths.contains(&account_path) {
+    if !account_paths.contains(account_path.root_dir()) {
         let idx = account_paths.len();
         debug!(
             "for appendvec_path {}, create hard-link path {}",
@@ -1188,7 +1177,7 @@ fn get_snapshot_accounts_hardlink_dir(
                 snapshot_hardlink_dir.clone(),
             )
         })?;
-        account_paths.insert(account_path);
+        account_paths.insert(account_path.root_dir().to_path_buf());
     };
 
     Ok(snapshot_hardlink_dir)
