@@ -1111,15 +1111,25 @@ mod tests {
         super::*,
         solana_runtime::{bank::Bank, bank_client::BankClient},
         solana_sdk::{
-            commitment_config::CommitmentConfig, fee_calculator::FeeRateGovernor,
-            genesis_config::create_genesis_config, native_token::sol_to_lamports, nonce::State,
+            commitment_config::CommitmentConfig,
+            feature_set::FeatureSet,
+            fee_calculator::FeeRateGovernor,
+            genesis_config::{create_genesis_config, GenesisConfig},
+            native_token::sol_to_lamports,
+            nonce::State,
         },
     };
+
+    fn bank_with_all_features(genesis_config: &GenesisConfig) -> Bank {
+        let mut bank = Bank::new_for_tests(genesis_config);
+        bank.feature_set = Arc::new(FeatureSet::all_enabled());
+        bank
+    }
 
     #[test]
     fn test_bench_tps_bank_client() {
         let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = bank_with_all_features(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
 
         let config = Config {
@@ -1139,7 +1149,7 @@ mod tests {
     #[test]
     fn test_bench_tps_fund_keys() {
         let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = bank_with_all_features(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
         let keypair_count = 20;
         let lamports = 20;
@@ -1163,7 +1173,7 @@ mod tests {
         let (mut genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
         let fee_rate_governor = FeeRateGovernor::new(11, 0);
         genesis_config.fee_rate_governor = fee_rate_governor;
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = bank_with_all_features(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
         let keypair_count = 20;
         let lamports = 20;
@@ -1180,7 +1190,7 @@ mod tests {
     #[test]
     fn test_bench_tps_create_durable_nonce() {
         let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = bank_with_all_features(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
         let keypair_count = 10;
         let lamports = 10_000_000;
