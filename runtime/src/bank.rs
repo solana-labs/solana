@@ -1906,38 +1906,39 @@ impl Bank {
 
     /// Process reward distribution for the block if it is inside reward interval.
     fn distribute_partitioned_epoch_rewards(&mut self) {
-        if let EpochRewardStatus::Active(status) = &self.epoch_reward_status {
-            assert!(
-                self.epoch_schedule.get_slots_in_epoch(self.epoch)
-                    > self.get_reward_total_num_blocks(status.calculated_epoch_stake_rewards.len())
+        let EpochRewardStatus::Active(status) = &self.epoch_reward_status
+            else {
+                return;
+            };
+
+        assert!(
+            self.epoch_schedule.get_slots_in_epoch(self.epoch)
+                > self.get_reward_total_num_blocks(status.calculated_epoch_stake_rewards.len())
+        );
+        let height = self.block_height();
+        let start_block_height = status.start_block_height;
+        let credit_start = start_block_height + self.get_reward_calculation_num_blocks();
+        let credit_end_exclusive = credit_start
+            + self.get_reward_distribution_num_blocks(status.calculated_epoch_stake_rewards.len());
+
+        if height >= credit_start && height < credit_end_exclusive {
+            let partition_index = height - credit_start;
+            self.distribute_epoch_rewards_in_partition(
+                &status.calculated_epoch_stake_rewards,
+                partition_index,
             );
-            let height = self.block_height();
-            let start_block_height = status.start_block_height;
-            let credit_start = start_block_height + self.get_reward_calculation_num_blocks();
-            let credit_end_exclusive = credit_start
-                + self.get_reward_distribution_num_blocks(
-                    status.calculated_epoch_stake_rewards.len(),
-                );
+        }
 
-            if height >= credit_start && height < credit_end_exclusive {
-                let partition_index = height - credit_start;
-                self.distribute_epoch_rewards_in_partition(
-                    &status.calculated_epoch_stake_rewards,
-                    partition_index,
-                );
-            }
+        if height.saturating_add(1) >= credit_end_exclusive {
+            datapoint_info!(
+                "epoch-reward-status-update",
+                ("slot", self.slot(), i64),
+                ("block_height", height, i64),
+                ("activate", 0, i64),
+                ("start_block_height", start_block_height, i64),
+            );
 
-            if height.saturating_add(1) >= credit_end_exclusive {
-                datapoint_warn!(
-                    "reward-status-update",
-                    ("slot", self.slot(), i64),
-                    ("height", height, i64),
-                    ("activate", 0, i64),
-                    ("start_height", start_block_height, i64),
-                );
-
-                self.deactivate_epoch_reward_status();
-            }
+            self.deactivate_epoch_reward_status();
         }
     }
 
