@@ -1855,7 +1855,7 @@ impl Bank {
         self.epoch_reward_status = EpochRewardStatus::Inactive;
         if let Some(account) = self.get_account(&sysvar::epoch_rewards::id()) {
             if account.lamports() > 0 {
-                warn!(
+                info!(
                     "burning {} extra lamports in EpochRewards sysvar account at slot {}",
                     account.lamports(),
                     self.slot()
