@@ -4918,7 +4918,7 @@ fn test_boot_from_local_state() {
     cluster.add_validator(
         &validator3_config.validator_config,
         DEFAULT_NODE_STAKE,
-        validator3_identity.clone(),
+        validator3_identity,
         None,
         SocketAddrSpace::Unspecified,
     );
