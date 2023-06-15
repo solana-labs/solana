@@ -101,6 +101,16 @@ pub struct TransferWithFeeProofContext {
     pub fee_parameters: pod::FeeParameters, // 10 bytes
 }
 
+/// The ElGamal public keys needed for a transfer with fee
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct TransferWithFeePubkeys {
+    pub source: pod::ElGamalPubkey,
+    pub destination: pod::ElGamalPubkey,
+    pub auditor: pod::ElGamalPubkey,
+    pub withdraw_withheld_authority: pod::ElGamalPubkey,
+}
+
 #[cfg(not(target_os = "solana"))]
 impl TransferWithFeeData {
     pub fn new(
@@ -694,16 +704,6 @@ impl TransferWithFeeProof {
 
         Ok(())
     }
-}
-
-/// The ElGamal public keys needed for a transfer with fee
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-pub struct TransferWithFeePubkeys {
-    pub source: pod::ElGamalPubkey,
-    pub destination: pod::ElGamalPubkey,
-    pub auditor: pod::ElGamalPubkey,
-    pub withdraw_withheld_authority: pod::ElGamalPubkey,
 }
 
 #[cfg(not(target_os = "solana"))]

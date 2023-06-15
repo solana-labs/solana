@@ -74,6 +74,15 @@ pub struct TransferProofContext {
     pub new_source_ciphertext: pod::ElGamalCiphertext, // 64 bytes
 }
 
+/// The ElGamal public keys needed for a transfer
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct TransferPubkeys {
+    pub source: pod::ElGamalPubkey,
+    pub destination: pod::ElGamalPubkey,
+    pub auditor: pod::ElGamalPubkey,
+}
+
 #[cfg(not(target_os = "solana"))]
 impl TransferData {
     #[allow(clippy::too_many_arguments)]
@@ -437,15 +446,6 @@ impl TransferProof {
 
         Ok(())
     }
-}
-
-/// The ElGamal public keys needed for a transfer
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-pub struct TransferPubkeys {
-    pub source: pod::ElGamalPubkey,
-    pub destination: pod::ElGamalPubkey,
-    pub auditor: pod::ElGamalPubkey,
 }
 
 #[cfg(test)]
