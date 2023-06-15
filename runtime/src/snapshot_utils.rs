@@ -1134,58 +1134,6 @@ fn check_deserialize_file_consumed(
     Ok(())
 }
 
-/// To allow generating a bank snapshot directory with full state information, we need to
-/// hardlink account appendvec files from the runtime operation directory to a snapshot
-/// hardlink directory.  This is to create the run/ and snapshot sub directories for an
-/// account_path provided by the user.  These two sub directories are on the same file
-/// system partition to allow hard-linking.
-pub fn create_accounts_run_and_snapshot_dirs(
-    account_dir: impl AsRef<Path>,
-) -> std::io::Result<(PathBuf, PathBuf)> {
-    let run_path = account_dir.as_ref().join("run");
-    let snapshot_path = account_dir.as_ref().join("snapshot");
-    if (!run_path.is_dir()) || (!snapshot_path.is_dir()) {
-        // If the "run/" or "snapshot" sub directories do not exist, the directory may be from
-        // an older version for which the appendvec files are at this directory.  Clean up
-        // them first.
-        // This will be done only once when transitioning from an old image without run directory
-        // to this new version using run and snapshot directories.
-        // The run/ content cleanup will be done at a later point.  The snapshot/ content persists
-        // across the process boot, and will be purged by the account_background_service.
-        if fs::remove_dir_all(&account_dir).is_err() {
-            delete_contents_of_path(&account_dir);
-        }
-        fs::create_dir_all(&run_path)?;
-        fs::create_dir_all(&snapshot_path)?;
-    }
-
-    Ok((run_path, snapshot_path))
-}
-
-/// For all account_paths, create the run/ and snapshot/ sub directories.
-/// If an account_path directory does not exist, create it.
-/// It returns (account_run_paths, account_snapshot_paths) or error
-pub fn create_all_accounts_run_and_snapshot_dirs(
-    account_paths: &[PathBuf],
-) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
-    let mut run_dirs = Vec::with_capacity(account_paths.len());
-    let mut snapshot_dirs = Vec::with_capacity(account_paths.len());
-    for account_path in account_paths {
-        // create the run/ and snapshot/ sub directories for each account_path
-        let (run_dir, snapshot_dir) =
-            create_accounts_run_and_snapshot_dirs(account_path).map_err(|err| {
-                SnapshotError::IoWithSourceAndFile(
-                    err,
-                    "Unable to create account run and snapshot directories",
-                    account_path.to_path_buf(),
-                )
-            })?;
-        run_dirs.push(run_dir);
-        snapshot_dirs.push(snapshot_dir);
-    }
-    Ok((run_dirs, snapshot_dirs))
-}
-
 /// Return account path from the appendvec path after checking its format.
 fn get_account_path_from_appendvec_path(appendvec_path: &Path) -> Option<PathBuf> {
     let run_path = appendvec_path.parent()?;
@@ -3439,11 +3387,11 @@ mod tests {
         std::{
             convert::TryFrom,
             mem::size_of,
-            os::unix::fs::PermissionsExt,
             sync::{atomic::Ordering, Arc},
         },
         tempfile::NamedTempFile,
     };
+
     #[test]
     fn test_serialize_snapshot_data_file_under_limit() {
         let temp_dir = tempfile::TempDir::new().unwrap();
@@ -5294,52 +5242,6 @@ mod tests {
         fs::remove_file(status_cache_file).unwrap();
         let snapshot = get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 1);
-    }
-
-    #[test]
-    pub fn test_create_all_accounts_run_and_snapshot_dirs() {
-        let (_tmp_dirs, account_paths): (Vec<TempDir>, Vec<PathBuf>) = (0..4)
-            .map(|_| {
-                let tmp_dir = tempfile::TempDir::new().unwrap();
-                let account_path = tmp_dir.path().join("accounts");
-                (tmp_dir, account_path)
-            })
-            .unzip();
-
-        // Set the parent directory of the first account path to be readonly, so that
-        // create_dir_all in create_all_accounts_run_and_snapshot_dirs fails.
-        let account_path_first = &account_paths[0];
-        let parent = account_path_first.parent().unwrap();
-        let mut parent_permissions = fs::metadata(parent).unwrap().permissions();
-        parent_permissions.set_readonly(true);
-        fs::set_permissions(parent, parent_permissions.clone()).unwrap();
-
-        // assert that create_all_accounts_run_and_snapshot_dirs returns error when the first account path
-        // is readonly.
-        assert!(create_all_accounts_run_and_snapshot_dirs(&account_paths).is_err());
-
-        // Set the parent directory of the first account path to be writable, so that
-        // create_all_accounts_run_and_snapshot_dirs returns Ok.
-        parent_permissions.set_mode(0o744);
-        fs::set_permissions(parent, parent_permissions.clone()).unwrap();
-        let result = create_all_accounts_run_and_snapshot_dirs(&account_paths);
-        assert!(result.is_ok());
-
-        let (account_run_paths, account_snapshot_paths) = result.unwrap();
-        account_run_paths.iter().all(|path| path.is_dir());
-        account_snapshot_paths.iter().all(|path| path.is_dir());
-
-        delete_contents_of_path(account_path_first);
-        assert!(account_path_first.exists());
-        let mut permissions = fs::metadata(account_path_first).unwrap().permissions();
-        permissions.set_readonly(true);
-        fs::set_permissions(account_path_first, permissions.clone()).unwrap();
-        parent_permissions.set_readonly(true);
-        fs::set_permissions(parent, parent_permissions.clone()).unwrap();
-        // assert that create_all_accounts_run_and_snapshot_dirs returns error when the first account path
-        // and its parent are readonly.  This exercises the case where the first account path is readonly,
-        // causing create_accounts_run_and_snapshot_dirs to fail.
-        assert!(create_all_accounts_run_and_snapshot_dirs(&account_paths).is_err());
     }
 
     #[test]
