@@ -13196,14 +13196,11 @@ fn test_get_reward_distribution_num_blocks_normal() {
         .map(|_| StakeReward::new_random())
         .collect::<Vec<_>>();
 
-    assert_eq!(
-        bank.get_reward_distribution_num_blocks(stake_rewards.len()),
-        2
-    );
+    assert_eq!(bank.get_reward_distribution_num_blocks(&stake_rewards), 2);
     assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
     assert_eq!(
-        bank.get_reward_total_num_blocks(stake_rewards.len()),
-        bank.get_reward_distribution_num_blocks(stake_rewards.len())
+        bank.get_reward_total_num_blocks(&stake_rewards),
+        bank.get_reward_distribution_num_blocks(&stake_rewards)
             + bank.get_reward_calculation_num_blocks(),
     );
 }
@@ -13224,14 +13221,11 @@ fn test_get_reward_distribution_num_blocks_cap() {
         .map(|_| StakeReward::new_random())
         .collect::<Vec<_>>();
 
-    assert_eq!(
-        bank.get_reward_distribution_num_blocks(stake_rewards.len()),
-        1
-    );
+    assert_eq!(bank.get_reward_distribution_num_blocks(&stake_rewards), 1);
     assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
     assert_eq!(
-        bank.get_reward_total_num_blocks(stake_rewards.len()),
-        bank.get_reward_distribution_num_blocks(stake_rewards.len())
+        bank.get_reward_total_num_blocks(&stake_rewards),
+        bank.get_reward_distribution_num_blocks(&stake_rewards)
             + bank.get_reward_calculation_num_blocks(),
     );
 }
@@ -13243,11 +13237,13 @@ fn test_get_reward_distribution_num_blocks_warmup() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
 
     let bank = Bank::new_for_tests(&genesis_config);
-    assert_eq!(bank.get_reward_distribution_num_blocks(0), 1);
+    let rewards = vec![];
+    assert_eq!(bank.get_reward_distribution_num_blocks(&rewards), 1);
     assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
     assert_eq!(
-        bank.get_reward_total_num_blocks(0),
-        bank.get_reward_distribution_num_blocks(0) + bank.get_reward_calculation_num_blocks(),
+        bank.get_reward_total_num_blocks(&rewards),
+        bank.get_reward_distribution_num_blocks(&rewards)
+            + bank.get_reward_calculation_num_blocks(),
     );
 }
 
