@@ -5,7 +5,10 @@ use crate::zk_token_elgamal::pod::{
 #[cfg(not(target_os = "solana"))]
 use crate::{
     errors::ProofError,
-    instruction::transfer::TransferAmountCiphertext as DecodedTransferAmountCiphertext,
+    instruction::transfer::{
+        FeeParameters as DecodedFeeParameters,
+        TransferAmountCiphertext as DecodedTransferAmountCiphertext,
+    },
 };
 
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -72,4 +75,24 @@ pub struct FeeParameters {
     pub fee_rate_basis_points: PodU16,
     /// Maximum fee assessed on transfers, expressed as an amount of tokens
     pub maximum_fee: PodU64,
+}
+
+#[cfg(not(target_os = "solana"))]
+impl From<DecodedFeeParameters> for FeeParameters {
+    fn from(decoded_fee_parameters: DecodedFeeParameters) -> Self {
+        FeeParameters {
+            fee_rate_basis_points: decoded_fee_parameters.fee_rate_basis_points.into(),
+            maximum_fee: decoded_fee_parameters.maximum_fee.into(),
+        }
+    }
+}
+
+#[cfg(not(target_os = "solana"))]
+impl From<FeeParameters> for DecodedFeeParameters {
+    fn from(pod_fee_parameters: FeeParameters) -> Self {
+        DecodedFeeParameters {
+            fee_rate_basis_points: pod_fee_parameters.fee_rate_basis_points.into(),
+            maximum_fee: pod_fee_parameters.maximum_fee.into(),
+        }
+    }
 }
