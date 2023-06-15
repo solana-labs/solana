@@ -1897,8 +1897,9 @@ impl Bank {
         rewards_metrics: &mut RewardsMetrics,
     ) {
         let CalculateRewardsAndDistributeVoteRewardsResult {
+            total_rewards,
+            distributed_rewards,
             stake_rewards_by_partition,
-            ..
         } = self.calculate_rewards_and_distribute_vote_rewards(
             parent_epoch,
             reward_calc_tracer,
@@ -1907,7 +1908,14 @@ impl Bank {
         );
 
         let slot = self.slot();
+        let credit_start = self.block_height() + self.get_reward_calculation_num_blocks();
+        let credit_end_exclusive = credit_start + stake_rewards_by_partition.len() as u64;
+
         self.set_epoch_reward_status_active(stake_rewards_by_partition);
+
+        // create EpochRewards sysvar that holds the balance of undistributed rewards with
+        // (total_rewards, distributed_rewards, credit_end_exclusive), total capital will increase by (total_rewards - distributed_rewards)
+        self.create_epoch_rewards_sysvar(total_rewards, distributed_rewards, credit_end_exclusive);
 
         datapoint_info!(
             "epoch-rewards-status-update",
