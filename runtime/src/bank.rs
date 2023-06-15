@@ -885,6 +885,8 @@ pub(crate) struct StartBlockHeightAndRewards {
     pub(crate) start_block_height: u64,
     /// calculated epoch rewards pending distribution, outer Vec is by partition (one partition per block)
     pub(crate) calculated_epoch_stake_rewards: Arc<Vec<StakeRewards>>,
+    /// # total stake reward accounts
+    pub(crate) all_stake_rewards_len: usize,
 }
 
 /// Represent whether bank is in the reward phase or not.
@@ -1496,10 +1498,15 @@ impl Bank {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn set_epoch_reward_status_active(&mut self, stake_rewards: Vec<StakeRewards>) {
+    pub(crate) fn set_epoch_reward_status_active(
+        &mut self,
+        stake_rewards: Vec<StakeRewards>,
+        all_stake_rewards_len: usize,
+    ) {
         self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
             start_block_height: self.block_height,
             calculated_epoch_stake_rewards: Arc::new(stake_rewards),
+            all_stake_rewards_len,
         });
     }
 
@@ -1919,13 +1926,14 @@ impl Bank {
         let start_block_height = status.start_block_height;
         let credit_start = start_block_height + self.get_reward_calculation_num_blocks();
         let credit_end_exclusive = credit_start
-            + self.get_reward_distribution_num_blocks(status.calculated_epoch_stake_rewards.len());
+            + self.get_reward_distribution_num_blocks(status.all_stake_rewards_len);
 
         if height >= credit_start && height < credit_end_exclusive {
             let partition_index = height - credit_start;
             self.distribute_epoch_rewards_in_partition(
-                &status.calculated_epoch_stake_rewards,
+                &status.calculated_epoch_stake_rewards[partition_index as usize],
                 partition_index,
+                status.calculated_epoch_stake_rewards.len(),
             );
         }
 
@@ -3950,16 +3958,16 @@ impl Bank {
     /// Store the rewards to AccountsDB, update reward history record and total capitalization.
     fn distribute_epoch_rewards_in_partition(
         &self,
-        all_stake_rewards: &[Vec<StakeReward>],
+        stake_rewards: &[StakeReward],
         partition_index: u64,
+        total_stake_accounts_count: usize,
     ) {
         let pre_capitalization = self.capitalization();
-        let this_partition_stake_rewards = &all_stake_rewards[partition_index as usize];
 
         let (total_rewards_in_lamports, store_stake_accounts_us) =
-            measure_us!(self.store_stake_accounts_in_partition(this_partition_stake_rewards));
+            measure_us!(self.store_stake_accounts_in_partition(stake_rewards));
 
-        self.update_reward_history_in_partition(this_partition_stake_rewards);
+        self.update_reward_history_in_partition(stake_rewards);
 
         // increase total capitalization by the distributed rewards
         self.capitalization
@@ -3968,10 +3976,10 @@ impl Bank {
         let metrics = RewardsStoreMetrics {
             pre_capitalization,
             post_capitalization: self.capitalization(),
-            total_stake_accounts_count: all_stake_rewards.len(),
+            total_stake_accounts_count,
             partition_index,
             store_stake_accounts_us,
-            store_stake_accounts_count: this_partition_stake_rewards.len(),
+            store_stake_accounts_count: stake_rewards.len(),
         };
 
         report_partitioned_reward_metrics(self, metrics);
