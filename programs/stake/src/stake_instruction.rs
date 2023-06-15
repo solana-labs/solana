@@ -77,13 +77,7 @@ declare_process_instruction!(
                 let mut me = get_stake_account()?;
                 let rent =
                     get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-                initialize(
-                    &mut me,
-                    &authorized,
-                    &lockup,
-                    &rent,
-                    &invoke_context.feature_set,
-                )
+                initialize(&mut me, &authorized, &lockup, &rent)
             }
             Ok(StakeInstruction::Authorize(authorized_pubkey, stake_authorize)) => {
                 let mut me = get_stake_account()?;
@@ -261,7 +255,6 @@ declare_process_instruction!(
                     } else {
                         None
                     },
-                    &invoke_context.feature_set,
                 )
             }
             Ok(StakeInstruction::Deactivate) => {
@@ -302,13 +295,7 @@ declare_process_instruction!(
                         instruction_context,
                         1,
                     )?;
-                    initialize(
-                        &mut me,
-                        &authorized,
-                        &Lockup::default(),
-                        &rent,
-                        &invoke_context.feature_set,
-                    )
+                    initialize(&mut me, &authorized, &Lockup::default(), &rent)
                 } else {
                     Err(InstructionError::InvalidInstructionData)
                 }
@@ -522,16 +509,6 @@ mod tests {
         Arc::get_mut(&mut feature_set)
             .unwrap()
             .deactivate(&feature_set::stake_raise_minimum_delegation_to_1_sol::id());
-        feature_set
-    }
-
-    /// The "old old" behavior is both before the stake minimum delegation was raised *and* before
-    /// undelegated stake accounts could have zero lamports beyond rent
-    fn feature_set_old_old_behavior() -> Arc<FeatureSet> {
-        let mut feature_set = feature_set_old_behavior();
-        Arc::get_mut(&mut feature_set)
-            .unwrap()
-            .deactivate(&feature_set::stake_allow_zero_undelegated_amount::id());
         feature_set
     }
 
@@ -4470,17 +4447,9 @@ mod tests {
     /// 3. Deactives the delegation
     /// 4. Withdraws from the account such that the ending balance is *below* rent + minimum delegation
     /// 5. Re-delegates, now with less than the minimum delegation, but it still succeeds
-    //
-    // The "old old" behavior relies on `validate_delegated_amount()` *not* checking if the
-    // stake amount meets the minimum delegation.  Once the
-    // `stake_allow_zero_undelegated_amount` feature is activated, `the expected_result`
-    // parameter can be removed and consolidated.
-    #[test_case(feature_set_old_old_behavior(), Ok(()); "old_old_behavior")]
-    #[test_case(feature_set_new_behavior(), Err(StakeError::InsufficientDelegation.into()); "new_behavior")]
-    fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation(
-        feature_set: Arc<FeatureSet>,
-        expected_result: Result<(), InstructionError>,
-    ) {
+    #[test]
+    fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation() {
+        let feature_set = feature_set_new_behavior();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -4641,7 +4610,7 @@ mod tests {
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts,
             instruction_accounts,
-            expected_result,
+            Err(StakeError::InsufficientDelegation.into()),
         );
     }
 
