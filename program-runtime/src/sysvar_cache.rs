@@ -8,8 +8,8 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
         sysvar::{
-            clock::Clock, epoch_schedule::EpochSchedule, rent::Rent, slot_hashes::SlotHashes,
-            stake_history::StakeHistory, Sysvar, SysvarId,
+            clock::Clock, epoch_rewards::EpochRewards, epoch_schedule::EpochSchedule, rent::Rent,
+            slot_hashes::SlotHashes, stake_history::StakeHistory, Sysvar, SysvarId,
         },
         transaction_context::{IndexOfAccount, InstructionContext, TransactionContext},
     },
@@ -28,6 +28,7 @@ impl ::solana_frozen_abi::abi_example::AbiExample for SysvarCache {
 pub struct SysvarCache {
     clock: Option<Arc<Clock>>,
     epoch_schedule: Option<Arc<EpochSchedule>>,
+    epoch_rewards: Option<Arc<EpochRewards>>,
     #[allow(deprecated)]
     fees: Option<Arc<Fees>>,
     rent: Option<Arc<Rent>>,
@@ -57,6 +58,16 @@ impl SysvarCache {
 
     pub fn set_epoch_schedule(&mut self, epoch_schedule: EpochSchedule) {
         self.epoch_schedule = Some(Arc::new(epoch_schedule));
+    }
+
+    pub fn get_epoch_rewards(&self) -> Result<Arc<EpochRewards>, InstructionError> {
+        self.epoch_rewards
+            .clone()
+            .ok_or(InstructionError::UnsupportedSysvar)
+    }
+
+    pub fn set_epoch_rewards(&mut self, epoch_rewards: EpochRewards) {
+        self.epoch_rewards = Some(Arc::new(epoch_rewards));
     }
 
     #[deprecated]
@@ -141,6 +152,15 @@ impl SysvarCache {
                 }
             });
         }
+
+        if self.epoch_rewards.is_none() {
+            get_account_data(&EpochRewards::id(), &mut |data: &[u8]| {
+                if let Ok(epoch_rewards) = bincode::deserialize(data) {
+                    self.set_epoch_rewards(epoch_rewards);
+                }
+            });
+        }
+
         #[allow(deprecated)]
         if self.fees.is_none() {
             get_account_data(&Fees::id(), &mut |data: &[u8]| {
