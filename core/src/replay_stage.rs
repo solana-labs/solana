@@ -2366,8 +2366,9 @@ impl ReplayStage {
             return;
         }
 
-        // TODO: check the timestamp in this vote is correct, i.e. it shouldn't
-        // have changed from the original timestamp of the vote.
+        // Update timestamp for refreshed vote
+        tower.refresh_last_vote_timestamp(heaviest_bank_on_same_fork.slot());
+
         let vote_tx = Self::generate_vote_tx(
             identity_keypair,
             heaviest_bank_on_same_fork,
