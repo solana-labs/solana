@@ -12506,7 +12506,7 @@ fn test_squash_timing_add_assign() {
 }
 
 /// Helper function to create a bank that pays some rewards
-fn create_reward_bank(expected_num_delegations: usize) -> Bank {
+fn create_reward_bank(expected_num_delegations: usize) -> (Bank, Vec<Pubkey>, Vec<Pubkey>) {
     let validator_keypairs = (0..expected_num_delegations)
         .map(|_| ValidatorVoteKeypairs::new_rand())
         .collect::<Vec<_>>();
@@ -12521,7 +12521,7 @@ fn create_reward_bank(expected_num_delegations: usize) -> Bank {
 
     // Fill bank_forks with banks with votes landing in the next slot
     // Create enough banks such that vote account will root
-    for validator_vote_keypairs in validator_keypairs {
+    for validator_vote_keypairs in &validator_keypairs {
         let vote_id = validator_vote_keypairs.vote_keypair.pubkey();
         let mut vote_account = bank.get_account(&vote_id).unwrap();
         // generate some rewards
@@ -12541,7 +12541,17 @@ fn create_reward_bank(expected_num_delegations: usize) -> Bank {
         }
         bank.store_account_and_update_capitalization(&vote_id, &vote_account);
     }
-    bank
+    (
+        bank,
+        validator_keypairs
+            .iter()
+            .map(|k| k.vote_keypair.pubkey())
+            .collect(),
+        validator_keypairs
+            .iter()
+            .map(|k| k.stake_keypair.pubkey())
+            .collect(),
+    )
 }
 
 #[test]
@@ -12549,7 +12559,7 @@ fn test_rewards_point_calculation() {
     solana_logger::setup();
 
     let expected_num_delegations = 100;
-    let bank = create_reward_bank(expected_num_delegations);
+    let (bank, _, _) = create_reward_bank(expected_num_delegations);
 
     let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
     let mut rewards_metrics = RewardsMetrics::default();
@@ -12594,7 +12604,93 @@ fn test_rewards_point_calculation_empty() {
     assert!(point_value.is_none());
 }
 
-/// Test reward computation at epoch boundary
+#[test]
+fn test_deactivate_epoch_reward_status() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+
+    let expected_num = 100;
+
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    bank.set_epoch_reward_status_active(vec![stake_rewards]);
+
+    assert!(bank.get_reward_interval() == RewardInterval::InsideInterval);
+    bank.deactivate_epoch_reward_status();
+    assert!(bank.get_reward_interval() == RewardInterval::OutsideInterval);
+}
+
+#[test]
+fn test_distribute_partitioned_epoch_rewards() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+
+    let expected_num = 100;
+
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    let stake_rewards = hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 100);
+
+    bank.set_epoch_reward_status_active(stake_rewards);
+
+    bank.distribute_partitioned_epoch_rewards();
+}
+
+#[test]
+fn test_distribute_partitioned_epoch_rewards_empty() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+
+    bank.set_epoch_reward_status_active(vec![]);
+
+    bank.distribute_partitioned_epoch_rewards();
+}
+
+#[test]
+/// Test rewards compuation and partitioned rewards distribution at the epoch boundary
+fn test_rewards_computation() {
+    solana_logger::setup();
+
+    let expected_num_delegations = 100;
+    let bank = create_reward_bank(expected_num_delegations).0;
+
+    // Calculate rewards
+    let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+    let mut rewards_metrics = RewardsMetrics::default();
+    let expected_rewards = 100_000_000_000;
+
+    let calculated_rewards = bank.calculate_validator_rewards(
+        1,
+        expected_rewards,
+        null_tracer(),
+        &thread_pool,
+        &mut rewards_metrics,
+    );
+
+    let vote_rewards = &calculated_rewards.as_ref().unwrap().0;
+    let stake_rewards = &calculated_rewards.as_ref().unwrap().1;
+
+    let total_vote_rewards: u64 = vote_rewards
+        .rewards
+        .iter()
+        .map(|reward| reward.1.lamports)
+        .sum::<i64>() as u64;
+
+    // assert that total rewards matches the sum of vote rewards and stake rewards
+    assert_eq!(
+        stake_rewards.total_stake_rewards_lamports + total_vote_rewards,
+        expected_rewards
+    );
+
+    // assert that number of stake rewards matches
+    assert_eq!(stake_rewards.stake_rewards.len(), expected_num_delegations);
+}
+
+/// Test rewards compuation and partitioned rewards distribution at the epoch boundary
 #[test]
 fn test_store_stake_accounts_in_partition() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
@@ -13060,4 +13156,162 @@ fn test_calc_vote_accounts_to_store_normal() {
             }
         }
     }
+}
+
+/// Test get_reward_distribution_num_blocks, get_reward_calculation_num_blocks, get_reward_total_num_blocks during normal epoch gives the expected result
+#[test]
+fn test_get_reward_distribution_num_blocks_normal() {
+    solana_logger::setup();
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
+
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    // Given 8k rewards, it will take 2 blocks to credit all the rewards
+    let expected_num = 8192;
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        bank.get_reward_distribution_num_blocks(stake_rewards.len()),
+        2
+    );
+    assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
+    assert_eq!(
+        bank.get_reward_total_num_blocks(stake_rewards.len()),
+        bank.get_reward_distribution_num_blocks(stake_rewards.len())
+            + bank.get_reward_calculation_num_blocks(),
+    );
+}
+
+/// Test get_reward_distribution_num_blocks, get_reward_calculation_num_blocks, get_reward_total_num_blocks during small epoch
+/// The num_credit_blocks should be cap to 5% of the total number of blocks in the epoch.
+#[test]
+fn test_get_reward_distribution_num_blocks_cap() {
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(32, 32, false);
+
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    // Given 8k rewards, normally it will take 2 blocks to credit all the rewards. However, because of
+    // the short epoch, i.e. 32 slots, we should cap the number of credit blocks to 32/20 = 1.
+    let expected_num = 8192;
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        bank.get_reward_distribution_num_blocks(stake_rewards.len()),
+        1
+    );
+    assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
+    assert_eq!(
+        bank.get_reward_total_num_blocks(stake_rewards.len()),
+        bank.get_reward_distribution_num_blocks(stake_rewards.len())
+            + bank.get_reward_calculation_num_blocks(),
+    );
+}
+
+/// Test get_reward_distribution_num_blocks, get_reward_calculation_num_blocks, get_reward_total_num_blocks during warm up epoch gives the expected result.
+/// The num_credit_blocks should be 1 during warm up epoch.
+#[test]
+fn test_get_reward_distribution_num_blocks_warmup() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+
+    let bank = Bank::new_for_tests(&genesis_config);
+    assert_eq!(bank.get_reward_distribution_num_blocks(0), 1);
+    assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
+    assert_eq!(
+        bank.get_reward_total_num_blocks(0),
+        bank.get_reward_distribution_num_blocks(0) + bank.get_reward_calculation_num_blocks(),
+    );
+}
+
+#[test]
+fn test_calculate_stake_vote_rewards() {
+    solana_logger::setup();
+
+    let expected_num_delegations = 1;
+    let (bank, voters, stakers) = create_reward_bank(expected_num_delegations);
+
+    let vote_pubkey = voters.first().unwrap();
+    let mut vote_account = bank
+        .load_slow_with_fixed_root(&bank.ancestors, vote_pubkey)
+        .unwrap()
+        .0;
+
+    let stake_pubkey = stakers.first().unwrap();
+    let stake_account = bank
+        .load_slow_with_fixed_root(&bank.ancestors, stake_pubkey)
+        .unwrap()
+        .0;
+
+    let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+    let mut rewards_metrics = RewardsMetrics::default();
+
+    let point_value = PointValue {
+        rewards: 100000, // lamports to split
+        points: 1000,    // over these points
+    };
+    let tracer = |_event: &RewardCalculationEvent| {};
+    let reward_calc_tracer = Some(tracer);
+    let rewarded_epoch = bank.epoch();
+    let stakes: RwLockReadGuard<Stakes<StakeAccount<Delegation>>> = bank.stakes_cache.stakes();
+    let reward_calculate_param = bank.get_epoch_reward_calculate_param_info(&stakes);
+    let (vote_rewards_accounts, stake_reward_calculation) = bank.calculate_stake_vote_rewards(
+        &reward_calculate_param,
+        rewarded_epoch,
+        point_value,
+        &thread_pool,
+        reward_calc_tracer,
+        &mut rewards_metrics,
+    );
+
+    assert_eq!(
+        vote_rewards_accounts.rewards.len(),
+        vote_rewards_accounts.accounts_to_store.len()
+    );
+    assert_eq!(vote_rewards_accounts.rewards.len(), 1);
+    let rewards = &vote_rewards_accounts.rewards[0];
+    let account = &vote_rewards_accounts.accounts_to_store[0];
+    let vote_rewards = 0;
+    let commision = 0;
+    _ = vote_account.checked_add_lamports(vote_rewards);
+    assert_eq!(
+        account.as_ref().unwrap().lamports(),
+        vote_account.lamports()
+    );
+    assert!(accounts_equal(account.as_ref().unwrap(), &vote_account));
+    assert_eq!(
+        rewards.1,
+        RewardInfo {
+            reward_type: RewardType::Voting,
+            lamports: vote_rewards as i64,
+            post_balance: vote_account.lamports(),
+            commission: Some(commision),
+        }
+    );
+    assert_eq!(&rewards.0, vote_pubkey);
+
+    assert_eq!(stake_reward_calculation.stake_rewards.len(), 1);
+    assert_eq!(
+        &stake_reward_calculation.stake_rewards[0].stake_pubkey,
+        stake_pubkey
+    );
+
+    let original_stake_lamport = stake_account.lamports();
+    let rewards = stake_reward_calculation.stake_rewards[0]
+        .stake_reward_info
+        .lamports;
+    let expected_reward_info = RewardInfo {
+        reward_type: RewardType::Staking,
+        lamports: rewards,
+        post_balance: original_stake_lamport + rewards as u64,
+        commission: Some(commision),
+    };
+    assert_eq!(
+        stake_reward_calculation.stake_rewards[0].stake_reward_info,
+        expected_reward_info,
+    );
 }
