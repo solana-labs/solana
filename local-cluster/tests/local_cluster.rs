@@ -4755,124 +4755,6 @@ fn test_duplicate_with_pruned_ancestor() {
     );
 }
 
-/// Test fastboot to ensure a node can boot from local state
-///
-/// * Take a bank snapshot that can be booted from
-/// * Restart the node with fastboot
-/// * Have the node generate a snapshot archive
-/// * Restart the node withOUT fastboot
-/// * Ensure the node still makes roots
-#[test]
-#[serial]
-fn test_boot_from_local_state_single_node() {
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
-    const FULL_SNAPSHOT_INTERVAL: Slot = 50;
-    const INCREMENTAL_SNAPSHOT_INTERVAL: Slot = 5;
-
-    let validator_config = SnapshotValidatorConfig::new(
-        FULL_SNAPSHOT_INTERVAL,
-        INCREMENTAL_SNAPSHOT_INTERVAL,
-        INCREMENTAL_SNAPSHOT_INTERVAL,
-        1,
-    );
-    let mut cluster_config = ClusterConfig {
-        node_stakes: vec![DEFAULT_NODE_STAKE],
-        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
-        validator_configs: make_identical_validator_configs(&validator_config.validator_config, 1),
-        ..ClusterConfig::default()
-    };
-    let mut cluster = LocalCluster::new(&mut cluster_config, SocketAddrSpace::Unspecified);
-    let validator_pubkey = *cluster.validators.keys().next().unwrap();
-
-    // in order to boot from local state, need to first have snapshot archives
-    info!("Waiting for validator to create snapshots...");
-    let (incremental_snapshot_archive, full_snapshot_archive) =
-        LocalCluster::wait_for_next_incremental_snapshot(
-            &cluster,
-            &validator_config.full_snapshot_archives_dir,
-            &validator_config.incremental_snapshot_archives_dir,
-            Some(Duration::from_secs(5 * 60)),
-        );
-    debug!("snapshot archives:\n\tfull: {full_snapshot_archive:?}\n\tincr: {incremental_snapshot_archive:?}");
-    info!("Waiting for validator to create snapshots... DONE");
-
-    // wait for a new bank snapshot to fastboot from that is newer than its snapshot archives
-    info!("Waiting for validator to create a new bank snapshot...");
-    let timer = Instant::now();
-    let bank_snapshot = loop {
-        if let Some(full_snapshot_slot) = snapshot_utils::get_highest_full_snapshot_archive_slot(
-            &validator_config.full_snapshot_archives_dir,
-        ) {
-            if let Some(incremental_snapshot_slot) =
-                snapshot_utils::get_highest_incremental_snapshot_archive_slot(
-                    &validator_config.incremental_snapshot_archives_dir,
-                    full_snapshot_slot,
-                )
-            {
-                if let Some(bank_snapshot) = snapshot_utils::get_highest_bank_snapshot_post(
-                    &validator_config.bank_snapshots_dir,
-                ) {
-                    if bank_snapshot.slot > incremental_snapshot_slot {
-                        break bank_snapshot;
-                    }
-                }
-            }
-        }
-        assert!(
-            timer.elapsed() < Duration::from_secs(30),
-            "It should not take longer than 30 seconds to create a new bank snapshot"
-        );
-        std::thread::yield_now();
-    };
-    debug!("bank snapshot: {bank_snapshot:?}");
-    info!("Waiting for validator to create a new bank snapshot... DONE");
-
-    // restart WITH fastboot
-    info!("Restarting validator from local state...");
-    let mut validator_info = cluster.exit_node(&validator_pubkey);
-    validator_info.config.boot_from_local_state = true;
-    cluster.restart_node(
-        &validator_pubkey,
-        validator_info,
-        SocketAddrSpace::Unspecified,
-    );
-    info!("Restarting validator from local state... DONE");
-
-    info!("Waiting for validator to create an incremental snapshot...");
-    let (incremental_snapshot_archive, full_snapshot_archive) =
-        LocalCluster::wait_for_next_incremental_snapshot(
-            &cluster,
-            &validator_config.full_snapshot_archives_dir,
-            &validator_config.incremental_snapshot_archives_dir,
-            Some(Duration::from_secs(5 * 60)),
-        );
-    debug!("snapshot archives:\n\tfull: {full_snapshot_archive:?}\n\tincr: {incremental_snapshot_archive:?}");
-    info!("Waiting for validator to create an incremental snapshot... DONE");
-
-    // restart withOUT fastboot
-    info!("Restarting validator from snapshot archives...");
-    let mut validator_info = cluster.exit_node(&validator_pubkey);
-    validator_info.config.boot_from_local_state = false;
-    cluster.restart_node(
-        &validator_pubkey,
-        validator_info,
-        SocketAddrSpace::Unspecified,
-    );
-    info!("Restarting validator from snapshot archives... DONE");
-
-    // wait for a new snapshot to ensure the validator is still making roots
-    info!("Waiting for validator to create snapshots...");
-    let (incremental_snapshot_archive, full_snapshot_archive) =
-        LocalCluster::wait_for_next_incremental_snapshot(
-            &cluster,
-            &validator_config.full_snapshot_archives_dir,
-            &validator_config.incremental_snapshot_archives_dir,
-            Some(Duration::from_secs(5 * 60)),
-        );
-    debug!("snapshot archives:\n\tfull: {full_snapshot_archive:?}\n\tincr: {incremental_snapshot_archive:?}");
-    info!("Waiting for validator to create snapshots... DONE");
-}
-
 /// Test fastboot to ensure a node can boot from local state and still produce correct snapshots
 ///
 /// 1. Start node 1 and wait for it to take snapshots
@@ -4885,7 +4767,7 @@ fn test_boot_from_local_state_single_node() {
 /// 8. Ensure the snapshots from (7) match node's 1 and 2
 #[test]
 #[serial]
-fn test_boot_from_local_state_multi_node() {
+fn test_boot_from_local_state() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     const FULL_SNAPSHOT_INTERVAL: Slot = 100;
     const INCREMENTAL_SNAPSHOT_INTERVAL: Slot = 10;
