@@ -3,13 +3,7 @@ use crate::zk_token_elgamal::pod::{
     PodU64, Zeroable,
 };
 #[cfg(not(target_os = "solana"))]
-use crate::{
-    errors::ProofError,
-    instruction::transfer::{
-        FeeParameters as DecodedFeeParameters,
-        TransferAmountCiphertext as DecodedTransferAmountCiphertext,
-    },
-};
+use crate::{errors::ProofError, instruction::transfer as decoded};
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
@@ -33,14 +27,14 @@ pub struct TransferWithFeePubkeys {
 pub struct TransferAmountCiphertext(pub GroupedElGamalCiphertext3Handles);
 
 #[cfg(not(target_os = "solana"))]
-impl From<DecodedTransferAmountCiphertext> for TransferAmountCiphertext {
-    fn from(decoded_ciphertext: DecodedTransferAmountCiphertext) -> Self {
+impl From<decoded::TransferAmountCiphertext> for TransferAmountCiphertext {
+    fn from(decoded_ciphertext: decoded::TransferAmountCiphertext) -> Self {
         Self(decoded_ciphertext.0.into())
     }
 }
 
 #[cfg(not(target_os = "solana"))]
-impl TryFrom<TransferAmountCiphertext> for DecodedTransferAmountCiphertext {
+impl TryFrom<TransferAmountCiphertext> for decoded::TransferAmountCiphertext {
     type Error = ProofError;
 
     fn try_from(pod_ciphertext: TransferAmountCiphertext) -> Result<Self, Self::Error> {
@@ -78,8 +72,8 @@ pub struct FeeParameters {
 }
 
 #[cfg(not(target_os = "solana"))]
-impl From<DecodedFeeParameters> for FeeParameters {
-    fn from(decoded_fee_parameters: DecodedFeeParameters) -> Self {
+impl From<decoded::FeeParameters> for FeeParameters {
+    fn from(decoded_fee_parameters: decoded::FeeParameters) -> Self {
         FeeParameters {
             fee_rate_basis_points: decoded_fee_parameters.fee_rate_basis_points.into(),
             maximum_fee: decoded_fee_parameters.maximum_fee.into(),
@@ -88,9 +82,9 @@ impl From<DecodedFeeParameters> for FeeParameters {
 }
 
 #[cfg(not(target_os = "solana"))]
-impl From<FeeParameters> for DecodedFeeParameters {
+impl From<FeeParameters> for decoded::FeeParameters {
     fn from(pod_fee_parameters: FeeParameters) -> Self {
-        DecodedFeeParameters {
+        decoded::FeeParameters {
             fee_rate_basis_points: pod_fee_parameters.fee_rate_basis_points.into(),
             maximum_fee: pod_fee_parameters.maximum_fee.into(),
         }
