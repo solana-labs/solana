@@ -312,7 +312,7 @@ fn test_bank_serialize_style(
     let slot = bank2.slot();
     let incremental =
         incremental_snapshot_persistence.then(|| BankIncrementalSnapshotPersistence {
-            full_slot: slot + 1,
+            full_slot: slot - 1,
             full_hash: SerdeAccountsHash(Hash::new(&[1; 32])),
             full_capitalization: 31,
             incremental_hash: SerdeIncrementalAccountsHash(Hash::new(&[2; 32])),
@@ -418,7 +418,16 @@ fn test_bank_serialize_style(
     assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
     assert_eq!(dbank.get_balance(&key2.pubkey()), 10);
     assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
-    assert_eq!(dbank.get_accounts_hash(), Some(accounts_hash));
+    if let Some(incremental_snapshot_persistence) = incremental.clone() {
+        assert_eq!(dbank.get_accounts_hash(), None,);
+        assert_eq!(
+            dbank.get_incremental_accounts_hash(),
+            Some(incremental_snapshot_persistence.incremental_hash.into()),
+        );
+    } else {
+        assert_eq!(dbank.get_accounts_hash(), Some(accounts_hash));
+        assert_eq!(dbank.get_incremental_accounts_hash(), None);
+    }
     assert!(bank2 == dbank);
     assert_eq!(dbank.incremental_snapshot_persistence, incremental);
     assert_eq!(dbank.get_epoch_accounts_hash_to_serialize().map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()), expected_epoch_accounts_hash,
