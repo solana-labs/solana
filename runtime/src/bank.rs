@@ -1528,7 +1528,8 @@ impl Bank {
 
     #[allow(dead_code)]
     /// Calculate the number of blocks required to distribute rewards to all stake accounts.
-    fn get_reward_distribution_num_blocks(&self, total_stake_accounts: usize) -> u64 {
+    fn get_reward_distribution_num_blocks(&self, rewards: &StakeRewards) -> u64 {
+        let total_stake_accounts = rewards.len();
         if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
             1
         } else {
@@ -1544,9 +1545,8 @@ impl Bank {
 
     #[allow(dead_code)]
     /// Return the total number of blocks in reward interval (including both calculation and crediting).
-    fn get_reward_total_num_blocks(&self, total_stake_accounts: usize) -> u64 {
-        self.get_reward_calculation_num_blocks()
-            + self.get_reward_distribution_num_blocks(total_stake_accounts)
+    fn get_reward_total_num_blocks(&self, rewards: &StakeRewards) -> u64 {
+        self.get_reward_calculation_num_blocks() + self.get_reward_distribution_num_blocks(rewards)
     }
 
     #[allow(dead_code)]
@@ -2642,8 +2642,7 @@ impl Bank {
             )
             .unwrap_or_default();
 
-        let num_partitions =
-            self.get_reward_distribution_num_blocks(stake_rewards.stake_rewards.len());
+        let num_partitions = self.get_reward_distribution_num_blocks(&stake_rewards.stake_rewards);
         let stake_rewards_by_partition = hash_rewards_into_partitions(
             std::mem::take(&mut stake_rewards.stake_rewards),
             &self.parent_hash(),
