@@ -1492,7 +1492,8 @@ impl Bank {
 
     #[allow(dead_code)]
     fn is_partitioned_rewards_feature_enabled(&self) -> bool {
-        false // Will be feature later. It is convenient to have a constant fn at the moment.
+        self.feature_set
+            .is_active(&feature_set::enable_partitioned_epoch_reward::id())
     }
 
     #[allow(dead_code)]
@@ -1501,12 +1502,6 @@ impl Bank {
             start_block_height: self.block_height,
             calculated_epoch_stake_rewards: Arc::new(stake_rewards),
         });
-    }
-
-    #[allow(dead_code)]
-    #[cfg(test)]
-    pub(crate) fn set_partitioned_rewards_feature_enabled_for_tests(&mut self) {
-        self.activate_feature(&enable_partitioned_epoch_reward::id())
     }
 
     fn partitioned_epoch_rewards_config(&self) -> &PartitionedEpochRewardsConfig {
