@@ -156,7 +156,7 @@ use {
         slot_history::{Check, SlotHistory},
         stake::state::Delegation,
         system_transaction,
-        sysvar::{self, Sysvar, SysvarId},
+        sysvar::{self, last_restart_slot::LastRestartSlot, Sysvar, SysvarId},
         timing::years_as_slots,
         transaction::{
             self, MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
@@ -1447,6 +1447,7 @@ impl Bank {
         bank.update_rent();
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
+        bank.update_last_restart_slot();
         bank.fill_missing_sysvar_cache_entries();
         bank
     }
@@ -1744,6 +1745,7 @@ impl Bank {
             new.update_stake_history(Some(parent_epoch));
             new.update_clock(Some(parent_epoch));
             new.update_fees();
+            new.update_last_restart_slot()
         });
 
         let (_, fill_sysvar_cache_time_us) = measure_us!(new.fill_missing_sysvar_cache_entries());
@@ -2413,6 +2415,35 @@ impl Bank {
                 self.inherit_specially_retained_account_fields(account),
             )
         });
+    }
+
+    pub fn update_last_restart_slot(&self) {
+        let feature_flag = self
+            .feature_set
+            .is_active(&feature_set::last_restart_slot_sysvar::id());
+
+        if feature_flag {
+            let last_restart_slot = {
+                let slot = self.slot;
+                let hard_forks = self.hard_forks();
+                let hard_forks_r = hard_forks.read().unwrap();
+
+                // Only consider hard forks <= this bank's slot to avoid prematurely applying
+                // a hard fork that is set to occur in the future.
+                hard_forks_r
+                    .iter()
+                    .rev()
+                    .find(|(hard_fork, _)| *hard_fork <= slot)
+                    .map(|(slot, _)| *slot)
+                    .unwrap_or(0)
+            };
+            self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
+                create_account(
+                    &LastRestartSlot { last_restart_slot },
+                    self.inherit_specially_retained_account_fields(account),
+                )
+            });
+        }
     }
 
     pub fn set_sysvar_for_tests<T>(&self, sysvar: &T)

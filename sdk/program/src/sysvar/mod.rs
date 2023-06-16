@@ -91,6 +91,7 @@ pub mod epoch_rewards;
 pub mod epoch_schedule;
 pub mod fees;
 pub mod instructions;
+pub mod last_restart_slot;
 pub mod recent_blockhashes;
 pub mod rent;
 pub mod rewards;
@@ -113,6 +114,7 @@ lazy_static! {
         stake_history::id(),
         instructions::id(),
         epoch_rewards::id(),
+        last_restart_slot::id(),
     ];
 }
 
