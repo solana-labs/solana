@@ -1492,8 +1492,7 @@ impl Bank {
 
     #[allow(dead_code)]
     fn is_partitioned_rewards_feature_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::enable_partitioned_epoch_reward::id())
+        false // Will be feature later. It is convenient to have a constant fn at the moment.
     }
 
     #[allow(dead_code)]
