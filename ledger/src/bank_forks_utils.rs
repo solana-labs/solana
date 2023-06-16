@@ -124,7 +124,7 @@ pub fn load_bank_forks(
     };
 
     let (bank_forks, starting_snapshot_hashes) = if snapshot_present {
-        bank_forks_from_snapshot(
+        let (bank_forks, starting_snapshot_hashes) = bank_forks_from_snapshot(
             genesis_config,
             account_paths,
             shrink_paths,
@@ -132,7 +132,8 @@ pub fn load_bank_forks(
             process_options,
             accounts_update_notifier,
             exit,
-        )
+        );
+        (bank_forks, Some(starting_snapshot_hashes))
     } else {
         let maybe_filler_accounts = process_options
             .accounts_db_config
@@ -197,7 +198,7 @@ fn bank_forks_from_snapshot(
     process_options: &ProcessOptions,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: Arc<AtomicBool>,
-) -> (Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>) {
+) -> (Arc<RwLock<BankForks>>, StartingSnapshotHashes) {
     // Fail hard here if snapshot fails to load, don't silently continue
     if account_paths.is_empty() {
         error!("Account paths not present when booting from snapshot");
@@ -323,6 +324,6 @@ fn bank_forks_from_snapshot(
 
     (
         Arc::new(RwLock::new(BankForks::new(deserialized_bank))),
-        Some(starting_snapshot_hashes),
+        starting_snapshot_hashes,
     )
 }
