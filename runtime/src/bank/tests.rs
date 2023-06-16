@@ -12604,17 +12604,6 @@ fn test_rewards_point_calculation_empty() {
     assert!(point_value.is_none());
 }
 
-/// Test partitioned_reward feature enable/disable
-#[test]
-fn test_is_partitioned_reward_enable() {
-    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
-
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    assert!(!bank.is_partitioned_rewards_feature_enabled());
-    bank.activate_feature(&feature_set::enable_partitioned_epoch_reward::id());
-    assert!(bank.is_partitioned_rewards_feature_enabled());
-}
-
 #[test]
 fn test_deactivate_epoch_reward_status() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
