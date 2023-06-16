@@ -186,8 +186,8 @@ impl TransferWithFeeData {
         let pod_ciphertext_lo: pod::TransferAmountCiphertext = ciphertext_lo.into();
         let pod_ciphertext_hi: pod::TransferAmountCiphertext = ciphertext_hi.into();
         let pod_new_source_ciphertext: pod::ElGamalCiphertext = new_source_ciphertext.into();
-        let pod_fee_ciphertext_lo: pod::FeeEncryption = fee_ciphertext_lo.to_pod();
-        let pod_fee_ciphertext_hi: pod::FeeEncryption = fee_ciphertext_hi.to_pod();
+        let pod_fee_ciphertext_lo: pod::FeeEncryption = fee_ciphertext_lo.into();
+        let pod_fee_ciphertext_hi: pod::FeeEncryption = fee_ciphertext_hi.into();
 
         let context = TransferWithFeeProofContext {
             ciphertext_lo: pod_ciphertext_lo,
@@ -266,17 +266,17 @@ impl TransferWithFeeData {
 
         let fee_handle_lo = match role {
             Role::Source => None,
-            Role::Destination => Some(fee_ciphertext_lo.destination_handle),
+            Role::Destination => Some(fee_ciphertext_lo.get_destination_handle()),
             Role::Auditor => None,
             Role::WithdrawWithheldAuthority => {
-                Some(fee_ciphertext_lo.withdraw_withheld_authority_handle)
+                Some(fee_ciphertext_lo.get_withdraw_withheld_authority_handle())
             }
         };
 
         if let Some(handle) = fee_handle_lo {
             Ok(ElGamalCiphertext {
-                commitment: fee_ciphertext_lo.commitment,
-                handle,
+                commitment: *fee_ciphertext_lo.get_commitment(),
+                handle: *handle,
             })
         } else {
             Err(ProofError::MissingCiphertext)
@@ -289,17 +289,17 @@ impl TransferWithFeeData {
 
         let fee_handle_hi = match role {
             Role::Source => None,
-            Role::Destination => Some(fee_ciphertext_hi.destination_handle),
+            Role::Destination => Some(fee_ciphertext_hi.get_destination_handle()),
             Role::Auditor => None,
             Role::WithdrawWithheldAuthority => {
-                Some(fee_ciphertext_hi.withdraw_withheld_authority_handle)
+                Some(fee_ciphertext_hi.get_withdraw_withheld_authority_handle())
             }
         };
 
         if let Some(handle) = fee_handle_hi {
             Ok(ElGamalCiphertext {
-                commitment: fee_ciphertext_hi.commitment,
-                handle,
+                commitment: *fee_ciphertext_hi.get_commitment(),
+                handle: *handle,
             })
         } else {
             Err(ProofError::MissingCiphertext)
@@ -467,8 +467,8 @@ impl TransferWithFeeProof {
         let combined_fee_amount =
             combine_lo_hi_u64(fee_amount_lo, fee_amount_hi, TRANSFER_AMOUNT_LO_BITS);
         let combined_fee_commitment = combine_lo_hi_commitments(
-            &fee_ciphertext_lo.commitment,
-            &fee_ciphertext_hi.commitment,
+            fee_ciphertext_lo.get_commitment(),
+            fee_ciphertext_hi.get_commitment(),
             TRANSFER_AMOUNT_LO_BITS,
         );
         let combined_fee_opening =
@@ -611,8 +611,8 @@ impl TransferWithFeeProof {
             TRANSFER_AMOUNT_LO_BITS,
         );
         let combined_fee_commitment = combine_lo_hi_commitments(
-            &fee_ciphertext_lo.commitment,
-            &fee_ciphertext_hi.commitment,
+            fee_ciphertext_lo.get_commitment(),
+            fee_ciphertext_hi.get_commitment(),
             TRANSFER_AMOUNT_LO_BITS,
         );
 
@@ -640,14 +640,17 @@ impl TransferWithFeeProof {
                 &transfer_with_fee_pubkeys.destination_pubkey,
                 &transfer_with_fee_pubkeys.withdraw_withheld_authority_pubkey,
             ),
-            (&fee_ciphertext_lo.commitment, &fee_ciphertext_hi.commitment),
             (
-                &fee_ciphertext_lo.destination_handle,
-                &fee_ciphertext_hi.destination_handle,
+                fee_ciphertext_lo.get_commitment(),
+                fee_ciphertext_hi.get_commitment(),
             ),
             (
-                &fee_ciphertext_lo.withdraw_withheld_authority_handle,
-                &fee_ciphertext_hi.withdraw_withheld_authority_handle,
+                fee_ciphertext_lo.get_destination_handle(),
+                fee_ciphertext_hi.get_destination_handle(),
+            ),
+            (
+                fee_ciphertext_lo.get_withdraw_withheld_authority_handle(),
+                fee_ciphertext_hi.get_withdraw_withheld_authority_handle(),
             ),
             transcript,
         )?;
@@ -663,8 +666,8 @@ impl TransferWithFeeProof {
                 ciphertext_hi.get_commitment(),
                 &claimed_commitment,
                 &claimed_commitment_negated,
-                &fee_ciphertext_lo.commitment,
-                &fee_ciphertext_hi.commitment,
+                fee_ciphertext_lo.get_commitment(),
+                fee_ciphertext_hi.get_commitment(),
             ],
             vec![
                 TRANSFER_SOURCE_AMOUNT_BITS, // 64
