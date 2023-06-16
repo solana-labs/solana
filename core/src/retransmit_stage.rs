@@ -320,7 +320,7 @@ fn retransmit_shred(
     let mut compute_turbine_peers = Measure::start("turbine_start");
     let data_plane_fanout = cluster_nodes::get_data_plane_fanout(key.slot(), root_bank);
     let (root_distance, addrs) =
-        cluster_nodes.get_retransmit_addrs(slot_leader, key, root_bank, data_plane_fanout)?;
+        cluster_nodes.get_retransmit_addrs(slot_leader, key, data_plane_fanout)?;
     let addrs: Vec<_> = addrs
         .into_iter()
         .filter(|addr| socket_addr_space.check(addr))
