@@ -53,9 +53,7 @@ mod target_arch {
         crate::{
             curve25519::scalar::PodScalar,
             errors::ProofError,
-            instruction::transfer::{
-                FeeEncryption, FeeParameters, TransferPubkeys, TransferWithFeePubkeys,
-            },
+            instruction::transfer::{FeeParameters, TransferPubkeys, TransferWithFeePubkeys},
         },
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
         std::convert::TryFrom,
@@ -130,32 +128,6 @@ mod target_arch {
                 auditor_pubkey: pod.auditor_pubkey.try_into()?,
                 withdraw_withheld_authority_pubkey: pod
                     .withdraw_withheld_authority_pubkey
-                    .try_into()?,
-            })
-        }
-    }
-
-    impl From<FeeEncryption> for pod::FeeEncryption {
-        fn from(ciphertext: FeeEncryption) -> Self {
-            Self {
-                commitment: ciphertext.commitment.into(),
-                destination_handle: ciphertext.destination_handle.into(),
-                withdraw_withheld_authority_handle: ciphertext
-                    .withdraw_withheld_authority_handle
-                    .into(),
-            }
-        }
-    }
-
-    impl TryFrom<pod::FeeEncryption> for FeeEncryption {
-        type Error = ProofError;
-
-        fn try_from(pod: pod::FeeEncryption) -> Result<Self, Self::Error> {
-            Ok(Self {
-                commitment: pod.commitment.try_into()?,
-                destination_handle: pod.destination_handle.try_into()?,
-                withdraw_withheld_authority_handle: pod
-                    .withdraw_withheld_authority_handle
                     .try_into()?,
             })
         }

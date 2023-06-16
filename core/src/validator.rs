@@ -251,6 +251,7 @@ pub struct ValidatorConfig {
     pub block_verification_method: BlockVerificationMethod,
     pub block_production_method: BlockProductionMethod,
     pub generator_config: Option<GeneratorConfig>,
+    pub boot_from_local_state: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -317,6 +318,7 @@ impl Default for ValidatorConfig {
             block_verification_method: BlockVerificationMethod::default(),
             block_production_method: BlockProductionMethod::default(),
             generator_config: None,
+            boot_from_local_state: false,
         }
     }
 }
@@ -1625,6 +1627,7 @@ fn load_blockstore(
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
         runtime_config: config.runtime_config.clone(),
+        boot_from_local_state: config.boot_from_local_state,
         ..blockstore_processor::ProcessOptions::default()
     };
 

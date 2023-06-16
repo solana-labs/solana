@@ -12633,7 +12633,30 @@ fn test_distribute_partitioned_epoch_rewards() {
         .map(|_| StakeReward::new_random())
         .collect::<Vec<_>>();
 
-    let stake_rewards = hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 100);
+    let stake_rewards = hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 2);
+
+    bank.set_epoch_reward_status_active(stake_rewards);
+
+    bank.distribute_partitioned_epoch_rewards();
+}
+
+#[test]
+#[should_panic(expected = "assertion failed: self.epoch_schedule.get_slots_in_epoch")]
+fn test_distribute_partitioned_epoch_rewards_too_many_partitions() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+
+    let expected_num = 1;
+
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    let stake_rewards = hash_rewards_into_partitions(
+        stake_rewards,
+        &Hash::new(&[1; 32]),
+        bank.epoch_schedule().slots_per_epoch as usize + 1,
+    );
 
     bank.set_epoch_reward_status_active(stake_rewards);
 
@@ -13173,14 +13196,11 @@ fn test_get_reward_distribution_num_blocks_normal() {
         .map(|_| StakeReward::new_random())
         .collect::<Vec<_>>();
 
-    assert_eq!(
-        bank.get_reward_distribution_num_blocks(stake_rewards.len()),
-        2
-    );
+    assert_eq!(bank.get_reward_distribution_num_blocks(&stake_rewards), 2);
     assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
     assert_eq!(
-        bank.get_reward_total_num_blocks(stake_rewards.len()),
-        bank.get_reward_distribution_num_blocks(stake_rewards.len())
+        bank.get_reward_total_num_blocks(&stake_rewards),
+        bank.get_reward_distribution_num_blocks(&stake_rewards)
             + bank.get_reward_calculation_num_blocks(),
     );
 }
@@ -13201,14 +13221,11 @@ fn test_get_reward_distribution_num_blocks_cap() {
         .map(|_| StakeReward::new_random())
         .collect::<Vec<_>>();
 
-    assert_eq!(
-        bank.get_reward_distribution_num_blocks(stake_rewards.len()),
-        1
-    );
+    assert_eq!(bank.get_reward_distribution_num_blocks(&stake_rewards), 1);
     assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
     assert_eq!(
-        bank.get_reward_total_num_blocks(stake_rewards.len()),
-        bank.get_reward_distribution_num_blocks(stake_rewards.len())
+        bank.get_reward_total_num_blocks(&stake_rewards),
+        bank.get_reward_distribution_num_blocks(&stake_rewards)
             + bank.get_reward_calculation_num_blocks(),
     );
 }
@@ -13220,11 +13237,13 @@ fn test_get_reward_distribution_num_blocks_warmup() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
 
     let bank = Bank::new_for_tests(&genesis_config);
-    assert_eq!(bank.get_reward_distribution_num_blocks(0), 1);
+    let rewards = vec![];
+    assert_eq!(bank.get_reward_distribution_num_blocks(&rewards), 1);
     assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
     assert_eq!(
-        bank.get_reward_total_num_blocks(0),
-        bank.get_reward_distribution_num_blocks(0) + bank.get_reward_calculation_num_blocks(),
+        bank.get_reward_total_num_blocks(&rewards),
+        bank.get_reward_distribution_num_blocks(&rewards)
+            + bank.get_reward_calculation_num_blocks(),
     );
 }
 

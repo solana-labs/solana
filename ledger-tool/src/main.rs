@@ -1639,6 +1639,7 @@ fn main() {
             .arg(&maximum_full_snapshot_archives_to_retain)
             .arg(&maximum_incremental_snapshot_archives_to_retain)
             .arg(&geyser_plugin_args)
+            .arg(&boot_from_local_state)
             .arg(
                 Arg::with_name("snapshot_slot")
                     .index(1)
@@ -2717,9 +2718,17 @@ fn main() {
                     NonZeroUsize
                 );
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+                let mut process_options = ProcessOptions {
+                    new_hard_forks,
+                    run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
+                    accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
+                    boot_from_local_state: arg_matches.is_present("boot_from_local_state"),
+                    ..ProcessOptions::default()
+                };
                 let blockstore = Arc::new(open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 ));
@@ -2745,6 +2754,7 @@ fn main() {
                     );
                     exit(1);
                 }
+                process_options.halt_at_slot = Some(snapshot_slot);
 
                 let ending_slot = if is_minimized {
                     let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
@@ -2779,14 +2789,7 @@ fn main() {
                     arg_matches,
                     &genesis_config,
                     blockstore.clone(),
-                    ProcessOptions {
-                        new_hard_forks,
-                        halt_at_slot: Some(snapshot_slot),
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
-                        ..ProcessOptions::default()
-                    },
+                    process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
                 ) {
