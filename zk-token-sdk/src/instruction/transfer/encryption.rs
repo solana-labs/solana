@@ -78,10 +78,14 @@ impl FeeEncryption {
     }
 
     pub fn get_destination_handle(&self) -> &DecryptHandle {
+        // `FeeEncryption` is a wrapper for `GroupedElGamalCiphertext<2>`, which holds
+        // exactly two decryption handles.
         self.0.handles.get(0).unwrap()
     }
 
     pub fn get_withdraw_withheld_authority_handle(&self) -> &DecryptHandle {
+        // `FeeEncryption` is a wrapper for `GroupedElGamalCiphertext<2>`, which holds
+        // exactly two decryption handles.
         self.0.handles.get(1).unwrap()
     }
 }
