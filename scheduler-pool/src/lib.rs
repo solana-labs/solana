@@ -698,7 +698,7 @@ mod tests {
             bank = Arc::new(Bank::new_from_parent(
                 &bank,
                 &Pubkey::default(),
-                bank.slot() + 1,
+                bank.slot().checked_add(1).unwrap(),
             ));
         }
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
