@@ -86,7 +86,7 @@ async fn get_sysvar_last_restart_slot() {
     context.warp_to_slot(40).unwrap();
     context.register_hard_fork(41 as Slot);
     check_with_program(&mut context, program_id, 0).await;
-    context.warp_to_slot(42).unwrap();
+    context.warp_to_slot(41).unwrap();
     check_with_program(&mut context, program_id, 41).await;
     // check for value lower than previous hardfork
     context.register_hard_fork(40 as Slot);
