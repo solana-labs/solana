@@ -420,8 +420,8 @@ fn test_stake_account_lifetime() {
     let pre_staked = get_staked(&bank, &stake_pubkey);
     let pre_balance = bank.get_balance(&stake_pubkey);
 
-    // next epoch bank should pay rewards
-    bank = next_epoch_and_n_slots(&bank, 0);
+    // next epoch bank plus one additional slot should pay rewards
+    bank = next_epoch_and_n_slots(&bank, 1);
 
     // Test that balance increased, and that the balance got staked
     let staked = get_staked(&bank, &stake_pubkey);
@@ -489,7 +489,7 @@ fn test_stake_account_lifetime() {
         .send_and_confirm_message(&[&mint_keypair, &stake_keypair], message)
         .is_err());
 
-    let mut bank = next_epoch_and_n_slots(&bank, 0);
+    let mut bank = next_epoch_and_n_slots(&bank, 1);
 
     let bank_client = BankClient::new_shared(&bank);
 
@@ -535,7 +535,7 @@ fn test_stake_account_lifetime() {
         if get_staked(&bank, &split_stake_pubkey) == 0 {
             break;
         }
-        bank = next_epoch_and_n_slots(&bank, 0);
+        bank = next_epoch_and_n_slots(&bank, 1);
     }
     let bank_client = BankClient::new_shared(&bank);
 
