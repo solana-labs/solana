@@ -156,7 +156,7 @@ use {
         slot_history::{Check, SlotHistory},
         stake::state::Delegation,
         system_transaction,
-        sysvar::{self, Sysvar, SysvarId},
+        sysvar::{self, last_restart_slot::LastRestartSlot, Sysvar, SysvarId},
         timing::years_as_slots,
         transaction::{
             self, MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
@@ -884,7 +884,7 @@ pub(crate) struct StartBlockHeightAndRewards {
     /// the block height of the slot at which rewards distribution began
     pub(crate) start_block_height: u64,
     /// calculated epoch rewards pending distribution, outer Vec is by partition (one partition per block)
-    pub(crate) calculated_epoch_stake_rewards: Arc<Vec<StakeRewards>>,
+    pub(crate) stake_rewards_by_partition: Arc<Vec<StakeRewards>>,
 }
 
 /// Represent whether bank is in the reward phase or not.
@@ -1447,6 +1447,7 @@ impl Bank {
         bank.update_rent();
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
+        bank.update_last_restart_slot();
         bank.fill_missing_sysvar_cache_entries();
         bank
     }
@@ -1496,10 +1497,13 @@ impl Bank {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn set_epoch_reward_status_active(&mut self, stake_rewards: Vec<StakeRewards>) {
+    pub(crate) fn set_epoch_reward_status_active(
+        &mut self,
+        stake_rewards_by_partition: Vec<StakeRewards>,
+    ) {
         self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
             start_block_height: self.block_height,
-            calculated_epoch_stake_rewards: Arc::new(stake_rewards),
+            stake_rewards_by_partition: Arc::new(stake_rewards_by_partition),
         });
     }
 
@@ -1741,6 +1745,7 @@ impl Bank {
             new.update_stake_history(Some(parent_epoch));
             new.update_clock(Some(parent_epoch));
             new.update_fees();
+            new.update_last_restart_slot()
         });
 
         let (_, fill_sysvar_cache_time_us) = measure_us!(new.fill_missing_sysvar_cache_entries());
@@ -1937,8 +1942,7 @@ impl Bank {
         let height = self.block_height();
         let start_block_height = status.start_block_height;
         let credit_start = start_block_height + self.get_reward_calculation_num_blocks();
-        let credit_end_exclusive =
-            credit_start + status.calculated_epoch_stake_rewards.len() as u64;
+        let credit_end_exclusive = credit_start + status.stake_rewards_by_partition.len() as u64;
         assert!(
             self.epoch_schedule.get_slots_in_epoch(self.epoch)
                 > credit_end_exclusive.saturating_sub(credit_start)
@@ -1947,7 +1951,7 @@ impl Bank {
         if height >= credit_start && height < credit_end_exclusive {
             let partition_index = height - credit_start;
             self.distribute_epoch_rewards_in_partition(
-                &status.calculated_epoch_stake_rewards,
+                &status.stake_rewards_by_partition,
                 partition_index,
             );
         }
@@ -2411,6 +2415,35 @@ impl Bank {
                 self.inherit_specially_retained_account_fields(account),
             )
         });
+    }
+
+    pub fn update_last_restart_slot(&self) {
+        let feature_flag = self
+            .feature_set
+            .is_active(&feature_set::last_restart_slot_sysvar::id());
+
+        if feature_flag {
+            let last_restart_slot = {
+                let slot = self.slot;
+                let hard_forks = self.hard_forks();
+                let hard_forks_r = hard_forks.read().unwrap();
+
+                // Only consider hard forks <= this bank's slot to avoid prematurely applying
+                // a hard fork that is set to occur in the future.
+                hard_forks_r
+                    .iter()
+                    .rev()
+                    .find(|(hard_fork, _)| *hard_fork <= slot)
+                    .map(|(slot, _)| *slot)
+                    .unwrap_or(0)
+            };
+            self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
+                create_account(
+                    &LastRestartSlot { last_restart_slot },
+                    self.inherit_specially_retained_account_fields(account),
+                )
+            });
+        }
     }
 
     pub fn set_sysvar_for_tests<T>(&self, sysvar: &T)

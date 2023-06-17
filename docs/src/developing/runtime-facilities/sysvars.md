@@ -156,3 +156,11 @@ determining whether epoch rewards distribution has finished.
 - Address: `SysvarEpochRewards1111111111111111111111111`
 - Layout:
   [EpochRewards](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/epoch_rewards/struct.EpochRewards.html)
+
+## LastRestartSlot
+
+The LastRestartSlot sysvar contains the slot number of the last restart or _0_ (zero) if none ever happened.
+
+- Address: `SysvarLastRestartS1ot1111111111111111111111`
+- Layout:
+  [LastRestartSlot](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/last_restart_slot/struct.LastRestartSlot.html)

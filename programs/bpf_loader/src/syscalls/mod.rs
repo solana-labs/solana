@@ -6,7 +6,7 @@ pub use self::{
     mem_ops::{SyscallMemcmp, SyscallMemcpy, SyscallMemmove, SyscallMemset},
     sysvar::{
         SyscallGetClockSysvar, SyscallGetEpochScheduleSysvar, SyscallGetFeesSysvar,
-        SyscallGetRentSysvar,
+        SyscallGetLastRestartSlotSysvar, SyscallGetRentSysvar,
     },
 };
 #[allow(deprecated)]
@@ -37,9 +37,10 @@ use {
             disable_cpi_setting_executable_and_rent_epoch, disable_deploy_of_alloc_free_syscall,
             disable_fees_sysvar, enable_alt_bn128_syscall, enable_big_mod_exp_syscall,
             enable_early_verification_of_account_modifications,
-            error_on_syscall_bpf_function_hash_collisions, libsecp256k1_0_5_upgrade_enabled,
-            reject_callx_r10, stop_sibling_instruction_search_at_parent,
-            stop_truncating_strings_in_syscalls, switch_to_new_elf_parser,
+            error_on_syscall_bpf_function_hash_collisions, last_restart_slot_sysvar,
+            libsecp256k1_0_5_upgrade_enabled, reject_callx_r10,
+            stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
+            switch_to_new_elf_parser,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -187,6 +188,7 @@ pub fn create_program_runtime_environment<'a>(
     let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
+    let last_restart_slot_syscall_enabled = feature_set.is_active(&last_restart_slot_sysvar::id());
 
     let mut result = BuiltinProgram::new_loader(config);
 
@@ -262,6 +264,13 @@ pub fn create_program_runtime_environment<'a>(
         SyscallGetFeesSysvar::call,
     )?;
     result.register_function(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
+
+    register_feature_gated_function!(
+        result,
+        last_restart_slot_syscall_enabled,
+        b"sol_get_last_restart_slot",
+        SyscallGetLastRestartSlotSysvar::call,
+    )?;
 
     // Memory ops
     result.register_function(b"sol_memcpy_", SyscallMemcpy::call)?;

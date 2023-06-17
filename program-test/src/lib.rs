@@ -371,6 +371,15 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         get_sysvar(get_invoke_context().get_sysvar_cache().get_rent(), var_addr)
     }
 
+    fn sol_get_last_restart_slot(&self, var_addr: *mut u8) -> u64 {
+        get_sysvar(
+            get_invoke_context()
+                .get_sysvar_cache()
+                .get_last_restart_slot(),
+            var_addr,
+        )
+    }
+
     fn sol_get_return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
         let (program_id, data) = get_invoke_context().transaction_context.get_return_data();
         Some((*program_id, data.to_vec()))
@@ -1161,5 +1170,13 @@ impl ProgramTestContext {
             .await?;
         self.last_blockhash = blockhash;
         Ok(blockhash)
+    }
+
+    /// record a hard fork slot in working bank; should be in the past
+    pub fn register_hard_fork(&mut self, hard_fork_slot: Slot) {
+        let bank_forks = self.bank_forks.write().unwrap();
+        let hard_forks = bank_forks.working_bank().hard_forks();
+        let mut write = hard_forks.write().unwrap();
+        write.register(hard_fork_slot);
     }
 }

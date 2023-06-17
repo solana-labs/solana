@@ -292,6 +292,19 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Use DIR as snapshot location [default: --ledger value]"),
         )
         .arg(
+            Arg::with_name("boot_from_local_state")
+                .long("boot-from-local-state")
+                .takes_value(false)
+                .hidden(hidden_unless_forced())
+                .help("Boot from state already on disk")
+                .long_help(
+                    "Boot from state already on disk, instead of \
+                    extracting it from a snapshot archive. \
+                    Note, this will use the latest state available, \
+                    which may be newer than the latest snapshot archive.",
+                )
+        )
+        .arg(
             Arg::with_name("incremental_snapshot_archive_path")
                 .long("incremental-snapshot-archive-path")
                 .conflicts_with("no-incremental-snapshots")
