@@ -53,7 +53,7 @@ mod target_arch {
         crate::{
             curve25519::scalar::PodScalar,
             errors::ProofError,
-            instruction::transfer::{FeeParameters, TransferPubkeys, TransferWithFeePubkeys},
+            instruction::transfer::{TransferPubkeys, TransferWithFeePubkeys},
         },
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
         std::convert::TryFrom,
@@ -130,24 +130,6 @@ mod target_arch {
                     .withdraw_withheld_authority_pubkey
                     .try_into()?,
             })
-        }
-    }
-
-    impl From<FeeParameters> for pod::FeeParameters {
-        fn from(parameters: FeeParameters) -> Self {
-            Self {
-                fee_rate_basis_points: parameters.fee_rate_basis_points.into(),
-                maximum_fee: parameters.maximum_fee.into(),
-            }
-        }
-    }
-
-    impl From<pod::FeeParameters> for FeeParameters {
-        fn from(pod: pod::FeeParameters) -> Self {
-            Self {
-                fee_rate_basis_points: pod.fee_rate_basis_points.into(),
-                maximum_fee: pod.maximum_fee.into(),
-            }
         }
     }
 }

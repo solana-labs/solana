@@ -70,3 +70,23 @@ pub struct FeeParameters {
     /// Maximum fee assessed on transfers, expressed as an amount of tokens
     pub maximum_fee: PodU64,
 }
+
+#[cfg(not(target_os = "solana"))]
+impl From<decoded::FeeParameters> for FeeParameters {
+    fn from(decoded_fee_parameters: decoded::FeeParameters) -> Self {
+        FeeParameters {
+            fee_rate_basis_points: decoded_fee_parameters.fee_rate_basis_points.into(),
+            maximum_fee: decoded_fee_parameters.maximum_fee.into(),
+        }
+    }
+}
+
+#[cfg(not(target_os = "solana"))]
+impl From<FeeParameters> for decoded::FeeParameters {
+    fn from(pod_fee_parameters: FeeParameters) -> Self {
+        decoded::FeeParameters {
+            fee_rate_basis_points: pod_fee_parameters.fee_rate_basis_points.into(),
+            maximum_fee: pod_fee_parameters.maximum_fee.into(),
+        }
+    }
+}
