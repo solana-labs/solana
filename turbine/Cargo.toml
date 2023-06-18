@@ -1,7 +1,7 @@
 [package]
-name = "solana-local-cluster"
+name = "solana-turbine"
 description = "Blockchain, Rebuilt for Scale"
-documentation = "https://docs.rs/solana-local-cluster"
+documentation = "https://docs.rs/solana-turbine"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
@@ -10,38 +10,40 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+bincode = { workspace = true }
 crossbeam-channel = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
+lru = { workspace = true }
 rand = { workspace = true }
+rand_chacha = { workspace = true }
 rayon = { workspace = true }
 solana-client = { workspace = true }
-solana-config-program = { workspace = true }
-solana-core = { workspace = true }
 solana-entry = { workspace = true }
 solana-gossip = { workspace = true }
 solana-ledger = { workspace = true }
-solana-pubsub-client = { workspace = true }
-solana-rpc-client = { workspace = true }
+solana-measure = { workspace = true }
+solana-metrics = { workspace = true }
+solana-perf = { workspace = true }
+solana-poh = { workspace = true }
+solana-quic-client = { workspace = true }
+solana-rayon-threadlimit = { workspace = true }
+solana-rpc = { workspace = true }
 solana-rpc-client-api = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
-solana-stake-program = { workspace = true }
 solana-streamer = { workspace = true }
-solana-thin-client = { workspace = true }
-solana-tpu-client = { workspace = true }
-solana-turbine = { workspace = true }
-solana-vote-program = { workspace = true }
-tempfile = { workspace = true }
-trees = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
-assert_matches = { workspace = true }
-fs_extra = { workspace = true }
-gag = { workspace = true }
-serial_test = { workspace = true }
-solana-download-utils = { workspace = true }
+matches = { workspace = true }
 solana-logger = { workspace = true }
 
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
+[[bench]]
+name = "cluster_info"
+
+[[bench]]
+name = "cluster_nodes"
+
+[[bench]]
+name = "retransmit_stage"

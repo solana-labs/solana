@@ -427,7 +427,7 @@ pub struct RetransmitStage {
 }
 
 impl RetransmitStage {
-    pub(crate) fn new(
+    pub fn new(
         bank_forks: Arc<RwLock<BankForks>>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         cluster_info: Arc<ClusterInfo>,
@@ -453,7 +453,7 @@ impl RetransmitStage {
         }
     }
 
-    pub(crate) fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         self.retransmit_thread_handle.join()
     }
 }

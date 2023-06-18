@@ -509,7 +509,6 @@ fn should_use_merkle_variant(slot: Slot, cluster_type: ClusterType, shred_versio
 mod test {
     use {
         super::*,
-        crate::validator::TURBINE_QUIC_CONNECTION_POOL_SIZE,
         solana_entry::entry::create_ticks,
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
@@ -580,7 +579,7 @@ mod test {
                 keypair,
                 IpAddr::V4(Ipv4Addr::LOCALHOST),
                 &Arc::<RwLock<StakedNodes>>::default(),
-                TURBINE_QUIC_CONNECTION_POOL_SIZE,
+                4, // connection_pool_size
             )
             .unwrap(),
         )

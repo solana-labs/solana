@@ -60,6 +60,7 @@ solana-send-transaction-service = { workspace = true }
 solana-streamer = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-transaction-status = { workspace = true }
+solana-turbine = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
@@ -93,16 +94,10 @@ rustc_version = { workspace = true }
 name = "banking_stage"
 
 [[bench]]
-name = "cluster_info"
-
-[[bench]]
 name = "gen_keys"
 
 [[bench]]
 name = "sigverify_stage"
-
-[[bench]]
-name = "retransmit_stage"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

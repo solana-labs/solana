@@ -8,10 +8,7 @@ use {
         fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
         standard_broadcast_run::StandardBroadcastRun,
     },
-    crate::{
-        cluster_nodes::{self, ClusterNodes, ClusterNodesCache},
-        result::{Error, Result},
-    },
+    crate::cluster_nodes::{self, ClusterNodes, ClusterNodesCache},
     crossbeam_channel::{unbounded, Receiver, RecvError, RecvTimeoutError, Sender},
     itertools::{Either, Itertools},
     solana_client::tpu_connection::TpuConnection,
@@ -46,6 +43,7 @@ use {
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
     },
+    thiserror::Error,
 };
 
 pub mod broadcast_duplicates_run;
@@ -59,10 +57,30 @@ const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
 const CLUSTER_NODES_CACHE_TTL: Duration = Duration::from_secs(5);
 
 pub(crate) const NUM_INSERT_THREADS: usize = 2;
-pub(crate) type RetransmitSlotsSender = Sender<Slot>;
-pub(crate) type RetransmitSlotsReceiver = Receiver<Slot>;
 pub(crate) type RecordReceiver = Receiver<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>;
 pub(crate) type TransmitReceiver = Receiver<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Blockstore(#[from] solana_ledger::blockstore::BlockstoreError),
+    #[error(transparent)]
+    ClusterInfo(#[from] solana_gossip::cluster_info::ClusterInfoError),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Recv(#[from] crossbeam_channel::RecvError),
+    #[error(transparent)]
+    RecvTimeout(#[from] crossbeam_channel::RecvTimeoutError),
+    #[error("Send")]
+    Send,
+    #[error(transparent)]
+    Serialize(#[from] std::boxed::Box<bincode::ErrorKind>),
+    #[error(transparent)]
+    TransportError(#[from] solana_sdk::transport::TransportError),
+}
+
+type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastStageReturnType {
@@ -84,7 +102,7 @@ impl BroadcastStageType {
         sock: Vec<UdpSocket>,
         cluster_info: Arc<ClusterInfo>,
         receiver: Receiver<WorkingBankEntry>,
-        retransmit_slots_receiver: RetransmitSlotsReceiver,
+        retransmit_slots_receiver: Receiver<Slot>,
         exit_sender: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -243,7 +261,7 @@ impl BroadcastStage {
         socks: Vec<UdpSocket>,
         cluster_info: Arc<ClusterInfo>,
         receiver: Receiver<WorkingBankEntry>,
-        retransmit_slots_receiver: RetransmitSlotsReceiver,
+        retransmit_slots_receiver: Receiver<Slot>,
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -333,7 +351,7 @@ impl BroadcastStage {
 
     fn check_retransmit_signals(
         blockstore: &Blockstore,
-        retransmit_slots_receiver: &RetransmitSlotsReceiver,
+        retransmit_slots_receiver: &Receiver<Slot>,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         const RECV_TIMEOUT: Duration = Duration::from_millis(100);
@@ -454,11 +472,16 @@ pub fn broadcast_shreds(
     result
 }
 
+impl<T> From<crossbeam_channel::SendError<T>> for Error {
+    fn from(_: crossbeam_channel::SendError<T>) -> Error {
+        Error::Send
+    }
+}
+
 #[cfg(test)]
 pub mod test {
     use {
         super::*,
-        crate::validator::TURBINE_QUIC_CONNECTION_POOL_SIZE,
         crossbeam_channel::unbounded,
         solana_entry::entry::create_ticks,
         solana_gossip::cluster_info::{ClusterInfo, Node},
@@ -603,7 +626,7 @@ pub mod test {
         leader_keypair: Arc<Keypair>,
         ledger_path: &Path,
         entry_receiver: Receiver<WorkingBankEntry>,
-        retransmit_slots_receiver: RetransmitSlotsReceiver,
+        retransmit_slots_receiver: Receiver<Slot>,
     ) -> MockBroadcastStage {
         // Make the database ledger
         let blockstore = Arc::new(Blockstore::open(ledger_path).unwrap());
@@ -613,7 +636,7 @@ pub mod test {
                 &leader_keypair,
                 IpAddr::V4(Ipv4Addr::LOCALHOST),
                 &Arc::<RwLock<StakedNodes>>::default(),
-                TURBINE_QUIC_CONNECTION_POOL_SIZE,
+                4, // connection_pool_size
             )
             .unwrap(),
         );

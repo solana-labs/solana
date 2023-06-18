@@ -5617,6 +5617,7 @@ dependencies = [
  "solana-streamer",
  "solana-tpu-client",
  "solana-transaction-status",
+ "solana-turbine",
  "solana-version",
  "solana-vote-program",
  "static_assertions",
@@ -6095,6 +6096,7 @@ dependencies = [
  "solana-streamer",
  "solana-thin-client",
  "solana-tpu-client",
+ "solana-turbine",
  "solana-vote-program",
  "tempfile",
  "trees",
@@ -7059,6 +7061,38 @@ dependencies = [
  "spl-memo",
  "spl-token",
  "spl-token-2022",
+ "thiserror",
+]
+
+[[package]]
+name = "solana-turbine"
+version = "1.17.0"
+dependencies = [
+ "bincode",
+ "crossbeam-channel",
+ "itertools",
+ "log",
+ "lru",
+ "matches",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
+ "rayon",
+ "solana-client",
+ "solana-entry",
+ "solana-gossip",
+ "solana-ledger",
+ "solana-logger",
+ "solana-measure",
+ "solana-metrics",
+ "solana-perf",
+ "solana-poh",
+ "solana-quic-client",
+ "solana-rayon-threadlimit",
+ "solana-rpc",
+ "solana-rpc-client-api",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-streamer",
  "thiserror",
 ]
 
