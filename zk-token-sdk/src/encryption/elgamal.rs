@@ -155,12 +155,16 @@ impl ElGamal {
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Zeroize)]
 pub struct ElGamalKeypair {
     /// The public half of this keypair.
-    pub public: ElGamalPubkey,
+    public: ElGamalPubkey,
     /// The secret half of this keypair.
-    pub secret: ElGamalSecretKey,
+    secret: ElGamalSecretKey,
 }
 
 impl ElGamalKeypair {
+    pub fn new(public: ElGamalPubkey, secret: ElGamalSecretKey) -> Self {
+        Self { public, secret }
+    }
+
     /// Deterministically derives an ElGamal keypair from a Solana signer and a public seed..
     ///
     /// This function exists for applications where a user may not wish to maintain a Solana signer
@@ -190,6 +194,14 @@ impl ElGamalKeypair {
     #[cfg(not(target_os = "solana"))]
     pub fn new_rand() -> Self {
         ElGamal::keygen()
+    }
+
+    pub fn pubkey(&self) -> &ElGamalPubkey {
+        &self.public
+    }
+
+    pub fn secret(&self) -> &ElGamalSecretKey {
+        &self.secret
     }
 
     pub fn to_bytes(&self) -> [u8; 64] {
