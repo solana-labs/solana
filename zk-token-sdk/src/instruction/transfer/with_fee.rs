@@ -126,13 +126,13 @@ impl TransferWithFeeData {
 
         let (ciphertext_lo, opening_lo) = TransferAmountCiphertext::new(
             amount_lo,
-            &source_keypair.public,
+            source_keypair.pubkey(),
             destination_pubkey,
             auditor_pubkey,
         );
         let (ciphertext_hi, opening_hi) = TransferAmountCiphertext::new(
             amount_hi,
-            &source_keypair.public,
+            source_keypair.pubkey(),
             destination_pubkey,
             auditor_pubkey,
         );
@@ -187,7 +187,7 @@ impl TransferWithFeeData {
 
         // generate transcript and append all public inputs
         let pod_transfer_with_fee_pubkeys = TransferWithFeePubkeys {
-            source: source_keypair.public.into(),
+            source: (*source_keypair.pubkey()).into(),
             destination: (*destination_pubkey).into(),
             auditor: (*auditor_pubkey).into(),
             withdraw_withheld_authority: (*withdraw_withheld_authority_pubkey).into(),
@@ -760,13 +760,19 @@ mod test {
     #[test]
     fn test_fee_correctness() {
         let source_keypair = ElGamalKeypair::new_rand();
-        let destination_pubkey = ElGamalKeypair::new_rand().public;
-        let auditor_pubkey = ElGamalKeypair::new_rand().public;
-        let withdraw_withheld_authority_pubkey = ElGamalKeypair::new_rand().public;
+
+        let destination_keypair = ElGamalKeypair::new_rand();
+        let destination_pubkey = destination_keypair.pubkey();
+
+        let auditor_keypair = ElGamalKeypair::new_rand();
+        let auditor_pubkey = auditor_keypair.pubkey();
+
+        let withdraw_withheld_authority_keypair = ElGamalKeypair::new_rand();
+        let withdraw_withheld_authority_pubkey = withdraw_withheld_authority_keypair.pubkey();
 
         // Case 1: transfer 0 amount
         let spendable_balance: u64 = 120;
-        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+        let spendable_ciphertext = source_keypair.pubkey().encrypt(spendable_balance);
 
         let transfer_amount: u64 = 0;
 
@@ -779,9 +785,9 @@ mod test {
             transfer_amount,
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
-            (&destination_pubkey, &auditor_pubkey),
+            (destination_pubkey, auditor_pubkey),
             fee_parameters,
-            &withdraw_withheld_authority_pubkey,
+            withdraw_withheld_authority_pubkey,
         )
         .unwrap();
 
@@ -789,7 +795,7 @@ mod test {
 
         // Case 2: transfer max amount
         let spendable_balance: u64 = u64::max_value();
-        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+        let spendable_ciphertext = source_keypair.pubkey().encrypt(spendable_balance);
 
         let transfer_amount: u64 =
             (1u64 << (TRANSFER_AMOUNT_LO_BITS + TRANSFER_AMOUNT_HI_BITS)) - 1;
@@ -803,9 +809,9 @@ mod test {
             transfer_amount,
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
-            (&destination_pubkey, &auditor_pubkey),
+            (destination_pubkey, auditor_pubkey),
             fee_parameters,
-            &withdraw_withheld_authority_pubkey,
+            withdraw_withheld_authority_pubkey,
         )
         .unwrap();
 
@@ -813,7 +819,7 @@ mod test {
 
         // Case 3: general success case
         let spendable_balance: u64 = 120;
-        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+        let spendable_ciphertext = source_keypair.pubkey().encrypt(spendable_balance);
 
         let transfer_amount: u64 = 100;
 
@@ -826,9 +832,9 @@ mod test {
             transfer_amount,
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
-            (&destination_pubkey, &auditor_pubkey),
+            (destination_pubkey, auditor_pubkey),
             fee_parameters,
-            &withdraw_withheld_authority_pubkey,
+            withdraw_withheld_authority_pubkey,
         )
         .unwrap();
 
@@ -836,7 +842,7 @@ mod test {
 
         // Case 4: invalid destination, auditor, or withdraw authority pubkeys
         let spendable_balance: u64 = 120;
-        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+        let spendable_ciphertext = source_keypair.pubkey().encrypt(spendable_balance);
 
         let transfer_amount: u64 = 0;
 
@@ -847,48 +853,60 @@ mod test {
 
         // destination pubkey invalid
         let destination_pubkey: ElGamalPubkey = pod::ElGamalPubkey::zeroed().try_into().unwrap();
-        let auditor_pubkey = ElGamalKeypair::new_rand().public;
-        let withdraw_withheld_authority_pubkey = ElGamalKeypair::new_rand().public;
+
+        let auditor_keypair = ElGamalKeypair::new_rand();
+        let auditor_pubkey = auditor_keypair.pubkey();
+
+        let withdraw_withheld_authority_keypair = ElGamalKeypair::new_rand();
+        let withdraw_withheld_authority_pubkey = withdraw_withheld_authority_keypair.pubkey();
 
         let fee_data = TransferWithFeeData::new(
             transfer_amount,
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
-            (&destination_pubkey, &auditor_pubkey),
+            (&destination_pubkey, auditor_pubkey),
             fee_parameters,
-            &withdraw_withheld_authority_pubkey,
+            withdraw_withheld_authority_pubkey,
         )
         .unwrap();
 
         assert!(fee_data.verify_proof().is_err());
 
         // auditor pubkey invalid
-        let destination_pubkey: ElGamalPubkey = ElGamalKeypair::new_rand().public;
+        let destination_keypair = ElGamalKeypair::new_rand();
+        let destination_pubkey = destination_keypair.pubkey();
+
         let auditor_pubkey = pod::ElGamalPubkey::zeroed().try_into().unwrap();
-        let withdraw_withheld_authority_pubkey = ElGamalKeypair::new_rand().public;
+
+        let withdraw_withheld_authority_keypair = ElGamalKeypair::new_rand();
+        let withdraw_withheld_authority_pubkey = withdraw_withheld_authority_keypair.pubkey();
 
         let fee_data = TransferWithFeeData::new(
             transfer_amount,
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
-            (&destination_pubkey, &auditor_pubkey),
+            (destination_pubkey, &auditor_pubkey),
             fee_parameters,
-            &withdraw_withheld_authority_pubkey,
+            withdraw_withheld_authority_pubkey,
         )
         .unwrap();
 
         assert!(fee_data.verify_proof().is_err());
 
         // withdraw authority invalid
-        let destination_pubkey: ElGamalPubkey = ElGamalKeypair::new_rand().public;
-        let auditor_pubkey = ElGamalKeypair::new_rand().public;
+        let destination_keypair = ElGamalKeypair::new_rand();
+        let destination_pubkey = destination_keypair.pubkey();
+
+        let auditor_keypair = ElGamalKeypair::new_rand();
+        let auditor_pubkey = auditor_keypair.pubkey();
+
         let withdraw_withheld_authority_pubkey = pod::ElGamalPubkey::zeroed().try_into().unwrap();
 
         let fee_data = TransferWithFeeData::new(
             transfer_amount,
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
-            (&destination_pubkey, &auditor_pubkey),
+            (destination_pubkey, auditor_pubkey),
             fee_parameters,
             &withdraw_withheld_authority_pubkey,
         )

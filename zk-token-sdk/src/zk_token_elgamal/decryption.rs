@@ -25,11 +25,11 @@ mod tests {
         let keypair = ElGamalKeypair::new_rand();
 
         let pod_ciphertext = pod::ElGamalCiphertext([0u8; 64]);
-        assert_eq!(pod_ciphertext.decrypt(&keypair.secret).unwrap(), 0);
+        assert_eq!(pod_ciphertext.decrypt(keypair.secret()).unwrap(), 0);
 
         let amount = 55_u64;
-        let ciphertext = keypair.public.encrypt(amount);
+        let ciphertext = keypair.pubkey().encrypt(amount);
         let pod_ciphertext: pod::ElGamalCiphertext = ciphertext.into();
-        assert_eq!(pod_ciphertext.decrypt(&keypair.secret).unwrap(), 55);
+        assert_eq!(pod_ciphertext.decrypt(keypair.secret()).unwrap(), 55);
     }
 }

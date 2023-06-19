@@ -54,7 +54,7 @@ impl ZeroBalanceProofData {
         keypair: &ElGamalKeypair,
         ciphertext: &ElGamalCiphertext,
     ) -> Result<Self, ProofError> {
-        let pod_pubkey = pod::ElGamalPubkey(keypair.public.to_bytes());
+        let pod_pubkey = pod::ElGamalPubkey(keypair.pubkey().to_bytes());
         let pod_ciphertext = pod::ElGamalCiphertext(ciphertext.to_bytes());
 
         let context = ZeroBalanceProofContext {
@@ -110,12 +110,12 @@ mod test {
         let keypair = ElGamalKeypair::new_rand();
 
         // general case: encryption of 0
-        let ciphertext = keypair.public.encrypt(0_u64);
+        let ciphertext = keypair.pubkey().encrypt(0_u64);
         let zero_balance_proof_data = ZeroBalanceProofData::new(&keypair, &ciphertext).unwrap();
         assert!(zero_balance_proof_data.verify_proof().is_ok());
 
         // general case: encryption of > 0
-        let ciphertext = keypair.public.encrypt(1_u64);
+        let ciphertext = keypair.pubkey().encrypt(1_u64);
         let zero_balance_proof_data = ZeroBalanceProofData::new(&keypair, &ciphertext).unwrap();
         assert!(zero_balance_proof_data.verify_proof().is_err());
     }

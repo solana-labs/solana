@@ -209,9 +209,9 @@ mod tests {
         let amount: u64 = 10;
         let grouped_ciphertext = GroupedElGamal::encrypt(
             [
-                &elgamal_keypair_0.public,
-                &elgamal_keypair_1.public,
-                &elgamal_keypair_2.public,
+                elgamal_keypair_0.pubkey(),
+                elgamal_keypair_1.pubkey(),
+                elgamal_keypair_2.pubkey(),
             ],
             amount,
         );
@@ -219,28 +219,28 @@ mod tests {
         assert_eq!(
             Some(amount),
             grouped_ciphertext
-                .decrypt_u32(&elgamal_keypair_0.secret, 0)
+                .decrypt_u32(elgamal_keypair_0.secret(), 0)
                 .unwrap()
         );
 
         assert_eq!(
             Some(amount),
             grouped_ciphertext
-                .decrypt_u32(&elgamal_keypair_1.secret, 1)
+                .decrypt_u32(elgamal_keypair_1.secret(), 1)
                 .unwrap()
         );
 
         assert_eq!(
             Some(amount),
             grouped_ciphertext
-                .decrypt_u32(&elgamal_keypair_2.secret, 2)
+                .decrypt_u32(elgamal_keypair_2.secret(), 2)
                 .unwrap()
         );
 
         assert_eq!(
             GroupedElGamalError::IndexOutOfBounds,
             grouped_ciphertext
-                .decrypt_u32(&elgamal_keypair_0.secret, 3)
+                .decrypt_u32(elgamal_keypair_0.secret(), 3)
                 .unwrap_err()
         );
     }
@@ -254,9 +254,9 @@ mod tests {
         let amount: u64 = 10;
         let grouped_ciphertext = GroupedElGamal::encrypt(
             [
-                &elgamal_keypair_0.public,
-                &elgamal_keypair_1.public,
-                &elgamal_keypair_2.public,
+                elgamal_keypair_0.pubkey(),
+                elgamal_keypair_1.pubkey(),
+                elgamal_keypair_2.pubkey(),
             ],
             amount,
         );
@@ -269,21 +269,21 @@ mod tests {
         assert_eq!(
             Some(amount),
             decoded_grouped_ciphertext
-                .decrypt_u32(&elgamal_keypair_0.secret, 0)
+                .decrypt_u32(elgamal_keypair_0.secret(), 0)
                 .unwrap()
         );
 
         assert_eq!(
             Some(amount),
             decoded_grouped_ciphertext
-                .decrypt_u32(&elgamal_keypair_1.secret, 1)
+                .decrypt_u32(elgamal_keypair_1.secret(), 1)
                 .unwrap()
         );
 
         assert_eq!(
             Some(amount),
             decoded_grouped_ciphertext
-                .decrypt_u32(&elgamal_keypair_2.secret, 2)
+                .decrypt_u32(elgamal_keypair_2.secret(), 2)
                 .unwrap()
         );
     }
