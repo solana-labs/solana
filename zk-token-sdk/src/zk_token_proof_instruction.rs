@@ -50,6 +50,8 @@ pub enum ProofInstruction {
 
     /// Verify a zero-balance proof.
     ///
+    /// A zero-balance proof certifies that an ElGamal ciphertext encrypts the value zero.
+    ///
     /// Accounts expected by this instruction:
     ///
     ///   * Creating a proof context account
@@ -65,6 +67,9 @@ pub enum ProofInstruction {
     VerifyZeroBalance,
 
     /// Verify a withdraw zero-knowledge proof.
+    ///
+    /// This proof is a collection of smallers proofs that are required the SPL Token 2022
+    /// confidential extension `Withdraw` instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -82,6 +87,9 @@ pub enum ProofInstruction {
 
     /// Verify a ciphertext-ciphertext equality proof.
     ///
+    /// A ciphertext-ciphertext equality proof certifies that two ElGamal ciphertexts encrypt the
+    /// same message.
+    ///
     /// Accounts expected by this instruction:
     ///
     ///   * Creating a proof context account
@@ -97,6 +105,9 @@ pub enum ProofInstruction {
     VerifyCiphertextCiphertextEquality,
 
     /// Verify a transfer zero-knowledge proof.
+    ///
+    /// This proof is a collection of smallers proofs that are required the SPL Token 2022
+    /// confidential extension `Transfer` instruction with transfer fees.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -114,6 +125,9 @@ pub enum ProofInstruction {
 
     /// Verify a transfer with fee zero-knowledge proof.
     ///
+    /// This proof is a collection of smallers proofs that are required the SPL Token 2022
+    /// confidential extension `Transfer` instruction without transfer fees.
+    ///
     /// Accounts expected by this instruction:
     ///
     ///   * Creating a proof context account
@@ -128,7 +142,10 @@ pub enum ProofInstruction {
     ///
     VerifyTransferWithFee,
 
-    /// Verify a pubkey validity zero-knowledge proof.
+    /// Verify a public-key validity zero-knowledge proof.
+    ///
+    /// A public-key validity proof certifies that an ElGamal public key is well-formed and the
+    /// prover knows the corresponding secret key.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -230,6 +247,9 @@ pub enum ProofInstruction {
     VerifyBatchedRangeProofU256,
 
     /// Verify a ciphertext-commitment equality proof.
+    ///
+    /// A ciphertext-commitment equality proof certifies that an ElGamal ciphertext and a Pedersen
+    /// commitment encrypts/encodes the same message.
     ///
     /// Accounts expected by this instruction:
     ///
