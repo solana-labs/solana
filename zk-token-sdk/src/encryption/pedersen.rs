@@ -167,8 +167,12 @@ define_mul_variants!(
 
 /// Pedersen commitment type.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PedersenCommitment(pub(crate) RistrettoPoint);
+pub struct PedersenCommitment(RistrettoPoint);
 impl PedersenCommitment {
+    pub fn new(point: RistrettoPoint) -> Self {
+        Self(point)
+    }
+
     pub fn get_point(&self) -> &RistrettoPoint {
         &self.0
     }
