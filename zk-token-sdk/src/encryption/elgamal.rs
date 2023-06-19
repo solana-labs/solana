@@ -650,7 +650,7 @@ define_mul_variants!(
 pub struct DecryptHandle(RistrettoPoint);
 impl DecryptHandle {
     pub fn new(public: &ElGamalPubkey, opening: &PedersenOpening) -> Self {
-        Self(&public.0 * &opening.0)
+        Self(&public.0 * opening.get_scalar())
     }
 
     pub fn get_point(&self) -> &RistrettoPoint {

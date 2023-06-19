@@ -67,8 +67,12 @@ impl Pedersen {
 /// Instances of Pedersen openings are zeroized on drop.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Zeroize)]
 #[zeroize(drop)]
-pub struct PedersenOpening(pub(crate) Scalar);
+pub struct PedersenOpening(Scalar);
 impl PedersenOpening {
+    pub fn new(scalar: Scalar) -> Self {
+        Self(scalar)
+    }
+
     pub fn get_scalar(&self) -> &Scalar {
         &self.0
     }
