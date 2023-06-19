@@ -1,6 +1,7 @@
 //! Example Rust-based SBF realloc test program
 
 #![cfg(feature = "program")]
+#![allow(clippy::integer_arithmetic)]
 
 extern crate solana_program;
 use {
@@ -183,6 +184,13 @@ fn process_instruction(
                     assert_eq!(0, data[i]);
                 }
             }
+        }
+        REALLOC_EXTEND_FROM_SLICE => {
+            msg!("realloc extend from slice");
+            let data = &instruction_data[1..];
+            let prev_len = account.data_len();
+            account.realloc(prev_len.saturating_add(data.len()), false)?;
+            account.data.borrow_mut()[prev_len..].copy_from_slice(data);
         }
         _ => panic!(),
     }

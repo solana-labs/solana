@@ -16,6 +16,7 @@ program = []
 [dependencies]
 solana-program = { workspace = true }
 solana-sbf-rust-invoked = { workspace = true }
+solana-sbf-rust-realloc = { workspace = true }
 
 [lib]
 crate-type = ["lib", "cdylib"]

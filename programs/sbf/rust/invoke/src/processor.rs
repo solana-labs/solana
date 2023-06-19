@@ -2,11 +2,13 @@
 
 #![cfg(feature = "program")]
 #![allow(unreachable_code)]
+#![allow(clippy::integer_arithmetic)]
 
 use {
     crate::instructions::*,
     solana_program::{
         account_info::AccountInfo,
+        bpf_loader_deprecated,
         entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
         instruction::Instruction,
         msg,
@@ -19,6 +21,8 @@ use {
         system_instruction, system_program,
     },
     solana_sbf_rust_invoked::instructions::*,
+    solana_sbf_rust_realloc::instructions::*,
+    std::slice,
 };
 
 fn do_nested_invokes(num_nested_invokes: u64, accounts: &[AccountInfo]) -> ProgramResult {
@@ -777,6 +781,179 @@ fn process_instruction(
                     .borrow_mut()
                     .get_unchecked_mut(instruction_data[1] as usize) = 42
             };
+        }
+        TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS => {
+            msg!("TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS");
+            const CALLEE_PROGRAM_INDEX: usize = 3;
+            let account = &accounts[ARGUMENT_INDEX];
+            let callee_program_id = accounts[CALLEE_PROGRAM_INDEX].key;
+
+            let expected = {
+                let data = &instruction_data[1..];
+                let prev_len = account.data_len();
+                account.realloc(prev_len + data.len(), false)?;
+                account.data.borrow_mut()[prev_len..].copy_from_slice(data);
+                account.data.borrow().to_vec()
+            };
+
+            let mut instruction_data = vec![TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_NESTED];
+            instruction_data.extend_from_slice(&expected);
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    instruction_data,
+                ),
+                accounts,
+            )
+            .unwrap();
+        }
+        TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_NESTED => {
+            msg!("TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_NESTED");
+            const ARGUMENT_INDEX: usize = 0;
+            let account = &accounts[ARGUMENT_INDEX];
+            assert_eq!(*account.data.borrow(), &instruction_data[1..]);
+        }
+        TEST_CPI_ACCOUNT_UPDATE_CALLEE_GROWS => {
+            msg!("TEST_CPI_ACCOUNT_UPDATE_CALLEE_GROWS");
+            const REALLOC_PROGRAM_INDEX: usize = 2;
+            const INVOKE_PROGRAM_INDEX: usize = 3;
+            let account = &accounts[ARGUMENT_INDEX];
+            let realloc_program_id = accounts[REALLOC_PROGRAM_INDEX].key;
+            let realloc_program_owner = accounts[REALLOC_PROGRAM_INDEX].owner;
+            let invoke_program_id = accounts[INVOKE_PROGRAM_INDEX].key;
+            let mut instruction_data = instruction_data.to_vec();
+            let mut expected = account.data.borrow().to_vec();
+            expected.extend_from_slice(&instruction_data[1..]);
+            instruction_data[0] = REALLOC_EXTEND_FROM_SLICE;
+            invoke(
+                &create_instruction(
+                    *realloc_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (realloc_program_id, false, false),
+                        (invoke_program_id, false, false),
+                    ],
+                    instruction_data.to_vec(),
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            if !bpf_loader_deprecated::check_id(realloc_program_owner) {
+                assert_eq!(&*account.data.borrow(), &expected);
+            }
+        }
+        TEST_CPI_ACCOUNT_UPDATE_CALLEE_SHRINKS_SMALLER_THAN_ORIGINAL_LEN => {
+            msg!("TEST_CPI_ACCOUNT_UPDATE_CALLEE_SHRINKS_SMALLER_THAN_ORIGINAL_LEN");
+            const REALLOC_PROGRAM_INDEX: usize = 2;
+            const INVOKE_PROGRAM_INDEX: usize = 3;
+            let account = &accounts[ARGUMENT_INDEX];
+            let realloc_program_id = accounts[REALLOC_PROGRAM_INDEX].key;
+            let realloc_program_owner = accounts[REALLOC_PROGRAM_INDEX].owner;
+            let invoke_program_id = accounts[INVOKE_PROGRAM_INDEX].key;
+            let new_len = usize::from_le_bytes(instruction_data[1..9].try_into().unwrap());
+            let prev_len = account.data_len();
+            let expected = account.data.borrow()[..new_len].to_vec();
+            let mut instruction_data = vec![REALLOC, 0];
+            instruction_data.extend_from_slice(&new_len.to_le_bytes());
+            invoke(
+                &create_instruction(
+                    *realloc_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (realloc_program_id, false, false),
+                        (invoke_program_id, false, false),
+                    ],
+                    instruction_data,
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            // deserialize_parameters_unaligned predates realloc support, and
+            // hardcodes the account data length to the original length.
+            if !bpf_loader_deprecated::check_id(realloc_program_owner) {
+                assert_eq!(&*account.data.borrow(), &expected);
+                assert_eq!(
+                    unsafe {
+                        slice::from_raw_parts(
+                            account.data.borrow().as_ptr().add(new_len),
+                            prev_len - new_len,
+                        )
+                    },
+                    &vec![0; prev_len - new_len]
+                );
+            }
+        }
+        TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_CALLEE_SHRINKS => {
+            msg!("TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_CALLEE_SHRINKS");
+            const INVOKE_PROGRAM_INDEX: usize = 3;
+            const SENTINEL: u8 = 42;
+            let account = &accounts[ARGUMENT_INDEX];
+            let invoke_program_id = accounts[INVOKE_PROGRAM_INDEX].key;
+
+            let prev_data = {
+                let data = &instruction_data[9..];
+                let prev_len = account.data_len();
+                account.realloc(prev_len + data.len(), false)?;
+                account.data.borrow_mut()[prev_len..].copy_from_slice(data);
+                unsafe {
+                    // write a sentinel value just outside the account data to
+                    // check that when CPI zeroes the realloc region it doesn't
+                    // zero too much
+                    *account
+                        .data
+                        .borrow_mut()
+                        .as_mut_ptr()
+                        .add(prev_len + data.len()) = SENTINEL;
+                };
+                account.data.borrow().to_vec()
+            };
+
+            let mut expected = account.data.borrow().to_vec();
+            let new_len = usize::from_le_bytes(instruction_data[1..9].try_into().unwrap());
+            expected.extend_from_slice(&instruction_data[9..]);
+            let mut instruction_data =
+                vec![TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_CALLEE_SHRINKS_NESTED];
+            instruction_data.extend_from_slice(&new_len.to_le_bytes());
+            invoke(
+                &create_instruction(
+                    *invoke_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (invoke_program_id, false, false),
+                    ],
+                    instruction_data,
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            assert_eq!(*account.data.borrow(), &prev_data[..new_len]);
+            assert_eq!(
+                unsafe {
+                    slice::from_raw_parts(
+                        account.data.borrow().as_ptr().add(new_len),
+                        prev_data.len() - new_len,
+                    )
+                },
+                &vec![0; prev_data.len() - new_len]
+            );
+            assert_eq!(
+                unsafe { *account.data.borrow().as_ptr().add(prev_data.len()) },
+                SENTINEL
+            );
+        }
+        TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_CALLEE_SHRINKS_NESTED => {
+            msg!("TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_CALLEE_SHRINKS_NESTED");
+            const ARGUMENT_INDEX: usize = 0;
+            let account = &accounts[ARGUMENT_INDEX];
+            let new_len = usize::from_le_bytes(instruction_data[1..9].try_into().unwrap());
+            account.realloc(new_len, false).unwrap();
         }
         _ => panic!("unexpected program data"),
     }
