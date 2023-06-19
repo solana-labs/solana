@@ -885,7 +885,7 @@ impl Validator {
                     Some((
                         &identity_keypair,
                         node.info
-                            .tpu(Protocol::UDP)
+                            .tpu(Protocol::QUIC)
                             .expect("Operator must spin up node with valid TPU address")
                             .ip(),
                     )),
