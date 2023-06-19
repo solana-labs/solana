@@ -650,16 +650,10 @@ async fn test_batched_grouped_ciphertext_2_handles_validity() {
     let opening_lo = PedersenOpening::new_rand();
     let opening_hi = PedersenOpening::new_rand();
 
-    let grouped_ciphertext_lo = GroupedElGamal::encrypt_with(
-        [destination_pubkey, auditor_pubkey],
-        amount_lo,
-        &opening_lo,
-    );
-    let grouped_ciphertext_hi = GroupedElGamal::encrypt_with(
-        [destination_pubkey, auditor_pubkey],
-        amount_hi,
-        &opening_hi,
-    );
+    let grouped_ciphertext_lo =
+        GroupedElGamal::encrypt_with([destination_pubkey, auditor_pubkey], amount_lo, &opening_lo);
+    let grouped_ciphertext_hi =
+        GroupedElGamal::encrypt_with([destination_pubkey, auditor_pubkey], amount_hi, &opening_hi);
 
     let success_proof_data = BatchedGroupedCiphertext2HandlesValidityProofData::new(
         destination_pubkey,
