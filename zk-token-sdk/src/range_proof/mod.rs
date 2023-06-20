@@ -360,16 +360,16 @@ impl RangeProof {
             return Err(ProofVerificationError::Deserialization.into());
         }
 
-        let A = CompressedRistretto(util::read32(&slice[0..]));
-        let S = CompressedRistretto(util::read32(&slice[RISTRETTO_LEN..]));
-        let T_1 = CompressedRistretto(util::read32(&slice[2 * RISTRETTO_LEN..]));
-        let T_2 = CompressedRistretto(util::read32(&slice[3 * RISTRETTO_LEN..]));
+        let A = CompressedRistretto(util::read_unit(&slice[0..]));
+        let S = CompressedRistretto(util::read_unit(&slice[RISTRETTO_LEN..]));
+        let T_1 = CompressedRistretto(util::read_unit(&slice[2 * RISTRETTO_LEN..]));
+        let T_2 = CompressedRistretto(util::read_unit(&slice[3 * RISTRETTO_LEN..]));
 
-        let t_x = Scalar::from_canonical_bytes(util::read32(&slice[4 * SCALAR_LEN..]))
+        let t_x = Scalar::from_canonical_bytes(util::read_unit(&slice[4 * SCALAR_LEN..]))
             .ok_or(ProofVerificationError::Deserialization)?;
-        let t_x_blinding = Scalar::from_canonical_bytes(util::read32(&slice[5 * SCALAR_LEN..]))
+        let t_x_blinding = Scalar::from_canonical_bytes(util::read_unit(&slice[5 * SCALAR_LEN..]))
             .ok_or(ProofVerificationError::Deserialization)?;
-        let e_blinding = Scalar::from_canonical_bytes(util::read32(&slice[6 * SCALAR_LEN..]))
+        let e_blinding = Scalar::from_canonical_bytes(util::read_unit(&slice[6 * SCALAR_LEN..]))
             .ok_or(ProofVerificationError::Deserialization)?;
 
         let ipp_proof = InnerProductProof::from_bytes(&slice[7 * SCALAR_LEN..])?;

@@ -1,7 +1,7 @@
 /// Utility functions for Bulletproofs.
 ///
 /// The code is copied from https://github.com/dalek-cryptography/bulletproofs for now...
-use curve25519_dalek::scalar::Scalar;
+use {crate::range_proof::UNIT_LEN, curve25519_dalek::scalar::Scalar};
 
 /// Represents a degree-1 vector polynomial \\(\mathbf{a} + \mathbf{b} \cdot x\\).
 pub struct VecPoly1(pub Vec<Scalar>, pub Vec<Scalar>);
@@ -88,10 +88,10 @@ pub fn add_vec(a: &[Scalar], b: &[Scalar]) -> Vec<Scalar> {
 }
 
 /// Given `data` with `len >= 32`, return the first 32 bytes.
-pub fn read32(data: &[u8]) -> [u8; 32] {
-    let mut buf32 = [0u8; 32];
-    buf32[..].copy_from_slice(&data[..32]);
-    buf32
+pub fn read_unit(data: &[u8]) -> [u8; UNIT_LEN] {
+    let mut buf_unit = [0u8; UNIT_LEN];
+    buf_unit[..].copy_from_slice(&data[..UNIT_LEN]);
+    buf_unit
 }
 
 /// Computes an inner product of two vectors

@@ -388,16 +388,16 @@ impl InnerProductProof {
         let mut R_vec: Vec<CompressedRistretto> = Vec::with_capacity(lg_n);
         for i in 0..lg_n {
             let pos = 2 * i * RISTRETTO_LEN;
-            L_vec.push(CompressedRistretto(util::read32(&slice[pos..])));
-            R_vec.push(CompressedRistretto(util::read32(
+            L_vec.push(CompressedRistretto(util::read_unit(&slice[pos..])));
+            R_vec.push(CompressedRistretto(util::read_unit(
                 &slice[pos + RISTRETTO_LEN..],
             )));
         }
 
-        let pos = 2 * lg_n * 32;
-        let a = Scalar::from_canonical_bytes(util::read32(&slice[pos..]))
+        let pos = 2 * lg_n * UNIT_LEN;
+        let a = Scalar::from_canonical_bytes(util::read_unit(&slice[pos..]))
             .ok_or(ProofVerificationError::Deserialization)?;
-        let b = Scalar::from_canonical_bytes(util::read32(&slice[pos + SCALAR_LEN..]))
+        let b = Scalar::from_canonical_bytes(util::read_unit(&slice[pos + SCALAR_LEN..]))
             .ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(InnerProductProof { L_vec, R_vec, a, b })
