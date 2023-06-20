@@ -133,7 +133,7 @@ impl ElGamal {
     fn decrypt(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> DiscreteLog {
         DiscreteLog::new(
             *G,
-            &ciphertext.commitment.0 - &(&secret.0 * &ciphertext.handle.0),
+            ciphertext.commitment.get_point() - &(&secret.0 * &ciphertext.handle.0),
         )
     }
 
@@ -520,7 +520,8 @@ pub struct ElGamalCiphertext {
 }
 impl ElGamalCiphertext {
     pub fn add_amount<T: Into<Scalar>>(&self, amount: T) -> Self {
-        let commitment_to_add = PedersenCommitment(amount.into() * &(*G));
+        let point = amount.into() * &(*G);
+        let commitment_to_add = PedersenCommitment::new(point);
         ElGamalCiphertext {
             commitment: &self.commitment + &commitment_to_add,
             handle: self.handle,
@@ -528,7 +529,8 @@ impl ElGamalCiphertext {
     }
 
     pub fn subtract_amount<T: Into<Scalar>>(&self, amount: T) -> Self {
-        let commitment_to_subtract = PedersenCommitment(amount.into() * &(*G));
+        let point = amount.into() * &(*G);
+        let commitment_to_subtract = PedersenCommitment::new(point);
         ElGamalCiphertext {
             commitment: &self.commitment - &commitment_to_subtract,
             handle: self.handle,
@@ -650,7 +652,7 @@ define_mul_variants!(
 pub struct DecryptHandle(RistrettoPoint);
 impl DecryptHandle {
     pub fn new(public: &ElGamalPubkey, opening: &PedersenOpening) -> Self {
-        Self(&public.0 * &opening.0)
+        Self(&public.0 * opening.get_scalar())
     }
 
     pub fn get_point(&self) -> &RistrettoPoint {
