@@ -7146,7 +7146,6 @@ name = "solana-zk-token-sdk"
 version = "1.16.2"
 dependencies = [
  "aes-gcm-siv",
- "arrayref",
  "base64 0.21.2",
  "bincode",
  "bytemuck",

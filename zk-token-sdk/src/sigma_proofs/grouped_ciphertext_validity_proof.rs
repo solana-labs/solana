@@ -16,6 +16,7 @@ use {
             pedersen::{PedersenCommitment, PedersenOpening, G, H},
         },
         errors::ProofVerificationError,
+        sigma_proofs::canonical_scalar_from_slice,
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -23,7 +24,6 @@ use {
 };
 use {
     crate::{sigma_proofs::errors::ValidityProofError, transcript::TranscriptProtocol},
-    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -209,17 +209,11 @@ impl GroupedCiphertext2HandlesValidityProof {
             return Err(ProofVerificationError::Deserialization.into());
         }
 
-        let bytes = array_ref![bytes, 0, 160];
-        let (Y_0, Y_1, Y_2, z_r, z_x) = array_refs![bytes, 32, 32, 32, 32, 32];
-
-        let Y_0 = CompressedRistretto::from_slice(Y_0);
-        let Y_1 = CompressedRistretto::from_slice(Y_1);
-        let Y_2 = CompressedRistretto::from_slice(Y_2);
-
-        let z_r =
-            Scalar::from_canonical_bytes(*z_r).ok_or(ProofVerificationError::Deserialization)?;
-        let z_x =
-            Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
+        let Y_0 = CompressedRistretto::from_slice(&bytes[..32]);
+        let Y_1 = CompressedRistretto::from_slice(&bytes[32..64]);
+        let Y_2 = CompressedRistretto::from_slice(&bytes[64..96]);
+        let z_r = canonical_scalar_from_slice(&bytes[96..128])?;
+        let z_x = canonical_scalar_from_slice(&bytes[128..160])?;
 
         Ok(GroupedCiphertext2HandlesValidityProof {
             Y_0,

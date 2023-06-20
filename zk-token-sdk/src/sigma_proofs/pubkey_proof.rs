@@ -5,9 +5,12 @@
 
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::encryption::{
-        elgamal::{ElGamalKeypair, ElGamalPubkey},
-        pedersen::H,
+    crate::{
+        encryption::{
+            elgamal::{ElGamalKeypair, ElGamalPubkey},
+            pedersen::H,
+        },
+        sigma_proofs::canonical_scalar_from_slice,
     },
     rand::rngs::OsRng,
     zeroize::Zeroize,
@@ -17,7 +20,6 @@ use {
         errors::ProofVerificationError, sigma_proofs::errors::PubkeyValidityProofError,
         transcript::TranscriptProtocol,
     },
-    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -126,11 +128,8 @@ impl PubkeyValidityProof {
             return Err(ProofVerificationError::Deserialization.into());
         }
 
-        let bytes = array_ref![bytes, 0, 64];
-        let (Y, z) = array_refs![bytes, 32, 32];
-
-        let Y = CompressedRistretto::from_slice(Y);
-        let z = Scalar::from_canonical_bytes(*z).ok_or(ProofVerificationError::Deserialization)?;
+        let Y = CompressedRistretto::from_slice(&bytes[..32]);
+        let z = canonical_scalar_from_slice(&bytes[32..64])?;
 
         Ok(PubkeyValidityProof { Y, z })
     }
