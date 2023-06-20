@@ -281,8 +281,7 @@ fn calculate_stake_points_and_credits(
             if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
                 inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnCurrent.into());
             }
-            // don't hint the caller and return current value if credits remain to be unchanged (=
-            // delinquent)
+            // don't hint caller and return current value if credits remain unchanged (= delinquent)
             return CalculatedStakePoints {
                 points: 0,
                 new_credits_observed: credits_in_stake,
