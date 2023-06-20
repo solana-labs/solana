@@ -2834,7 +2834,6 @@ impl Bank {
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
-            self.credits_auto_rewind(),
             thread_pool,
             metrics,
             update_rewards_from_cached_accounts,
@@ -3271,7 +3270,6 @@ impl Bank {
         rewarded_epoch: Epoch,
         rewards: u64,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
-        credits_auto_rewind: bool,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
         update_rewards_from_cached_accounts: bool,
@@ -3297,7 +3295,6 @@ impl Bank {
                 vote_with_stake_delegations_map,
                 rewarded_epoch,
                 point_value,
-                credits_auto_rewind,
                 &stake_history,
                 thread_pool,
                 reward_calc_tracer.as_ref(),
@@ -3579,7 +3576,6 @@ impl Bank {
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
     ) -> (VoteRewardsAccounts, StakeRewardCalculation) {
-        let credits_auto_rewind = self.credits_auto_rewind();
         let EpochRewardCalculateParamInfo {
             stake_history,
             stake_delegations,
@@ -3713,7 +3709,6 @@ impl Bank {
         vote_with_stake_delegations_map: DashMap<Pubkey, VoteWithStakeDelegations>,
         rewarded_epoch: Epoch,
         point_value: PointValue,
-        credits_auto_rewind: bool,
         stake_history: &StakeHistory,
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
@@ -8392,11 +8387,6 @@ impl Bank {
     pub fn prevent_rent_paying_rent_recipients(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::prevent_rent_paying_rent_recipients::id())
-    }
-
-    pub fn credits_auto_rewind(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::credits_auto_rewind::id())
     }
 
     pub fn read_cost_tracker(&self) -> LockResult<RwLockReadGuard<CostTracker>> {
