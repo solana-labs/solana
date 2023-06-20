@@ -661,7 +661,7 @@ impl TransferWithFeeProof {
 
         // verify ciphertext validity proof for fee ciphertexts
         fee_ciphertext_validity_proof.verify(
-            (destination_pubkey, auditor_pubkey),
+            (destination_pubkey, withdraw_withheld_authority_pubkey),
             (
                 fee_ciphertext_lo.get_commitment(),
                 fee_ciphertext_hi.get_commitment(),
