@@ -1529,7 +1529,7 @@ pub fn main() {
         packager_thread_niceness_adj: snapshot_packager_niceness_adj,
     };
 
-    // The accounts hash interval shall match the snapshot interval, unless manually specified
+    // The accounts hash interval shall match the snapshot interval
     validator_config.accounts_hash_interval_slots =
         std::cmp::min(
             full_snapshot_archive_interval_slots,
