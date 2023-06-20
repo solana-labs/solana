@@ -62,9 +62,6 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         let mut contact_info = ContactInfo::new_localhost(&id, timestamp());
         let port = socket.local_addr().unwrap().port();
         contact_info.set_tvu((Ipv4Addr::LOCALHOST, port)).unwrap();
-        contact_info
-            .set_tvu_forwards(contact_info.tvu(Protocol::UDP).unwrap())
-            .unwrap();
         info!("local: {:?}", contact_info.tvu(Protocol::UDP).unwrap());
         cluster_info.insert_info(contact_info);
         socket.set_nonblocking(true).unwrap();

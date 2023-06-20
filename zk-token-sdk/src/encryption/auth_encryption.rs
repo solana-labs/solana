@@ -12,7 +12,6 @@ use {
     thiserror::Error,
 };
 use {
-    arrayref::{array_ref, array_refs},
     base64::{prelude::BASE64_STANDARD, Engine},
     sha3::{Digest, Sha3_512},
     solana_sdk::{
@@ -192,14 +191,14 @@ impl SeedDerivable for AeKey {
 
 /// For the purpose of encrypting balances for the spl token accounts, the nonce and ciphertext
 /// sizes should always be fixed.
-pub type Nonce = [u8; 12];
-pub type Ciphertext = [u8; 24];
+type Nonce = [u8; 12];
+type Ciphertext = [u8; 24];
 
 /// Authenticated encryption nonce and ciphertext
 #[derive(Debug, Default, Clone)]
 pub struct AeCiphertext {
-    pub nonce: Nonce,
-    pub ciphertext: Ciphertext,
+    nonce: Nonce,
+    ciphertext: Ciphertext,
 }
 impl AeCiphertext {
     pub fn decrypt(&self, key: &AeKey) -> Option<u64> {
@@ -218,13 +217,10 @@ impl AeCiphertext {
             return None;
         }
 
-        let bytes = array_ref![bytes, 0, 36];
-        let (nonce, ciphertext) = array_refs![bytes, 12, 24];
+        let nonce = bytes[..32].try_into().ok()?;
+        let ciphertext = bytes[32..].try_into().ok()?;
 
-        Some(AeCiphertext {
-            nonce: *nonce,
-            ciphertext: *ciphertext,
-        })
+        Some(AeCiphertext { nonce, ciphertext })
     }
 }
 

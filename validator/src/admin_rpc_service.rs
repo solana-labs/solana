@@ -102,7 +102,7 @@ impl From<ContactInfo> for AdminRpcContactInfo {
             last_updated_timestamp: node.wallclock(),
             gossip: unwrap_socket!(gossip),
             tvu: unwrap_socket!(tvu, Protocol::UDP),
-            tvu_forwards: unwrap_socket!(tvu_forwards),
+            tvu_forwards: SOCKET_ADDR_UNSPECIFIED,
             repair: unwrap_socket!(repair),
             tpu: unwrap_socket!(tpu, Protocol::UDP),
             tpu_forwards: unwrap_socket!(tpu_forwards, Protocol::UDP),

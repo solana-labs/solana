@@ -139,7 +139,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             peers.iter().enumerate().for_each(|(i, peer)| {
                 if fake == (i <= self.partition) {
                     // Send fake shreds to the first N peers
-                    if let Ok(addr) = peer.tvu_forwards() {
+                    if let Ok(addr) = peer.tvu(Protocol::UDP) {
                         data_shreds.iter().for_each(|b| {
                             sock.send_to(b.payload(), addr).unwrap();
                         });

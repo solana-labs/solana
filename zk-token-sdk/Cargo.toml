@@ -21,7 +21,6 @@ tiny-bip39 = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
 aes-gcm-siv = { workspace = true }
-arrayref = { workspace = true }
 bincode = { workspace = true }
 byteorder = { workspace = true }
 curve25519-dalek = { workspace = true, features = ["serde"] }

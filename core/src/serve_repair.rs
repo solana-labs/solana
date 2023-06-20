@@ -1929,7 +1929,6 @@ mod tests {
         );
         nxt.set_gossip((Ipv4Addr::LOCALHOST, 1234)).unwrap();
         nxt.set_tvu((Ipv4Addr::LOCALHOST, 1235)).unwrap();
-        nxt.set_tvu_forwards((Ipv4Addr::LOCALHOST, 1236)).unwrap();
         nxt.set_repair((Ipv4Addr::LOCALHOST, 1237)).unwrap();
         nxt.set_tpu((Ipv4Addr::LOCALHOST, 1238)).unwrap();
         nxt.set_tpu_forwards((Ipv4Addr::LOCALHOST, 1239)).unwrap();
@@ -1960,7 +1959,6 @@ mod tests {
         );
         nxt.set_gossip((Ipv4Addr::LOCALHOST, 1234)).unwrap();
         nxt.set_tvu((Ipv4Addr::LOCALHOST, 1235)).unwrap();
-        nxt.set_tvu_forwards((Ipv4Addr::LOCALHOST, 1236)).unwrap();
         nxt.set_repair((Ipv4Addr::LOCALHOST, 1237)).unwrap();
         nxt.set_tpu((Ipv4Addr::LOCALHOST, 1238)).unwrap();
         nxt.set_tpu_forwards((Ipv4Addr::LOCALHOST, 1239)).unwrap();
