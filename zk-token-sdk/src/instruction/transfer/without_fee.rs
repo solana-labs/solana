@@ -16,7 +16,6 @@ use {
         },
         transcript::TranscriptProtocol,
     },
-    arrayref::{array_ref, array_refs},
     bytemuck::bytes_of,
     merlin::Transcript,
     std::convert::TryInto,
@@ -69,10 +68,19 @@ pub struct TransferProofContext {
     pub ciphertext_hi: pod::TransferAmountCiphertext, // 128 bytes
 
     /// The public encryption keys associated with the transfer: source, dest, and auditor
-    pub transfer_pubkeys: pod::TransferPubkeys, // 96 bytes
+    pub transfer_pubkeys: TransferPubkeys, // 96 bytes
 
     /// The final spendable ciphertext after the transfer
     pub new_source_ciphertext: pod::ElGamalCiphertext, // 64 bytes
+}
+
+/// The ElGamal public keys needed for a transfer
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct TransferPubkeys {
+    pub source: pod::ElGamalPubkey,
+    pub destination: pod::ElGamalPubkey,
+    pub auditor: pod::ElGamalPubkey,
 }
 
 #[cfg(not(target_os = "solana"))]
@@ -124,10 +132,10 @@ impl TransferData {
             );
 
         // generate transcript and append all public inputs
-        let pod_transfer_pubkeys = pod::TransferPubkeys {
-            source_pubkey: source_keypair.public.into(),
-            destination_pubkey: (*destination_pubkey).into(),
-            auditor_pubkey: (*auditor_pubkey).into(),
+        let pod_transfer_pubkeys = TransferPubkeys {
+            source: source_keypair.public.into(),
+            destination: (*destination_pubkey).into(),
+            auditor: (*auditor_pubkey).into(),
         };
         let pod_ciphertext_lo: pod::TransferAmountCiphertext = ciphertext_lo.into();
         let pod_ciphertext_hi: pod::TransferAmountCiphertext = ciphertext_hi.into();
@@ -225,15 +233,20 @@ impl ZkProofData<TransferProofContext> for TransferData {
         // generate transcript and append all public inputs
         let mut transcript = self.context.new_transcript();
 
+        let source_pubkey = self.context.transfer_pubkeys.source.try_into()?;
+        let destination_pubkey = self.context.transfer_pubkeys.destination.try_into()?;
+        let auditor_pubkey = self.context.transfer_pubkeys.auditor.try_into()?;
+
         let ciphertext_lo = self.context.ciphertext_lo.try_into()?;
         let ciphertext_hi = self.context.ciphertext_hi.try_into()?;
-        let transfer_pubkeys = self.context.transfer_pubkeys.try_into()?;
         let new_spendable_ciphertext = self.context.new_source_ciphertext.try_into()?;
 
         self.proof.verify(
+            &source_pubkey,
+            &destination_pubkey,
+            &auditor_pubkey,
             &ciphertext_lo,
             &ciphertext_hi,
-            &transfer_pubkeys,
             &new_spendable_ciphertext,
             &mut transcript,
         )
@@ -353,9 +366,11 @@ impl TransferProof {
 
     pub fn verify(
         &self,
+        source_pubkey: &ElGamalPubkey,
+        destination_pubkey: &ElGamalPubkey,
+        auditor_pubkey: &ElGamalPubkey,
         ciphertext_lo: &TransferAmountCiphertext,
         ciphertext_hi: &TransferAmountCiphertext,
-        transfer_pubkeys: &TransferPubkeys,
         ciphertext_new_spendable: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
@@ -369,7 +384,7 @@ impl TransferProof {
 
         // verify equality proof
         equality_proof.verify(
-            &transfer_pubkeys.source_pubkey,
+            source_pubkey,
             ciphertext_new_spendable,
             &commitment,
             transcript,
@@ -377,10 +392,7 @@ impl TransferProof {
 
         // verify validity proof
         aggregated_validity_proof.verify(
-            (
-                &transfer_pubkeys.destination_pubkey,
-                &transfer_pubkeys.auditor_pubkey,
-            ),
+            (destination_pubkey, auditor_pubkey),
             (
                 ciphertext_lo.get_commitment(),
                 ciphertext_hi.get_commitment(),
@@ -433,46 +445,6 @@ impl TransferProof {
         }
 
         Ok(())
-    }
-}
-
-/// The ElGamal public keys needed for a transfer
-#[derive(Clone)]
-#[repr(C)]
-#[cfg(not(target_os = "solana"))]
-pub struct TransferPubkeys {
-    pub source_pubkey: ElGamalPubkey,
-    pub destination_pubkey: ElGamalPubkey,
-    pub auditor_pubkey: ElGamalPubkey,
-}
-
-#[cfg(not(target_os = "solana"))]
-impl TransferPubkeys {
-    // TODO: use constructor instead
-    pub fn to_bytes(&self) -> [u8; 96] {
-        let mut bytes = [0u8; 96];
-        bytes[..32].copy_from_slice(&self.source_pubkey.to_bytes());
-        bytes[32..64].copy_from_slice(&self.destination_pubkey.to_bytes());
-        bytes[64..96].copy_from_slice(&self.auditor_pubkey.to_bytes());
-        bytes
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
-        let bytes = array_ref![bytes, 0, 96];
-        let (source_pubkey, destination_pubkey, auditor_pubkey) = array_refs![bytes, 32, 32, 32];
-
-        let source_pubkey =
-            ElGamalPubkey::from_bytes(source_pubkey).ok_or(ProofError::PubkeyDeserialization)?;
-        let destination_pubkey = ElGamalPubkey::from_bytes(destination_pubkey)
-            .ok_or(ProofError::PubkeyDeserialization)?;
-        let auditor_pubkey =
-            ElGamalPubkey::from_bytes(auditor_pubkey).ok_or(ProofError::PubkeyDeserialization)?;
-
-        Ok(Self {
-            source_pubkey,
-            destination_pubkey,
-            auditor_pubkey,
-        })
     }
 }
 

@@ -16,10 +16,7 @@ pub use {
     bytemuck::{Pod, Zeroable},
     elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
     grouped_elgamal::{GroupedElGamalCiphertext2Handles, GroupedElGamalCiphertext3Handles},
-    instruction::{
-        FeeEncryption, FeeParameters, TransferAmountCiphertext, TransferPubkeys,
-        TransferWithFeePubkeys,
-    },
+    instruction::{FeeEncryption, FeeParameters, TransferAmountCiphertext},
     pedersen::PedersenCommitment,
     range_proof::{RangeProofU128, RangeProofU256, RangeProofU64},
     sigma_proofs::{
