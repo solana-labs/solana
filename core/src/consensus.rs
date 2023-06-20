@@ -463,6 +463,12 @@ impl Tower {
         } else {
             // If the previous vote did not send a timestamp due to clock error,
             // use the last good timestamp + 1
+            datapoint_info!(
+                "refresh-timestamp-missing",
+                ("heaviest-slot", heaviest_slot_on_same_fork, i64),
+                ("last-timestamp", self.last_timestamp.timestamp, i64),
+                ("last-slot", self.last_timestamp.slot, i64),
+            );
             self.last_timestamp.timestamp.saturating_add(1)
         };
 
@@ -629,6 +635,13 @@ impl Tower {
                     timestamp,
                 };
                 return Some(timestamp);
+            } else {
+                datapoint_info!(
+                    "backwards-timestamp",
+                    ("slot", current_slot, i64),
+                    ("timestamp", timestamp, i64),
+                    ("last-timestamp", self.last_timestamp.timestamp, i64),
+                )
             }
         }
         None
