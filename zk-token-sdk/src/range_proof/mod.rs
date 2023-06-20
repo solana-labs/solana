@@ -28,6 +28,15 @@ pub mod generators;
 pub mod inner_product;
 pub mod util;
 
+/// The basic unit of byte length used in the encoding of range proofs
+const UNIT_LEN: usize = 32;
+/// The byte length of a curve25519 compressed Ristretto point
+const RISTRETTO_LEN: usize = UNIT_LEN;
+/// The byte length of a curve25519 scalar
+const SCALAR_LEN: usize = UNIT_LEN;
+/// The byte length of a serialized range proof excluding the inner-product proof component `(7 * UNIT_LEN)`
+const RANGE_PROOF_WIHOUT_INNER_PRODUCT_LEN: usize = 224;
+
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct RangeProof {
@@ -322,7 +331,14 @@ impl RangeProof {
     // Following the dalek rangeproof library signature for now. The exact method signature can be
     // changed.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(7 * 32 + self.ipp_proof.serialized_size());
+        // Inner-product proof supports vectors of at most `2^32`, which means that an inner-product
+        // proof is at most `(32 * 2 + 2) * 32 = 2112`. Rust guarantees `usize` to be at least 16
+        // bits, which means `expected_len` will never overflow.
+        let expected_len = RANGE_PROOF_WIHOUT_INNER_PRODUCT_LEN
+            .checked_add(self.ipp_proof.serialized_size())
+            .unwrap();
+
+        let mut buf = Vec::with_capacity(expected_len);
         buf.extend_from_slice(self.A.as_bytes());
         buf.extend_from_slice(self.S.as_bytes());
         buf.extend_from_slice(self.T_1.as_bytes());
@@ -337,26 +353,26 @@ impl RangeProof {
     // Following the dalek rangeproof library signature for now. The exact method signature can be
     // changed.
     pub fn from_bytes(slice: &[u8]) -> Result<RangeProof, RangeProofError> {
-        if slice.len() % 32 != 0 {
+        if slice.len() % UNIT_LEN != 0 {
             return Err(ProofVerificationError::Deserialization.into());
         }
-        if slice.len() < 7 * 32 {
+        if slice.len() < 7 * UNIT_LEN {
             return Err(ProofVerificationError::Deserialization.into());
         }
 
         let A = CompressedRistretto(util::read32(&slice[0..]));
-        let S = CompressedRistretto(util::read32(&slice[32..]));
-        let T_1 = CompressedRistretto(util::read32(&slice[2 * 32..]));
-        let T_2 = CompressedRistretto(util::read32(&slice[3 * 32..]));
+        let S = CompressedRistretto(util::read32(&slice[RISTRETTO_LEN..]));
+        let T_1 = CompressedRistretto(util::read32(&slice[2 * RISTRETTO_LEN..]));
+        let T_2 = CompressedRistretto(util::read32(&slice[3 * RISTRETTO_LEN..]));
 
-        let t_x = Scalar::from_canonical_bytes(util::read32(&slice[4 * 32..]))
+        let t_x = Scalar::from_canonical_bytes(util::read32(&slice[4 * SCALAR_LEN..]))
             .ok_or(ProofVerificationError::Deserialization)?;
-        let t_x_blinding = Scalar::from_canonical_bytes(util::read32(&slice[5 * 32..]))
+        let t_x_blinding = Scalar::from_canonical_bytes(util::read32(&slice[5 * SCALAR_LEN..]))
             .ok_or(ProofVerificationError::Deserialization)?;
-        let e_blinding = Scalar::from_canonical_bytes(util::read32(&slice[6 * 32..]))
+        let e_blinding = Scalar::from_canonical_bytes(util::read32(&slice[6 * SCALAR_LEN..]))
             .ok_or(ProofVerificationError::Deserialization)?;
 
-        let ipp_proof = InnerProductProof::from_bytes(&slice[7 * 32..])?;
+        let ipp_proof = InnerProductProof::from_bytes(&slice[7 * SCALAR_LEN..])?;
 
         Ok(RangeProof {
             A,

@@ -1,7 +1,7 @@
 use {
     crate::{
         errors::ProofVerificationError,
-        range_proof::{errors::RangeProofError, util},
+        range_proof::{errors::RangeProofError, util, RISTRETTO_LEN, SCALAR_LEN, UNIT_LEN},
         transcript::TranscriptProtocol,
     },
     core::iter,
@@ -13,6 +13,9 @@ use {
     merlin::Transcript,
     std::borrow::Borrow,
 };
+
+/// The log of the maximum vector length of an inner-product proof
+const LOG_MAXIMUM_BIT_LEN: usize = 32;
 
 #[allow(non_snake_case)]
 #[derive(Clone)]
@@ -206,7 +209,7 @@ impl InnerProductProof {
         transcript: &mut Transcript,
     ) -> Result<(Vec<Scalar>, Vec<Scalar>, Vec<Scalar>), RangeProofError> {
         let lg_n = self.L_vec.len();
-        if lg_n >= 32 {
+        if lg_n >= LOG_MAXIMUM_BIT_LEN {
             // 4 billion multiplications should be enough for anyone
             // and this check prevents overflow in 1<<lg_n below.
             return Err(ProofVerificationError::InvalidBitSize.into());
@@ -340,7 +343,7 @@ impl InnerProductProof {
     /// For vectors of length `n` the proof size is
     /// \\(32 \cdot (2\lg n+2)\\) bytes.
     pub fn serialized_size(&self) -> usize {
-        (self.L_vec.len() * 2 + 2) * 32
+        (self.L_vec.len() * 2 + 2) * UNIT_LEN
     }
 
     /// Serializes the proof into a byte array of \\(2n+2\\) 32-byte elements.
@@ -366,10 +369,10 @@ impl InnerProductProof {
     /// * any of 2 scalars are not canonical scalars modulo Ristretto group order.
     pub fn from_bytes(slice: &[u8]) -> Result<InnerProductProof, RangeProofError> {
         let b = slice.len();
-        if b % 32 != 0 {
+        if b % UNIT_LEN != 0 {
             return Err(ProofVerificationError::Deserialization.into());
         }
-        let num_elements = b / 32;
+        let num_elements = b / UNIT_LEN;
         if num_elements < 2 {
             return Err(ProofVerificationError::Deserialization.into());
         }
@@ -377,22 +380,24 @@ impl InnerProductProof {
             return Err(ProofVerificationError::Deserialization.into());
         }
         let lg_n = (num_elements - 2) / 2;
-        if lg_n >= 32 {
+        if lg_n >= UNIT_LEN {
             return Err(ProofVerificationError::Deserialization.into());
         }
 
         let mut L_vec: Vec<CompressedRistretto> = Vec::with_capacity(lg_n);
         let mut R_vec: Vec<CompressedRistretto> = Vec::with_capacity(lg_n);
         for i in 0..lg_n {
-            let pos = 2 * i * 32;
+            let pos = 2 * i * RISTRETTO_LEN;
             L_vec.push(CompressedRistretto(util::read32(&slice[pos..])));
-            R_vec.push(CompressedRistretto(util::read32(&slice[pos + 32..])));
+            R_vec.push(CompressedRistretto(util::read32(
+                &slice[pos + RISTRETTO_LEN..],
+            )));
         }
 
         let pos = 2 * lg_n * 32;
         let a = Scalar::from_canonical_bytes(util::read32(&slice[pos..]))
             .ok_or(ProofVerificationError::Deserialization)?;
-        let b = Scalar::from_canonical_bytes(util::read32(&slice[pos + 32..]))
+        let b = Scalar::from_canonical_bytes(util::read32(&slice[pos + SCALAR_LEN..]))
             .ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(InnerProductProof { L_vec, R_vec, a, b })
