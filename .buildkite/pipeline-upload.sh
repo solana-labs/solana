@@ -8,11 +8,33 @@
 #
 
 set -e
-cd "$(dirname "$0")"/..
-source ci/_
+# cd "$(dirname "$0")"/..
+# source ci/_
 
-_ ci/buildkite-pipeline.sh pipeline.yml
-echo +++ pipeline
-cat pipeline.yml
+# _ ci/buildkite-pipeline.sh pipeline.yml
+# echo +++ pipeline
+# cat pipeline.yml
 
-_ buildkite-agent pipeline upload pipeline.yml
+# _ buildkite-agent pipeline upload pipeline.yml
+
+cat <<EOF | buildkite-agent pipeline upload
+steps:
+  - group: "coverage"
+    steps:
+      - name: "part1"
+        command: "ci/coverage/part1.sh"
+        timeout_in_minutes: 30
+        agents:
+          queue: "solana"
+      - name: "part2"
+        command: "ci/coverage/part2.sh"
+        timeout_in_minutes: 30
+        agents:
+          queue: "solana"
+      - wait
+      - name: "final"
+        command: "ci/coverage/run.sh"
+        timeout_in_minutes: 30
+        agents:
+          queue: "solana"
+EOF
