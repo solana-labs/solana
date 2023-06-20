@@ -1547,8 +1547,12 @@ pub fn main() {
         packager_thread_niceness_adj: snapshot_packager_niceness_adj,
     };
 
-    validator_config.accounts_hash_interval_slots =
-        value_t_or_exit!(matches, "accounts-hash-interval-slots", u64);
+    // The accounts hash interval shall match the snapshot interval
+    validator_config.accounts_hash_interval_slots = std::cmp::min(
+        full_snapshot_archive_interval_slots,
+        incremental_snapshot_archive_interval_slots,
+    );
+
     if !is_snapshot_config_valid(
         &validator_config.snapshot_config,
         validator_config.accounts_hash_interval_slots,
