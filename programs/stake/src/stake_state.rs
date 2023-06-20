@@ -248,49 +248,43 @@ fn calculate_stake_points_and_credits(
     let credits_in_stake = stake.credits_observed;
     let credits_in_vote = new_vote_state.credits();
     // if there is no newer credits since observed, return no point
-    if credits_in_vote <= credits_in_stake {
-        if credits_in_vote < credits_in_stake {
-            if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
-                inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnRewinded.into());
-            }
-            // Don't adjust stake.activation_epoch for simplicity:
-            //  - generally fast-forwarding stake.activation_epoch forcibly (for
-            //    artificial re-activation with re-warm-up) skews the stake
-            //    history sysvar. And properly handling all the cases
-            //    regarding deactivation epoch/warm-up/cool-down without
-            //    introducing incentive skew is hard.
-            //  - Conceptually, it should be acceptable for the staked SOLs at
-            //    the recreated vote to receive rewards again immediately after
-            //    rewind even if it looks like instant activation. That's
-            //    because it must have passed the required warmed-up at least
-            //    once in the past already
-            //  - Also such a stake account remains to be a part of overall
-            //    effective stake calculation even while the vote account is
-            //    missing for (indefinite) time or remains to be pre-remove
-            //    credits score. It should be treated equally to staking with
-            //    delinquent validator with no differentiation.
+    if credits_in_vote < credits_in_stake {
+        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
+            inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnRewinded.into());
+        }
+        // Don't adjust stake.activation_epoch for simplicity:
+        //  - generally fast-forwarding stake.activation_epoch forcibly (for
+        //    artificial re-activation with re-warm-up) skews the stake
+        //    history sysvar. And properly handling all the cases
+        //    regarding deactivation epoch/warm-up/cool-down without
+        //    introducing incentive skew is hard.
+        //  - Conceptually, it should be acceptable for the staked SOLs at
+        //    the recreated vote to receive rewards again immediately after
+        //    rewind even if it looks like instant activation. That's
+        //    because it must have passed the required warmed-up at least
+        //    once in the past already
+        //  - Also such a stake account remains to be a part of overall
+        //    effective stake calculation even while the vote account is
+        //    missing for (indefinite) time or remains to be pre-remove
+        //    credits score. It should be treated equally to staking with
+        //    delinquent validator with no differentiation.
 
-            // hint with true to indicate some exceptional credits handling is needed
-            return CalculatedStakePoints {
-                points: 0,
-                new_credits_observed: credits_in_vote,
-                force_credits_update_with_skipped_reward: true,
-            };
-        } else {
-            // change the above `else` to `else if credits_in_vote == credits_in_stake`
-            // (and remove the outermost enclosing `if`) when cleaning credits_auto_rewind
-            // after activation
-
-            if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
-                inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnCurrent.into());
-            }
-            // don't hint the caller and return current value if credits remain to be unchanged (=
-            // delinquent)
-            return CalculatedStakePoints {
-                points: 0,
-                new_credits_observed: credits_in_stake,
-                force_credits_update_with_skipped_reward: false,
-            };
+        // hint with true to indicate some exceptional credits handling is needed
+        return CalculatedStakePoints {
+            points: 0,
+            new_credits_observed: credits_in_vote,
+            force_credits_update_with_skipped_reward: true,
+        };
+    } else if credits_in_vote == credits_in_stake {
+        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
+            inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnCurrent.into());
+        }
+        // don't hint the caller and return current value if credits remain to be unchanged (=
+        // delinquent)
+        return CalculatedStakePoints {
+            points: 0,
+            new_credits_observed: credits_in_stake,
+            force_credits_update_with_skipped_reward: false,
         };
     }
 
