@@ -1531,12 +1531,10 @@ pub fn main() {
 
     // The accounts hash interval shall match the snapshot interval, unless manually specified
     validator_config.accounts_hash_interval_slots =
-        value_t!(matches, "accounts_hash_interval_slots", Slot).unwrap_or_else(|_| {
-            std::cmp::min(
-                full_snapshot_archive_interval_slots,
-                incremental_snapshot_archive_interval_slots,
-            )
-        });
+        std::cmp::min(
+            full_snapshot_archive_interval_slots,
+            incremental_snapshot_archive_interval_slots,
+        );
 
     if !is_snapshot_config_valid(
         &validator_config.snapshot_config,
