@@ -276,7 +276,7 @@ rustls = { version = "0.20.8", default-features = false }
 rustversion = "1.0.12"
 scopeguard = "1.1.0"
 semver = "1.0.17"
-serde = "1.0.163"
+serde = "1.0.164"
 serde_bytes = "0.11.9"
 serde_derive = "1.0.103"
 serde_json = "1.0.97"
