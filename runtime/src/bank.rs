@@ -7314,16 +7314,25 @@ impl Bank {
 
     pub fn register_hard_fork(&self, new_hard_fork_slot: Slot) {
         let bank_slot = self.slot();
-        if new_hard_fork_slot > bank_slot {
+
+        let lock = self.freeze_lock();
+        let bank_frozen = *lock != Hash::default();
+        if new_hard_fork_slot < bank_slot {
+            warn!(
+                "Hard fork at slot {new_hard_fork_slot} ignored, the hard fork is older \
+                than the bank at slot {bank_slot} that attempted to register it."
+            );
+        } else if (new_hard_fork_slot == bank_slot) && bank_frozen {
+            warn!(
+                "Hard fork at slot {new_hard_fork_slot} ignored, the hard fork is the same \
+                slot as the bank at slot {bank_slot} that attempted to register it, but that \
+                bank is already frozen."
+            );
+        } else {
             self.hard_forks
                 .write()
                 .unwrap()
                 .register(new_hard_fork_slot);
-        } else {
-            warn!(
-                "Hard fork at slot {new_hard_fork_slot} ignored, it is older than
-                   than the bank at slot {bank_slot} that attempted to register it"
-            );
         }
     }
 
