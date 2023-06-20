@@ -142,9 +142,9 @@ pub enum ProofInstruction {
     ///
     VerifyTransferWithFee,
 
-    /// Verify a public-key validity zero-knowledge proof.
+    /// Verify a public key validity zero-knowledge proof.
     ///
-    /// A public-key validity proof certifies that an ElGamal public key is well-formed and the
+    /// A public key validity proof certifies that an ElGamal public key is well-formed and the
     /// prover knows the corresponding secret key.
     ///
     /// Accounts expected by this instruction:
