@@ -1,12 +1,12 @@
 //! Instructions provided by the [`ZK Token proof`] program.
 //!
-//! There are two types of instructions in the proof program: the proof verification instructions
+//! There are two types of instructions in the proof program: proof verification instructions
 //! and the `CloseContextState` instruction.
 //!
 //! Each proof verification instruction verifies a certain type of zero-knowledge proof. These
 //! instructions are processed by the program in two steps:
 //!   1. The program verifies the zero-knowledge proof.
-//!   2. The program optionally stores the context data component of the instruction data to a
+//!   2. The program optionally stores the context component of the instruction data to a
 //!      dedicated [`context-state`] account.
 //! If no accounts are provided with the instruction, the program simply verifies the proofs. If
 //! accounts are provided with the instruction, then the program writes the context data to the
@@ -68,7 +68,7 @@ pub enum ProofInstruction {
 
     /// Verify a withdraw zero-knowledge proof.
     ///
-    /// This proof is a collection of smallers proofs that are required the SPL Token 2022
+    /// This proof is a collection of smallers proofs that are required by the SPL Token 2022
     /// confidential extension `Withdraw` instruction.
     ///
     /// Accounts expected by this instruction:
@@ -106,7 +106,7 @@ pub enum ProofInstruction {
 
     /// Verify a transfer zero-knowledge proof.
     ///
-    /// This proof is a collection of smallers proofs that are required the SPL Token 2022
+    /// This proof is a collection of smallers proofs that are required by the SPL Token 2022
     /// confidential extension `Transfer` instruction with transfer fees.
     ///
     /// Accounts expected by this instruction:
@@ -125,7 +125,7 @@ pub enum ProofInstruction {
 
     /// Verify a transfer with fee zero-knowledge proof.
     ///
-    /// This proof is a collection of smallers proofs that are required the SPL Token 2022
+    /// This proof is a collection of smallers proofs that are required by the SPL Token 2022
     /// confidential extension `Transfer` instruction without transfer fees.
     ///
     /// Accounts expected by this instruction:
@@ -249,7 +249,7 @@ pub enum ProofInstruction {
     /// Verify a ciphertext-commitment equality proof.
     ///
     /// A ciphertext-commitment equality proof certifies that an ElGamal ciphertext and a Pedersen
-    /// commitment encrypts/encodes the same message.
+    /// commitment encrypt/encode the same message.
     ///
     /// Accounts expected by this instruction:
     ///
