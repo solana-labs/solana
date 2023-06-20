@@ -183,7 +183,6 @@ fn redeem_stake_rewards(
     vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-    credits_auto_rewind: bool,
 ) -> Option<(u64, u64)> {
     if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
         inflation_point_calc_tracer(&InflationPointCalculationEvent::CreditsObserved(
@@ -198,7 +197,6 @@ fn redeem_stake_rewards(
         vote_state,
         stake_history,
         inflation_point_calc_tracer.as_ref(),
-        credits_auto_rewind,
     )
     .map(|calculated_stake_rewards| {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
@@ -227,8 +225,6 @@ fn calculate_stake_points(
         vote_state,
         stake_history,
         inflation_point_calc_tracer,
-        true, // this is safe because this flag shouldn't affect the
-              // `points` field of the returned struct in any way
     )
     .points
 }
@@ -248,13 +244,12 @@ fn calculate_stake_points_and_credits(
     new_vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-    credits_auto_rewind: bool,
 ) -> CalculatedStakePoints {
     let credits_in_stake = stake.credits_observed;
     let credits_in_vote = new_vote_state.credits();
     // if there is no newer credits since observed, return no point
     if credits_in_vote <= credits_in_stake {
-        if credits_auto_rewind && credits_in_vote < credits_in_stake {
+        if credits_in_vote < credits_in_stake {
             if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
                 inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnRewinded.into());
             }
@@ -289,8 +284,8 @@ fn calculate_stake_points_and_credits(
             if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
                 inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnCurrent.into());
             }
-            // don't hint the caller and return current value if credits_auto_rewind is off or
-            // credits remain to be unchanged (= delinquent)
+            // don't hint the caller and return current value if credits remain to be unchanged (=
+            // delinquent)
             return CalculatedStakePoints {
                 points: 0,
                 new_credits_observed: credits_in_stake,
@@ -366,7 +361,6 @@ fn calculate_stake_rewards(
     vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-    credits_auto_rewind: bool,
 ) -> Option<CalculatedStakeRewards> {
     // ensure to run to trigger (optional) inflation_point_calc_tracer
     let CalculatedStakePoints {
@@ -378,7 +372,6 @@ fn calculate_stake_rewards(
         vote_state,
         stake_history,
         inflation_point_calc_tracer.as_ref(),
-        credits_auto_rewind,
     );
 
     // Drive credits_observed forward unconditionally when rewards are disabled
@@ -1584,7 +1577,6 @@ pub fn redeem_rewards(
     point_value: &PointValue,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-    credits_auto_rewind: bool,
 ) -> Result<(u64, u64), InstructionError> {
     if let StakeState::Stake(meta, mut stake) = stake_state {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
@@ -1608,7 +1600,6 @@ pub fn redeem_rewards(
             vote_state,
             stake_history,
             inflation_point_calc_tracer,
-            credits_auto_rewind,
         ) {
             stake_account.checked_add_lamports(stakers_reward)?;
             stake_account.set_state(&StakeState::Stake(meta, stake))?;
@@ -2540,7 +2531,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2561,7 +2551,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2599,7 +2588,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2643,7 +2631,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2668,7 +2655,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2690,7 +2676,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2715,7 +2700,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2738,7 +2722,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2763,7 +2746,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2782,7 +2764,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
         vote_state.commission = 99;
@@ -2798,7 +2779,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2821,7 +2801,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2844,7 +2823,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2854,21 +2832,12 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: false,
             },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
+            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer())
         );
 
         // credits_observed is auto-rewinded when vote_state credits are assumed to have been
         // recreated
         stake.credits_observed = 1000;
-        // this is old behavior; return the pre-recreation (large) credits from stake account
-        assert_eq!(
-            CalculatedStakePoints {
-                points: 0,
-                new_credits_observed: 1000,
-                force_credits_update_with_skipped_reward: false,
-            },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), false)
-        );
         // this is new behavior 1; return the post-recreation rewinded credits from the vote account
         assert_eq!(
             CalculatedStakePoints {
@@ -2876,7 +2845,7 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: true,
             },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
+            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer())
         );
         // this is new behavior 2; don't hint when credits both from stake and vote are identical
         stake.credits_observed = 4;
@@ -2886,7 +2855,7 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: false,
             },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
+            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer())
         );
 
         // get rewards and credits observed when not the activation epoch
@@ -2909,7 +2878,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2933,7 +2901,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
     }

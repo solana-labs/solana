@@ -3647,7 +3647,6 @@ impl Bank {
                         &point_value,
                         Some(stake_history),
                         reward_calc_tracer.as_ref(),
-                        credits_auto_rewind,
                     );
 
                     let post_lamport = stake_account.lamports();
@@ -3766,7 +3765,6 @@ impl Bank {
                         &point_value,
                         Some(stake_history),
                         reward_calc_tracer.as_ref(),
-                        credits_auto_rewind,
                     );
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
                         // track voter rewards
