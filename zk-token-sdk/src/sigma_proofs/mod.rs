@@ -23,3 +23,21 @@ pub mod fee_proof;
 pub mod grouped_ciphertext_validity_proof;
 pub mod pubkey_proof;
 pub mod zero_balance_proof;
+
+#[cfg(not(target_os = "solana"))]
+use {crate::errors::ProofVerificationError, curve25519_dalek::scalar::Scalar};
+
+#[cfg(not(target_os = "solana"))]
+fn canonical_scalar_from_slice(bytes: &[u8]) -> Result<Scalar, ProofVerificationError> {
+    if bytes.len() != 32 {
+        return Err(ProofVerificationError::Deserialization);
+    }
+
+    let scalar_bytes = bytes[..32]
+        .try_into()
+        .map_err(|_| ProofVerificationError::Deserialization)?;
+
+    let scalar = Scalar::from_canonical_bytes(scalar_bytes)
+        .ok_or(ProofVerificationError::Deserialization)?;
+    Ok(scalar)
+}
