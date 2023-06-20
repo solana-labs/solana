@@ -1763,7 +1763,6 @@ pub fn main() {
         node.info.remove_tpu();
         node.info.remove_tpu_forwards();
         node.info.remove_tvu();
-        node.info.remove_tvu_forwards();
         node.info.remove_serve_repair();
 
         // A node in this configuration shouldn't be an entrypoint to other nodes
