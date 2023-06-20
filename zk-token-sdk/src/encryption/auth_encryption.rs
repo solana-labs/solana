@@ -192,14 +192,14 @@ impl SeedDerivable for AeKey {
 
 /// For the purpose of encrypting balances for the spl token accounts, the nonce and ciphertext
 /// sizes should always be fixed.
-pub type Nonce = [u8; 12];
-pub type Ciphertext = [u8; 24];
+type Nonce = [u8; 12];
+type Ciphertext = [u8; 24];
 
 /// Authenticated encryption nonce and ciphertext
 #[derive(Debug, Default, Clone)]
 pub struct AeCiphertext {
-    pub nonce: Nonce,
-    pub ciphertext: Ciphertext,
+    nonce: Nonce,
+    ciphertext: Ciphertext,
 }
 impl AeCiphertext {
     pub fn decrypt(&self, key: &AeKey) -> Option<u64> {
