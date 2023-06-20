@@ -23,7 +23,7 @@ pub struct AccountMetaFlags {
 }
 
 impl AccountMetaFlags {
-    fn new_from(optional_fields: &AccountMetaOptionalFields) -> Self {
+    pub fn new_from(optional_fields: &AccountMetaOptionalFields) -> Self {
         let mut flags = AccountMetaFlags::default();
         flags.set_has_rent_epoch(optional_fields.rent_epoch.is_some());
         flags.set_has_account_hash(optional_fields.account_hash.is_some());

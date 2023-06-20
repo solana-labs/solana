@@ -1162,6 +1162,43 @@ impl ProgramTestContext {
         Ok(())
     }
 
+    /// warp forward one more slot and force reward interval end
+    pub fn warp_forward_force_reward_interval_end(&mut self) -> Result<(), ProgramTestError> {
+        let mut bank_forks = self.bank_forks.write().unwrap();
+        let bank = bank_forks.working_bank();
+
+        // Fill ticks until a new blockhash is recorded, otherwise retried transactions will have
+        // the same signature
+        bank.fill_bank_with_ticks_for_tests();
+        let pre_warp_slot = bank.slot();
+
+        bank_forks.set_root(
+            pre_warp_slot,
+            &solana_runtime::accounts_background_service::AbsRequestSender::default(),
+            Some(pre_warp_slot),
+        );
+
+        // warp_bank is frozen so go forward to get unfrozen bank at warp_slot
+        let warp_slot = pre_warp_slot + 1;
+        let mut warp_bank = Bank::new_from_parent(&bank, &Pubkey::default(), warp_slot);
+
+        warp_bank.force_reward_interval_end_for_tests();
+        bank_forks.insert(warp_bank);
+
+        // Update block commitment cache, otherwise banks server will poll at
+        // the wrong slot
+        let mut w_block_commitment_cache = self.block_commitment_cache.write().unwrap();
+        // HACK: The root set here should be `pre_warp_slot`, but since we're
+        // in a testing environment, the root bank never updates after a warp.
+        // The ticking thread only updates the working bank, and never the root
+        // bank.
+        w_block_commitment_cache.set_all_slots(warp_slot, warp_slot);
+
+        let bank = bank_forks.working_bank();
+        self.last_blockhash = bank.last_blockhash();
+        Ok(())
+    }
+
     /// Get a new latest blockhash, similar in spirit to RpcClient::get_latest_blockhash()
     pub async fn get_new_latest_blockhash(&mut self) -> io::Result<Hash> {
         let blockhash = self

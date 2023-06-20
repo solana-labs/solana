@@ -44,9 +44,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_package::SnapshotType,
-        snapshot_utils::{
-            self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
-        },
+        snapshot_utils::{self, create_accounts_run_and_snapshot_dirs},
         vote_parser,
     },
     solana_sdk::{
@@ -1347,7 +1345,10 @@ fn test_snapshots_blockstore_floor() {
             .into_path(),
         archive_info.slot(),
         archive_info.hash(),
-        ArchiveFormat::TarBzip2,
+        validator_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .archive_format,
     );
     fs::hard_link(archive_info.path(), validator_archive_path).unwrap();
     let slot_floor = archive_info.slot();
@@ -2165,7 +2166,7 @@ fn create_snapshot_to_hard_fork(
     };
     let ledger_path = blockstore.ledger_path();
     let genesis_config = open_genesis_config(ledger_path, u64::max_value());
-    let snapshot_config = Some(create_simple_snapshot_config(ledger_path));
+    let snapshot_config = create_simple_snapshot_config(ledger_path);
     let (bank_forks, ..) = bank_forks_utils::load(
         &genesis_config,
         blockstore,
@@ -2175,7 +2176,7 @@ fn create_snapshot_to_hard_fork(
                 .0,
         ],
         None,
-        snapshot_config.as_ref(),
+        Some(&snapshot_config),
         process_options,
         None,
         None,
@@ -2188,10 +2189,10 @@ fn create_snapshot_to_hard_fork(
     let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
         ledger_path,
         &bank,
-        Some(SnapshotVersion::default()),
+        Some(snapshot_config.snapshot_version),
         ledger_path,
         ledger_path,
-        ArchiveFormat::TarZstd,
+        snapshot_config.archive_format,
         NonZeroUsize::new(1).unwrap(),
         NonZeroUsize::new(1).unwrap(),
     )

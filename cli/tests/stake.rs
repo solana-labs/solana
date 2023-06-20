@@ -157,8 +157,8 @@ fn test_stake_redelegation() {
     };
     process_command(&config).unwrap();
 
-    // wait for new epoch
-    wait_for_next_epoch_plus_n_slots(&rpc_client, 0);
+    // wait for new epoch plus one additional slot for rewards payout
+    wait_for_next_epoch_plus_n_slots(&rpc_client, 1);
 
     // `stake_keypair` should now be delegated to `vote_keypair` and fully activated
     let stake_account = rpc_client.get_account(&stake_keypair.pubkey()).unwrap();
@@ -197,10 +197,11 @@ fn test_stake_redelegation() {
     )
     .unwrap();
 
-    // wait for a new epoch to ensure the `Redelegate` happens as soon as possible in the epoch
-    // to reduce the risk of a race condition when checking the stake account correctly enters the
-    // deactivating state for the remainder of the current epoch
-    wait_for_next_epoch_plus_n_slots(&rpc_client, 0);
+    // wait for a new epoch to ensure the `Redelegate` happens as soon as possible (i.e. till the
+    // last reward distribution block in the new epoch) to reduce the risk of a race condition
+    // when checking the stake account correctly enters the deactivating state for the
+    // remainder of the current epoch.
+    wait_for_next_epoch_plus_n_slots(&rpc_client, 1);
 
     // Redelegate to `vote2_keypair` via `stake2_keypair
     config.signers = vec![&default_signer, &stake2_keypair];
@@ -250,8 +251,8 @@ fn test_stake_redelegation() {
     check_balance!(rent_exempt_reserve, &rpc_client, &stake_keypair.pubkey());
     check_balance!(50_000_000_000, &rpc_client, &stake2_keypair.pubkey());
 
-    // wait for new epoch
-    wait_for_next_epoch_plus_n_slots(&rpc_client, 0);
+    // wait for new epoch plus reward blocks
+    wait_for_next_epoch_plus_n_slots(&rpc_client, 1);
 
     // `stake_keypair` should now be deactivated
     assert_eq!(

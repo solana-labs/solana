@@ -29,7 +29,7 @@ use {
         snapshot_hash::SnapshotHash,
         snapshot_package::{AccountsPackage, AccountsPackageType, SnapshotPackage, SnapshotType},
         snapshot_utils::{
-            self, ArchiveFormat,
+            self,
             SnapshotVersion::{self, V1_2_0},
         },
         status_cache::MAX_CACHE_ENTRIES,
@@ -140,31 +140,22 @@ fn restore_from_snapshot(
     old_genesis_config: &GenesisConfig,
     account_paths: &[PathBuf],
 ) {
-    let full_snapshot_archives_dir = old_bank_forks
-        .snapshot_config
-        .as_ref()
-        .map(|c| &c.full_snapshot_archives_dir)
-        .unwrap();
-
+    let snapshot_config = old_bank_forks.snapshot_config.as_ref().unwrap();
     let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
     let check_hash_calculation = false;
     let full_snapshot_archive_path = snapshot_utils::build_full_snapshot_archive_path(
-        full_snapshot_archives_dir,
+        &snapshot_config.full_snapshot_archives_dir,
         old_last_bank.slot(),
         &old_last_bank.get_snapshot_hash(),
-        ArchiveFormat::TarBzip2,
+        snapshot_config.archive_format,
     );
     let full_snapshot_archive_info =
         FullSnapshotArchiveInfo::new_from_path(full_snapshot_archive_path).unwrap();
 
     let (deserialized_bank, _timing) = snapshot_utils::bank_from_snapshot_archives(
         account_paths,
-        &old_bank_forks
-            .snapshot_config
-            .as_ref()
-            .unwrap()
-            .bank_snapshots_dir,
+        &snapshot_config.bank_snapshots_dir,
         &full_snapshot_archive_info,
         None,
         old_genesis_config,
@@ -255,7 +246,7 @@ fn run_bank_forks_snapshot_n<F>(
         &snapshot_config.full_snapshot_archives_dir,
         &snapshot_config.incremental_snapshot_archives_dir,
         last_bank.get_snapshot_storages(None),
-        ArchiveFormat::TarBzip2,
+        snapshot_config.archive_format,
         snapshot_version,
         None,
     )
@@ -471,7 +462,7 @@ fn test_concurrent_snapshot_packaging(
                 // this needs to match the hash value that we reserialize with later. It is complicated, so just use default.
                 // This hash value is just used to build the file name. Since this is mocked up test code, it is sufficient to pass default here.
                 &SnapshotHash(Hash::default()),
-                ArchiveFormat::TarBzip2,
+                snapshot_config.archive_format,
             ));
         }
     }
@@ -569,7 +560,7 @@ fn test_concurrent_snapshot_packaging(
     snapshot_utils::verify_snapshot_archive(
         saved_archive_path.unwrap(),
         saved_snapshots_dir.path(),
-        ArchiveFormat::TarBzip2,
+        snapshot_config.archive_format,
         snapshot_utils::VerifyBank::NonDeterministic,
         saved_slot,
     );
