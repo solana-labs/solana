@@ -47,7 +47,7 @@ async fn test_zero_balance() {
 
     let incorrect_pubkey = elgamal_keypair.pubkey();
     let incorrect_secret = ElGamalSecretKey::new_rand();
-    let incorrect_keypair = ElGamalKeypair::new(*incorrect_pubkey, incorrect_secret);
+    let incorrect_keypair = ElGamalKeypair::new_for_tests(*incorrect_pubkey, incorrect_secret);
 
     let fail_proof_data = ZeroBalanceProofData::new(&incorrect_keypair, &zero_ciphertext).unwrap();
 
@@ -99,7 +99,7 @@ async fn test_ciphertext_ciphertext_equality() {
 
     let incorrect_pubkey = source_keypair.pubkey();
     let incorrect_secret = ElGamalSecretKey::new_rand();
-    let incorrect_keypair = ElGamalKeypair::new(*incorrect_pubkey, incorrect_secret);
+    let incorrect_keypair = ElGamalKeypair::new_for_tests(*incorrect_pubkey, incorrect_secret);
 
     let fail_proof_data = CiphertextCiphertextEqualityProofData::new(
         &incorrect_keypair,
@@ -159,7 +159,7 @@ async fn test_transfer() {
 
     let incorrect_pubkey = source_keypair.pubkey();
     let incorrect_secret = ElGamalSecretKey::new_rand();
-    let incorrect_keypair = ElGamalKeypair::new(*incorrect_pubkey, incorrect_secret);
+    let incorrect_keypair = ElGamalKeypair::new_for_tests(*incorrect_pubkey, incorrect_secret);
 
     let fail_proof_data = TransferData::new(
         transfer_amount,
@@ -227,7 +227,7 @@ async fn test_transfer_with_fee() {
 
     let incorrect_pubkey = source_keypair.pubkey();
     let incorrect_secret = ElGamalSecretKey::new_rand();
-    let incorrect_keypair = ElGamalKeypair::new(*incorrect_pubkey, incorrect_secret);
+    let incorrect_keypair = ElGamalKeypair::new_for_tests(*incorrect_pubkey, incorrect_secret);
 
     let fail_proof_data = TransferWithFeeData::new(
         transfer_amount,
@@ -280,7 +280,7 @@ async fn test_withdraw() {
 
     let incorrect_pubkey = elgamal_keypair.pubkey();
     let incorrect_secret = ElGamalSecretKey::new_rand();
-    let incorrect_keypair = ElGamalKeypair::new(*incorrect_pubkey, incorrect_secret);
+    let incorrect_keypair = ElGamalKeypair::new_for_tests(*incorrect_pubkey, incorrect_secret);
 
     let fail_proof_data = WithdrawData::new(
         withdraw_amount,
@@ -321,7 +321,7 @@ async fn test_pubkey_validity() {
 
     let incorrect_pubkey = elgamal_keypair.pubkey();
     let incorrect_secret = ElGamalSecretKey::new_rand();
-    let incorrect_keypair = ElGamalKeypair::new(*incorrect_pubkey, incorrect_secret);
+    let incorrect_keypair = ElGamalKeypair::new_for_tests(*incorrect_pubkey, incorrect_secret);
 
     let fail_proof_data = PubkeyValidityData::new(&incorrect_keypair).unwrap();
 
@@ -547,7 +547,7 @@ async fn test_ciphertext_commitment_equality() {
 
     let incorrect_pubkey = keypair.pubkey();
     let incorrect_secret = ElGamalSecretKey::new_rand();
-    let incorrect_keypair = ElGamalKeypair::new(*incorrect_pubkey, incorrect_secret);
+    let incorrect_keypair = ElGamalKeypair::new_for_tests(*incorrect_pubkey, incorrect_secret);
 
     let fail_proof_data = CiphertextCommitmentEqualityProofData::new(
         &incorrect_keypair,

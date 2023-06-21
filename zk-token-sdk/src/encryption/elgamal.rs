@@ -161,11 +161,16 @@ pub struct ElGamalKeypair {
 }
 
 impl ElGamalKeypair {
-    pub fn new(public: ElGamalPubkey, secret: ElGamalSecretKey) -> Self {
+    /// Create an ElGamal keypair from an ElGamal public key and an ElGamal secret key.
+    ///
+    /// An ElGamal keypair should never be instantiated manually; `ElGamalKeypair::new_rand` or
+    /// `ElGamalKeypair::new_from_signer` should be used instead. This function exists to create
+    /// custom ElGamal keypairs for tests.
+    pub fn new_for_tests(public: ElGamalPubkey, secret: ElGamalSecretKey) -> Self {
         Self { public, secret }
     }
 
-    /// Deterministically derives an ElGamal keypair from a Solana signer and a public seed..
+    /// Deterministically derives an ElGamal keypair from a Solana signer and a public seed.
     ///
     /// This function exists for applications where a user may not wish to maintain a Solana signer
     /// and an ElGamal keypair separately. Instead, a user can derive the ElGamal keypair
