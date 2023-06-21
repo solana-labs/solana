@@ -1,4 +1,27 @@
-//! Instructions provided by the ZkToken Proof program
+//! Instructions provided by the [`ZK Token proof`] program.
+//!
+//! There are two types of instructions in the proof program: proof verification instructions
+//! and the `CloseContextState` instruction.
+//!
+//! Each proof verification instruction verifies a certain type of zero-knowledge proof. These
+//! instructions are processed by the program in two steps:
+//!   1. The program verifies the zero-knowledge proof.
+//!   2. The program optionally stores the context component of the instruction data to a
+//!      dedicated [`context-state`] account.
+//! If no accounts are provided with the instruction, the program simply verifies the proofs. If
+//! accounts are provided with the instruction, then the program writes the context data to the
+//! specified context-state account.
+//!
+//! NOTE: A context-state account must be pre-allocated to the exact size of the context data that
+//! is expected for a proof type before it is included in a proof verification instruction.
+//!
+//! The `CloseContextState` instruction closes a context state account. A transaction containing
+//! this instruction must be signed by the context account's owner. This instruction can be used by
+//! the account owner to reclaim lamports for storage.
+//!
+//! [`ZK Token proof`]: https://edge.docs.solana.com/developing/runtime-facilities/zk-token-proof
+//! [`context-state`]: https://edge.docs.solana.com/developing/runtime-facilities/zk-token-proof#context-data
+
 pub use crate::instruction::*;
 use {
     bytemuck::bytes_of,
@@ -27,10 +50,7 @@ pub enum ProofInstruction {
 
     /// Verify a zero-balance proof.
     ///
-    /// This instruction can be configured to optionally initialize a proof context state account.
-    /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<ZeroBalanceProofContext>` and assigned to the ZkToken proof program
-    /// prior to the execution of this instruction.
+    /// A zero-balance proof certifies that an ElGamal ciphertext encrypts the value zero.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -48,10 +68,8 @@ pub enum ProofInstruction {
 
     /// Verify a withdraw zero-knowledge proof.
     ///
-    /// This instruction can be configured to optionally initialize a proof context state account.
-    /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<WithdrawProofContext>` and assigned to the ZkToken proof program prior
-    /// to the execution of this instruction.
+    /// This proof is a collection of smallers proofs that are required by the SPL Token 2022
+    /// confidential extension `Withdraw` instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -69,10 +87,8 @@ pub enum ProofInstruction {
 
     /// Verify a ciphertext-ciphertext equality proof.
     ///
-    /// This instruction can be configured to optionally initialize a proof context state account.
-    /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<CiphertextCiphertextEqualityProofContext>` and assigned to the ZkToken
-    /// proof program prior to the execution of this instruction.
+    /// A ciphertext-ciphertext equality proof certifies that two ElGamal ciphertexts encrypt the
+    /// same message.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -90,10 +106,8 @@ pub enum ProofInstruction {
 
     /// Verify a transfer zero-knowledge proof.
     ///
-    /// This instruction can be configured to optionally initialize a proof context state account.
-    /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<TransferProofContext>` and assigned to the ZkToken proof program prior
-    /// to the execution of this instruction.
+    /// This proof is a collection of smallers proofs that are required by the SPL Token 2022
+    /// confidential extension `Transfer` instruction with transfer fees.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -111,10 +125,8 @@ pub enum ProofInstruction {
 
     /// Verify a transfer with fee zero-knowledge proof.
     ///
-    /// This instruction can be configured to optionally initialize a proof context state account.
-    /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<TransferWithFeeProofContext>` and assigned to the ZkToken proof program
-    /// prior to the execution of this instruction.
+    /// This proof is a collection of smallers proofs that are required by the SPL Token 2022
+    /// confidential extension `Transfer` instruction without transfer fees.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -130,12 +142,10 @@ pub enum ProofInstruction {
     ///
     VerifyTransferWithFee,
 
-    /// Verify a pubkey validity zero-knowledge proof.
+    /// Verify a public key validity zero-knowledge proof.
     ///
-    /// This instruction can be configured to optionally initialize a proof context state account.
-    /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<PubkeyValidityProofContext>` and assigned to the ZkToken proof program
-    /// prior to the execution of this instruction.
+    /// A public key validity proof certifies that an ElGamal public key is well-formed and the
+    /// prover knows the corresponding secret key.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -155,11 +165,6 @@ pub enum ProofInstruction {
     ///
     /// A range proof is defined with respect to a Pedersen commitment. The 64-bit range proof
     /// certifies that a Pedersen commitment holds an unsigned 64-bit number.
-    ///
-    /// This instruction can be configured to optionally initialize a proof context state account.
-    /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<RangeProofContext>` and assigned to the ZkToken proof program prior to
-    /// the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -187,11 +192,6 @@ pub enum ProofInstruction {
     /// `n_1, ..., n_N`. For example, this instruction can be used to certify that two commitments
     /// `C_1` and `C_2` each hold positive 32-bit numbers.
     ///
-    /// This instruction can be configured to optionally initialize a proof context state account.
-    /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<BatchedRangeProofContext>` and assigned to the ZkToken proof program
-    /// prior to the execution of this instruction.
-    ///
     /// Accounts expected by this instruction:
     ///
     ///   * Creating a proof context account
@@ -211,11 +211,6 @@ pub enum ProofInstruction {
     /// The bit-length of a batched range proof specifies the sum of the individual bit-lengths
     /// `n_1, ..., n_N`. For example, this instruction can be used to certify that two commitments
     /// `C_1` and `C_2` each hold positive 64-bit numbers.
-    ///
-    /// This instruction can be configured to optionally initialize a proof context state account.
-    /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<BatchedRangeProofContext>` and assigned to the ZkToken proof program
-    /// prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -237,11 +232,6 @@ pub enum ProofInstruction {
     /// `n_1, ..., n_N`. For example, this instruction can be used to certify that four commitments
     /// `[C_1, C_2, C_3, C_4]` each hold positive 64-bit numbers.
     ///
-    /// This instruction can be configured to optionally initialize a proof context state account.
-    /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<BatchedRangeProofContext>` and assigned to the ZkToken proof program
-    /// prior to the execution of this instruction.
-    ///
     /// Accounts expected by this instruction:
     ///
     ///   * Creating a proof context account
@@ -258,10 +248,8 @@ pub enum ProofInstruction {
 
     /// Verify a ciphertext-commitment equality proof.
     ///
-    /// This instruction can be configured to optionally initialize a proof context state account.
-    /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<CiphertextCommitmentEqualityProofContext>` and assigned to the ZkToken
-    /// proof program prior to the execution of this instruction.
+    /// A ciphertext-commitment equality proof certifies that an ElGamal ciphertext and a Pedersen
+    /// commitment encrypt/encode the same message.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -283,11 +271,6 @@ pub enum ProofInstruction {
     /// well-defined, i.e. the ciphertext can be decrypted by private keys associated with its
     /// decryption handles.
     ///
-    /// This instruction can be configured to optionally initialize a proof context state account.
-    /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<GroupedCiphertextValidityProofContext>` and assigned to the ZkToken
-    /// proof program prior to the execution of this instruction.
-    ///
     /// Accounts expected by this instruction:
     ///
     ///   * Creating a proof context account
@@ -308,11 +291,6 @@ pub enum ProofInstruction {
     /// ciphertext that are encrypted using the same set of ElGamal public keys. A batched
     /// grouped-ciphertext validity proof is shorter and more efficient than two individual
     /// grouped-ciphertext validity proofs.
-    ///
-    /// This instruction can be configured to optionally initialize a proof context state account.
-    /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<BatchedGroupedCiphertextValidityProofContext>` and assigned to the
-    /// ZkToken proof program prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
