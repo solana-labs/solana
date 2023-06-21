@@ -183,6 +183,7 @@ pub enum CliCommand {
         lockup: Lockup,
         amount: SpendAmount,
         sign_only: bool,
+        force: bool,
         dump_transaction_message: bool,
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
@@ -1113,6 +1114,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             lockup,
             amount,
             sign_only,
+            force,
             dump_transaction_message,
             blockhash_query,
             ref nonce_account,
@@ -1132,6 +1134,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             lockup,
             *amount,
             *sign_only,
+            *force,
             *dump_transaction_message,
             blockhash_query,
             nonce_account.as_ref(),
@@ -2159,6 +2162,7 @@ mod tests {
             },
             amount: SpendAmount::Some(30),
             sign_only: false,
+            force: false,
             dump_transaction_message: false,
             blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
             nonce_account: None,
@@ -2380,6 +2384,7 @@ mod tests {
             },
             amount: SpendAmount::Some(15),
             sign_only: false,
+            force: false,
             dump_transaction_message: false,
             blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
             nonce_account: None,
@@ -2408,6 +2413,7 @@ mod tests {
             },
             amount: SpendAmount::Some(22),
             sign_only: false,
+            force: false,
             dump_transaction_message: false,
             blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
             nonce_account: None,
@@ -2419,6 +2425,36 @@ mod tests {
         };
         config.signers = vec![&keypair, &bob_keypair];
         assert!(process_command(&config).is_err());
+
+        // Create stake: Check force flag for min delegation amount (20 + 5)
+        let bob_keypair = Keypair::new();
+        let custodian = solana_sdk::pubkey::new_rand();
+        config.command = CliCommand::CreateStakeAccount {
+            stake_account: 1,
+            seed: None,
+            staker: None,
+            withdrawer: None,
+            withdrawer_signer: None,
+            lockup: Lockup {
+                epoch: 0,
+                unix_timestamp: 0,
+                custodian,
+            },
+            amount: SpendAmount::Some(22),
+            sign_only: false,
+            force: true,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+            nonce_account: None,
+            nonce_authority: 0,
+            memo: None,
+            fee_payer: 0,
+            from: 0,
+            compute_unit_price: None,
+        };
+        config.signers = vec![&keypair, &bob_keypair];
+        assert!(process_command(&config).is_ok());
+
 
         // Split stake: Check rent + min delegation on target (25 lamports min)
         let stake_account_pubkey = solana_sdk::pubkey::new_rand();
