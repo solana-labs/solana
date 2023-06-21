@@ -231,7 +231,7 @@ impl fmt::Display for CliBlockProduction {
                 "Leader Slots",
                 "Blocks Produced",
                 "Skipped Slots",
-                "Skipped Slot Percentage",
+                "Skip Rate",
             ))
             .bold()
         )?;
