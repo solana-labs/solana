@@ -3,7 +3,7 @@ use {
     crate::{args::*, bigtable::*, ledger_path::*, ledger_utils::*, output::*, program::*},
     chrono::{DateTime, Utc},
     clap::{
-        crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
+        arg_enum, crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
         AppSettings, Arg, ArgMatches, SubCommand,
     },
     dashmap::DashMap,
@@ -986,6 +986,21 @@ fn get_access_type(process_options: &ProcessOptions) -> AccessType {
     }
 }
 
+arg_enum! {
+    /// When should snapshot archives be used at startup?
+    ///
+    /// If snapshot archives are used, they will be extracted and overwrite any existing state
+    /// already on disk.  This will incur the associated runtime costs for extracting.
+    /// If snapshot archive are not used, then the local snapshot state already on disk is
+    /// used instead.  If there is no local state on disk, startup will fail.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum UseSnapshotArchivesAtStartup {
+        Always,
+        Never,
+        //Newer <-- will be added later
+    }
+}
+
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 
@@ -1169,21 +1184,31 @@ fn main() {
         .multiple(true)
         .takes_value(true)
         .help("Log when transactions are processed that reference the given key(s).");
-    let boot_from_local_state = Arg::with_name("ignore_snapshot_archives_at_startup")
-        .long("ignore-snapshot-archives-at-startup")
-        .takes_value(false)
+    let default_use_snapshot_archives_at_startup = UseSnapshotArchivesAtStartup::Always.to_string();
+    let use_snapshot_archives_at_startup = Arg::with_name("use_snapshot_archives_at_startup")
+        .long("use-snapshot-archives-at-startup")
+        .takes_value(true)
+        .possible_values(&UseSnapshotArchivesAtStartup::variants())
+        .default_value(&default_use_snapshot_archives_at_startup)
+        .case_insensitive(true)
         .hidden(hidden_unless_forced())
-        .help("Do not use snapshot archives to startup")
+        .help("When should snapshot archives be used at startup?")
         .long_help(
-            "Startup from state already on disk, instead of \
-            extracting it from a snapshot archive. \
+            "At startup, when should snapshot archives be extracted \
+            versus using what is already on disk? \
+            Specifying \"always\" will always startup by extracting snapshot archives \
+            and disregard any snapshot-related state already on disk. \
+            Note that starting up from snapshot archives will incur the runtime costs \
+            assocaited with extracting the archives and rebuilding the local state. \
+            Specifying \"never\" will never startup from snapshot archives \
+            and will only use snapshot-related state already on disk. \
+            If there is no state already on disk, startup will fail. \
             This requires primary access, so another instance of \
             solana-ledger-tool or solana-validator cannot \
             simultaneously use the same ledger/accounts. \
             Note, this will use the latest state available, \
             which may be newer than the latest snapshot archive.",
-        )
-        .conflicts_with("no_snapshot");
+        );
 
     let default_max_full_snapshot_archives_to_retain =
         &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
@@ -1543,7 +1568,7 @@ fn main() {
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&debug_key_arg)
             .arg(&geyser_plugin_args)
-            .arg(&boot_from_local_state)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("skip_poh_verify")
                     .long("skip-poh-verify")
@@ -1599,7 +1624,7 @@ fn main() {
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
-            .arg(&boot_from_local_state)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("include_all_votes")
                     .long("include-all-votes")
@@ -1639,7 +1664,7 @@ fn main() {
             .arg(&maximum_full_snapshot_archives_to_retain)
             .arg(&maximum_incremental_snapshot_archives_to_retain)
             .arg(&geyser_plugin_args)
-            .arg(&boot_from_local_state)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("snapshot_slot")
                     .index(1)
@@ -1828,7 +1853,7 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&geyser_plugin_args)
             .arg(&accounts_data_encoding_arg)
-            .arg(&boot_from_local_state)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("include_sysvars")
                     .long("include-sysvars")
@@ -1861,7 +1886,7 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&geyser_plugin_args)
-            .arg(&boot_from_local_state)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("warp_epoch")
                     .required(false)
@@ -2518,6 +2543,11 @@ fn main() {
                     );
                 }
 
+                let boot_from_local_state = value_t_or_exit!(
+                    matches,
+                    "use_snapshot_archives_at_startup",
+                    UseSnapshotArchivesAtStartup
+                ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     run_verification: !(arg_matches.is_present("skip_poh_verify")
@@ -2540,7 +2570,7 @@ fn main() {
                         .is_present("accounts_db_test_hash_calculation"),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                     runtime_config: RuntimeConfig::default(),
-                    boot_from_local_state: arg_matches.is_present("boot_from_local_state"),
+                    boot_from_local_state,
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
@@ -2583,12 +2613,17 @@ fn main() {
                     ),
                 };
 
+                let boot_from_local_state = value_t_or_exit!(
+                    matches,
+                    "use_snapshot_archives_at_startup",
+                    UseSnapshotArchivesAtStartup
+                ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                    boot_from_local_state: arg_matches.is_present("boot_from_local_state"),
+                    boot_from_local_state,
                     ..ProcessOptions::default()
                 };
 
@@ -2710,12 +2745,17 @@ fn main() {
                     NonZeroUsize
                 );
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+                let boot_from_local_state = value_t_or_exit!(
+                    matches,
+                    "use_snapshot_archives_at_startup",
+                    UseSnapshotArchivesAtStartup
+                ) == UseSnapshotArchivesAtStartup::Never;
                 let mut process_options = ProcessOptions {
                     new_hard_forks,
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
-                    boot_from_local_state: arg_matches.is_present("boot_from_local_state"),
+                    boot_from_local_state,
                     ..ProcessOptions::default()
                 };
                 let blockstore = Arc::new(open_blockstore(
@@ -3123,12 +3163,17 @@ fn main() {
             }
             ("accounts", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
+                let boot_from_local_state = value_t_or_exit!(
+                    matches,
+                    "use_snapshot_archives_at_startup",
+                    UseSnapshotArchivesAtStartup
+                ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                    boot_from_local_state: arg_matches.is_present("boot_from_local_state"),
+                    boot_from_local_state,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -3214,12 +3259,17 @@ fn main() {
             }
             ("capitalization", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
+                let boot_from_local_state = value_t_or_exit!(
+                    matches,
+                    "use_snapshot_archives_at_startup",
+                    UseSnapshotArchivesAtStartup
+                ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                    boot_from_local_state: arg_matches.is_present("boot_from_local_state"),
+                    boot_from_local_state,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);

@@ -62,7 +62,7 @@ use {
         admin_rpc_service,
         admin_rpc_service::{load_staked_nodes_overrides, StakedNodesOverrides},
         bootstrap,
-        cli::{app, warn_for_deprecated_arguments, DefaultArgs},
+        cli::{app, warn_for_deprecated_arguments, DefaultArgs, UseSnapshotArchivesAtStartup},
         dashboard::Dashboard,
         ledger_lockfile, lock_ledger, new_spinner_progress_bar, println_name_value,
         redirect_stderr_to_file,
@@ -1374,7 +1374,11 @@ pub fn main() {
         },
         staked_nodes_overrides: staked_nodes_overrides.clone(),
         replay_slots_concurrently: matches.is_present("replay_slots_concurrently"),
-        boot_from_local_state: matches.is_present("ignore_snapshot_archives_at_startup"),
+        boot_from_local_state: value_t_or_exit!(
+            matches,
+            "use_snapshot_archives_at_startup",
+            UseSnapshotArchivesAtStartup
+        ) == UseSnapshotArchivesAtStartup::Never,
         ..ValidatorConfig::default()
     };
 

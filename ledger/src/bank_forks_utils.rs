@@ -244,8 +244,8 @@ fn bank_forks_from_snapshot(
                 warn!(
                     "Starting up from local state at slot {}, which is *older* \
                     than the latest snapshot archive at slot {}. If this is not \
-                    desired, remove the --ignore-snapshot-archives-at-startup \
-                    CLI flag and restart.",
+                    desired, change the --use-snapshot-archives-at-startup \
+                    CLI option to \"always\" and restart.",
                     bank.slot(),
                     latest_snapshot_archive_slot,
                 );

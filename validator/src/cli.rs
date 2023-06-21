@@ -1,6 +1,7 @@
 use {
     clap::{
-        crate_description, crate_name, App, AppSettings, Arg, ArgGroup, ArgMatches, SubCommand,
+        arg_enum, crate_description, crate_name, App, AppSettings, Arg, ArgGroup, ArgMatches,
+        SubCommand,
     },
     log::warn,
     solana_clap_utils::{
@@ -292,14 +293,24 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Use DIR as snapshot location [default: --ledger value]"),
         )
         .arg(
-            Arg::with_name("ignore_snapshot_archives_at_startup")
-                .long("ignore-snapshot-archives-at-startup")
-                .takes_value(false)
+            Arg::with_name("use_snapshot_archives_at_startup")
+                .long("use-snapshot-archives-at-startup")
+                .takes_value(true)
+                .possible_values(&UseSnapshotArchivesAtStartup::variants())
+                .default_value(&default_args.use_snapshot_archives_at_startup)
+                .case_insensitive(true)
                 .hidden(hidden_unless_forced())
-                .help("Do not use snapshot archives to startup")
+                .help("When should snapshot archives be used at startup?")
                 .long_help(
-                    "Startup from state already on disk, instead of \
-                    extracting it from a snapshot archive. \
+                    "At startup, when should snapshot archives be extracted \
+                    versus using what is already on disk? \
+                    Specifying \"always\" will always startup by extracting snapshot archives \
+                    and disregard any snapshot-related state already on disk. \
+                    Note that starting up from snapshot archives will incur the runtime costs \
+                    assocaited with extracting the archives and rebuilding the local state. \
+                    Specifying \"never\" will never startup from snapshot archives \
+                    and will only use snapshot-related state already on disk. \
+                    If there is no state already on disk, startup will fail. \
                     Note, this will use the latest state available, \
                     which may be newer than the latest snapshot archive.",
                 )
@@ -1655,6 +1666,21 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         );
 }
 
+arg_enum! {
+    /// When should snapshot archives be used at startup?
+    ///
+    /// If snapshot archives are used, they will be extracted and overwrite any existing state
+    /// already on disk.  This will incur the associated runtime costs for extracting.
+    /// If snapshot archive are not used, then the local snapshot state already on disk is
+    /// used instead.  If there is no local state on disk, startup will fail.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum UseSnapshotArchivesAtStartup {
+        Always,
+        Never,
+        //Newer <-- will be added later
+    }
+}
+
 /// Deprecated argument description should be moved into the [`deprecated_arguments()`] function,
 /// expressed as an instance of this type.
 struct DeprecatedArg {
@@ -1897,6 +1923,7 @@ pub struct DefaultArgs {
 
     pub snapshot_version: SnapshotVersion,
     pub snapshot_archive_format: String,
+    pub use_snapshot_archives_at_startup: String,
 
     pub rocksdb_shred_compaction: String,
     pub rocksdb_ledger_compression: String,
@@ -1980,6 +2007,7 @@ impl DefaultArgs {
             snapshot_archive_format: DEFAULT_ARCHIVE_COMPRESSION.to_string(),
             contact_debug_interval: "120000".to_string(),
             snapshot_version: SnapshotVersion::default(),
+            use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup::Always.to_string(),
             rocksdb_shred_compaction: "level".to_string(),
             rocksdb_ledger_compression: "none".to_string(),
             rocksdb_perf_sample_interval: "0".to_string(),
