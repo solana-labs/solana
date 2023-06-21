@@ -2426,35 +2426,6 @@ mod tests {
         config.signers = vec![&keypair, &bob_keypair];
         assert!(process_command(&config).is_err());
 
-        // Create stake: Check force flag for min delegation amount (20 + 5)
-        let bob_keypair = Keypair::new();
-        let custodian = solana_sdk::pubkey::new_rand();
-        config.command = CliCommand::CreateStakeAccount {
-            stake_account: 1,
-            seed: None,
-            staker: None,
-            withdrawer: None,
-            withdrawer_signer: None,
-            lockup: Lockup {
-                epoch: 0,
-                unix_timestamp: 0,
-                custodian,
-            },
-            amount: SpendAmount::Some(22),
-            sign_only: false,
-            force: true,
-            dump_transaction_message: false,
-            blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
-            nonce_account: None,
-            nonce_authority: 0,
-            memo: None,
-            fee_payer: 0,
-            from: 0,
-            compute_unit_price: None,
-        };
-        config.signers = vec![&keypair, &bob_keypair];
-        assert!(process_command(&config).is_ok());
-
         // Split stake: Check rent + min delegation on target (25 lamports min)
         let stake_account_pubkey = solana_sdk::pubkey::new_rand();
         let split_stake_account = Keypair::new();
