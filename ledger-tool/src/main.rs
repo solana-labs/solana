@@ -1169,13 +1169,13 @@ fn main() {
         .multiple(true)
         .takes_value(true)
         .help("Log when transactions are processed that reference the given key(s).");
-    let boot_from_local_state = Arg::with_name("boot_from_local_state")
-        .long("boot-from-local-state")
+    let boot_from_local_state = Arg::with_name("ignore_snapshot_archives_at_startup")
+        .long("ignore-snapshot-archives-at-startup")
         .takes_value(false)
         .hidden(hidden_unless_forced())
-        .help("Boot from state already on disk")
+        .help("Do not use snapshot archives to startup")
         .long_help(
-            "Boot from state already on disk, instead of \
+            "Startup from state already on disk, instead of \
             extracting it from a snapshot archive. \
             This requires primary access, so another instance of \
             solana-ledger-tool or solana-validator cannot \
