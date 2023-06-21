@@ -226,12 +226,8 @@ impl fmt::Display for CliBlockProduction {
             f,
             "{}",
             style(format!(
-                "  {:<44}  {:>15}  {:>15}  {:>15}  {:>23}",
-                "Identity",
-                "Leader Slots",
-                "Blocks Produced",
-                "Skipped Slots",
-                "Skipped Slot Percentage",
+                "  {:<44}  {:>15}  {:>15}  {:>15}  {:>15}",
+                "Identity", "Leader Slots", "Blocks Produced", "Skipped Slots", "Skip Rate",
             ))
             .bold()
         )?;
