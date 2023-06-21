@@ -285,11 +285,11 @@ impl ComputeBudget {
 
     // https://github.com/solana-labs/solana/issues/31453 to round compute-unit-price, in micro-lamports,
     // down to its nearest 1_000 micro-lamport.
-    const ROUND_DOWN_FACTOR: u64 = 1_000;
+    const PRIORITY_FEE_TICK_SIZE: u64 = 1_000;
     fn round_prioritization_fee(micro_lamports: u64) -> u64 {
         micro_lamports
-            .saturating_div(Self::ROUND_DOWN_FACTOR)
-            .saturating_mul(Self::ROUND_DOWN_FACTOR)
+            .saturating_div(Self::PRIORITY_FEE_TICK_SIZE)
+            .saturating_mul(Self::PRIORITY_FEE_TICK_SIZE)
     }
 }
 
@@ -735,7 +735,7 @@ mod tests {
         }
 
         for support_round_compute_unit_price in [true, false] {
-            let cu_price = ComputeBudget::ROUND_DOWN_FACTOR - 1;
+            let cu_price = ComputeBudget::PRIORITY_FEE_TICK_SIZE - 1;
             let expected_cu_price = if support_round_compute_unit_price {
                 0
             } else {
@@ -754,10 +754,10 @@ mod tests {
         for support_round_compute_unit_price in [true, false] {
             test_set_compute_unit_price(
                 &[ComputeBudgetInstruction::set_compute_unit_price(
-                    ComputeBudget::ROUND_DOWN_FACTOR,
+                    ComputeBudget::PRIORITY_FEE_TICK_SIZE,
                 )],
                 Ok(PrioritizationFeeDetails::new(
-                    PrioritizationFeeType::ComputeUnitPrice(ComputeBudget::ROUND_DOWN_FACTOR),
+                    PrioritizationFeeType::ComputeUnitPrice(ComputeBudget::PRIORITY_FEE_TICK_SIZE),
                     0,
                 )),
                 support_round_compute_unit_price,
@@ -765,9 +765,9 @@ mod tests {
         }
 
         for support_round_compute_unit_price in [true, false] {
-            let cu_price = ComputeBudget::ROUND_DOWN_FACTOR + 1;
+            let cu_price = ComputeBudget::PRIORITY_FEE_TICK_SIZE + 1;
             let expected_cu_price = if support_round_compute_unit_price {
-                ComputeBudget::ROUND_DOWN_FACTOR
+                ComputeBudget::PRIORITY_FEE_TICK_SIZE
             } else {
                 cu_price
             };
@@ -782,9 +782,9 @@ mod tests {
         }
 
         for support_round_compute_unit_price in [true, false] {
-            let cu_price = 3 * ComputeBudget::ROUND_DOWN_FACTOR - 1;
+            let cu_price = 3 * ComputeBudget::PRIORITY_FEE_TICK_SIZE - 1;
             let expected_cu_price = if support_round_compute_unit_price {
-                2 * ComputeBudget::ROUND_DOWN_FACTOR
+                2 * ComputeBudget::PRIORITY_FEE_TICK_SIZE
             } else {
                 cu_price
             };
@@ -970,26 +970,26 @@ mod tests {
         );
 
         assert_eq!(
-            ComputeBudget::round_prioritization_fee(ComputeBudget::ROUND_DOWN_FACTOR - 1),
+            ComputeBudget::round_prioritization_fee(ComputeBudget::PRIORITY_FEE_TICK_SIZE - 1),
             0,
             "less than 1_000 MICRO_LAMPORTS should round down to zero"
         );
 
         assert_eq!(
-            ComputeBudget::round_prioritization_fee(ComputeBudget::ROUND_DOWN_FACTOR),
-            ComputeBudget::ROUND_DOWN_FACTOR,
+            ComputeBudget::round_prioritization_fee(ComputeBudget::PRIORITY_FEE_TICK_SIZE),
+            ComputeBudget::PRIORITY_FEE_TICK_SIZE,
             "1_000 MICRO_LAMPORTS should round to itself"
         );
 
         assert_eq!(
-            ComputeBudget::round_prioritization_fee(ComputeBudget::ROUND_DOWN_FACTOR + 1),
-            ComputeBudget::ROUND_DOWN_FACTOR,
+            ComputeBudget::round_prioritization_fee(ComputeBudget::PRIORITY_FEE_TICK_SIZE + 1),
+            ComputeBudget::PRIORITY_FEE_TICK_SIZE,
             "more than 1_000 MICRO_LAMPORTS should round down to the nearest"
         );
 
         assert_eq!(
-            ComputeBudget::round_prioritization_fee(ComputeBudget::ROUND_DOWN_FACTOR * 3 - 1),
-            ComputeBudget::ROUND_DOWN_FACTOR * 2,
+            ComputeBudget::round_prioritization_fee(ComputeBudget::PRIORITY_FEE_TICK_SIZE * 3 - 1),
+            ComputeBudget::PRIORITY_FEE_TICK_SIZE * 2,
             "more than 1_000 MICRO_LAMPORTS should round down to the nearest"
         );
     }
