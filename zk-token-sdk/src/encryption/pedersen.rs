@@ -67,8 +67,12 @@ impl Pedersen {
 /// Instances of Pedersen openings are zeroized on drop.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Zeroize)]
 #[zeroize(drop)]
-pub struct PedersenOpening(pub(crate) Scalar);
+pub struct PedersenOpening(Scalar);
 impl PedersenOpening {
+    pub fn new(scalar: Scalar) -> Self {
+        Self(scalar)
+    }
+
     pub fn get_scalar(&self) -> &Scalar {
         &self.0
     }
@@ -163,8 +167,12 @@ define_mul_variants!(
 
 /// Pedersen commitment type.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PedersenCommitment(pub(crate) RistrettoPoint);
+pub struct PedersenCommitment(RistrettoPoint);
 impl PedersenCommitment {
+    pub fn new(point: RistrettoPoint) -> Self {
+        Self(point)
+    }
+
     pub fn get_point(&self) -> &RistrettoPoint {
         &self.0
     }
