@@ -2743,9 +2743,15 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openssl"
+<<<<<<< HEAD:programs/bpf/Cargo.lock
 version = "0.10.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "518915b97df115dd36109bfa429a48b8f737bd05508cf9588977b599648926d2"
+=======
+version = "0.10.55"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "345df152bc43501c5eb9e4654ff05f794effb78d4efe3d53abc158baddc0703d"
+>>>>>>> 6fdac22c66 (Bump openssl from 0.10.54 to 0.10.55 (#32215)):programs/sbf/Cargo.lock
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -2784,9 +2790,15 @@ dependencies = [
 
 [[package]]
 name = "openssl-sys"
+<<<<<<< HEAD:programs/bpf/Cargo.lock
 version = "0.9.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "666416d899cf077260dac8698d60a60b435a46d57e82acb1be3d0dad87284e5b"
+=======
+version = "0.9.89"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4026ef4fae4cd0c85aee4846e497cea7855659077108067c0d37c0d628f3e40a"
+>>>>>>> 6fdac22c66 (Bump openssl from 0.10.54 to 0.10.55 (#32215)):programs/sbf/Cargo.lock
 dependencies = [
  "autocfg",
  "cc",
