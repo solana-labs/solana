@@ -1921,6 +1921,7 @@ impl Bank {
 
         // create EpochRewards sysvar that holds the balance of undistributed rewards with
         // (total_rewards, distributed_rewards, credit_end_exclusive), total capital will increase by (total_rewards - distributed_rewards)
+        info!("EpochRewards Start: {slot} {total_rewards} {distributed_rewards} {credit_end_exclusive}");
         self.create_epoch_rewards_sysvar(total_rewards, distributed_rewards, credit_end_exclusive);
 
         datapoint_info!(
