@@ -349,6 +349,13 @@ fn main() {
         *read_from_client_file,
     );
 
+    // TAO NOTE - keypairs here have been generated and funded. Can use them in ATL extendtion 
+    //            if testing ATL, then
+    //              1. CreateATL
+    //              2. ExtendATL to num_of_accounts_in_atl, borrow keys funded above
+    //              3. return: atl_pubkey, and num_of_accounts_in_atl
+    //              4. pass them to do_bench_tps() so each TX going out will have atl in it.
+
     let nonce_keypairs = if *use_durable_nonce {
         Some(generate_durable_nonce_accounts(client.clone(), &keypairs))
     } else {
