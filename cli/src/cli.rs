@@ -2455,7 +2455,6 @@ mod tests {
         config.signers = vec![&keypair, &bob_keypair];
         assert!(process_command(&config).is_ok());
 
-
         // Split stake: Check rent + min delegation on target (25 lamports min)
         let stake_account_pubkey = solana_sdk::pubkey::new_rand();
         let split_stake_account = Keypair::new();
