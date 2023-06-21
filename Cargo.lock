@@ -3280,9 +3280,15 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openssl"
+<<<<<<< HEAD
 version = "0.10.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "01b8574602df80f7b85fdfc5392fa884a4e3b3f4f35402c070ab34c3d3f78d56"
+=======
+version = "0.10.55"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "345df152bc43501c5eb9e4654ff05f794effb78d4efe3d53abc158baddc0703d"
+>>>>>>> 6fdac22c6 (Bump openssl from 0.10.54 to 0.10.55 (#32215))
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -3321,9 +3327,15 @@ dependencies = [
 
 [[package]]
 name = "openssl-sys"
+<<<<<<< HEAD
 version = "0.9.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e17f59264b2809d77ae94f0e1ebabc434773f370d6ca667bd223ea10e06cc7e"
+=======
+version = "0.9.89"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4026ef4fae4cd0c85aee4846e497cea7855659077108067c0d37c0d628f3e40a"
+>>>>>>> 6fdac22c6 (Bump openssl from 0.10.54 to 0.10.55 (#32215))
 dependencies = [
  "cc",
  "libc",
