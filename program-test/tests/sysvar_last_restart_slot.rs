@@ -92,13 +92,13 @@ async fn get_sysvar_last_restart_slot() {
     context.register_hard_fork(40 as Slot);
     context.warp_to_slot(45).unwrap();
     check_with_program(&mut context, program_id, 41).await;
-    context.register_hard_fork(43 as Slot);
     context.register_hard_fork(47 as Slot);
+    context.register_hard_fork(48 as Slot);
     context.warp_to_slot(46).unwrap();
-    check_with_program(&mut context, program_id, 43).await;
+    check_with_program(&mut context, program_id, 41).await;
     context.register_hard_fork(50 as Slot);
     context.warp_to_slot(48).unwrap();
-    check_with_program(&mut context, program_id, 47).await;
+    check_with_program(&mut context, program_id, 48).await;
     context.warp_to_slot(50).unwrap();
     check_with_program(&mut context, program_id, 50).await;
 }

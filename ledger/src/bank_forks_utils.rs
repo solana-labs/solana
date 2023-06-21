@@ -172,18 +172,9 @@ pub fn load_bank_forks(
 
     if let Some(ref new_hard_forks) = process_options.new_hard_forks {
         let root_bank = bank_forks.read().unwrap().root_bank();
-        let hard_forks = root_bank.hard_forks();
-
-        for hard_fork_slot in new_hard_forks.iter() {
-            if *hard_fork_slot > root_bank.slot() {
-                hard_forks.write().unwrap().register(*hard_fork_slot);
-            } else {
-                warn!(
-                    "Hard fork at {} ignored, --hard-fork option can be removed.",
-                    hard_fork_slot
-                );
-            }
-        }
+        new_hard_forks
+            .iter()
+            .for_each(|hard_fork_slot| root_bank.register_hard_fork(*hard_fork_slot));
     }
 
     (bank_forks, leader_schedule_cache, starting_snapshot_hashes)

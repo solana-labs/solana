@@ -2426,8 +2426,7 @@ impl Bank {
         if feature_flag {
             let last_restart_slot = {
                 let slot = self.slot;
-                let hard_forks = self.hard_forks();
-                let hard_forks_r = hard_forks.read().unwrap();
+                let hard_forks_r = self.hard_forks.read().unwrap();
 
                 // Only consider hard forks <= this bank's slot to avoid prematurely applying
                 // a hard fork that is set to occur in the future.
@@ -7309,8 +7308,33 @@ impl Bank {
         *self.inflation.write().unwrap() = inflation;
     }
 
-    pub fn hard_forks(&self) -> Arc<RwLock<HardForks>> {
-        self.hard_forks.clone()
+    /// Get a snapshot of the current set of hard forks
+    pub fn hard_forks(&self) -> HardForks {
+        self.hard_forks.read().unwrap().clone()
+    }
+
+    pub fn register_hard_fork(&self, new_hard_fork_slot: Slot) {
+        let bank_slot = self.slot();
+
+        let lock = self.freeze_lock();
+        let bank_frozen = *lock != Hash::default();
+        if new_hard_fork_slot < bank_slot {
+            warn!(
+                "Hard fork at slot {new_hard_fork_slot} ignored, the hard fork is older \
+                than the bank at slot {bank_slot} that attempted to register it."
+            );
+        } else if (new_hard_fork_slot == bank_slot) && bank_frozen {
+            warn!(
+                "Hard fork at slot {new_hard_fork_slot} ignored, the hard fork is the same \
+                slot as the bank at slot {bank_slot} that attempted to register it, but that \
+                bank is already frozen."
+            );
+        } else {
+            self.hard_forks
+                .write()
+                .unwrap()
+                .register(new_hard_fork_slot);
+        }
     }
 
     // Hi! leaky abstraction here....
