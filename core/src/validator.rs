@@ -665,19 +665,15 @@ impl Validator {
             entry_notifier,
             Some(poh_timing_point_sender.clone()),
         )?;
+        let hard_forks = bank_forks.read().unwrap().root_bank().hard_forks();
+        if !hard_forks.is_empty() {
+            info!("Hard forks: {:?}", hard_forks);
+        }
 
         node.info.set_wallclock(timestamp());
         node.info.set_shred_version(compute_shred_version(
             &genesis_config.hash(),
-            Some(
-                &bank_forks
-                    .read()
-                    .unwrap()
-                    .working_bank()
-                    .hard_forks()
-                    .read()
-                    .unwrap(),
-            ),
+            Some(&hard_forks),
         ));
 
         Self::print_node_info(&node);
@@ -1674,21 +1670,6 @@ fn load_blockstore(
     // is processing the dropped banks from the `pruned_banks_receiver` channel.
     let pruned_banks_receiver =
         AccountsBackgroundService::setup_bank_drop_callback(bank_forks.clone());
-    {
-        let hard_forks: Vec<_> = bank_forks
-            .read()
-            .unwrap()
-            .working_bank()
-            .hard_forks()
-            .read()
-            .unwrap()
-            .iter()
-            .copied()
-            .collect();
-        if !hard_forks.is_empty() {
-            info!("Hard forks: {:?}", hard_forks);
-        }
-    }
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
     {

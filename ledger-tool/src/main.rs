@@ -2243,15 +2243,7 @@ fn main() {
                             "{}",
                             compute_shred_version(
                                 &genesis_config.hash(),
-                                Some(
-                                    &bank_forks
-                                        .read()
-                                        .unwrap()
-                                        .working_bank()
-                                        .hard_forks()
-                                        .read()
-                                        .unwrap()
-                                )
+                                Some(&bank_forks.read().unwrap().working_bank().hard_forks())
                             )
                         );
                     }
@@ -3120,10 +3112,7 @@ fn main() {
 
                         println!(
                             "Shred version: {}",
-                            compute_shred_version(
-                                &genesis_config.hash(),
-                                Some(&bank.hard_forks().read().unwrap())
-                            )
+                            compute_shred_version(&genesis_config.hash(), Some(&bank.hard_forks()))
                         );
                     }
                     Err(err) => {
