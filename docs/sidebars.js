@@ -117,6 +117,11 @@ module.exports = {
           id: "getstarted/rust",
           label: "Create and deploy a Rust program",
         },
+        {
+          type: "doc",
+          id: "getstarted/transaction",
+          label: "Create a transaction",
+        }
         // {
         //   type: "doc",
         //   id: "getstarted/nft",
