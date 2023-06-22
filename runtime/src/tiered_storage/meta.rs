@@ -103,6 +103,23 @@ impl AccountMetaOptionalFields {
                 .write_version
                 .map_or(0, |_| std::mem::size_of::<StoredMetaWriteVersion>())
     }
+
+    /// Given the specified AccountMetaFlags, returns the size of its
+    /// associated AccountMetaOptionalFields.
+    pub fn size_from_flags(flags: &AccountMetaFlags) -> usize {
+        let mut fields_size = 0;
+        if flags.has_rent_epoch() {
+            fields_size += std::mem::size_of::<Epoch>();
+        }
+        if flags.has_account_hash() {
+            fields_size += std::mem::size_of::<Hash>();
+        }
+        if flags.has_write_version() {
+            fields_size += std::mem::size_of::<StoredMetaWriteVersion>();
+        }
+
+        fields_size
+    }
 }
 
 #[cfg(test)]
@@ -205,6 +222,12 @@ pub mod tests {
                             + account_hash.map_or(0, |_| std::mem::size_of::<Hash>())
                             + write_version
                                 .map_or(0, |_| std::mem::size_of::<StoredMetaWriteVersion>())
+                    );
+                    assert_eq!(
+                        opt_fields.size(),
+                        AccountMetaOptionalFields::size_from_flags(&AccountMetaFlags::new_from(
+                            &opt_fields
+                        ))
                     );
                 }
             }
