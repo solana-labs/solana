@@ -4,7 +4,7 @@ use {
     solana_core::{
         broadcast_stage::BroadcastStageType,
         consensus::{Tower, SWITCH_FORK_THRESHOLD},
-        tower_storage::{FileTowerStorage, SavedTower, SavedTowerVersions, TowerStorage},
+        tower_storage::FileTowerStorage,
         validator::ValidatorConfig,
     },
     solana_gossip::gossip_service::discover_cluster,
@@ -544,8 +544,5 @@ pub fn setup_snapshot_validator_config(
 
 pub fn save_tower(tower_path: &Path, tower: &Tower, node_keypair: &Keypair) {
     let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
-    let saved_tower = SavedTower::new(tower, node_keypair).unwrap();
-    file_tower_storage
-        .store(&SavedTowerVersions::from(saved_tower))
-        .unwrap();
+    tower.save(&file_tower_storage, node_keypair).unwrap();
 }
