@@ -39,6 +39,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         mem::ManuallyDrop,
+        num::NonZeroU64,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -81,8 +82,14 @@ impl TestEnvironment {
         incremental_snapshot_archive_interval_slots: Slot,
     ) -> TestEnvironment {
         let snapshot_config = SnapshotConfig {
-            full_snapshot_archive_interval_slots,
-            incremental_snapshot_archive_interval_slots,
+            full_snapshot_archive_interval_slots: NonZeroU64::new(
+                full_snapshot_archive_interval_slots,
+            )
+            .unwrap(),
+            incremental_snapshot_archive_interval_slots: NonZeroU64::new(
+                incremental_snapshot_archive_interval_slots,
+            )
+            .unwrap(),
             ..SnapshotConfig::default()
         };
         Self::_new(snapshot_config)
@@ -114,7 +121,9 @@ impl TestEnvironment {
             BankTestConfig::default(),
         ));
         bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
-        bank_forks.set_accounts_hash_interval_slots(Self::ACCOUNTS_HASH_INTERVAL);
+        bank_forks.set_accounts_hash_interval_slots(
+            NonZeroU64::new(Self::ACCOUNTS_HASH_INTERVAL).unwrap(),
+        );
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
         let exit = Arc::new(AtomicBool::new(false));

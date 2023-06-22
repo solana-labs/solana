@@ -5,7 +5,7 @@ use {
         broadcast_stage::BroadcastStageType,
         consensus::{Tower, SWITCH_FORK_THRESHOLD},
         tower_storage::{FileTowerStorage, SavedTower, SavedTowerVersions, TowerStorage},
-        validator::ValidatorConfig,
+        validator::{is_snapshot_config_valid, ValidatorConfig},
     },
     solana_gossip::gossip_service::discover_cluster,
     solana_ledger::{
@@ -39,7 +39,7 @@ use {
     std::{
         collections::HashSet,
         fs, iter,
-        num::NonZeroUsize,
+        num::{NonZeroU64, NonZeroUsize},
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -473,25 +473,19 @@ pub struct SnapshotValidatorConfig {
 
 impl SnapshotValidatorConfig {
     pub fn new(
-        full_snapshot_archive_interval_slots: Slot,
-        incremental_snapshot_archive_interval_slots: Slot,
-        accounts_hash_interval_slots: Slot,
+        full_snapshot_archive_interval_slots: u64,
+        incremental_snapshot_archive_interval_slots: u64,
+        accounts_hash_interval_slots: u64,
         num_account_paths: usize,
     ) -> SnapshotValidatorConfig {
-        assert!(accounts_hash_interval_slots > 0);
-        assert!(full_snapshot_archive_interval_slots > 0);
-        assert!(full_snapshot_archive_interval_slots != SNAPSHOT_ARCHIVE_DISABLED_INTERVAL);
-        assert!(full_snapshot_archive_interval_slots % accounts_hash_interval_slots == 0);
-        if incremental_snapshot_archive_interval_slots != SNAPSHOT_ARCHIVE_DISABLED_INTERVAL {
-            assert!(incremental_snapshot_archive_interval_slots > 0);
-            assert!(
-                incremental_snapshot_archive_interval_slots % accounts_hash_interval_slots == 0
-            );
-            assert!(
-                full_snapshot_archive_interval_slots % incremental_snapshot_archive_interval_slots
-                    == 0
-            );
-        }
+        let full_snapshot_archive_interval_slots =
+            NonZeroU64::new(full_snapshot_archive_interval_slots)
+                .expect("full_snapshot_archive_interval_slots must be nonzero");
+        let incremental_snapshot_archive_interval_slots =
+            NonZeroU64::new(incremental_snapshot_archive_interval_slots)
+                .expect("incremental_snapshot_archive_interval_slots must be nonzero");
+        let accounts_hash_interval_slots = NonZeroU64::new(accounts_hash_interval_slots)
+            .expect("accounts_hash_interval_slots must be nonzero");
 
         // Create the snapshot config
         let _ = fs::create_dir_all(farf_dir());
@@ -510,6 +504,11 @@ impl SnapshotValidatorConfig {
             maximum_incremental_snapshot_archives_to_retain: NonZeroUsize::new(usize::MAX).unwrap(),
             ..SnapshotConfig::default()
         };
+        assert!(snapshot_config.should_generate_snapshots());
+        assert!(is_snapshot_config_valid(
+            &snapshot_config,
+            accounts_hash_interval_slots
+        ));
 
         // Create the account paths
         let (account_storage_dirs, account_storage_paths) =
@@ -534,12 +533,12 @@ impl SnapshotValidatorConfig {
 }
 
 pub fn setup_snapshot_validator_config(
-    snapshot_interval_slots: Slot,
+    snapshot_interval_slots: u64,
     num_account_paths: usize,
 ) -> SnapshotValidatorConfig {
     SnapshotValidatorConfig::new(
         snapshot_interval_slots,
-        SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
+        SNAPSHOT_ARCHIVE_DISABLED_INTERVAL.get(),
         snapshot_interval_slots,
         num_account_paths,
     )

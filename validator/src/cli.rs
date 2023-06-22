@@ -8,7 +8,7 @@ use {
         input_validators::{
             is_keypair, is_keypair_or_ask_keyword, is_niceness_adjustment_valid, is_parsable,
             is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
-            is_valid_percentage, is_within_range,
+            is_valid_percentage, is_within_range, validate_full_snapshot_interval_slots,
             validate_maximum_full_snapshot_archives_to_retain,
             validate_maximum_incremental_snapshot_archives_to_retain,
         },
@@ -461,6 +461,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .default_value(&default_args.full_snapshot_archive_interval_slots)
+                .validator(validate_full_snapshot_interval_slots)
                 .help("Number of slots between generating full snapshots")
         )
         .arg(

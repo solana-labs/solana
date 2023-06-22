@@ -13,6 +13,7 @@ use {
     solana_sdk::{clock::Slot, feature_set, hash::Hash, timing},
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
+        num::NonZeroU64,
         ops::Index,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
@@ -63,7 +64,7 @@ pub struct BankForks {
 
     pub snapshot_config: Option<SnapshotConfig>,
 
-    pub accounts_hash_interval_slots: Slot,
+    pub accounts_hash_interval_slots: NonZeroU64,
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
     highest_slot_at_startup: Slot,
@@ -180,7 +181,7 @@ impl BankForks {
             banks,
             descendants,
             snapshot_config: None,
-            accounts_hash_interval_slots: std::u64::MAX,
+            accounts_hash_interval_slots: NonZeroU64::new(std::u64::MAX).unwrap(),
             last_accounts_hash_slot: root,
             in_vote_only_mode: Arc::new(AtomicBool::new(false)),
             highest_slot_at_startup: 0,
@@ -335,7 +336,7 @@ impl BankForks {
         // intervals), it *is* possible, and there are tests to exercise this possibility.
         if let Some(bank) = banks.iter().find(|bank| {
             bank.slot() > self.last_accounts_hash_slot
-                && bank.block_height() % self.accounts_hash_interval_slots == 0
+                && bank.block_height() % self.accounts_hash_interval_slots.get() == 0
         }) {
             let bank_slot = bank.slot();
             self.last_accounts_hash_slot = bank_slot;
@@ -622,7 +623,7 @@ impl BankForks {
         self.snapshot_config = snapshot_config;
     }
 
-    pub fn set_accounts_hash_interval_slots(&mut self, accounts_interval_slots: u64) {
+    pub fn set_accounts_hash_interval_slots(&mut self, accounts_interval_slots: NonZeroU64) {
         self.accounts_hash_interval_slots = accounts_interval_slots;
     }
 

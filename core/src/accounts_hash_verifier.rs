@@ -595,7 +595,7 @@ mod tests {
             timing::timestamp,
         },
         solana_streamer::socket::SocketAddrSpace,
-        std::str::FromStr,
+        std::{num::NonZeroU64, str::FromStr},
     };
 
     fn new_test_cluster_info() -> ClusterInfo {
@@ -614,7 +614,7 @@ mod tests {
         let mut hashes = vec![];
         let full_snapshot_archive_interval_slots = 100;
         let snapshot_config = SnapshotConfig {
-            full_snapshot_archive_interval_slots,
+            full_snapshot_archive_interval_slots: NonZeroU64::new(100).unwrap(),
             incremental_snapshot_archive_interval_slots: SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
             ..SnapshotConfig::default()
         };

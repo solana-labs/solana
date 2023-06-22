@@ -72,7 +72,7 @@ use {
         env,
         fs::{self, File},
         net::{IpAddr, Ipv4Addr, SocketAddr},
-        num::NonZeroUsize,
+        num::{NonZeroU64, NonZeroUsize},
         path::{Path, PathBuf},
         process::exit,
         str::FromStr,
@@ -1515,10 +1515,12 @@ pub fn main() {
     let incremental_snapshot_interval_slots =
         value_t_or_exit!(matches, "incremental_snapshot_interval_slots", u64);
     let (full_snapshot_archive_interval_slots, incremental_snapshot_archive_interval_slots) =
-        if incremental_snapshot_interval_slots > 0 {
+        if let Some(incremental_snapshot_interval_slots) =
+            NonZeroU64::new(incremental_snapshot_interval_slots)
+        {
             if !matches.is_present("no_incremental_snapshots") {
                 (
-                    value_t_or_exit!(matches, "full_snapshot_interval_slots", u64),
+                    value_t_or_exit!(matches, "full_snapshot_interval_slots", NonZeroU64),
                     incremental_snapshot_interval_slots,
                 )
             } else {

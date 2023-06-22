@@ -412,29 +412,34 @@ where
     }
 }
 
+pub fn validate_full_snapshot_interval_slots<T>(value: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    validate_nonzero_arg(value, "full-snapshot-interval-slots")
+}
+
 pub fn validate_maximum_full_snapshot_archives_to_retain<T>(value: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
 {
-    let value = value.as_ref();
-    if value.eq("0") {
-        Err(String::from(
-            "--maximum-full-snapshot-archives-to-retain cannot be zero",
-        ))
-    } else {
-        Ok(())
-    }
+    validate_nonzero_arg(value, "maximum-full-snapshot-archives-to-retain")
 }
 
 pub fn validate_maximum_incremental_snapshot_archives_to_retain<T>(value: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
 {
+    validate_nonzero_arg(value, "maximum-incremental-snapshot-archives-to-retain")
+}
+
+fn validate_nonzero_arg<T>(value: T, arg_name: &str) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
     let value = value.as_ref();
     if value.eq("0") {
-        Err(String::from(
-            "--maximum-incremental-snapshot-archives-to-retain cannot be zero",
-        ))
+        Err(format!("--{} cannot be zero", arg_name))
     } else {
         Ok(())
     }

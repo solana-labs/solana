@@ -61,6 +61,7 @@ use {
         fs::{self, remove_dir_all, File},
         io::Read,
         net::{IpAddr, Ipv4Addr, SocketAddr},
+        num::NonZeroU64,
         path::{Path, PathBuf},
         str::FromStr,
         sync::{Arc, RwLock},
@@ -930,7 +931,7 @@ impl TestValidator {
             )),
             rpc_config: config.rpc_config.clone(),
             pubsub_config: config.pubsub_config.clone(),
-            accounts_hash_interval_slots: 100,
+            accounts_hash_interval_slots: NonZeroU64::new(100).unwrap(),
             account_paths: vec![
                 create_accounts_run_and_snapshot_dirs(ledger_path.join("accounts"))
                     .unwrap()
@@ -938,8 +939,9 @@ impl TestValidator {
             ],
             run_verification: false, // Skip PoH verification of ledger on startup for speed
             snapshot_config: SnapshotConfig {
-                full_snapshot_archive_interval_slots: 100,
-                incremental_snapshot_archive_interval_slots: Slot::MAX,
+                full_snapshot_archive_interval_slots: NonZeroU64::new(100).unwrap(),
+                incremental_snapshot_archive_interval_slots: NonZeroU64::new(std::u64::MAX)
+                    .unwrap(),
                 bank_snapshots_dir: ledger_path.join("snapshot"),
                 full_snapshot_archives_dir: ledger_path.to_path_buf(),
                 incremental_snapshot_archives_dir: ledger_path.to_path_buf(),

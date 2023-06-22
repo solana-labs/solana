@@ -115,6 +115,7 @@ use {
     std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
+        num::NonZeroU64,
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
@@ -214,7 +215,7 @@ pub struct ValidatorConfig {
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>, // Empty = repair with all
     pub gossip_validators: Option<HashSet<Pubkey>>, // None = gossip with all
     pub accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
-    pub accounts_hash_interval_slots: u64,
+    pub accounts_hash_interval_slots: NonZeroU64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
     /// Run PoH, transaction signature and other transaction verifications during blockstore
@@ -283,7 +284,7 @@ impl Default for ValidatorConfig {
             repair_whitelist: Arc::new(RwLock::new(HashSet::default())),
             gossip_validators: None,
             accounts_hash_fault_injector: None,
-            accounts_hash_interval_slots: std::u64::MAX,
+            accounts_hash_interval_slots: NonZeroU64::new(u64::MAX).unwrap(),
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
             run_verification: true,
@@ -2257,19 +2258,21 @@ fn cleanup_accounts_paths(config: &ValidatorConfig) {
 
 pub fn is_snapshot_config_valid(
     snapshot_config: &SnapshotConfig,
-    accounts_hash_interval_slots: Slot,
+    accounts_hash_interval_slots: NonZeroU64,
 ) -> bool {
     // if the snapshot config is configured to *not* take snapshots, then it is valid
     if !snapshot_config.should_generate_snapshots() {
         return true;
     }
 
-    let full_snapshot_interval_slots = snapshot_config.full_snapshot_archive_interval_slots;
-    let incremental_snapshot_interval_slots =
-        snapshot_config.incremental_snapshot_archive_interval_slots;
+    let accounts_hash_interval_slots = accounts_hash_interval_slots.get();
+    let full_snapshot_interval_slots = snapshot_config.full_snapshot_archive_interval_slots.get();
+    let incremental_snapshot_interval_slots = snapshot_config
+        .incremental_snapshot_archive_interval_slots
+        .get();
 
     let is_incremental_config_valid =
-        if incremental_snapshot_interval_slots == SNAPSHOT_ARCHIVE_DISABLED_INTERVAL {
+        if incremental_snapshot_interval_slots == SNAPSHOT_ARCHIVE_DISABLED_INTERVAL.get() {
             true
         } else {
             incremental_snapshot_interval_slots >= accounts_hash_interval_slots
@@ -2293,7 +2296,7 @@ mod tests {
         solana_tpu_client::tpu_client::{
             DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
         },
-        std::{fs::remove_dir_all, thread, time::Duration},
+        std::{fs::remove_dir_all, num::NonZeroU64, thread, time::Duration},
     };
 
     #[test]
@@ -2537,8 +2540,8 @@ mod tests {
     #[test]
     fn test_interval_check() {
         fn new_snapshot_config(
-            full_snapshot_archive_interval_slots: Slot,
-            incremental_snapshot_archive_interval_slots: Slot,
+            full_snapshot_archive_interval_slots: NonZeroU64,
+            incremental_snapshot_archive_interval_slots: NonZeroU64,
         ) -> SnapshotConfig {
             SnapshotConfig {
                 full_snapshot_archive_interval_slots,
@@ -2546,14 +2549,19 @@ mod tests {
                 ..SnapshotConfig::default()
             }
         }
-
-        assert!(is_snapshot_config_valid(
-            &new_snapshot_config(300, 200),
-            100
-        ));
+        macro_rules! nz {
+            ($value:expr) => {
+                NonZeroU64::new($value).expect("Expected nonzero u64")
+            };
+        }
 
         let default_accounts_hash_interval =
             snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS;
+
+        assert!(is_snapshot_config_valid(
+            &new_snapshot_config(nz!(300), nz!(200)),
+            default_accounts_hash_interval
+        ));
         assert!(is_snapshot_config_valid(
             &new_snapshot_config(
                 snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
@@ -2580,47 +2588,44 @@ mod tests {
                 SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
                 SNAPSHOT_ARCHIVE_DISABLED_INTERVAL
             ),
-            Slot::MAX
-        ));
-
-        assert!(!is_snapshot_config_valid(&new_snapshot_config(0, 100), 100));
-        assert!(!is_snapshot_config_valid(&new_snapshot_config(100, 0), 100));
-        assert!(!is_snapshot_config_valid(
-            &new_snapshot_config(42, 100),
-            100
+            NonZeroU64::new(Slot::MAX).unwrap()
         ));
         assert!(!is_snapshot_config_valid(
-            &new_snapshot_config(100, 42),
-            100
+            &new_snapshot_config(nz!(42), nz!(100)),
+            default_accounts_hash_interval
         ));
         assert!(!is_snapshot_config_valid(
-            &new_snapshot_config(100, 100),
-            100
+            &new_snapshot_config(nz!(100), nz!(42)),
+            default_accounts_hash_interval
         ));
         assert!(!is_snapshot_config_valid(
-            &new_snapshot_config(100, 200),
-            100
+            &new_snapshot_config(nz!(100), nz!(100)),
+            default_accounts_hash_interval
         ));
         assert!(!is_snapshot_config_valid(
-            &new_snapshot_config(444, 200),
-            100
+            &new_snapshot_config(nz!(100), nz!(200)),
+            default_accounts_hash_interval
         ));
         assert!(!is_snapshot_config_valid(
-            &new_snapshot_config(400, 222),
-            100
+            &new_snapshot_config(nz!(444), nz!(200)),
+            default_accounts_hash_interval
+        ));
+        assert!(!is_snapshot_config_valid(
+            &new_snapshot_config(nz!(400), nz!(222)),
+            default_accounts_hash_interval
         ));
 
         assert!(is_snapshot_config_valid(
             &SnapshotConfig::new_load_only(),
-            100
+            default_accounts_hash_interval
         ));
         assert!(is_snapshot_config_valid(
             &SnapshotConfig {
-                full_snapshot_archive_interval_slots: 41,
-                incremental_snapshot_archive_interval_slots: 37,
+                full_snapshot_archive_interval_slots: nz!(41),
+                incremental_snapshot_archive_interval_slots: nz!(37),
                 ..SnapshotConfig::new_load_only()
             },
-            100
+            default_accounts_hash_interval
         ));
         assert!(is_snapshot_config_valid(
             &SnapshotConfig {
@@ -2628,7 +2633,7 @@ mod tests {
                 incremental_snapshot_archive_interval_slots: SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
                 ..SnapshotConfig::new_load_only()
             },
-            100
+            default_accounts_hash_interval
         ));
     }
 

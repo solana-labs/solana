@@ -52,6 +52,7 @@ use {
         collections::HashSet,
         fs,
         io::{Error, ErrorKind},
+        num::NonZeroU64,
         path::PathBuf,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -62,6 +63,12 @@ use {
     tempfile::TempDir,
     test_case::test_case,
 };
+
+macro_rules! nz {
+    ($value:expr) => {
+        NonZeroU64::new($value).expect("Expected nonzero u64")
+    };
+}
 
 struct SnapshotTestConfig {
     bank_forks: BankForks,
@@ -80,9 +87,9 @@ impl SnapshotTestConfig {
     fn new(
         snapshot_version: SnapshotVersion,
         cluster_type: ClusterType,
-        accounts_hash_interval_slots: Slot,
-        full_snapshot_archive_interval_slots: Slot,
-        incremental_snapshot_archive_interval_slots: Slot,
+        accounts_hash_interval_slots: NonZeroU64,
+        full_snapshot_archive_interval_slots: NonZeroU64,
+        incremental_snapshot_archive_interval_slots: NonZeroU64,
     ) -> SnapshotTestConfig {
         let (accounts_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = TempDir::new().unwrap();
@@ -198,8 +205,8 @@ fn run_bank_forks_snapshot_n<F>(
     let mut snapshot_test_config = SnapshotTestConfig::new(
         snapshot_version,
         cluster_type,
-        set_root_interval,
-        set_root_interval,
+        nz!(set_root_interval),
+        nz!(set_root_interval),
         SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
     );
 
@@ -331,8 +338,8 @@ fn test_concurrent_snapshot_packaging(
     let mut snapshot_test_config = SnapshotTestConfig::new(
         snapshot_version,
         cluster_type,
-        1,
-        1,
+        nz!(1),
+        nz!(1),
         SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
     );
 
@@ -586,8 +593,8 @@ fn test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clust
         let mut snapshot_test_config = SnapshotTestConfig::new(
             snapshot_version,
             cluster_type,
-            (*add_root_interval * num_set_roots * 2) as Slot,
-            (*add_root_interval * num_set_roots * 2) as Slot,
+            nz!((*add_root_interval * num_set_roots * 2) as u64),
+            nz!((*add_root_interval * num_set_roots * 2) as u64),
             SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
         );
         let mut current_bank = snapshot_test_config.bank_forks[0].clone();
@@ -704,9 +711,9 @@ fn test_bank_forks_incremental_snapshot(
     let mut snapshot_test_config = SnapshotTestConfig::new(
         snapshot_version,
         cluster_type,
-        SET_ROOT_INTERVAL,
-        FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-        INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+        nz!(SET_ROOT_INTERVAL),
+        nz!(FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS),
+        nz!(INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS),
     );
     trace!("SnapshotTestConfig:\naccounts_dir: {}\nbank_snapshots_dir: {}\nfull_snapshot_archives_dir: {}\nincremental_snapshot_archives_dir: {}",
             snapshot_test_config.accounts_dir.display(), snapshot_test_config.bank_snapshots_dir.path().display(), snapshot_test_config.full_snapshot_archives_dir.path().display(), snapshot_test_config.incremental_snapshot_archives_dir.path().display());
@@ -761,7 +768,10 @@ fn test_bank_forks_incremental_snapshot(
 
         // Since AccountsBackgroundService isn't running, manually make a full snapshot archive
         // at the right interval
-        if snapshot_utils::should_take_full_snapshot(slot, FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS) {
+        if snapshot_utils::should_take_full_snapshot(
+            slot,
+            NonZeroU64::new(FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS).unwrap(),
+        ) {
             make_full_snapshot_archive(&bank, &snapshot_test_config.snapshot_config).unwrap();
         }
         // Similarly, make an incremental snapshot archive at the right interval, but only if
@@ -771,7 +781,7 @@ fn test_bank_forks_incremental_snapshot(
         // Then, after making an incremental snapshot, restore the bank and verify it is correct
         else if snapshot_utils::should_take_incremental_snapshot(
             slot,
-            INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            NonZeroU64::new(INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS).unwrap(),
             last_full_snapshot_slot,
         ) && slot != last_full_snapshot_slot.unwrap()
         {
@@ -942,9 +952,9 @@ fn test_snapshots_with_background_services(
     let snapshot_test_config = SnapshotTestConfig::new(
         snapshot_version,
         cluster_type,
-        BANK_SNAPSHOT_INTERVAL_SLOTS,
-        FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-        INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+        nz!(BANK_SNAPSHOT_INTERVAL_SLOTS),
+        nz!(FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS),
+        nz!(INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS),
     );
 
     let node_keypair = Arc::new(Keypair::new());

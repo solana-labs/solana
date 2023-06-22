@@ -1,7 +1,9 @@
 use {
     crate::snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
-    solana_sdk::clock::Slot,
-    std::{num::NonZeroUsize, path::PathBuf},
+    std::{
+        num::{NonZeroU64, NonZeroUsize},
+        path::PathBuf,
+    },
 };
 
 /// Snapshot configuration and runtime information
@@ -11,10 +13,10 @@ pub struct SnapshotConfig {
     pub usage: SnapshotUsage,
 
     /// Generate a new full snapshot archive every this many slots
-    pub full_snapshot_archive_interval_slots: Slot,
+    pub full_snapshot_archive_interval_slots: NonZeroU64,
 
     /// Generate a new incremental snapshot archive every this many slots
-    pub incremental_snapshot_archive_interval_slots: Slot,
+    pub incremental_snapshot_archive_interval_slots: NonZeroU64,
 
     /// Path to the directory where full snapshot archives are stored
     pub full_snapshot_archives_dir: PathBuf,

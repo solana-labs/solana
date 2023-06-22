@@ -778,6 +778,7 @@ mod test {
         solana_sdk::{
             account::AccountSharedData, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey,
         },
+        std::num::NonZeroU64,
     };
 
     #[test]
@@ -820,12 +821,12 @@ mod test {
         // other requests before this slot, and then 2+ requests of each type afterwards (to
         // further test the prioritization logic).
         const SLOTS_PER_EPOCH: Slot = 400;
-        const FULL_SNAPSHOT_INTERVAL: Slot = 80;
-        const INCREMENTAL_SNAPSHOT_INTERVAL: Slot = 30;
+        let full_snapshot_interval = NonZeroU64::new(80).unwrap();
+        let incremental_snapshot_interval = NonZeroU64::new(30).unwrap();
 
         let snapshot_config = SnapshotConfig {
-            full_snapshot_archive_interval_slots: FULL_SNAPSHOT_INTERVAL,
-            incremental_snapshot_archive_interval_slots: INCREMENTAL_SNAPSHOT_INTERVAL,
+            full_snapshot_archive_interval_slots: full_snapshot_interval,
+            incremental_snapshot_archive_interval_slots: incremental_snapshot_interval,
             ..SnapshotConfig::default()
         };
 

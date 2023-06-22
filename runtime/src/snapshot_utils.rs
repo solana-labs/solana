@@ -55,7 +55,7 @@ use {
         fmt,
         fs::{self, File},
         io::{BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
-        num::NonZeroUsize,
+        num::{NonZeroU64, NonZeroUsize},
         path::{Path, PathBuf},
         process::ExitStatus,
         str::FromStr,
@@ -80,8 +80,6 @@ pub const SNAPSHOT_VERSION_FILENAME: &str = "version";
 pub const SNAPSHOT_STATE_COMPLETE_FILENAME: &str = "state_complete";
 pub const SNAPSHOT_ACCOUNTS_HARDLINKS: &str = "accounts_hardlinks";
 pub const SNAPSHOT_ARCHIVE_DOWNLOAD_DIR: &str = "remote";
-pub const DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 25_000;
-pub const DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100;
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const MAX_SNAPSHOT_VERSION_FILE_SIZE: u64 = 8; // byte
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
@@ -89,13 +87,18 @@ pub const TMP_SNAPSHOT_ARCHIVE_PREFIX: &str = "tmp-snapshot-archive-";
 pub const BANK_SNAPSHOT_PRE_FILENAME_EXTENSION: &str = "pre";
 // The following unsafes are
 // - Safe because the values are fixed, known non-zero constants
-// - Necessary in order to have a plain NonZeroUsize as the constant, NonZeroUsize
-//   returns an Option<NonZeroUsize> and we can't .unwrap() at compile time
+// - Necessary in order to have a plain NonZero type as the constant, NonZeroT
+//   returns an Option<NonZeroT> and we can't .unwrap() at compile time
+pub const DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: NonZeroU64 =
+    unsafe { NonZeroU64::new_unchecked(25_000) };
+pub const DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: NonZeroU64 =
+    unsafe { NonZeroU64::new_unchecked(100) };
+pub const SNAPSHOT_ARCHIVE_DISABLED_INTERVAL: NonZeroU64 =
+    unsafe { NonZeroU64::new_unchecked(std::u64::MAX) };
 pub const DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN: NonZeroUsize =
     unsafe { NonZeroUsize::new_unchecked(2) };
 pub const DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN: NonZeroUsize =
     unsafe { NonZeroUsize::new_unchecked(4) };
-pub const SNAPSHOT_ARCHIVE_DISABLED_INTERVAL: Slot = Slot::MAX;
 pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^snapshot-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz|tar\.lz4)$";
 pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^incremental-snapshot-(?P<base>[[:digit:]]+)-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz|tar\.lz4)$";
 
@@ -3338,17 +3341,17 @@ pub fn package_and_archive_incremental_snapshot(
 
 pub fn should_take_full_snapshot(
     block_height: Slot,
-    full_snapshot_archive_interval_slots: Slot,
+    full_snapshot_archive_interval_slots: NonZeroU64,
 ) -> bool {
-    block_height % full_snapshot_archive_interval_slots == 0
+    block_height % full_snapshot_archive_interval_slots.get() == 0
 }
 
 pub fn should_take_incremental_snapshot(
     block_height: Slot,
-    incremental_snapshot_archive_interval_slots: Slot,
+    incremental_snapshot_archive_interval_slots: NonZeroU64,
     last_full_snapshot_slot: Option<Slot>,
 ) -> bool {
-    block_height % incremental_snapshot_archive_interval_slots == 0
+    block_height % incremental_snapshot_archive_interval_slots.get() == 0
         && last_full_snapshot_slot.is_some()
 }
 
