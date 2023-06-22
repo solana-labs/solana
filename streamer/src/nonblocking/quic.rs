@@ -36,10 +36,7 @@ use {
         },
         time::{Duration, Instant},
     },
-    tokio::{
-        task::JoinHandle,
-        time::{sleep, timeout},
-    },
+    tokio::{task::JoinHandle, time::timeout},
 };
 
 const WAIT_FOR_STREAM_TIMEOUT: Duration = Duration::from_millis(100);
@@ -135,7 +132,6 @@ async fn run_server(
     coalesce: Duration,
 ) {
     const WAIT_FOR_CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);
-    const WAIT_BETWEEN_NEW_CONNECTIONS: Duration = Duration::from_millis(1);
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
     let unstaked_connection_table: Arc<Mutex<ConnectionTable>> = Arc::new(Mutex::new(
@@ -173,7 +169,6 @@ async fn run_server(
                 stats.clone(),
                 wait_for_chunk_timeout,
             ));
-            sleep(WAIT_BETWEEN_NEW_CONNECTIONS).await;
         } else {
             debug!("accept(): Timed out waiting for connection");
         }
