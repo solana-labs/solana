@@ -127,4 +127,8 @@ where
             .get_multiple_accounts(pubkeys)
             .map_err(|err| err.into())
     }
+
+    fn get_slot(&self) -> Result<u64> {
+        self.rpc_client().get_slot().map_err(|err| err.into())
+    }
 }

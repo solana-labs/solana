@@ -5184,6 +5184,7 @@ dependencies = [
  "serde_json",
  "serde_yaml 0.9.21",
  "serial_test",
+ "solana-address-lookup-table-program",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",

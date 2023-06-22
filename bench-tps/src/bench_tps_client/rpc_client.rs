@@ -103,4 +103,8 @@ impl BenchTpsClient for RpcClient {
     fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> Result<Vec<Option<Account>>> {
         RpcClient::get_multiple_accounts(self, pubkeys).map_err(|err| err.into())
     }
+
+    fn get_slot(&self) -> Result<u64> {
+        RpcClient::get_slot(self).map_err(|err| err.into())
+    }
 }

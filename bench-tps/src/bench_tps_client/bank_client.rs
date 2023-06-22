@@ -111,4 +111,8 @@ impl BenchTpsClient for BankClient {
     fn get_multiple_accounts(&self, _pubkeys: &[Pubkey]) -> Result<Vec<Option<Account>>> {
         unimplemented!("BankClient doesn't support get_multiple_accounts");
     }
+
+    fn get_slot(&self) -> Result<u64> {
+        SyncClient::get_slot(self).map_err(|err| err.into())
+    }
 }

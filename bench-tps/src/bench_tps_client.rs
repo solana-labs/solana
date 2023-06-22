@@ -93,6 +93,8 @@ pub trait BenchTpsClient {
     ) -> Result<Account>;
 
     fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> Result<Vec<Option<Account>>>;
+
+    fn get_slot(&self) -> Result<u64>;
 }
 
 mod bank_client;

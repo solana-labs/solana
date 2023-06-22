@@ -110,4 +110,9 @@ impl BenchTpsClient for ThinClient {
             .get_multiple_accounts(pubkeys)
             .map_err(|err| err.into())
     }
+
+    fn get_slot(&self) -> Result<u64> {
+        SyncClient::get_slot(self).map_err(|err| err.into())
+    }
+
 }
