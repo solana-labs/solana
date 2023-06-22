@@ -2544,7 +2544,7 @@ fn main() {
                 }
 
                 let boot_from_local_state = value_t_or_exit!(
-                    matches,
+                    arg_matches,
                     "use_snapshot_archives_at_startup",
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
@@ -2614,7 +2614,7 @@ fn main() {
                 };
 
                 let boot_from_local_state = value_t_or_exit!(
-                    matches,
+                    arg_matches,
                     "use_snapshot_archives_at_startup",
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
@@ -2746,7 +2746,7 @@ fn main() {
                 );
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let boot_from_local_state = value_t_or_exit!(
-                    matches,
+                    arg_matches,
                     "use_snapshot_archives_at_startup",
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
@@ -3164,7 +3164,7 @@ fn main() {
             ("accounts", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
                 let boot_from_local_state = value_t_or_exit!(
-                    matches,
+                    arg_matches,
                     "use_snapshot_archives_at_startup",
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
@@ -3260,7 +3260,7 @@ fn main() {
             ("capitalization", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
                 let boot_from_local_state = value_t_or_exit!(
-                    matches,
+                    arg_matches,
                     "use_snapshot_archives_at_startup",
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
