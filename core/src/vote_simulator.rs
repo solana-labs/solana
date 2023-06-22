@@ -4,7 +4,7 @@ use {
         cluster_slot_state_verifier::{
             DuplicateSlotsTracker, EpochSlotsFrozenSlots, GossipDuplicateConfirmedSlots,
         },
-        cluster_slots::ClusterSlots,
+        cluster_slots_service::cluster_slots::ClusterSlots,
         consensus::Tower,
         fork_choice::SelectVoteAndResetForkResult,
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,

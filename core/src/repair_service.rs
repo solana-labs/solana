@@ -9,7 +9,7 @@ use {
     crate::{
         ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
         cluster_info_vote_listener::VerifiedVoteReceiver,
-        cluster_slots::ClusterSlots,
+        cluster_slots_service::cluster_slots::ClusterSlots,
         duplicate_repair_status::AncestorDuplicateSlotsToRepair,
         outstanding_requests::OutstandingRequests,
         repair_weight::RepairWeight,

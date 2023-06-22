@@ -1,7 +1,7 @@
 use {
     crate::{
         cluster_info_vote_listener::SlotVoteTracker,
-        cluster_slots::SlotPubkeys,
+        cluster_slots_service::cluster_slots::SlotPubkeys,
         consensus::{Stake, ThresholdDecision, VotedStakes},
         replay_stage::SUPERMINORITY_THRESHOLD,
     },
