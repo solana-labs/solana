@@ -49,7 +49,7 @@ use {
         snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
             self, create_all_accounts_run_and_snapshot_dirs, create_and_canonicalize_directories,
-            ArchiveFormat, SnapshotVersion,
+            ArchiveFormat, SnapshotVersion, SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
         },
     },
     solana_sdk::{
@@ -1530,14 +1530,20 @@ pub fn main() {
                     incremental_snapshot_interval_slots,
                 )
             } else {
-                (incremental_snapshot_interval_slots, Slot::MAX)
+                (
+                    incremental_snapshot_interval_slots,
+                    SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
+                )
             }
         } else {
-            (Slot::MAX, Slot::MAX)
+            (
+                SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
+                SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
+            )
         };
 
     validator_config.snapshot_config = SnapshotConfig {
-        usage: if full_snapshot_archive_interval_slots == Slot::MAX {
+        usage: if full_snapshot_archive_interval_slots == SNAPSHOT_ARCHIVE_DISABLED_INTERVAL {
             SnapshotUsage::LoadOnly
         } else {
             SnapshotUsage::LoadAndGenerate
@@ -1573,8 +1579,8 @@ pub fn main() {
             \n\tfull snapshot interval: {} \
             \n\tincremental snapshot interval: {} \
             \n\taccounts hash interval: {}",
-            if full_snapshot_archive_interval_slots == Slot::MAX { "disabled".to_string() } else { full_snapshot_archive_interval_slots.to_string() },
-            if incremental_snapshot_archive_interval_slots == Slot::MAX { "disabled".to_string() } else { incremental_snapshot_archive_interval_slots.to_string() },
+            if full_snapshot_archive_interval_slots == SNAPSHOT_ARCHIVE_DISABLED_INTERVAL { "disabled".to_string() } else { full_snapshot_archive_interval_slots.to_string() },
+            if incremental_snapshot_archive_interval_slots == SNAPSHOT_ARCHIVE_DISABLED_INTERVAL { "disabled".to_string() } else { incremental_snapshot_archive_interval_slots.to_string() },
             validator_config.accounts_hash_interval_slots);
 
         exit(1);
