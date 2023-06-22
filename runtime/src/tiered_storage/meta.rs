@@ -28,10 +28,6 @@ pub trait TieredAccountMeta: Sized {
     /// Constructs a TieredAcountMeta instance.
     fn new() -> Self;
 
-    /// Returns true if the TieredAccountMeta implementation supports multiple
-    /// accounts sharing one account block.
-    fn supports_shared_account_block() -> bool;
-
     /// A builder function that initializes lamports.
     fn with_lamports(self, lamports: u64) -> Self;
 
@@ -67,6 +63,10 @@ pub trait TieredAccountMeta: Sized {
 
     /// Returns the AccountMetaFlags of the current meta.
     fn flags(&self) -> &AccountMetaFlags;
+
+    /// Returns true if the TieredAccountMeta implementation supports multiple
+    /// accounts sharing one account block.
+    fn supports_shared_account_block() -> bool;
 }
 
 impl AccountMetaFlags {
