@@ -4,7 +4,6 @@ use {
     crate::{
         ancestor_hashes_service::AncestorHashesReplayUpdateSender,
         banking_trace::BankingTracer,
-        broadcast_stage::RetransmitSlotsSender,
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
             GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
@@ -487,7 +486,7 @@ impl ReplayStage {
         maybe_process_blockstore: Option<ProcessBlockStore>,
         vote_tracker: Arc<VoteTracker>,
         cluster_slots: Arc<ClusterSlots>,
-        retransmit_slots_sender: RetransmitSlotsSender,
+        retransmit_slots_sender: Sender<Slot>,
         ancestor_duplicate_slots_receiver: AncestorDuplicateSlotsReceiver,
         replay_vote_sender: ReplayVoteSender,
         gossip_duplicate_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
@@ -1152,7 +1151,7 @@ impl ReplayStage {
 
     fn maybe_retransmit_unpropagated_slots(
         metric_name: &'static str,
-        retransmit_slots_sender: &RetransmitSlotsSender,
+        retransmit_slots_sender: &Sender<Slot>,
         progress: &mut ProgressMap,
         latest_leader_slot: Slot,
     ) {
@@ -1192,7 +1191,7 @@ impl ReplayStage {
 
     fn retransmit_latest_unpropagated_leader_slot(
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        retransmit_slots_sender: &RetransmitSlotsSender,
+        retransmit_slots_sender: &Sender<Slot>,
         progress: &mut ProgressMap,
     ) {
         let start_slot = poh_recorder.read().unwrap().start_slot();
@@ -1835,7 +1834,7 @@ impl ReplayStage {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         rpc_subscriptions: &Arc<RpcSubscriptions>,
         progress_map: &mut ProgressMap,
-        retransmit_slots_sender: &RetransmitSlotsSender,
+        retransmit_slots_sender: &Sender<Slot>,
         skipped_slots_info: &mut SkippedSlotsInfo,
         banking_tracer: &Arc<BankingTracer>,
         has_new_vote_been_rooted: bool,
@@ -3835,7 +3834,6 @@ pub(crate) mod tests {
     use {
         super::*,
         crate::{
-            broadcast_stage::RetransmitSlotsReceiver,
             consensus::Tower,
             progress_map::{ValidatorStakeInfo, RETRANSMIT_BASE_DELAY_MS},
             replay_stage::ReplayStage,
@@ -7373,7 +7371,7 @@ pub(crate) mod tests {
         );
     }
 
-    fn receive_slots(retransmit_slots_receiver: &RetransmitSlotsReceiver) -> Vec<Slot> {
+    fn receive_slots(retransmit_slots_receiver: &Receiver<Slot>) -> Vec<Slot> {
         let mut slots = Vec::default();
         while let Ok(slot) = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10)) {
             slots.push(slot);

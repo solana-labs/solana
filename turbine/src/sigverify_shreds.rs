@@ -28,7 +28,7 @@ enum Error {
     SendError,
 }
 
-pub(crate) fn spawn_shred_sigverify(
+pub fn spawn_shred_sigverify(
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,

@@ -6,7 +6,6 @@ use {
         accounts_hash_verifier::{AccountsHashFaultInjector, AccountsHashVerifier},
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         banking_trace::{self, BankingTracer},
-        broadcast_stage::BroadcastStageType,
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
@@ -110,6 +109,7 @@ use {
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
+    solana_turbine::broadcast_stage::BroadcastStageType,
     solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},

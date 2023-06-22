@@ -4,7 +4,6 @@
 use {
     crate::{
         banking_trace::BankingTracer,
-        broadcast_stage::RetransmitSlotsSender,
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
             GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver,
@@ -18,17 +17,15 @@ use {
         ledger_cleanup_service::LedgerCleanupService,
         repair_service::RepairInfo,
         replay_stage::{ReplayStage, ReplayStageConfig},
-        retransmit_stage::RetransmitStage,
         rewards_recorder_service::RewardsRecorderSender,
         shred_fetch_stage::ShredFetchStage,
-        sigverify_shreds,
         tower_storage::TowerStorage,
         validator::ProcessBlockStore,
         voting_service::VotingService,
         warm_quic_cache_service::WarmQuicCacheService,
         window_service::WindowService,
     },
-    crossbeam_channel::{unbounded, Receiver},
+    crossbeam_channel::{unbounded, Receiver, Sender},
     solana_client::connection_cache::ConnectionCache,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::{
@@ -52,6 +49,7 @@ use {
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
     solana_streamer::streamer::StakedNodes,
+    solana_turbine::retransmit_stage::RetransmitStage,
     std::{
         collections::HashSet,
         net::UdpSocket,
@@ -124,7 +122,7 @@ impl Tvu {
         cache_block_meta_sender: Option<CacheBlockMetaSender>,
         entry_notification_sender: Option<EntryNotifierSender>,
         vote_tracker: Arc<VoteTracker>,
-        retransmit_slots_sender: RetransmitSlotsSender,
+        retransmit_slots_sender: Sender<Slot>,
         gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
         verified_vote_receiver: VerifiedVoteReceiver,
         replay_vote_sender: ReplayVoteSender,
@@ -171,7 +169,7 @@ impl Tvu {
 
         let (verified_sender, verified_receiver) = unbounded();
         let (retransmit_sender, retransmit_receiver) = unbounded();
-        let shred_sigverify = sigverify_shreds::spawn_shred_sigverify(
+        let shred_sigverify = solana_turbine::sigverify_shreds::spawn_shred_sigverify(
             cluster_info.clone(),
             bank_forks.clone(),
             leader_schedule_cache.clone(),

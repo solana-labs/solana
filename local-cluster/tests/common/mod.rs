@@ -2,7 +2,6 @@
 use {
     log::*,
     solana_core::{
-        broadcast_stage::BroadcastStageType,
         consensus::{Tower, SWITCH_FORK_THRESHOLD},
         tower_storage::FileTowerStorage,
         validator::ValidatorConfig,
@@ -33,6 +32,7 @@ use {
         signature::{Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_turbine::broadcast_stage::BroadcastStageType,
     std::{
         collections::HashSet,
         fs, iter,

@@ -27,8 +27,6 @@ pub enum Error {
     RecvTimeout(#[from] crossbeam_channel::RecvTimeoutError),
     #[error("Send")]
     Send,
-    #[error(transparent)]
-    TransportError(#[from] solana_sdk::transport::TransportError),
     #[error("TrySend")]
     TrySend,
     #[error(transparent)]
