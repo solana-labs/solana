@@ -8439,7 +8439,7 @@ impl Bank {
         bank_creation_time: &Instant,
         max_tx_ingestion_nanos: u128,
     ) -> bool {
-        // Do this check outside of the poh lock, hence not a method on PohRecorder
+        // Do this check outside of the PoH lock, hence not a method on PohRecorder
         bank_creation_time.elapsed().as_nanos() <= max_tx_ingestion_nanos
     }
 
