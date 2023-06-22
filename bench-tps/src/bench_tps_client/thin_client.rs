@@ -114,5 +114,4 @@ impl BenchTpsClient for ThinClient {
     fn get_slot(&self) -> Result<u64> {
         SyncClient::get_slot(self).map_err(|err| err.into())
     }
-
 }

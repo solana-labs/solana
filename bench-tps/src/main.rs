@@ -3,7 +3,7 @@ use {
     clap::value_t,
     log::*,
     solana_bench_tps::{
-        address_table_lookup::{create_address_lookup_table_account,},
+        address_table_lookup::create_address_lookup_table_account,
         bench::{do_bench_tps, max_lamports_for_prioritization},
         bench_tps_client::BenchTpsClient,
         cli::{self, ExternalClientType},
@@ -350,19 +350,14 @@ fn main() {
         *read_from_client_file,
     );
 
-    // TAO NOTE - keypairs here have been generated and funded. Can use them in ATL extendtion 
+    // TAO NOTE - keypairs here have been generated and funded. Can use them in ATL extendtion
     //            if testing ATL, then
     //              1. CreateATL
     //              2. ExtendATL to num_of_accounts_in_atl, borrow keys funded above
     //              3. return: atl_pubkey, and num_of_accounts_in_atl
     //              4. pass them to do_bench_tps() so each TX going out will have atl in it.
-    let number_of_accounts_in_atl = 64;
-    create_address_lookup_table_account(
-        client.clone(),
-        id,
-        number_of_accounts_in_atl,
-        &keypairs,
-    );
+    let number_of_accounts_in_atl = 72;
+    create_address_lookup_table_account(client.clone(), id, number_of_accounts_in_atl, &keypairs);
     return;
 
     let nonce_keypairs = if *use_durable_nonce {
