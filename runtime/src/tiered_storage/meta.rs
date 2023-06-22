@@ -24,7 +24,7 @@ pub struct AccountMetaFlags {
 
 /// A trait that allows different implementations of the account meta that
 /// support different tiers of the accounts storage.
-pub trait TieredAccountMeta {
+pub trait TieredAccountMeta : Sized {
     /// Constructs a TieredAcountMeta instance.
     fn new() -> Self;
 
@@ -33,22 +33,22 @@ pub trait TieredAccountMeta {
     fn supports_shared_account_block() -> bool;
 
     /// A builder function that initializes lamports.
-    fn with_lamports(&mut self, lamports: u64) -> &mut Self;
+    fn with_lamports(self, lamports: u64) -> Self;
 
     /// A builder function that initializes the number of padding bytes
     /// for the account data associated with the current meta.
-    fn with_account_data_padding(&mut self, padding: u8) -> &mut Self;
+    fn with_account_data_padding(self, padding: u8) -> Self;
 
     /// A builder function that initializes the owner's index.
-    fn with_owner_index(&mut self, index: u32) -> &mut Self;
+    fn with_owner_index(self, index: u32) -> Self;
 
     /// A builder function that initializes the account data size.
     /// The size here represents the logical data size without compression.
-    fn with_data_size(&mut self, data_size: u64) -> &mut Self;
+    fn with_data_size(self, data_size: u64) -> Self;
 
     /// A builder function that initializes the AccountMetaFlags of the current
     /// meta.
-    fn with_flags(&mut self, flags: &AccountMetaFlags) -> &mut Self;
+    fn with_flags(self, flags: &AccountMetaFlags) -> Self;
 
     /// Returns the balance of the lamports associated with the account.
     fn lamports(&self) -> u64;
