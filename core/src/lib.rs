@@ -16,7 +16,6 @@ pub mod banking_trace;
 pub mod cache_block_meta_service;
 pub mod cluster_info_vote_listener;
 pub mod cluster_slot_state_verifier;
-pub mod cluster_slots;
 pub mod cluster_slots_service;
 pub mod commitment_service;
 pub mod completed_data_sets_service;

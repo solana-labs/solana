@@ -1,6 +1,6 @@
 use {
     crate::{
-        cluster_slots::ClusterSlots,
+        cluster_slots_service::cluster_slots::ClusterSlots,
         duplicate_repair_status::{
             AncestorRequestDecision, AncestorRequestStatus, AncestorRequestType,
         },

@@ -1,6 +1,6 @@
 use {
     crate::{
-        cluster_slots::ClusterSlots,
+        cluster_slots_service::cluster_slots::ClusterSlots,
         duplicate_repair_status::get_ancestor_hash_repair_sample_size,
         repair_response,
         repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
