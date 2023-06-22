@@ -14,6 +14,7 @@ use {
         system_monitor_service::SystemMonitorService,
         tower_storage,
         tpu::DEFAULT_TPU_COALESCE,
+        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
         validator::{
             is_snapshot_config_valid, BlockProductionMethod, BlockVerificationMethod, Validator,
             ValidatorConfig, ValidatorStartProgress,
@@ -62,7 +63,7 @@ use {
         admin_rpc_service,
         admin_rpc_service::{load_staked_nodes_overrides, StakedNodesOverrides},
         bootstrap,
-        cli::{app, warn_for_deprecated_arguments, DefaultArgs, UseSnapshotArchivesAtStartup},
+        cli::{app, warn_for_deprecated_arguments, DefaultArgs},
         dashboard::Dashboard,
         ledger_lockfile, lock_ledger, new_spinner_progress_bar, println_name_value,
         redirect_stderr_to_file,

@@ -1,7 +1,6 @@
 use {
     clap::{
-        arg_enum, crate_description, crate_name, App, AppSettings, Arg, ArgGroup, ArgMatches,
-        SubCommand,
+        crate_description, crate_name, App, AppSettings, Arg, ArgGroup, ArgMatches, SubCommand,
     },
     log::warn,
     solana_clap_utils::{
@@ -17,6 +16,7 @@ use {
     },
     solana_core::{
         banking_trace::{DirByteLimit, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT},
+        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
         validator::{BlockProductionMethod, BlockVerificationMethod},
     },
     solana_faucet::faucet::{self, FAUCET_PORT},
@@ -1664,21 +1664,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 )
                 .after_help("Note: At least one arg must be used. Using multiple is ok"),
         );
-}
-
-arg_enum! {
-    /// When should snapshot archives be used at startup?
-    ///
-    /// If snapshot archives are used, they will be extracted and overwrite any existing state
-    /// already on disk.  This will incur the associated runtime costs for extracting.
-    /// If snapshot archive are not used, then the local snapshot state already on disk is
-    /// used instead.  If there is no local state on disk, startup will fail.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum UseSnapshotArchivesAtStartup {
-        Always,
-        Never,
-        //Newer <-- will be added later
-    }
 }
 
 /// Deprecated argument description should be moved into the [`deprecated_arguments()`] function,

@@ -3,7 +3,7 @@ use {
     crate::{args::*, bigtable::*, ledger_path::*, ledger_utils::*, output::*, program::*},
     chrono::{DateTime, Utc},
     clap::{
-        arg_enum, crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
+        crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
         AppSettings, Arg, ArgMatches, SubCommand,
     },
     dashmap::DashMap,
@@ -28,6 +28,7 @@ use {
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
+        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
         validator::BlockVerificationMethod,
     },
     solana_entry::entry::Entry,
@@ -983,21 +984,6 @@ fn get_access_type(process_options: &ProcessOptions) -> AccessType {
         AccessType::PrimaryForMaintenance
     } else {
         AccessType::Secondary
-    }
-}
-
-arg_enum! {
-    /// When should snapshot archives be used at startup?
-    ///
-    /// If snapshot archives are used, they will be extracted and overwrite any existing state
-    /// already on disk.  This will incur the associated runtime costs for extracting.
-    /// If snapshot archive are not used, then the local snapshot state already on disk is
-    /// used instead.  If there is no local state on disk, startup will fail.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum UseSnapshotArchivesAtStartup {
-        Always,
-        Never,
-        //Newer <-- will be added later
     }
 }
 
