@@ -24,7 +24,7 @@ pub struct AccountMetaFlags {
 
 /// A trait that allows different implementations of the account meta that
 /// support different tiers of the accounts storage.
-pub trait TieredAccountMeta : Sized {
+pub trait TieredAccountMeta: Sized {
     /// Constructs a TieredAcountMeta instance.
     fn new() -> Self;
 
