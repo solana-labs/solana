@@ -59,7 +59,7 @@ impl PubkeyValidityProof {
         transcript.pubkey_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the input
-        let s = elgamal_keypair.secret.get_scalar();
+        let s = elgamal_keypair.secret().get_scalar();
 
         assert!(s != &Scalar::zero());
         let s_inv = s.invert();
@@ -152,7 +152,7 @@ mod test {
 
         let proof = PubkeyValidityProof::new(&keypair, &mut prover_transcript);
         assert!(proof
-            .verify(&keypair.public, &mut verifier_transcript)
+            .verify(keypair.pubkey(), &mut verifier_transcript)
             .is_ok());
 
         // derived ElGamal keypair
@@ -164,7 +164,7 @@ mod test {
 
         let proof = PubkeyValidityProof::new(&keypair, &mut prover_transcript);
         assert!(proof
-            .verify(&keypair.public, &mut verifier_transcript)
+            .verify(keypair.pubkey(), &mut verifier_transcript)
             .is_ok());
     }
 }
