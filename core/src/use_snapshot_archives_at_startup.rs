@@ -13,7 +13,6 @@ pub enum UseSnapshotArchivesAtStartup {
     /// If snapshot archive are not used, then the local snapshot state already on disk is
     /// used instead.  If there is no local state on disk, startup will fail.
     Never,
-    //Newer <-- will be added later
 }
 
 impl UseSnapshotArchivesAtStartup {
