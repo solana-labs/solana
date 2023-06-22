@@ -1,26 +1,9 @@
 use crate::zk_token_elgamal::pod::{
-    ElGamalPubkey, GroupedElGamalCiphertext2Handles, GroupedElGamalCiphertext3Handles, Pod, PodU16,
-    PodU64, Zeroable,
+    GroupedElGamalCiphertext2Handles, GroupedElGamalCiphertext3Handles, Pod, PodU16, PodU64,
+    Zeroable,
 };
 #[cfg(not(target_os = "solana"))]
 use crate::{errors::ProofError, instruction::transfer as decoded};
-
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-pub struct TransferPubkeys {
-    pub source_pubkey: ElGamalPubkey,
-    pub destination_pubkey: ElGamalPubkey,
-    pub auditor_pubkey: ElGamalPubkey,
-}
-
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-pub struct TransferWithFeePubkeys {
-    pub source_pubkey: ElGamalPubkey,
-    pub destination_pubkey: ElGamalPubkey,
-    pub auditor_pubkey: ElGamalPubkey,
-    pub withdraw_withheld_authority_pubkey: ElGamalPubkey,
-}
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
