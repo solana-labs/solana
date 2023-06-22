@@ -1170,14 +1170,12 @@ fn main() {
         .multiple(true)
         .takes_value(true)
         .help("Log when transactions are processed that reference the given key(s).");
-    let default_use_snapshot_archives_at_startup = UseSnapshotArchivesAtStartup::Always.to_string();
     let use_snapshot_archives_at_startup = Arg::with_name("use_snapshot_archives_at_startup")
         .long("use-snapshot-archives-at-startup")
-        .takes_value(true)
-        .possible_values(&UseSnapshotArchivesAtStartup::variants())
-        .default_value(&default_use_snapshot_archives_at_startup)
-        .case_insensitive(true)
         .hidden(hidden_unless_forced())
+        .takes_value(true)
+        .possible_values(UseSnapshotArchivesAtStartup::variants())
+        .default_value(UseSnapshotArchivesAtStartup::default().into())
         .help("When should snapshot archives be used at startup?")
         .long_help(
             "At startup, when should snapshot archives be extracted \

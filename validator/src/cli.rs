@@ -295,11 +295,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("use_snapshot_archives_at_startup")
                 .long("use-snapshot-archives-at-startup")
-                .takes_value(true)
-                .possible_values(&UseSnapshotArchivesAtStartup::variants())
-                .default_value(&default_args.use_snapshot_archives_at_startup)
-                .case_insensitive(true)
                 .hidden(hidden_unless_forced())
+                .takes_value(true)
+                .possible_values(UseSnapshotArchivesAtStartup::variants())
+                .default_value(UseSnapshotArchivesAtStartup::default().into())
                 .help("When should snapshot archives be used at startup?")
                 .long_help(
                     "At startup, when should snapshot archives be extracted \
