@@ -95,6 +95,7 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
             self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
+            SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
         },
     },
     solana_sdk::{
@@ -2267,13 +2268,14 @@ pub fn is_snapshot_config_valid(
     let incremental_snapshot_interval_slots =
         snapshot_config.incremental_snapshot_archive_interval_slots;
 
-    let is_incremental_config_valid = if incremental_snapshot_interval_slots == Slot::MAX {
-        true
-    } else {
-        incremental_snapshot_interval_slots >= accounts_hash_interval_slots
-            && incremental_snapshot_interval_slots % accounts_hash_interval_slots == 0
-            && full_snapshot_interval_slots > incremental_snapshot_interval_slots
-    };
+    let is_incremental_config_valid =
+        if incremental_snapshot_interval_slots == SNAPSHOT_ARCHIVE_DISABLED_INTERVAL {
+            true
+        } else {
+            incremental_snapshot_interval_slots >= accounts_hash_interval_slots
+                && incremental_snapshot_interval_slots % accounts_hash_interval_slots == 0
+                && full_snapshot_interval_slots > incremental_snapshot_interval_slots
+        };
 
     full_snapshot_interval_slots >= accounts_hash_interval_slots
         && full_snapshot_interval_slots % accounts_hash_interval_slots == 0
@@ -2562,19 +2564,22 @@ mod tests {
         assert!(is_snapshot_config_valid(
             &new_snapshot_config(
                 snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-                Slot::MAX
+                SNAPSHOT_ARCHIVE_DISABLED_INTERVAL
             ),
             default_accounts_hash_interval
         ));
         assert!(is_snapshot_config_valid(
             &new_snapshot_config(
                 snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-                Slot::MAX
+                SNAPSHOT_ARCHIVE_DISABLED_INTERVAL
             ),
             default_accounts_hash_interval
         ));
         assert!(is_snapshot_config_valid(
-            &new_snapshot_config(Slot::MAX, Slot::MAX),
+            &new_snapshot_config(
+                SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
+                SNAPSHOT_ARCHIVE_DISABLED_INTERVAL
+            ),
             Slot::MAX
         ));
 
@@ -2619,8 +2624,8 @@ mod tests {
         ));
         assert!(is_snapshot_config_valid(
             &SnapshotConfig {
-                full_snapshot_archive_interval_slots: Slot::MAX,
-                incremental_snapshot_archive_interval_slots: Slot::MAX,
+                full_snapshot_archive_interval_slots: SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
+                incremental_snapshot_archive_interval_slots: SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
                 ..SnapshotConfig::new_load_only()
             },
             100
