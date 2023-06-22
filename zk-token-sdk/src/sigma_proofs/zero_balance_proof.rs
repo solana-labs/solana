@@ -63,8 +63,8 @@ impl ZeroBalanceProof {
         transcript.zero_balance_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the input
-        let P = elgamal_keypair.public.get_point();
-        let s = elgamal_keypair.secret.get_scalar();
+        let P = elgamal_keypair.pubkey().get_point();
+        let s = elgamal_keypair.secret().get_scalar();
         let D = ciphertext.handle.get_point();
 
         // generate a random masking factor that also serves as a nonce
@@ -178,7 +178,7 @@ mod test {
     use {
         super::*,
         crate::encryption::{
-            elgamal::{DecryptHandle, ElGamalKeypair, ElGamalSecretKey},
+            elgamal::{DecryptHandle, ElGamalKeypair},
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
     };
@@ -191,24 +191,24 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"test");
 
         // general case: encryption of 0
-        let elgamal_ciphertext = source_keypair.public.encrypt(0_u64);
+        let elgamal_ciphertext = source_keypair.pubkey().encrypt(0_u64);
         let proof =
             ZeroBalanceProof::new(&source_keypair, &elgamal_ciphertext, &mut prover_transcript);
         assert!(proof
             .verify(
-                &source_keypair.public,
+                source_keypair.pubkey(),
                 &elgamal_ciphertext,
                 &mut verifier_transcript
             )
             .is_ok());
 
         // general case: encryption of > 0
-        let elgamal_ciphertext = source_keypair.public.encrypt(1_u64);
+        let elgamal_ciphertext = source_keypair.pubkey().encrypt(1_u64);
         let proof =
             ZeroBalanceProof::new(&source_keypair, &elgamal_ciphertext, &mut prover_transcript);
         assert!(proof
             .verify(
-                &source_keypair.public,
+                source_keypair.pubkey(),
                 &elgamal_ciphertext,
                 &mut verifier_transcript
             )
@@ -229,7 +229,7 @@ mod test {
 
         assert!(proof
             .verify(
-                &source_keypair.public,
+                source_keypair.pubkey(),
                 &ciphertext,
                 &mut verifier_transcript
             )
@@ -242,7 +242,7 @@ mod test {
 
         let zeroed_commitment = PedersenCommitment::from_bytes(&[0u8; 32]).unwrap();
         let handle = source_keypair
-            .public
+            .pubkey()
             .decrypt_handle(&PedersenOpening::new_rand());
 
         let ciphertext = ElGamalCiphertext {
@@ -254,7 +254,7 @@ mod test {
 
         assert!(proof
             .verify(
-                &source_keypair.public,
+                source_keypair.pubkey(),
                 &ciphertext,
                 &mut verifier_transcript
             )
@@ -273,7 +273,7 @@ mod test {
 
         assert!(proof
             .verify(
-                &source_keypair.public,
+                source_keypair.pubkey(),
                 &ciphertext,
                 &mut verifier_transcript
             )
@@ -284,17 +284,13 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"test");
 
         let public = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
-        let secret = ElGamalSecretKey::new_rand();
-
-        let elgamal_keypair = ElGamalKeypair { public, secret };
-
-        let ciphertext = elgamal_keypair.public.encrypt(0_u64);
+        let ciphertext = public.encrypt(0_u64);
 
         let proof = ZeroBalanceProof::new(&source_keypair, &ciphertext, &mut prover_transcript);
 
         assert!(proof
             .verify(
-                &source_keypair.public,
+                source_keypair.pubkey(),
                 &ciphertext,
                 &mut verifier_transcript
             )

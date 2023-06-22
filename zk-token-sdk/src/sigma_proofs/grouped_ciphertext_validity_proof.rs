@@ -234,8 +234,11 @@ mod test {
 
     #[test]
     fn test_grouped_ciphertext_validity_proof_correctness() {
-        let destination_pubkey = ElGamalKeypair::new_rand().public;
-        let auditor_pubkey = ElGamalKeypair::new_rand().public;
+        let destination_keypair = ElGamalKeypair::new_rand();
+        let destination_pubkey = destination_keypair.pubkey();
+
+        let auditor_keypair = ElGamalKeypair::new_rand();
+        let auditor_pubkey = auditor_keypair.pubkey();
 
         let amount: u64 = 55;
         let (commitment, opening) = Pedersen::new(amount);
@@ -247,7 +250,7 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = GroupedCiphertext2HandlesValidityProof::new(
-            (&destination_pubkey, &auditor_pubkey),
+            (destination_pubkey, auditor_pubkey),
             amount,
             &opening,
             &mut prover_transcript,
@@ -256,7 +259,7 @@ mod test {
         assert!(proof
             .verify(
                 &commitment,
-                (&destination_pubkey, &auditor_pubkey),
+                (destination_pubkey, auditor_pubkey),
                 (&destination_handle, &auditor_handle),
                 &mut verifier_transcript,
             )
@@ -267,7 +270,9 @@ mod test {
     fn test_grouped_ciphertext_validity_proof_edge_cases() {
         // if destination public key zeroed, then the proof should always reject
         let destination_pubkey = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
-        let auditor_pubkey = ElGamalKeypair::new_rand().public;
+
+        let auditor_keypair = ElGamalKeypair::new_rand();
+        let auditor_pubkey = auditor_keypair.pubkey();
 
         let amount: u64 = 55;
         let (commitment, opening) = Pedersen::new(amount);
@@ -279,7 +284,7 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = GroupedCiphertext2HandlesValidityProof::new(
-            (&destination_pubkey, &auditor_pubkey),
+            (&destination_pubkey, auditor_pubkey),
             amount,
             &opening,
             &mut prover_transcript,
@@ -288,14 +293,16 @@ mod test {
         assert!(proof
             .verify(
                 &commitment,
-                (&destination_pubkey, &auditor_pubkey),
+                (&destination_pubkey, auditor_pubkey),
                 (&destination_handle, &auditor_handle),
                 &mut verifier_transcript,
             )
             .is_err());
 
         // if auditor public key zeroed, then the proof should always reject
-        let destination_pubkey = ElGamalKeypair::new_rand().public;
+        let destination_keypair = ElGamalKeypair::new_rand();
+        let destination_pubkey = destination_keypair.pubkey();
+
         let auditor_pubkey = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
 
         let amount: u64 = 55;
@@ -308,7 +315,7 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = GroupedCiphertext2HandlesValidityProof::new(
-            (&destination_pubkey, &auditor_pubkey),
+            (destination_pubkey, &auditor_pubkey),
             amount,
             &opening,
             &mut prover_transcript,
@@ -317,15 +324,18 @@ mod test {
         assert!(proof
             .verify(
                 &commitment,
-                (&destination_pubkey, &auditor_pubkey),
+                (destination_pubkey, &auditor_pubkey),
                 (&destination_handle, &auditor_handle),
                 &mut verifier_transcript,
             )
             .is_err());
 
         // all zeroed ciphertext should still be valid
-        let destination_pubkey = ElGamalKeypair::new_rand().public;
-        let auditor_pubkey = ElGamalKeypair::new_rand().public;
+        let destination_keypair = ElGamalKeypair::new_rand();
+        let destination_pubkey = destination_keypair.pubkey();
+
+        let auditor_keypair = ElGamalKeypair::new_rand();
+        let auditor_pubkey = auditor_keypair.pubkey();
 
         let amount: u64 = 0;
         let commitment = PedersenCommitment::from_bytes(&[0u8; 32]).unwrap();
@@ -338,7 +348,7 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = GroupedCiphertext2HandlesValidityProof::new(
-            (&destination_pubkey, &auditor_pubkey),
+            (destination_pubkey, auditor_pubkey),
             amount,
             &opening,
             &mut prover_transcript,
@@ -347,15 +357,18 @@ mod test {
         assert!(proof
             .verify(
                 &commitment,
-                (&destination_pubkey, &auditor_pubkey),
+                (destination_pubkey, auditor_pubkey),
                 (&destination_handle, &auditor_handle),
                 &mut verifier_transcript,
             )
             .is_ok());
 
         // decryption handles can be zero as long as the Pedersen commitment is valid
-        let destination_pubkey = ElGamalKeypair::new_rand().public;
-        let auditor_pubkey = ElGamalKeypair::new_rand().public;
+        let destination_keypair = ElGamalKeypair::new_rand();
+        let destination_pubkey = destination_keypair.pubkey();
+
+        let auditor_keypair = ElGamalKeypair::new_rand();
+        let auditor_pubkey = auditor_keypair.pubkey();
 
         let amount: u64 = 55;
         let (commitment, opening) = Pedersen::new(amount);
@@ -367,7 +380,7 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = GroupedCiphertext2HandlesValidityProof::new(
-            (&destination_pubkey, &auditor_pubkey),
+            (destination_pubkey, auditor_pubkey),
             amount,
             &opening,
             &mut prover_transcript,
@@ -376,7 +389,7 @@ mod test {
         assert!(proof
             .verify(
                 &commitment,
-                (&destination_pubkey, &auditor_pubkey),
+                (destination_pubkey, auditor_pubkey),
                 (&destination_handle, &auditor_handle),
                 &mut verifier_transcript,
             )

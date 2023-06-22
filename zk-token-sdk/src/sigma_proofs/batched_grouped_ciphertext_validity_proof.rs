@@ -117,8 +117,11 @@ mod test {
 
     #[test]
     fn test_batched_grouped_ciphertext_validity_proof() {
-        let destination_pubkey = ElGamalKeypair::new_rand().public;
-        let auditor_pubkey = ElGamalKeypair::new_rand().public;
+        let destination_keypair = ElGamalKeypair::new_rand();
+        let destination_pubkey = destination_keypair.pubkey();
+
+        let auditor_keypair = ElGamalKeypair::new_rand();
+        let auditor_pubkey = auditor_keypair.pubkey();
 
         let amount_lo: u64 = 55;
         let amount_hi: u64 = 77;
@@ -136,7 +139,7 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = BatchedGroupedCiphertext2HandlesValidityProof::new(
-            (&destination_pubkey, &auditor_pubkey),
+            (destination_pubkey, auditor_pubkey),
             (amount_lo, amount_hi),
             (&open_lo, &open_hi),
             &mut prover_transcript,
@@ -144,7 +147,7 @@ mod test {
 
         assert!(proof
             .verify(
-                (&destination_pubkey, &auditor_pubkey),
+                (destination_pubkey, auditor_pubkey),
                 (&commitment_lo, &commitment_hi),
                 (&destination_handle_lo, &destination_handle_hi),
                 (&auditor_handle_lo, &auditor_handle_hi),

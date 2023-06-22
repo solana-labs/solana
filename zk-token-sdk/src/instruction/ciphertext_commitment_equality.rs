@@ -62,7 +62,7 @@ impl CiphertextCommitmentEqualityProofData {
         amount: u64,
     ) -> Result<Self, ProofError> {
         let context = CiphertextCommitmentEqualityProofContext {
-            pubkey: pod::ElGamalPubkey(keypair.public.to_bytes()),
+            pubkey: pod::ElGamalPubkey(keypair.pubkey().to_bytes()),
             ciphertext: pod::ElGamalCiphertext(ciphertext.to_bytes()),
             commitment: pod::PedersenCommitment(commitment.to_bytes()),
         };
@@ -128,7 +128,7 @@ mod test {
     fn test_ctxt_comm_equality_proof_correctness() {
         let keypair = ElGamalKeypair::new_rand();
         let amount: u64 = 55;
-        let ciphertext = keypair.public.encrypt(amount);
+        let ciphertext = keypair.pubkey().encrypt(amount);
         let (commitment, opening) = Pedersen::new(amount);
 
         let proof_data = CiphertextCommitmentEqualityProofData::new(
