@@ -2,7 +2,7 @@ use strum::{Display, EnumString, EnumVariantNames, IntoStaticStr, VariantNames};
 
 /// When should snapshot archives be used at startup?
 #[derive(
-    Debug, Display, Default, Clone, Copy, PartialEq, Eq, EnumVariantNames, EnumString, IntoStaticStr,
+    Debug, Default, Clone, Copy, PartialEq, Eq, Display, EnumString, EnumVariantNames, IntoStaticStr,
 )]
 #[strum(serialize_all = "kebab-case")]
 pub enum UseSnapshotArchivesAtStartup {
