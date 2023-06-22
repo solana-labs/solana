@@ -1199,7 +1199,7 @@ fn main() {
             Specifying \"always\" will always startup by extracting snapshot archives \
             and disregard any snapshot-related state already on disk. \
             Note that starting up from snapshot archives will incur the runtime costs \
-            assocaited with extracting the archives and rebuilding the local state. \
+            associated with extracting the archives and rebuilding the local state. \
             Specifying \"never\" will never startup from snapshot archives \
             and will only use snapshot-related state already on disk. \
             If there is no state already on disk, startup will fail. \
