@@ -6,17 +6,25 @@ use {
     modular_bitfield::prelude::*,
 };
 
+/// The maximum number of padding bytes used in a hot account entry.
+const MAX_HOT_PADDING: u8 = 7;
+
 /// The maximum allowed value for the owner index of a hot account.
 const MAX_HOT_OWNER_INDEX: u32 = (1 << 29) - 1;
-/// The maximum allowed value for the number of padding bytes of
-/// a hot account data.
-const MAX_HOT_PADDING: u8 = 7;
 
 #[bitfield(bits = 32)]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
 struct HotMetaPackedFields {
-    /// The number of padding bytes after its hot account entry.
+    /// A hot account entry consists of the following elements:
+    ///
+    /// * HotAccountMeta
+    /// * [u8] account data
+    /// * 0-7 bytes padding
+    /// * optional fields
+    ///
+    /// The following field records the number of padding bytes used
+    /// in its hot account entry.
     padding: B3,
     /// The index to the owner of a hot account inside an AccountsFile.
     owner_index: B29,
@@ -46,7 +54,7 @@ impl TieredAccountMeta for HotAccountMeta {
     }
 
     /// Always returns false as HotAccountMeta does not support multiple
-    /// meta entries sharing the same byte block.
+    /// meta entries sharing the same account block.
     fn supports_shared_account_block() -> bool {
         false
     }
@@ -96,7 +104,7 @@ impl TieredAccountMeta for HotAccountMeta {
         self.packed_fields.padding()
     }
 
-    /// Always return None as a HotAccountMeta entry never shares its byte
+    /// Always return None as a HotAccountMeta entry never shares its account
     /// block with other account meta entries.
     fn data_size_for_shared_block(&self) -> Option<usize> {
         None
