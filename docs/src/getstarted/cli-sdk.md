@@ -112,7 +112,7 @@ transfers SOL from one account to another.
 
 ### Prerequisites
 
-Make sure you have [NodeJs](https://nodejs.org/en/) installed. You can check
+Make sure you have [Node.js](https://nodejs.org/en/) installed. You can check
 this by running `node -v` in your terminal. You should see a version number
 printed out.
 
@@ -122,8 +122,8 @@ Start by creating a node project and installing the Solana SDK. Run this in your
 terminal:
 
 ```bash
-mkdir solana-tx
-cd solana-tx
+mkdir send-sol
+cd send-sol
 npm init -y
 npm install @solana/web3.js
 ```
@@ -139,10 +139,10 @@ const fs = require("fs");
 const path = require("path");
 
 const CLUSTER = "http://127.0.0.1:8899";
-const RECIPIENT_ADDRESS = "9B5XszUGdMaxCZ7uSQhPzdks5ZQSmWxrmzCSvtJ6Ns6g";
-
 const connection = new web3.Connection(CLUSTER, "confirmed");
-const recipient = new web3.PublicKey(RECIPIENT_ADDRESS);
+const recipient = new web3.PublicKey(
+  "9B5XszUGdMaxCZ7uSQhPzdks5ZQSmWxrmzCSvtJ6Ns6g",
+);
 ```
 
 This code imports the Solana SDK and creates a connection to the local Solana
@@ -159,11 +159,12 @@ quickstart. Add this code below the previous block:
 ```js
 // Import the existing keypair from the file system wallet
 const keypairPath = path.join(os.homedir(), ".config", "solana", "id.json");
-let secretKey, keypair;
+let keypair;
 
 try {
-  secretKey = JSON.parse(fs.readFileSync(keypairPath, "utf-8"));
-  keypair = web3.Keypair.fromSecretKey(Buffer.from(secretKey));
+  keypair = web3.Keypair.fromSecretKey(
+    Buffer.from(JSON.parse(fs.readFileSync(keypairPath, "utf-8"))),
+  );
 } catch (err) {
   console.error("Error while loading the keypair:", err);
   process.exit(1);
@@ -178,17 +179,16 @@ Finally, we'll use the built in transfer function to send 0.05 SOL to the
 recipient address.
 
 ```js
-async function transferSol() {
+async function transferSol(connection, payer, recipient) {
   console.log("Transferring 0.05 SOL...");
 
   // Create a transaction and add a system instruction to transfer SOL
   const transaction = new web3.Transaction().add(
     // This system instruction takes the sender's address, the recipient's address, and the amount to transfer
     web3.SystemProgram.transfer({
-      fromPubkey: keypair.publicKey,
+      fromPubkey: payer.publicKey,
       toPubkey: recipient,
-      // The amount of SOL must be in Lamports, the smallest unit of SOL
-      lamports: web3.LAMPORTS_PER_SOL * 0.05,
+      lamports: web3.LAMPORTS_PER_SOL * 0.005, // The amount of SOL must be in Lamports, the smallest unit of SOL
     }),
   );
 
@@ -197,17 +197,21 @@ async function transferSol() {
     const signature = await web3.sendAndConfirmTransaction(
       connection,
       transaction,
-      [keypair],
+      [payer],
+    );
+    console.log(
+      "View this transaction at:",
+      `https://explorer.solana.com/tx/${signature}?cluster=custom`,
     );
 
-    const newBalance = await connection.getBalance(keypair.publicKey);
+    const newBalance = await connection.getBalance(payer.publicKey);
     console.log("New balance is", newBalance / web3.LAMPORTS_PER_SOL);
   } catch (err) {
     console.error("Error while transferring:", err);
   }
 }
 
-transferSol().catch(console.error);
+transferSol(connection, keypair, recipient).catch(console.error);
 ```
 
 This code creates a transaction with one instruction that transfers 0.05 SOL
@@ -256,6 +260,9 @@ Run the script again:
 ```bash
 node main.js
 ```
+
+You've now sent SOL on the devnet! Make sure you change the cluster on the
+explorer to devnet to see the transaction.
 
 ## Next steps
 
