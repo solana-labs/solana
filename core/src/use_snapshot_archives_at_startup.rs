@@ -16,6 +16,20 @@ pub enum UseSnapshotArchivesAtStartup {
 }
 
 impl UseSnapshotArchivesAtStartup {
+    pub const fn variants() -> &'static [&'static str] {
+        Self::VARIANTS
+    }
+}
+
+pub mod cli {
+    use super::*;
+
+    pub const fn name() -> &'static str {
+        "use_snapshot_archives_at_startup"
+    }
+    pub const fn long_name() -> &'static str {
+        "use-snapshot-archives-at-startup"
+    }
     pub const fn help() -> &'static str {
         "When should snapshot archives be used at startup?"
     }
@@ -32,7 +46,10 @@ impl UseSnapshotArchivesAtStartup {
         Note, this will use the latest state available, \
         which may be newer than the latest snapshot archive."
     }
-    pub const fn variants() -> &'static [&'static str] {
-        Self::VARIANTS
+    pub const fn possible_values() -> &'static [&'static str] {
+        UseSnapshotArchivesAtStartup::VARIANTS
+    }
+    pub fn default_value() -> &'static str {
+        UseSnapshotArchivesAtStartup::default().into()
     }
 }

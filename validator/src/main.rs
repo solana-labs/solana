@@ -14,7 +14,7 @@ use {
         system_monitor_service::SystemMonitorService,
         tower_storage,
         tpu::DEFAULT_TPU_COALESCE,
-        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
+        use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
         validator::{
             is_snapshot_config_valid, BlockProductionMethod, BlockVerificationMethod, Validator,
             ValidatorConfig, ValidatorStartProgress,
@@ -1377,7 +1377,7 @@ pub fn main() {
         replay_slots_concurrently: matches.is_present("replay_slots_concurrently"),
         boot_from_local_state: value_t_or_exit!(
             matches,
-            "use_snapshot_archives_at_startup",
+            use_snapshot_archives_at_startup::cli::name(),
             UseSnapshotArchivesAtStartup
         ) == UseSnapshotArchivesAtStartup::Never,
         ..ValidatorConfig::default()

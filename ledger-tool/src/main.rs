@@ -28,7 +28,7 @@ use {
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
-        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
+        use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
         validator::BlockVerificationMethod,
     },
     solana_entry::entry::Entry,
@@ -1170,14 +1170,15 @@ fn main() {
         .multiple(true)
         .takes_value(true)
         .help("Log when transactions are processed that reference the given key(s).");
-    let use_snapshot_archives_at_startup = Arg::with_name("use_snapshot_archives_at_startup")
-        .long("use-snapshot-archives-at-startup")
-        .hidden(hidden_unless_forced())
-        .takes_value(true)
-        .possible_values(UseSnapshotArchivesAtStartup::variants())
-        .default_value(UseSnapshotArchivesAtStartup::default().into())
-        .help(UseSnapshotArchivesAtStartup::help())
-        .long_help(UseSnapshotArchivesAtStartup::long_help());
+    let use_snapshot_archives_at_startup =
+        Arg::with_name(use_snapshot_archives_at_startup::cli::name())
+            .long(use_snapshot_archives_at_startup::cli::long_name())
+            .hidden(hidden_unless_forced())
+            .takes_value(true)
+            .possible_values(use_snapshot_archives_at_startup::cli::possible_values())
+            .default_value(use_snapshot_archives_at_startup::cli::default_value())
+            .help(use_snapshot_archives_at_startup::cli::help())
+            .long_help(use_snapshot_archives_at_startup::cli::long_help());
 
     let default_max_full_snapshot_archives_to_retain =
         &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
@@ -2514,7 +2515,7 @@ fn main() {
 
                 let boot_from_local_state = value_t_or_exit!(
                     arg_matches,
-                    "use_snapshot_archives_at_startup",
+                    use_snapshot_archives_at_startup::cli::name(),
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
@@ -2584,7 +2585,7 @@ fn main() {
 
                 let boot_from_local_state = value_t_or_exit!(
                     arg_matches,
-                    "use_snapshot_archives_at_startup",
+                    use_snapshot_archives_at_startup::cli::name(),
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
@@ -2716,7 +2717,7 @@ fn main() {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let boot_from_local_state = value_t_or_exit!(
                     arg_matches,
-                    "use_snapshot_archives_at_startup",
+                    use_snapshot_archives_at_startup::cli::name(),
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
                 let mut process_options = ProcessOptions {
@@ -3134,7 +3135,7 @@ fn main() {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
                 let boot_from_local_state = value_t_or_exit!(
                     arg_matches,
-                    "use_snapshot_archives_at_startup",
+                    use_snapshot_archives_at_startup::cli::name(),
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
@@ -3230,7 +3231,7 @@ fn main() {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
                 let boot_from_local_state = value_t_or_exit!(
                     arg_matches,
-                    "use_snapshot_archives_at_startup",
+                    use_snapshot_archives_at_startup::cli::name(),
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
