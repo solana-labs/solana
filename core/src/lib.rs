@@ -70,7 +70,6 @@ pub mod tracer_packet_stats;
 pub mod tree_diff;
 pub mod tvu;
 pub mod unfrozen_gossip_verified_vote_hashes;
-pub mod use_snapshot_archives_at_startup;
 pub mod validator;
 pub mod verified_vote_packets;
 pub mod vote_simulator;

@@ -28,7 +28,6 @@ use {
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
-        use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
         validator::BlockVerificationMethod,
     },
     solana_entry::entry::Entry,
@@ -42,6 +41,7 @@ use {
         },
         blockstore_processor::ProcessOptions,
         shred::Shred,
+        use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
