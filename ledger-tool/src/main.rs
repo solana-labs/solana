@@ -1176,23 +1176,8 @@ fn main() {
         .takes_value(true)
         .possible_values(UseSnapshotArchivesAtStartup::variants())
         .default_value(UseSnapshotArchivesAtStartup::default().into())
-        .help("When should snapshot archives be used at startup?")
-        .long_help(
-            "At startup, when should snapshot archives be extracted \
-            versus using what is already on disk? \
-            Specifying \"always\" will always startup by extracting snapshot archives \
-            and disregard any snapshot-related state already on disk. \
-            Note that starting up from snapshot archives will incur the runtime costs \
-            associated with extracting the archives and rebuilding the local state. \
-            Specifying \"never\" will never startup from snapshot archives \
-            and will only use snapshot-related state already on disk. \
-            If there is no state already on disk, startup will fail. \
-            This requires primary access, so another instance of \
-            solana-ledger-tool or solana-validator cannot \
-            simultaneously use the same ledger/accounts. \
-            Note, this will use the latest state available, \
-            which may be newer than the latest snapshot archive.",
-        );
+        .help(UseSnapshotArchivesAtStartup::help())
+        .long_help(UseSnapshotArchivesAtStartup::long_help());
 
     let default_max_full_snapshot_archives_to_retain =
         &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();

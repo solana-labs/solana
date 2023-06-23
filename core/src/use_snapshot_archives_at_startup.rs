@@ -16,6 +16,22 @@ pub enum UseSnapshotArchivesAtStartup {
 }
 
 impl UseSnapshotArchivesAtStartup {
+    pub const fn help() -> &'static str {
+        "When should snapshot archives be used at startup?"
+    }
+    pub const fn long_help() -> &'static str {
+        "At startup, when should snapshot archives be extracted \
+        versus using what is already on disk? \
+        \nSpecifying \"always\" will always startup by extracting snapshot archives \
+        and disregard any snapshot-related state already on disk. \
+        Note that starting up from snapshot archives will incur the runtime costs \
+        associated with extracting the archives and rebuilding the local state. \
+        \nSpecifying \"never\" will never startup from snapshot archives \
+        and will only use snapshot-related state already on disk. \
+        If there is no state already on disk, startup will fail. \
+        Note, this will use the latest state available, \
+        which may be newer than the latest snapshot archive."
+    }
     pub const fn variants() -> &'static [&'static str] {
         Self::VARIANTS
     }
