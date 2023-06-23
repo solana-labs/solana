@@ -1380,7 +1380,7 @@ pub fn main() {
         replay_slots_concurrently: matches.is_present("replay_slots_concurrently"),
         boot_from_local_state: value_t_or_exit!(
             matches,
-            use_snapshot_archives_at_startup::cli::name(),
+            use_snapshot_archives_at_startup::cli::NAME,
             UseSnapshotArchivesAtStartup
         ) == UseSnapshotArchivesAtStartup::Never,
         ..ValidatorConfig::default()

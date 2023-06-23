@@ -1171,14 +1171,14 @@ fn main() {
         .takes_value(true)
         .help("Log when transactions are processed that reference the given key(s).");
     let use_snapshot_archives_at_startup =
-        Arg::with_name(use_snapshot_archives_at_startup::cli::name())
-            .long(use_snapshot_archives_at_startup::cli::long_name())
+        Arg::with_name(use_snapshot_archives_at_startup::cli::NAME)
+            .long(use_snapshot_archives_at_startup::cli::LONG_ARG)
             .hidden(hidden_unless_forced())
             .takes_value(true)
-            .possible_values(use_snapshot_archives_at_startup::cli::possible_values())
+            .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
             .default_value(use_snapshot_archives_at_startup::cli::default_value())
-            .help(use_snapshot_archives_at_startup::cli::help())
-            .long_help(use_snapshot_archives_at_startup::cli::long_help());
+            .help(use_snapshot_archives_at_startup::cli::HELP)
+            .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP);
 
     let default_max_full_snapshot_archives_to_retain =
         &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
@@ -2515,7 +2515,7 @@ fn main() {
 
                 let boot_from_local_state = value_t_or_exit!(
                     arg_matches,
-                    use_snapshot_archives_at_startup::cli::name(),
+                    use_snapshot_archives_at_startup::cli::NAME,
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
@@ -2585,7 +2585,7 @@ fn main() {
 
                 let boot_from_local_state = value_t_or_exit!(
                     arg_matches,
-                    use_snapshot_archives_at_startup::cli::name(),
+                    use_snapshot_archives_at_startup::cli::NAME,
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
@@ -2717,7 +2717,7 @@ fn main() {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let boot_from_local_state = value_t_or_exit!(
                     arg_matches,
-                    use_snapshot_archives_at_startup::cli::name(),
+                    use_snapshot_archives_at_startup::cli::NAME,
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
                 let mut process_options = ProcessOptions {
@@ -3135,7 +3135,7 @@ fn main() {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
                 let boot_from_local_state = value_t_or_exit!(
                     arg_matches,
-                    use_snapshot_archives_at_startup::cli::name(),
+                    use_snapshot_archives_at_startup::cli::NAME,
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
@@ -3231,7 +3231,7 @@ fn main() {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
                 let boot_from_local_state = value_t_or_exit!(
                     arg_matches,
-                    use_snapshot_archives_at_startup::cli::name(),
+                    use_snapshot_archives_at_startup::cli::NAME,
                     UseSnapshotArchivesAtStartup
                 ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {

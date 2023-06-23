@@ -18,17 +18,10 @@ pub enum UseSnapshotArchivesAtStartup {
 pub mod cli {
     use super::*;
 
-    pub const fn name() -> &'static str {
-        "use_snapshot_archives_at_startup"
-    }
-    pub const fn long_name() -> &'static str {
-        "use-snapshot-archives-at-startup"
-    }
-    pub const fn help() -> &'static str {
-        "When should snapshot archives be used at startup?"
-    }
-    pub const fn long_help() -> &'static str {
-        "At startup, when should snapshot archives be extracted \
+    pub const NAME: &str = "use_snapshot_archives_at_startup";
+    pub const LONG_ARG: &str = "use-snapshot-archives-at-startup";
+    pub const HELP: &str = "When should snapshot archives be used at startup?";
+    pub const LONG_HELP: &str = "At startup, when should snapshot archives be extracted \
         versus using what is already on disk? \
         \nSpecifying \"always\" will always startup by extracting snapshot archives \
         and disregard any snapshot-related state already on disk. \
@@ -38,11 +31,10 @@ pub mod cli {
         and will only use snapshot-related state already on disk. \
         If there is no state already on disk, startup will fail. \
         Note, this will use the latest state available, \
-        which may be newer than the latest snapshot archive."
-    }
-    pub const fn possible_values() -> &'static [&'static str] {
-        UseSnapshotArchivesAtStartup::VARIANTS
-    }
+        which may be newer than the latest snapshot archive.";
+
+    pub const POSSIBLE_VALUES: &[&str] = UseSnapshotArchivesAtStartup::VARIANTS;
+
     pub fn default_value() -> &'static str {
         UseSnapshotArchivesAtStartup::default().into()
     }

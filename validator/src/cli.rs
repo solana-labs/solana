@@ -293,14 +293,14 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Use DIR as snapshot location [default: --ledger value]"),
         )
         .arg(
-            Arg::with_name(use_snapshot_archives_at_startup::cli::name())
-                .long(use_snapshot_archives_at_startup::cli::long_name())
+            Arg::with_name(use_snapshot_archives_at_startup::cli::NAME)
+                .long(use_snapshot_archives_at_startup::cli::LONG_ARG)
                 .hidden(hidden_unless_forced())
                 .takes_value(true)
-                .possible_values(use_snapshot_archives_at_startup::cli::possible_values())
+                .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
                 .default_value(use_snapshot_archives_at_startup::cli::default_value())
-                .help(use_snapshot_archives_at_startup::cli::help())
-                .long_help(use_snapshot_archives_at_startup::cli::long_help())
+                .help(use_snapshot_archives_at_startup::cli::HELP)
+                .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP)
         )
         .arg(
             Arg::with_name("incremental_snapshot_archive_path")
