@@ -64,7 +64,7 @@ where
             return Err(InstructionError::InvalidAccountData);
         }
 
-        proof_context_account.set_data(context_state_data)?;
+        proof_context_account.set_data_from_slice(&context_state_data)?;
     }
 
     Ok(())
