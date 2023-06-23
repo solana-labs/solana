@@ -20,8 +20,12 @@ use {
         },
     },
     solana_gossip::{cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo},
-    solana_ledger::blockstore_options::{
-        BlockstoreCompressionType, BlockstoreRecoveryMode, LedgerColumnOptions, ShredStorageType,
+    solana_ledger::{
+        blockstore_options::{
+            BlockstoreCompressionType, BlockstoreRecoveryMode, LedgerColumnOptions,
+            ShredStorageType,
+        },
+        use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
     },
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
@@ -1374,7 +1378,11 @@ pub fn main() {
         },
         staked_nodes_overrides: staked_nodes_overrides.clone(),
         replay_slots_concurrently: matches.is_present("replay_slots_concurrently"),
-        boot_from_local_state: matches.is_present("boot_from_local_state"),
+        boot_from_local_state: value_t_or_exit!(
+            matches,
+            use_snapshot_archives_at_startup::cli::NAME,
+            UseSnapshotArchivesAtStartup
+        ) == UseSnapshotArchivesAtStartup::Never,
         ..ValidatorConfig::default()
     };
 

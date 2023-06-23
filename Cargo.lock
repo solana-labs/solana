@@ -5998,6 +5998,8 @@ dependencies = [
  "spl-token",
  "spl-token-2022",
  "static_assertions",
+ "strum",
+ "strum_macros",
  "tempfile",
  "test-case",
  "thiserror",

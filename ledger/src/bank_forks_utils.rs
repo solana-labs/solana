@@ -231,9 +231,8 @@ fn bank_forks_from_snapshot(
                     full_snapshot_archive_info.slot(),
                 );
 
-            // If a newer snapshot archive was downloaded, it is possible that the snapshot
-            // slot is higher than the local bank we just loaded.  It is unlikely the user
-            // intended to still boot from local state in this scenario.
+            // If a newer snapshot archive was downloaded, it is possible that its slot is
+            // higher than the local bank we just loaded.  Did the user intend for this?
             let latest_snapshot_archive_slot = std::cmp::max(
                 full_snapshot_archive_info.slot(),
                 incremental_snapshot_archive_info
@@ -242,14 +241,14 @@ fn bank_forks_from_snapshot(
                     .unwrap_or(0),
             );
             if bank.slot() < latest_snapshot_archive_slot {
-                error!(
-                    "Attempting to boot from local state at a slot {} that is *older* than the latest \
-                     snapshot archive slot {}, which is not supported. Either remove the snapshot archive \
-                     or remove the --boot-from-local-state CLI flag.",
+                warn!(
+                    "Starting up from local state at slot {}, which is *older* \
+                    than the latest snapshot archive at slot {}. If this is not \
+                    desired, change the --use-snapshot-archives-at-startup \
+                    CLI option to \"always\" and restart.",
                     bank.slot(),
                     latest_snapshot_archive_slot,
                 );
-                process::exit(1);
             }
 
             (
