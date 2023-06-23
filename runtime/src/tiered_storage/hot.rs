@@ -53,12 +53,6 @@ impl TieredAccountMeta for HotAccountMeta {
         }
     }
 
-    /// Always returns false as HotAccountMeta does not support multiple
-    /// meta entries sharing the same account block.
-    fn supports_shared_account_block() -> bool {
-        false
-    }
-
     /// A builder function that initializes lamports.
     fn with_lamports(mut self, lamports: u64) -> Self {
         self.lamports = lamports;
@@ -68,14 +62,18 @@ impl TieredAccountMeta for HotAccountMeta {
     /// A builder function that initializes the number of padding bytes
     /// for the account data associated with the current meta.
     fn with_account_data_padding(mut self, padding: u8) -> Self {
-        assert!(padding <= MAX_HOT_PADDING);
+        if padding > MAX_HOT_PADDING {
+            panic!("padding exceeds MAX_HOT_PADDING");
+        }
         self.packed_fields.set_padding(padding);
         self
     }
 
     /// A builder function that initializes the owner's index.
     fn with_owner_index(mut self, owner_index: u32) -> Self {
-        assert!(owner_index <= MAX_HOT_OWNER_INDEX);
+        if owner_index > MAX_HOT_OWNER_INDEX {
+            panic!("owner_index exceeds MAX_HOT_OWNER_INDEX");
+        }
         self.packed_fields.set_owner_index(owner_index);
         self
     }
@@ -119,6 +117,12 @@ impl TieredAccountMeta for HotAccountMeta {
     fn flags(&self) -> &AccountMetaFlags {
         &self.flags
     }
+
+    /// Always returns false as HotAccountMeta does not support multiple
+    /// meta entries sharing the same account block.
+    fn supports_shared_account_block() -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
@@ -156,6 +160,28 @@ pub mod tests {
         packed_fields.set_owner_index(MAX_HOT_OWNER_INDEX);
         assert_eq!(packed_fields.padding(), MAX_HOT_PADDING);
         assert_eq!(packed_fields.owner_index(), MAX_HOT_OWNER_INDEX);
+    }
+
+    #[test]
+    fn test_hot_meta_max_values() {
+        let meta = HotAccountMeta::new()
+            .with_account_data_padding(MAX_HOT_PADDING)
+            .with_owner_index(MAX_HOT_OWNER_INDEX);
+
+        assert_eq!(meta.account_data_padding(), MAX_HOT_PADDING);
+        assert_eq!(meta.owner_index(), MAX_HOT_OWNER_INDEX);
+    }
+
+    #[test]
+    #[should_panic(expected = "padding exceeds MAX_HOT_PADDING")]
+    fn test_hot_meta_padding_exceeds_limit() {
+        HotAccountMeta::new().with_account_data_padding(MAX_HOT_PADDING + 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "owner_index exceeds MAX_HOT_OWNER_INDEX")]
+    fn test_hot_meta_owner_index_exceeds_limit() {
+        HotAccountMeta::new().with_owner_index(MAX_HOT_OWNER_INDEX + 1);
     }
 
     #[test]
