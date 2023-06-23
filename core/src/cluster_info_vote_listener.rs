@@ -430,6 +430,10 @@ impl ClusterInfoVoteListener {
                         verified_packets_sender,
                         &verified_vote_packets,
                     )?;
+                } else if let Some(bank_vote_sender_state) = bank_vote_sender_state_option {
+                    // This ensures we report the last slot's metrics
+                    bank_vote_sender_state.report_metrics();
+                    bank_vote_sender_state_option = None;
                 }
                 // Check if we've crossed the feature boundary
                 if !is_tower_full_vote_enabled {
