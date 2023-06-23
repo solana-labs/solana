@@ -886,9 +886,10 @@ impl<'a> BorrowedAccount<'a> {
     /// You should always prefer set_data_from_slice(). Calling this method is
     /// currently safe but requires some special casing during CPI when direct
     /// account mapping is enabled.
-    ///
-    /// Currently only used by tests and the program-test crate.
-    #[cfg(not(target_os = "solana"))]
+    #[cfg(all(
+        not(target_os = "solana"),
+        any(test, feature = "dev-context-only-utils")
+    ))]
     pub fn set_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
         self.can_data_be_changed()?;
