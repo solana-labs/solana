@@ -189,7 +189,6 @@ impl MessageProcessor {
 mod tests {
     use {
         super::*,
-        crate::rent_collector::RentCollector,
         solana_program_runtime::{declare_process_instruction, loaded_programs::LoadedProgram},
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
@@ -251,7 +250,6 @@ mod tests {
         let writable_pubkey = Pubkey::new_unique();
         let readonly_pubkey = Pubkey::new_unique();
         let mock_system_program_id = Pubkey::new_unique();
-        let rent_collector = RentCollector::default();
 
         let accounts = vec![
             (
@@ -309,7 +307,7 @@ mod tests {
             &message,
             &program_indices,
             &mut transaction_context,
-            rent_collector.rent,
+            Rent::default(),
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
@@ -362,7 +360,7 @@ mod tests {
             &message,
             &program_indices,
             &mut transaction_context,
-            rent_collector.rent,
+            Rent::default(),
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
@@ -405,7 +403,7 @@ mod tests {
             &message,
             &program_indices,
             &mut transaction_context,
-            rent_collector.rent,
+            Rent::default(),
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
@@ -486,7 +484,6 @@ mod tests {
             }
         });
         let mock_program_id = Pubkey::from([2u8; 32]);
-        let rent_collector = RentCollector::default();
         let accounts = vec![
             (
                 solana_sdk::pubkey::new_rand(),
@@ -540,7 +537,7 @@ mod tests {
             &message,
             &program_indices,
             &mut transaction_context,
-            rent_collector.rent,
+            Rent::default(),
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
@@ -577,7 +574,7 @@ mod tests {
             &message,
             &program_indices,
             &mut transaction_context,
-            rent_collector.rent,
+            Rent::default(),
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
@@ -611,7 +608,7 @@ mod tests {
             &message,
             &program_indices,
             &mut transaction_context,
-            rent_collector.rent,
+            Rent::default(),
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
@@ -692,7 +689,7 @@ mod tests {
             &message,
             &[vec![0], vec![1]],
             &mut transaction_context,
-            RentCollector::default().rent,
+            Rent::default(),
             None,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
