@@ -2,7 +2,7 @@ use {
     solana_rpc_client_api::client_error::Error as ClientError,
     solana_sdk::{
         account::Account, commitment_config::CommitmentConfig, epoch_info::EpochInfo, hash::Hash,
-        message::Message, pubkey::Pubkey, signature::Signature, transaction::Transaction,
+        message::Message, pubkey::Pubkey, signature::Signature, transaction::{Transaction, VersionedTransaction},
         transport::TransportError,
     },
     solana_tpu_client::tpu_client::TpuSenderError,
@@ -33,6 +33,9 @@ pub trait BenchTpsClient {
 
     /// Send a batch of signed transactions without confirmation.
     fn send_batch(&self, transactions: Vec<Transaction>) -> Result<()>;
+
+    /// Send a batch of signed versioned transactions without confirmation.
+    fn send_versioned_transaction_batch(&self, transactions: Vec<VersionedTransaction>) -> Result<()>;
 
     /// Get latest blockhash
     fn get_latest_blockhash(&self) -> Result<Hash>;

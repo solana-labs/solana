@@ -3,7 +3,8 @@ use {
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         account::Account, commitment_config::CommitmentConfig, epoch_info::EpochInfo, hash::Hash,
-        message::Message, pubkey::Pubkey, signature::Signature, transaction::Transaction,
+        message::Message, pubkey::Pubkey, signature::Signature,
+        transaction::{Transaction, VersionedTransaction,},
     },
 };
 
@@ -15,6 +16,10 @@ impl BenchTpsClient for RpcClient {
         for transaction in transactions {
             BenchTpsClient::send_transaction(self, transaction)?;
         }
+        Ok(())
+    }
+    fn send_versioned_transaction_batch(&self, transactions: Vec<VersionedTransaction>) -> Result<()> {
+            BenchTpsClient::send_versioned_transaction_batch(self, transactions)?;
         Ok(())
     }
     fn get_latest_blockhash(&self) -> Result<Hash> {

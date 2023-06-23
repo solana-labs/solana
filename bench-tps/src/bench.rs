@@ -12,17 +12,18 @@ use {
     solana_metrics::{self, datapoint_info},
     solana_sdk::{
         account::Account,
+        address_lookup_table_account::AddressLookupTableAccount,
         clock::{DEFAULT_MS_PER_SLOT, DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},
         compute_budget::ComputeBudgetInstruction,
         hash::Hash,
         instruction::{AccountMeta, Instruction},
-        message::Message,
+        message::{Message, VersionedMessage, v0,},
         native_token::Sol,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_instruction,
         timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
-        transaction::Transaction,
+        transaction::{Transaction, VersionedTransaction,},
     },
     spl_instruction_padding::instruction::wrap_instruction,
     std::{
@@ -70,7 +71,7 @@ pub fn max_lamports_for_prioritization(use_randomized_compute_unit_price: bool) 
 // 32K page size, so it'd cost 0 extra CU.
 const TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE: u32 = 30 * 1024;
 
-pub type TimestampedTransaction = (Transaction, Option<u64>);
+pub type TimestampedTransaction = (VersionedTransaction, Option<u64>);
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<TimestampedTransaction>>>>;
 
 /// Keypairs split into source and destination
@@ -584,7 +585,7 @@ fn transfer_with_compute_unit_price_and_padding(
     recent_blockhash: Hash,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
     compute_unit_price: Option<u64>,
-) -> Transaction {
+) -> VersionedTransaction {
     let from_pubkey = from_keypair.pubkey();
     let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
     let instruction = if let Some(instruction_padding_config) = instruction_padding_config {
@@ -610,8 +611,23 @@ fn transfer_with_compute_unit_price_and_padding(
             TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
         ),
     ]);
-    let message = Message::new(&instructions, Some(&from_pubkey));
-    Transaction::new(&[from_keypair], message, recent_blockhash)
+    let versioned_transaction = VersionedTransaction::try_new(
+        //VersionedMessage::Legacy(Message::new_with_blockhash(&instructions, Some(&from_pubkey), &recent_blockhash)),
+        VersionedMessage::V0(
+            v0::Message::try_compile(
+                &from_pubkey, //payer
+                &instructions,
+                // TODO - taking from created ATL account
+                &[AddressLookupTableAccount {key: Pubkey::new_unique(), addresses: vec![],} ],
+                recent_blockhash,
+                ).unwrap()
+            ),
+        &[from_keypair],
+    ).unwrap();
+
+    info!("==== versioned_transaction {:?}", versioned_transaction);
+
+    versioned_transaction
 }
 
 fn get_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
@@ -682,7 +698,7 @@ fn nonced_transfer_with_padding(
     nonce_authority: &Keypair,
     nonce_hash: Hash,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
-) -> Transaction {
+) -> VersionedTransaction {
     let from_pubkey = from_keypair.pubkey();
     let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
     let instruction = if let Some(instruction_padding_config) = instruction_padding_config {
@@ -702,13 +718,24 @@ fn nonced_transfer_with_padding(
             TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
         ),
     ]);
-    let message = Message::new_with_nonce(
-        instructions,
-        Some(&from_pubkey),
-        nonce_account,
-        &nonce_authority.pubkey(),
-    );
-    Transaction::new(&[from_keypair, nonce_authority], message, nonce_hash)
+    // TODO - using versionedTransaction
+    let versioned_nonce_transaction = VersionedTransaction::try_new(
+        VersionedMessage::Legacy(
+            Message::new_with_nonce(
+                instructions,
+                Some(&from_pubkey),
+                nonce_account,
+                &nonce_authority.pubkey(),
+            )
+        ),
+        &[from_keypair],
+    ).unwrap();
+
+    info!("==== versioned_nonce_transaction {:?}", versioned_nonce_transaction);
+
+    // TODO - need to sign the tx with 
+    // nonce_hash
+    versioned_nonce_transaction
 }
 
 fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
@@ -906,7 +933,7 @@ fn do_tx_transfers<T: BenchTpsClient + ?Sized>(
                 );
             }
 
-            if let Err(error) = client.send_batch(transactions) {
+            if let Err(error) = client.send_versioned_transaction_batch(transactions) {
                 warn!("send_batch_sync in do_tx_transfers failed: {}", error);
             }
 

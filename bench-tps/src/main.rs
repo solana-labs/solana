@@ -358,7 +358,6 @@ fn main() {
     //              4. pass them to do_bench_tps() so each TX going out will have atl in it.
     let number_of_accounts_in_atl = 72;
     create_address_lookup_table_account(client.clone(), id, number_of_accounts_in_atl, &keypairs);
-    return;
 
     let nonce_keypairs = if *use_durable_nonce {
         Some(generate_durable_nonce_accounts(client.clone(), &keypairs))
