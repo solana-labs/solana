@@ -15,12 +15,6 @@ pub enum UseSnapshotArchivesAtStartup {
     Never,
 }
 
-impl UseSnapshotArchivesAtStartup {
-    pub const fn variants() -> &'static [&'static str] {
-        Self::VARIANTS
-    }
-}
-
 pub mod cli {
     use super::*;
 
