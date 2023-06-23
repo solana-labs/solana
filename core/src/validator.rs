@@ -54,6 +54,7 @@ use {
         entry_notifier_service::{EntryNotifierSender, EntryNotifierService},
         leader_schedule::FixedSchedule,
         leader_schedule_cache::LeaderScheduleCache,
+        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_info, poh_timing_point::PohTimingSender},
@@ -251,7 +252,7 @@ pub struct ValidatorConfig {
     pub block_verification_method: BlockVerificationMethod,
     pub block_production_method: BlockProductionMethod,
     pub generator_config: Option<GeneratorConfig>,
-    pub boot_from_local_state: bool,
+    pub use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup,
 }
 
 impl Default for ValidatorConfig {
@@ -318,7 +319,7 @@ impl Default for ValidatorConfig {
             block_verification_method: BlockVerificationMethod::default(),
             block_production_method: BlockProductionMethod::default(),
             generator_config: None,
-            boot_from_local_state: false,
+            use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup::default(),
         }
     }
 }
@@ -1622,7 +1623,7 @@ fn load_blockstore(
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
         runtime_config: config.runtime_config.clone(),
-        boot_from_local_state: config.boot_from_local_state,
+        use_snapshot_archives_at_startup: config.use_snapshot_archives_at_startup,
         ..blockstore_processor::ProcessOptions::default()
     };
 

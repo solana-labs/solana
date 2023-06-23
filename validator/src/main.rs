@@ -1378,11 +1378,11 @@ pub fn main() {
         },
         staked_nodes_overrides: staked_nodes_overrides.clone(),
         replay_slots_concurrently: matches.is_present("replay_slots_concurrently"),
-        boot_from_local_state: value_t_or_exit!(
+        use_snapshot_archives_at_startup: value_t_or_exit!(
             matches,
             use_snapshot_archives_at_startup::cli::NAME,
             UseSnapshotArchivesAtStartup
-        ) == UseSnapshotArchivesAtStartup::Never,
+        ),
         ..ValidatorConfig::default()
     };
 

@@ -19,6 +19,7 @@ use {
     solana_ledger::{
         ancestor_iterator::AncestorIterator, bank_forks_utils, blockstore::Blockstore,
         blockstore_processor::ProcessOptions, leader_schedule::FixedSchedule,
+        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
@@ -4876,7 +4877,7 @@ fn test_boot_from_local_state() {
     // restart WITH fastboot
     info!("Restarting validator2 from local state...");
     let mut validator2_info = cluster.exit_node(&validator2_identity.pubkey());
-    validator2_info.config.boot_from_local_state = true;
+    validator2_info.config.use_snapshot_archives_at_startup = UseSnapshotArchivesAtStartup::Never;
     cluster.restart_node(
         &validator2_identity.pubkey(),
         validator2_info,

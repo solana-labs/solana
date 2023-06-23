@@ -7,6 +7,7 @@ use {
         },
         entry_notifier_service::EntryNotifierSender,
         leader_schedule_cache::LeaderScheduleCache,
+        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     log::*,
     solana_runtime::{
@@ -197,7 +198,7 @@ fn bank_forks_from_snapshot(
     }
 
     let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
-        if process_options.boot_from_local_state {
+        if process_options.use_snapshot_archives_at_startup == UseSnapshotArchivesAtStartup::Never {
             let bank = snapshot_utils::bank_from_latest_snapshot_dir(
                 &snapshot_config.bank_snapshots_dir,
                 genesis_config,
