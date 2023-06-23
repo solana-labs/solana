@@ -5,16 +5,17 @@ use {
         repair_response,
         repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
         request_response::RequestResponse,
-        result::{Error, Result},
     },
     bincode::serialize,
+    crossbeam_channel::RecvTimeoutError,
     lru::LruCache,
     rand::{
         distributions::{Distribution, WeightedError, WeightedIndex},
         Rng,
     },
     solana_gossip::{
-        cluster_info::{ClusterInfo, ClusterInfoError},
+        cluster_info::{self, ClusterInfo, ClusterInfoError},
+        contact_info,
         legacy_contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo},
         ping_pong::{self, PingCache, Pong},
         weighted_shuffle::WeightedShuffle,
@@ -101,6 +102,22 @@ pub enum RepairVerifyError {
     #[error("Unsigned")]
     Unsigned,
 }
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    ClusterInfo(#[from] cluster_info::ClusterInfoError),
+    #[error(transparent)]
+    InvalidContactInfo(#[from] contact_info::Error),
+    #[error(transparent)]
+    Serialize(#[from] std::boxed::Box<bincode::ErrorKind>),
+    #[error(transparent)]
+    WeightedIndex(#[from] rand::distributions::weighted::WeightedError),
+    #[error(transparent)]
+    RepairVerify(#[from] RepairVerifyError),
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ShredRepairType {
@@ -628,7 +645,7 @@ impl ServeRepair {
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), RecvTimeoutError> {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
         let mut reqs_v = vec![requests_receiver.recv_timeout(timeout)?];
@@ -831,8 +848,11 @@ impl ServeRepair {
                         &data_budget,
                     );
                     match result {
-                        Err(Error::RecvTimeout(_)) | Ok(_) => {}
-                        Err(err) => info!("repair listener error: {:?}", err),
+                        Err(RecvTimeoutError::Timeout) | Ok(_) => {}
+                        Err(RecvTimeoutError::Disconnected) => {
+                            info!("repair listener disconnected");
+                            return;
+                        }
                     };
                     if exit.load(Ordering::Relaxed) {
                         return;
@@ -1367,7 +1387,7 @@ impl ServeRepair {
 mod tests {
     use {
         super::*,
-        crate::{repair_response, result::Error},
+        crate::repair_response,
         solana_gossip::{contact_info::ContactInfo, socketaddr, socketaddr_any},
         solana_ledger::{
             blockstore::make_many_slot_entries,
