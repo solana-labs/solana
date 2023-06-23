@@ -30,6 +30,7 @@ source ci/rust-version.sh nightly
 # package isn't part of released binaries.
 declare tainted_packages=(
   "solana-banking-bench"
+  "solana-banking-bench2"
 )
 
 # convert to comma separeted (ref: https://stackoverflow.com/a/53839433)

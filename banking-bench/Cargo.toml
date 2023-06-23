@@ -33,3 +33,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [features]
 dev-context-only-utils = []
+
+[lib]
+crate-type = ["cdylib", "rlib"]

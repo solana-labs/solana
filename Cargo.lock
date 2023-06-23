@@ -5119,6 +5119,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-banking-bench2"
+version = "1.17.0"
+dependencies = [
+ "solana-banking-bench",
+]
+
+[[package]]
 name = "solana-banks-client"
 version = "1.17.0"
 dependencies = [
