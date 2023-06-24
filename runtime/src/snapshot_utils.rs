@@ -213,6 +213,14 @@ impl BankSnapshotInfo {
         let bank_snapshot_pre_path =
             bank_snapshot_post_path.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
+        // NOTE: It is important that checking for "Pre" happens before "Post.
+        //
+        // Consider the scenario where AccountsHashVerifier is actively processing an
+        // AccountsPackage for a snapshot/slot; if AHV is in the middle of reserializing the
+        // bank snapshot file (writing the new "Post" file), and then the process dies,
+        // there will be an incomplete "Post" file on disk.  We do not want only the existence of
+        // this "Post" file to be sufficient for deciding the snapshot type as "Post".  More so,
+        // "Post" *requires* the *absence* of a "Pre" file.
         let snapshot_type = if bank_snapshot_pre_path.is_file() {
             BankSnapshotType::Pre
         } else if bank_snapshot_post_path.is_file() {
