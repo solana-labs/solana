@@ -83,10 +83,6 @@ pub async fn run_server(
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
 ) {
-<<<<<<< HEAD
-=======
-    const WAIT_FOR_CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);
->>>>>>> 689ca503e2 (Remove a unnecessary sleep in run server (#32216))
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
     let unstaked_connection_table: Arc<Mutex<ConnectionTable>> = Arc::new(Mutex::new(
@@ -96,7 +92,6 @@ pub async fn run_server(
         Arc::new(Mutex::new(ConnectionTable::new(ConnectionPeerType::Staked)));
     while !exit.load(Ordering::Relaxed) {
         const WAIT_FOR_CONNECTION_TIMEOUT_MS: u64 = 1000;
-        const WAIT_BETWEEN_NEW_CONNECTIONS_US: u64 = 1000;
         let timeout_connection = timeout(
             Duration::from_millis(WAIT_FOR_CONNECTION_TIMEOUT_MS),
             incoming.next(),
@@ -120,10 +115,6 @@ pub async fn run_server(
                 max_unstaked_connections,
                 stats.clone(),
             ));
-<<<<<<< HEAD
-            sleep(Duration::from_micros(WAIT_BETWEEN_NEW_CONNECTIONS_US)).await;
-=======
->>>>>>> 689ca503e2 (Remove a unnecessary sleep in run server (#32216))
         } else {
             debug!("accept(): Timed out waiting for connection");
         }
