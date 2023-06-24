@@ -32,6 +32,13 @@ declare dev_util_tainted_packages=(
 )
 
 mode=${1:-full}
+if [[ $mode != "tree" &&
+      $mode != "check-bins" &&
+      $mode != "check-all-targets" &&
+      $mode != "full" ]]; then
+  echo "$0: unrecoginized mode: $mode";
+  exit 1
+fi
 
 if [[ $mode = "tree" || $mode = "full" ]]; then
   # Run against the entire workspace dep graph (sans $dev_util_tainted_packages)
@@ -42,7 +49,7 @@ if [[ $mode = "tree" || $mode = "full" ]]; then
   _ cargo "+${rust_nightly}" tree --workspace -f "{p} {f}" --edges normal,build \
     $dev_utils_excludes | (
     if grep -E -C 3 -m 10 "[, ]dev-utils([, ]|$)"; then
-      echo "dev-utils must not be used as normal dependencies" > /dev/stderr
+      echo "$0: dev-utils must not be used as normal dependencies" > /dev/stderr
       exit 1
     fi
   )
@@ -56,7 +63,7 @@ if [[ $mode = "tree" || $mode = "full" ]]; then
     _ cargo "+${rust_nightly}" tree --workspace -f "{p} {f}" --edges normal,build \
       --invert "$tainted" --features dev-utils-ci-marker | (
       if grep -E -C 3 -m 10 -v "[, ]dev-utils([, ]|$)"; then
-        echo "$tainted: All inverted dependencies must be with dev-utils" \
+        echo "$0: $tainted: All inverted dependencies must be with dev-utils" \
           > /dev/stderr
         exit 1
       fi
