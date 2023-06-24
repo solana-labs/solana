@@ -187,10 +187,12 @@ impl MessageProcessor {
 
 #[cfg(test)]
 mod tests {
-    use crate::message_processor::MessageProcessor;
     use {
         super::*,
-        crate::{declare_process_instruction, loaded_programs::LoadedProgram},
+        crate::{
+            declare_process_instruction, loaded_programs::LoadedProgram,
+            message_processor::MessageProcessor,
+        },
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
             instruction::{AccountMeta, Instruction, InstructionError},
