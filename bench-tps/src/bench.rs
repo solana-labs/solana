@@ -8,12 +8,16 @@ use {
     log::*,
     rand::distributions::{Distribution, Uniform},
     rayon::prelude::*,
+    solana_address_lookup_table_program::{
+        state::AddressLookupTable,
+    },
     solana_client::{nonce_utils, rpc_request::MAX_MULTIPLE_ACCOUNTS},
     solana_metrics::{self, datapoint_info},
     solana_sdk::{
         account::Account,
         address_lookup_table_account::AddressLookupTableAccount,
         clock::{DEFAULT_MS_PER_SLOT, DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},
+        commitment_config::CommitmentConfig,
         compute_budget::ComputeBudgetInstruction,
         hash::Hash,
         instruction::{AccountMeta, Instruction},
@@ -49,7 +53,7 @@ const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) a
 // `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE * COMPUTE_UNIT_PRICE_MULTIPLIER / 1_000_000`
 const MAX_COMPUTE_UNIT_PRICE: u64 = 50;
 const COMPUTE_UNIT_PRICE_MULTIPLIER: u64 = 1_000;
-const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 600; // 1 transfer is plus 3 compute_budget ixs
+const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 600 + 10; // 1 transfer is plus 3 compute_budget ixs; //TODO added 10 to use noop ix to fool runtime
 /// calculate maximum possible prioritization fee, if `use-randomized-compute-unit-price` is
 /// enabled, round to nearest lamports.
 pub fn max_lamports_for_prioritization(use_randomized_compute_unit_price: bool) -> u64 {
@@ -123,6 +127,7 @@ struct TransactionChunkGenerator<'a, 'b, T: ?Sized> {
     reclaim_lamports_back_to_source_account: bool,
     use_randomized_compute_unit_price: bool,
     instruction_padding_config: Option<InstructionPaddingConfig>,
+    lookup_table_address: Option<Pubkey>,
 }
 
 impl<'a, 'b, T> TransactionChunkGenerator<'a, 'b, T>
@@ -137,6 +142,7 @@ where
         use_randomized_compute_unit_price: bool,
         instruction_padding_config: Option<InstructionPaddingConfig>,
         num_conflict_groups: Option<usize>,
+        lookup_table_address: Option<Pubkey>,
     ) -> Self {
         let account_chunks = if let Some(num_conflict_groups) = num_conflict_groups {
             KeypairChunks::new_with_conflict_groups(gen_keypairs, chunk_size, num_conflict_groups)
@@ -154,6 +160,7 @@ where
             reclaim_lamports_back_to_source_account: false,
             use_randomized_compute_unit_price,
             instruction_padding_config,
+            lookup_table_address,
         }
     }
 
@@ -166,6 +173,20 @@ where
             tx_count, self.reclaim_lamports_back_to_source_account, blockhash
         );
         let signing_start = Instant::now();
+
+        let address_lookup_table_account = self.lookup_table_address.and_then(|lookup_table_address| {
+            let lookup_table_account = self.client
+                .get_account_with_commitment(&lookup_table_address, CommitmentConfig::processed())
+                .unwrap();
+            info!("==== {:?}", lookup_table_account);
+            let lookup_table = AddressLookupTable::deserialize(&lookup_table_account.data).unwrap();
+            info!("==== {:?}", lookup_table);
+            Some(AddressLookupTableAccount {
+                key: lookup_table_address, 
+                addresses: lookup_table.addresses.to_vec(),
+            })
+        });
+        info!("==== address_lookup_table_account {:?}", address_lookup_table_account);
 
         let source_chunk = &self.account_chunks.source[self.chunk_index];
         let dest_chunk = &self.account_chunks.dest[self.chunk_index];
@@ -190,6 +211,7 @@ where
                 blockhash.unwrap(),
                 &self.instruction_padding_config,
                 self.use_randomized_compute_unit_price,
+                &address_lookup_table_account,
             )
         };
 
@@ -368,6 +390,7 @@ pub fn do_bench_tps<T>(
     config: Config,
     gen_keypairs: Vec<Keypair>,
     nonce_keypairs: Option<Vec<Keypair>>,
+    lookup_table_address: Option<Pubkey>,
 ) -> u64
 where
     T: 'static + BenchTpsClient + Send + Sync + ?Sized,
@@ -396,6 +419,7 @@ where
         use_randomized_compute_unit_price,
         instruction_padding_config,
         num_conflict_groups,
+        lookup_table_address,
     );
 
     let first_tx_count = loop {
@@ -522,6 +546,7 @@ fn generate_system_txs(
     blockhash: &Hash,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
     use_randomized_compute_unit_price: bool,
+    address_lookup_table_account: &Option<AddressLookupTableAccount>,
 ) -> Vec<TimestampedTransaction> {
     let pairs: Vec<_> = if !reclaim {
         source.iter().zip(dest.iter()).collect()
@@ -553,6 +578,7 @@ fn generate_system_txs(
                         *blockhash,
                         instruction_padding_config,
                         Some(**compute_unit_price),
+                        address_lookup_table_account,
                     ),
                     Some(timestamp()),
                 )
@@ -570,6 +596,7 @@ fn generate_system_txs(
                         *blockhash,
                         instruction_padding_config,
                         None,
+                        address_lookup_table_account,
                     ),
                     Some(timestamp()),
                 )
@@ -585,6 +612,7 @@ fn transfer_with_compute_unit_price_and_padding(
     recent_blockhash: Hash,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
     compute_unit_price: Option<u64>,
+    address_lookup_table_account: &Option<AddressLookupTableAccount>,
 ) -> VersionedTransaction {
     let from_pubkey = from_keypair.pubkey();
     let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
@@ -611,18 +639,43 @@ fn transfer_with_compute_unit_price_and_padding(
             TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
         ),
     ]);
-    let versioned_transaction = VersionedTransaction::try_new(
-        //VersionedMessage::Legacy(Message::new_with_blockhash(&instructions, Some(&from_pubkey), &recent_blockhash)),
+
+    let versioned_message = if let Some(address_lookup_table_account) = address_lookup_table_account {
+        let address_lookup_table_account_clone = address_lookup_table_account.clone();
+        let address_lookup_table_accounts = vec![address_lookup_table_account_clone];
+        
+        // TAO NOTE - add fake IX to force load all accounts in ATL
+        // however the transaction will fail to execute (solana_runtime::bank] tx error:
+        // ProgramAccountNotFound), so the transfers wont land, so the bench results are invalid.
+        // TODO - need to either create the fake program account, mark it executable and hope it
+        // allows successful execution; OR hack the runtime to ignore this program pubkey (since
+        // the bench test doesn't concern execution; OR ask on Discord to see if any program
+        // available to load many accounts without executing anything.
+        let account_metas: Vec<_> = address_lookup_table_account.addresses.iter().map(|pubkey| {
+            AccountMeta::new(pubkey.clone(), false)
+        }).collect();
+        //let noop_key_string = "11111111111111111111111111111111";
+        let noop_key_string = "FbXmsPdGqmSPrtbPCuvX16SEWqA3w6Ee16wu6jucFZuG";
+        let noop_key = noop_key_string.parse::<Pubkey>().unwrap();  //Pubkey::new_unique()
+        instructions.extend_from_slice(&[
+            Instruction::new_with_bincode(noop_key, &(),
+            account_metas,
+            ),
+        ]);
+
         VersionedMessage::V0(
             v0::Message::try_compile(
                 &from_pubkey, //payer
                 &instructions,
-                // TODO - taking from created ATL account
-                &[AddressLookupTableAccount {key: Pubkey::new_unique(), addresses: vec![],} ],
+                &address_lookup_table_accounts,
                 recent_blockhash,
                 ).unwrap()
-            ),
-        &[from_keypair],
+            )
+    } else {
+        VersionedMessage::Legacy(Message::new_with_blockhash(&instructions, Some(&from_pubkey), &recent_blockhash))
+    };
+    let versioned_transaction = VersionedTransaction::try_new(
+        versioned_message, &[from_keypair],
     ).unwrap();
 
     info!("==== versioned_transaction {:?}", versioned_transaction);
@@ -718,7 +771,6 @@ fn nonced_transfer_with_padding(
             TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
         ),
     ]);
-    // TODO - using versionedTransaction
     let versioned_nonce_transaction = VersionedTransaction::try_new(
         VersionedMessage::Legacy(
             Message::new_with_nonce(

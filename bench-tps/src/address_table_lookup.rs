@@ -65,10 +65,6 @@ fn build_create_lookup_table_tx(
         funding_key.pubkey(), // payer
         recent_slot,          // slot
     );
-    info!(
-        "==== {:?}, {:?}, {:?}",
-        recent_slot, lookup_table_address, create_lookup_table_ix
-    );
 
     (
         Transaction::new_signed_with_payer(
@@ -87,7 +83,6 @@ fn build_extend_lookup_table_tx(
     num_addresses: usize,
     recent_blockhash: Hash,
 ) -> Transaction {
-    info!("===========================");
     let mut addresses = Vec::with_capacity(num_addresses);
     // TODO - replace new_unique with keys from keypairs,
     //        Or maybe not necessary? Should log and check what accounts.rs does with new_unique
@@ -99,7 +94,6 @@ fn build_extend_lookup_table_tx(
         Some(funding_key.pubkey()), // payer
         addresses,
     );
-    info!("==== {:?}", extend_lookup_table_ix);
 
     Transaction::new_signed_with_payer(
         &[extend_lookup_table_ix],

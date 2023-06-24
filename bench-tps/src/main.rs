@@ -356,13 +356,15 @@ fn main() {
     //              2. ExtendATL to num_of_accounts_in_atl, borrow keys funded above
     //              3. return: atl_pubkey, and num_of_accounts_in_atl
     //              4. pass them to do_bench_tps() so each TX going out will have atl in it.
+    // TODO - taking from cli arg
     let number_of_accounts_in_atl = 72;
-    create_address_lookup_table_account(client.clone(), id, number_of_accounts_in_atl, &keypairs);
+    // TODO - only creates ATL if cli arg is used, otherwise pass None
+    let lookup_table_address = create_address_lookup_table_account(client.clone(), id, number_of_accounts_in_atl, &keypairs).ok();
 
     let nonce_keypairs = if *use_durable_nonce {
         Some(generate_durable_nonce_accounts(client.clone(), &keypairs))
     } else {
         None
     };
-    do_bench_tps(client, cli_config, keypairs, nonce_keypairs);
+    do_bench_tps(client, cli_config, keypairs, nonce_keypairs, lookup_table_address);
 }

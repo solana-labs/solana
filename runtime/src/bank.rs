@@ -6049,6 +6049,12 @@ impl Bank {
         counts: CommitTransactionCounts,
         timings: &mut ExecuteTimings,
     ) -> TransactionResults {
+        // TAO TODO - remove the print
+        execution_results.iter().zip(sanitized_txs).for_each(|(execution_result, tx)| {
+            debug!("==== tx_sig {:?}, execution_result {:?}", tx.signature(), execution_result);
+        });
+        
+        
         assert!(
             !self.freeze_started(),
             "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
