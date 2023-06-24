@@ -6348,6 +6348,7 @@ dependencies = [
  "enum-iterator",
  "itertools",
  "libc",
+ "libsecp256k1",
  "log",
  "num-derive",
  "num-traits",

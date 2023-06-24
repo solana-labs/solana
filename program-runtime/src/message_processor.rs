@@ -1,7 +1,5 @@
 use {
-    serde::{Deserialize, Serialize},
-    solana_measure::measure::Measure,
-    solana_program_runtime::{
+    crate::{
         compute_budget::ComputeBudget,
         invoke_context::InvokeContext,
         loaded_programs::LoadedProgramsForTxBatch,
@@ -9,6 +7,8 @@ use {
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
+    serde::{Deserialize, Serialize},
+    solana_measure::measure::Measure,
     solana_sdk::{
         account::WritableAccount,
         feature_set::FeatureSet,
@@ -189,7 +189,10 @@ impl MessageProcessor {
 mod tests {
     use {
         super::*,
-        solana_program_runtime::{declare_process_instruction, loaded_programs::LoadedProgram},
+        crate::{
+            declare_process_instruction, loaded_programs::LoadedProgram,
+            message_processor::MessageProcessor,
+        },
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
             instruction::{AccountMeta, Instruction, InstructionError},
