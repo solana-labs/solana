@@ -4,7 +4,10 @@
 
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::encryption::pedersen::{PedersenCommitment, PedersenOpening, G, H},
+    crate::{
+        encryption::pedersen::{PedersenCommitment, PedersenOpening, G, H},
+        sigma_proofs::canonical_scalar_from_slice,
+    },
     rand::rngs::OsRng,
 };
 use {
@@ -12,7 +15,6 @@ use {
         errors::ProofVerificationError, sigma_proofs::errors::FeeSigmaProofError,
         transcript::TranscriptProtocol,
     },
-    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -367,24 +369,15 @@ impl FeeSigmaProof {
             return Err(ProofVerificationError::Deserialization.into());
         }
 
-        let bytes = array_ref![bytes, 0, 256];
-        let (Y_max_proof, z_max_proof, c_max_proof, Y_delta, Y_claimed, z_x, z_delta, z_claimed) =
-            array_refs![bytes, 32, 32, 32, 32, 32, 32, 32, 32];
+        let Y_max_proof = CompressedRistretto::from_slice(&bytes[..32]);
+        let z_max_proof = canonical_scalar_from_slice(&bytes[32..64])?;
+        let c_max_proof = canonical_scalar_from_slice(&bytes[64..96])?;
 
-        let Y_max_proof = CompressedRistretto::from_slice(Y_max_proof);
-        let z_max_proof = Scalar::from_canonical_bytes(*z_max_proof)
-            .ok_or(ProofVerificationError::Deserialization)?;
-        let c_max_proof = Scalar::from_canonical_bytes(*c_max_proof)
-            .ok_or(ProofVerificationError::Deserialization)?;
-
-        let Y_delta = CompressedRistretto::from_slice(Y_delta);
-        let Y_claimed = CompressedRistretto::from_slice(Y_claimed);
-        let z_x =
-            Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
-        let z_delta = Scalar::from_canonical_bytes(*z_delta)
-            .ok_or(ProofVerificationError::Deserialization)?;
-        let z_claimed = Scalar::from_canonical_bytes(*z_claimed)
-            .ok_or(ProofVerificationError::Deserialization)?;
+        let Y_delta = CompressedRistretto::from_slice(&bytes[96..128]);
+        let Y_claimed = CompressedRistretto::from_slice(&bytes[128..160]);
+        let z_x = canonical_scalar_from_slice(&bytes[160..192])?;
+        let z_delta = canonical_scalar_from_slice(&bytes[192..224])?;
+        let z_claimed = canonical_scalar_from_slice(&bytes[224..256])?;
 
         Ok(Self {
             fee_max_proof: FeeMaxProof {
