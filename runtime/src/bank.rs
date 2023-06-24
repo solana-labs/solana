@@ -103,6 +103,7 @@ use {
             LoadedProgramsForTxBatch, WorkingSlot,
         },
         log_collector::LogCollector,
+        message_processor::MessageProcessor,
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimingType, ExecuteTimings},
     },
@@ -262,7 +263,6 @@ pub struct BankRc {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
-use solana_program_runtime::message_processor::MessageProcessor;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
