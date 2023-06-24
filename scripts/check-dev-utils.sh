@@ -36,7 +36,7 @@ if [[ $mode != "tree" &&
       $mode != "check-bins" &&
       $mode != "check-all-targets" &&
       $mode != "full" ]]; then
-  echo "$0: unrecoginized mode: $mode";
+  echo "$0: unrecognized mode: $mode";
   exit 1
 fi
 
