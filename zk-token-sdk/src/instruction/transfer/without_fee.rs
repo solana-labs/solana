@@ -97,14 +97,14 @@ impl TransferData {
 
         let (ciphertext_lo, opening_lo) = TransferAmountCiphertext::new(
             amount_lo,
-            &source_keypair.public,
+            source_keypair.pubkey(),
             destination_pubkey,
             auditor_pubkey,
         );
 
         let (ciphertext_hi, opening_hi) = TransferAmountCiphertext::new(
             amount_hi,
-            &source_keypair.public,
+            source_keypair.pubkey(),
             destination_pubkey,
             auditor_pubkey,
         );
@@ -133,7 +133,7 @@ impl TransferData {
 
         // generate transcript and append all public inputs
         let pod_transfer_pubkeys = TransferPubkeys {
-            source: source_keypair.public.into(),
+            source: (*source_keypair.pubkey()).into(),
             destination: (*destination_pubkey).into(),
             auditor: (*auditor_pubkey).into(),
         };
@@ -456,14 +456,18 @@ mod test {
     fn test_transfer_correctness() {
         // ElGamalKeypair keys for source, destination, and auditor accounts
         let source_keypair = ElGamalKeypair::new_rand();
-        let dest_pk = ElGamalKeypair::new_rand().public;
-        let auditor_pk = ElGamalKeypair::new_rand().public;
+
+        let dest_keypair = ElGamalKeypair::new_rand();
+        let dest_pk = dest_keypair.pubkey();
+
+        let auditor_keypair = ElGamalKeypair::new_rand();
+        let auditor_pk = auditor_keypair.pubkey();
 
         // Case 1: transfer 0 amount
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 0;
-        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+        let spendable_ciphertext = source_keypair.pubkey().encrypt(spendable_balance);
 
         // transfer amount
         let transfer_amount: u64 = 0;
@@ -473,7 +477,7 @@ mod test {
             transfer_amount,
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
-            (&dest_pk, &auditor_pk),
+            (dest_pk, auditor_pk),
         )
         .unwrap();
 
@@ -483,7 +487,7 @@ mod test {
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = u64::max_value();
-        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+        let spendable_ciphertext = source_keypair.pubkey().encrypt(spendable_balance);
 
         // transfer amount
         let transfer_amount: u64 =
@@ -494,7 +498,7 @@ mod test {
             transfer_amount,
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
-            (&dest_pk, &auditor_pk),
+            (dest_pk, auditor_pk),
         )
         .unwrap();
 
@@ -504,7 +508,7 @@ mod test {
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
-        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+        let spendable_ciphertext = source_keypair.pubkey().encrypt(spendable_balance);
 
         // transfer amount
         let transfer_amount: u64 = 55;
@@ -514,7 +518,7 @@ mod test {
             transfer_amount,
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
-            (&dest_pk, &auditor_pk),
+            (dest_pk, auditor_pk),
         )
         .unwrap();
 
@@ -522,33 +526,35 @@ mod test {
 
         // Case 4: invalid destination or auditor pubkey
         let spendable_balance: u64 = 0;
-        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+        let spendable_ciphertext = source_keypair.pubkey().encrypt(spendable_balance);
 
         let transfer_amount: u64 = 0;
 
         // destination pubkey invalid
         let dest_pk = pod::ElGamalPubkey::zeroed().try_into().unwrap();
-        let auditor_pk = ElGamalKeypair::new_rand().public;
+        let auditor_keypair = ElGamalKeypair::new_rand();
+        let auditor_pk = auditor_keypair.pubkey();
 
         let transfer_data = TransferData::new(
             transfer_amount,
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
-            (&dest_pk, &auditor_pk),
+            (&dest_pk, auditor_pk),
         )
         .unwrap();
 
         assert!(transfer_data.verify_proof().is_err());
 
         // auditor pubkey invalid
-        let dest_pk = ElGamalKeypair::new_rand().public;
+        let dest_keypair = ElGamalKeypair::new_rand();
+        let dest_pk = dest_keypair.pubkey();
         let auditor_pk = pod::ElGamalPubkey::zeroed().try_into().unwrap();
 
         let transfer_data = TransferData::new(
             transfer_amount,
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
-            (&dest_pk, &auditor_pk),
+            (dest_pk, &auditor_pk),
         )
         .unwrap();
 
@@ -559,20 +565,16 @@ mod test {
     fn test_source_dest_ciphertext() {
         // ElGamalKeypair keys for source, destination, and auditor accounts
         let source_keypair = ElGamalKeypair::new_rand();
+        let dest_pk = source_keypair.pubkey();
+        let dest_sk = source_keypair.secret();
 
-        let ElGamalKeypair {
-            public: dest_pk,
-            secret: dest_sk,
-        } = ElGamalKeypair::new_rand();
-
-        let ElGamalKeypair {
-            public: auditor_pk,
-            secret: auditor_sk,
-        } = ElGamalKeypair::new_rand();
+        let auditor_keypair = ElGamalKeypair::new_rand();
+        let auditor_pk = auditor_keypair.pubkey();
+        let auditor_sk = auditor_keypair.secret();
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 770000;
-        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+        let spendable_ciphertext = source_keypair.pubkey().encrypt(spendable_balance);
 
         // transfer amount
         let transfer_amount: u64 = 550000;
@@ -582,27 +584,27 @@ mod test {
             transfer_amount,
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
-            (&dest_pk, &auditor_pk),
+            (dest_pk, auditor_pk),
         )
         .unwrap();
 
         assert_eq!(
             transfer_data
-                .decrypt_amount(Role::Source, &source_keypair.secret)
+                .decrypt_amount(Role::Source, source_keypair.secret())
                 .unwrap(),
             550000_u64,
         );
 
         assert_eq!(
             transfer_data
-                .decrypt_amount(Role::Destination, &dest_sk)
+                .decrypt_amount(Role::Destination, dest_sk)
                 .unwrap(),
             550000_u64,
         );
 
         assert_eq!(
             transfer_data
-                .decrypt_amount(Role::Auditor, &auditor_sk)
+                .decrypt_amount(Role::Auditor, auditor_sk)
                 .unwrap(),
             550000_u64,
         );

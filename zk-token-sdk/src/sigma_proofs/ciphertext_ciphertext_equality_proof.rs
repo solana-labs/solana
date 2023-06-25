@@ -71,11 +71,11 @@ impl CiphertextCiphertextEqualityProof {
         transcript.equality_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
-        let P_source = source_keypair.public.get_point();
+        let P_source = source_keypair.pubkey().get_point();
         let D_source = source_ciphertext.handle.get_point();
         let P_destination = destination_pubkey.get_point();
 
-        let s = source_keypair.secret.get_scalar();
+        let s = source_keypair.secret().get_scalar();
         let x = Scalar::from(amount);
         let r = destination_opening.get_scalar();
 
@@ -270,11 +270,11 @@ mod test {
         let destination_keypair = ElGamalKeypair::new_rand();
         let message: u64 = 55;
 
-        let source_ciphertext = source_keypair.public.encrypt(message);
+        let source_ciphertext = source_keypair.pubkey().encrypt(message);
 
         let destination_opening = PedersenOpening::new_rand();
         let destination_ciphertext = destination_keypair
-            .public
+            .pubkey()
             .encrypt_with(message, &destination_opening);
 
         let mut prover_transcript = Transcript::new(b"Test");
@@ -282,7 +282,7 @@ mod test {
 
         let proof = CiphertextCiphertextEqualityProof::new(
             &source_keypair,
-            &destination_keypair.public,
+            destination_keypair.pubkey(),
             &source_ciphertext,
             &destination_opening,
             message,
@@ -291,8 +291,8 @@ mod test {
 
         assert!(proof
             .verify(
-                &source_keypair.public,
-                &destination_keypair.public,
+                source_keypair.pubkey(),
+                destination_keypair.pubkey(),
                 &source_ciphertext,
                 &destination_ciphertext,
                 &mut verifier_transcript
@@ -303,11 +303,11 @@ mod test {
         let source_message: u64 = 55;
         let destination_message: u64 = 77;
 
-        let source_ciphertext = source_keypair.public.encrypt(source_message);
+        let source_ciphertext = source_keypair.pubkey().encrypt(source_message);
 
         let destination_opening = PedersenOpening::new_rand();
         let destination_ciphertext = destination_keypair
-            .public
+            .pubkey()
             .encrypt_with(destination_message, &destination_opening);
 
         let mut prover_transcript = Transcript::new(b"Test");
@@ -315,7 +315,7 @@ mod test {
 
         let proof = CiphertextCiphertextEqualityProof::new(
             &source_keypair,
-            &destination_keypair.public,
+            destination_keypair.pubkey(),
             &source_ciphertext,
             &destination_opening,
             message,
@@ -324,8 +324,8 @@ mod test {
 
         assert!(proof
             .verify(
-                &source_keypair.public,
-                &destination_keypair.public,
+                source_keypair.pubkey(),
+                destination_keypair.pubkey(),
                 &source_ciphertext,
                 &destination_ciphertext,
                 &mut verifier_transcript
