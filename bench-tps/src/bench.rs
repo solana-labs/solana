@@ -1,5 +1,6 @@
 use {
     crate::{
+        address_table_lookup::create_address_lookup_table_account,
         bench_tps_client::*,
         cli::{Config, InstructionPaddingConfig},
         perf_utils::{sample_txs, SampleStats},
@@ -390,7 +391,6 @@ pub fn do_bench_tps<T>(
     config: Config,
     gen_keypairs: Vec<Keypair>,
     nonce_keypairs: Option<Vec<Keypair>>,
-    lookup_table_address: Option<Pubkey>,
 ) -> u64
 where
     T: 'static + BenchTpsClient + Send + Sync + ?Sized,
@@ -407,8 +407,18 @@ where
         use_durable_nonce,
         instruction_padding_config,
         num_conflict_groups,
+        number_of_accounts_from_address_lookup_table,
         ..
     } = config;
+
+    // if --number_of_accounts_from_address_lookup_table is used, creates Lookup Table account,
+    // then extend it with spepcified number of account. 
+    // All bench transfer transactions will include a `noop` instruction to load
+    // number_of_accounts_from_address_lookup_table from Lookup Table account as writable accounts.
+    // TODO - add `noop` program id to cli, and make it dependent with --number_of_accounts_from_address_lookup_table
+    let lookup_table_address = number_of_accounts_from_address_lookup_table.and_then(|number_of_accounts_from_address_lookup_table| {
+        create_address_lookup_table_account(client.clone(), &id, number_of_accounts_from_address_lookup_table, &gen_keypairs).ok()
+    });
 
     assert!(gen_keypairs.len() >= 2 * tx_count);
     let chunk_generator = TransactionChunkGenerator::new(

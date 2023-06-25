@@ -74,6 +74,7 @@ pub struct Config {
     pub num_conflict_groups: Option<usize>,
     pub bind_address: IpAddr,
     pub client_node_id: Option<Keypair>,
+    pub number_of_accounts_from_address_lookup_table: Option<usize>,
 }
 
 impl Eq for Config {}
@@ -109,6 +110,7 @@ impl Default for Config {
             num_conflict_groups: None,
             bind_address: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             client_node_id: None,
+            number_of_accounts_from_address_lookup_table: None,
         }
     }
 }
@@ -382,6 +384,13 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .validator(is_keypair)
                 .help("File containing the node identity (keypair) of a validator with active stake. This allows communicating with network using staked connection"),
         )
+        .arg(
+            Arg::with_name("number_of_accounts_from_address_lookup_table")
+                .long("number-of-accounts-from-address-lookup-table")
+                .takes_value(true)
+                .validator(|arg| is_within_range(arg, 0..))
+                .help("The additional number of accounts bench TPS transaction to load from address-lookup-table, use it to bench number of account per transaction")
+        ) 
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -555,6 +564,13 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         // error is checked by arg validator
         let client_node_id = read_keypair_file(client_node_id_filename).map_err(|_| "")?;
         args.client_node_id = Some(client_node_id);
+    }
+
+    if let Some(number_of_accounts_from_address_lookup_table) = matches.value_of("number_of_accounts_from_address_lookup_table") {
+        let parsed_number_of_accounts_from_address_lookup_table = number_of_accounts_from_address_lookup_table
+            .parse()
+            .map_err(|_| "Can't parse number-of-accounts-from-address-lookup-table")?;
+        args.number_of_accounts_from_address_lookup_table = Some(parsed_number_of_accounts_from_address_lookup_table);
     }
 
     Ok(args)
