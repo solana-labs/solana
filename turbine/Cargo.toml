@@ -11,13 +11,18 @@ edition = { workspace = true }
 
 [dependencies]
 bincode = { workspace = true }
+bytes = { workspace = true }
 crossbeam-channel = { workspace = true }
+futures = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
+quinn = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
+rcgen = { workspace = true }
+rustls = { workspace = true }
 solana-client = { workspace = true }
 solana-entry = { workspace = true }
 solana-gossip = { workspace = true }
@@ -34,6 +39,7 @@ solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-streamer = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 matches = { workspace = true }
