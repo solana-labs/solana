@@ -2315,8 +2315,9 @@ where
         match entry_iter {
             Err(err) => {
                 info!(
-                    "Unable to read snapshot archives directory {}: {err}",
-                    dir.display()
+                    "Unable to read snapshot archives directory {}: {}",
+                    dir.display(),
+                    err,
                 );
                 vec![]
             }
