@@ -1,8 +1,11 @@
 use {
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
+    itertools::Itertools,
     solana_clap_utils::{
         hidden_unless_forced,
-        input_validators::{is_keypair, is_url, is_url_or_moniker, is_within_range},
+        input_validators::{
+            is_keypair, is_url, is_url_or_moniker, is_within_range,
+        },
     },
     solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_sdk::{
@@ -74,7 +77,7 @@ pub struct Config {
     pub num_conflict_groups: Option<usize>,
     pub bind_address: IpAddr,
     pub client_node_id: Option<Keypair>,
-    pub number_of_accounts_from_address_lookup_table: Option<usize>,
+    pub load_accounts_from_address_lookup_table: Option<(Pubkey, usize)>,
 }
 
 impl Eq for Config {}
@@ -110,7 +113,7 @@ impl Default for Config {
             num_conflict_groups: None,
             bind_address: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             client_node_id: None,
-            number_of_accounts_from_address_lookup_table: None,
+            load_accounts_from_address_lookup_table: None,
         }
     }
 }
@@ -385,11 +388,21 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .help("File containing the node identity (keypair) of a validator with active stake. This allows communicating with network using staked connection"),
         )
         .arg(
-            Arg::with_name("number_of_accounts_from_address_lookup_table")
-                .long("number-of-accounts-from-address-lookup-table")
+            Arg::with_name("load_accounts_from_address_lookup_table")
+                .long("load-accounts-from-address-lookup-table")
+                .value_names(&["SBF_PROGRAM_PUBKEY", "NUMBER_OF_ACCOUNTS_TO_LOAD"])
                 .takes_value(true)
-                .validator(|arg| is_within_range(arg, 0..))
-                .help("The additional number of accounts bench TPS transaction to load from address-lookup-table, use it to bench number of account per transaction")
+                .number_of_values(2)
+                .multiple(true)
+                .help(
+                    "Specify a SBF program to load number of accounts from ATL in bench-tps Transfer transaction; \
+                     When thhis argument is used, bench-tps creates a address-lookup account with NUMBER_OF_ACCOUNTS_TO_LOAD\
+                         accounts in test cluster, then sends VersionedTransaction with V0 message includes a instruction\
+                         that load all accounts from ATL by program of SBF_PROGRAM_PUBKEY; \
+                     Otherwise, bench-tps creates VersionedTransaction with LegacyMessage without using ATL;\
+                     1st parameter is a pubkey string of SBF program to be used;\
+                     2nd parameter is the number of accounts to be loaded by the SBF program from ATL.",
+                ),
         ) 
 }
 
@@ -566,11 +579,20 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         args.client_node_id = Some(client_node_id);
     }
 
-    if let Some(number_of_accounts_from_address_lookup_table) = matches.value_of("number_of_accounts_from_address_lookup_table") {
-        let parsed_number_of_accounts_from_address_lookup_table = number_of_accounts_from_address_lookup_table
-            .parse()
-            .map_err(|_| "Can't parse number-of-accounts-from-address-lookup-table")?;
-        args.number_of_accounts_from_address_lookup_table = Some(parsed_number_of_accounts_from_address_lookup_table);
+    if let Some(values) = matches.values_of("load_accounts_from_address_lookup_table") {
+        for (sbf_program_pubkey_string, number_of_accounts) in values.into_iter().tuples() {
+            let sbf_program_pubkey = sbf_program_pubkey_string.parse::<Pubkey>().map_err(|_| "Can't parse pubkey string")?;
+            let parsed_number_of_accounts = number_of_accounts
+                .parse()
+                .map_err(|_| "Can't parse number-of-accounts-from-address-lookup-table")?;
+            // TODO - remove log
+            log::info!("==== instruct {:?} to load {:?} accounts from from ATL", sbf_program_pubkey, parsed_number_of_accounts);
+            // NOTE - support multiple ATL IXs later
+            args.load_accounts_from_address_lookup_table = Some((
+                    sbf_program_pubkey,
+                    parsed_number_of_accounts,
+            ));
+        }
     }
 
     Ok(args)

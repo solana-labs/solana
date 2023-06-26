@@ -128,7 +128,7 @@ struct TransactionChunkGenerator<'a, 'b, T: ?Sized> {
     reclaim_lamports_back_to_source_account: bool,
     use_randomized_compute_unit_price: bool,
     instruction_padding_config: Option<InstructionPaddingConfig>,
-    lookup_table_address: Option<Pubkey>,
+    lookup_table_address: Option<(Pubkey, Pubkey)>,
 }
 
 impl<'a, 'b, T> TransactionChunkGenerator<'a, 'b, T>
@@ -143,7 +143,7 @@ where
         use_randomized_compute_unit_price: bool,
         instruction_padding_config: Option<InstructionPaddingConfig>,
         num_conflict_groups: Option<usize>,
-        lookup_table_address: Option<Pubkey>,
+        lookup_table_address: Option<(Pubkey, Pubkey)>,
     ) -> Self {
         let account_chunks = if let Some(num_conflict_groups) = num_conflict_groups {
             KeypairChunks::new_with_conflict_groups(gen_keypairs, chunk_size, num_conflict_groups)
@@ -175,17 +175,20 @@ where
         );
         let signing_start = Instant::now();
 
-        let address_lookup_table_account = self.lookup_table_address.and_then(|lookup_table_address| {
+        let address_lookup_table_account = self.lookup_table_address.and_then(|(lookup_table_address, sbf_program_id)| {
             let lookup_table_account = self.client
                 .get_account_with_commitment(&lookup_table_address, CommitmentConfig::processed())
                 .unwrap();
             info!("==== {:?}", lookup_table_account);
             let lookup_table = AddressLookupTable::deserialize(&lookup_table_account.data).unwrap();
             info!("==== {:?}", lookup_table);
-            Some(AddressLookupTableAccount {
-                key: lookup_table_address, 
-                addresses: lookup_table.addresses.to_vec(),
-            })
+            Some((
+                AddressLookupTableAccount {
+                    key: lookup_table_address, 
+                    addresses: lookup_table.addresses.to_vec(),
+                }, 
+                sbf_program_id,
+            ))
         });
         info!("==== address_lookup_table_account {:?}", address_lookup_table_account);
 
@@ -407,17 +410,17 @@ where
         use_durable_nonce,
         instruction_padding_config,
         num_conflict_groups,
-        number_of_accounts_from_address_lookup_table,
+        load_accounts_from_address_lookup_table,
         ..
     } = config;
 
-    // if --number_of_accounts_from_address_lookup_table is used, creates Lookup Table account,
-    // then extend it with spepcified number of account. 
-    // All bench transfer transactions will include a `noop` instruction to load
-    // number_of_accounts_from_address_lookup_table from Lookup Table account as writable accounts.
-    // TODO - add `noop` program id to cli, and make it dependent with --number_of_accounts_from_address_lookup_table
-    let lookup_table_address = number_of_accounts_from_address_lookup_table.and_then(|number_of_accounts_from_address_lookup_table| {
-        create_address_lookup_table_account(client.clone(), &id, number_of_accounts_from_address_lookup_table, &gen_keypairs).ok()
+    // if --load_accounts_from_address_lookup_table is used, creates Lookup Table account,
+    //     then extend it with spepcified number of account. 
+    // All bench transfer transactions will include a `sbf_program_id` instruction to load
+    //     specified number of accounts from Lookup Table account as writable accounts.
+    let lookup_table_address = load_accounts_from_address_lookup_table.and_then(|(sbf_program_id, number_of_accounts)| {
+        let lookup_table_account = create_address_lookup_table_account(client.clone(), &id, number_of_accounts, &gen_keypairs).unwrap();
+        Some((lookup_table_account, sbf_program_id))
     });
 
     assert!(gen_keypairs.len() >= 2 * tx_count);
@@ -556,7 +559,7 @@ fn generate_system_txs(
     blockhash: &Hash,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
     use_randomized_compute_unit_price: bool,
-    address_lookup_table_account: &Option<AddressLookupTableAccount>,
+    address_lookup_table_account: &Option<(AddressLookupTableAccount, Pubkey)>,
 ) -> Vec<TimestampedTransaction> {
     let pairs: Vec<_> = if !reclaim {
         source.iter().zip(dest.iter()).collect()
@@ -622,7 +625,7 @@ fn transfer_with_compute_unit_price_and_padding(
     recent_blockhash: Hash,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
     compute_unit_price: Option<u64>,
-    address_lookup_table_account: &Option<AddressLookupTableAccount>,
+    address_lookup_table_account: &Option<(AddressLookupTableAccount, Pubkey)>,
 ) -> VersionedTransaction {
     let from_pubkey = from_keypair.pubkey();
     let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
@@ -650,25 +653,15 @@ fn transfer_with_compute_unit_price_and_padding(
         ),
     ]);
 
-    let versioned_message = if let Some(address_lookup_table_account) = address_lookup_table_account {
+    let versioned_message = if let Some((address_lookup_table_account, sbf_program_id)) = address_lookup_table_account {
         let address_lookup_table_account_clone = address_lookup_table_account.clone();
         let address_lookup_table_accounts = vec![address_lookup_table_account_clone];
         
-        // TAO NOTE - add fake IX to force load all accounts in ATL
-        // however the transaction will fail to execute (solana_runtime::bank] tx error:
-        // ProgramAccountNotFound), so the transfers wont land, so the bench results are invalid.
-        // TODO - need to either create the fake program account, mark it executable and hope it
-        // allows successful execution; OR hack the runtime to ignore this program pubkey (since
-        // the bench test doesn't concern execution; OR ask on Discord to see if any program
-        // available to load many accounts without executing anything.
         let account_metas: Vec<_> = address_lookup_table_account.addresses.iter().map(|pubkey| {
             AccountMeta::new(pubkey.clone(), false)
         }).collect();
-        //let noop_key_string = "11111111111111111111111111111111";
-        let noop_key_string = "FbXmsPdGqmSPrtbPCuvX16SEWqA3w6Ee16wu6jucFZuG";
-        let noop_key = noop_key_string.parse::<Pubkey>().unwrap();  //Pubkey::new_unique()
         instructions.extend_from_slice(&[
-            Instruction::new_with_bincode(noop_key, &(),
+            Instruction::new_with_bincode(sbf_program_id.clone(), &(),
             account_metas,
             ),
         ]);

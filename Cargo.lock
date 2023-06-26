@@ -5178,6 +5178,7 @@ version = "1.17.0"
 dependencies = [
  "clap 2.33.3",
  "crossbeam-channel",
+ "itertools",
  "log",
  "rand 0.7.3",
  "rayon",
