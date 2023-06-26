@@ -1722,7 +1722,7 @@ mod tests {
         // 1) If we hand over a `current_leader_bank`, vote sender state should be updated
         ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
             &mut bank_vote_sender_state_option,
-            current_leader_bank.clone(),
+            Some(current_leader_bank.clone()),
             &verified_packets_sender,
             &verified_vote_packets,
         )
@@ -1741,7 +1741,7 @@ mod tests {
         // 2) Handing over the same leader bank again should not update the state
         ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
             &mut bank_vote_sender_state_option,
-            current_leader_bank.clone(),
+            Some(current_leader_bank.clone()),
             &verified_packets_sender,
             &verified_vote_packets,
         )
@@ -1767,7 +1767,7 @@ mod tests {
         ));
         ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
             &mut bank_vote_sender_state_option,
-            current_leader_bank.clone(),
+            Some(current_leader_bank.clone()),
             &verified_packets_sender,
             &verified_vote_packets,
         )
