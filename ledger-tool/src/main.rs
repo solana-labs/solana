@@ -980,10 +980,9 @@ fn assert_capitalization(bank: &Bank) {
 
 /// Get the AccessType required, based on `process_options`
 fn get_access_type(process_options: &ProcessOptions) -> AccessType {
-    if process_options.use_snapshot_archives_at_startup == UseSnapshotArchivesAtStartup::Never {
-        AccessType::PrimaryForMaintenance
-    } else {
-        AccessType::Secondary
+    match process_options.use_snapshot_archives_at_startup {
+        UseSnapshotArchivesAtStartup::Always => AccessType::Secondary,
+        UseSnapshotArchivesAtStartup::Never => AccessType::PrimaryForMaintenance,
     }
 }
 
