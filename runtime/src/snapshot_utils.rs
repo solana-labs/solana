@@ -1150,10 +1150,9 @@ pub fn create_all_accounts_run_and_snapshot_dirs(
         // create the run/ and snapshot/ sub directories for each account_path
         let (run_dir, snapshot_dir) =
             create_accounts_run_and_snapshot_dirs(account_path).map_err(|err| {
-                SnapshotError::IoWithSourceAndFile(
+                SnapshotError::IoWithSource(
                     err,
                     "Unable to create account run and snapshot directories",
-                    account_path.to_path_buf(),
                 )
             })?;
         run_dirs.push(run_dir);
