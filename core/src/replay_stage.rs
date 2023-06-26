@@ -9,8 +9,7 @@ use {
             GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
         },
         cluster_slot_state_verifier::*,
-        cluster_slots::ClusterSlots,
-        cluster_slots_service::ClusterSlotsUpdateSender,
+        cluster_slots_service::{cluster_slots::ClusterSlots, ClusterSlotsUpdateSender},
         commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
         consensus::{
             ComputedBankState, Stake, SwitchForkDecision, ThresholdDecision, Tower, VotedStakes,
