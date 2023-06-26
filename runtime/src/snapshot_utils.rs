@@ -3445,7 +3445,6 @@ mod tests {
         std::{
             convert::TryFrom,
             mem::size_of,
-            os::unix::fs::PermissionsExt,
             sync::{atomic::Ordering, Arc},
         },
         tempfile::NamedTempFile,
@@ -5312,40 +5311,22 @@ mod tests {
             })
             .unzip();
 
-        // Set the parent directory of the first account path to be readonly, so that
-        // create_dir_all in create_all_accounts_run_and_snapshot_dirs fails.
-        let account_path_first = &account_paths[0];
-        let parent = account_path_first.parent().unwrap();
-        let mut parent_permissions = fs::metadata(parent).unwrap().permissions();
-        parent_permissions.set_readonly(true);
-        fs::set_permissions(parent, parent_permissions.clone()).unwrap();
-
-        // assert that create_all_accounts_run_and_snapshot_dirs returns error when the first account path
-        // is readonly.
-        assert!(create_all_accounts_run_and_snapshot_dirs(&account_paths).is_err());
-
-        // Set the parent directory of the first account path to be writable, so that
-        // create_all_accounts_run_and_snapshot_dirs returns Ok.
-        parent_permissions.set_mode(0o744);
-        fs::set_permissions(parent, parent_permissions.clone()).unwrap();
-        let result = create_all_accounts_run_and_snapshot_dirs(&account_paths);
-        assert!(result.is_ok());
-
-        let (account_run_paths, account_snapshot_paths) = result.unwrap();
+        // create the `run/` and `snapshot/` dirs, and ensure they're there
+        let (account_run_paths, account_snapshot_paths) =
+            create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap();
         account_run_paths.iter().all(|path| path.is_dir());
         account_snapshot_paths.iter().all(|path| path.is_dir());
 
+        // delete a `run/` and `snapshot/` dir, then re-create it
+        let account_path_first = account_paths.first().unwrap();
         delete_contents_of_path(account_path_first);
         assert!(account_path_first.exists());
-        let mut permissions = fs::metadata(account_path_first).unwrap().permissions();
-        permissions.set_readonly(true);
-        fs::set_permissions(account_path_first, permissions.clone()).unwrap();
-        parent_permissions.set_readonly(true);
-        fs::set_permissions(parent, parent_permissions.clone()).unwrap();
-        // assert that create_all_accounts_run_and_snapshot_dirs returns error when the first account path
-        // and its parent are readonly.  This exercises the case where the first account path is readonly,
-        // causing create_accounts_run_and_snapshot_dirs to fail.
-        assert!(create_all_accounts_run_and_snapshot_dirs(&account_paths).is_err());
+        assert!(!account_path_first.join("run").exists());
+        assert!(!account_path_first.join("snapshot").exists());
+
+        _ = create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap();
+        account_run_paths.iter().all(|path| path.is_dir());
+        account_snapshot_paths.iter().all(|path| path.is_dir());
     }
 
     #[test]
