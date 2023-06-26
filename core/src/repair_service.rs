@@ -2,7 +2,7 @@
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
 #[cfg(test)]
 use {
-    crate::duplicate_repair_status::DuplicateSlotRepairStatus, solana_ledger::shred::Nonce,
+    crate::duplicate_repair_status::DuplicateSlotRepairStatus,
     solana_sdk::clock::DEFAULT_MS_PER_SLOT,
 };
 use {
@@ -670,7 +670,7 @@ impl RepairService {
         blockstore: &Blockstore,
         max_repairs: usize,
         repair_range: &RepairSlotRange,
-    ) -> crate::result::Result<Vec<ShredRepairType>> {
+    ) -> Vec<ShredRepairType> {
         // Slot height and shred indexes for shreds we want to repair
         let mut repairs: Vec<ShredRepairType> = vec![];
         for slot in repair_range.start..=repair_range.end {
@@ -695,7 +695,7 @@ impl RepairService {
             repairs.extend(new_repairs);
         }
 
-        Ok(repairs)
+        repairs
     }
 
     #[cfg(test)]
@@ -750,20 +750,23 @@ impl RepairService {
                     let mut outstanding_requests = outstanding_requests.write().unwrap();
                     for repair_type in repairs {
                         let nonce = outstanding_requests.add_request(repair_type, timestamp());
-                        if let Err(e) = Self::serialize_and_send_request(
+
+                        match serve_repair.map_repair_request(
                             &repair_type,
-                            repair_socket,
                             &repair_pubkey,
-                            &repair_addr,
-                            serve_repair,
                             repair_stats,
                             nonce,
                             identity_keypair,
                         ) {
-                            info!(
-                                "repair req send_to {} ({}) error {:?}",
-                                repair_pubkey, repair_addr, e
-                            );
+                            Ok(req) => {
+                                if let Err(e) = repair_socket.send_to(&req, repair_addr) {
+                                    info!(
+                                        "repair req send_to {} ({}) error {:?}",
+                                        repair_pubkey, repair_addr, e
+                                    );
+                                }
+                            }
+                            Err(e) => info!("map_repair_request err={e}"),
                         }
                     }
                     true
@@ -774,28 +777,6 @@ impl RepairService {
                 true
             }
         })
-    }
-
-    #[cfg(test)]
-    fn serialize_and_send_request(
-        repair_type: &ShredRepairType,
-        repair_socket: &UdpSocket,
-        repair_pubkey: &Pubkey,
-        to: &SocketAddr,
-        serve_repair: &ServeRepair,
-        repair_stats: &mut RepairStats,
-        nonce: Nonce,
-        identity_keypair: &Keypair,
-    ) -> crate::result::Result<()> {
-        let req = serve_repair.map_repair_request(
-            repair_type,
-            repair_pubkey,
-            repair_stats,
-            nonce,
-            identity_keypair,
-        )?;
-        repair_socket.send_to(&req, to)?;
-        Ok(())
     }
 
     #[cfg(test)]
@@ -1115,8 +1096,7 @@ mod test {
                             &blockstore,
                             std::usize::MAX,
                             &repair_slot_range,
-                        )
-                        .unwrap(),
+                        ),
                         expected
                     );
                 }
@@ -1163,8 +1143,7 @@ mod test {
                     &blockstore,
                     std::usize::MAX,
                     &repair_slot_range,
-                )
-                .unwrap(),
+                ),
                 expected
             );
         }

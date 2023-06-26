@@ -8,6 +8,7 @@ use {
         result::{Error, Result},
     },
     bincode::serialize,
+    crossbeam_channel::RecvTimeoutError,
     lru::LruCache,
     rand::{
         distributions::{Distribution, WeightedError, WeightedIndex},
@@ -628,7 +629,7 @@ impl ServeRepair {
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), RecvTimeoutError> {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
         let mut reqs_v = vec![requests_receiver.recv_timeout(timeout)?];
@@ -831,8 +832,11 @@ impl ServeRepair {
                         &data_budget,
                     );
                     match result {
-                        Err(Error::RecvTimeout(_)) | Ok(_) => {}
-                        Err(err) => info!("repair listener error: {:?}", err),
+                        Ok(_) | Err(RecvTimeoutError::Timeout) => {}
+                        Err(RecvTimeoutError::Disconnected) => {
+                            info!("repair listener disconnected");
+                            return;
+                        }
                     };
                     if exit.load(Ordering::Relaxed) {
                         return;
@@ -1367,7 +1371,7 @@ impl ServeRepair {
 mod tests {
     use {
         super::*,
-        crate::{repair_response, result::Error},
+        crate::repair_response,
         solana_gossip::{contact_info::ContactInfo, socketaddr, socketaddr_any},
         solana_ledger::{
             blockstore::make_many_slot_entries,
