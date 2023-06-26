@@ -100,9 +100,6 @@ fn verify_reachable_ports(
         udp_sockets.extend(node.sockets.broadcast.iter());
         udp_sockets.extend(node.sockets.retransmit_sockets.iter());
     }
-    if verify_address(&node.info.tvu_forwards().ok()) {
-        udp_sockets.extend(node.sockets.tvu_forwards.iter());
-    }
 
     let mut tcp_listeners = vec![];
     if let Some((rpc_addr, rpc_pubsub_addr)) = validator_config.rpc_addrs {

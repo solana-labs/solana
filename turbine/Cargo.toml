@@ -1,0 +1,49 @@
+[package]
+name = "solana-turbine"
+description = "Blockchain, Rebuilt for Scale"
+documentation = "https://docs.rs/solana-turbine"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bincode = { workspace = true }
+crossbeam-channel = { workspace = true }
+itertools = { workspace = true }
+log = { workspace = true }
+lru = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+rayon = { workspace = true }
+solana-client = { workspace = true }
+solana-entry = { workspace = true }
+solana-gossip = { workspace = true }
+solana-ledger = { workspace = true }
+solana-measure = { workspace = true }
+solana-metrics = { workspace = true }
+solana-perf = { workspace = true }
+solana-poh = { workspace = true }
+solana-quic-client = { workspace = true }
+solana-rayon-threadlimit = { workspace = true }
+solana-rpc = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+solana-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-streamer = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+matches = { workspace = true }
+solana-logger = { workspace = true }
+
+[[bench]]
+name = "cluster_info"
+
+[[bench]]
+name = "cluster_nodes"
+
+[[bench]]
+name = "retransmit_stage"

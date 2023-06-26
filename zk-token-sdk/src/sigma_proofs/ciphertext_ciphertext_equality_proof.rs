@@ -11,6 +11,7 @@ use {
             pedersen::{PedersenOpening, G, H},
         },
         errors::ProofVerificationError,
+        sigma_proofs::canonical_scalar_from_slice,
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -18,7 +19,6 @@ use {
 };
 use {
     crate::{sigma_proofs::errors::EqualityProofError, transcript::TranscriptProtocol},
-    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -68,14 +68,14 @@ impl CiphertextCiphertextEqualityProof {
         amount: u64,
         transcript: &mut Transcript,
     ) -> Self {
-        transcript.equality_proof_domain_sep();
+        transcript.equality_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
-        let P_source = source_keypair.public.get_point();
+        let P_source = source_keypair.pubkey().get_point();
         let D_source = source_ciphertext.handle.get_point();
         let P_destination = destination_pubkey.get_point();
 
-        let s = source_keypair.secret.get_scalar();
+        let s = source_keypair.secret().get_scalar();
         let x = Scalar::from(amount);
         let r = destination_opening.get_scalar();
 
@@ -136,7 +136,7 @@ impl CiphertextCiphertextEqualityProof {
         destination_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), EqualityProofError> {
-        transcript.equality_proof_domain_sep();
+        transcript.equality_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
         let P_source = source_pubkey.get_point();
@@ -239,20 +239,13 @@ impl CiphertextCiphertextEqualityProof {
             return Err(ProofVerificationError::Deserialization.into());
         }
 
-        let bytes = array_ref![bytes, 0, 224];
-        let (Y_0, Y_1, Y_2, Y_3, z_s, z_x, z_r) = array_refs![bytes, 32, 32, 32, 32, 32, 32, 32];
-
-        let Y_0 = CompressedRistretto::from_slice(Y_0);
-        let Y_1 = CompressedRistretto::from_slice(Y_1);
-        let Y_2 = CompressedRistretto::from_slice(Y_2);
-        let Y_3 = CompressedRistretto::from_slice(Y_3);
-
-        let z_s =
-            Scalar::from_canonical_bytes(*z_s).ok_or(ProofVerificationError::Deserialization)?;
-        let z_x =
-            Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
-        let z_r =
-            Scalar::from_canonical_bytes(*z_r).ok_or(ProofVerificationError::Deserialization)?;
+        let Y_0 = CompressedRistretto::from_slice(&bytes[..32]);
+        let Y_1 = CompressedRistretto::from_slice(&bytes[32..64]);
+        let Y_2 = CompressedRistretto::from_slice(&bytes[64..96]);
+        let Y_3 = CompressedRistretto::from_slice(&bytes[96..128]);
+        let z_s = canonical_scalar_from_slice(&bytes[128..160])?;
+        let z_x = canonical_scalar_from_slice(&bytes[160..192])?;
+        let z_r = canonical_scalar_from_slice(&bytes[192..224])?;
 
         Ok(CiphertextCiphertextEqualityProof {
             Y_0,
@@ -277,11 +270,11 @@ mod test {
         let destination_keypair = ElGamalKeypair::new_rand();
         let message: u64 = 55;
 
-        let source_ciphertext = source_keypair.public.encrypt(message);
+        let source_ciphertext = source_keypair.pubkey().encrypt(message);
 
         let destination_opening = PedersenOpening::new_rand();
         let destination_ciphertext = destination_keypair
-            .public
+            .pubkey()
             .encrypt_with(message, &destination_opening);
 
         let mut prover_transcript = Transcript::new(b"Test");
@@ -289,7 +282,7 @@ mod test {
 
         let proof = CiphertextCiphertextEqualityProof::new(
             &source_keypair,
-            &destination_keypair.public,
+            destination_keypair.pubkey(),
             &source_ciphertext,
             &destination_opening,
             message,
@@ -298,8 +291,8 @@ mod test {
 
         assert!(proof
             .verify(
-                &source_keypair.public,
-                &destination_keypair.public,
+                source_keypair.pubkey(),
+                destination_keypair.pubkey(),
                 &source_ciphertext,
                 &destination_ciphertext,
                 &mut verifier_transcript
@@ -310,11 +303,11 @@ mod test {
         let source_message: u64 = 55;
         let destination_message: u64 = 77;
 
-        let source_ciphertext = source_keypair.public.encrypt(source_message);
+        let source_ciphertext = source_keypair.pubkey().encrypt(source_message);
 
         let destination_opening = PedersenOpening::new_rand();
         let destination_ciphertext = destination_keypair
-            .public
+            .pubkey()
             .encrypt_with(destination_message, &destination_opening);
 
         let mut prover_transcript = Transcript::new(b"Test");
@@ -322,7 +315,7 @@ mod test {
 
         let proof = CiphertextCiphertextEqualityProof::new(
             &source_keypair,
-            &destination_keypair.public,
+            destination_keypair.pubkey(),
             &source_ciphertext,
             &destination_opening,
             message,
@@ -331,8 +324,8 @@ mod test {
 
         assert!(proof
             .verify(
-                &source_keypair.public,
-                &destination_keypair.public,
+                source_keypair.pubkey(),
+                destination_keypair.pubkey(),
                 &source_ciphertext,
                 &destination_ciphertext,
                 &mut verifier_transcript

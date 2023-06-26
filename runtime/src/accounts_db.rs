@@ -114,7 +114,7 @@ use {
 };
 
 const PAGE_SIZE: u64 = 4 * 1024;
-const MAX_RECYCLE_STORES: usize = 1000;
+pub(crate) const MAX_RECYCLE_STORES: usize = 1000;
 // when the accounts write cache exceeds this many bytes, we will flush it
 // this can be specified on the command line, too (--accounts-db-cache-limit-mb)
 const WRITE_CACHE_LIMIT_BYTES_DEFAULT: u64 = 15_000_000_000;
@@ -4621,12 +4621,21 @@ impl AccountsDb {
         let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
 
         dropped_roots.for_each(|slot| {
-            self.accounts_index
-                .clean_dead_slot(slot, &mut AccountsIndexRootsStats::default());
+            self.accounts_index.clean_dead_slot(slot);
             accounts_delta_hashes.remove(&slot);
             bank_hash_stats.remove(&slot);
             // the storage has been removed from this slot and recycled or dropped
             assert!(self.storage.remove(&slot, false).is_none());
+            debug_assert!(
+                !self
+                    .accounts_index
+                    .roots_tracker
+                    .read()
+                    .unwrap()
+                    .alive_roots
+                    .contains(&slot),
+                "slot: {slot}"
+            );
         });
     }
 
@@ -5528,7 +5537,7 @@ impl AccountsDb {
                     drop(recycle_stores);
                     let old_id = ret.append_vec_id();
                     ret.recycle(slot, self.next_id());
-                    // This info show the appendvec history change history.  It helps debugging
+                    // This info shows the appendvec change history.  It helps debugging
                     // the appendvec data corrupution issues related to recycling.
                     debug!(
                         "recycling store: old slot {}, old_id: {}, new slot {}, new id{}, path {:?} ",
@@ -8210,10 +8219,7 @@ impl AccountsDb {
         let mut unrooted_cleaned_count = 0;
         let dead_slots: Vec<_> = dead_slots_iter
             .map(|slot| {
-                if self
-                    .accounts_index
-                    .clean_dead_slot(*slot, &mut accounts_index_root_stats)
-                {
+                if self.accounts_index.clean_dead_slot(*slot) {
                     rooted_cleaned_count += 1;
                 } else {
                     unrooted_cleaned_count += 1;
@@ -8230,7 +8236,8 @@ impl AccountsDb {
             );
             trace!("remove_dead_slots_metadata: dead_slots: {:?}", dead_slots);
         }
-
+        self.accounts_index
+            .update_roots_stats(&mut accounts_index_root_stats);
         accounts_index_root_stats.rooted_cleaned_count += rooted_cleaned_count;
         accounts_index_root_stats.unrooted_cleaned_count += unrooted_cleaned_count;
 

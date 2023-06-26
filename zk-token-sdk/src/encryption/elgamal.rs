@@ -133,7 +133,7 @@ impl ElGamal {
     fn decrypt(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> DiscreteLog {
         DiscreteLog::new(
             *G,
-            &ciphertext.commitment.0 - &(&secret.0 * &ciphertext.handle.0),
+            ciphertext.commitment.get_point() - &(&secret.0 * &ciphertext.handle.0),
         )
     }
 
@@ -155,13 +155,22 @@ impl ElGamal {
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Zeroize)]
 pub struct ElGamalKeypair {
     /// The public half of this keypair.
-    pub public: ElGamalPubkey,
+    public: ElGamalPubkey,
     /// The secret half of this keypair.
-    pub secret: ElGamalSecretKey,
+    secret: ElGamalSecretKey,
 }
 
 impl ElGamalKeypair {
-    /// Deterministically derives an ElGamal keypair from a Solana signer and a public seed..
+    /// Create an ElGamal keypair from an ElGamal public key and an ElGamal secret key.
+    ///
+    /// An ElGamal keypair should never be instantiated manually; `ElGamalKeypair::new_rand` or
+    /// `ElGamalKeypair::new_from_signer` should be used instead. This function exists to create
+    /// custom ElGamal keypairs for tests.
+    pub fn new_for_tests(public: ElGamalPubkey, secret: ElGamalSecretKey) -> Self {
+        Self { public, secret }
+    }
+
+    /// Deterministically derives an ElGamal keypair from a Solana signer and a public seed.
     ///
     /// This function exists for applications where a user may not wish to maintain a Solana signer
     /// and an ElGamal keypair separately. Instead, a user can derive the ElGamal keypair
@@ -190,6 +199,14 @@ impl ElGamalKeypair {
     #[cfg(not(target_os = "solana"))]
     pub fn new_rand() -> Self {
         ElGamal::keygen()
+    }
+
+    pub fn pubkey(&self) -> &ElGamalPubkey {
+        &self.public
+    }
+
+    pub fn secret(&self) -> &ElGamalSecretKey {
+        &self.secret
     }
 
     pub fn to_bytes(&self) -> [u8; 64] {
@@ -520,7 +537,8 @@ pub struct ElGamalCiphertext {
 }
 impl ElGamalCiphertext {
     pub fn add_amount<T: Into<Scalar>>(&self, amount: T) -> Self {
-        let commitment_to_add = PedersenCommitment(amount.into() * &(*G));
+        let point = amount.into() * &(*G);
+        let commitment_to_add = PedersenCommitment::new(point);
         ElGamalCiphertext {
             commitment: &self.commitment + &commitment_to_add,
             handle: self.handle,
@@ -528,7 +546,8 @@ impl ElGamalCiphertext {
     }
 
     pub fn subtract_amount<T: Into<Scalar>>(&self, amount: T) -> Self {
-        let commitment_to_subtract = PedersenCommitment(amount.into() * &(*G));
+        let point = amount.into() * &(*G);
+        let commitment_to_subtract = PedersenCommitment::new(point);
         ElGamalCiphertext {
             commitment: &self.commitment - &commitment_to_subtract,
             handle: self.handle,
@@ -650,7 +669,7 @@ define_mul_variants!(
 pub struct DecryptHandle(RistrettoPoint);
 impl DecryptHandle {
     pub fn new(public: &ElGamalPubkey, opening: &PedersenOpening) -> Self {
-        Self(&public.0 * &opening.0)
+        Self(&public.0 * opening.get_scalar())
     }
 
     pub fn get_point(&self) -> &RistrettoPoint {

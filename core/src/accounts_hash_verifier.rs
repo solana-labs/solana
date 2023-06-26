@@ -587,7 +587,9 @@ mod tests {
         super::*,
         rand::seq::SliceRandom,
         solana_gossip::contact_info::ContactInfo,
-        solana_runtime::snapshot_package::SnapshotType,
+        solana_runtime::{
+            snapshot_package::SnapshotType, snapshot_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
+        },
         solana_sdk::{
             signature::{Keypair, Signer},
             timing::timestamp,
@@ -613,7 +615,7 @@ mod tests {
         let full_snapshot_archive_interval_slots = 100;
         let snapshot_config = SnapshotConfig {
             full_snapshot_archive_interval_slots,
-            incremental_snapshot_archive_interval_slots: Slot::MAX,
+            incremental_snapshot_archive_interval_slots: DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
             ..SnapshotConfig::default()
         };
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();

@@ -349,7 +349,6 @@ pub(crate) mod tests {
             MessageHash::Compute,
             None,
             SimpleAddressLoader::Disabled,
-            true, // require_static_program_ids
         )
         .unwrap();
 

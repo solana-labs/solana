@@ -10,7 +10,7 @@ use {
     },
     solana_zk_token_sdk::{
         encryption::{
-            elgamal::ElGamalKeypair,
+            elgamal::{ElGamalKeypair, ElGamalSecretKey},
             grouped_elgamal::GroupedElGamal,
             pedersen::{Pedersen, PedersenOpening},
         },
@@ -42,13 +42,13 @@ const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 13] = [
 async fn test_zero_balance() {
     let elgamal_keypair = ElGamalKeypair::new_rand();
 
-    let zero_ciphertext = elgamal_keypair.public.encrypt(0_u64);
+    let zero_ciphertext = elgamal_keypair.pubkey().encrypt(0_u64);
     let success_proof_data = ZeroBalanceProofData::new(&elgamal_keypair, &zero_ciphertext).unwrap();
 
-    let incorrect_keypair = ElGamalKeypair {
-        public: ElGamalKeypair::new_rand().public,
-        secret: ElGamalKeypair::new_rand().secret,
-    };
+    let incorrect_pubkey = elgamal_keypair.pubkey();
+    let incorrect_secret = ElGamalSecretKey::new_rand();
+    let incorrect_keypair = ElGamalKeypair::new_for_tests(*incorrect_pubkey, incorrect_secret);
+
     let fail_proof_data = ZeroBalanceProofData::new(&incorrect_keypair, &zero_ciphertext).unwrap();
 
     test_verify_proof_without_context(
@@ -80,16 +80,16 @@ async fn test_ciphertext_ciphertext_equality() {
     let destination_keypair = ElGamalKeypair::new_rand();
 
     let amount: u64 = 0;
-    let source_ciphertext = source_keypair.public.encrypt(amount);
+    let source_ciphertext = source_keypair.pubkey().encrypt(amount);
 
     let destination_opening = PedersenOpening::new_rand();
     let destination_ciphertext = destination_keypair
-        .public
+        .pubkey()
         .encrypt_with(amount, &destination_opening);
 
     let success_proof_data = CiphertextCiphertextEqualityProofData::new(
         &source_keypair,
-        &destination_keypair.public,
+        destination_keypair.pubkey(),
         &source_ciphertext,
         &destination_ciphertext,
         &destination_opening,
@@ -97,13 +97,13 @@ async fn test_ciphertext_ciphertext_equality() {
     )
     .unwrap();
 
-    let incorrect_keypair = ElGamalKeypair {
-        public: ElGamalKeypair::new_rand().public,
-        secret: ElGamalKeypair::new_rand().secret,
-    };
+    let incorrect_pubkey = source_keypair.pubkey();
+    let incorrect_secret = ElGamalSecretKey::new_rand();
+    let incorrect_keypair = ElGamalKeypair::new_for_tests(*incorrect_pubkey, incorrect_secret);
+
     let fail_proof_data = CiphertextCiphertextEqualityProofData::new(
         &incorrect_keypair,
-        &destination_keypair.public,
+        destination_keypair.pubkey(),
         &source_ciphertext,
         &destination_ciphertext,
         &destination_opening,
@@ -137,11 +137,15 @@ async fn test_ciphertext_ciphertext_equality() {
 #[tokio::test]
 async fn test_transfer() {
     let source_keypair = ElGamalKeypair::new_rand();
-    let dest_pubkey = ElGamalKeypair::new_rand().public;
-    let auditor_pubkey = ElGamalKeypair::new_rand().public;
+
+    let destination_keypair = ElGamalKeypair::new_rand();
+    let destination_pubkey = destination_keypair.pubkey();
+
+    let auditor_keypair = ElGamalKeypair::new_rand();
+    let auditor_pubkey = auditor_keypair.pubkey();
 
     let spendable_balance: u64 = 0;
-    let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+    let spendable_ciphertext = source_keypair.pubkey().encrypt(spendable_balance);
 
     let transfer_amount: u64 = 0;
 
@@ -149,20 +153,19 @@ async fn test_transfer() {
         transfer_amount,
         (spendable_balance, &spendable_ciphertext),
         &source_keypair,
-        (&dest_pubkey, &auditor_pubkey),
+        (destination_pubkey, auditor_pubkey),
     )
     .unwrap();
 
-    let incorrect_keypair = ElGamalKeypair {
-        public: ElGamalKeypair::new_rand().public,
-        secret: ElGamalKeypair::new_rand().secret,
-    };
+    let incorrect_pubkey = source_keypair.pubkey();
+    let incorrect_secret = ElGamalSecretKey::new_rand();
+    let incorrect_keypair = ElGamalKeypair::new_for_tests(*incorrect_pubkey, incorrect_secret);
 
     let fail_proof_data = TransferData::new(
         transfer_amount,
         (spendable_balance, &spendable_ciphertext),
         &incorrect_keypair,
-        (&dest_pubkey, &auditor_pubkey),
+        (destination_pubkey, auditor_pubkey),
     )
     .unwrap();
 
@@ -192,12 +195,18 @@ async fn test_transfer() {
 #[tokio::test]
 async fn test_transfer_with_fee() {
     let source_keypair = ElGamalKeypair::new_rand();
-    let destination_pubkey = ElGamalKeypair::new_rand().public;
-    let auditor_pubkey = ElGamalKeypair::new_rand().public;
-    let withdraw_withheld_authority_pubkey = ElGamalKeypair::new_rand().public;
+
+    let destination_keypair = ElGamalKeypair::new_rand();
+    let destination_pubkey = destination_keypair.pubkey();
+
+    let auditor_keypair = ElGamalKeypair::new_rand();
+    let auditor_pubkey = auditor_keypair.pubkey();
+
+    let withdraw_withheld_authority_keypair = ElGamalKeypair::new_rand();
+    let withdraw_withheld_authority_pubkey = withdraw_withheld_authority_keypair.pubkey();
 
     let spendable_balance: u64 = 120;
-    let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+    let spendable_ciphertext = source_keypair.pubkey().encrypt(spendable_balance);
 
     let transfer_amount: u64 = 0;
 
@@ -210,24 +219,23 @@ async fn test_transfer_with_fee() {
         transfer_amount,
         (spendable_balance, &spendable_ciphertext),
         &source_keypair,
-        (&destination_pubkey, &auditor_pubkey),
+        (destination_pubkey, auditor_pubkey),
         fee_parameters,
-        &withdraw_withheld_authority_pubkey,
+        withdraw_withheld_authority_pubkey,
     )
     .unwrap();
 
-    let incorrect_keypair = ElGamalKeypair {
-        public: ElGamalKeypair::new_rand().public,
-        secret: ElGamalKeypair::new_rand().secret,
-    };
+    let incorrect_pubkey = source_keypair.pubkey();
+    let incorrect_secret = ElGamalSecretKey::new_rand();
+    let incorrect_keypair = ElGamalKeypair::new_for_tests(*incorrect_pubkey, incorrect_secret);
 
     let fail_proof_data = TransferWithFeeData::new(
         transfer_amount,
         (spendable_balance, &spendable_ciphertext),
         &incorrect_keypair,
-        (&destination_pubkey, &auditor_pubkey),
+        (destination_pubkey, auditor_pubkey),
         fee_parameters,
-        &withdraw_withheld_authority_pubkey,
+        withdraw_withheld_authority_pubkey,
     )
     .unwrap();
 
@@ -259,7 +267,7 @@ async fn test_withdraw() {
     let elgamal_keypair = ElGamalKeypair::new_rand();
 
     let current_balance: u64 = 77;
-    let current_ciphertext = elgamal_keypair.public.encrypt(current_balance);
+    let current_ciphertext = elgamal_keypair.pubkey().encrypt(current_balance);
     let withdraw_amount: u64 = 55;
 
     let success_proof_data = WithdrawData::new(
@@ -270,10 +278,10 @@ async fn test_withdraw() {
     )
     .unwrap();
 
-    let incorrect_keypair = ElGamalKeypair {
-        public: ElGamalKeypair::new_rand().public,
-        secret: ElGamalKeypair::new_rand().secret,
-    };
+    let incorrect_pubkey = elgamal_keypair.pubkey();
+    let incorrect_secret = ElGamalSecretKey::new_rand();
+    let incorrect_keypair = ElGamalKeypair::new_for_tests(*incorrect_pubkey, incorrect_secret);
+
     let fail_proof_data = WithdrawData::new(
         withdraw_amount,
         &incorrect_keypair,
@@ -311,10 +319,9 @@ async fn test_pubkey_validity() {
 
     let success_proof_data = PubkeyValidityData::new(&elgamal_keypair).unwrap();
 
-    let incorrect_keypair = ElGamalKeypair {
-        public: ElGamalKeypair::new_rand().public,
-        secret: ElGamalKeypair::new_rand().secret,
-    };
+    let incorrect_pubkey = elgamal_keypair.pubkey();
+    let incorrect_secret = ElGamalSecretKey::new_rand();
+    let incorrect_keypair = ElGamalKeypair::new_for_tests(*incorrect_pubkey, incorrect_secret);
 
     let fail_proof_data = PubkeyValidityData::new(&incorrect_keypair).unwrap();
 
@@ -526,7 +533,7 @@ async fn test_batched_range_proof_u256() {
 async fn test_ciphertext_commitment_equality() {
     let keypair = ElGamalKeypair::new_rand();
     let amount: u64 = 55;
-    let ciphertext = keypair.public.encrypt(amount);
+    let ciphertext = keypair.pubkey().encrypt(amount);
     let (commitment, opening) = Pedersen::new(amount);
 
     let success_proof_data = CiphertextCommitmentEqualityProofData::new(
@@ -538,10 +545,9 @@ async fn test_ciphertext_commitment_equality() {
     )
     .unwrap();
 
-    let incorrect_keypair = ElGamalKeypair {
-        public: ElGamalKeypair::new_rand().public,
-        secret: ElGamalKeypair::new_rand().secret,
-    };
+    let incorrect_pubkey = keypair.pubkey();
+    let incorrect_secret = ElGamalSecretKey::new_rand();
+    let incorrect_keypair = ElGamalKeypair::new_for_tests(*incorrect_pubkey, incorrect_secret);
 
     let fail_proof_data = CiphertextCommitmentEqualityProofData::new(
         &incorrect_keypair,
@@ -577,17 +583,20 @@ async fn test_ciphertext_commitment_equality() {
 
 #[tokio::test]
 async fn test_grouped_ciphertext_2_handles_validity() {
-    let destination_pubkey = ElGamalKeypair::new_rand().public;
-    let auditor_pubkey = ElGamalKeypair::new_rand().public;
+    let destination_keypair = ElGamalKeypair::new_rand();
+    let destination_pubkey = destination_keypair.pubkey();
+
+    let auditor_keypair = ElGamalKeypair::new_rand();
+    let auditor_pubkey = auditor_keypair.pubkey();
 
     let amount: u64 = 55;
     let opening = PedersenOpening::new_rand();
     let grouped_ciphertext =
-        GroupedElGamal::encrypt_with([&destination_pubkey, &auditor_pubkey], amount, &opening);
+        GroupedElGamal::encrypt_with([destination_pubkey, auditor_pubkey], amount, &opening);
 
     let success_proof_data = GroupedCiphertext2HandlesValidityProofData::new(
-        &destination_pubkey,
-        &auditor_pubkey,
+        destination_pubkey,
+        auditor_pubkey,
         &grouped_ciphertext,
         amount,
         &opening,
@@ -596,8 +605,8 @@ async fn test_grouped_ciphertext_2_handles_validity() {
 
     let incorrect_opening = PedersenOpening::new_rand();
     let fail_proof_data = GroupedCiphertext2HandlesValidityProofData::new(
-        &destination_pubkey,
-        &auditor_pubkey,
+        destination_pubkey,
+        auditor_pubkey,
         &grouped_ciphertext,
         amount,
         &incorrect_opening,
@@ -629,8 +638,11 @@ async fn test_grouped_ciphertext_2_handles_validity() {
 
 #[tokio::test]
 async fn test_batched_grouped_ciphertext_2_handles_validity() {
-    let destination_pubkey = ElGamalKeypair::new_rand().public;
-    let auditor_pubkey = ElGamalKeypair::new_rand().public;
+    let destination_keypair = ElGamalKeypair::new_rand();
+    let destination_pubkey = destination_keypair.pubkey();
+
+    let auditor_keypair = ElGamalKeypair::new_rand();
+    let auditor_pubkey = auditor_keypair.pubkey();
 
     let amount_lo: u64 = 55;
     let amount_hi: u64 = 22;
@@ -638,20 +650,14 @@ async fn test_batched_grouped_ciphertext_2_handles_validity() {
     let opening_lo = PedersenOpening::new_rand();
     let opening_hi = PedersenOpening::new_rand();
 
-    let grouped_ciphertext_lo = GroupedElGamal::encrypt_with(
-        [&destination_pubkey, &auditor_pubkey],
-        amount_lo,
-        &opening_lo,
-    );
-    let grouped_ciphertext_hi = GroupedElGamal::encrypt_with(
-        [&destination_pubkey, &auditor_pubkey],
-        amount_hi,
-        &opening_hi,
-    );
+    let grouped_ciphertext_lo =
+        GroupedElGamal::encrypt_with([destination_pubkey, auditor_pubkey], amount_lo, &opening_lo);
+    let grouped_ciphertext_hi =
+        GroupedElGamal::encrypt_with([destination_pubkey, auditor_pubkey], amount_hi, &opening_hi);
 
     let success_proof_data = BatchedGroupedCiphertext2HandlesValidityProofData::new(
-        &destination_pubkey,
-        &auditor_pubkey,
+        destination_pubkey,
+        auditor_pubkey,
         &grouped_ciphertext_lo,
         &grouped_ciphertext_hi,
         amount_lo,
@@ -663,8 +669,8 @@ async fn test_batched_grouped_ciphertext_2_handles_validity() {
 
     let incorrect_opening = PedersenOpening::new_rand();
     let fail_proof_data = BatchedGroupedCiphertext2HandlesValidityProofData::new(
-        &destination_pubkey,
-        &auditor_pubkey,
+        destination_pubkey,
+        auditor_pubkey,
         &grouped_ciphertext_lo,
         &grouped_ciphertext_hi,
         amount_lo,

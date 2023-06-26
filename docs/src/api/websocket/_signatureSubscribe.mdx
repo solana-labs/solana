@@ -12,8 +12,8 @@ import {
 
 ## signatureSubscribe
 
-Subscribe to a transaction signature, to receive notification when the given
-transaction reaches the specified commitment level.
+Subscribe to receive a notification when the transaction with the given
+signature reaches the specified commitment level.
 
 :::caution
 
@@ -54,8 +54,8 @@ Configuration object containing the following fields:
 
 <Field name="enableReceivedNotification" type="bool" optional={true}>
 
-Whether or not to recieve notifications when signatures are recieved by the RPC,
-in addition to when they are processed.
+Whether or not to subscribe for notifications when signatures are received by
+the RPC, in addition to when they are processed.
 
 </Field>
 
@@ -101,17 +101,19 @@ The notification will be an RpcResponse JSON object with value containing an
 object with:
 
 - `slot: <u64>` - The corresponding slot.
-- `value: <object|string>` - notification response value of:
-  - `err: <object|null>`: a
-    [`RpcSignatureResult`](https://github.com/solana-labs/solana/blob/6d28fd455b07e3557fc6c0c3ddf3ba03e3fe8482/rpc-client-api/src/response.rs#L265)
-    with a value of either:
-    - `null` if transaction succeeded in being processed at the specified
+- `value: <object|string>` - a notification value of
+  [`RpcSignatureResult`](https://github.com/solana-labs/solana/blob/6d28fd455b07e3557fc6c0c3ddf3ba03e3fe8482/rpc-client-api/src/response.rs#L265-L268),
+  resulting in either:
+  - when `enableReceivedNotification` is `true` and the signature is received: the
+    literal string
+    [`"receivedSignature"`](https://github.com/solana-labs/solana/blob/6d28fd455b07e3557fc6c0c3ddf3ba03e3fe8482/rpc-client-api/src/response.rs#L286-L288),
+    or
+  - when the signature is processed: `err: <object|null>`:
+    - `null` if the transaction succeeded in being processed at the specified
       commitment level, or
     - a
-      [`TransactionError`](https://github.com/solana-labs/solana/blob/6d28fd455b07e3557fc6c0c3ddf3ba03e3fe8482/sdk/src/transaction/error.rs#L15),
+      [`TransactionError`](https://github.com/solana-labs/solana/blob/6d28fd455b07e3557fc6c0c3ddf3ba03e3fe8482/sdk/src/transaction/error.rs#L15-L164),
       if the transaction failed
-  - when `enableReceivedNotification` is true,
-    [`ReceivedSignatureResult`](https://github.com/solana-labs/solana/blob/6d28fd455b07e3557fc6c0c3ddf3ba03e3fe8482/rpc-client-api/src/response.rs#L286)
 
 #### Example responses:
 

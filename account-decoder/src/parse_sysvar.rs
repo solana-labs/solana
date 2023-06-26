@@ -15,7 +15,7 @@ use {
         slot_hashes::SlotHashes,
         slot_history::{self, SlotHistory},
         stake_history::{StakeHistory, StakeHistoryEntry},
-        sysvar::{self, rewards::Rewards},
+        sysvar::{self, last_restart_slot::LastRestartSlot, rewards::Rewards},
     },
 };
 
@@ -82,6 +82,13 @@ pub fn parse_sysvar(data: &[u8], pubkey: &Pubkey) -> Result<SysvarAccountType, P
                     .collect();
                 SysvarAccountType::StakeHistory(stake_history)
             })
+        } else if pubkey == &sysvar::last_restart_slot::id() {
+            deserialize::<LastRestartSlot>(data)
+                .ok()
+                .map(|last_restart_slot| {
+                    let last_restart_slot = last_restart_slot.last_restart_slot;
+                    SysvarAccountType::LastRestartSlot(UiLastRestartSlot { last_restart_slot })
+                })
         } else {
             None
         }
@@ -105,6 +112,7 @@ pub enum SysvarAccountType {
     SlotHashes(Vec<UiSlotHashEntry>),
     SlotHistory(UiSlotHistory),
     StakeHistory(Vec<UiStakeHistoryEntry>),
+    LastRestartSlot(UiLastRestartSlot),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -216,6 +224,12 @@ impl std::fmt::Debug for SlotHistoryBits {
 pub struct UiStakeHistoryEntry {
     pub epoch: Epoch,
     pub stake_history: StakeHistoryEntry,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UiLastRestartSlot {
+    pub last_restart_slot: Slot,
 }
 
 #[cfg(test)]
@@ -334,5 +348,20 @@ mod test {
 
         let bad_data = vec![0; 4];
         assert!(parse_sysvar(&bad_data, &sysvar::stake_history::id()).is_err());
+
+        let last_restart_slot = LastRestartSlot {
+            last_restart_slot: 1282,
+        };
+        let last_restart_slot_account = create_account_for_test(&last_restart_slot);
+        assert_eq!(
+            parse_sysvar(
+                &last_restart_slot_account.data,
+                &sysvar::last_restart_slot::id()
+            )
+            .unwrap(),
+            SysvarAccountType::LastRestartSlot(UiLastRestartSlot {
+                last_restart_slot: 1282
+            })
+        );
     }
 }

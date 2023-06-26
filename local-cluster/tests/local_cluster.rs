@@ -8,9 +8,6 @@ use {
     serial_test::serial,
     solana_client::thin_client::ThinClient,
     solana_core::{
-        broadcast_stage::{
-            broadcast_duplicates_run::BroadcastDuplicatesConfig, BroadcastStageType,
-        },
         consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
@@ -22,6 +19,7 @@ use {
     solana_ledger::{
         ancestor_iterator::AncestorIterator, bank_forks_utils, blockstore::Blockstore,
         blockstore_processor::ProcessOptions, leader_schedule::FixedSchedule,
+        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
@@ -44,9 +42,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_package::SnapshotType,
-        snapshot_utils::{
-            self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
-        },
+        snapshot_utils::{self, create_accounts_run_and_snapshot_dirs},
         vote_parser,
     },
     solana_sdk::{
@@ -65,6 +61,9 @@ use {
         vote::state::VoteStateUpdate,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_turbine::broadcast_stage::{
+        broadcast_duplicates_run::BroadcastDuplicatesConfig, BroadcastStageType,
+    },
     solana_vote_program::{vote_state::MAX_LOCKOUT_HISTORY, vote_transaction},
     std::{
         collections::{BTreeSet, HashMap, HashSet},
@@ -1108,14 +1107,6 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     info!(
         "Restarting the validator with full snapshot {validator_full_snapshot_slot_at_startup}..."
     );
-    // To restart, it is not enough to remove the old bank snapshot directories under snapshot/.
-    // The old hardlinks under <account_path>/snapshot/<slot> should also be removed.
-    // The purge call covers all of them.
-    snapshot_utils::purge_old_bank_snapshots(
-        validator_snapshot_test_config.bank_snapshots_dir,
-        0,
-        None,
-    );
     cluster.restart_node(
         &validator_identity.pubkey(),
         validator_info,
@@ -1355,7 +1346,10 @@ fn test_snapshots_blockstore_floor() {
             .into_path(),
         archive_info.slot(),
         archive_info.hash(),
-        ArchiveFormat::TarBzip2,
+        validator_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .archive_format,
     );
     fs::hard_link(archive_info.path(), validator_archive_path).unwrap();
     let slot_floor = archive_info.slot();
@@ -2173,7 +2167,7 @@ fn create_snapshot_to_hard_fork(
     };
     let ledger_path = blockstore.ledger_path();
     let genesis_config = open_genesis_config(ledger_path, u64::max_value());
-    let snapshot_config = Some(create_simple_snapshot_config(ledger_path));
+    let snapshot_config = create_simple_snapshot_config(ledger_path);
     let (bank_forks, ..) = bank_forks_utils::load(
         &genesis_config,
         blockstore,
@@ -2183,7 +2177,7 @@ fn create_snapshot_to_hard_fork(
                 .0,
         ],
         None,
-        snapshot_config.as_ref(),
+        Some(&snapshot_config),
         process_options,
         None,
         None,
@@ -2196,10 +2190,10 @@ fn create_snapshot_to_hard_fork(
     let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
         ledger_path,
         &bank,
-        Some(SnapshotVersion::default()),
+        Some(snapshot_config.snapshot_version),
         ledger_path,
         ledger_path,
-        ArchiveFormat::TarZstd,
+        snapshot_config.archive_format,
         NonZeroUsize::new(1).unwrap(),
         NonZeroUsize::new(1).unwrap(),
     )
@@ -4761,4 +4755,247 @@ fn test_duplicate_with_pruned_ancestor() {
         &cluster.connection_cache,
         "test_duplicate_with_pruned_ancestor",
     );
+}
+
+/// Test fastboot to ensure a node can boot from local state and still produce correct snapshots
+///
+/// 1. Start node 1 and wait for it to take snapshots
+/// 2. Start node 2 with the snapshots from (1)
+/// 3. Wait for node 2 to take a bank snapshot
+/// 4. Restart node 2 with the local state from (3)
+/// 5. Wait for node 2 to take new snapshots
+/// 6. Start node 3 with the snapshots from (5)
+/// 7. Wait for node 3 to take new snapshots
+/// 8. Ensure the snapshots from (7) match node's 1 and 2
+#[test]
+#[serial]
+fn test_boot_from_local_state() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+    const FULL_SNAPSHOT_INTERVAL: Slot = 100;
+    const INCREMENTAL_SNAPSHOT_INTERVAL: Slot = 10;
+
+    let validator1_config = SnapshotValidatorConfig::new(
+        FULL_SNAPSHOT_INTERVAL,
+        INCREMENTAL_SNAPSHOT_INTERVAL,
+        INCREMENTAL_SNAPSHOT_INTERVAL,
+        2,
+    );
+    let validator2_config = SnapshotValidatorConfig::new(
+        FULL_SNAPSHOT_INTERVAL,
+        INCREMENTAL_SNAPSHOT_INTERVAL,
+        INCREMENTAL_SNAPSHOT_INTERVAL,
+        4,
+    );
+    let validator3_config = SnapshotValidatorConfig::new(
+        FULL_SNAPSHOT_INTERVAL,
+        INCREMENTAL_SNAPSHOT_INTERVAL,
+        INCREMENTAL_SNAPSHOT_INTERVAL,
+        3,
+    );
+
+    let mut cluster_config = ClusterConfig {
+        node_stakes: vec![100 * DEFAULT_NODE_STAKE],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
+        validator_configs: make_identical_validator_configs(&validator1_config.validator_config, 1),
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&mut cluster_config, SocketAddrSpace::Unspecified);
+
+    // in order to boot from local state, need to first have snapshot archives
+    info!("Waiting for validator1 to create snapshots...");
+    let (incremental_snapshot_archive, full_snapshot_archive) =
+        LocalCluster::wait_for_next_incremental_snapshot(
+            &cluster,
+            &validator1_config.full_snapshot_archives_dir,
+            &validator1_config.incremental_snapshot_archives_dir,
+            Some(Duration::from_secs(5 * 60)),
+        );
+    debug!("snapshot archives:\n\tfull: {full_snapshot_archive:?}\n\tincr: {incremental_snapshot_archive:?}");
+    info!("Waiting for validator1 to create snapshots... DONE");
+
+    info!("Copying snapshots to validator2...");
+    std::fs::copy(
+        full_snapshot_archive.path(),
+        validator2_config
+            .full_snapshot_archives_dir
+            .path()
+            .join(full_snapshot_archive.path().file_name().unwrap()),
+    )
+    .unwrap();
+    std::fs::copy(
+        incremental_snapshot_archive.path(),
+        validator2_config
+            .incremental_snapshot_archives_dir
+            .path()
+            .join(incremental_snapshot_archive.path().file_name().unwrap()),
+    )
+    .unwrap();
+    info!("Copying snapshots to validator2... DONE");
+
+    info!("Starting validator2...");
+    let validator2_identity = Arc::new(Keypair::new());
+    cluster.add_validator(
+        &validator2_config.validator_config,
+        DEFAULT_NODE_STAKE,
+        validator2_identity.clone(),
+        None,
+        SocketAddrSpace::Unspecified,
+    );
+    info!("Starting validator2... DONE");
+
+    // wait for a new bank snapshot to fastboot from that is newer than its snapshot archives
+    info!("Waiting for validator2 to create a new bank snapshot...");
+    let timer = Instant::now();
+    let bank_snapshot = loop {
+        if let Some(full_snapshot_slot) = snapshot_utils::get_highest_full_snapshot_archive_slot(
+            &validator2_config.full_snapshot_archives_dir,
+        ) {
+            if let Some(incremental_snapshot_slot) =
+                snapshot_utils::get_highest_incremental_snapshot_archive_slot(
+                    &validator2_config.incremental_snapshot_archives_dir,
+                    full_snapshot_slot,
+                )
+            {
+                if let Some(bank_snapshot) = snapshot_utils::get_highest_bank_snapshot_post(
+                    &validator2_config.bank_snapshots_dir,
+                ) {
+                    if bank_snapshot.slot > incremental_snapshot_slot {
+                        break bank_snapshot;
+                    }
+                }
+            }
+        }
+        assert!(
+            timer.elapsed() < Duration::from_secs(30),
+            "It should not take longer than 30 seconds to create a new bank snapshot"
+        );
+        std::thread::yield_now();
+    };
+    debug!("bank snapshot: {bank_snapshot:?}");
+    info!("Waiting for validator2 to create a new bank snapshot... DONE");
+
+    // restart WITH fastboot
+    info!("Restarting validator2 from local state...");
+    let mut validator2_info = cluster.exit_node(&validator2_identity.pubkey());
+    validator2_info.config.use_snapshot_archives_at_startup = UseSnapshotArchivesAtStartup::Never;
+    cluster.restart_node(
+        &validator2_identity.pubkey(),
+        validator2_info,
+        SocketAddrSpace::Unspecified,
+    );
+    info!("Restarting validator2 from local state... DONE");
+
+    info!("Waiting for validator2 to create snapshots...");
+    let (incremental_snapshot_archive, full_snapshot_archive) =
+        LocalCluster::wait_for_next_incremental_snapshot(
+            &cluster,
+            &validator2_config.full_snapshot_archives_dir,
+            &validator2_config.incremental_snapshot_archives_dir,
+            Some(Duration::from_secs(5 * 60)),
+        );
+    debug!("snapshot archives:\n\tfull: {full_snapshot_archive:?}\n\tincr: {incremental_snapshot_archive:?}");
+    info!("Waiting for validator2 to create snapshots... DONE");
+
+    info!("Copying snapshots to validator3...");
+    std::fs::copy(
+        full_snapshot_archive.path(),
+        validator3_config
+            .full_snapshot_archives_dir
+            .path()
+            .join(full_snapshot_archive.path().file_name().unwrap()),
+    )
+    .unwrap();
+    std::fs::copy(
+        incremental_snapshot_archive.path(),
+        validator3_config
+            .incremental_snapshot_archives_dir
+            .path()
+            .join(incremental_snapshot_archive.path().file_name().unwrap()),
+    )
+    .unwrap();
+    info!("Copying snapshots to validator3... DONE");
+
+    info!("Starting validator3...");
+    let validator3_identity = Arc::new(Keypair::new());
+    cluster.add_validator(
+        &validator3_config.validator_config,
+        DEFAULT_NODE_STAKE,
+        validator3_identity,
+        None,
+        SocketAddrSpace::Unspecified,
+    );
+    info!("Starting validator3... DONE");
+
+    // wait for a new snapshot to ensure the validator is making roots
+    info!("Waiting for validator3 to create snapshots...");
+    let (incremental_snapshot_archive, full_snapshot_archive) =
+        LocalCluster::wait_for_next_incremental_snapshot(
+            &cluster,
+            &validator3_config.full_snapshot_archives_dir,
+            &validator3_config.incremental_snapshot_archives_dir,
+            Some(Duration::from_secs(5 * 60)),
+        );
+    debug!("snapshot archives:\n\tfull: {full_snapshot_archive:?}\n\tincr: {incremental_snapshot_archive:?}");
+    info!("Waiting for validator3 to create snapshots... DONE");
+
+    // ensure that all validators have the correct state by comparing snapshots
+    // - wait for the other validators to have high enough snapshots
+    // - ensure validator3's snapshot hashes match the other validators' snapshot hashes
+    //
+    // NOTE: There's a chance validator's 1 or 2 have crossed the next full snapshot past what
+    // validator 3 has.  If that happens, validator's 1 or 2 may have purged the snapshots needed
+    // to compare with validator 3, and thus assert.  If that happens, the full snapshot interval
+    // may need to be adjusted larger.
+    for (i, other_validator_config) in [(1, &validator1_config), (2, &validator2_config)] {
+        info!("Checking if validator{i} has the same snapshots as validator3...");
+        let timer = Instant::now();
+        loop {
+            if let Some(other_full_snapshot_slot) =
+                snapshot_utils::get_highest_full_snapshot_archive_slot(
+                    &other_validator_config.full_snapshot_archives_dir,
+                )
+            {
+                let other_incremental_snapshot_slot =
+                    snapshot_utils::get_highest_incremental_snapshot_archive_slot(
+                        &other_validator_config.incremental_snapshot_archives_dir,
+                        other_full_snapshot_slot,
+                    );
+                if other_full_snapshot_slot >= full_snapshot_archive.slot()
+                    && other_incremental_snapshot_slot >= Some(incremental_snapshot_archive.slot())
+                {
+                    break;
+                }
+            }
+            assert!(
+                timer.elapsed() < Duration::from_secs(60),
+                "It should not take longer than 60 seconds to take snapshots"
+            );
+            std::thread::yield_now();
+        }
+        let other_full_snapshot_archives = snapshot_utils::get_full_snapshot_archives(
+            &other_validator_config.full_snapshot_archives_dir,
+        );
+        debug!("validator{i} full snapshot archives: {other_full_snapshot_archives:?}");
+        assert!(other_full_snapshot_archives
+            .iter()
+            .any(
+                |other_full_snapshot_archive| other_full_snapshot_archive.slot()
+                    == full_snapshot_archive.slot()
+                    && other_full_snapshot_archive.hash() == full_snapshot_archive.hash()
+            ));
+
+        let other_incremental_snapshot_archives = snapshot_utils::get_incremental_snapshot_archives(
+            &other_validator_config.incremental_snapshot_archives_dir,
+        );
+        debug!(
+            "validator{i} incremental snapshot archives: {other_incremental_snapshot_archives:?}"
+        );
+        assert!(other_incremental_snapshot_archives.iter().any(
+            |other_incremental_snapshot_archive| other_incremental_snapshot_archive.base_slot()
+                == incremental_snapshot_archive.base_slot()
+                && other_incremental_snapshot_archive.slot() == incremental_snapshot_archive.slot()
+                && other_incremental_snapshot_archive.hash() == incremental_snapshot_archive.hash()
+        ));
+        info!("Checking if validator{i} has the same snapshots as validator3... DONE");
+    }
 }

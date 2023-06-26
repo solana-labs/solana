@@ -1889,7 +1889,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     /// Remove the slot when the storage for the slot is freed
     /// Accounts no longer reference this slot.
     /// return true if slot was a root
-    pub fn clean_dead_slot(&self, slot: Slot, stats: &mut AccountsIndexRootsStats) -> bool {
+    pub fn clean_dead_slot(&self, slot: Slot) -> bool {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         let removed_from_unclean_roots = w_roots_tracker.uncleaned_roots.remove(&slot);
         let removed_from_previous_uncleaned_roots =
@@ -1912,15 +1912,18 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             }
             false
         } else {
-            stats.roots_len = Some(w_roots_tracker.alive_roots.len());
-            stats.uncleaned_roots_len = Some(w_roots_tracker.uncleaned_roots.len());
-            stats.previous_uncleaned_roots_len =
-                Some(w_roots_tracker.previous_uncleaned_roots.len());
-            stats.roots_range = Some(w_roots_tracker.alive_roots.range_width());
             drop(w_roots_tracker);
             self.roots_removed.fetch_add(1, Ordering::Relaxed);
             true
         }
+    }
+
+    pub(crate) fn update_roots_stats(&self, stats: &mut AccountsIndexRootsStats) {
+        let roots_tracker = self.roots_tracker.read().unwrap();
+        stats.roots_len = Some(roots_tracker.alive_roots.len());
+        stats.uncleaned_roots_len = Some(roots_tracker.uncleaned_roots.len());
+        stats.previous_uncleaned_roots_len = Some(roots_tracker.previous_uncleaned_roots.len());
+        stats.roots_range = Some(roots_tracker.alive_roots.range_width());
     }
 
     pub fn min_alive_root(&self) -> Option<Slot> {
@@ -2957,7 +2960,7 @@ pub mod tests {
         let index = AccountsIndex::<bool, bool>::default_for_tests();
         index.add_root(0);
         index.add_root(1);
-        index.clean_dead_slot(0, &mut AccountsIndexRootsStats::default());
+        index.clean_dead_slot(0);
         assert!(index.is_alive_root(1));
         assert!(!index.is_alive_root(0));
     }
@@ -2968,7 +2971,7 @@ pub mod tests {
         let index = AccountsIndex::<bool, bool>::default_for_tests();
         index.add_root(0);
         index.add_root(1);
-        index.clean_dead_slot(1, &mut AccountsIndexRootsStats::default());
+        index.clean_dead_slot(1);
         assert!(!index.is_alive_root(1));
         assert!(index.is_alive_root(0));
     }
@@ -3019,7 +3022,7 @@ pub mod tests {
                 .len()
         );
 
-        index.clean_dead_slot(1, &mut AccountsIndexRootsStats::default());
+        index.clean_dead_slot(1);
         assert_eq!(3, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(2, index.roots_tracker.read().unwrap().uncleaned_roots.len());
         assert_eq!(
@@ -3032,7 +3035,7 @@ pub mod tests {
                 .len()
         );
 
-        index.clean_dead_slot(2, &mut AccountsIndexRootsStats::default());
+        index.clean_dead_slot(2);
         assert_eq!(2, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(1, index.roots_tracker.read().unwrap().uncleaned_roots.len());
         assert_eq!(
@@ -4023,7 +4026,7 @@ pub mod tests {
         assert!(!index.clean_rooted_entries(&key, &mut gc, Some(slot2)));
         assert_eq!(gc, vec![(slot1, value)]);
         gc.clear();
-        index.clean_dead_slot(slot2, &mut AccountsIndexRootsStats::default());
+        index.clean_dead_slot(slot2);
         let slot3 = 3;
         assert!(index.clean_rooted_entries(&key, &mut gc, Some(slot3)));
         assert_eq!(gc, vec![(slot2, value)]);

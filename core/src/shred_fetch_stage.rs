@@ -1,9 +1,9 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
 use {
-    crate::{cluster_nodes::check_feature_activation, serve_repair::ServeRepair},
+    crate::serve_repair::ServeRepair,
     crossbeam_channel::{unbounded, Sender},
-    solana_gossip::cluster_info::ClusterInfo,
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::Protocol},
     solana_ledger::shred::{should_discard_shred, ShredFetchStats},
     solana_perf::packet::{PacketBatch, PacketBatchRecycler, PacketFlags},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -11,7 +11,8 @@ use {
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         feature_set,
     },
-    solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
+    solana_streamer::streamer::{self, PacketBatchReceiver, StakedNodes, StreamerReceiveStats},
+    solana_turbine::cluster_nodes::check_feature_activation,
     std::{
         net::UdpSocket,
         sync::{
@@ -22,6 +23,12 @@ use {
         time::{Duration, Instant},
     },
 };
+
+const MAX_QUIC_CONNECTIONS_PER_PEER: usize = 8;
+const MAX_STAKED_QUIC_CONNECTIONS: usize = 4000;
+const MAX_UNSTAKED_QUIC_CONNECTIONS: usize = 2000;
+const QUIC_WAIT_FOR_CHUNK_TIMEOUT: Duration = Duration::from_secs(5);
+const QUIC_COALESCE_WAIT: Duration = Duration::from_millis(10);
 
 pub(crate) struct ShredFetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -161,14 +168,16 @@ impl ShredFetchStage {
         (streamers, modifier_hdl)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         sockets: Vec<Arc<UdpSocket>>,
-        forward_sockets: Vec<Arc<UdpSocket>>,
+        quic_socket: UdpSocket,
         repair_socket: Arc<UdpSocket>,
         sender: Sender<PacketBatch>,
         shred_version: u16,
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<ClusterInfo>,
+        staked_nodes: Arc<RwLock<StakedNodes>>,
         turbine_disabled: Arc<AtomicBool>,
         exit: Arc<AtomicBool>,
     ) -> Self {
@@ -187,37 +196,64 @@ impl ShredFetchStage {
             turbine_disabled.clone(),
         );
 
-        let (tvu_forwards_threads, fwd_thread_hdl) = Self::packet_modifier(
-            forward_sockets,
-            exit.clone(),
-            sender.clone(),
-            recycler.clone(),
-            bank_forks.clone(),
-            shred_version,
-            "shred_fetch_tvu_forwards",
-            PacketFlags::FORWARDED,
-            None, // repair_context
-            turbine_disabled.clone(),
-        );
-
         let (repair_receiver, repair_handler) = Self::packet_modifier(
             vec![repair_socket.clone()],
-            exit,
-            sender,
+            exit.clone(),
+            sender.clone(),
             recycler,
-            bank_forks,
+            bank_forks.clone(),
             shred_version,
             "shred_fetch_repair",
             PacketFlags::REPAIR,
-            Some((repair_socket, cluster_info)),
-            turbine_disabled,
+            Some((repair_socket, cluster_info.clone())),
+            turbine_disabled.clone(),
         );
 
-        tvu_threads.extend(tvu_forwards_threads.into_iter());
         tvu_threads.extend(repair_receiver.into_iter());
         tvu_threads.push(tvu_filter);
-        tvu_threads.push(fwd_thread_hdl);
         tvu_threads.push(repair_handler);
+
+        let keypair = cluster_info.keypair().clone();
+        let ip_addr = cluster_info
+            .my_contact_info()
+            .tvu(Protocol::QUIC)
+            .expect("Operator must spin up node with valid (QUIC) TVU address")
+            .ip();
+        let (packet_sender, packet_receiver) = unbounded();
+        let (_endpoint, join_handle) = solana_streamer::quic::spawn_server(
+            "quic_streamer_tvu",
+            quic_socket,
+            &keypair,
+            ip_addr,
+            packet_sender,
+            exit,
+            MAX_QUIC_CONNECTIONS_PER_PEER,
+            staked_nodes,
+            MAX_STAKED_QUIC_CONNECTIONS,
+            MAX_UNSTAKED_QUIC_CONNECTIONS,
+            QUIC_WAIT_FOR_CHUNK_TIMEOUT,
+            QUIC_COALESCE_WAIT,
+        )
+        .unwrap();
+        tvu_threads.push(join_handle);
+
+        tvu_threads.push(
+            Builder::new()
+                .name("solTvuFetchPMod".to_string())
+                .spawn(move || {
+                    Self::modify_packets(
+                        packet_receiver,
+                        sender,
+                        &bank_forks,
+                        shred_version,
+                        "shred_fetch_quic",
+                        PacketFlags::empty(),
+                        None, // repair_context
+                        turbine_disabled,
+                    )
+                })
+                .unwrap(),
+        );
 
         Self {
             thread_hdls: tvu_threads,

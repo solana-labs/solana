@@ -6,7 +6,6 @@ use {
         accounts_hash_verifier::{AccountsHashFaultInjector, AccountsHashVerifier},
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         banking_trace::{self, BankingTracer},
-        broadcast_stage::BroadcastStageType,
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
@@ -55,6 +54,7 @@ use {
         entry_notifier_service::{EntryNotifierSender, EntryNotifierService},
         leader_schedule::FixedSchedule,
         leader_schedule_cache::LeaderScheduleCache,
+        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_info, poh_timing_point::PohTimingSender},
@@ -95,6 +95,7 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
             self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
+            DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         },
     },
     solana_sdk::{
@@ -110,6 +111,7 @@ use {
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
+    solana_turbine::broadcast_stage::BroadcastStageType,
     solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
@@ -128,6 +130,8 @@ use {
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
+
+pub const TURBINE_QUIC_CONNECTION_POOL_SIZE: usize = 4;
 
 #[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
@@ -249,6 +253,7 @@ pub struct ValidatorConfig {
     pub block_verification_method: BlockVerificationMethod,
     pub block_production_method: BlockProductionMethod,
     pub generator_config: Option<GeneratorConfig>,
+    pub use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup,
 }
 
 impl Default for ValidatorConfig {
@@ -315,6 +320,7 @@ impl Default for ValidatorConfig {
             block_verification_method: BlockVerificationMethod::default(),
             block_production_method: BlockProductionMethod::default(),
             generator_config: None,
+            use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup::default(),
         }
     }
 }
@@ -661,19 +667,15 @@ impl Validator {
             entry_notifier,
             Some(poh_timing_point_sender.clone()),
         )?;
+        let hard_forks = bank_forks.read().unwrap().root_bank().hard_forks();
+        if !hard_forks.is_empty() {
+            info!("Hard forks: {:?}", hard_forks);
+        }
 
         node.info.set_wallclock(timestamp());
         node.info.set_shred_version(compute_shred_version(
             &genesis_config.hash(),
-            Some(
-                &bank_forks
-                    .read()
-                    .unwrap()
-                    .working_bank()
-                    .hard_forks()
-                    .read()
-                    .unwrap(),
-            ),
+            Some(&hard_forks),
         ));
 
         Self::print_node_info(&node);
@@ -1107,6 +1109,19 @@ impl Validator {
         let entry_notification_sender = entry_notifier_service
             .as_ref()
             .map(|service| service.sender_cloned());
+        let turbine_quic_connection_cache = Arc::new(
+            solana_quic_client::new_quic_connection_cache(
+                "connection_cache_tvu_quic",
+                &identity_keypair,
+                node.info
+                    .tvu(Protocol::QUIC)
+                    .expect("Operator must spin up node with valid TVU address")
+                    .ip(),
+                &staked_nodes,
+                TURBINE_QUIC_CONNECTION_POOL_SIZE,
+            )
+            .unwrap(),
+        );
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
@@ -1117,7 +1132,7 @@ impl Validator {
                 repair: node.sockets.repair,
                 retransmit: node.sockets.retransmit_sockets,
                 fetch: node.sockets.tvu,
-                forwards: node.sockets.tvu_forwards,
+                fetch_quic: node.sockets.tvu_quic,
                 ancestor_hashes_requests: node.sockets.ancestor_hashes_requests,
             },
             blockstore.clone(),
@@ -1158,6 +1173,8 @@ impl Validator {
             &connection_cache,
             &prioritization_fee_cache,
             banking_tracer.clone(),
+            staked_nodes.clone(),
+            turbine_quic_connection_cache.clone(),
         )?;
 
         let tpu = Tpu::new(
@@ -1190,6 +1207,7 @@ impl Validator {
             config.tpu_coalesce,
             cluster_confirmed_slot_sender,
             &connection_cache,
+            turbine_quic_connection_cache,
             &identity_keypair,
             config.runtime_config.log_messages_bytes_limit,
             &staked_nodes,
@@ -1606,6 +1624,7 @@ fn load_blockstore(
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
         runtime_config: config.runtime_config.clone(),
+        use_snapshot_archives_at_startup: config.use_snapshot_archives_at_startup,
         ..blockstore_processor::ProcessOptions::default()
     };
 
@@ -1653,21 +1672,6 @@ fn load_blockstore(
     // is processing the dropped banks from the `pruned_banks_receiver` channel.
     let pruned_banks_receiver =
         AccountsBackgroundService::setup_bank_drop_callback(bank_forks.clone());
-    {
-        let hard_forks: Vec<_> = bank_forks
-            .read()
-            .unwrap()
-            .working_bank()
-            .hard_forks()
-            .read()
-            .unwrap()
-            .iter()
-            .copied()
-            .collect();
-        if !hard_forks.is_empty() {
-            info!("Hard forks: {:?}", hard_forks);
-        }
-    }
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
     {
@@ -2265,13 +2269,14 @@ pub fn is_snapshot_config_valid(
     let incremental_snapshot_interval_slots =
         snapshot_config.incremental_snapshot_archive_interval_slots;
 
-    let is_incremental_config_valid = if incremental_snapshot_interval_slots == Slot::MAX {
-        true
-    } else {
-        incremental_snapshot_interval_slots >= accounts_hash_interval_slots
-            && incremental_snapshot_interval_slots % accounts_hash_interval_slots == 0
-            && full_snapshot_interval_slots > incremental_snapshot_interval_slots
-    };
+    let is_incremental_config_valid =
+        if incremental_snapshot_interval_slots == DISABLED_SNAPSHOT_ARCHIVE_INTERVAL {
+            true
+        } else {
+            incremental_snapshot_interval_slots >= accounts_hash_interval_slots
+                && incremental_snapshot_interval_slots % accounts_hash_interval_slots == 0
+                && full_snapshot_interval_slots > incremental_snapshot_interval_slots
+        };
 
     full_snapshot_interval_slots >= accounts_hash_interval_slots
         && full_snapshot_interval_slots % accounts_hash_interval_slots == 0
@@ -2560,19 +2565,22 @@ mod tests {
         assert!(is_snapshot_config_valid(
             &new_snapshot_config(
                 snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-                Slot::MAX
+                DISABLED_SNAPSHOT_ARCHIVE_INTERVAL
             ),
             default_accounts_hash_interval
         ));
         assert!(is_snapshot_config_valid(
             &new_snapshot_config(
                 snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-                Slot::MAX
+                DISABLED_SNAPSHOT_ARCHIVE_INTERVAL
             ),
             default_accounts_hash_interval
         ));
         assert!(is_snapshot_config_valid(
-            &new_snapshot_config(Slot::MAX, Slot::MAX),
+            &new_snapshot_config(
+                DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
+                DISABLED_SNAPSHOT_ARCHIVE_INTERVAL
+            ),
             Slot::MAX
         ));
 
@@ -2617,8 +2625,8 @@ mod tests {
         ));
         assert!(is_snapshot_config_valid(
             &SnapshotConfig {
-                full_snapshot_archive_interval_slots: Slot::MAX,
-                incremental_snapshot_archive_interval_slots: Slot::MAX,
+                full_snapshot_archive_interval_slots: DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
+                incremental_snapshot_archive_interval_slots: DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
                 ..SnapshotConfig::new_load_only()
             },
             100

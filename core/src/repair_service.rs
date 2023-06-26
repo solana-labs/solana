@@ -2,14 +2,14 @@
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
 #[cfg(test)]
 use {
-    crate::duplicate_repair_status::DuplicateSlotRepairStatus, solana_ledger::shred::Nonce,
+    crate::duplicate_repair_status::DuplicateSlotRepairStatus,
     solana_sdk::clock::DEFAULT_MS_PER_SLOT,
 };
 use {
     crate::{
         ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
         cluster_info_vote_listener::VerifiedVoteReceiver,
-        cluster_slots::ClusterSlots,
+        cluster_slots_service::cluster_slots::ClusterSlots,
         duplicate_repair_status::AncestorDuplicateSlotsToRepair,
         outstanding_requests::OutstandingRequests,
         repair_weight::RepairWeight,
@@ -93,7 +93,11 @@ impl RepairStatsGroup {
         // Update the max requested shred index for this slot
         slot_repairs.highest_shred_index =
             std::cmp::max(slot_repairs.highest_shred_index, shred_index);
-        self.min = std::cmp::min(self.min, slot);
+        if self.min == 0 {
+            self.min = slot;
+        } else {
+            self.min = std::cmp::min(self.min, slot);
+        }
         self.max = std::cmp::max(self.max, slot);
     }
 }
@@ -479,14 +483,21 @@ impl RepairService {
                     .collect();
                 info!("repair_stats: {:?}", slot_to_count);
                 if repair_total > 0 {
+                    let nonzero_num = |x| if x == 0 { None } else { Some(x) };
                     datapoint_info!(
                         "repair_service-my_requests",
                         ("repair-total", repair_total, i64),
                         ("shred-count", repair_stats.shred.count, i64),
                         ("highest-shred-count", repair_stats.highest_shred.count, i64),
                         ("orphan-count", repair_stats.orphan.count, i64),
-                        ("repair-highest-slot", repair_stats.highest_shred.max, i64),
-                        ("repair-orphan", repair_stats.orphan.max, i64),
+                        ("shred-slot-max", nonzero_num(repair_stats.shred.max), Option<i64>),
+                        ("shred-slot-min", nonzero_num(repair_stats.shred.min), Option<i64>),
+                        ("repair-highest-slot", repair_stats.highest_shred.max, i64), // deprecated
+                        ("highest-shred-slot-max", nonzero_num(repair_stats.highest_shred.max), Option<i64>),
+                        ("highest-shred-slot-min", nonzero_num(repair_stats.highest_shred.min), Option<i64>),
+                        ("repair-orphan", repair_stats.orphan.max, i64), // deprecated
+                        ("orphan-slot-max", nonzero_num(repair_stats.orphan.max), Option<i64>),
+                        ("orphan-slot-min", nonzero_num(repair_stats.orphan.min), Option<i64>),
                     );
                 }
                 datapoint_info!(
@@ -659,7 +670,7 @@ impl RepairService {
         blockstore: &Blockstore,
         max_repairs: usize,
         repair_range: &RepairSlotRange,
-    ) -> crate::result::Result<Vec<ShredRepairType>> {
+    ) -> Vec<ShredRepairType> {
         // Slot height and shred indexes for shreds we want to repair
         let mut repairs: Vec<ShredRepairType> = vec![];
         for slot in repair_range.start..=repair_range.end {
@@ -684,7 +695,7 @@ impl RepairService {
             repairs.extend(new_repairs);
         }
 
-        Ok(repairs)
+        repairs
     }
 
     #[cfg(test)]
@@ -739,20 +750,23 @@ impl RepairService {
                     let mut outstanding_requests = outstanding_requests.write().unwrap();
                     for repair_type in repairs {
                         let nonce = outstanding_requests.add_request(repair_type, timestamp());
-                        if let Err(e) = Self::serialize_and_send_request(
+
+                        match serve_repair.map_repair_request(
                             &repair_type,
-                            repair_socket,
                             &repair_pubkey,
-                            &repair_addr,
-                            serve_repair,
                             repair_stats,
                             nonce,
                             identity_keypair,
                         ) {
-                            info!(
-                                "repair req send_to {} ({}) error {:?}",
-                                repair_pubkey, repair_addr, e
-                            );
+                            Ok(req) => {
+                                if let Err(e) = repair_socket.send_to(&req, repair_addr) {
+                                    info!(
+                                        "repair req send_to {} ({}) error {:?}",
+                                        repair_pubkey, repair_addr, e
+                                    );
+                                }
+                            }
+                            Err(e) => info!("map_repair_request err={e}"),
                         }
                     }
                     true
@@ -763,28 +777,6 @@ impl RepairService {
                 true
             }
         })
-    }
-
-    #[cfg(test)]
-    fn serialize_and_send_request(
-        repair_type: &ShredRepairType,
-        repair_socket: &UdpSocket,
-        repair_pubkey: &Pubkey,
-        to: &SocketAddr,
-        serve_repair: &ServeRepair,
-        repair_stats: &mut RepairStats,
-        nonce: Nonce,
-        identity_keypair: &Keypair,
-    ) -> crate::result::Result<()> {
-        let req = serve_repair.map_repair_request(
-            repair_type,
-            repair_pubkey,
-            repair_stats,
-            nonce,
-            identity_keypair,
-        )?;
-        repair_socket.send_to(&req, to)?;
-        Ok(())
     }
 
     #[cfg(test)]
@@ -1104,8 +1096,7 @@ mod test {
                             &blockstore,
                             std::usize::MAX,
                             &repair_slot_range,
-                        )
-                        .unwrap(),
+                        ),
                         expected
                     );
                 }
@@ -1152,8 +1143,7 @@ mod test {
                     &blockstore,
                     std::usize::MAX,
                     &repair_slot_range,
-                )
-                .unwrap(),
+                ),
                 expected
             );
         }

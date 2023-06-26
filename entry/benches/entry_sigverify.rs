@@ -40,7 +40,6 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
                     message_hash,
                     None,
                     SimpleAddressLoader::Disabled,
-                    true, // require_static_program_ids
                 )
             }?;
 
@@ -82,7 +81,6 @@ fn bench_cpusigverify(bencher: &mut Bencher) {
                     message_hash,
                     None,
                     SimpleAddressLoader::Disabled,
-                    true, // require_static_program_ids
                 )
             }?;
 

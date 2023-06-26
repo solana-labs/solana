@@ -1,5 +1,5 @@
 use {
-    crate::immutable_deserialized_packet::ImmutableDeserializedPacket,
+    super::immutable_deserialized_packet::ImmutableDeserializedPacket,
     solana_sdk::{clock::Slot, transaction::SanitizedTransaction},
     std::sync::Arc,
 };

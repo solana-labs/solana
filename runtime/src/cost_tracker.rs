@@ -4,7 +4,7 @@
 //! - add_transaction_cost(&tx_cost), mutable function to accumulate tx_cost to tracker.
 //!
 use {
-    crate::{block_cost_limits::*, cost_model::TransactionCost},
+    crate::{block_cost_limits::*, transaction_cost::TransactionCost},
     solana_sdk::{
         clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::TransactionError,
     },
@@ -367,7 +367,6 @@ mod tests {
             MessageHash::Compute,
             Some(true),
             SimpleAddressLoader::Disabled,
-            true, // require_static_program_ids
         )
         .unwrap();
         let mut tx_cost = TransactionCost::new_with_capacity(1);

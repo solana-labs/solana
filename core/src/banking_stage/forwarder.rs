@@ -1,11 +1,13 @@
 use {
-    super::{BankingStageStats, ForwardOption},
-    crate::{
+    super::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
-        leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
+        leader_slot_metrics::LeaderSlotMetricsTracker,
+        unprocessed_transaction_storage::UnprocessedTransactionStorage, BankingStageStats,
+        ForwardOption,
+    },
+    crate::{
         next_leader::{next_leader, next_leader_tpu_vote},
         tracer_packet_stats::TracerPacketStats,
-        unprocessed_transaction_storage::UnprocessedTransactionStorage,
     },
     solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_gossip::cluster_info::ClusterInfo,
@@ -269,8 +271,8 @@ impl Forwarder {
 mod tests {
     use {
         super::*,
-        crate::{
-            banking_stage::tests::{create_slow_genesis_config_with_leader, new_test_cluster_info},
+        crate::banking_stage::{
+            tests::{create_slow_genesis_config_with_leader, new_test_cluster_info},
             unprocessed_packet_batches::{DeserializedPacket, UnprocessedPacketBatches},
             unprocessed_transaction_storage::ThreadType,
         },

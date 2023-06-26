@@ -16,3 +16,10 @@ num-traits = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-zk-token-sdk = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "verify_proofs"
+harness = false

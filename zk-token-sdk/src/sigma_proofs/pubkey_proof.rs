@@ -5,9 +5,12 @@
 
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::encryption::{
-        elgamal::{ElGamalKeypair, ElGamalPubkey},
-        pedersen::H,
+    crate::{
+        encryption::{
+            elgamal::{ElGamalKeypair, ElGamalPubkey},
+            pedersen::H,
+        },
+        sigma_proofs::canonical_scalar_from_slice,
     },
     rand::rngs::OsRng,
     zeroize::Zeroize,
@@ -17,7 +20,6 @@ use {
         errors::ProofVerificationError, sigma_proofs::errors::PubkeyValidityProofError,
         transcript::TranscriptProtocol,
     },
-    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -54,10 +56,10 @@ impl PubkeyValidityProof {
     /// proved
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new(elgamal_keypair: &ElGamalKeypair, transcript: &mut Transcript) -> Self {
-        transcript.pubkey_proof_domain_sep();
+        transcript.pubkey_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the input
-        let s = elgamal_keypair.secret.get_scalar();
+        let s = elgamal_keypair.secret().get_scalar();
 
         assert!(s != &Scalar::zero());
         let s_inv = s.invert();
@@ -87,7 +89,7 @@ impl PubkeyValidityProof {
         elgamal_pubkey: &ElGamalPubkey,
         transcript: &mut Transcript,
     ) -> Result<(), PubkeyValidityProofError> {
-        transcript.pubkey_proof_domain_sep();
+        transcript.pubkey_proof_domain_separator();
 
         // extract the relvant scalar and Ristretto points from the input
         let P = elgamal_pubkey.get_point();
@@ -126,11 +128,8 @@ impl PubkeyValidityProof {
             return Err(ProofVerificationError::Deserialization.into());
         }
 
-        let bytes = array_ref![bytes, 0, 64];
-        let (Y, z) = array_refs![bytes, 32, 32];
-
-        let Y = CompressedRistretto::from_slice(Y);
-        let z = Scalar::from_canonical_bytes(*z).ok_or(ProofVerificationError::Deserialization)?;
+        let Y = CompressedRistretto::from_slice(&bytes[..32]);
+        let z = canonical_scalar_from_slice(&bytes[32..64])?;
 
         Ok(PubkeyValidityProof { Y, z })
     }
@@ -153,7 +152,7 @@ mod test {
 
         let proof = PubkeyValidityProof::new(&keypair, &mut prover_transcript);
         assert!(proof
-            .verify(&keypair.public, &mut verifier_transcript)
+            .verify(keypair.pubkey(), &mut verifier_transcript)
             .is_ok());
 
         // derived ElGamal keypair
@@ -165,7 +164,7 @@ mod test {
 
         let proof = PubkeyValidityProof::new(&keypair, &mut prover_transcript);
         assert!(proof
-            .verify(&keypair.public, &mut verifier_transcript)
+            .verify(keypair.pubkey(), &mut verifier_transcript)
             .is_ok());
     }
 }

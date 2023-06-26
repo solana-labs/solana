@@ -1,5 +1,5 @@
 use {
-    crate::consensus::{SwitchForkDecision, TowerError},
+    crate::consensus::{Result, SwitchForkDecision, TowerError},
     solana_sdk::{
         clock::Slot,
         hash::Hash,
@@ -46,7 +46,7 @@ pub struct SavedTower1_7_14 {
 }
 
 impl SavedTower1_7_14 {
-    pub fn new<T: Signer>(tower: &Tower1_7_14, keypair: &T) -> Result<Self, TowerError> {
+    pub fn new<T: Signer>(tower: &Tower1_7_14, keypair: &T) -> Result<Self> {
         let node_pubkey = keypair.pubkey();
         if tower.node_pubkey != node_pubkey {
             return Err(TowerError::WrongTower(format!(

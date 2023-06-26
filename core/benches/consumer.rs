@@ -7,9 +7,8 @@ use {
         iter::IndexedParallelIterator,
         prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     },
-    solana_core::{
-        banking_stage::{committer::Committer, consumer::Consumer},
-        qos_service::QosService,
+    solana_core::banking_stage::{
+        committer::Committer, consumer::Consumer, qos_service::QosService,
     },
     solana_entry::entry::Entry,
     solana_ledger::{

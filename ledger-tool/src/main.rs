@@ -41,6 +41,7 @@ use {
         },
         blockstore_processor::ProcessOptions,
         shred::Shred,
+        use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
@@ -922,7 +923,6 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                     MessageHash::Compute,
                     None,
                     SimpleAddressLoader::Disabled,
-                    true, // require_static_program_ids
                 )
                 .map_err(|err| {
                     warn!("Failed to compute cost of transaction: {:?}", err);
@@ -977,6 +977,15 @@ fn assert_capitalization(bank: &Bank) {
     let debug_verify = true;
     assert!(bank.calculate_and_verify_capitalization(debug_verify));
 }
+
+/// Get the AccessType required, based on `process_options`
+fn get_access_type(process_options: &ProcessOptions) -> AccessType {
+    match process_options.use_snapshot_archives_at_startup {
+        UseSnapshotArchivesAtStartup::Always => AccessType::Secondary,
+        UseSnapshotArchivesAtStartup::Never => AccessType::PrimaryForMaintenance,
+    }
+}
+
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 
@@ -1160,6 +1169,15 @@ fn main() {
         .multiple(true)
         .takes_value(true)
         .help("Log when transactions are processed that reference the given key(s).");
+    let use_snapshot_archives_at_startup =
+        Arg::with_name(use_snapshot_archives_at_startup::cli::NAME)
+            .long(use_snapshot_archives_at_startup::cli::LONG_ARG)
+            .hidden(hidden_unless_forced())
+            .takes_value(true)
+            .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
+            .default_value(use_snapshot_archives_at_startup::cli::default_value())
+            .help(use_snapshot_archives_at_startup::cli::HELP)
+            .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP);
 
     let default_max_full_snapshot_archives_to_retain =
         &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
@@ -1519,6 +1537,7 @@ fn main() {
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&debug_key_arg)
             .arg(&geyser_plugin_args)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("skip_poh_verify")
                     .long("skip-poh-verify")
@@ -1574,6 +1593,7 @@ fn main() {
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("include_all_votes")
                     .long("include-all-votes")
@@ -1613,6 +1633,7 @@ fn main() {
             .arg(&maximum_full_snapshot_archives_to_retain)
             .arg(&maximum_incremental_snapshot_archives_to_retain)
             .arg(&geyser_plugin_args)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("snapshot_slot")
                     .index(1)
@@ -1801,6 +1822,7 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&geyser_plugin_args)
             .arg(&accounts_data_encoding_arg)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("include_sysvars")
                     .long("include-sysvars")
@@ -1833,6 +1855,7 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&geyser_plugin_args)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("warp_epoch")
                     .required(false)
@@ -2197,7 +2220,7 @@ fn main() {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -2214,15 +2237,7 @@ fn main() {
                             "{}",
                             compute_shred_version(
                                 &genesis_config.hash(),
-                                Some(
-                                    &bank_forks
-                                        .read()
-                                        .unwrap()
-                                        .working_bank()
-                                        .hard_forks()
-                                        .read()
-                                        .unwrap()
-                                )
+                                Some(&bank_forks.read().unwrap().working_bank().hard_forks())
                             )
                         );
                     }
@@ -2289,7 +2304,7 @@ fn main() {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -2519,6 +2534,11 @@ fn main() {
                         .is_present("accounts_db_test_hash_calculation"),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                     runtime_config: RuntimeConfig::default(),
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
@@ -2527,7 +2547,7 @@ fn main() {
 
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -2566,12 +2586,17 @@ fn main() {
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
                     ..ProcessOptions::default()
                 };
 
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -2687,9 +2712,21 @@ fn main() {
                     NonZeroUsize
                 );
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+                let mut process_options = ProcessOptions {
+                    new_hard_forks,
+                    run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
+                    accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
+                    ..ProcessOptions::default()
+                };
                 let blockstore = Arc::new(open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 ));
@@ -2715,6 +2752,7 @@ fn main() {
                     );
                     exit(1);
                 }
+                process_options.halt_at_slot = Some(snapshot_slot);
 
                 let ending_slot = if is_minimized {
                     let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
@@ -2749,14 +2787,7 @@ fn main() {
                     arg_matches,
                     &genesis_config,
                     blockstore.clone(),
-                    ProcessOptions {
-                        new_hard_forks,
-                        halt_at_slot: Some(snapshot_slot),
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
-                        ..ProcessOptions::default()
-                    },
+                    process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
                 ) {
@@ -3087,10 +3118,7 @@ fn main() {
 
                         println!(
                             "Shred version: {}",
-                            compute_shred_version(
-                                &genesis_config.hash(),
-                                Some(&bank.hard_forks().read().unwrap())
-                            )
+                            compute_shred_version(&genesis_config.hash(), Some(&bank.hard_forks()))
                         );
                     }
                     Err(err) => {
@@ -3106,13 +3134,18 @@ fn main() {
                     halt_at_slot,
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let include_sysvars = arg_matches.is_present("include_sysvars");
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -3196,12 +3229,17 @@ fn main() {
                     halt_at_slot,
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 );
