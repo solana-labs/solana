@@ -1,12 +1,11 @@
 use {
     crate::{
-        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        consensus::{heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, tree_diff::TreeDiff},
         repair_generic_traversal::{get_closest_completion, get_unknown_last_index},
         repair_service::{BestRepairsStats, RepairTiming},
         repair_weighted_traversal,
         replay_stage::DUPLICATE_THRESHOLD,
         serve_repair::ShredRepairType,
-        tree_diff::TreeDiff,
     },
     solana_ledger::{
         ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_meta::SlotMeta,

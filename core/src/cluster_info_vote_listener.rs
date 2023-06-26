@@ -1,6 +1,7 @@
 use {
     crate::{
         banking_trace::{BankingPacketBatch, BankingPacketSender},
+        consensus::vote_stake_tracker::VoteStakeTracker,
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
         result::{Error, Result},
@@ -8,7 +9,6 @@ use {
         verified_vote_packets::{
             ValidatorGossipVotesIterator, VerifiedVoteMetadata, VerifiedVotePackets,
         },
-        vote_stake_tracker::VoteStakeTracker,
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Select, Sender},
     log::*,

@@ -8,7 +8,7 @@ use {
     log::*,
     solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
     solana_core::{
-        tower_storage::FileTowerStorage,
+        consensus::tower_storage::FileTowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{
