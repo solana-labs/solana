@@ -259,7 +259,7 @@ impl FeeSigmaProof {
         }
     }
 
-    /// Fee sigma proof verifier.
+    /// Verifies a fee sigma proof
     ///
     /// * `fee_commitment` - The Pedersen commitment of the transfer fee
     /// * `delta_commitment` - The Pedersen commitment of the "real" delta value

@@ -49,7 +49,7 @@ pub struct CiphertextCommitmentEqualityProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
 impl CiphertextCommitmentEqualityProof {
-    /// Equality proof constructor. The proof is with respect to a ciphertext and commitment.
+    /// Creates a ciphertext-commitment equality proof.
     ///
     /// The function does *not* hash the public key, ciphertext, or commitment into the transcript.
     /// For security, the caller (the main protocol) should hash these public components prior to
@@ -120,7 +120,7 @@ impl CiphertextCommitmentEqualityProof {
         }
     }
 
-    /// Equality proof verifier. The proof is with respect to a single ciphertext and commitment.
+    /// Verifies a ciphertext-commitment equality proof.
     ///
     /// * `source_pubkey` - The ElGamal pubkey associated with the ciphertext to be proved
     /// * `source_ciphertext` - The main ElGamal ciphertext to be proved
