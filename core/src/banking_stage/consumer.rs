@@ -472,9 +472,9 @@ impl Consumer {
             ..
         } = execute_and_commit_transactions_output;
 
-        // The transaction scheduler may allocate costs for transactions that don't get executed
-        // due to AccountInUse, InsufficientFunds, and other errors. Those costs should be removed
-        // to ensure accurate tracking of compute units.
+        // Costs of all transactions are added before processing.
+        // To ensure accurate tracking of compute units, transactions that ultimately
+        // were not included in the block should have their cost removed.
         QosService::remove_costs(
             transaction_qos_cost_results.iter(),
             commit_transactions_result.as_ref().ok(),
