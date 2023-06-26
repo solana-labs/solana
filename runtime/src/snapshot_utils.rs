@@ -2447,7 +2447,7 @@ pub fn purge_old_snapshot_archives(
         for path in archives.iter().map(|a| a.path()) {
             trace!("Removing snapshot archive: {}", path.display());
             fs_err::remove_file(path)
-                .unwrap_or_else(|err| info!("Failed to remove {}: {err}", path.display()));
+                .unwrap_or_else(|err| info!("Failed to remove {}: {}", path.display(), err));
         }
     }
     remove_archives(full_snapshot_archives_to_remove);
