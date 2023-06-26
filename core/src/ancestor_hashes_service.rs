@@ -8,13 +8,12 @@ use {
         packet_threshold::DynamicPacketToProcessThreshold,
         repair_service::{AncestorDuplicateSlotsSender, RepairInfo, RepairStatsGroup},
         replay_stage::DUPLICATE_THRESHOLD,
-        result::{Error, Result},
         serve_repair::{
             AncestorHashesRepairType, AncestorHashesResponse, RepairProtocol, ServeRepair,
         },
     },
     bincode::serialize,
-    crossbeam_channel::{unbounded, Receiver, Sender},
+    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     dashmap::{mapref::entry::Entry::Occupied, DashMap},
     solana_gossip::{cluster_info::ClusterInfo, ping_pong::Pong},
     solana_ledger::blockstore::Blockstore,
@@ -246,8 +245,11 @@ impl AncestorHashesService {
                         &ancestor_socket,
                     );
                     match result {
-                        Err(Error::RecvTimeout(_)) | Ok(_) => {}
-                        Err(err) => info!("ancestors hashes responses listener error: {:?}", err),
+                        Ok(_) | Err(RecvTimeoutError::Timeout) => (),
+                        Err(RecvTimeoutError::Disconnected) => {
+                            info!("ancestors hashes responses listener disconnected");
+                            return;
+                        }
                     };
                     if exit.load(Ordering::Relaxed) {
                         return;
@@ -274,7 +276,7 @@ impl AncestorHashesService {
         retryable_slots_sender: &RetryableSlotsSender,
         keypair: &Keypair,
         ancestor_socket: &UdpSocket,
-    ) -> Result<()> {
+    ) -> Result<(), RecvTimeoutError> {
         let timeout = Duration::new(1, 0);
         let mut packet_batches = vec![response_receiver.recv_timeout(timeout)?];
         let mut total_packets = packet_batches[0].len();
