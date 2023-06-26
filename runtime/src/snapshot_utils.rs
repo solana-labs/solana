@@ -1531,7 +1531,7 @@ pub fn bank_from_snapshot_archives(
     exit: Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     info!(
-        "Loading bank from full snapshot: {}, and incremental snapshot: {:?}",
+        "Loading bank from full snapshot archive: {}, and incremental snapshot archive: {:?}",
         full_snapshot_archive_info.path().display(),
         incremental_snapshot_archive_info
             .as_ref()
