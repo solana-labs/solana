@@ -11,7 +11,7 @@ use {
             pedersen::H,
         },
         errors::ProofVerificationError,
-        sigma_proofs::canonical_scalar_from_slice,
+        sigma_proofs::{canonical_scalar_from_optional_slice, ristretto_point_from_optional_slice},
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -154,21 +154,18 @@ impl ZeroBalanceProof {
 
     pub fn to_bytes(&self) -> [u8; 96] {
         let mut buf = [0_u8; 96];
-        buf[..32].copy_from_slice(self.Y_P.as_bytes());
-        buf[32..64].copy_from_slice(self.Y_D.as_bytes());
-        buf[64..96].copy_from_slice(self.z.as_bytes());
+        let mut chunks = buf.chunks_mut(32);
+        chunks.next().unwrap().copy_from_slice(self.Y_P.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.Y_D.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.z.as_bytes());
         buf
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ZeroBalanceProofError> {
-        if bytes.len() != 96 {
-            return Err(ProofVerificationError::Deserialization.into());
-        }
-
-        let Y_P = CompressedRistretto::from_slice(&bytes[..32]);
-        let Y_D = CompressedRistretto::from_slice(&bytes[32..64]);
-        let z = canonical_scalar_from_slice(&bytes[64..96])?;
-
+        let mut chunks = bytes.chunks(32);
+        let Y_P = ristretto_point_from_optional_slice(chunks.next())?;
+        let Y_D = ristretto_point_from_optional_slice(chunks.next())?;
+        let z = canonical_scalar_from_optional_slice(chunks.next())?;
         Ok(ZeroBalanceProof { Y_P, Y_D, z })
     }
 }
