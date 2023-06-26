@@ -16,6 +16,8 @@ pub enum UseSnapshotArchivesAtStartup {
     /// Only use snapshot archives if they are newer than the local snapshot state on disk.
     /// This can happen if a node is stopped and a new snapshot archive is downloaded before
     /// restarting.  At startup, the snapshot archive would be the newest and loaded from.
+    /// Note, this also implies that snapshot archives will be used if there is no local snapshot
+    /// state on disk.
     WhenNewest,
 }
 
@@ -37,7 +39,7 @@ pub mod cli {
         Note, this will use the latest state available, \
         which may be newer than the latest snapshot archive. \
         Specifying \"when-newest\" will use snapshot-related state \
-        already on disk unless there are snapshot archives newer. \
+        already on disk unless there are snapshot archives newer than it. \
         This can happen if a new snapshot archive is downloaded \
         while the node is stopped.";
 
