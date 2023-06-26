@@ -3,9 +3,14 @@ use {
     solana_client::tpu_client::TpuClient,
     solana_connection_cache::connection_cache::{ConnectionManager, ConnectionPool},
     solana_sdk::{
-        account::Account, commitment_config::CommitmentConfig, epoch_info::EpochInfo, hash::Hash,
-        message::Message, pubkey::Pubkey, signature::Signature,
-        transaction::{Transaction, VersionedTransaction,},
+        account::Account,
+        commitment_config::CommitmentConfig,
+        epoch_info::EpochInfo,
+        hash::Hash,
+        message::Message,
+        pubkey::Pubkey,
+        signature::Signature,
+        transaction::{Transaction, VersionedTransaction},
     },
 };
 
@@ -23,8 +28,12 @@ where
         self.try_send_transaction_batch(&transactions)?;
         Ok(())
     }
-    fn send_versioned_transaction_batch(&self, transactions: Vec<VersionedTransaction>) -> Result<()> {
-            BenchTpsClient::send_versioned_transaction_batch(self, transactions)?;
+    fn send_versioned_transaction_batch(
+        &self,
+        transactions: Vec<VersionedTransaction>,
+    ) -> Result<()> {
+        self.rpc_client()
+            .send_versioned_transaction_batch(transactions)?;
         Ok(())
     }
     fn get_latest_blockhash(&self) -> Result<Hash> {

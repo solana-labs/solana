@@ -3,9 +3,7 @@ use {
     itertools::Itertools,
     solana_clap_utils::{
         hidden_unless_forced,
-        input_validators::{
-            is_keypair, is_url, is_url_or_moniker, is_within_range,
-        },
+        input_validators::{is_keypair, is_url, is_url_or_moniker, is_within_range},
     },
     solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_sdk::{
@@ -403,7 +401,7 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                      1st parameter is a pubkey string of SBF program to be used;\
                      2nd parameter is the number of accounts to be loaded by the SBF program from ATL.",
                 ),
-        ) 
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -581,17 +579,15 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
 
     if let Some(values) = matches.values_of("load_accounts_from_address_lookup_table") {
         for (sbf_program_pubkey_string, number_of_accounts) in values.into_iter().tuples() {
-            let sbf_program_pubkey = sbf_program_pubkey_string.parse::<Pubkey>().map_err(|_| "Can't parse pubkey string")?;
+            let sbf_program_pubkey = sbf_program_pubkey_string
+                .parse::<Pubkey>()
+                .map_err(|_| "Can't parse pubkey string")?;
             let parsed_number_of_accounts = number_of_accounts
                 .parse()
                 .map_err(|_| "Can't parse number-of-accounts-from-address-lookup-table")?;
-            // TODO - remove log
-            log::info!("==== instruct {:?} to load {:?} accounts from from ATL", sbf_program_pubkey, parsed_number_of_accounts);
-            // NOTE - support multiple ATL IXs later
-            args.load_accounts_from_address_lookup_table = Some((
-                    sbf_program_pubkey,
-                    parsed_number_of_accounts,
-            ));
+            // NOTE - can support multiple ATL IXs later, for now, only use one such ix.
+            args.load_accounts_from_address_lookup_table =
+                Some((sbf_program_pubkey, parsed_number_of_accounts));
         }
     }
 

@@ -256,7 +256,6 @@ fn main() {
         instruction_padding_config,
         bind_address,
         client_node_id,
-        load_accounts_from_address_lookup_table,
         ..
     } = &cli_config;
 

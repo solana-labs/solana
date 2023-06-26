@@ -792,8 +792,6 @@ impl Accounts {
             let lookup_table = AddressLookupTable::deserialize(table_account.data())
                 .map_err(|_ix_err| AddressLookupError::InvalidAccountData)?;
 
-            debug!("==== load_lookup_table_addresses, lookup_table {:?}", lookup_table);
-
             Ok(LoadedAddresses {
                 writable: lookup_table.lookup(
                     current_slot,

@@ -9,9 +9,7 @@ use {
     log::*,
     rand::distributions::{Distribution, Uniform},
     rayon::prelude::*,
-    solana_address_lookup_table_program::{
-        state::AddressLookupTable,
-    },
+    solana_address_lookup_table_program::state::AddressLookupTable,
     solana_client::{nonce_utils, rpc_request::MAX_MULTIPLE_ACCOUNTS},
     solana_metrics::{self, datapoint_info},
     solana_sdk::{
@@ -22,13 +20,13 @@ use {
         compute_budget::ComputeBudgetInstruction,
         hash::Hash,
         instruction::{AccountMeta, Instruction},
-        message::{Message, VersionedMessage, v0,},
+        message::{v0, Message, VersionedMessage},
         native_token::Sol,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_instruction,
         timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
-        transaction::{Transaction, VersionedTransaction,},
+        transaction::VersionedTransaction,
     },
     spl_instruction_padding::instruction::wrap_instruction,
     std::{
@@ -54,7 +52,7 @@ const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) a
 // `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE * COMPUTE_UNIT_PRICE_MULTIPLIER / 1_000_000`
 const MAX_COMPUTE_UNIT_PRICE: u64 = 50;
 const COMPUTE_UNIT_PRICE_MULTIPLIER: u64 = 1_000;
-const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 600 + 10; // 1 transfer is plus 3 compute_budget ixs; //TODO added 10 to use noop ix to fool runtime
+const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 600 + 10; // 1 transfer is plus 3 compute_budget ixs, plus 10 to use noop ix to load atl
 /// calculate maximum possible prioritization fee, if `use-randomized-compute-unit-price` is
 /// enabled, round to nearest lamports.
 pub fn max_lamports_for_prioritization(use_randomized_compute_unit_price: bool) -> u64 {
@@ -175,22 +173,32 @@ where
         );
         let signing_start = Instant::now();
 
-        let address_lookup_table_account = self.lookup_table_address.and_then(|(lookup_table_address, sbf_program_id)| {
-            let lookup_table_account = self.client
-                .get_account_with_commitment(&lookup_table_address, CommitmentConfig::processed())
-                .unwrap();
-            info!("==== {:?}", lookup_table_account);
-            let lookup_table = AddressLookupTable::deserialize(&lookup_table_account.data).unwrap();
-            info!("==== {:?}", lookup_table);
-            Some((
-                AddressLookupTableAccount {
-                    key: lookup_table_address, 
-                    addresses: lookup_table.addresses.to_vec(),
-                }, 
-                sbf_program_id,
-            ))
-        });
-        info!("==== address_lookup_table_account {:?}", address_lookup_table_account);
+        let address_lookup_table_account =
+            self.lookup_table_address
+                .and_then(|(lookup_table_address, sbf_program_id)| {
+                    let lookup_table_account = self
+                        .client
+                        .get_account_with_commitment(
+                            &lookup_table_address,
+                            CommitmentConfig::processed(),
+                        )
+                        .unwrap();
+                    info!("==== {:?}", lookup_table_account);
+                    let lookup_table =
+                        AddressLookupTable::deserialize(&lookup_table_account.data).unwrap();
+                    info!("==== {:?}", lookup_table);
+                    Some((
+                        AddressLookupTableAccount {
+                            key: lookup_table_address,
+                            addresses: lookup_table.addresses.to_vec(),
+                        },
+                        sbf_program_id,
+                    ))
+                });
+        info!(
+            "==== address_lookup_table_account {:?}",
+            address_lookup_table_account
+        );
 
         let source_chunk = &self.account_chunks.source[self.chunk_index];
         let dest_chunk = &self.account_chunks.dest[self.chunk_index];
@@ -415,13 +423,16 @@ where
     } = config;
 
     // if --load_accounts_from_address_lookup_table is used, creates Lookup Table account,
-    //     then extend it with spepcified number of account. 
+    //     then extend it with spepcified number of account.
     // All bench transfer transactions will include a `sbf_program_id` instruction to load
     //     specified number of accounts from Lookup Table account as writable accounts.
-    let lookup_table_address = load_accounts_from_address_lookup_table.and_then(|(sbf_program_id, number_of_accounts)| {
-        let lookup_table_account = create_address_lookup_table_account(client.clone(), &id, number_of_accounts, &gen_keypairs).unwrap();
-        Some((lookup_table_account, sbf_program_id))
-    });
+    let lookup_table_address =
+        load_accounts_from_address_lookup_table.and_then(|(sbf_program_id, number_of_accounts)| {
+            let lookup_table_account =
+                create_address_lookup_table_account(client.clone(), &id, number_of_accounts)
+                    .unwrap();
+            Some((lookup_table_account, sbf_program_id))
+        });
 
     assert!(gen_keypairs.len() >= 2 * tx_count);
     let chunk_generator = TransactionChunkGenerator::new(
@@ -653,18 +664,22 @@ fn transfer_with_compute_unit_price_and_padding(
         ),
     ]);
 
-    let versioned_message = if let Some((address_lookup_table_account, sbf_program_id)) = address_lookup_table_account {
+    let versioned_message = if let Some((address_lookup_table_account, sbf_program_id)) =
+        address_lookup_table_account
+    {
         let address_lookup_table_account_clone = address_lookup_table_account.clone();
         let address_lookup_table_accounts = vec![address_lookup_table_account_clone];
-        
-        let account_metas: Vec<_> = address_lookup_table_account.addresses.iter().map(|pubkey| {
-            AccountMeta::new(pubkey.clone(), false)
-        }).collect();
-        instructions.extend_from_slice(&[
-            Instruction::new_with_bincode(sbf_program_id.clone(), &(),
+
+        let account_metas: Vec<_> = address_lookup_table_account
+            .addresses
+            .iter()
+            .map(|pubkey| AccountMeta::new(pubkey.clone(), false))
+            .collect();
+        instructions.extend_from_slice(&[Instruction::new_with_bincode(
+            sbf_program_id.clone(),
+            &(),
             account_metas,
-            ),
-        ]);
+        )]);
 
         VersionedMessage::V0(
             v0::Message::try_compile(
@@ -672,14 +687,18 @@ fn transfer_with_compute_unit_price_and_padding(
                 &instructions,
                 &address_lookup_table_accounts,
                 recent_blockhash,
-                ).unwrap()
             )
+            .unwrap(),
+        )
     } else {
-        VersionedMessage::Legacy(Message::new_with_blockhash(&instructions, Some(&from_pubkey), &recent_blockhash))
+        VersionedMessage::Legacy(Message::new_with_blockhash(
+            &instructions,
+            Some(&from_pubkey),
+            &recent_blockhash,
+        ))
     };
-    let versioned_transaction = VersionedTransaction::try_new(
-        versioned_message, &[from_keypair],
-    ).unwrap();
+    let versioned_transaction =
+        VersionedTransaction::try_new(versioned_message, &[from_keypair]).unwrap();
 
     info!("==== versioned_transaction {:?}", versioned_transaction);
 
@@ -752,7 +771,7 @@ fn nonced_transfer_with_padding(
     lamports: u64,
     nonce_account: &Pubkey,
     nonce_authority: &Keypair,
-    nonce_hash: Hash,
+    _nonce_hash: Hash,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
 ) -> VersionedTransaction {
     let from_pubkey = from_keypair.pubkey();
@@ -775,21 +794,22 @@ fn nonced_transfer_with_padding(
         ),
     ]);
     let versioned_nonce_transaction = VersionedTransaction::try_new(
-        VersionedMessage::Legacy(
-            Message::new_with_nonce(
-                instructions,
-                Some(&from_pubkey),
-                nonce_account,
-                &nonce_authority.pubkey(),
-            )
-        ),
+        VersionedMessage::Legacy(Message::new_with_nonce(
+            instructions,
+            Some(&from_pubkey),
+            nonce_account,
+            &nonce_authority.pubkey(),
+        )),
         &[from_keypair],
-    ).unwrap();
+    )
+    .unwrap();
 
-    info!("==== versioned_nonce_transaction {:?}", versioned_nonce_transaction);
+    info!(
+        "==== versioned_nonce_transaction {:?}",
+        versioned_nonce_transaction
+    );
 
-    // TODO - need to sign the tx with 
-    // nonce_hash
+    // TODO - need to sign the tx with `nonce_hash`?
     versioned_nonce_transaction
 }
 

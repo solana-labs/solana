@@ -1,7 +1,5 @@
 use {
-    crate::{
-        bench_tps_client::*,
-    },
+    crate::bench_tps_client::*,
     log::*,
     solana_address_lookup_table_program::{
         instruction::{create_lookup_table, extend_lookup_table},
@@ -15,11 +13,7 @@ use {
         slot_history::Slot,
         transaction::Transaction,
     },
-    std::{
-        sync::Arc,
-        thread::sleep,
-        time::Duration,
-    },
+    std::{sync::Arc, thread::sleep, time::Duration},
 };
 
 // Number of pubkeys to be included in single extend_lookup_table transaction that not exceeds MTU
@@ -29,7 +23,6 @@ pub fn create_address_lookup_table_account<T: 'static + BenchTpsClient + Send + 
     client: Arc<T>,
     funding_key: &Keypair,
     num_addresses: usize,
-    keypairs: &Vec<Keypair>,
 ) -> Result<Pubkey> {
     let (transaction, lookup_table_address) = build_create_lookup_table_tx(
         funding_key,
@@ -84,9 +77,8 @@ fn build_extend_lookup_table_tx(
     recent_blockhash: Hash,
 ) -> Transaction {
     let mut addresses = Vec::with_capacity(num_addresses);
-    // TODO - replace new_unique with keys from keypairs,
-    //        Or maybe not necessary? Should log and check what accounts.rs does with new_unique
-    //        keys when loading
+    // NOTE - generated bunch of random addresses for sbf program (eg noop.so) to use,
+    //        if real accounts are required, can use funded keypairs in lookup-table.
     addresses.resize_with(num_addresses, Pubkey::new_unique);
     let extend_lookup_table_ix = extend_lookup_table(
         *lookup_table_address,
@@ -108,9 +100,8 @@ fn send_and_confirm_transaction<T: 'static + BenchTpsClient + Send + Sync + ?Siz
     transaction: Transaction,
     lookup_table_address: &Pubkey,
 ) {
-    info!("==== {:?}", transaction);
     let tx_sig = client.send_transaction(transaction).unwrap();
-    info!("==== {:?}", tx_sig);
+    debug!("address_table_lookup sent transaction, sig {:?}", tx_sig);
 
     // Sleep a few slots to allow transactions to process
     sleep(Duration::from_secs(1));
@@ -119,7 +110,6 @@ fn send_and_confirm_transaction<T: 'static + BenchTpsClient + Send + Sync + ?Siz
     let lookup_table_account = client
         .get_account_with_commitment(&lookup_table_address, CommitmentConfig::processed())
         .unwrap();
-    info!("==== {:?}", lookup_table_account);
     let lookup_table = AddressLookupTable::deserialize(&lookup_table_account.data).unwrap();
-    info!("==== {:?}", lookup_table);
+    debug!("lookup table: {:?}", lookup_table);
 }
