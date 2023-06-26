@@ -3323,6 +3323,9 @@ impl Blockstore {
         self.db.is_primary_access()
     }
 
+    /// Search for any ancestors of the latest root that are not marked as
+    /// roots themselves. Then, mark these found slots as roots since the
+    /// ancestor of a root is also inherently a root.
     pub fn scan_and_fix_roots(&self, exit: &AtomicBool) -> Result<()> {
         let ancestor_iterator = AncestorIterator::new(self.last_root(), self)
             .take_while(|&slot| slot >= self.lowest_cleanup_slot());
