@@ -133,6 +133,24 @@ impl ByteBlockReader {
             AccountBlockFormat::AlignedRaw => panic!("the input buffer is already decoded"),
         }
     }
+
+    /// Reads the raw part of the input byte_block at the specified offset
+    /// as type T.
+    ///
+    /// If `offset` + size_of::<T>() exceeds the size of the input byte_block,
+    /// then None will be returned.
+    pub fn read_type<T>(byte_block: &[u8], offset: usize) -> Option<&T> {
+        let size = std::mem::size_of::<T>();
+        if offset + size > byte_block.len() {
+            return None;
+        }
+        let data = &byte_block[offset..][..size];
+        let raw_ptr = data.as_ptr() as *const u8;
+        let slice = unsafe { std::slice::from_raw_parts(raw_ptr, size) };
+        let ptr = slice.as_ptr() as *const T;
+        debug_assert!(ptr as usize % std::mem::align_of::<T>() == 0);
+        Some(unsafe { &*ptr })
+    }
 }
 
 #[cfg(test)]
@@ -143,7 +161,7 @@ mod tests {
         solana_sdk::{hash::Hash, stake_history::Epoch},
     };
 
-    fn read_type<T>(buffer: &[u8], offset: usize) -> (T, usize) {
+    fn read_type_unaligned<T>(buffer: &[u8], offset: usize) -> (T, usize) {
         let size = std::mem::size_of::<T>();
         let (next, overflow) = offset.overflowing_add(size);
         assert!(!overflow && next <= buffer.len());
@@ -170,7 +188,7 @@ mod tests {
 
         assert_eq!(decoded_buffer.len(), mem::size_of::<u32>());
 
-        let (value_from_buffer, next) = read_type::<u32>(&decoded_buffer, 0);
+        let (value_from_buffer, next) = read_type_unaligned::<u32>(&decoded_buffer, 0);
         assert_eq!(value, value_from_buffer);
 
         if format != AccountBlockFormat::AlignedRaw {
@@ -250,7 +268,7 @@ mod tests {
         );
 
         // verify meta1 and its data
-        let (meta1_from_buffer, next1) = read_type::<TestMetaStruct>(&decoded_buffer, 0);
+        let (meta1_from_buffer, next1) = read_type_unaligned::<TestMetaStruct>(&decoded_buffer, 0);
         assert_eq!(test_metas[0], meta1_from_buffer);
         assert_eq!(
             test_data1,
@@ -258,8 +276,10 @@ mod tests {
         );
 
         // verify meta2 and its data
-        let (meta2_from_buffer, next2) =
-            read_type::<TestMetaStruct>(&decoded_buffer, next1 + meta1_from_buffer.data_len);
+        let (meta2_from_buffer, next2) = read_type_unaligned::<TestMetaStruct>(
+            &decoded_buffer,
+            next1 + meta1_from_buffer.data_len,
+        );
         assert_eq!(test_metas[1], meta2_from_buffer);
         assert_eq!(
             test_data2,
@@ -267,8 +287,10 @@ mod tests {
         );
 
         // verify meta3 and its data
-        let (meta3_from_buffer, next3) =
-            read_type::<TestMetaStruct>(&decoded_buffer, next2 + meta2_from_buffer.data_len);
+        let (meta3_from_buffer, next3) = read_type_unaligned::<TestMetaStruct>(
+            &decoded_buffer,
+            next2 + meta2_from_buffer.data_len,
+        );
         assert_eq!(test_metas[2], meta3_from_buffer);
         assert_eq!(
             test_data3,
@@ -337,23 +359,25 @@ mod tests {
         let mut offset = 0;
         for opt_fields in &opt_fields_vec {
             if let Some(expected_rent_epoch) = opt_fields.rent_epoch {
-                let (rent_epoch, next) = read_type::<Epoch>(&decoded_buffer, offset);
-                assert_eq!(rent_epoch, expected_rent_epoch);
+                let rent_epoch =
+                    ByteBlockReader::read_type::<Epoch>(&decoded_buffer, offset).unwrap();
+                assert_eq!(*rent_epoch, expected_rent_epoch);
                 verified_count += 1;
-                offset = next;
+                offset += std::mem::size_of::<Epoch>();
             }
             if let Some(expected_hash) = opt_fields.account_hash {
-                let (hash, next) = read_type::<Hash>(&decoded_buffer, offset);
-                assert_eq!(hash, expected_hash);
+                let hash = ByteBlockReader::read_type::<Hash>(&decoded_buffer, offset).unwrap();
+                assert_eq!(hash, &expected_hash);
                 verified_count += 1;
-                offset = next;
+                offset += std::mem::size_of::<Hash>();
             }
             if let Some(expected_write_version) = opt_fields.write_version {
-                let (write_version, next) =
-                    read_type::<StoredMetaWriteVersion>(&decoded_buffer, offset);
-                assert_eq!(write_version, expected_write_version);
+                let write_version =
+                    ByteBlockReader::read_type::<StoredMetaWriteVersion>(&decoded_buffer, offset)
+                        .unwrap();
+                assert_eq!(*write_version, expected_write_version);
                 verified_count += 1;
-                offset = next;
+                offset += std::mem::size_of::<StoredMetaWriteVersion>();
             }
         }
 
