@@ -3327,8 +3327,15 @@ impl Blockstore {
     /// roots themselves. Then, mark these found slots as roots since the
     /// ancestor of a root is also inherently a root.
     pub fn scan_and_fix_roots(&self, exit: &AtomicBool) -> Result<()> {
-        let ancestor_iterator = AncestorIterator::new(self.last_root(), self)
-            .take_while(|&slot| slot >= self.lowest_cleanup_slot());
+        // Hold the lowest_cleanup_slot read lock to prevent any cleaning of
+        // the blockstore from another thread. Doing so will prevent a
+        // possible inconsistency across column families where a slot is:
+        //  - Identified as needing root repair by this thread
+        //  - Cleaned from the blockstore by another thread (LedgerCleanupSerivce)
+        //  - Marked as root via Self::set_root() by this this thread
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
+
+        let ancestor_iterator = AncestorIterator::new(self.last_root(), self);
 
         let mut find_missing_roots = Measure::start("find_missing_roots");
         let mut roots_to_fix = vec![];
@@ -3352,7 +3359,7 @@ impl Blockstore {
         } else {
             debug!(
                 "No missing roots found in range {} to {}",
-                self.lowest_cleanup_slot(),
+                *lowest_cleanup_slot,
                 self.last_root()
             );
         }
