@@ -1,10 +1,9 @@
 #![allow(dead_code)]
 //! The account meta and related structs for the tiered storage.
-
 use {
     crate::account_storage::meta::StoredMetaWriteVersion,
+    ::solana_sdk::{hash::Hash, stake_history::Epoch},
     modular_bitfield::prelude::*,
-    solana_sdk::{hash::Hash, stake_history::Epoch},
 };
 
 /// The struct that handles the account meta flags.
@@ -67,6 +66,43 @@ pub trait TieredAccountMeta: Sized {
     /// Returns true if the TieredAccountMeta implementation supports multiple
     /// accounts sharing one account block.
     fn supports_shared_account_block() -> bool;
+
+    /// Returns the epoch that this account will next owe rent by parsing
+    /// the specified account block.  None will be returned if this account
+    /// does not persist this optional field.
+    fn rent_epoch(&self, _account_block: &[u8]) -> Option<Epoch> {
+        None
+    }
+
+    /// Returns the account hash by parsing the specified account block.  None
+    /// will be returned if this account does not persist this optional field.
+    fn account_hash<'a>(&self, _account_block: &'a [u8]) -> Option<&'a Hash> {
+        None
+    }
+
+    /// Returns the write version by parsing the specified account block.  None
+    /// will be returned if this account does not persist this optional field.
+    fn write_version(&self, _account_block: &[u8]) -> Option<StoredMetaWriteVersion> {
+        None
+    }
+
+    /// Returns the offset of the optional fields based on the specified account
+    /// block.
+    fn optional_fields_offset(&self, _account_block: &[u8]) -> usize {
+        unimplemented!();
+    }
+
+    /// Returns the length of the data associated to this account based on the
+    /// specified account block.
+    fn data_len(&self, _account_block: &[u8]) -> usize {
+        unimplemented!();
+    }
+
+    /// Returns the data associated to this account based on the specified
+    /// account block.
+    fn account_data<'a>(&self, _account_block: &'a [u8]) -> &'a [u8] {
+        unimplemented!();
+    }
 }
 
 impl AccountMetaFlags {
