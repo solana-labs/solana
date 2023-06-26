@@ -67,7 +67,7 @@ pub trait TieredAccountMeta: Sized {
     /// accounts sharing one account block.
     fn supports_shared_account_block() -> bool;
 
-    /// Returns the epoch at which this account will next own rent by parsing
+    /// Returns the epoch that this account will next owe rent by parsing
     /// the specified account block.  None will be returned if this account
     /// does not persist this optional field.
     fn rent_epoch(&self, _account_block: &[u8]) -> Option<Epoch> {
@@ -86,19 +86,19 @@ pub trait TieredAccountMeta: Sized {
         None
     }
 
-    /// Returns the offset of the optional field based on the specified account
+    /// Returns the offset of the optional fields based on the specified account
     /// block.
     fn optional_fields_offset(&self, _account_block: &[u8]) -> usize {
         unimplemented!();
     }
 
-    /// Returns the length of the data associated to this account baesd on the
+    /// Returns the length of the data associated to this account based on the
     /// specified account block.
     fn data_len(&self, _account_block: &[u8]) -> usize {
         unimplemented!();
     }
 
-    /// Returns the data associated to this account baesd on the specified
+    /// Returns the data associated to this account based on the specified
     /// account block.
     fn account_data<'a>(&self, _account_block: &'a [u8]) -> &'a [u8] {
         unimplemented!();
