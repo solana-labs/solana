@@ -472,6 +472,15 @@ impl Consumer {
             ..
         } = execute_and_commit_transactions_output;
 
+        // The transaction scheduler may allocate costs for transactions that don't get executed
+        // due to AccountInUse, InsufficientFunds, and other errors. Those costs should be removed
+        // to ensure tracking of blockspace.
+        QosService::remove_costs(
+            transaction_qos_cost_results.iter(),
+            commit_transactions_result.as_ref().ok(),
+            bank,
+        );
+
         // once feature `apply_cost_tracker_during_replay` is activated, leader shall no longer
         // adjust block with executed cost (a behavior more inline with bankless leader), it
         // should use requested, or default `compute_unit_limit` as transaction's execution cost.
@@ -479,7 +488,7 @@ impl Consumer {
             .feature_set
             .is_active(&feature_set::apply_cost_tracker_during_replay::id())
         {
-            QosService::update_or_remove_transaction_costs(
+            QosService::update_costs(
                 transaction_qos_cost_results.iter(),
                 commit_transactions_result.as_ref().ok(),
                 bank,
