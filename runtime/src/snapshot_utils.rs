@@ -1522,6 +1522,18 @@ pub fn bank_from_snapshot_archives(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
+    info!(
+        "Loading bank from full snapshot: {}, and incremental snapshot: {:?}",
+        full_snapshot_archive_info.path().display(),
+        incremental_snapshot_archive_info
+            .as_ref()
+            .map(
+                |incremental_snapshot_archive_info| incremental_snapshot_archive_info
+                    .path()
+                    .display()
+            )
+    );
+
     let (unarchived_full_snapshot, mut unarchived_incremental_snapshot, next_append_vec_id) =
         verify_and_unarchive_snapshots(
             bank_snapshots_dir,
@@ -1616,11 +1628,36 @@ pub fn bank_from_snapshot_archives(
             }),
         verify_snapshot_bank_us: measure_verify.as_us(),
     };
+    datapoint_info!(
+        "bank_from_snapshot_archives",
+        (
+            "full_snapshot_untar_us",
+            timings.full_snapshot_untar_us,
+            i64
+        ),
+        (
+            "incremental_snapshot_untar_us",
+            timings.incremental_snapshot_untar_us,
+            i64
+        ),
+        (
+            "rebuild_bank_from_snapshots_us",
+            timings.rebuild_bank_from_snapshots_us,
+            i64
+        ),
+        (
+            "verify_snapshot_bank_us",
+            timings.verify_snapshot_bank_us,
+            i64
+        ),
+    );
     Ok((bank, timings))
 }
 
-/// Rebuild bank from snapshot archives.  This function searches `full_snapshot_archives_dir` and `incremental_snapshot_archives_dir` for the
-/// highest full snapshot and highest corresponding incremental snapshot, then rebuilds the bank.
+/// Rebuild bank from snapshot archives
+///
+/// This function searches `full_snapshot_archives_dir` and `incremental_snapshot_archives_dir` for
+/// the highest full snapshot and highest corresponding incremental snapshot, then rebuilds the bank.
 #[allow(clippy::too_many_arguments)]
 pub fn bank_from_latest_snapshot_archives(
     bank_snapshots_dir: impl AsRef<Path>,
@@ -1654,19 +1691,7 @@ pub fn bank_from_latest_snapshot_archives(
         full_snapshot_archive_info.slot(),
     );
 
-    info!(
-        "Loading bank from full snapshot: {}, and incremental snapshot: {:?}",
-        full_snapshot_archive_info.path().display(),
-        incremental_snapshot_archive_info
-            .as_ref()
-            .map(
-                |incremental_snapshot_archive_info| incremental_snapshot_archive_info
-                    .path()
-                    .display()
-            )
-    );
-
-    let (bank, timings) = bank_from_snapshot_archives(
+    let (bank, _) = bank_from_snapshot_archives(
         account_paths,
         bank_snapshots_dir.as_ref(),
         &full_snapshot_archive_info,
@@ -1685,30 +1710,6 @@ pub fn bank_from_latest_snapshot_archives(
         accounts_update_notifier,
         exit,
     )?;
-
-    datapoint_info!(
-        "bank_from_snapshot_archives",
-        (
-            "full_snapshot_untar_us",
-            timings.full_snapshot_untar_us,
-            i64
-        ),
-        (
-            "incremental_snapshot_untar_us",
-            timings.incremental_snapshot_untar_us,
-            i64
-        ),
-        (
-            "rebuild_bank_from_snapshots_us",
-            timings.rebuild_bank_from_snapshots_us,
-            i64
-        ),
-        (
-            "verify_snapshot_bank_us",
-            timings.verify_snapshot_bank_us,
-            i64
-        ),
-    );
 
     Ok((
         bank,
@@ -1734,6 +1735,11 @@ pub fn bank_from_snapshot_dir(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromDirTimings)> {
+    info!(
+        "Loading bank from snapshot dir: {}",
+        bank_snapshot.snapshot_dir.display()
+    );
+
     // Clear the contents of the account paths run directories.  When constructing the bank, the appendvec
     // files will be extracted from the snapshot hardlink directories into these run/ directories.
     for path in account_paths {
@@ -1754,7 +1760,7 @@ pub fn bank_from_snapshot_dir(
         storage,
         next_append_vec_id,
     };
-    let mut measure_rebuild = Measure::start("rebuild bank from snapshots");
+    let mut measure_rebuild = Measure::start("rebuild bank from snapshot");
     let bank = rebuild_bank_from_snapshot(
         bank_snapshot,
         account_paths,
@@ -1782,6 +1788,19 @@ pub fn bank_from_snapshot_dir(
         rebuild_bank_from_snapshot_us: measure_rebuild.as_us(),
         build_storage_us: measure_build_storage.as_us(),
     };
+    datapoint_info!(
+        "bank_from_snapshot_dir",
+        (
+            "build_storage_from_snapshot_dir_us",
+            timings.build_storage_us,
+            i64
+        ),
+        (
+            "rebuild_bank_from_snapshot_us",
+            timings.rebuild_bank_from_snapshot_us,
+            i64
+        ),
+    );
     Ok((bank, timings))
 }
 
@@ -1802,12 +1821,11 @@ pub fn bank_from_latest_snapshot_dir(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: Arc<AtomicBool>,
 ) -> Result<Bank> {
-    info!("Loading bank from snapshot dir");
     let bank_snapshot = get_highest_bank_snapshot_post(&bank_snapshots_dir).ok_or_else(|| {
         SnapshotError::NoSnapshotSlotDir(bank_snapshots_dir.as_ref().to_path_buf())
     })?;
 
-    let (bank, timings) = bank_from_snapshot_dir(
+    let (bank, _) = bank_from_snapshot_dir(
         account_paths,
         &bank_snapshot,
         genesis_config,
@@ -1823,19 +1841,6 @@ pub fn bank_from_latest_snapshot_dir(
         exit,
     )?;
 
-    datapoint_info!(
-        "bank_from_snapshot_dir",
-        (
-            "build_storage_from_snapshot_dir_us",
-            timings.build_storage_us,
-            i64
-        ),
-        (
-            "rebuild_bank_from_snapshot_us",
-            timings.rebuild_bank_from_snapshot_us,
-            i64
-        ),
-    );
     Ok(bank)
 }
 
