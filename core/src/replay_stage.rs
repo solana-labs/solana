@@ -3184,6 +3184,97 @@ impl ReplayStage {
         );
     }
 
+    fn select_forks_failed_switch_threshold(
+        reset_bank: Option<&Arc<Bank>>,
+        progress: &ProgressMap,
+        tower: &mut Tower,
+        heaviest_bank_slot: Slot,
+        failure_reasons: &mut Vec<HeaviestForkFailures>,
+        switch_proof_stake: u64,
+        total_stake: u64,
+        switch_fork_decision: SwitchForkDecision,
+    ) -> SwitchForkDecision {
+        let last_vote_unable_to_land = match reset_bank {
+            Some(heaviest_bank_on_same_voted_fork) => {
+                match tower.last_voted_slot() {
+                    Some(last_voted_slot) => {
+                        match progress.my_latest_landed_vote(
+                            heaviest_bank_on_same_voted_fork.slot(),
+                        ) {
+                            Some(my_latest_landed_vote) =>
+                            // Last vote did not land
+                            {
+                                my_latest_landed_vote < last_voted_slot
+                                    // If we are already voting at the tip, there is nothing we can do.
+                                    && last_voted_slot < heaviest_bank_on_same_voted_fork.slot()
+                                    // Last vote outside slot hashes of the tip of fork
+                                    && !heaviest_bank_on_same_voted_fork
+                                        .is_in_slot_hashes_history(&last_voted_slot)
+                            }
+                            None => false,
+                        }
+                    }
+                    None => false,
+                }
+            }
+            None => false,
+        };
+
+        if last_vote_unable_to_land {
+            // If we reach here, these assumptions are true:
+            // 1. We can't switch because of threshold
+            // 2. Our last vote was on a non-duplicate/confirmed slot
+            // 3. Our last vote is now outside slot hashes history of the tip of fork
+            // So, there was no hope of this last vote ever landing again.
+
+            // In this case, we do want to obey threshold, yet try to register our vote on
+            // the current fork, so we choose to vote at the tip of current fork instead.
+            // This will not cause longer lockout because lockout doesn't double after 512
+            // slots, it might be enough to get majority vote.
+            SwitchForkDecision::SameFork
+        } else {
+            // If we can't switch and our last vote was on a non-duplicate/confirmed slot, then
+            // reset to the the next votable bank on the same fork as our last vote,
+            // but don't vote.
+
+            // We don't just reset to the heaviest fork when switch threshold fails because
+            // a situation like this can occur:
+
+            /* Figure 1:
+                        slot 0
+                            |
+                        slot 1
+                        /        \
+            slot 2 (last vote)     |
+                        |      slot 8 (10%)
+                slot 4 (9%)
+            */
+
+            // Imagine 90% of validators voted on slot 4, but only 9% landed. If everybody that fails
+            // the switch threshold abandons slot 4 to build on slot 8 (because it's *currently* heavier),
+            // then there will be no blocks to include the votes for slot 4, and the network halts
+            // because 90% of validators can't vote
+            info!(
+                "Waiting to switch vote to {},
+                resetting to slot {:?} for now,
+                switch proof stake: {},
+                threshold stake: {},
+                total stake: {}",
+                heaviest_bank_slot,
+                reset_bank.as_ref().map(|b| b.slot()),
+                switch_proof_stake,
+                total_stake as f64 * SWITCH_FORK_THRESHOLD,
+                total_stake
+            );
+            failure_reasons.push(HeaviestForkFailures::FailedSwitchThreshold(
+                heaviest_bank_slot,
+                switch_proof_stake,
+                total_stake,
+            ));
+            switch_fork_decision
+        }
+    }
+
     /// Given a `heaviest_bank` and a `heaviest_bank_on_same_voted_fork`, return
     /// a bank to vote on, a bank to reset to, and a list of switch failure
     /// reasons.
@@ -3238,85 +3329,17 @@ impl ReplayStage {
             match switch_fork_decision {
                 SwitchForkDecision::FailedSwitchThreshold(switch_proof_stake, total_stake) => {
                     let reset_bank = heaviest_bank_on_same_voted_fork;
-                    let last_vote_unable_to_land = match heaviest_bank_on_same_voted_fork {
-                        Some(heaviest_bank_on_same_voted_fork) => {
-                            match tower.last_voted_slot() {
-                                Some(last_voted_slot) => {
-                                    match progress.my_latest_landed_vote(
-                                        heaviest_bank_on_same_voted_fork.slot(),
-                                    ) {
-                                        Some(my_latest_landed_vote) =>
-                                        // Last vote did not land
-                                        {
-                                            my_latest_landed_vote < last_voted_slot
-                                                // If we are already voting at the tip, there is nothing we can do.
-                                                && last_voted_slot < heaviest_bank_on_same_voted_fork.slot()
-                                                // Last vote outside slot hashes of the tip of fork
-                                                && !heaviest_bank_on_same_voted_fork
-                                                    .is_in_slot_hashes_history(&last_voted_slot)
-                                        }
-                                        None => false,
-                                    }
-                                }
-                                None => false,
-                            }
-                        }
-                        None => false,
-                    };
-
-                    if last_vote_unable_to_land {
-                        // If we reach here, these assumptions are true:
-                        // 1. We can't switch because of threshold
-                        // 2. Our last vote was on a non-duplicate/confirmed slot
-                        // 3. Our last vote is now outside slot hashes history of the tip of fork
-                        // So, there was no hope of this last vote ever landing again.
-
-                        // In this case, we do want to obey threshold, yet try to register our vote on
-                        // the current fork, so we choose to vote at the tip of current fork instead.
-                        // This will not cause longer lockout because lockout doesn't double after 512
-                        // slots, it might be enough to get majority vote.
-                        reset_bank.map(|b| (b, SwitchForkDecision::SameFork))
-                    } else {
-                        // If we can't switch and our last vote was on a non-duplicate/confirmed slot, then
-                        // reset to the the next votable bank on the same fork as our last vote,
-                        // but don't vote.
-
-                        // We don't just reset to the heaviest fork when switch threshold fails because
-                        // a situation like this can occur:
-
-                        /* Figure 1:
-                                    slot 0
-                                        |
-                                    slot 1
-                                    /        \
-                        slot 2 (last vote)     |
-                                    |      slot 8 (10%)
-                            slot 4 (9%)
-                        */
-
-                        // Imagine 90% of validators voted on slot 4, but only 9% landed. If everybody that fails
-                        // the switch threshold abandons slot 4 to build on slot 8 (because it's *currently* heavier),
-                        // then there will be no blocks to include the votes for slot 4, and the network halts
-                        // because 90% of validators can't vote
-                        info!(
-                            "Waiting to switch vote to {},
-                            resetting to slot {:?} for now,
-                            switch proof stake: {},
-                            threshold stake: {},
-                            total stake: {}",
-                            heaviest_bank.slot(),
-                            reset_bank.as_ref().map(|b| b.slot()),
-                            switch_proof_stake,
-                            total_stake as f64 * SWITCH_FORK_THRESHOLD,
-                            total_stake
-                        );
-                        failure_reasons.push(HeaviestForkFailures::FailedSwitchThreshold(
-                            heaviest_bank.slot(),
-                            switch_proof_stake,
-                            total_stake,
-                        ));
-                        reset_bank.map(|b| (b, switch_fork_decision))
-                    }
+                    let final_switch_fork_decision = Self::select_forks_failed_switch_threshold(
+                        reset_bank,
+                        progress,
+                        tower,
+                        heaviest_bank.slot(),
+                        &mut failure_reasons,
+                        switch_proof_stake,
+                        total_stake,
+                        switch_fork_decision,
+                    );
+                    reset_bank.map(|b| (b, final_switch_fork_decision))
                 }
                 SwitchForkDecision::FailedSwitchDuplicateRollback(latest_duplicate_ancestor) => {
                     // If we can't switch and our last vote was on an unconfirmed, duplicate slot,
