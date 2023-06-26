@@ -438,12 +438,9 @@ pub fn create_and_canonicalize_directories(directories: &[PathBuf]) -> Result<Ve
     directories
         .iter()
         .map(|path| {
-            std::fs::create_dir_all(path).map_err(|err| {
-                SnapshotError::IoWithSourceAndFile(err, "create_dir_all", path.clone())
-            })?;
-            path.canonicalize().map_err(|err| {
-                SnapshotError::IoWithSourceAndFile(err, "canonicalize", path.clone())
-            })
+            fs_err::create_dir_all(path)?;
+            let path = fs_err::canonicalize(path)?;
+            Ok(path)
         })
         .collect()
 }
@@ -554,15 +551,8 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
         .name("solDeletePath".to_string())
         .spawn(move || {
             trace!("background deleting {}...", path_delete.display());
-            let (_, measure_delete) = measure!(std::fs::remove_dir_all(&path_delete)
-                .map_err(|err| {
-                    SnapshotError::IoWithSourceAndFile(
-                        err,
-                        "background remove_dir_all",
-                        path_delete.clone(),
-                    )
-                })
-                .expect("background delete"));
+            let (_, measure_delete) =
+                measure!(fs_err::remove_dir_all(&path_delete).expect("background delete"));
             trace!(
                 "background deleting {}... Done, and{measure_delete}",
                 path_delete.display()
@@ -666,13 +656,11 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
                 .unwrap_or_else(|_| String::new());
             if file_name.starts_with(TMP_SNAPSHOT_ARCHIVE_PREFIX) {
                 if entry.path().is_file() {
-                    fs::remove_file(entry.path())
+                    fs_err::remove_file(entry.path())
                 } else {
-                    fs::remove_dir_all(entry.path())
+                    fs_err::remove_dir_all(entry.path())
                 }
-                .unwrap_or_else(|err| {
-                    warn!("Failed to remove {}: {}", entry.path().display(), err)
-                });
+                .unwrap_or_else(|err| warn!("Failed to remove temporary snapshot archive: {err}"));
             }
         }
     }
@@ -683,11 +671,8 @@ pub fn write_snapshot_version_file(
     version_file: impl AsRef<Path>,
     version: SnapshotVersion,
 ) -> Result<()> {
-    let mut f = fs::File::create(version_file)
-        .map_err(|e| SnapshotError::IoWithSource(e, "create version file"))?;
-    f.write_all(version.as_str().as_bytes())
-        .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
-    Ok(())
+    fs_err::write(version_file, version.as_str().as_bytes())
+        .map_err(|err| SnapshotError::IoWithSource(err, "write snapshot version file"))
 }
 
 /// Make a snapshot archive out of the snapshot package
@@ -709,9 +694,8 @@ pub fn archive_snapshot_package(
         .parent()
         .expect("Tar output path is invalid");
 
-    fs::create_dir_all(tar_dir).map_err(|e| {
-        SnapshotError::IoWithSourceAndFile(e, "create archive path", tar_dir.into())
-    })?;
+    fs_err::create_dir_all(tar_dir)
+        .map_err(|err| SnapshotError::IoWithSource(err, "create archive path"))?;
 
     // Create the staging directories
     let staging_dir_prefix = TMP_SNAPSHOT_ARCHIVE_PREFIX;
@@ -729,24 +713,14 @@ pub fn archive_snapshot_package(
     let staging_version_file = staging_dir.path().join(SNAPSHOT_VERSION_FILENAME);
 
     // Create staging/accounts/
-    fs::create_dir_all(&staging_accounts_dir).map_err(|e| {
-        SnapshotError::IoWithSourceAndFile(
-            e,
-            "create staging accounts path",
-            staging_accounts_dir.clone(),
-        )
-    })?;
+    fs_err::create_dir_all(&staging_accounts_dir)
+        .map_err(|err| SnapshotError::IoWithSource(err, "create staging accounts path"))?;
 
     let slot_str = snapshot_package.slot().to_string();
     let staging_snapshot_dir = staging_snapshots_dir.join(&slot_str);
     // Creates staging snapshots/<slot>/
-    fs::create_dir_all(&staging_snapshot_dir).map_err(|e| {
-        SnapshotError::IoWithSourceAndFile(
-            e,
-            "create staging snapshots path",
-            staging_snapshots_dir.clone(),
-        )
-    })?;
+    fs_err::create_dir_all(&staging_snapshot_dir)
+        .map_err(|err| SnapshotError::IoWithSource(err, "create staging snapshots path"))?;
 
     let src_snapshot_dir = &snapshot_package.bank_snapshot_dir;
     // To be a source for symlinking and archiving, the path need to be an aboslute path
@@ -844,11 +818,10 @@ pub fn archive_snapshot_package(
     }
 
     // Atomically move the archive into position for other validators to find
-    let metadata = fs::metadata(&archive_path).map_err(|e| {
-        SnapshotError::IoWithSourceAndFile(e, "archive path stat", archive_path.clone())
-    })?;
-    fs::rename(&archive_path, snapshot_package.path())
-        .map_err(|e| SnapshotError::IoWithSource(e, "archive path rename"))?;
+    let metadata = fs_err::metadata(&archive_path)
+        .map_err(|err| SnapshotError::IoWithSource(err, "archive path stat"))?;
+    fs_err::rename(&archive_path, snapshot_package.path())
+        .map_err(|err| SnapshotError::IoWithSource(err, "archive path rename"))?;
 
     purge_old_snapshot_archives(
         full_snapshot_archives_dir,
@@ -1178,10 +1151,9 @@ pub fn create_all_accounts_run_and_snapshot_dirs(
         // create the run/ and snapshot/ sub directories for each account_path
         let (run_dir, snapshot_dir) =
             create_accounts_run_and_snapshot_dirs(account_path).map_err(|err| {
-                SnapshotError::IoWithSourceAndFile(
+                SnapshotError::IoWithSource(
                     err,
                     "Unable to create account run and snapshot directories",
-                    account_path.to_path_buf(),
                 )
             })?;
         run_dirs.push(run_dir);
@@ -1229,13 +1201,8 @@ fn get_snapshot_accounts_hardlink_dir(
             appendvec_path.display(),
             snapshot_hardlink_dir.display()
         );
-        fs::create_dir_all(&snapshot_hardlink_dir).map_err(|e| {
-            SnapshotError::IoWithSourceAndFile(
-                e,
-                "create hard-link dir",
-                snapshot_hardlink_dir.clone(),
-            )
-        })?;
+        fs_err::create_dir_all(&snapshot_hardlink_dir)
+            .map_err(|err| SnapshotError::IoWithSource(err, "create hard-link dir"))?;
         let symlink_path = hardlinks_dir.as_ref().join(format!("account_path_{idx}"));
         symlink::symlink_dir(&snapshot_hardlink_dir, symlink_path).map_err(|e| {
             SnapshotError::IoWithSourceAndFile(
@@ -1276,15 +1243,8 @@ fn hard_link_storages_to_snapshot(
         // Use the storage slot and id to compose a consistent file name for the hard-link file.
         let hardlink_filename = AppendVec::file_name(storage.slot(), storage.append_vec_id());
         let hard_link_path = snapshot_hardlink_dir.join(hardlink_filename);
-        fs::hard_link(&storage_path, &hard_link_path).map_err(|e| {
-            let err_msg = format!(
-                "hard-link appendvec file {} to {} failed.  Error: {}",
-                storage_path.display(),
-                hard_link_path.display(),
-                e,
-            );
-            SnapshotError::Io(IoError::new(ErrorKind::Other, err_msg))
-        })?;
+        fs_err::hard_link(&storage_path, &hard_link_path)
+            .map_err(|err| SnapshotError::IoWithSource(err, "hard-link append vec file"))?;
     }
     Ok(())
 }
