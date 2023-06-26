@@ -3198,9 +3198,9 @@ impl ReplayStage {
             Some(heaviest_bank_on_same_voted_fork) => {
                 match tower.last_voted_slot() {
                     Some(last_voted_slot) => {
-                        match progress.my_latest_landed_vote(
-                            heaviest_bank_on_same_voted_fork.slot(),
-                        ) {
+                        match progress
+                            .my_latest_landed_vote(heaviest_bank_on_same_voted_fork.slot())
+                        {
                             Some(my_latest_landed_vote) =>
                             // Last vote did not land
                             {
