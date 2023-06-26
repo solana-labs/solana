@@ -23,7 +23,7 @@ use {
     solana_runtime::{
         snapshot_config::SnapshotConfig,
         snapshot_utils::{
-            create_accounts_run_and_snapshot_dirs, SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
+            create_accounts_run_and_snapshot_dirs, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         },
     },
     solana_sdk::{
@@ -480,9 +480,9 @@ impl SnapshotValidatorConfig {
     ) -> SnapshotValidatorConfig {
         assert!(accounts_hash_interval_slots > 0);
         assert!(full_snapshot_archive_interval_slots > 0);
-        assert!(full_snapshot_archive_interval_slots != SNAPSHOT_ARCHIVE_DISABLED_INTERVAL);
+        assert!(full_snapshot_archive_interval_slots != DISABLED_SNAPSHOT_ARCHIVE_INTERVAL);
         assert!(full_snapshot_archive_interval_slots % accounts_hash_interval_slots == 0);
-        if incremental_snapshot_archive_interval_slots != SNAPSHOT_ARCHIVE_DISABLED_INTERVAL {
+        if incremental_snapshot_archive_interval_slots != DISABLED_SNAPSHOT_ARCHIVE_INTERVAL {
             assert!(incremental_snapshot_archive_interval_slots > 0);
             assert!(
                 incremental_snapshot_archive_interval_slots % accounts_hash_interval_slots == 0
@@ -539,7 +539,7 @@ pub fn setup_snapshot_validator_config(
 ) -> SnapshotValidatorConfig {
     SnapshotValidatorConfig::new(
         snapshot_interval_slots,
-        SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
+        DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         snapshot_interval_slots,
         num_account_paths,
     )

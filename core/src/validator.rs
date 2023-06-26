@@ -94,7 +94,7 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
             self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
-            SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
+            DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         },
     },
     solana_sdk::{
@@ -2269,7 +2269,7 @@ pub fn is_snapshot_config_valid(
         snapshot_config.incremental_snapshot_archive_interval_slots;
 
     let is_incremental_config_valid =
-        if incremental_snapshot_interval_slots == SNAPSHOT_ARCHIVE_DISABLED_INTERVAL {
+        if incremental_snapshot_interval_slots == DISABLED_SNAPSHOT_ARCHIVE_INTERVAL {
             true
         } else {
             incremental_snapshot_interval_slots >= accounts_hash_interval_slots
@@ -2564,21 +2564,21 @@ mod tests {
         assert!(is_snapshot_config_valid(
             &new_snapshot_config(
                 snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-                SNAPSHOT_ARCHIVE_DISABLED_INTERVAL
+                DISABLED_SNAPSHOT_ARCHIVE_INTERVAL
             ),
             default_accounts_hash_interval
         ));
         assert!(is_snapshot_config_valid(
             &new_snapshot_config(
                 snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-                SNAPSHOT_ARCHIVE_DISABLED_INTERVAL
+                DISABLED_SNAPSHOT_ARCHIVE_INTERVAL
             ),
             default_accounts_hash_interval
         ));
         assert!(is_snapshot_config_valid(
             &new_snapshot_config(
-                SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
-                SNAPSHOT_ARCHIVE_DISABLED_INTERVAL
+                DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
+                DISABLED_SNAPSHOT_ARCHIVE_INTERVAL
             ),
             Slot::MAX
         ));
@@ -2624,8 +2624,8 @@ mod tests {
         ));
         assert!(is_snapshot_config_valid(
             &SnapshotConfig {
-                full_snapshot_archive_interval_slots: SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
-                incremental_snapshot_archive_interval_slots: SNAPSHOT_ARCHIVE_DISABLED_INTERVAL,
+                full_snapshot_archive_interval_slots: DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
+                incremental_snapshot_archive_interval_slots: DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
                 ..SnapshotConfig::new_load_only()
             },
             100
