@@ -980,10 +980,9 @@ fn assert_capitalization(bank: &Bank) {
 
 /// Get the AccessType required, based on `process_options`
 fn get_access_type(process_options: &ProcessOptions) -> AccessType {
-    if process_options.boot_from_local_state {
-        AccessType::PrimaryForMaintenance
-    } else {
-        AccessType::Secondary
+    match process_options.use_snapshot_archives_at_startup {
+        UseSnapshotArchivesAtStartup::Always => AccessType::Secondary,
+        UseSnapshotArchivesAtStartup::Never => AccessType::PrimaryForMaintenance,
     }
 }
 
@@ -2513,11 +2512,6 @@ fn main() {
                     );
                 }
 
-                let boot_from_local_state = value_t_or_exit!(
-                    arg_matches,
-                    use_snapshot_archives_at_startup::cli::NAME,
-                    UseSnapshotArchivesAtStartup
-                ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     run_verification: !(arg_matches.is_present("skip_poh_verify")
@@ -2540,7 +2534,11 @@ fn main() {
                         .is_present("accounts_db_test_hash_calculation"),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                     runtime_config: RuntimeConfig::default(),
-                    boot_from_local_state,
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
@@ -2583,17 +2581,16 @@ fn main() {
                     ),
                 };
 
-                let boot_from_local_state = value_t_or_exit!(
-                    arg_matches,
-                    use_snapshot_archives_at_startup::cli::NAME,
-                    UseSnapshotArchivesAtStartup
-                ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                    boot_from_local_state,
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
                     ..ProcessOptions::default()
                 };
 
@@ -2715,17 +2712,16 @@ fn main() {
                     NonZeroUsize
                 );
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let boot_from_local_state = value_t_or_exit!(
-                    arg_matches,
-                    use_snapshot_archives_at_startup::cli::NAME,
-                    UseSnapshotArchivesAtStartup
-                ) == UseSnapshotArchivesAtStartup::Never;
                 let mut process_options = ProcessOptions {
                     new_hard_forks,
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
-                    boot_from_local_state,
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
                     ..ProcessOptions::default()
                 };
                 let blockstore = Arc::new(open_blockstore(
@@ -3133,17 +3129,16 @@ fn main() {
             }
             ("accounts", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
-                let boot_from_local_state = value_t_or_exit!(
-                    arg_matches,
-                    use_snapshot_archives_at_startup::cli::NAME,
-                    UseSnapshotArchivesAtStartup
-                ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                    boot_from_local_state,
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -3229,17 +3224,16 @@ fn main() {
             }
             ("capitalization", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
-                let boot_from_local_state = value_t_or_exit!(
-                    arg_matches,
-                    use_snapshot_archives_at_startup::cli::NAME,
-                    UseSnapshotArchivesAtStartup
-                ) == UseSnapshotArchivesAtStartup::Never;
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                    boot_from_local_state,
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
