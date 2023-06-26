@@ -285,7 +285,7 @@ fn bank_forks_from_snapshot(
         // If a newer snapshot archive was downloaded, it is possible that its slot is
         // higher than the local bank we will load.  Did the user intend for this?
         if bank_snapshot.slot < latest_snapshot_archive_slot {
-            debug_assert_eq!(
+            assert_eq!(
                 process_options.use_snapshot_archives_at_startup,
                 UseSnapshotArchivesAtStartup::Never,
             );
