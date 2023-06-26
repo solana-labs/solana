@@ -21,7 +21,10 @@ use {
     },
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
-        snapshot_config::SnapshotConfig, snapshot_utils::create_accounts_run_and_snapshot_dirs,
+        snapshot_config::SnapshotConfig,
+        snapshot_utils::{
+            create_accounts_run_and_snapshot_dirs, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
+        },
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -477,9 +480,9 @@ impl SnapshotValidatorConfig {
     ) -> SnapshotValidatorConfig {
         assert!(accounts_hash_interval_slots > 0);
         assert!(full_snapshot_archive_interval_slots > 0);
-        assert!(full_snapshot_archive_interval_slots != Slot::MAX);
+        assert!(full_snapshot_archive_interval_slots != DISABLED_SNAPSHOT_ARCHIVE_INTERVAL);
         assert!(full_snapshot_archive_interval_slots % accounts_hash_interval_slots == 0);
-        if incremental_snapshot_archive_interval_slots != Slot::MAX {
+        if incremental_snapshot_archive_interval_slots != DISABLED_SNAPSHOT_ARCHIVE_INTERVAL {
             assert!(incremental_snapshot_archive_interval_slots > 0);
             assert!(
                 incremental_snapshot_archive_interval_slots % accounts_hash_interval_slots == 0
@@ -536,7 +539,7 @@ pub fn setup_snapshot_validator_config(
 ) -> SnapshotValidatorConfig {
     SnapshotValidatorConfig::new(
         snapshot_interval_slots,
-        Slot::MAX,
+        DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         snapshot_interval_slots,
         num_account_paths,
     )

@@ -31,6 +31,7 @@ use {
         snapshot_utils::{
             self,
             SnapshotVersion::{self, V1_2_0},
+            DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         },
         status_cache::MAX_CACHE_ENTRIES,
     },
@@ -199,7 +200,7 @@ fn run_bank_forks_snapshot_n<F>(
         cluster_type,
         set_root_interval,
         set_root_interval,
-        Slot::MAX,
+        DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
     );
 
     let bank_forks = &mut snapshot_test_config.bank_forks;
@@ -327,8 +328,13 @@ fn test_concurrent_snapshot_packaging(
     const MAX_BANK_SNAPSHOTS_TO_RETAIN: usize = 8;
 
     // Set up snapshotting config
-    let mut snapshot_test_config =
-        SnapshotTestConfig::new(snapshot_version, cluster_type, 1, 1, Slot::MAX);
+    let mut snapshot_test_config = SnapshotTestConfig::new(
+        snapshot_version,
+        cluster_type,
+        1,
+        1,
+        DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
+    );
 
     let bank_forks = &mut snapshot_test_config.bank_forks;
     let snapshot_config = &snapshot_test_config.snapshot_config;
@@ -582,7 +588,7 @@ fn test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clust
             cluster_type,
             (*add_root_interval * num_set_roots * 2) as Slot,
             (*add_root_interval * num_set_roots * 2) as Slot,
-            Slot::MAX,
+            DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         );
         let mut current_bank = snapshot_test_config.bank_forks[0].clone();
         let request_sender = AbsRequestSender::new(snapshot_sender);
