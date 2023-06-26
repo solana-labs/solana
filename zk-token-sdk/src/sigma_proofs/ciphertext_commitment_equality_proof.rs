@@ -17,6 +17,7 @@ use {
         },
         errors::ProofVerificationError,
         sigma_proofs::{canonical_scalar_from_optional_slice, ristretto_point_from_optional_slice},
+        UNIT_LEN,
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -31,6 +32,9 @@ use {
     },
     merlin::Transcript,
 };
+
+/// Byte length of a ciphertext-commitment equality proof.
+const CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN: usize = 192;
 
 /// Equality proof.
 ///
@@ -203,9 +207,9 @@ impl CiphertextCommitmentEqualityProof {
         }
     }
 
-    pub fn to_bytes(&self) -> [u8; 192] {
-        let mut buf = [0_u8; 192];
-        let mut chunks = buf.chunks_mut(32);
+    pub fn to_bytes(&self) -> [u8; CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN] {
+        let mut buf = [0_u8; CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN];
+        let mut chunks = buf.chunks_mut(UNIT_LEN);
         chunks.next().unwrap().copy_from_slice(self.Y_0.as_bytes());
         chunks.next().unwrap().copy_from_slice(self.Y_1.as_bytes());
         chunks.next().unwrap().copy_from_slice(self.Y_2.as_bytes());
@@ -216,7 +220,7 @@ impl CiphertextCommitmentEqualityProof {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EqualityProofError> {
-        let mut chunks = bytes.chunks(32);
+        let mut chunks = bytes.chunks(UNIT_LEN);
         let Y_0 = ristretto_point_from_optional_slice(chunks.next())?;
         let Y_1 = ristretto_point_from_optional_slice(chunks.next())?;
         let Y_2 = ristretto_point_from_optional_slice(chunks.next())?;

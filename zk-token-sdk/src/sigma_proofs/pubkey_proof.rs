@@ -11,6 +11,7 @@ use {
             pedersen::H,
         },
         sigma_proofs::{canonical_scalar_from_optional_slice, ristretto_point_from_optional_slice},
+        UNIT_LEN,
     },
     rand::rngs::OsRng,
     zeroize::Zeroize,
@@ -27,6 +28,9 @@ use {
     },
     merlin::Transcript,
 };
+
+/// Byte length of a public key validity proof.
+const PUBKEY_VALIDITY_PROOF_LEN: usize = 64;
 
 /// Public-key proof.
 ///
@@ -116,16 +120,16 @@ impl PubkeyValidityProof {
         }
     }
 
-    pub fn to_bytes(&self) -> [u8; 64] {
-        let mut buf = [0_u8; 64];
-        let mut chunks = buf.chunks_mut(32);
+    pub fn to_bytes(&self) -> [u8; PUBKEY_VALIDITY_PROOF_LEN] {
+        let mut buf = [0_u8; PUBKEY_VALIDITY_PROOF_LEN];
+        let mut chunks = buf.chunks_mut(UNIT_LEN);
         chunks.next().unwrap().copy_from_slice(self.Y.as_bytes());
         chunks.next().unwrap().copy_from_slice(self.z.as_bytes());
         buf
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, PubkeyValidityProofError> {
-        let mut chunks = bytes.chunks(32);
+        let mut chunks = bytes.chunks(UNIT_LEN);
         let Y = ristretto_point_from_optional_slice(chunks.next())?;
         let z = canonical_scalar_from_optional_slice(chunks.next())?;
         Ok(PubkeyValidityProof { Y, z })
