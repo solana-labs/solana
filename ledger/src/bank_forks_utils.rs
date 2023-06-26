@@ -14,14 +14,15 @@ use {
         accounts_background_service::AbsRequestSender,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank_forks::BankForks,
-        snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_archive_info::{
+            FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
+        },
         snapshot_config::SnapshotConfig,
         snapshot_hash::{FullSnapshotHash, IncrementalSnapshotHash, StartingSnapshotHashes},
         snapshot_utils,
     },
     solana_sdk::genesis_config::GenesisConfig,
     std::{
-        fs,
         path::PathBuf,
         process, result,
         sync::{atomic::AtomicBool, Arc, RwLock},
@@ -98,72 +99,94 @@ pub fn load_bank_forks(
     LeaderScheduleCache,
     Option<StartingSnapshotHashes>,
 ) {
-    let snapshot_present = if let Some(snapshot_config) = snapshot_config {
-        info!(
-            "Initializing bank snapshot path: {}",
-            snapshot_config.bank_snapshots_dir.display()
-        );
-        fs::create_dir_all(&snapshot_config.bank_snapshots_dir)
-            .expect("Couldn't create snapshot directory");
+    fn get_snapshots_to_load(
+        snapshot_config: Option<&SnapshotConfig>,
+    ) -> Option<(
+        FullSnapshotArchiveInfo,
+        Option<IncrementalSnapshotArchiveInfo>,
+    )> {
+        let Some(snapshot_config) = snapshot_config else {
+            info!("Snapshots disabled; will load from genesis");
+            return None;
+        };
 
-        if snapshot_utils::get_highest_full_snapshot_archive_info(
-            &snapshot_config.full_snapshot_archives_dir,
-        )
-        .is_some()
-        {
-            true
-        } else {
-            warn!(
-                "No snapshot package found in directory: {:?}; will load from genesis",
+        let Some(full_snapshot_archive_info) =
+            snapshot_utils::get_highest_full_snapshot_archive_info(
                 &snapshot_config.full_snapshot_archives_dir
+            )
+        else {
+            warn!(
+                "No snapshot package found in directory: {}; will load from genesis",
+                snapshot_config.full_snapshot_archives_dir.display()
             );
-            false
-        }
-    } else {
-        info!("Snapshots disabled; will load from genesis");
-        false
-    };
+            return None;
+        };
 
-    let (bank_forks, starting_snapshot_hashes) = if snapshot_present {
-        let (bank_forks, starting_snapshot_hashes) = bank_forks_from_snapshot(
-            genesis_config,
-            account_paths,
-            shrink_paths,
-            snapshot_config.as_ref().unwrap(),
-            process_options,
-            accounts_update_notifier,
-            exit,
-        );
-        (bank_forks, Some(starting_snapshot_hashes))
-    } else {
-        let maybe_filler_accounts = process_options
-            .accounts_db_config
-            .as_ref()
-            .map(|config| config.filler_accounts_config.count > 0);
+        let incremental_snapshot_archive_info =
+            snapshot_utils::get_highest_incremental_snapshot_archive_info(
+                &snapshot_config.incremental_snapshot_archives_dir,
+                full_snapshot_archive_info.slot(),
+            );
 
-        if let Some(true) = maybe_filler_accounts {
-            panic!("filler accounts specified, but not loading from snapshot");
-        }
+        Some((
+            full_snapshot_archive_info,
+            incremental_snapshot_archive_info,
+        ))
+    }
 
-        info!("Processing ledger from genesis");
-        let bank_forks = blockstore_processor::process_blockstore_for_bank_0(
-            genesis_config,
-            blockstore,
-            account_paths,
-            process_options,
-            cache_block_meta_sender,
-            entry_notification_sender,
-            accounts_update_notifier,
-            exit,
-        );
-        bank_forks
-            .read()
-            .unwrap()
-            .root_bank()
-            .set_startup_verification_complete();
+    let (bank_forks, starting_snapshot_hashes) =
+        if let Some((full_snapshot_archive_info, incremental_snapshot_archive_info)) =
+            get_snapshots_to_load(snapshot_config)
+        {
+            // SAFETY: Having snapshots to load ensures a snapshot config
+            let snapshot_config = snapshot_config.unwrap();
+            info!(
+                "Initializing bank snapshots dir: {}",
+                snapshot_config.bank_snapshots_dir.display()
+            );
+            std::fs::create_dir_all(&snapshot_config.bank_snapshots_dir)
+                .expect("create bank snapshots dir");
+            let (bank_forks, starting_snapshot_hashes) = bank_forks_from_snapshot(
+                full_snapshot_archive_info,
+                incremental_snapshot_archive_info,
+                genesis_config,
+                account_paths,
+                shrink_paths,
+                snapshot_config,
+                process_options,
+                accounts_update_notifier,
+                exit,
+            );
+            (bank_forks, Some(starting_snapshot_hashes))
+        } else {
+            let maybe_filler_accounts = process_options
+                .accounts_db_config
+                .as_ref()
+                .map(|config| config.filler_accounts_config.count > 0);
 
-        (bank_forks, None)
-    };
+            if let Some(true) = maybe_filler_accounts {
+                panic!("filler accounts specified, but not loading from snapshot");
+            }
+
+            info!("Processing ledger from genesis");
+            let bank_forks = blockstore_processor::process_blockstore_for_bank_0(
+                genesis_config,
+                blockstore,
+                account_paths,
+                process_options,
+                cache_block_meta_sender,
+                entry_notification_sender,
+                accounts_update_notifier,
+                exit,
+            );
+            bank_forks
+                .read()
+                .unwrap()
+                .root_bank()
+                .set_startup_verification_complete();
+
+            (bank_forks, None)
+        };
 
     let mut leader_schedule_cache =
         LeaderScheduleCache::new_from_bank(&bank_forks.read().unwrap().root_bank());
@@ -183,6 +206,8 @@ pub fn load_bank_forks(
 
 #[allow(clippy::too_many_arguments)]
 fn bank_forks_from_snapshot(
+    full_snapshot_archive_info: FullSnapshotArchiveInfo,
+    incremental_snapshot_archive_info: Option<IncrementalSnapshotArchiveInfo>,
     genesis_config: &GenesisConfig,
     account_paths: Vec<PathBuf>,
     shrink_paths: Option<Vec<PathBuf>>,
@@ -197,114 +222,81 @@ fn bank_forks_from_snapshot(
         process::exit(1);
     }
 
-    let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
-        match process_options.use_snapshot_archives_at_startup {
-            UseSnapshotArchivesAtStartup::Always => {
-                // Given that we are going to boot from an archive, the append vecs held in the snapshot dirs for fast-boot should
-                // be released.  They will be released by the account_background_service anyway.  But in the case of the account_paths
-                // using memory-mounted file system, they are not released early enough to give space for the new append-vecs from
-                // the archives, causing the out-of-memory problem.  So, purge the snapshot dirs upfront before loading from the archive.
-                snapshot_utils::purge_old_bank_snapshots(
-                    &snapshot_config.bank_snapshots_dir,
-                    0,
-                    None,
+    let bank = match process_options.use_snapshot_archives_at_startup {
+        UseSnapshotArchivesAtStartup::Always => {
+            // Given that we are going to boot from an archive, the append vecs held in the snapshot dirs for fast-boot should
+            // be released.  They will be released by the account_background_service anyway.  But in the case of the account_paths
+            // using memory-mounted file system, they are not released early enough to give space for the new append-vecs from
+            // the archives, causing the out-of-memory problem.  So, purge the snapshot dirs upfront before loading from the archive.
+            snapshot_utils::purge_old_bank_snapshots(&snapshot_config.bank_snapshots_dir, 0, None);
+
+            let (bank, _) = snapshot_utils::bank_from_snapshot_archives(
+                &account_paths,
+                &snapshot_config.bank_snapshots_dir,
+                &full_snapshot_archive_info,
+                incremental_snapshot_archive_info.as_ref(),
+                genesis_config,
+                &process_options.runtime_config,
+                process_options.debug_keys.clone(),
+                None,
+                process_options.account_indexes.clone(),
+                process_options.limit_load_slot_count_from_snapshot,
+                process_options.shrink_ratio,
+                process_options.accounts_db_test_hash_calculation,
+                process_options.accounts_db_skip_shrink,
+                process_options.verify_index,
+                process_options.accounts_db_config.clone(),
+                accounts_update_notifier,
+                exit,
+            )
+            .expect("load bank from snapshot archives");
+
+            bank
+        }
+        UseSnapshotArchivesAtStartup::Never => {
+            let bank = snapshot_utils::bank_from_latest_snapshot_dir(
+                &snapshot_config.bank_snapshots_dir,
+                genesis_config,
+                &process_options.runtime_config,
+                &account_paths,
+                process_options.debug_keys.clone(),
+                None,
+                process_options.account_indexes.clone(),
+                process_options.limit_load_slot_count_from_snapshot,
+                process_options.shrink_ratio,
+                process_options.verify_index,
+                process_options.accounts_db_config.clone(),
+                accounts_update_notifier,
+                exit,
+            )
+            .expect("load bank from local state");
+
+            // If a newer snapshot archive was downloaded, it is possible that its slot is
+            // higher than the local bank we just loaded.  Did the user intend for this?
+            let latest_snapshot_archive_slot = std::cmp::max(
+                full_snapshot_archive_info.slot(),
+                incremental_snapshot_archive_info
+                    .as_ref()
+                    .map(SnapshotArchiveInfoGetter::slot)
+                    .unwrap_or(0),
+            );
+            if bank.slot() < latest_snapshot_archive_slot {
+                warn!(
+                    "Starting up from local state at slot {}, which is *older* \
+                    than the latest snapshot archive at slot {}. If this is not \
+                    desired, change the --use-snapshot-archives-at-startup \
+                    CLI option to \"always\" and restart.",
+                    bank.slot(),
+                    latest_snapshot_archive_slot,
                 );
-
-                let (
-                    deserialized_bank,
-                    full_snapshot_archive_info,
-                    incremental_snapshot_archive_info,
-                ) = snapshot_utils::bank_from_latest_snapshot_archives(
-                    &snapshot_config.bank_snapshots_dir,
-                    &snapshot_config.full_snapshot_archives_dir,
-                    &snapshot_config.incremental_snapshot_archives_dir,
-                    &account_paths,
-                    genesis_config,
-                    &process_options.runtime_config,
-                    process_options.debug_keys.clone(),
-                    None,
-                    process_options.account_indexes.clone(),
-                    process_options.limit_load_slot_count_from_snapshot,
-                    process_options.shrink_ratio,
-                    process_options.accounts_db_test_hash_calculation,
-                    process_options.accounts_db_skip_shrink,
-                    process_options.verify_index,
-                    process_options.accounts_db_config.clone(),
-                    accounts_update_notifier,
-                    exit,
-                )
-                .expect("load bank from snapshot archives");
-
-                (
-                    deserialized_bank,
-                    full_snapshot_archive_info,
-                    incremental_snapshot_archive_info,
-                )
             }
-            UseSnapshotArchivesAtStartup::Never => {
-                let bank = snapshot_utils::bank_from_latest_snapshot_dir(
-                    &snapshot_config.bank_snapshots_dir,
-                    genesis_config,
-                    &process_options.runtime_config,
-                    &account_paths,
-                    process_options.debug_keys.clone(),
-                    None,
-                    process_options.account_indexes.clone(),
-                    process_options.limit_load_slot_count_from_snapshot,
-                    process_options.shrink_ratio,
-                    process_options.verify_index,
-                    process_options.accounts_db_config.clone(),
-                    accounts_update_notifier,
-                    exit,
-                )
-                .expect("load bank from local state");
 
-                // The highest snapshot *archives* are still needed, as they are
-                // the starting snapshot hashes, which are used by the background services
-                // when performing snapshot-related tasks.
-                let full_snapshot_archive_info =
-                    snapshot_utils::get_highest_full_snapshot_archive_info(
-                        &snapshot_config.full_snapshot_archives_dir,
-                    )
-                    // SAFETY: Calling `bank_forks_from_snapshot` requires at least a full snapshot
-                    .expect("get highest full snapshot");
-
-                let incremental_snapshot_archive_info =
-                    snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                        &snapshot_config.incremental_snapshot_archives_dir,
-                        full_snapshot_archive_info.slot(),
-                    );
-
-                // If a newer snapshot archive was downloaded, it is possible that its slot is
-                // higher than the local bank we just loaded.  Did the user intend for this?
-                let latest_snapshot_archive_slot = std::cmp::max(
-                    full_snapshot_archive_info.slot(),
-                    incremental_snapshot_archive_info
-                        .as_ref()
-                        .map(SnapshotArchiveInfoGetter::slot)
-                        .unwrap_or(0),
-                );
-                if bank.slot() < latest_snapshot_archive_slot {
-                    warn!(
-                        "Starting up from local state at slot {}, which is *older* \
-                            than the latest snapshot archive at slot {}. If this is not \
-                            desired, change the --use-snapshot-archives-at-startup \
-                            CLI option to \"always\" and restart.",
-                        bank.slot(),
-                        latest_snapshot_archive_slot,
-                    );
-                }
-
-                (
-                    bank,
-                    full_snapshot_archive_info,
-                    incremental_snapshot_archive_info,
-                )
-            }
-        };
+            bank
+        }
+    };
 
     if let Some(shrink_paths) = shrink_paths {
-        deserialized_bank.set_shrink_paths(shrink_paths);
+        bank.set_shrink_paths(shrink_paths);
     }
 
     let full_snapshot_hash = FullSnapshotHash((
@@ -324,7 +316,7 @@ fn bank_forks_from_snapshot(
     };
 
     (
-        Arc::new(RwLock::new(BankForks::new(deserialized_bank))),
+        Arc::new(RwLock::new(BankForks::new(bank))),
         starting_snapshot_hashes,
     )
 }
