@@ -105,8 +105,7 @@ pub fn load_bank_forks(
         FullSnapshotArchiveInfo,
         Option<IncrementalSnapshotArchiveInfo>,
     )> {
-        let Some(snapshot_config) = snapshot_config
-        else {
+        let Some(snapshot_config) = snapshot_config else {
             info!("Snapshots disabled; will load from genesis");
             return None;
         };
