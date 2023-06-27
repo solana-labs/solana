@@ -3974,25 +3974,13 @@ fn main() {
                     );
                     exit(1);
                 }
-                let ancestor_iterator = AncestorIterator::new(start_root, &blockstore)
-                    .take_while(|&slot| slot >= end_root);
-                let roots_to_fix: Vec<_> = ancestor_iterator
-                    .filter(|slot| !blockstore.is_root(*slot))
-                    .collect();
-                if !roots_to_fix.is_empty() {
-                    eprintln!("{} slots to be rooted", roots_to_fix.len());
-                    for chunk in roots_to_fix.chunks(100) {
-                        eprintln!("{chunk:?}");
-                        blockstore
-                            .set_roots(roots_to_fix.iter())
-                            .unwrap_or_else(|err| {
-                                eprintln!("Unable to set roots {roots_to_fix:?}: {err}");
-                                exit(1);
-                            });
-                    }
-                } else {
-                    println!("No missing roots found in range {end_root} to {start_root}");
-                }
+
+                blockstore
+                    .scan_and_fix_roots(Some(start_root), Some(end_root), &AtomicBool::new(false))
+                    .unwrap_or_else(|err| {
+                        eprintln!("Unable to repair roots: {err}");
+                        exit(1);
+                    })
             }
             ("bounds", Some(arg_matches)) => {
                 let blockstore = open_blockstore(
