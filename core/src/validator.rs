@@ -399,7 +399,7 @@ impl BlockstoreRootScan {
             Some(
                 Builder::new()
                     .name("solBStoreRtScan".to_string())
-                    .spawn(move || blockstore.scan_and_fix_roots(&exit))
+                    .spawn(move || blockstore.scan_and_fix_roots(None, None, &exit))
                     .unwrap(),
             )
         } else {
