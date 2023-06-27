@@ -120,7 +120,7 @@ impl CiphertextCiphertextEqualityProof {
         }
     }
 
-    /// Creates a ciphertext-commitment equality proof.
+    /// Verifies a ciphertext-ciphertext equality proof.
     ///
     /// * `source_pubkey` - The ElGamal pubkey associated with the first ciphertext to be proved
     /// * `destination_pubkey` - The ElGamal pubkey associated with the second ciphertext to be proved

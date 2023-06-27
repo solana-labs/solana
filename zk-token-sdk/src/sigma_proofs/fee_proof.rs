@@ -57,27 +57,27 @@ impl FeeSigmaProof {
     /// - the `fee_rate_basis_point`, which defines the fee rate in units of 0.01%,
     /// - the `max_fee`, which defines the cap amount for a transfer fee.
     ///
-    /// This means that there are two cases to consider. If `fee_amount` >= `max_fee`, then the
+    /// This means that there are two cases to consider. If `fee_amount >= max_fee`, then the
     /// `fee_amount` must always equal `max_fee`.
     ///
-    /// If `fee_amount` < `max_fee`, then assuming that there is no division rounding, the
-    /// `fee_amount` must satisfy the relation `transfer_amount` * (`fee_rate_basis_point` /
-    /// 10_000) = `fee_amount` or equivalently, `transfer_amount` * `fee_rate_basis_point` - 10_000
-    /// * `fee_amount` = 0. More generally, let `delta_fee` = `transfer_amount` *
-    /// `fee_rate_basis_point` - 10_000 * `fee_amount`. Then assuming that a division rounding
-    /// could occur, the `delta_fee` must satisfy the bound 0 <= `delta_fee` < 10_000.
+    /// If `fee_amount < max_fee`, then assuming that there is no division rounding, the
+    /// `fee_amount` must satisfy the relation `transfer_amount * (fee_rate_basis_point /
+    /// 10_000) = fee_amount` or equivalently, `(transfer_amount * fee_rate_basis_point) - (10_000
+    /// * fee_amount) = 0`. More generally, let `delta_fee = (transfer_amount *
+    /// fee_rate_basis_point) - (10_000 * fee_amount)`. Then assuming that a division rounding
+    /// could occur, the `delta_fee` must satisfy the bound `0 <= delta_fee < 10_000`.
     ///
-    /// If `fee_amount` >= `max_fee`, then `fee_amount` = `max_fee` and therefore, the prover can
+    /// If `fee_amount >= max_fee`, then `fee_amount = max_fee` and therefore, the prover can
     /// generate a proof certifying that a fee commitment exactly encodes `max_fee`. If
-    /// `fee_amount` < `max_fee`, then the prover can create a commitment to `delta_fee` and
-    /// create a range proof certifying that the committed value satisfies the bound 0 <=
-    /// `delta_fee` < 10_000.
+    /// `fee_amount < max_fee`, then the prover can create a commitment to `delta_fee` and
+    /// create a range proof certifying that the committed value satisfies the bound `0 <=
+    /// delta_fee < 10_000`.
     ///
     /// Since the type of proof that a prover generates reveals information about the transfer
     /// amount and transfer fee, the prover must generate and include both types of proof. If
-    /// `fee_amount` >= `max_fee`, then the prover generates a valid `fee_max_proof`, but commits
+    /// `fee_amount >= max_fee`, then the prover generates a valid `fee_max_proof`, but commits
     /// to 0 as the "claimed" delta value and simulates ("fakes") a proof (`fee_equality_proof`)
-    /// that this is valid. If `fee_amount` > `max_fee`, then the prover simulates a
+    /// that this is valid. If `fee_amount > max_fee`, then the prover simulates a
     /// `fee_max_proof`, and creates a valid `fee_equality_proof` certifying that the claimed delta
     /// value is equal to the "real" delta value.
     ///
