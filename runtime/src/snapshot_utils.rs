@@ -451,11 +451,7 @@ pub fn create_and_canonicalize_directories(directories: &[PathBuf]) -> Result<Ve
 fn delete_contents_of_path(path: impl AsRef<Path>) {
     match fs_err::read_dir(path.as_ref()) {
         Err(err) => {
-            warn!(
-                "Failed to delete contents of {}: {}",
-                path.as_ref().display(),
-                err
-            );
+            warn!("Failed to delete contents: {err}")
         }
         Ok(dir_entries) => {
             for entry in dir_entries.flatten() {
@@ -2225,11 +2221,7 @@ where
         let entry_iter = fs_err::read_dir(dir);
         match entry_iter {
             Err(err) => {
-                info!(
-                    "Unable to read snapshot archives directory {}: {}",
-                    dir.display(),
-                    err,
-                );
+                info!("Unable to read snapshot archives directory: {err}");
                 vec![]
             }
             Ok(entries) => entries
