@@ -8,6 +8,10 @@ use {
     serial_test::serial,
     solana_client::thin_client::ThinClient,
     solana_core::{
+        broadcast_stage::{
+            broadcast_duplicates_run::{BroadcastDuplicatesConfig, ClusterPartition},
+            BroadcastStageType,
+        },
         consensus::{
             tower_storage::FileTowerStorage, Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH,
         },
@@ -3764,9 +3768,11 @@ fn test_duplicate_shreds_broadcast_leader() {
     // 1) Set up the cluster
     let (mut cluster, validator_keys) = test_faulty_node(
         BroadcastStageType::BroadcastDuplicates(BroadcastDuplicatesConfig {
-            stake_partition: partition_node_stake,
+            partition: ClusterPartition::Stake(partition_node_stake),
         }),
         node_stakes,
+        None,
+        None,
     );
 
     // This is why it's important our node was last in `node_stakes`

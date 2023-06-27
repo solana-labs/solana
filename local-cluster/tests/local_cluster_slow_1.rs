@@ -14,7 +14,7 @@ use {
         replay_stage::DUPLICATE_THRESHOLD,
         validator::ValidatorConfig,
     },
-    solana_gossip::gossip_service::discover_cluster,
+    solana_gossip::{contact_info::Protocol, gossip_service::discover_cluster},
     solana_ledger::{
         ancestor_iterator::AncestorIterator, blockstore_meta::DuplicateSlotProof,
         leader_schedule::FixedSchedule, shred::Shred,
@@ -441,6 +441,7 @@ fn restart_dup_validator(
 ) {
     let disable_turbine = Arc::new(AtomicBool::new(true));
     duplicate_fork_validator_info.config.turbine_disabled = disable_turbine.clone();
+    info!("Restarting node: {}", pubkey);
     cluster.restart_node(
         pubkey,
         duplicate_fork_validator_info,
@@ -468,7 +469,11 @@ fn restart_dup_validator(
     // Send the node the other version of the shred so they realize it's duplicate
     info!("Resending duplicate shreds to duplicate fork validator");
     let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let duplicate_fork_validator_tvu = cluster.get_contact_info(pubkey).unwrap().tvu().unwrap();
+    let duplicate_fork_validator_tvu = cluster
+        .get_contact_info(pubkey)
+        .unwrap()
+        .tvu(Protocol::UDP)
+        .unwrap();
     send_socket
         .send_to(dup_shred1.payload().as_ref(), duplicate_fork_validator_tvu)
         .unwrap();
@@ -582,8 +587,8 @@ fn test_duplicate_shreds_switch_failure() {
         // where we disallow resetting to a slot which matches the last vote slot, we still don't build off `D`,
         // and continue building on `A`.
         //
-        // The `target_switch_fork_validator_pubkey` fork is necessary in 2. to prevent the validator from making a freebie vote
-        // from `A` and allowing consensus to continue.
+        // The `target_switch_fork_validator_pubkey` fork is necessary in 2. to force the validator stall trying to switch
+        // vote on that other fork and prevent the validator from making a freebie vote from `A` and allowing consensus to continue.
 
         // It's important we give the `duplicate_fork_validator1_pubkey` very few leader slots so that
         // 1. We have ample time to ensure he doesn't have a chance to make a block until after 2 when they see the block is duplicate.
