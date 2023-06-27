@@ -137,11 +137,10 @@ impl TieredAccountMeta for HotAccountMeta {
     /// does not persist this optional field.
     fn rent_epoch(&self, data_block: &[u8]) -> Option<Epoch> {
         let offset = self.optional_fields_offset(data_block);
-        if self.flags.has_rent_epoch() {
-            let epoch = *ByteBlockReader::read_type::<Epoch>(data_block, offset)?;
-            return Some(epoch);
-        }
-        None
+        self.flags()
+            .has_rent_epoch()
+            .then(|| ByteBlockReader::read_type::<Epoch>(data_block, offset).copied())
+            .flatten()
     }
 
     /// Returns the account hash by parsing the specified account block.  None
@@ -151,10 +150,10 @@ impl TieredAccountMeta for HotAccountMeta {
         if self.flags.has_rent_epoch() {
             offset += std::mem::size_of::<Epoch>();
         }
-        if self.flags.has_account_hash() {
-            return ByteBlockReader::read_type::<Hash>(data_block, offset);
-        }
-        None
+        self.flags()
+            .has_account_hash()
+            .then(|| ByteBlockReader::read_type::<Hash>(data_block, offset))
+            .flatten()
     }
 
     /// Returns the write version by parsing the specified account block.  None
@@ -167,12 +166,12 @@ impl TieredAccountMeta for HotAccountMeta {
         if self.flags.has_account_hash() {
             offset += std::mem::size_of::<Hash>();
         }
-        if self.flags.has_write_version() {
-            let write_version =
-                ByteBlockReader::read_type::<StoredMetaWriteVersion>(data_block, offset)?;
-            return Some(*write_version);
-        }
-        None
+        self.flags
+            .has_write_version()
+            .then(|| {
+                ByteBlockReader::read_type::<StoredMetaWriteVersion>(data_block, offset).copied()
+            })
+            .flatten()
     }
 
     /// Returns the offset of the optional fields based on the specified account
@@ -193,7 +192,7 @@ impl TieredAccountMeta for HotAccountMeta {
     /// Returns the data associated to this account based on the specified
     /// account block.
     fn account_data<'a>(&self, data_block: &'a [u8]) -> &'a [u8] {
-        &data_block[0..self.data_len(data_block)]
+        &data_block[..self.data_len(data_block)]
     }
 }
 
