@@ -4,7 +4,7 @@ use {
     solana_core::{
         consensus::{Tower, SWITCH_FORK_THRESHOLD},
         tower_storage::FileTowerStorage,
-        validator::ValidatorConfig,
+        validator::{is_snapshot_config_valid, ValidatorConfig},
     },
     solana_gossip::gossip_service::discover_cluster,
     solana_ledger::{
@@ -478,20 +478,12 @@ impl SnapshotValidatorConfig {
         accounts_hash_interval_slots: Slot,
         num_account_paths: usize,
     ) -> SnapshotValidatorConfig {
+        // Interval values must be nonzero
         assert!(accounts_hash_interval_slots > 0);
         assert!(full_snapshot_archive_interval_slots > 0);
+        assert!(incremental_snapshot_archive_interval_slots > 0);
+        // Ensure that some snapshots will be created
         assert!(full_snapshot_archive_interval_slots != DISABLED_SNAPSHOT_ARCHIVE_INTERVAL);
-        assert!(full_snapshot_archive_interval_slots % accounts_hash_interval_slots == 0);
-        if incremental_snapshot_archive_interval_slots != DISABLED_SNAPSHOT_ARCHIVE_INTERVAL {
-            assert!(incremental_snapshot_archive_interval_slots > 0);
-            assert!(
-                incremental_snapshot_archive_interval_slots % accounts_hash_interval_slots == 0
-            );
-            assert!(
-                full_snapshot_archive_interval_slots % incremental_snapshot_archive_interval_slots
-                    == 0
-            );
-        }
 
         // Create the snapshot config
         let _ = fs::create_dir_all(farf_dir());
@@ -510,6 +502,10 @@ impl SnapshotValidatorConfig {
             maximum_incremental_snapshot_archives_to_retain: NonZeroUsize::new(usize::MAX).unwrap(),
             ..SnapshotConfig::default()
         };
+        assert!(is_snapshot_config_valid(
+            &snapshot_config,
+            accounts_hash_interval_slots
+        ));
 
         // Create the account paths
         let (account_storage_dirs, account_storage_paths) =
