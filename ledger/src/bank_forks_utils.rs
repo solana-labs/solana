@@ -7,7 +7,7 @@ use {
         },
         entry_notifier_service::EntryNotifierSender,
         leader_schedule_cache::LeaderScheduleCache,
-        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
+        use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
     },
     log::*,
     solana_runtime::{
@@ -222,77 +222,99 @@ fn bank_forks_from_snapshot(
         process::exit(1);
     }
 
-    let bank = match process_options.use_snapshot_archives_at_startup {
-        UseSnapshotArchivesAtStartup::Always => {
-            // Given that we are going to boot from an archive, the append vecs held in the snapshot dirs for fast-boot should
-            // be released.  They will be released by the account_background_service anyway.  But in the case of the account_paths
-            // using memory-mounted file system, they are not released early enough to give space for the new append-vecs from
-            // the archives, causing the out-of-memory problem.  So, purge the snapshot dirs upfront before loading from the archive.
-            snapshot_utils::purge_old_bank_snapshots(&snapshot_config.bank_snapshots_dir, 0, None);
+    let latest_snapshot_archive_slot = std::cmp::max(
+        full_snapshot_archive_info.slot(),
+        incremental_snapshot_archive_info
+            .as_ref()
+            .map(SnapshotArchiveInfoGetter::slot)
+            .unwrap_or(0),
+    );
+    let latest_bank_snapshot =
+        snapshot_utils::get_highest_bank_snapshot_post(&snapshot_config.bank_snapshots_dir);
 
-            let (bank, _) = snapshot_utils::bank_from_snapshot_archives(
-                &account_paths,
-                &snapshot_config.bank_snapshots_dir,
-                &full_snapshot_archive_info,
-                incremental_snapshot_archive_info.as_ref(),
-                genesis_config,
-                &process_options.runtime_config,
-                process_options.debug_keys.clone(),
-                None,
-                process_options.account_indexes.clone(),
-                process_options.limit_load_slot_count_from_snapshot,
-                process_options.shrink_ratio,
-                process_options.accounts_db_test_hash_calculation,
-                process_options.accounts_db_skip_shrink,
-                process_options.verify_index,
-                process_options.accounts_db_config.clone(),
-                accounts_update_notifier,
-                exit,
-            )
-            .expect("load bank from snapshot archives");
+    let will_startup_from_snapshot_archives = match process_options.use_snapshot_archives_at_startup
+    {
+        UseSnapshotArchivesAtStartup::Always => true,
+        UseSnapshotArchivesAtStartup::Never => false,
+        UseSnapshotArchivesAtStartup::WhenNewest => latest_bank_snapshot
+            .as_ref()
+            .map(|bank_snapshot| latest_snapshot_archive_slot > bank_snapshot.slot)
+            .unwrap_or(true),
+    };
 
-            bank
-        }
-        UseSnapshotArchivesAtStartup::Never => {
-            let bank = snapshot_utils::bank_from_latest_snapshot_dir(
-                &snapshot_config.bank_snapshots_dir,
-                genesis_config,
-                &process_options.runtime_config,
-                &account_paths,
-                process_options.debug_keys.clone(),
-                None,
-                process_options.account_indexes.clone(),
-                process_options.limit_load_slot_count_from_snapshot,
-                process_options.shrink_ratio,
-                process_options.verify_index,
-                process_options.accounts_db_config.clone(),
-                accounts_update_notifier,
-                exit,
-            )
-            .expect("load bank from local state");
+    let bank = if will_startup_from_snapshot_archives {
+        // Given that we are going to boot from an archive, the append vecs held in the snapshot dirs for fast-boot should
+        // be released.  They will be released by the account_background_service anyway.  But in the case of the account_paths
+        // using memory-mounted file system, they are not released early enough to give space for the new append-vecs from
+        // the archives, causing the out-of-memory problem.  So, purge the snapshot dirs upfront before loading from the archive.
+        snapshot_utils::purge_old_bank_snapshots(&snapshot_config.bank_snapshots_dir, 0, None);
 
-            // If a newer snapshot archive was downloaded, it is possible that its slot is
-            // higher than the local bank we just loaded.  Did the user intend for this?
-            let latest_snapshot_archive_slot = std::cmp::max(
-                full_snapshot_archive_info.slot(),
-                incremental_snapshot_archive_info
-                    .as_ref()
-                    .map(SnapshotArchiveInfoGetter::slot)
-                    .unwrap_or(0),
+        let (bank, _) = snapshot_utils::bank_from_snapshot_archives(
+            &account_paths,
+            &snapshot_config.bank_snapshots_dir,
+            &full_snapshot_archive_info,
+            incremental_snapshot_archive_info.as_ref(),
+            genesis_config,
+            &process_options.runtime_config,
+            process_options.debug_keys.clone(),
+            None,
+            process_options.account_indexes.clone(),
+            process_options.limit_load_slot_count_from_snapshot,
+            process_options.shrink_ratio,
+            process_options.accounts_db_test_hash_calculation,
+            process_options.accounts_db_skip_shrink,
+            process_options.verify_index,
+            process_options.accounts_db_config.clone(),
+            accounts_update_notifier,
+            exit,
+        )
+        .expect("load bank from snapshot archives");
+        bank
+    } else {
+        let Some(bank_snapshot) = latest_bank_snapshot else {
+            error!(
+                "There is no local state to startup from. Ensure --{} is *not* set to \"{}\" and restart.",
+                use_snapshot_archives_at_startup::cli::LONG_ARG,
+                UseSnapshotArchivesAtStartup::Never.to_string(),
             );
-            if bank.slot() < latest_snapshot_archive_slot {
-                warn!(
-                    "Starting up from local state at slot {}, which is *older* \
-                    than the latest snapshot archive at slot {}. If this is not \
-                    desired, change the --use-snapshot-archives-at-startup \
-                    CLI option to \"always\" and restart.",
-                    bank.slot(),
-                    latest_snapshot_archive_slot,
-                );
-            }
+            process::exit(1);
+        };
 
-            bank
+        // If a newer snapshot archive was downloaded, it is possible that its slot is
+        // higher than the local bank we will load.  Did the user intend for this?
+        if bank_snapshot.slot < latest_snapshot_archive_slot {
+            assert_eq!(
+                process_options.use_snapshot_archives_at_startup,
+                UseSnapshotArchivesAtStartup::Never,
+            );
+            warn!(
+                "Starting up from local state at slot {}, which is *older* than \
+                the latest snapshot archive at slot {}. If this is not desired, \
+                change the --{} CLI option to *not* \"{}\" and restart.",
+                bank_snapshot.slot,
+                latest_snapshot_archive_slot,
+                use_snapshot_archives_at_startup::cli::LONG_ARG,
+                UseSnapshotArchivesAtStartup::Never.to_string(),
+            );
         }
+
+        let (bank, _) = snapshot_utils::bank_from_snapshot_dir(
+            &account_paths,
+            &bank_snapshot,
+            genesis_config,
+            &process_options.runtime_config,
+            process_options.debug_keys.clone(),
+            None,
+            process_options.account_indexes.clone(),
+            process_options.limit_load_slot_count_from_snapshot,
+            process_options.shrink_ratio,
+            process_options.verify_index,
+            process_options.accounts_db_config.clone(),
+            accounts_update_notifier,
+            exit,
+        )
+        .expect("load bank from local state");
+        bank
     };
 
     if let Some(shrink_paths) = shrink_paths {
