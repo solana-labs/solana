@@ -168,9 +168,7 @@ impl TieredAccountMeta for HotAccountMeta {
         }
         self.flags
             .has_write_version()
-            .then(|| {
-                byte_block::read_type::<StoredMetaWriteVersion>(data_block, offset).copied()
-            })
+            .then(|| byte_block::read_type::<StoredMetaWriteVersion>(data_block, offset).copied())
             .flatten()
     }
 
