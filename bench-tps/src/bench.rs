@@ -175,7 +175,7 @@ where
 
         let address_lookup_table_account =
             self.lookup_table_address
-                .and_then(|(lookup_table_address, sbf_program_id)| {
+                .map(|(lookup_table_address, sbf_program_id)| {
                     let lookup_table_account = self
                         .client
                         .get_account_with_commitment(
@@ -187,13 +187,13 @@ where
                     let lookup_table =
                         AddressLookupTable::deserialize(&lookup_table_account.data).unwrap();
                     info!("==== {:?}", lookup_table);
-                    Some((
+                    (
                         AddressLookupTableAccount {
                             key: lookup_table_address,
                             addresses: lookup_table.addresses.to_vec(),
                         },
                         sbf_program_id,
-                    ))
+                    )
                 });
         info!(
             "==== address_lookup_table_account {:?}",
@@ -427,11 +427,11 @@ where
     // All bench transfer transactions will include a `sbf_program_id` instruction to load
     //     specified number of accounts from Lookup Table account as writable accounts.
     let lookup_table_address =
-        load_accounts_from_address_lookup_table.and_then(|(sbf_program_id, number_of_accounts)| {
+        load_accounts_from_address_lookup_table.map(|(sbf_program_id, number_of_accounts)| {
             let lookup_table_account =
                 create_address_lookup_table_account(client.clone(), &id, number_of_accounts)
                     .unwrap();
-            Some((lookup_table_account, sbf_program_id))
+            (lookup_table_account, sbf_program_id)
         });
 
     assert!(gen_keypairs.len() >= 2 * tx_count);
@@ -673,10 +673,10 @@ fn transfer_with_compute_unit_price_and_padding(
         let account_metas: Vec<_> = address_lookup_table_account
             .addresses
             .iter()
-            .map(|pubkey| AccountMeta::new(pubkey.clone(), false))
+            .map(|pubkey| AccountMeta::new(*pubkey, false))
             .collect();
         instructions.extend_from_slice(&[Instruction::new_with_bincode(
-            sbf_program_id.clone(),
+            *sbf_program_id,
             &(),
             account_metas,
         )]);

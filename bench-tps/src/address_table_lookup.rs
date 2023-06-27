@@ -108,7 +108,7 @@ fn send_and_confirm_transaction<T: 'static + BenchTpsClient + Send + Sync + ?Siz
 
     // confirm tx
     let lookup_table_account = client
-        .get_account_with_commitment(&lookup_table_address, CommitmentConfig::processed())
+        .get_account_with_commitment(lookup_table_address, CommitmentConfig::processed())
         .unwrap();
     let lookup_table = AddressLookupTable::deserialize(&lookup_table_account.data).unwrap();
     debug!("lookup table: {:?}", lookup_table);
