@@ -121,12 +121,11 @@ pub struct ByteBlockReader;
 /// If `offset` + size_of::<T>() exceeds the size of the input byte_block,
 /// then None will be returned.
 pub fn read_type<T>(byte_block: &[u8], offset: usize) -> Option<&T> {
-    let size = std::mem::size_of::<T>();
-    let (next, overflow) = offset.overflowing_add(size);
+    let (next, overflow) = offset.overflowing_add(std::mem::size_of::<T>());
     if overflow || next > byte_block.len() {
         return None;
     }
-    let ptr = byte_block[offset..][..size].as_ptr() as *const T;
+    let ptr = byte_block[offset..].as_ptr() as *const T;
     debug_assert!(ptr as usize % std::mem::align_of::<T>() == 0);
     Some(unsafe { &*ptr })
 }
