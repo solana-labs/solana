@@ -458,10 +458,8 @@ fn delete_contents_of_path(path: impl AsRef<Path>) {
                 let sub_path = entry.path();
                 let result = if sub_path.is_dir() {
                     fs_err::remove_dir_all(&sub_path)
-                } else if sub_path.is_file() {
-                    fs_err::remove_file(&sub_path)
                 } else {
-                    continue;
+                    fs_err::remove_file(&sub_path)
                 };
                 if let Err(err) = result {
                     warn!("Failed to delete contents: {err}");
@@ -624,16 +622,17 @@ fn is_bank_snapshot_complete(bank_snapshot_dir: impl AsRef<Path>) -> bool {
 /// directory won't be cleaned up.  Call this function to clean them up.
 pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
     if let Ok(entries) = std::fs::read_dir(snapshot_archives_dir) {
-        for entry in entries.filter_map(|entry| entry.ok()) {
+        for entry in entries.flatten() {
             let file_name = entry
                 .file_name()
                 .into_string()
                 .unwrap_or_else(|_| String::new());
             if file_name.starts_with(TMP_SNAPSHOT_ARCHIVE_PREFIX) {
-                let result = if entry.path().is_file() {
-                    fs_err::remove_file(entry.path())
+                let path = entry.path();
+                let result = if path.is_dir() {
+                    fs_err::remove_dir_all(path)
                 } else {
-                    fs_err::remove_dir_all(entry.path())
+                    fs_err::remove_file(path)
                 };
                 if let Err(err) = result {
                     warn!("Failed to remove temporary snapshot archive: {err}");
