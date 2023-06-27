@@ -13,8 +13,9 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
     sysvar::{
-        self, clock::Clock, epoch_schedule::EpochSchedule, instructions, rent::Rent,
-        slot_hashes::SlotHashes, slot_history::SlotHistory, stake_history::StakeHistory, Sysvar,
+        self, clock::Clock, epoch_rewards::EpochRewards, epoch_schedule::EpochSchedule,
+        instructions, rent::Rent, slot_hashes::SlotHashes, slot_history::SlotHistory,
+        stake_history::StakeHistory, Sysvar,
     },
 };
 
@@ -69,6 +70,7 @@ pub fn process_instruction(
                 AccountMeta::new_readonly(*accounts[8].key, false),
                 AccountMeta::new_readonly(*accounts[9].key, false),
                 AccountMeta::new_readonly(*accounts[10].key, false),
+                AccountMeta::new_readonly(*accounts[11].key, false),
             ],
         )
     );
@@ -121,6 +123,19 @@ pub fn process_instruction(
         let fees = Fees::from_account_info(&accounts[10]).unwrap();
         let got_fees = Fees::get()?;
         assert_eq!(fees, got_fees);
+    }
+
+    // Epoch Rewards
+    {
+        msg!("EpochRewards identifier:");
+        sysvar::epoch_rewards::id().log();
+        let epoch_rewards = EpochRewards::from_account_info(&accounts[11]);
+        // epoch_rewards sysvar should only be valid during epoch reward period. In this test case,
+        // the test bank is outside reward period. Therefore, we expect that the epoch_rewards
+        // sysvar doesn't exist.
+        assert!(epoch_rewards.is_err());
+        let got_epoch_rewards = EpochRewards::get();
+        assert!(got_epoch_rewards.is_err());
     }
 
     Ok(())
