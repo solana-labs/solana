@@ -28,8 +28,17 @@ source ci/rust-version.sh nightly
 # binaries.
 # Note also that dev-utils-ci-marker feature must be added and all of its
 # dependencies should be edited likewise if any.
+declare -r dev_utils_feature="dev-utils"
 declare dev_util_tainted_packages=(
 )
+
+tainted=("${dev_util_tainted_packages[@]}")
+if [[ ${#tainted[@]} -gt 0 ]]; then
+  allowed="\"${tainted[0]}\""
+  for package in "${tainted[@]:1}"; do
+    allowed="${allowed},\"$package\""
+  done
+fi
 
 mode=${1:-full}
 case "$mode" in
@@ -42,34 +51,85 @@ case "$mode" in
 esac
 
 if [[ $mode = "tree" || $mode = "full" ]]; then
-  # Run against the entire workspace dep graph (sans $dev_util_tainted_packages)
-  dev_utils_excludes=$(for tainted in "${dev_util_tainted_packages[@]}"; do
-    echo "--exclude $tainted"
-  done)
-  # shellcheck disable=SC2086 # Don't want to double quote $dev_utils_excludes
-  _ cargo "+${rust_nightly}" tree --workspace -f "{p} {f}" --edges normal,build \
-    $dev_utils_excludes | (
-    if grep -E -C 3 -m 10 "[, ]dev-utils([, ]|$)"; then
-      echo "$0: dev-utils must not be used as normal dependencies" > /dev/stderr
-      exit 1
-    fi
+  query=$(cat <<EOF
+.packages
+  | map(.name as \$crate
+    | (.dependencies
+      | map({
+        "crate" : \$crate,
+        "dependency" : .name,
+        "dependencyFeatures" : .features
+      })
+    )
   )
+  | flatten
+  | map(select(
+    (.dependencyFeatures
+      | index("${dev_utils_feature}")
+    ) and (.crate as \$needle
+      | ([$allowed] | index(\$needle))
+      | not
+    )
+  ))
+  | map([.crate, .dependency] | join(": "))
+  | join("\n      ")
+EOF
+)
+
+  abusers="$(_cargo "+${rust_nightly}" metadata --format-version=1 | jq -r "$query")"
+  if [[ -n "$abusers" ]]; then
+    cat <<EOF 1>&2
+    ${dev_utils_feature} must not be used as normal dependencies, but is by: \`[crate]: [dependency]\`
+      $abusers
+EOF
+  fi
 
   # Sanity-check that tainted packages has undergone the proper tedious rituals
   # to be justified as such.
-  for tainted in "${dev_util_tainted_packages[@]}"; do
-    # dev-utils-ci-marker is special proxy feature needed only when using
-    # dev-utils code as part of normal dependency. dev-utils will be enabled
-    # indirectly via this feature only if prepared correctly
-    _ cargo "+${rust_nightly}" tree --workspace -f "{p} {f}" --edges normal,build \
-      --invert "$tainted" --features dev-utils-ci-marker | (
-      if grep -E -C 3 -m 10 -v "[, ]dev-utils([, ]|$)"; then
-        echo "$0: $tainted: All inverted dependencies must be with dev-utils" \
-          > /dev/stderr
-        exit 1
-      fi
+  query=$(cat <<EOF
+.packages
+  | map(select(
+    .dependencies
+      | any(.name as \$needle
+        | ([$allowed] | index(\$needle))
+      )
+  ))
+  | map([.name, (.features | keys)] as [\$dependant, \$dependant_features]
+    | (.dependencies
+      | map({
+        "crate" : .name,
+        "crateFeatures" : .features,
+        "dependant" : \$dependant,
+        "dependantFeatures" : \$dependant_features
+      })
     )
-  done
+  )
+  | flatten
+  | map(select(
+    ((.crateFeatures
+      | index("${dev_utils_feature}"))
+      | not
+    ) or ((.dependantFeatures
+      | index("${dev_utils_feature}"))
+      | not
+    )
+  ))
+  | map([.crate, .dependant] | join(": "))
+  | join("\n      ")
+EOF
+)
+
+  # dev-utils-ci-marker is special proxy feature needed only when using
+  # dev-utils code as part of normal dependency. dev-utils will be enabled
+  # indirectly via this feature only if prepared correctly
+  misconfigured_crates=$(_ cargo "+${rust_nightly}" metadata --format-version=1 --features dev-utils-ci-marker | jq -r "$query")
+  if [[ -n "$misconfigured_crates" ]]; then
+    cat <<EOF 1>&2
+    All crates marked \`tainted\`, as well as their dependents, MUST declare the
+    \`$dev_utils_feature\`. The following crates are in violation. \`[crate]: [dependant]\`
+      $misconfigured_crates
+EOF
+  fi
 fi
 
 # Detect possible compilation errors of problematic usage of `dev-utils`-gated code
