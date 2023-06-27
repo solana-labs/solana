@@ -25,7 +25,7 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_scheduler::{SchedulingMode, WithSchedulingMode},
-    solana_sdk::transaction::Result,
+    solana_sdk::transaction::{Result, SanitizedTransaction},
     std::{
         fmt::Debug,
         marker::PhantomData,
@@ -137,7 +137,8 @@ pub trait ScheduledTransactionHandler<SEA: ScheduleExecutionArg>:
         result: &mut Result<()>,
         timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
-        with_transaction_and_index: SEA::TransactionWithIndex<'_>,
+        transaction: &SanitizedTransaction,
+        index: usize,
         pool: &SchedulerPool<T, Self, SEA>,
     );
 }
@@ -155,26 +156,25 @@ impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTran
         result: &mut Result<()>,
         timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
-        transaction_with_index: SEA::TransactionWithIndex<'_>,
+        transaction: &SanitizedTransaction,
+        index: usize,
         pool: &SchedulerPool<T, Self, SEA>,
     ) {
-        transaction_with_index.with_transaction_and_index(move |transaction, index| {
-            let batch = bank.prepare_sanitized_batch_without_locking(transaction);
-            let batch_with_indexes = TransactionBatchWithIndexes {
-                batch,
-                transaction_indexes: vec![index],
-            };
+        let batch = bank.prepare_sanitized_batch_without_locking(transaction);
+        let batch_with_indexes = TransactionBatchWithIndexes {
+            batch,
+            transaction_indexes: vec![index],
+        };
 
-            *result = execute_batch(
-                &batch_with_indexes,
-                bank,
-                pool.transaction_status_sender.as_ref(),
-                pool.replay_vote_sender.as_ref(),
-                timings,
-                pool.log_messages_bytes_limit,
-                &pool.prioritization_fee_cache,
-            );
-        });
+        *result = execute_batch(
+            &batch_with_indexes,
+            bank,
+            pool.transaction_status_sender.as_ref(),
+            pool.replay_vote_sender.as_ref(),
+            timings,
+            pool.log_messages_bytes_limit,
+            &pool.prioritization_fee_cache,
+        );
     }
 }
 
@@ -243,7 +243,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
         self.pool.clone()
     }
 
-    fn schedule_execution(&self, with_transaction_and_index: SEA::TransactionWithIndex<'_>) {
+    fn schedule_execution(&self, transaction_with_index: SEA::TransactionWithIndex<'_>) {
         let context = self.context.as_ref().expect("active context should exist");
 
         let fail_fast = match context.mode() {
@@ -258,14 +258,17 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
         // so, we're NOT scheduling at all; rather, just execute tx straight off.  we doesn't need
         // to solve inter-tx locking deps only in the case of single-thread fifo like this....
         if result.is_ok() || !fail_fast {
-            TH::handle(
-                &self.handler,
-                result,
-                timings,
-                context.bank(),
-                with_transaction_and_index,
-                &self.pool,
-            );
+            transaction_with_index.with_transaction_and_index(|transaction, index| {
+                TH::handle(
+                    &self.handler,
+                    result,
+                    timings,
+                    context.bank(),
+                    transaction,
+                    index,
+                    &self.pool,
+                );
+            })
         }
     }
 
@@ -612,7 +615,8 @@ mod tests {
                     &mut result,
                     &mut timings,
                     context.bank(),
-                    &(&transaction_and_index.0, transaction_and_index.1),
+                    &transaction_and_index.0,
+                    transaction_and_index.1,
                     &pool,
                 );
                 (result, timings)

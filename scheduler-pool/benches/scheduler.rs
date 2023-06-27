@@ -67,7 +67,8 @@ impl<SEA: ScheduleExecutionArg + Clone, const MUTATE_ARC: bool> ScheduledTransac
         _result: &mut Result<()>,
         _timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
-        transaction_with_index: SEA::TransactionWithIndex<'_>,
+        transaction: &SanitizedTransaction,
+        _index: usize,
         _pool: &SchedulerPool<T, Self, SEA>,
     ) {
         //std::hint::black_box(bank.clone());
@@ -80,9 +81,7 @@ impl<SEA: ScheduleExecutionArg + Clone, const MUTATE_ARC: bool> ScheduledTransac
             }
             // call random one of Bank's lightweight-and-very-multi-threaded-friendly methods which take a
             // transaction inside this artifical tight loop.
-            transaction_with_index.with_transaction_and_index(|transaction, _index| {
-                i += bank.get_fee_for_message_with_lamports_per_signature(transaction.message(), i)
-            });
+            i += bank.get_fee_for_message_with_lamports_per_signature(transaction.message(), i)
         }
         std::hint::black_box(i);
     }
@@ -279,13 +278,18 @@ mod nonblocking {
                             match message {
                                 ChainedChannel::Payload(with_transaction_and_index) => {
                                     count += 1;
-                                    H::handle(
-                                        &handler,
-                                        &mut result,
-                                        &mut timings,
-                                        &bank,
-                                        with_transaction_and_index,
-                                        &pool,
+                                    with_transaction_and_index.with_transaction_and_index(
+                                        |transaction, index| {
+                                            H::handle(
+                                                &handler,
+                                                &mut result,
+                                                &mut timings,
+                                                &bank,
+                                                transaction,
+                                                index,
+                                                &pool,
+                                            );
+                                        },
                                     );
                                 }
                                 ChainedChannel::NextContext(next_context) => {
@@ -510,15 +514,14 @@ mod thread_utilization {
             _result: &mut Result<()>,
             _timings: &mut ExecuteTimings,
             _bank: &Arc<Bank>,
-            transaction_with_index: SEA::TransactionWithIndex<'_>,
+            transaction: &SanitizedTransaction,
+            _index: usize,
             _pool: &SchedulerPool<T, Self, SEA>,
         ) {
-            transaction_with_index.with_transaction_and_index(|transaction, _index| {
-                let Ok(Transfer{lamports: sleep_ms}) =
-                    bincode::deserialize(&transaction.message().instructions()[0].data) else { panic!() };
+            let Ok(Transfer{lamports: sleep_ms}) =
+                bincode::deserialize(&transaction.message().instructions()[0].data) else { panic!() };
 
-                sleep(Duration::from_millis(sleep_ms));
-            });
+            sleep(Duration::from_millis(sleep_ms));
         }
     }
 
@@ -638,17 +641,16 @@ mod thread_utilization {
             _result: &mut Result<()>,
             _timings: &mut ExecuteTimings,
             _bank: &Arc<Bank>,
-            transaction_with_index: SEA::TransactionWithIndex<'_>,
+            transaction: &SanitizedTransaction,
+            _index: usize,
             _pool: &SchedulerPool<T, Self, SEA>,
         ) {
-            transaction_with_index.with_transaction_and_index(|transaction, _index| {
-                let Ok(Transfer{lamports: sleep_ms}) =
-                    bincode::deserialize(&transaction.message().instructions()[0].data) else { panic!() };
+            let Ok(Transfer{lamports: sleep_ms}) =
+                bincode::deserialize(&transaction.message().instructions()[0].data) else { panic!() };
 
-                sleep(Duration::from_millis(sleep_ms));
+            sleep(Duration::from_millis(sleep_ms));
 
-                self.0.send(*transaction.signature()).unwrap();
-            });
+            self.0.send(*transaction.signature()).unwrap();
         }
     }
 
