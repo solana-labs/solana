@@ -3323,6 +3323,9 @@ impl Blockstore {
         self.db.is_primary_access()
     }
 
+    /// Search for any ancestors of the latest root that are not marked as
+    /// roots themselves. Then, mark these found slots as roots since the
+    /// ancestor of a root is also inherently a root.
     pub fn scan_and_fix_roots(&self, exit: &AtomicBool) -> Result<()> {
         let ancestor_iterator = AncestorIterator::new(self.last_root(), self)
             .take_while(|&slot| slot >= self.lowest_cleanup_slot());
@@ -5603,6 +5606,75 @@ pub mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_scan_and_fix_roots() {
+        solana_logger::setup();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let entries_per_slot = max_ticks_per_n_shreds(5, None);
+        let start_slot: Slot = 0;
+        let num_slots = 10;
+
+        // Produce the following chains and insert shreds into Blockstore
+        // 0 --> 2 --> 4 --> 6 --> 8 --> 10
+        //  \
+        //   --> 1 --> 3 --> 5 --> 7 --> 9
+        let shreds: Vec<_> = (start_slot..=num_slots)
+            .flat_map(|slot| {
+                let parent_slot = if slot % 2 == 0 {
+                    slot.saturating_sub(2)
+                } else {
+                    slot.saturating_sub(1)
+                };
+                let (shreds, _) = make_slot_entries(
+                    slot,
+                    parent_slot,
+                    entries_per_slot,
+                    true, // merkle_variant
+                );
+                shreds.into_iter()
+            })
+            .collect();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+
+        // Mark several roots
+        let roots = vec![6, 10];
+        blockstore.set_roots(roots.iter()).unwrap();
+        assert_eq!(
+            &roots,
+            &blockstore
+                .rooted_slot_iterator(0)
+                .unwrap()
+                .collect::<Vec<_>>(),
+        );
+
+        // Fix roots and ensure all even slots are now root
+        let roots = vec![0, 2, 4, 6, 8, 10];
+        blockstore
+            .scan_and_fix_roots(&AtomicBool::new(false))
+            .unwrap();
+        assert_eq!(
+            &roots,
+            &blockstore
+                .rooted_slot_iterator(0)
+                .unwrap()
+                .collect::<Vec<_>>(),
+        );
+
+        // Subsequent calls should have no effect and return without error
+        blockstore
+            .scan_and_fix_roots(&AtomicBool::new(false))
+            .unwrap();
+        assert_eq!(
+            &roots,
+            &blockstore
+                .rooted_slot_iterator(0)
+                .unwrap()
+                .collect::<Vec<_>>(),
+        );
     }
 
     #[test]
