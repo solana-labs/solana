@@ -5,7 +5,7 @@ use {
     crate::{
         account_storage::meta::StoredMetaWriteVersion,
         tiered_storage::{
-            byte_block::ByteBlockReader,
+            byte_block,
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
         },
     },
@@ -139,7 +139,7 @@ impl TieredAccountMeta for HotAccountMeta {
         let offset = self.optional_fields_offset(data_block);
         self.flags()
             .has_rent_epoch()
-            .then(|| ByteBlockReader::read_type::<Epoch>(data_block, offset).copied())
+            .then(|| byte_block::read_type::<Epoch>(data_block, offset).copied())
             .flatten()
     }
 
@@ -152,7 +152,7 @@ impl TieredAccountMeta for HotAccountMeta {
         }
         self.flags()
             .has_account_hash()
-            .then(|| ByteBlockReader::read_type::<Hash>(data_block, offset))
+            .then(|| byte_block::read_type::<Hash>(data_block, offset))
             .flatten()
     }
 
@@ -169,7 +169,7 @@ impl TieredAccountMeta for HotAccountMeta {
         self.flags
             .has_write_version()
             .then(|| {
-                ByteBlockReader::read_type::<StoredMetaWriteVersion>(data_block, offset).copied()
+                byte_block::read_type::<StoredMetaWriteVersion>(data_block, offset).copied()
             })
             .flatten()
     }
@@ -203,7 +203,7 @@ pub mod tests {
         crate::{
             account_storage::meta::StoredMetaWriteVersion,
             tiered_storage::{
-                byte_block::{ByteBlockReader, ByteBlockWriter},
+                byte_block::ByteBlockWriter,
                 footer::AccountBlockFormat,
                 meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
             },
@@ -319,7 +319,7 @@ pub mod tests {
         writer.write_optional_fields(&optional_fields).unwrap();
         let buffer = writer.finish().unwrap();
 
-        let meta = ByteBlockReader::read_type::<HotAccountMeta>(&buffer, 0).unwrap();
+        let meta = byte_block::read_type::<HotAccountMeta>(&buffer, 0).unwrap();
         assert_eq!(expected_meta, *meta);
         assert!(meta.flags().has_rent_epoch());
         assert!(meta.flags().has_account_hash());
