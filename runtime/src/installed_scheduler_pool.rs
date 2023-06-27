@@ -221,9 +221,6 @@ pub struct BankWithSchedulerInner {
 }
 pub type InstalledSchedulerRwLock = RwLock<Option<DefaultInstalledSchedulerBox>>;
 
-#[allow(clippy::declare_interior_mutable_const)]
-pub const NO_INSTALLED_SCHEDULER_RW_LOCK: InstalledSchedulerRwLock = RwLock::new(None);
-
 impl BankWithScheduler {
     fn _new(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
         if let Some(bank_in_context) = scheduler.as_ref().and_then(|scheduler| scheduler.context())
@@ -299,6 +296,9 @@ impl BankWithScheduler {
     }
 
     pub const fn no_scheduler_available() -> InstalledSchedulerRwLock {
+        #[allow(clippy::declare_interior_mutable_const)]
+        pub const NO_INSTALLED_SCHEDULER_RW_LOCK: InstalledSchedulerRwLock = RwLock::new(None);
+
         NO_INSTALLED_SCHEDULER_RW_LOCK
     }
 
