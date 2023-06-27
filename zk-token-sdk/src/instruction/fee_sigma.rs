@@ -2,6 +2,11 @@
 //!
 //! A fee sigma proof certifies that a Pedersen commitment to a transfer fee for SPL Token 2022 is
 //! well-formed.
+//!
+//! A formal documentation of how transfer fees and fee sigma proof are computed can be found in
+//! the [`ZK Token proof`] program documentation.
+//!
+//! [`ZK Token proof`]: https://edge.docs.solana.com/developing/runtime-facilities/zk-token-proof
 
 #[cfg(not(target_os = "solana"))]
 use {
@@ -35,15 +40,23 @@ pub struct FeeSigmaProofData {
 }
 
 /// The context data needed to verify a pubkey validity proof.
+///
+/// We refer to [`ZK Token proof`] for the formal details on how the fee sigma proof is computed.
+///
+/// [`ZK Token proof`]: https://edge.docs.solana.com/developing/runtime-facilities/zk-token-proof
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct FeeSigmaProofContext {
+    /// The Pedersen commitment to the transfer fee
     pub fee_commitment: pod::PedersenCommitment,
 
+    /// The Pedersen commitment to the real delta fee.
     pub delta_commitment: pod::PedersenCommitment,
 
+    /// The Pedersen commitment to the claimed delta fee.
     pub claimed_commitment: pod::PedersenCommitment,
 
+    /// The maximum cap for a transfer fee
     pub max_fee: pod::PodU64,
 }
 
