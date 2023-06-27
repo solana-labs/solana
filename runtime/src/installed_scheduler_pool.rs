@@ -225,7 +225,7 @@ pub type InstalledSchedulerRwLock = RwLock<Option<DefaultInstalledSchedulerBox>>
 pub const NO_INSTALLED_SCHEDULER_RW_LOCK: InstalledSchedulerRwLock = RwLock::new(None);
 
 impl BankWithScheduler {
-    pub(crate) fn new(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
+    fn _new(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
         if let Some(bank_in_context) = scheduler.as_ref().and_then(|scheduler| scheduler.context())
         {
             assert_eq!(bank.slot(), bank_in_context.slot());
@@ -239,13 +239,17 @@ impl BankWithScheduler {
         }
     }
 
+    pub(crate) fn new(bank: Arc<Bank>, scheduler: DefaultInstalledSchedulerBox) -> Self {
+        Self::_new(bank, Some(scheduler))
+    }
+
     #[cfg(any(test, feature = "test-in-workspace"))]
     pub fn new_for_test(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
-        Self::new(bank, scheduler)
+        Self::_new(bank, scheduler)
     }
 
     pub fn new_without_scheduler(bank: Arc<Bank>) -> Self {
-        Self::new(bank, None)
+        Self::_new(bank, None)
     }
 
     pub fn clone_with_scheduler(&self) -> BankWithScheduler {

@@ -171,11 +171,17 @@ impl BankForks {
 
         // Iterate through the heads of all the different forks
         for bank in initial_forks {
-            banks.insert(bank.slot(), BankWithScheduler::new(bank.clone(), None));
+            banks.insert(
+                bank.slot(),
+                BankWithScheduler::new_without_scheduler(bank.clone()),
+            );
             let parents = bank.parents();
             for parent in parents {
                 if banks
-                    .insert(parent.slot(), BankWithScheduler::new(parent.clone(), None))
+                    .insert(
+                        parent.slot(),
+                        BankWithScheduler::new_without_scheduler(parent.clone()),
+                    )
                     .is_some()
                 {
                     // All ancestors have already been inserted by another fork
@@ -207,9 +213,9 @@ impl BankForks {
         let bank = if let Some(scheduler_pool) = &self.scheduler_pool {
             let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
             let scheduler = scheduler_pool.take_from_pool(context);
-            BankWithScheduler::new(bank, Some(scheduler))
+            BankWithScheduler::new(bank, scheduler)
         } else {
-            BankWithScheduler::new(bank, None)
+            BankWithScheduler::new_without_scheduler(bank)
         };
         let prev = self.banks.insert(bank.slot(), bank.clone_with_scheduler());
         assert!(prev.is_none());
