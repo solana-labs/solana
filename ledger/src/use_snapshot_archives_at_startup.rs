@@ -10,9 +10,15 @@ pub enum UseSnapshotArchivesAtStartup {
     /// already on disk.  This will incur the associated runtime costs for extracting.
     #[default]
     Always,
-    /// If snapshot archive are not used, then the local snapshot state already on disk is
+    /// If snapshot archives are not used, then the local snapshot state already on disk is
     /// used instead.  If there is no local state on disk, startup will fail.
     Never,
+    /// Only use snapshot archives if they are newer than the local snapshot state on disk.
+    /// This can happen if a node is stopped and a new snapshot archive is downloaded before
+    /// restarting.  At startup, the snapshot archive would be the newest and loaded from.
+    /// Note, this also implies that snapshot archives will be used if there is no local snapshot
+    /// state on disk.
+    WhenNewest,
 }
 
 pub mod cli {
@@ -31,7 +37,11 @@ pub mod cli {
         and will only use snapshot-related state already on disk. \
         If there is no state already on disk, startup will fail. \
         Note, this will use the latest state available, \
-        which may be newer than the latest snapshot archive.";
+        which may be newer than the latest snapshot archive. \
+        Specifying \"when-newest\" will use snapshot-related state \
+        already on disk unless there are snapshot archives newer than it. \
+        This can happen if a new snapshot archive is downloaded \
+        while the node is stopped.";
 
     pub const POSSIBLE_VALUES: &[&str] = UseSnapshotArchivesAtStartup::VARIANTS;
 

@@ -8760,6 +8760,17 @@ impl Bank {
             &mut error_counters,
         )
     }
+
+    pub fn is_in_slot_hashes_history(&self, slot: &Slot) -> bool {
+        if slot < &self.slot {
+            if let Ok(sysvar_cache) = self.sysvar_cache.read() {
+                if let Ok(slot_hashes) = sysvar_cache.get_slot_hashes() {
+                    return slot_hashes.get(slot).is_some();
+                }
+            }
+        }
+        false
+    }
 }
 
 /// Compute how much an account has changed size.  This function is useful when the data size delta

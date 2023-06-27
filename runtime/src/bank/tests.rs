@@ -12323,6 +12323,23 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
 }
 
 #[test]
+fn test_is_in_slot_hashes_history() {
+    use solana_sdk::slot_hashes::MAX_ENTRIES;
+
+    let bank0 = create_simple_test_arc_bank(1);
+    assert!(!bank0.is_in_slot_hashes_history(&0));
+    assert!(!bank0.is_in_slot_hashes_history(&1));
+    let mut last_bank = bank0;
+    for _ in 0..MAX_ENTRIES {
+        let new_bank = Arc::new(new_from_parent(&last_bank));
+        assert!(new_bank.is_in_slot_hashes_history(&0));
+        last_bank = new_bank;
+    }
+    let new_bank = Arc::new(new_from_parent(&last_bank));
+    assert!(!new_bank.is_in_slot_hashes_history(&0));
+}
+
+#[test]
 fn test_runtime_feature_enable_with_program_cache() {
     solana_logger::setup();
 

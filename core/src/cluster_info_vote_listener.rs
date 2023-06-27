@@ -422,15 +422,12 @@ impl ClusterInfoVoteListener {
                 // Always set this to avoid taking the poh lock too often
                 time_since_lock = Instant::now();
                 // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
-                let current_working_bank = poh_recorder.read().unwrap().bank();
-                if let Some(current_working_bank) = current_working_bank {
-                    Self::check_for_leader_bank_and_send_votes(
-                        &mut bank_vote_sender_state_option,
-                        current_working_bank,
-                        verified_packets_sender,
-                        &verified_vote_packets,
-                    )?;
-                }
+                Self::check_for_leader_bank_and_send_votes(
+                    &mut bank_vote_sender_state_option,
+                    poh_recorder.read().unwrap().bank(),
+                    verified_packets_sender,
+                    &verified_vote_packets,
+                )?;
                 // Check if we've crossed the feature boundary
                 if !is_tower_full_vote_enabled {
                     is_tower_full_vote_enabled = bank_forks
@@ -446,10 +443,22 @@ impl ClusterInfoVoteListener {
 
     fn check_for_leader_bank_and_send_votes(
         bank_vote_sender_state_option: &mut Option<BankVoteSenderState>,
-        current_working_bank: Arc<Bank>,
+        current_working_bank: Option<Arc<Bank>>,
         verified_packets_sender: &BankingPacketSender,
         verified_vote_packets: &VerifiedVotePackets,
     ) -> Result<()> {
+        let current_working_bank = match current_working_bank {
+            Some(current_working_bank) => current_working_bank,
+            None => {
+                // We are not the leader!
+                if let Some(bank_vote_sender_state) = bank_vote_sender_state_option {
+                    // This ensures we report the last slot's metrics
+                    bank_vote_sender_state.report_metrics();
+                    *bank_vote_sender_state_option = None;
+                }
+                return Ok(());
+            }
+        };
         // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
         if let Some(bank_vote_sender_state) = bank_vote_sender_state_option {
             if bank_vote_sender_state.bank.slot() != current_working_bank.slot() {
@@ -1713,7 +1722,7 @@ mod tests {
         // 1) If we hand over a `current_leader_bank`, vote sender state should be updated
         ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
             &mut bank_vote_sender_state_option,
-            current_leader_bank.clone(),
+            Some(current_leader_bank.clone()),
             &verified_packets_sender,
             &verified_vote_packets,
         )
@@ -1732,7 +1741,7 @@ mod tests {
         // 2) Handing over the same leader bank again should not update the state
         ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
             &mut bank_vote_sender_state_option,
-            current_leader_bank.clone(),
+            Some(current_leader_bank.clone()),
             &verified_packets_sender,
             &verified_vote_packets,
         )
@@ -1758,7 +1767,7 @@ mod tests {
         ));
         ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
             &mut bank_vote_sender_state_option,
-            current_leader_bank.clone(),
+            Some(current_leader_bank.clone()),
             &verified_packets_sender,
             &verified_vote_packets,
         )
