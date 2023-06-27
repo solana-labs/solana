@@ -54,7 +54,6 @@ use {
         cmp::Ordering,
         collections::{HashMap, HashSet},
         fmt,
-        fs::File,
         io::{BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
         num::NonZeroUsize,
         path::{Path, PathBuf},
@@ -450,10 +449,13 @@ pub fn create_and_canonicalize_directories(directories: &[PathBuf]) -> Result<Ve
 /// to delete the top level directory it might be able to
 /// delete the contents of that directory.
 fn delete_contents_of_path(path: impl AsRef<Path>) {
-    let path = path.as_ref().to_path_buf();
-    match fs_err::read_dir(&path) {
+    match fs_err::read_dir(path.as_ref()) {
         Err(err) => {
-            warn!("Failed to delete contents of {}: {}", path.display(), err);
+            warn!(
+                "Failed to delete contents of {}: {}",
+                path.as_ref().display(),
+                err
+            );
         }
         Ok(dir_entries) => {
             for entry in dir_entries.flatten() {
@@ -609,11 +611,7 @@ pub fn purge_incomplete_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) {
                 "Purged incomplete snapshot dir: {}",
                 incomplete_dir.display()
             ),
-            Err(err) => warn!(
-                "Failed to purge incomplete snapshot dir: {}, {}",
-                incomplete_dir.display(),
-                err,
-            ),
+            Err(err) => warn!("Failed to purge incomplete snapshot dir: {err}"),
         }
     }
 }
@@ -847,13 +845,9 @@ pub fn archive_snapshot_package(
 /// Get the bank snapshots in a directory
 pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnapshotInfo> {
     let mut bank_snapshots = Vec::default();
-    match std::fs::read_dir(&bank_snapshots_dir) {
+    match fs_err::read_dir(bank_snapshots_dir.as_ref()) {
         Err(err) => {
-            info!(
-                "Unable to read bank snapshots directory {}: {}",
-                bank_snapshots_dir.as_ref().display(),
-                err,
-            );
+            info!("Unable to read bank snapshots directory: {err}");
         }
         Ok(paths) => paths
             .filter_map(|entry| {
@@ -934,7 +928,7 @@ fn do_get_highest_bank_snapshot(
 
 pub fn serialize_snapshot_data_file<F>(data_file_path: &Path, serializer: F) -> Result<u64>
 where
-    F: FnOnce(&mut BufWriter<File>) -> Result<()>,
+    F: FnOnce(&mut BufWriter<std::fs::File>) -> Result<()>,
 {
     serialize_snapshot_data_file_capped::<F>(
         data_file_path,
@@ -945,9 +939,9 @@ where
 
 pub fn deserialize_snapshot_data_file<T: Sized>(
     data_file_path: &Path,
-    deserializer: impl FnOnce(&mut BufReader<File>) -> Result<T>,
+    deserializer: impl FnOnce(&mut BufReader<std::fs::File>) -> Result<T>,
 ) -> Result<T> {
-    let wrapped_deserializer = move |streams: &mut SnapshotStreams<File>| -> Result<T> {
+    let wrapped_deserializer = move |streams: &mut SnapshotStreams<std::fs::File>| -> Result<T> {
         deserializer(streams.full_snapshot_stream)
     };
 
@@ -965,7 +959,7 @@ pub fn deserialize_snapshot_data_file<T: Sized>(
 
 fn deserialize_snapshot_data_files<T: Sized>(
     snapshot_root_paths: &SnapshotRootPaths,
-    deserializer: impl FnOnce(&mut SnapshotStreams<File>) -> Result<T>,
+    deserializer: impl FnOnce(&mut SnapshotStreams<std::fs::File>) -> Result<T>,
 ) -> Result<T> {
     deserialize_snapshot_data_files_capped(
         snapshot_root_paths,
@@ -980,7 +974,7 @@ fn serialize_snapshot_data_file_capped<F>(
     serializer: F,
 ) -> Result<u64>
 where
-    F: FnOnce(&mut BufWriter<File>) -> Result<()>,
+    F: FnOnce(&mut BufWriter<std::fs::File>) -> Result<()>,
 {
     let data_file = fs_err::File::create(data_file_path)?.into();
     let mut data_file_stream = BufWriter::new(data_file);
@@ -1000,7 +994,7 @@ where
 fn deserialize_snapshot_data_files_capped<T: Sized>(
     snapshot_root_paths: &SnapshotRootPaths,
     maximum_file_size: u64,
-    deserializer: impl FnOnce(&mut SnapshotStreams<File>) -> Result<T>,
+    deserializer: impl FnOnce(&mut SnapshotStreams<std::fs::File>) -> Result<T>,
 ) -> Result<T> {
     let (full_snapshot_file_size, mut full_snapshot_data_file_stream) =
         create_snapshot_data_file_stream(
@@ -1055,7 +1049,7 @@ fn deserialize_snapshot_data_files_capped<T: Sized>(
 fn create_snapshot_data_file_stream(
     snapshot_root_file_path: impl AsRef<Path>,
     maximum_file_size: u64,
-) -> Result<(u64, BufReader<File>)> {
+) -> Result<(u64, BufReader<std::fs::File>)> {
     let snapshot_file_size = fs_err::metadata(&snapshot_root_file_path)?.len();
 
     if snapshot_file_size > maximum_file_size {
@@ -1068,8 +1062,8 @@ fn create_snapshot_data_file_stream(
         return Err(get_io_error(&error_message));
     }
 
-    let snapshot_data_file = File::open(snapshot_root_file_path)?;
-    let snapshot_data_file_stream = BufReader::new(snapshot_data_file);
+    let snapshot_data_file = fs_err::File::open(snapshot_root_file_path.as_ref())?;
+    let snapshot_data_file_stream = BufReader::new(snapshot_data_file.into());
 
     Ok((snapshot_file_size, snapshot_data_file_stream))
 }
@@ -1079,7 +1073,7 @@ fn create_snapshot_data_file_stream(
 fn check_deserialize_file_consumed(
     file_size: u64,
     file_path: impl AsRef<Path>,
-    file_stream: &mut BufReader<File>,
+    file_stream: &mut BufReader<std::fs::File>,
 ) -> Result<()> {
     let consumed_size = file_stream.stream_position()?;
 
@@ -1273,7 +1267,7 @@ pub fn add_bank_snapshot(
     // from the operational accounts/ directory to here.
     hard_link_storages_to_snapshot(&bank_snapshot_dir, slot, snapshot_storages)?;
 
-    let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
+    let bank_snapshot_serializer = move |stream: &mut BufWriter<std::fs::File>| -> Result<()> {
         let serde_style = match snapshot_version {
             SnapshotVersion::V1_2_0 => SerdeStyle::Newer,
         };
@@ -1896,7 +1890,7 @@ fn create_snapshot_meta_files_for_unarchived_snapshot(unpack_dir: impl AsRef<Pat
     }
 
     // The unpacked dir has a single slot dir, which is the snapshot slot dir.
-    let slot_dir = fs_err::read_dir(&snapshots_dir)
+    let slot_dir = std::fs::read_dir(&snapshots_dir)
         .map_err(|_| SnapshotError::NoSnapshotSlotDir(snapshots_dir.clone()))?
         .find(|entry| entry.as_ref().unwrap().path().is_dir())
         .ok_or_else(|| SnapshotError::NoSnapshotSlotDir(snapshots_dir.clone()))?
@@ -2079,7 +2073,7 @@ fn snapshot_version_from_file(path: impl AsRef<Path>) -> Result<String> {
 
     // Read snapshot_version from file.
     let mut snapshot_version = String::new();
-    File::open(path).and_then(|mut f| f.read_to_string(&mut snapshot_version))?;
+    fs_err::File::open(path.as_ref()).and_then(|mut f| f.read_to_string(&mut snapshot_version))?;
     Ok(snapshot_version.trim().to_string())
 }
 
@@ -2452,7 +2446,7 @@ fn untar_snapshot_create_shared_buffer(
     snapshot_tar: &Path,
     archive_format: ArchiveFormat,
 ) -> SharedBuffer {
-    let open_file = || File::open(snapshot_tar).unwrap();
+    let open_file = || fs_err::File::open(snapshot_tar).unwrap();
     match archive_format {
         ArchiveFormat::TarBzip2 => SharedBuffer::new(BzDecoder::new(BufReader::new(open_file()))),
         ArchiveFormat::TarGzip => SharedBuffer::new(GzDecoder::new(BufReader::new(open_file()))),
@@ -3735,10 +3729,10 @@ mod tests {
 
             let snapshot_filename = get_snapshot_file_name(slot);
             let snapshot_path = snapshot_dir.join(snapshot_filename);
-            File::create(snapshot_path).unwrap();
+            fs_err::File::create(snapshot_path).unwrap();
 
             let status_cache_file = snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-            File::create(status_cache_file).unwrap();
+            fs_err::File::create(status_cache_file).unwrap();
 
             let version_path = snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
             write_snapshot_version_file(version_path, SnapshotVersion::default()).unwrap();
@@ -3798,13 +3792,13 @@ mod tests {
                     Hash::default()
                 );
                 let snapshot_filepath = incremental_snapshot_archives_dir.join(snapshot_filename);
-                File::create(snapshot_filepath).unwrap();
+                fs_err::File::create(snapshot_filepath).unwrap();
             }
 
             let snapshot_filename =
                 format!("snapshot-{}-{}.tar", full_snapshot_slot, Hash::default());
             let snapshot_filepath = full_snapshot_archives_dir.join(snapshot_filename);
-            File::create(snapshot_filepath).unwrap();
+            fs_err::File::create(snapshot_filepath).unwrap();
 
             // Add in an incremental snapshot with a bad filename and high slot to ensure filename are filtered and sorted correctly
             let bad_filename = format!(
@@ -3813,14 +3807,14 @@ mod tests {
                 max_incremental_snapshot_slot + 1,
             );
             let bad_filepath = incremental_snapshot_archives_dir.join(bad_filename);
-            File::create(bad_filepath).unwrap();
+            fs_err::File::create(bad_filepath).unwrap();
         }
 
         // Add in a snapshot with a bad filename and high slot to ensure filename are filtered and
         // sorted correctly
         let bad_filename = format!("snapshot-{}-bad!hash.tar", max_full_snapshot_slot + 1);
         let bad_filepath = full_snapshot_archives_dir.join(bad_filename);
-        File::create(bad_filepath).unwrap();
+        fs_err::File::create(bad_filepath).unwrap();
     }
 
     #[test]
@@ -3992,7 +3986,7 @@ mod tests {
 
         for snap_name in snapshot_names {
             let snap_path = temp_snap_dir.path().join(snap_name);
-            let mut _snap_file = File::create(snap_path);
+            let mut _snap_file = fs_err::File::create(snap_path);
         }
         purge_old_snapshot_archives(
             temp_snap_dir.path(),
@@ -4074,7 +4068,7 @@ mod tests {
             let full_snapshot_archive_path = full_snapshot_archives_dir
                 .as_ref()
                 .join(full_snapshot_archive_file_name);
-            File::create(full_snapshot_archive_path).unwrap();
+            fs_err::File::create(full_snapshot_archive_path).unwrap();
 
             // don't purge-and-check until enough snapshot archives have been created
             if slot < starting_slot + maximum_snapshots_to_retain.get() as Slot {
@@ -4135,7 +4129,7 @@ mod tests {
                 let snapshot_filename =
                     format!("snapshot-{}-{}.tar", full_snapshot_slot, Hash::default());
                 let snapshot_path = full_snapshot_archives_dir.path().join(&snapshot_filename);
-                File::create(snapshot_path).unwrap();
+                fs_err::File::create(snapshot_path).unwrap();
                 snapshot_filenames.push(snapshot_filename);
 
                 (full_snapshot_slot..)
@@ -4152,7 +4146,7 @@ mod tests {
                         let snapshot_path = incremental_snapshot_archives_dir
                             .path()
                             .join(&snapshot_filename);
-                        File::create(snapshot_path).unwrap();
+                        fs_err::File::create(snapshot_path).unwrap();
                         snapshot_filenames.push(snapshot_filename);
                     });
             });
@@ -4255,7 +4249,7 @@ mod tests {
             let snapshot_path = incremental_snapshot_archives_dir
                 .path()
                 .join(snapshot_filenames);
-            File::create(snapshot_path).unwrap();
+            fs_err::File::create(snapshot_path).unwrap();
         }
 
         purge_old_snapshot_archives(
