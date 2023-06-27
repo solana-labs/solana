@@ -472,7 +472,7 @@ impl Consumer {
             ..
         } = execute_and_commit_transactions_output;
 
-        // Costs of all transactions are added before processing.
+        // Costs of all transactions are added to the cost_tracker before processing.
         // To ensure accurate tracking of compute units, transactions that ultimately
         // were not included in the block should have their cost removed.
         QosService::remove_costs(
