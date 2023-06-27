@@ -12838,7 +12838,134 @@ fn test_program_execution_restricted_for_stake_account_in_reward_period() {
     }
 }
 
-/// Test rewards compuation and partitioned rewards distribution at the epoch boundary
+/// Test reward calculation is launched at the first block of the new epoch. And the reward status
+/// makes a transition to `active` in this block. Then, after a few more blocks, i.e.
+/// get_reward_distribution_num_blocks(), when the reward credits have completed, and the bank reward status
+/// should make another transition back to `inactive`.
+#[test]
+fn test_reward_status_transitions_at_epoch_boundary() {
+    // create the first genesis bank
+    let mut bank0 = Bank::new_for_tests(&GenesisConfig {
+        accounts: (0..42)
+            .map(|_| {
+                (
+                    solana_sdk::pubkey::new_rand(),
+                    Account::new(1_000_000_000, 0, &Pubkey::default()),
+                )
+            })
+            .collect(),
+        poh_config: PohConfig {
+            target_tick_duration: Duration::from_secs(
+                SECONDS_PER_YEAR as u64 / MINIMUM_SLOTS_PER_EPOCH / DEFAULT_TICKS_PER_SLOT,
+            ),
+            hashes_per_tick: None,
+            target_tick_count: None,
+        },
+        cluster_type: ClusterType::MainnetBeta,
+
+        ..GenesisConfig::default()
+    });
+
+    // enable partitioned rewards feature
+    bank0.activate_feature(&feature_set::enable_partitioned_epoch_reward::id());
+    let bank0 = Arc::new(bank0);
+
+    bank0.restore_old_behavior_for_fragile_tests();
+
+    assert_eq!(
+        bank0.capitalization(),
+        42 * 1_000_000_000 + genesis_sysvar_and_builtin_program_lamports(),
+    );
+
+    // set up vote and stake accounts
+    let ((vote_id, mut vote_account), (stake_id, stake_account)) =
+        crate::stakes::tests::create_staked_node_accounts(10_000);
+    let starting_vote_and_stake_balance = 10_000 + 1;
+
+    bank0.store_account_and_update_capitalization(&stake_id, &stake_account);
+
+    // generate some rewards
+    let mut vote_state = Some(vote_state::from(&vote_account).unwrap());
+    for i in 0..MAX_LOCKOUT_HISTORY + 42 {
+        if let Some(v) = vote_state.as_mut() {
+            vote_state::process_slot_vote_unchecked(v, i as u64)
+        }
+        let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
+        vote_state::to(&versioned, &mut vote_account).unwrap();
+        bank0.store_account_and_update_capitalization(&vote_id, &vote_account);
+        match versioned {
+            VoteStateVersions::Current(v) => {
+                vote_state = Some(*v);
+            }
+            _ => panic!("Has to be of type Current"),
+        };
+    }
+    bank0.store_account_and_update_capitalization(&vote_id, &vote_account);
+    bank0.freeze();
+
+    assert_eq!(
+        bank0.capitalization(),
+        42 * 1_000_000_000
+            + genesis_sysvar_and_builtin_program_lamports()
+            + starting_vote_and_stake_balance
+            + bank0_sysvar_delta(),
+    );
+    assert!(bank0.rewards.read().unwrap().is_empty());
+
+    // put a child bank in epoch 1
+    // This block calculates the rewards and distribute the vote_rewards.
+    let bank1 = Bank::new_from_parent(
+        &bank0,
+        &Pubkey::default(),
+        bank0.get_slots_in_epoch(bank0.epoch()) + 1,
+    );
+
+    let bank1 = Arc::new(bank1);
+    bank1.freeze();
+
+    // assert that after reward calculation, the bank is corrected marked active in epoch reward
+    // status.
+    assert!(matches!(
+        bank1.get_reward_interval(),
+        RewardInterval::InsideInterval
+    ));
+
+    // assert num distribution blocks
+    if let EpochRewardStatus::Active(status) = &bank1.epoch_reward_status {
+        assert_eq!(status.stake_rewards_by_partition.len(), 1);
+    } else {
+        unimplemented!();
+    }
+    // assert that vote rewards are paid
+    assert_eq!(bank1.rewards.read().unwrap().len(), 1);
+
+    // put another child bank in epoch 1
+    // This block should distribute the stake rewards.
+    let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), bank1.slot() + 1);
+
+    let bank2 = Arc::new(bank2);
+    bank2.freeze();
+
+    // assert stake rewards reward status transition to `inactive`.
+    assert!(matches!(
+        bank2.get_reward_interval(),
+        RewardInterval::OutsideInterval
+    ));
+
+    // put another child bank in epoch 1
+    // This block should be out side of reward distribution
+    let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), bank2.slot() + 1);
+
+    let bank3 = Arc::new(bank3);
+    bank3.freeze();
+
+    // assert reward status transition stays `inactive`
+    assert!(matches!(
+        bank3.get_reward_interval(),
+        RewardInterval::OutsideInterval
+    ));
+}
+
 #[test]
 fn test_store_stake_accounts_in_partition() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
