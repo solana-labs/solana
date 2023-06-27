@@ -2,8 +2,8 @@ use {
     solana_program_test::{processor, ProgramTest},
     solana_sdk::{
         account_info::AccountInfo, clock::Clock, entrypoint::ProgramResult,
-        epoch_schedule::EpochSchedule, instruction::Instruction, msg, pubkey::Pubkey, rent::Rent,
-        signature::Signer, sysvar::Sysvar, transaction::Transaction,
+        epoch_rewards::EpochRewards, epoch_schedule::EpochSchedule, instruction::Instruction, msg,
+        pubkey::Pubkey, rent::Rent, signature::Signer, sysvar::Sysvar, transaction::Transaction,
     },
 };
 
@@ -23,6 +23,10 @@ fn sysvar_getter_process_instruction(
 
     let rent = Rent::get()?;
     assert_eq!(rent, Rent::default());
+
+    // epoch rewards sysvar should not exist for banks that are not in reward period
+    let epoch_rewards = EpochRewards::get();
+    assert!(epoch_rewards.is_err());
 
     Ok(())
 }
