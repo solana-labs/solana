@@ -623,11 +623,9 @@ fn is_bank_snapshot_complete(bank_snapshot_dir: impl AsRef<Path>) -> bool {
 pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
     if let Ok(entries) = std::fs::read_dir(snapshot_archives_dir) {
         for entry in entries.flatten() {
-            let file_name = entry
-                .file_name()
-                .into_string()
-                .unwrap_or_else(|_| String::new());
-            if file_name.starts_with(TMP_SNAPSHOT_ARCHIVE_PREFIX) {
+            if entry.file_name().to_str().map_or(false, |file_name| {
+                file_name.starts_with(TMP_SNAPSHOT_ARCHIVE_PREFIX)
+            }) {
                 let path = entry.path();
                 let result = if path.is_dir() {
                     fs_err::remove_dir_all(path)
