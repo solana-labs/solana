@@ -116,6 +116,7 @@ impl ZkProofData<FeeSigmaProofContext> for FeeSigmaProofData {
     }
 }
 
+#[cfg(not(target_os = "solana"))]
 impl FeeSigmaProofContext {
     fn new_transcript(&self) -> Transcript {
         let mut transcript = Transcript::new(b"FeeSigmaProof");
