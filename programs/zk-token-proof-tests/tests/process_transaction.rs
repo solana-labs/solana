@@ -720,8 +720,7 @@ async fn test_fee_sigma() {
     let scalar_rate = Scalar::from(fee_rate);
     let delta_commitment =
         &fee_commitment * Scalar::from(10_000_u64) - &transfer_commitment * &scalar_rate;
-    let delta_opening =
-        &fee_opening * &Scalar::from(10_000_u64) - &transfer_opening * &scalar_rate;
+    let delta_opening = &fee_opening * &Scalar::from(10_000_u64) - &transfer_opening * &scalar_rate;
 
     let (claimed_commitment, claimed_opening) = Pedersen::new(delta_fee);
 
