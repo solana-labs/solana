@@ -236,7 +236,7 @@ fn bank_forks_from_snapshot(
     {
         UseSnapshotArchivesAtStartup::Always => true,
         UseSnapshotArchivesAtStartup::Never => false,
-        UseSnapshotArchivesAtStartup::WhenNewest => lastest_bank_snapshot
+        UseSnapshotArchivesAtStartup::WhenNewest => latest_bank_snapshot
             .as_ref()
             .map(|bank_snapshot| latest_snapshot_archive_slot > bank_snapshot.slot)
             .unwrap_or(true),
