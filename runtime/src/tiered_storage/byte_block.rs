@@ -115,6 +115,22 @@ impl ByteBlockWriter {
 /// The util struct for reading byte blocks.
 pub struct ByteBlockReader;
 
+/// Reads the raw part of the input byte_block at the specified offset
+/// as type T.
+///
+/// If `offset` + size_of::<T>() exceeds the size of the input byte_block,
+/// then None will be returned.
+pub fn read_type<T>(byte_block: &[u8], offset: usize) -> Option<&T> {
+    let size = std::mem::size_of::<T>();
+    let (next, overflow) = offset.overflowing_add(size);
+    if overflow || next > byte_block.len() {
+        return None;
+    }
+    let ptr = byte_block[offset..][..size].as_ptr() as *const T;
+    debug_assert!(ptr as usize % std::mem::align_of::<T>() == 0);
+    Some(unsafe { &*ptr })
+}
+
 impl ByteBlockReader {
     /// Decode the input byte array using the specified format.
     ///
@@ -132,24 +148,6 @@ impl ByteBlockReader {
             }
             AccountBlockFormat::AlignedRaw => panic!("the input buffer is already decoded"),
         }
-    }
-
-    /// Reads the raw part of the input byte_block at the specified offset
-    /// as type T.
-    ///
-    /// If `offset` + size_of::<T>() exceeds the size of the input byte_block,
-    /// then None will be returned.
-    pub fn read_type<T>(byte_block: &[u8], offset: usize) -> Option<&T> {
-        let size = std::mem::size_of::<T>();
-        if offset + size > byte_block.len() {
-            return None;
-        }
-        let data = &byte_block[offset..][..size];
-        let raw_ptr = data.as_ptr() as *const u8;
-        let slice = unsafe { std::slice::from_raw_parts(raw_ptr, size) };
-        let ptr = slice.as_ptr() as *const T;
-        debug_assert!(ptr as usize % std::mem::align_of::<T>() == 0);
-        Some(unsafe { &*ptr })
     }
 }
 
@@ -359,22 +357,20 @@ mod tests {
         let mut offset = 0;
         for opt_fields in &opt_fields_vec {
             if let Some(expected_rent_epoch) = opt_fields.rent_epoch {
-                let rent_epoch =
-                    ByteBlockReader::read_type::<Epoch>(&decoded_buffer, offset).unwrap();
+                let rent_epoch = read_type::<Epoch>(&decoded_buffer, offset).unwrap();
                 assert_eq!(*rent_epoch, expected_rent_epoch);
                 verified_count += 1;
                 offset += std::mem::size_of::<Epoch>();
             }
             if let Some(expected_hash) = opt_fields.account_hash {
-                let hash = ByteBlockReader::read_type::<Hash>(&decoded_buffer, offset).unwrap();
+                let hash = read_type::<Hash>(&decoded_buffer, offset).unwrap();
                 assert_eq!(hash, &expected_hash);
                 verified_count += 1;
                 offset += std::mem::size_of::<Hash>();
             }
             if let Some(expected_write_version) = opt_fields.write_version {
                 let write_version =
-                    ByteBlockReader::read_type::<StoredMetaWriteVersion>(&decoded_buffer, offset)
-                        .unwrap();
+                    read_type::<StoredMetaWriteVersion>(&decoded_buffer, offset).unwrap();
                 assert_eq!(*write_version, expected_write_version);
                 verified_count += 1;
                 offset += std::mem::size_of::<StoredMetaWriteVersion>();
