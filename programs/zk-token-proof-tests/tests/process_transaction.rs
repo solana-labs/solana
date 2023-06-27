@@ -705,6 +705,7 @@ async fn test_batched_grouped_ciphertext_2_handles_validity() {
     .await;
 }
 
+#[allow(clippy::op_ref)]
 #[tokio::test]
 async fn test_fee_sigma() {
     let transfer_amount: u64 = 1;

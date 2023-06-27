@@ -190,6 +190,7 @@ fn bench_batched_grouped_ciphertext_validity(c: &mut Criterion) {
     });
 }
 
+#[allow(clippy::op_ref)]
 fn bench_fee_sigma(c: &mut Criterion) {
     let transfer_amount: u64 = 1;
     let max_fee: u64 = 3;
