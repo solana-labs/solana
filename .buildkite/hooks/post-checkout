@@ -12,7 +12,7 @@ source ci/env.sh
 (
   echo "+++ Killing stale docker containers"
   while read -r line; do
-    read id image _ <<<"$line"
+    read -r id image _ <<<"$line"
 
     if [[ $image =~ "solanalabs/rust" ]]; then
       if docker kill "$id" >/dev/null; then
