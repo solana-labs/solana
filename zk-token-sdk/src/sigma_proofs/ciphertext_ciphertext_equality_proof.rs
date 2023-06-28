@@ -29,7 +29,7 @@ use {
 };
 
 /// Byte length of a ciphertext-ciphertext equality proof.
-const CIPHERTEXT_CIPHERTEXT_EQUALITY_PROOF_LEN: usize = 224;
+const CIPHERTEXT_CIPHERTEXT_EQUALITY_PROOF_LEN: usize = UNIT_LEN * 7;
 
 /// The ciphertext-ciphertext equality proof.
 ///

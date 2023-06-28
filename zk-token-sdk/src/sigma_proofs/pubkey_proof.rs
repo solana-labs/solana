@@ -30,7 +30,7 @@ use {
 };
 
 /// Byte length of a public key validity proof.
-const PUBKEY_VALIDITY_PROOF_LEN: usize = 64;
+const PUBKEY_VALIDITY_PROOF_LEN: usize = UNIT_LEN * 2;
 
 /// Public-key proof.
 ///

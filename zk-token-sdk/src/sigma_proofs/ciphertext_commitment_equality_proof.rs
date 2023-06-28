@@ -34,7 +34,7 @@ use {
 };
 
 /// Byte length of a ciphertext-commitment equality proof.
-const CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN: usize = 192;
+const CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN: usize = UNIT_LEN * 6;
 
 /// Equality proof.
 ///

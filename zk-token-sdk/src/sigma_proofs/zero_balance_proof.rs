@@ -29,7 +29,7 @@ use {
 };
 
 /// Byte length of a zero-balance proof.
-const ZERO_BALANCE_PROOF_LEN: usize = 96;
+const ZERO_BALANCE_PROOF_LEN: usize = UNIT_LEN * 3;
 
 /// Zero-balance proof.
 ///

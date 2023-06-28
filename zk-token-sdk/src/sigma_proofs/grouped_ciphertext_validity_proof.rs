@@ -34,7 +34,7 @@ use {
 };
 
 /// Byte length of a grouped ciphertext validity proof for 2 handles
-const GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_LEN: usize = 160;
+const GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_LEN: usize = UNIT_LEN * 5;
 
 /// The grouped ciphertext validity proof for 2 handles.
 ///

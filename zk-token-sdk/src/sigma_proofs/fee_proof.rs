@@ -34,7 +34,7 @@ use {
 };
 
 /// Byte length of a fee sigma proof.
-const FEE_SIGMA_PROOF_LEN: usize = 256;
+const FEE_SIGMA_PROOF_LEN: usize = UNIT_LEN * 8;
 
 /// Fee sigma proof.
 ///
