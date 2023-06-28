@@ -1259,13 +1259,17 @@ mod tests {
             // needs to be adjusted by the actual cost executed. The adjusted should just be the final
             // cost
             let expected_block_cost = if !apply_cost_tracker_during_replay_enabled {
-                block_cost
-                    + match commit_transactions_result.get(0).unwrap() {
-                        CommitTransactionDetails::Committed { compute_units } => compute_units,
-                        CommitTransactionDetails::NotCommitted => {
-                            unreachable!()
-                        }
+                let actual_bpf_execution_cost = match commit_transactions_result.get(0).unwrap() {
+                    CommitTransactionDetails::Committed { compute_units } => *compute_units,
+                    CommitTransactionDetails::NotCommitted => {
+                        unreachable!()
                     }
+                };
+
+                let mut cost = CostModel::calculate_cost(&transactions[0], &bank.feature_set);
+                cost.bpf_execution_cost = actual_bpf_execution_cost;
+
+                block_cost + cost.sum()
             } else {
                 block_cost + CostModel::calculate_cost(&transactions[0], &bank.feature_set).sum()
             };
