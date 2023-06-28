@@ -14,7 +14,8 @@
 use {
     crate::{
         encryption::pedersen::{PedersenCommitment, PedersenOpening, G, H},
-        sigma_proofs::canonical_scalar_from_slice,
+        sigma_proofs::{canonical_scalar_from_optional_slice, ristretto_point_from_optional_slice},
+        UNIT_LEN,
     },
     rand::rngs::OsRng,
 };
@@ -31,6 +32,9 @@ use {
     merlin::Transcript,
     subtle::{Choice, ConditionallySelectable, ConstantTimeGreater},
 };
+
+/// Byte length of a fee sigma proof.
+const FEE_SIGMA_PROOF_LEN: usize = UNIT_LEN * 8;
 
 /// Fee sigma proof.
 ///
@@ -387,33 +391,55 @@ impl FeeSigmaProof {
         }
     }
 
-    pub fn to_bytes(&self) -> [u8; 256] {
-        let mut buf = [0_u8; 256];
-        buf[..32].copy_from_slice(self.fee_max_proof.Y_max_proof.as_bytes());
-        buf[32..64].copy_from_slice(self.fee_max_proof.z_max_proof.as_bytes());
-        buf[64..96].copy_from_slice(self.fee_max_proof.c_max_proof.as_bytes());
-        buf[96..128].copy_from_slice(self.fee_equality_proof.Y_delta.as_bytes());
-        buf[128..160].copy_from_slice(self.fee_equality_proof.Y_claimed.as_bytes());
-        buf[160..192].copy_from_slice(self.fee_equality_proof.z_x.as_bytes());
-        buf[192..224].copy_from_slice(self.fee_equality_proof.z_delta.as_bytes());
-        buf[224..256].copy_from_slice(self.fee_equality_proof.z_claimed.as_bytes());
+    pub fn to_bytes(&self) -> [u8; FEE_SIGMA_PROOF_LEN] {
+        let mut buf = [0_u8; FEE_SIGMA_PROOF_LEN];
+        let mut chunks = buf.chunks_mut(UNIT_LEN);
+        chunks
+            .next()
+            .unwrap()
+            .copy_from_slice(self.fee_max_proof.Y_max_proof.as_bytes());
+        chunks
+            .next()
+            .unwrap()
+            .copy_from_slice(self.fee_max_proof.z_max_proof.as_bytes());
+        chunks
+            .next()
+            .unwrap()
+            .copy_from_slice(self.fee_max_proof.c_max_proof.as_bytes());
+        chunks
+            .next()
+            .unwrap()
+            .copy_from_slice(self.fee_equality_proof.Y_delta.as_bytes());
+        chunks
+            .next()
+            .unwrap()
+            .copy_from_slice(self.fee_equality_proof.Y_claimed.as_bytes());
+        chunks
+            .next()
+            .unwrap()
+            .copy_from_slice(self.fee_equality_proof.z_x.as_bytes());
+        chunks
+            .next()
+            .unwrap()
+            .copy_from_slice(self.fee_equality_proof.z_delta.as_bytes());
+        chunks
+            .next()
+            .unwrap()
+            .copy_from_slice(self.fee_equality_proof.z_claimed.as_bytes());
         buf
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, FeeSigmaProofError> {
-        if bytes.len() != 256 {
-            return Err(ProofVerificationError::Deserialization.into());
-        }
+        let mut chunks = bytes.chunks(UNIT_LEN);
+        let Y_max_proof = ristretto_point_from_optional_slice(chunks.next())?;
+        let z_max_proof = canonical_scalar_from_optional_slice(chunks.next())?;
+        let c_max_proof = canonical_scalar_from_optional_slice(chunks.next())?;
 
-        let Y_max_proof = CompressedRistretto::from_slice(&bytes[..32]);
-        let z_max_proof = canonical_scalar_from_slice(&bytes[32..64])?;
-        let c_max_proof = canonical_scalar_from_slice(&bytes[64..96])?;
-
-        let Y_delta = CompressedRistretto::from_slice(&bytes[96..128]);
-        let Y_claimed = CompressedRistretto::from_slice(&bytes[128..160]);
-        let z_x = canonical_scalar_from_slice(&bytes[160..192])?;
-        let z_delta = canonical_scalar_from_slice(&bytes[192..224])?;
-        let z_claimed = canonical_scalar_from_slice(&bytes[224..256])?;
+        let Y_delta = ristretto_point_from_optional_slice(chunks.next())?;
+        let Y_claimed = ristretto_point_from_optional_slice(chunks.next())?;
+        let z_x = canonical_scalar_from_optional_slice(chunks.next())?;
+        let z_delta = canonical_scalar_from_optional_slice(chunks.next())?;
+        let z_claimed = canonical_scalar_from_optional_slice(chunks.next())?;
 
         Ok(Self {
             fee_max_proof: FeeMaxProof {

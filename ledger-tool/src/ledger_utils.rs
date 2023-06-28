@@ -365,20 +365,36 @@ pub fn open_blockstore(
         },
     ) {
         Ok(blockstore) => blockstore,
-        Err(BlockstoreError::RocksDb(err))
-            if (err
+        Err(BlockstoreError::RocksDb(err)) => {
+            // Missing essential file, indicative of blockstore not existing
+            let missing_blockstore = err
                 .to_string()
-                // Missing column family
-                .starts_with("Invalid argument: Column family not found:")
-                || err
-                    .to_string()
-                    // Missing essential file, indicative of blockstore not existing
-                    .starts_with("IO error: No such file or directory:"))
-                && access_type == AccessType::Secondary =>
-        {
-            error!("Blockstore is incompatible with current software and requires updates");
+                .starts_with("IO error: No such file or directory:");
+            // Missing column in blockstore that is expected by software
+            let missing_column = err
+                .to_string()
+                .starts_with("Invalid argument: Column family not found:");
+            // The blockstore settings with Primary access can resolve the
+            // above issues automatically, so only emit the help messages
+            // if access type is Secondary
+            let is_secondary = access_type == AccessType::Secondary;
+
+            if missing_blockstore && is_secondary {
+                eprintln!(
+                    "Failed to open blockstore at {ledger_path:?}, it \
+                    is missing at least one critical file: {err:?}"
+                );
+            } else if missing_column && is_secondary {
+                eprintln!(
+                    "Failed to open blockstore at {ledger_path:?}, it \
+                    does not have all necessary columns: {err:?}"
+                );
+            } else {
+                eprintln!("Failed to open blockstore at {ledger_path:?}: {err:?}");
+                exit(1);
+            }
             if !force_update_to_open {
-                error!("Use --force-update-to-open to allow blockstore to update");
+                eprintln!("Use --force-update-to-open flag to attempt to update the blockstore");
                 exit(1);
             }
             open_blockstore_with_temporary_primary_access(
@@ -387,7 +403,7 @@ pub fn open_blockstore(
                 wal_recovery_mode,
             )
             .unwrap_or_else(|err| {
-                error!(
+                eprintln!(
                     "Failed to open blockstore (with --force-update-to-open) at {:?}: {:?}",
                     ledger_path, err
                 );

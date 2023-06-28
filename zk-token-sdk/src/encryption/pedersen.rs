@@ -3,6 +3,7 @@
 #[cfg(not(target_os = "solana"))]
 use rand::rngs::OsRng;
 use {
+    crate::{RISTRETTO_POINT_LEN, SCALAR_LEN},
     core::ops::{Add, Mul, Sub},
     curve25519_dalek::{
         constants::{RISTRETTO_BASEPOINT_COMPRESSED, RISTRETTO_BASEPOINT_POINT},
@@ -16,6 +17,12 @@ use {
     subtle::{Choice, ConstantTimeEq},
     zeroize::Zeroize,
 };
+
+/// Byte length of a Pedersen opening.
+const PEDERSEN_OPENING_LEN: usize = SCALAR_LEN;
+
+/// Byte length of a Pedersen commitment.
+pub(crate) const PEDERSEN_COMMITMENT_LEN: usize = RISTRETTO_POINT_LEN;
 
 lazy_static::lazy_static! {
     /// Pedersen base point for encoding messages to be committed.
@@ -82,11 +89,11 @@ impl PedersenOpening {
         PedersenOpening(Scalar::random(&mut OsRng))
     }
 
-    pub fn as_bytes(&self) -> &[u8; 32] {
+    pub fn as_bytes(&self) -> &[u8; PEDERSEN_OPENING_LEN] {
         self.0.as_bytes()
     }
 
-    pub fn to_bytes(&self) -> [u8; 32] {
+    pub fn to_bytes(&self) -> [u8; PEDERSEN_OPENING_LEN] {
         self.0.to_bytes()
     }
 
@@ -177,12 +184,12 @@ impl PedersenCommitment {
         &self.0
     }
 
-    pub fn to_bytes(&self) -> [u8; 32] {
+    pub fn to_bytes(&self) -> [u8; PEDERSEN_COMMITMENT_LEN] {
         self.0.compress().to_bytes()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<PedersenCommitment> {
-        if bytes.len() != 32 {
+        if bytes.len() != PEDERSEN_COMMITMENT_LEN {
             return None;
         }
 

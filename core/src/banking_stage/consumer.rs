@@ -472,6 +472,15 @@ impl Consumer {
             ..
         } = execute_and_commit_transactions_output;
 
+        // Costs of all transactions are added to the cost_tracker before processing.
+        // To ensure accurate tracking of compute units, transactions that ultimately
+        // were not included in the block should have their cost removed.
+        QosService::remove_costs(
+            transaction_qos_cost_results.iter(),
+            commit_transactions_result.as_ref().ok(),
+            bank,
+        );
+
         // once feature `apply_cost_tracker_during_replay` is activated, leader shall no longer
         // adjust block with executed cost (a behavior more inline with bankless leader), it
         // should use requested, or default `compute_unit_limit` as transaction's execution cost.
@@ -479,7 +488,7 @@ impl Consumer {
             .feature_set
             .is_active(&feature_set::apply_cost_tracker_during_replay::id())
         {
-            QosService::update_or_remove_transaction_costs(
+            QosService::update_costs(
                 transaction_qos_cost_results.iter(),
                 commit_transactions_result.as_ref().ok(),
                 bank,
@@ -1193,36 +1202,25 @@ mod tests {
             assert_eq!(executed_with_successful_result_count, 1);
             assert!(commit_transactions_result.is_ok());
 
-            let single_transfer_cost = get_block_cost();
-            assert_ne!(single_transfer_cost, 0);
+            let block_cost = get_block_cost();
+            assert_ne!(block_cost, 0);
             assert_eq!(get_tx_count(), 1);
 
-            //
-            // TEST: When a tx in a batch can't be executed (here because of account
-            // locks), then its cost does not affect the cost tracker only if qos
-            // adjusts it with actual execution cost (when apply_cost_tracker_during_replay
-            // is not enabled).
-            //
-
+            // TEST: it's expected that the allocation will execute but the transfer will not
+            // because of a shared write-lock between mint_keypair. Ensure only the first transaction
+            // takes compute units in the block AND the apply_cost_tracker_during_replay_enabled feature
+            // is applied correctly
             let allocate_keypair = Keypair::new();
-
             let transactions = sanitize_transactions(vec![
-                system_transaction::transfer(&mint_keypair, &pubkey, 2, genesis_config.hash()),
-                // intentionally use a tx that has a different cost
                 system_transaction::allocate(
                     &mint_keypair,
                     &allocate_keypair,
                     genesis_config.hash(),
-                    1,
+                    100,
                 ),
+                // this one won't execute in process_and_record_transactions from shared account lock overlap
+                system_transaction::transfer(&mint_keypair, &pubkey, 2, genesis_config.hash()),
             ]);
-            let mut expected_block_cost = 2 * single_transfer_cost;
-            let mut expected_tracked_tx_count = 2;
-            if apply_cost_tracker_during_replay_enabled {
-                expected_block_cost +=
-                    CostModel::calculate_cost(&transactions[1], &bank.feature_set).sum();
-                expected_tracked_tx_count += 1;
-            }
 
             let process_transactions_batch_output =
                 consumer.process_and_record_transactions(&bank, &transactions, 0);
@@ -1235,10 +1233,39 @@ mod tests {
             } = process_transactions_batch_output.execute_and_commit_transactions_output;
             assert_eq!(executed_with_successful_result_count, 1);
             assert!(commit_transactions_result.is_ok());
+
+            // first one should have been committed, second one not committed due to AccountInUse error during
+            // account locking
+            let commit_transactions_result = commit_transactions_result.unwrap();
+            assert_eq!(commit_transactions_result.len(), 2);
+            assert!(matches!(
+                commit_transactions_result.get(0).unwrap(),
+                CommitTransactionDetails::Committed { .. }
+            ));
+            assert!(matches!(
+                commit_transactions_result.get(1).unwrap(),
+                CommitTransactionDetails::NotCommitted
+            ));
             assert_eq!(retryable_transaction_indexes, vec![1]);
 
+            let expected_block_cost = if !apply_cost_tracker_during_replay_enabled {
+                let actual_bpf_execution_cost = match commit_transactions_result.get(0).unwrap() {
+                    CommitTransactionDetails::Committed { compute_units } => *compute_units,
+                    CommitTransactionDetails::NotCommitted => {
+                        unreachable!()
+                    }
+                };
+
+                let mut cost = CostModel::calculate_cost(&transactions[0], &bank.feature_set);
+                cost.bpf_execution_cost = actual_bpf_execution_cost;
+
+                block_cost + cost.sum()
+            } else {
+                block_cost + CostModel::calculate_cost(&transactions[0], &bank.feature_set).sum()
+            };
+
             assert_eq!(get_block_cost(), expected_block_cost);
-            assert_eq!(get_tx_count(), expected_tracked_tx_count);
+            assert_eq!(get_tx_count(), 2);
 
             poh_recorder
                 .read()

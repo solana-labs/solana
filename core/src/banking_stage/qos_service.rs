@@ -177,17 +177,30 @@ impl QosService {
         (select_results, num_included)
     }
 
-    /// Update the transaction cost in the cost_tracker with the real cost for
-    /// transactions that were executed successfully;
-    /// Otherwise remove the cost from the cost tracker, therefore preventing cost_tracker
-    /// being inflated with unsuccessfully executed transactions.
-    pub fn update_or_remove_transaction_costs<'a>(
+    /// Updates the transaction costs for committed transactions. Does not handle removing costs
+    /// for transactions that didn't get recorded or committed
+    pub fn update_costs<'a>(
+        transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
+        transaction_committed_status: Option<&Vec<CommitTransactionDetails>>,
+        bank: &Arc<Bank>,
+    ) {
+        if let Some(transaction_committed_status) = transaction_committed_status {
+            Self::update_committed_transaction_costs(
+                transaction_cost_results,
+                transaction_committed_status,
+                bank,
+            )
+        }
+    }
+
+    /// Removes transaction costs from the cost tracker if not committed or recorded
+    pub fn remove_costs<'a>(
         transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
         transaction_committed_status: Option<&Vec<CommitTransactionDetails>>,
         bank: &Arc<Bank>,
     ) {
         match transaction_committed_status {
-            Some(transaction_committed_status) => Self::update_transaction_costs(
+            Some(transaction_committed_status) => Self::remove_uncommitted_transaction_costs(
                 transaction_cost_results,
                 transaction_committed_status,
                 bank,
@@ -196,7 +209,7 @@ impl QosService {
         }
     }
 
-    fn update_transaction_costs<'a>(
+    fn remove_uncommitted_transaction_costs<'a>(
         transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
         transaction_committed_status: &Vec<CommitTransactionDetails>,
         bank: &Arc<Bank>,
@@ -208,11 +221,29 @@ impl QosService {
                 // Only transactions that the qos service included have to be
                 // checked for update
                 if let Ok(tx_cost) = tx_cost {
-                    match transaction_committed_details {
-                        CommitTransactionDetails::Committed { compute_units } => {
-                            cost_tracker.update_execution_cost(tx_cost, *compute_units)
-                        }
-                        CommitTransactionDetails::NotCommitted => cost_tracker.remove(tx_cost),
+                    if *transaction_committed_details == CommitTransactionDetails::NotCommitted {
+                        cost_tracker.remove(tx_cost)
+                    }
+                }
+            });
+    }
+
+    fn update_committed_transaction_costs<'a>(
+        transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
+        transaction_committed_status: &Vec<CommitTransactionDetails>,
+        bank: &Arc<Bank>,
+    ) {
+        let mut cost_tracker = bank.write_cost_tracker().unwrap();
+        transaction_cost_results
+            .zip(transaction_committed_status)
+            .for_each(|(tx_cost, transaction_committed_details)| {
+                // Only transactions that the qos service included have to be
+                // checked for update
+                if let Ok(tx_cost) = tx_cost {
+                    if let CommitTransactionDetails::Committed { compute_units } =
+                        transaction_committed_details
+                    {
+                        cost_tracker.update_execution_cost(tx_cost, *compute_units)
                     }
                 }
             });
@@ -730,7 +761,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_or_remove_transaction_costs_commited() {
+    fn test_update_and_remove_transaction_costs_committed() {
         solana_logger::setup();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
@@ -774,11 +805,19 @@ mod tests {
                 })
                 .collect();
             let final_txs_cost = total_txs_cost + execute_units_adjustment * transaction_count;
-            QosService::update_or_remove_transaction_costs(
-                qos_cost_results.iter(),
-                Some(&commited_status),
-                &bank,
+
+            // All transactions are committed, no costs should be removed
+            QosService::remove_costs(qos_cost_results.iter(), Some(&commited_status), &bank);
+            assert_eq!(
+                total_txs_cost,
+                bank.read_cost_tracker().unwrap().block_cost()
             );
+            assert_eq!(
+                transaction_count,
+                bank.read_cost_tracker().unwrap().transaction_count()
+            );
+
+            QosService::update_costs(qos_cost_results.iter(), Some(&commited_status), &bank);
             assert_eq!(
                 final_txs_cost,
                 bank.read_cost_tracker().unwrap().block_cost()
@@ -791,7 +830,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_or_remove_transaction_costs_not_commited() {
+    fn test_update_and_remove_transaction_costs_not_committed() {
         solana_logger::setup();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
@@ -825,14 +864,26 @@ mod tests {
                 total_txs_cost,
                 bank.read_cost_tracker().unwrap().block_cost()
             );
-            QosService::update_or_remove_transaction_costs(qos_cost_results.iter(), None, &bank);
+
+            // update costs doesn't impact non-committed
+            QosService::update_costs(qos_cost_results.iter(), None, &bank);
+            assert_eq!(
+                total_txs_cost,
+                bank.read_cost_tracker().unwrap().block_cost()
+            );
+            assert_eq!(
+                transaction_count,
+                bank.read_cost_tracker().unwrap().transaction_count()
+            );
+
+            QosService::remove_costs(qos_cost_results.iter(), None, &bank);
             assert_eq!(0, bank.read_cost_tracker().unwrap().block_cost());
             assert_eq!(0, bank.read_cost_tracker().unwrap().transaction_count());
         }
     }
 
     #[test]
-    fn test_update_or_remove_transaction_costs_mixed_execution() {
+    fn test_update_and_remove_transaction_costs_mixed_execution() {
         solana_logger::setup();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
@@ -882,11 +933,9 @@ mod tests {
                     }
                 })
                 .collect();
-            QosService::update_or_remove_transaction_costs(
-                qos_cost_results.iter(),
-                Some(&commited_status),
-                &bank,
-            );
+
+            QosService::remove_costs(qos_cost_results.iter(), Some(&commited_status), &bank);
+            QosService::update_costs(qos_cost_results.iter(), Some(&commited_status), &bank);
 
             // assert the final block cost
             let mut expected_final_txs_count = 0u64;

@@ -2,8 +2,16 @@
 //! The account meta and related structs for hot accounts.
 
 use {
-    crate::tiered_storage::meta::{AccountMetaFlags, TieredAccountMeta},
+    crate::{
+        account_storage::meta::StoredMetaWriteVersion,
+        tiered_storage::{
+            byte_block,
+            meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
+        },
+    },
     modular_bitfield::prelude::*,
+    solana_sdk::{hash::Hash, stake_history::Epoch},
+    std::option::Option,
 };
 
 /// The maximum number of padding bytes used in a hot account entry.
@@ -123,15 +131,83 @@ impl TieredAccountMeta for HotAccountMeta {
     fn supports_shared_account_block() -> bool {
         false
     }
+
+    /// Returns the epoch that this account will next owe rent by parsing
+    /// the specified account block.  None will be returned if this account
+    /// does not persist this optional field.
+    fn rent_epoch(&self, account_block: &[u8]) -> Option<Epoch> {
+        self.flags()
+            .has_rent_epoch()
+            .then(|| {
+                let offset = self.optional_fields_offset(account_block)
+                    + AccountMetaOptionalFields::rent_epoch_offset(self.flags());
+                byte_block::read_type::<Epoch>(account_block, offset).copied()
+            })
+            .flatten()
+    }
+
+    /// Returns the account hash by parsing the specified account block.  None
+    /// will be returned if this account does not persist this optional field.
+    fn account_hash<'a>(&self, account_block: &'a [u8]) -> Option<&'a Hash> {
+        self.flags()
+            .has_account_hash()
+            .then(|| {
+                let offset = self.optional_fields_offset(account_block)
+                    + AccountMetaOptionalFields::account_hash_offset(self.flags());
+                byte_block::read_type::<Hash>(account_block, offset)
+            })
+            .flatten()
+    }
+
+    /// Returns the write version by parsing the specified account block.  None
+    /// will be returned if this account does not persist this optional field.
+    fn write_version(&self, account_block: &[u8]) -> Option<StoredMetaWriteVersion> {
+        self.flags
+            .has_write_version()
+            .then(|| {
+                let offset = self.optional_fields_offset(account_block)
+                    + AccountMetaOptionalFields::write_version_offset(self.flags());
+                byte_block::read_type::<StoredMetaWriteVersion>(account_block, offset).copied()
+            })
+            .flatten()
+    }
+
+    /// Returns the offset of the optional fields based on the specified account
+    /// block.
+    fn optional_fields_offset(&self, account_block: &[u8]) -> usize {
+        account_block
+            .len()
+            .saturating_sub(AccountMetaOptionalFields::size_from_flags(&self.flags))
+    }
+
+    /// Returns the length of the data associated to this account based on the
+    /// specified account block.
+    fn data_len(&self, account_block: &[u8]) -> usize {
+        self.optional_fields_offset(account_block)
+            .saturating_sub(self.account_data_padding() as usize)
+    }
+
+    /// Returns the data associated to this account based on the specified
+    /// account block.
+    fn account_data<'a>(&self, account_block: &'a [u8]) -> &'a [u8] {
+        &account_block[..self.data_len(account_block)]
+    }
 }
 
 #[cfg(test)]
 pub mod tests {
     use {
         super::*,
-        crate::tiered_storage::meta::AccountMetaOptionalFields,
+        crate::{
+            account_storage::meta::StoredMetaWriteVersion,
+            tiered_storage::{
+                byte_block::ByteBlockWriter,
+                footer::AccountBlockFormat,
+                meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
+            },
+        },
+        ::solana_sdk::{hash::Hash, stake_history::Epoch},
         memoffset::offset_of,
-        solana_sdk::{hash::Hash, stake_history::Epoch},
     };
 
     #[test]
@@ -209,5 +285,62 @@ pub mod tests {
         assert_eq!(meta.data_size_for_shared_block(), None);
         assert_eq!(meta.owner_index(), TEST_OWNER_INDEX);
         assert_eq!(*meta.flags(), flags);
+    }
+
+    #[test]
+    fn test_hot_account_meta_full() {
+        let account_data = [11u8; 83];
+        let padding = [0u8; 5];
+
+        const TEST_LAMPORT: u64 = 2314232137;
+        const OWNER_INDEX: u32 = 0x1fef_1234;
+        const TEST_RENT_EPOCH: Epoch = 7;
+        const TEST_WRITE_VERSION: StoredMetaWriteVersion = 0;
+
+        let optional_fields = AccountMetaOptionalFields {
+            rent_epoch: Some(TEST_RENT_EPOCH),
+            account_hash: Some(Hash::new_unique()),
+            write_version: Some(TEST_WRITE_VERSION),
+        };
+
+        let flags = AccountMetaFlags::new_from(&optional_fields);
+        let expected_meta = HotAccountMeta::new()
+            .with_lamports(TEST_LAMPORT)
+            .with_account_data_padding(padding.len().try_into().unwrap())
+            .with_owner_index(OWNER_INDEX)
+            .with_flags(&flags);
+
+        let mut writer = ByteBlockWriter::new(AccountBlockFormat::AlignedRaw);
+        writer.write_type(&expected_meta).unwrap();
+        writer.write_type(&account_data).unwrap();
+        writer.write_type(&padding).unwrap();
+        writer.write_optional_fields(&optional_fields).unwrap();
+        let buffer = writer.finish().unwrap();
+
+        let meta = byte_block::read_type::<HotAccountMeta>(&buffer, 0).unwrap();
+        assert_eq!(expected_meta, *meta);
+        assert!(meta.flags().has_rent_epoch());
+        assert!(meta.flags().has_account_hash());
+        assert!(meta.flags().has_write_version());
+        assert_eq!(meta.account_data_padding() as usize, padding.len());
+
+        let account_block = &buffer[std::mem::size_of::<HotAccountMeta>()..];
+        assert_eq!(
+            meta.optional_fields_offset(account_block),
+            account_block
+                .len()
+                .saturating_sub(AccountMetaOptionalFields::size_from_flags(&flags))
+        );
+        assert_eq!(account_data.len(), meta.data_len(account_block));
+        assert_eq!(account_data, meta.account_data(account_block));
+        assert_eq!(meta.rent_epoch(account_block), optional_fields.rent_epoch);
+        assert_eq!(
+            *(meta.account_hash(account_block).unwrap()),
+            optional_fields.account_hash.unwrap()
+        );
+        assert_eq!(
+            meta.write_version(account_block),
+            optional_fields.write_version
+        );
     }
 }
