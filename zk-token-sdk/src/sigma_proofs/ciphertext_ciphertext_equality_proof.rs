@@ -45,7 +45,7 @@ pub struct CiphertextCiphertextEqualityProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
 impl CiphertextCiphertextEqualityProof {
-    /// The ciphertext-ciphertext equality proof constructor.
+    /// Creates a ciphertext-ciphertext equality proof.
     ///
     /// The function does *not* hash the public key, ciphertext, or commitment into the transcript.
     /// For security, the caller (the main protocol) should hash these public components prior to
@@ -120,8 +120,7 @@ impl CiphertextCiphertextEqualityProof {
         }
     }
 
-    /// The ciphertext-ciphertext equality proof verifier. The proof is with respect to two
-    /// ciphertexts.
+    /// Verifies a ciphertext-ciphertext equality proof.
     ///
     /// * `source_pubkey` - The ElGamal pubkey associated with the first ciphertext to be proved
     /// * `destination_pubkey` - The ElGamal pubkey associated with the second ciphertext to be proved

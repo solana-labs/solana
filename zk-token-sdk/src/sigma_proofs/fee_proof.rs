@@ -1,6 +1,14 @@
-//! The sigma proofs for transfer fees.
+//! The fee sigma proof.
 //!
-//! TODO: Add detail on how the fee is calculated.
+//! A fee sigma proof certifies that an ElGamal ciphertext encrypts a properly computed transfer fee.
+//!
+//! A detailed description of how transfer fees and proofs are calculated is provided in the [`ZK
+//! Token proof program`] documentation.
+//!
+//! The protocol guarantees computational soundness (by the hardness of discrete log) and perfect
+//! zero-knowledge in the random oracle model.
+//!
+//! [`ZK Token proof program`]: https://edge.docs.solana.com/developing/runtime-facilities/zk-token-proof
 
 #[cfg(not(target_os = "solana"))]
 use {
@@ -27,9 +35,9 @@ use {
 /// Fee sigma proof.
 ///
 /// The proof consists of two main components: `fee_max_proof` and `fee_equality_proof`. If the fee
-/// surpasses the maximum fee bound, then the `fee_max_proof` should properly be generated and
-/// `fee_equality_proof` should be simulated. If the fee is below the maximum fee bound, then the
-/// `fee_equality_proof` should be properly generated and `fee_max_proof` should be simulated.
+/// is greater than the maximum fee bound, then the `fee_max_proof` is properly generated and
+/// `fee_equality_proof` is simulated. If the fee is smaller than the maximum fee bound, the
+/// `fee_equality_proof` is properly generated and `fee_max_proof` is simulated.
 #[derive(Clone)]
 pub struct FeeSigmaProof {
     /// Proof that the committed fee amount equals the maximum fee bound
@@ -45,8 +53,36 @@ impl FeeSigmaProof {
     /// Creates a fee sigma proof assuming that the committed fee is greater than the maximum fee
     /// bound.
     ///
-    /// Note: the proof is generated twice via `create_proof_fee_above_max` and
-    /// `create_proof_fee_below_max` to enforce constant time execution.
+    /// A transfer fee amount `fee_amount` for a `transfer_amount` is determined by two parameters:
+    /// - the `fee_rate_basis_point`, which defines the fee rate in units of 0.01%,
+    /// - the `max_fee`, which defines the cap amount for a transfer fee.
+    ///
+    /// This means that there are two cases to consider. If `fee_amount >= max_fee`, then the
+    /// `fee_amount` must always equal `max_fee`.
+    ///
+    /// If `fee_amount < max_fee`, then assuming that there is no division rounding, the
+    /// `fee_amount` must satisfy the relation `transfer_amount * (fee_rate_basis_point /
+    /// 10_000) = fee_amount` or equivalently, `(transfer_amount * fee_rate_basis_point) - (10_000
+    /// * fee_amount) = 0`. More generally, let `delta_fee = (transfer_amount *
+    /// fee_rate_basis_point) - (10_000 * fee_amount)`. Then assuming that a division rounding
+    /// could occur, the `delta_fee` must satisfy the bound `0 <= delta_fee < 10_000`.
+    ///
+    /// If `fee_amount >= max_fee`, then `fee_amount = max_fee` and therefore, the prover can
+    /// generate a proof certifying that a fee commitment exactly encodes `max_fee`. If
+    /// `fee_amount < max_fee`, then the prover can create a commitment to `delta_fee` and
+    /// create a range proof certifying that the committed value satisfies the bound `0 <=
+    /// delta_fee < 10_000`.
+    ///
+    /// Since the type of proof that a prover generates reveals information about the transfer
+    /// amount and transfer fee, the prover must generate and include both types of proof. If
+    /// `fee_amount >= max_fee`, then the prover generates a valid `fee_max_proof`, but commits
+    /// to 0 as the "claimed" delta value and simulates ("fakes") a proof (`fee_equality_proof`)
+    /// that this is valid. If `fee_amount > max_fee`, then the prover simulates a
+    /// `fee_max_proof`, and creates a valid `fee_equality_proof` certifying that the claimed delta
+    /// value is equal to the "real" delta value.
+    ///
+    /// Note: In the implementation, the proof is generated twice via `create_proof_fee_above_max`
+    /// and `create_proof_fee_below_max` to enforce that the function executes in constant time.
     ///
     /// * `(fee_amount, fee_commitment, fee_opening)` - The amount, Pedersen commitment, and
     /// opening of the transfer fee
@@ -85,7 +121,7 @@ impl FeeSigmaProof {
         let below_max = u64::ct_gt(&max_fee, &fee_amount);
 
         // choose one of `proof_fee_above_max` or `proof_fee_below_max` according to whether the
-        // fee amount surpasses max fee
+        // fee amount is greater than `max_fee` or not
         let fee_max_proof = FeeMaxProof::conditional_select(
             &proof_fee_above_max.fee_max_proof,
             &proof_fee_below_max.fee_max_proof,
@@ -259,7 +295,7 @@ impl FeeSigmaProof {
         }
     }
 
-    /// Fee sigma proof verifier.
+    /// Verifies a fee sigma proof
     ///
     /// * `fee_commitment` - The Pedersen commitment of the transfer fee
     /// * `delta_commitment` - The Pedersen commitment of the "real" delta value
@@ -443,6 +479,7 @@ impl ConditionallySelectable for FeeEqualityProof {
     }
 }
 
+/// Selects one of two Ristretto points in constant time.
 #[allow(clippy::needless_range_loop)]
 fn conditional_select_ristretto(
     a: &CompressedRistretto,
