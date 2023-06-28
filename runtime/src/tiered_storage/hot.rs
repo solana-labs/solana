@@ -136,7 +136,8 @@ impl TieredAccountMeta for HotAccountMeta {
     /// the specified account block.  None will be returned if this account
     /// does not persist this optional field.
     fn rent_epoch(&self, data_block: &[u8]) -> Option<Epoch> {
-        let offset = self.optional_fields_offset(data_block);
+        let offset = self.optional_fields_offset(data_block)
+            + AccountMetaOptionalFields::rent_epoch_offset(self.flags());
         self.flags()
             .has_rent_epoch()
             .then(|| byte_block::read_type::<Epoch>(data_block, offset).copied())
@@ -146,10 +147,8 @@ impl TieredAccountMeta for HotAccountMeta {
     /// Returns the account hash by parsing the specified account block.  None
     /// will be returned if this account does not persist this optional field.
     fn account_hash<'a>(&self, data_block: &'a [u8]) -> Option<&'a Hash> {
-        let mut offset = self.optional_fields_offset(data_block);
-        if self.flags.has_rent_epoch() {
-            offset += std::mem::size_of::<Epoch>();
-        }
+        let offset = self.optional_fields_offset(data_block)
+            + AccountMetaOptionalFields::account_hash_offset(self.flags());
         self.flags()
             .has_account_hash()
             .then(|| byte_block::read_type::<Hash>(data_block, offset))
@@ -159,13 +158,8 @@ impl TieredAccountMeta for HotAccountMeta {
     /// Returns the write version by parsing the specified account block.  None
     /// will be returned if this account does not persist this optional field.
     fn write_version(&self, data_block: &[u8]) -> Option<StoredMetaWriteVersion> {
-        let mut offset = self.optional_fields_offset(data_block);
-        if self.flags.has_rent_epoch() {
-            offset += std::mem::size_of::<Epoch>();
-        }
-        if self.flags.has_account_hash() {
-            offset += std::mem::size_of::<Hash>();
-        }
+        let offset = self.optional_fields_offset(data_block)
+            + AccountMetaOptionalFields::write_version_offset(self.flags());
         self.flags
             .has_write_version()
             .then(|| byte_block::read_type::<StoredMetaWriteVersion>(data_block, offset).copied())
