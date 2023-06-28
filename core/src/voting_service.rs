@@ -1,7 +1,7 @@
 use {
     crate::{
+        consensus::tower_storage::{SavedTowerVersions, TowerStorage},
         next_leader::next_leader_tpu_vote,
-        tower_storage::{SavedTowerVersions, TowerStorage},
     },
     crossbeam_channel::Receiver,
     solana_gossip::cluster_info::ClusterInfo,

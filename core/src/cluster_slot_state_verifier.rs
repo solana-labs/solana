@@ -1,8 +1,9 @@
 use {
     crate::{
         ancestor_hashes_service::{AncestorHashesReplayUpdate, AncestorHashesReplayUpdateSender},
-        fork_choice::ForkChoice,
-        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        consensus::{
+            fork_choice::ForkChoice, heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        },
     },
     solana_ledger::blockstore::Blockstore,
     solana_sdk::{clock::Slot, hash::Hash},
@@ -946,7 +947,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
 mod test {
     use {
         super::*,
-        crate::{progress_map::ProgressMap, replay_stage::tests::setup_forks_from_tree},
+        crate::{consensus::progress_map::ProgressMap, replay_stage::tests::setup_forks_from_tree},
         crossbeam_channel::unbounded,
         solana_runtime::bank_forks::BankForks,
         std::{

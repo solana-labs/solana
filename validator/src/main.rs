@@ -10,9 +10,9 @@ use {
     solana_clap_utils::input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
     solana_core::{
         banking_trace::DISABLED_BAKING_TRACE_DIR,
+        consensus::tower_storage,
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         system_monitor_service::SystemMonitorService,
-        tower_storage,
         tpu::DEFAULT_TPU_COALESCE,
         validator::{
             is_snapshot_config_valid, BlockProductionMethod, BlockVerificationMethod, Validator,
@@ -1078,7 +1078,7 @@ pub fn main() {
         .ok()
         .or_else(|| get_cluster_shred_version(&entrypoint_addrs));
 
-    let tower_storage: Arc<dyn solana_core::tower_storage::TowerStorage> =
+    let tower_storage: Arc<dyn tower_storage::TowerStorage> =
         match value_t_or_exit!(matches, "tower_storage", String).as_str() {
             "file" => {
                 let tower_path = value_t!(matches, "tower", PathBuf)

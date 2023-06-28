@@ -2,8 +2,7 @@
 use {
     log::*,
     solana_core::{
-        consensus::{Tower, SWITCH_FORK_THRESHOLD},
-        tower_storage::FileTowerStorage,
+        consensus::{tower_storage::FileTowerStorage, Tower, SWITCH_FORK_THRESHOLD},
         validator::{is_snapshot_config_valid, ValidatorConfig},
     },
     solana_gossip::gossip_service::discover_cluster,
