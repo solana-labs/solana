@@ -4,13 +4,6 @@ extern crate test;
 
 use {
     rand::{thread_rng, Rng},
-    solana_core::{
-        broadcast_stage::{
-            broadcast_metrics::TransmitShredsStats, broadcast_shreds, BroadcastStage,
-        },
-        cluster_nodes::ClusterNodesCache,
-        validator::TURBINE_QUIC_CONNECTION_POOL_SIZE,
-    },
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
         contact_info::ContactInfo,
@@ -27,6 +20,12 @@ use {
         timing::{timestamp, AtomicInterval},
     },
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
+    solana_turbine::{
+        broadcast_stage::{
+            broadcast_metrics::TransmitShredsStats, broadcast_shreds, BroadcastStage,
+        },
+        cluster_nodes::ClusterNodesCache,
+    },
     std::{
         collections::HashMap,
         net::{IpAddr, Ipv4Addr, UdpSocket},
@@ -45,7 +44,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
         &leader_keypair,
         IpAddr::V4(Ipv4Addr::LOCALHOST),
         &Arc::<RwLock<StakedNodes>>::default(),
-        TURBINE_QUIC_CONNECTION_POOL_SIZE,
+        4, // connection_pool_size
     )
     .unwrap();
     let leader_info = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());

@@ -1634,6 +1634,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-err"
+version = "2.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0845fa252299212f0389d64ba26f34fa32cfe41588355f21ed507c59a0f64541"
+
+[[package]]
 name = "fs_extra"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4754,6 +4760,7 @@ dependencies = [
  "solana-streamer",
  "solana-tpu-client",
  "solana-transaction-status",
+ "solana-turbine",
  "solana-version",
  "solana-vote-program",
  "strum",
@@ -5005,6 +5012,8 @@ dependencies = [
  "spl-token",
  "spl-token-2022",
  "static_assertions",
+ "strum",
+ "strum_macros",
  "tempfile",
  "thiserror",
  "tokio",
@@ -5424,6 +5433,7 @@ dependencies = [
  "dir-diff",
  "flate2",
  "fnv",
+ "fs-err",
  "im",
  "index_list",
  "itertools",
@@ -6135,6 +6145,36 @@ dependencies = [
  "spl-memo",
  "spl-token",
  "spl-token-2022",
+ "thiserror",
+]
+
+[[package]]
+name = "solana-turbine"
+version = "1.17.0"
+dependencies = [
+ "bincode",
+ "crossbeam-channel",
+ "itertools",
+ "log",
+ "lru",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
+ "rayon",
+ "solana-client",
+ "solana-entry",
+ "solana-gossip",
+ "solana-ledger",
+ "solana-measure",
+ "solana-metrics",
+ "solana-perf",
+ "solana-poh",
+ "solana-quic-client",
+ "solana-rayon-threadlimit",
+ "solana-rpc",
+ "solana-rpc-client-api",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-streamer",
  "thiserror",
 ]
 

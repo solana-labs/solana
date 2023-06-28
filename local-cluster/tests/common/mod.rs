@@ -2,10 +2,8 @@
 use {
     log::*,
     solana_core::{
-        broadcast_stage::BroadcastStageType,
-        consensus::{Tower, SWITCH_FORK_THRESHOLD},
-        tower_storage::{FileTowerStorage, SavedTower, SavedTowerVersions, TowerStorage},
-        validator::ValidatorConfig,
+        consensus::{tower_storage::FileTowerStorage, Tower, SWITCH_FORK_THRESHOLD},
+        validator::{is_snapshot_config_valid, ValidatorConfig},
     },
     solana_gossip::gossip_service::discover_cluster,
     solana_ledger::{
@@ -22,7 +20,10 @@ use {
     },
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
-        snapshot_config::SnapshotConfig, snapshot_utils::create_accounts_run_and_snapshot_dirs,
+        snapshot_config::SnapshotConfig,
+        snapshot_utils::{
+            create_accounts_run_and_snapshot_dirs, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
+        },
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -33,6 +34,7 @@ use {
         signature::{Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_turbine::broadcast_stage::BroadcastStageType,
     std::{
         collections::HashSet,
         fs, iter,
@@ -475,20 +477,12 @@ impl SnapshotValidatorConfig {
         accounts_hash_interval_slots: Slot,
         num_account_paths: usize,
     ) -> SnapshotValidatorConfig {
+        // Interval values must be nonzero
         assert!(accounts_hash_interval_slots > 0);
         assert!(full_snapshot_archive_interval_slots > 0);
-        assert!(full_snapshot_archive_interval_slots != Slot::MAX);
-        assert!(full_snapshot_archive_interval_slots % accounts_hash_interval_slots == 0);
-        if incremental_snapshot_archive_interval_slots != Slot::MAX {
-            assert!(incremental_snapshot_archive_interval_slots > 0);
-            assert!(
-                incremental_snapshot_archive_interval_slots % accounts_hash_interval_slots == 0
-            );
-            assert!(
-                full_snapshot_archive_interval_slots % incremental_snapshot_archive_interval_slots
-                    == 0
-            );
-        }
+        assert!(incremental_snapshot_archive_interval_slots > 0);
+        // Ensure that some snapshots will be created
+        assert!(full_snapshot_archive_interval_slots != DISABLED_SNAPSHOT_ARCHIVE_INTERVAL);
 
         // Create the snapshot config
         let _ = fs::create_dir_all(farf_dir());
@@ -507,6 +501,10 @@ impl SnapshotValidatorConfig {
             maximum_incremental_snapshot_archives_to_retain: NonZeroUsize::new(usize::MAX).unwrap(),
             ..SnapshotConfig::default()
         };
+        assert!(is_snapshot_config_valid(
+            &snapshot_config,
+            accounts_hash_interval_slots
+        ));
 
         // Create the account paths
         let (account_storage_dirs, account_storage_paths) =
@@ -536,7 +534,7 @@ pub fn setup_snapshot_validator_config(
 ) -> SnapshotValidatorConfig {
     SnapshotValidatorConfig::new(
         snapshot_interval_slots,
-        Slot::MAX,
+        DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         snapshot_interval_slots,
         num_account_paths,
     )
@@ -544,8 +542,5 @@ pub fn setup_snapshot_validator_config(
 
 pub fn save_tower(tower_path: &Path, tower: &Tower, node_keypair: &Keypair) {
     let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
-    let saved_tower = SavedTower::new(tower, node_keypair).unwrap();
-    file_tower_storage
-        .store(&SavedTowerVersions::from(saved_tower))
-        .unwrap();
+    tower.save(&file_tower_storage, node_keypair).unwrap();
 }

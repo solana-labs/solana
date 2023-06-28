@@ -1,8 +1,7 @@
 use {
-    crate::{
-        consensus::{Result, Tower, TowerError, TowerVersions},
-        tower1_14_11::Tower1_14_11,
-        tower1_7_14::SavedTower1_7_14,
+    crate::consensus::{
+        tower1_14_11::Tower1_14_11, tower1_7_14::SavedTower1_7_14, Result, Tower, TowerError,
+        TowerVersions,
     },
     solana_sdk::{
         pubkey::Pubkey,
@@ -371,9 +370,9 @@ impl TowerStorage for EtcdTowerStorage {
 pub mod test {
     use {
         super::*,
-        crate::{
-            consensus::Tower,
+        crate::consensus::{
             tower1_7_14::{SavedTower1_7_14, Tower1_7_14},
+            Tower,
         },
         solana_sdk::{hash::Hash, signature::Keypair},
         solana_vote_program::vote_state::{

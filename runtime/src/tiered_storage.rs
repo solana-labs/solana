@@ -2,6 +2,7 @@ pub mod byte_block;
 pub mod error;
 pub mod file;
 pub mod footer;
+pub mod hot;
 pub mod meta;
 pub mod mmap_utils;
 

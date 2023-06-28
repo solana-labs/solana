@@ -9,8 +9,8 @@ use {
         pubkey::Pubkey,
         signature::Signer,
         sysvar::{
-            clock, epoch_schedule, fees, instructions, recent_blockhashes, rent, slot_hashes,
-            slot_history, stake_history,
+            clock, epoch_rewards, epoch_schedule, fees, instructions, recent_blockhashes, rent,
+            slot_hashes, slot_history, stake_history,
         },
         transaction::Transaction,
     },
@@ -45,6 +45,7 @@ async fn test_sysvars() {
                 AccountMeta::new_readonly(stake_history::id(), false),
                 #[allow(deprecated)]
                 AccountMeta::new_readonly(fees::id(), false),
+                AccountMeta::new_readonly(epoch_rewards::id(), false),
             ],
         )],
         Some(&payer.pubkey()),
@@ -78,6 +79,7 @@ async fn test_sysvars() {
                 AccountMeta::new_readonly(stake_history::id(), false),
                 #[allow(deprecated)]
                 AccountMeta::new_readonly(fees::id(), false),
+                AccountMeta::new_readonly(epoch_rewards::id(), false),
             ],
         )],
         Some(&payer.pubkey()),

@@ -19,6 +19,7 @@ use {
         validator::{BlockProductionMethod, BlockVerificationMethod},
     },
     solana_faucet::faucet::{self, FAUCET_PORT},
+    solana_ledger::use_snapshot_archives_at_startup,
     solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     solana_rpc::{rpc::MAX_REQUEST_BODY_SIZE, rpc_pubsub_service::PubSubConfig},
     solana_rpc_client_api::request::MAX_MULTIPLE_ACCOUNTS,
@@ -292,17 +293,14 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Use DIR as snapshot location [default: --ledger value]"),
         )
         .arg(
-            Arg::with_name("boot_from_local_state")
-                .long("boot-from-local-state")
-                .takes_value(false)
+            Arg::with_name(use_snapshot_archives_at_startup::cli::NAME)
+                .long(use_snapshot_archives_at_startup::cli::LONG_ARG)
                 .hidden(hidden_unless_forced())
-                .help("Boot from state already on disk")
-                .long_help(
-                    "Boot from state already on disk, instead of \
-                    extracting it from a snapshot archive. \
-                    Note, this will use the latest state available, \
-                    which may be newer than the latest snapshot archive.",
-                )
+                .takes_value(true)
+                .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
+                .default_value(use_snapshot_archives_at_startup::cli::default_value())
+                .help(use_snapshot_archives_at_startup::cli::HELP)
+                .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP)
         )
         .arg(
             Arg::with_name("incremental_snapshot_archive_path")

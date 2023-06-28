@@ -1,5 +1,5 @@
 use {
-    crate::result::Result,
+    super::Result,
     bincode::serialized_size,
     crossbeam_channel::Receiver,
     solana_entry::entry::Entry,

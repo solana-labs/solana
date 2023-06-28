@@ -1,7 +1,7 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
 use {
-    crate::{cluster_nodes::check_feature_activation, serve_repair::ServeRepair},
+    crate::serve_repair::ServeRepair,
     crossbeam_channel::{unbounded, Sender},
     solana_gossip::{cluster_info::ClusterInfo, contact_info::Protocol},
     solana_ledger::shred::{should_discard_shred, ShredFetchStats},
@@ -12,6 +12,7 @@ use {
         feature_set,
     },
     solana_streamer::streamer::{self, PacketBatchReceiver, StakedNodes, StreamerReceiveStats},
+    solana_turbine::cluster_nodes::check_feature_activation,
     std::{
         net::UdpSocket,
         sync::{

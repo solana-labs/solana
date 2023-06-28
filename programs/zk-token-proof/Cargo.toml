@@ -19,6 +19,7 @@ solana-zk-token-sdk = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+curve25519-dalek = { workspace = true }
 
 [[bench]]
 name = "verify_proofs"

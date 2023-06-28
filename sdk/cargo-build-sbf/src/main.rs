@@ -162,6 +162,21 @@ fn get_latest_platform_tools_version() -> Result<String, String> {
     Ok(version)
 }
 
+fn get_base_rust_version(platform_tools_version: &str) -> String {
+    let target_path =
+        make_platform_tools_path_for_version("platform-tools", platform_tools_version);
+    let rustc = target_path.join("rust").join("bin").join("rustc");
+    let args = vec!["--version"];
+    let output = spawn(&rustc, args, false);
+    let rustc_re = Regex::new(r"(rustc [0-9]+\.[0-9]+\.[0-9]+).*").unwrap();
+    if rustc_re.is_match(output.as_str()) {
+        let captures = rustc_re.captures(output.as_str()).unwrap();
+        captures[1].to_string()
+    } else {
+        String::from("")
+    }
+}
+
 fn normalize_version(version: String) -> String {
     let dots = version.as_bytes().iter().fold(
         0,
@@ -894,10 +909,12 @@ fn main() {
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of platform-tools.
     let platform_tools_version = String::from("v1.37");
+    let rust_base_version = get_base_rust_version(platform_tools_version.as_str());
     let version = format!(
-        "{}\nplatform-tools {}",
+        "{}\nplatform-tools {}\n{}",
         crate_version!(),
         platform_tools_version,
+        rust_base_version,
     );
     let matches = clap::Command::new(crate_name!())
         .about(crate_description!())

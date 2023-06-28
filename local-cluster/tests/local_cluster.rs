@@ -8,13 +8,11 @@ use {
     serial_test::serial,
     solana_client::thin_client::ThinClient,
     solana_core::{
-        broadcast_stage::{
-            broadcast_duplicates_run::BroadcastDuplicatesConfig, BroadcastStageType,
+        consensus::{
+            tower_storage::FileTowerStorage, Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH,
         },
-        consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
-        tower_storage::FileTowerStorage,
         validator::ValidatorConfig,
     },
     solana_download_utils::download_snapshot_archive,
@@ -22,6 +20,7 @@ use {
     solana_ledger::{
         ancestor_iterator::AncestorIterator, bank_forks_utils, blockstore::Blockstore,
         blockstore_processor::ProcessOptions, leader_schedule::FixedSchedule,
+        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
@@ -63,6 +62,9 @@ use {
         vote::state::VoteStateUpdate,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_turbine::broadcast_stage::{
+        broadcast_duplicates_run::BroadcastDuplicatesConfig, BroadcastStageType,
+    },
     solana_vote_program::{vote_state::MAX_LOCKOUT_HISTORY, vote_transaction},
     std::{
         collections::{BTreeSet, HashMap, HashSet},
@@ -4876,7 +4878,7 @@ fn test_boot_from_local_state() {
     // restart WITH fastboot
     info!("Restarting validator2 from local state...");
     let mut validator2_info = cluster.exit_node(&validator2_identity.pubkey());
-    validator2_info.config.boot_from_local_state = true;
+    validator2_info.config.use_snapshot_archives_at_startup = UseSnapshotArchivesAtStartup::Never;
     cluster.restart_node(
         &validator2_identity.pubkey(),
         validator2_info,

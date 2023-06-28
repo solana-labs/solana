@@ -6,11 +6,14 @@ use {
         accounts_hash_verifier::{AccountsHashFaultInjector, AccountsHashVerifier},
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         banking_trace::{self, BankingTracer},
-        broadcast_stage::BroadcastStageType,
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
-        consensus::{reconcile_blockstore_roots_with_external_source, ExternalRootSource, Tower},
+        consensus::{
+            reconcile_blockstore_roots_with_external_source,
+            tower_storage::{NullTowerStorage, TowerStorage},
+            ExternalRootSource, Tower,
+        },
         ledger_metric_report_service::LedgerMetricReportService,
         poh_timing_report_service::PohTimingReportService,
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
@@ -23,7 +26,6 @@ use {
         system_monitor_service::{
             verify_net_stats_access, SystemMonitorService, SystemMonitorStatsReportConfig,
         },
-        tower_storage::TowerStorage,
         tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE},
         tvu::{Tvu, TvuConfig, TvuSockets},
     },
@@ -55,6 +57,7 @@ use {
         entry_notifier_service::{EntryNotifierSender, EntryNotifierService},
         leader_schedule::FixedSchedule,
         leader_schedule_cache::LeaderScheduleCache,
+        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_info, poh_timing_point::PohTimingSender},
@@ -95,6 +98,7 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
             self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
+            DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         },
     },
     solana_sdk::{
@@ -110,6 +114,7 @@ use {
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
+    solana_turbine::broadcast_stage::BroadcastStageType,
     solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
@@ -251,7 +256,7 @@ pub struct ValidatorConfig {
     pub block_verification_method: BlockVerificationMethod,
     pub block_production_method: BlockProductionMethod,
     pub generator_config: Option<GeneratorConfig>,
-    pub boot_from_local_state: bool,
+    pub use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup,
 }
 
 impl Default for ValidatorConfig {
@@ -287,7 +292,7 @@ impl Default for ValidatorConfig {
             wal_recovery_mode: None,
             run_verification: true,
             require_tower: false,
-            tower_storage: Arc::new(crate::tower_storage::NullTowerStorage::default()),
+            tower_storage: Arc::new(NullTowerStorage::default()),
             debug_keys: None,
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
             contact_save_interval: DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
@@ -318,7 +323,7 @@ impl Default for ValidatorConfig {
             block_verification_method: BlockVerificationMethod::default(),
             block_production_method: BlockProductionMethod::default(),
             generator_config: None,
-            boot_from_local_state: false,
+            use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup::default(),
         }
     }
 }
@@ -1622,7 +1627,7 @@ fn load_blockstore(
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
         runtime_config: config.runtime_config.clone(),
-        boot_from_local_state: config.boot_from_local_state,
+        use_snapshot_archives_at_startup: config.use_snapshot_archives_at_startup,
         ..blockstore_processor::ProcessOptions::default()
     };
 
@@ -2267,13 +2272,14 @@ pub fn is_snapshot_config_valid(
     let incremental_snapshot_interval_slots =
         snapshot_config.incremental_snapshot_archive_interval_slots;
 
-    let is_incremental_config_valid = if incremental_snapshot_interval_slots == Slot::MAX {
-        true
-    } else {
-        incremental_snapshot_interval_slots >= accounts_hash_interval_slots
-            && incremental_snapshot_interval_slots % accounts_hash_interval_slots == 0
-            && full_snapshot_interval_slots > incremental_snapshot_interval_slots
-    };
+    let is_incremental_config_valid =
+        if incremental_snapshot_interval_slots == DISABLED_SNAPSHOT_ARCHIVE_INTERVAL {
+            true
+        } else {
+            incremental_snapshot_interval_slots >= accounts_hash_interval_slots
+                && incremental_snapshot_interval_slots % accounts_hash_interval_slots == 0
+                && full_snapshot_interval_slots > incremental_snapshot_interval_slots
+        };
 
     full_snapshot_interval_slots >= accounts_hash_interval_slots
         && full_snapshot_interval_slots % accounts_hash_interval_slots == 0
@@ -2562,19 +2568,22 @@ mod tests {
         assert!(is_snapshot_config_valid(
             &new_snapshot_config(
                 snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-                Slot::MAX
+                DISABLED_SNAPSHOT_ARCHIVE_INTERVAL
             ),
             default_accounts_hash_interval
         ));
         assert!(is_snapshot_config_valid(
             &new_snapshot_config(
                 snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-                Slot::MAX
+                DISABLED_SNAPSHOT_ARCHIVE_INTERVAL
             ),
             default_accounts_hash_interval
         ));
         assert!(is_snapshot_config_valid(
-            &new_snapshot_config(Slot::MAX, Slot::MAX),
+            &new_snapshot_config(
+                DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
+                DISABLED_SNAPSHOT_ARCHIVE_INTERVAL
+            ),
             Slot::MAX
         ));
 
@@ -2619,8 +2628,8 @@ mod tests {
         ));
         assert!(is_snapshot_config_valid(
             &SnapshotConfig {
-                full_snapshot_archive_interval_slots: Slot::MAX,
-                incremental_snapshot_archive_interval_slots: Slot::MAX,
+                full_snapshot_archive_interval_slots: DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
+                incremental_snapshot_archive_interval_slots: DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
                 ..SnapshotConfig::new_load_only()
             },
             100

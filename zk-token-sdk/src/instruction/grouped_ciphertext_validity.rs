@@ -144,17 +144,20 @@ mod test {
 
     #[test]
     fn test_ciphertext_validity_proof_instruction_correctness() {
-        let destination_pubkey = ElGamalKeypair::new_rand().public;
-        let auditor_pubkey = ElGamalKeypair::new_rand().public;
+        let destination_keypair = ElGamalKeypair::new_rand();
+        let destination_pubkey = destination_keypair.pubkey();
+
+        let auditor_keypair = ElGamalKeypair::new_rand();
+        let auditor_pubkey = auditor_keypair.pubkey();
 
         let amount: u64 = 55;
         let opening = PedersenOpening::new_rand();
         let grouped_ciphertext =
-            GroupedElGamal::encrypt_with([&destination_pubkey, &auditor_pubkey], amount, &opening);
+            GroupedElGamal::encrypt_with([destination_pubkey, auditor_pubkey], amount, &opening);
 
         let proof_data = GroupedCiphertext2HandlesValidityProofData::new(
-            &destination_pubkey,
-            &auditor_pubkey,
+            destination_pubkey,
+            auditor_pubkey,
             &grouped_ciphertext,
             amount,
             &opening,

@@ -1,10 +1,9 @@
 #![allow(dead_code)]
 //! The account meta and related structs for the tiered storage.
-
 use {
     crate::account_storage::meta::StoredMetaWriteVersion,
+    ::solana_sdk::{hash::Hash, stake_history::Epoch},
     modular_bitfield::prelude::*,
-    solana_sdk::{hash::Hash, stake_history::Epoch},
 };
 
 /// The struct that handles the account meta flags.
@@ -20,6 +19,90 @@ pub struct AccountMetaFlags {
     pub has_write_version: bool,
     /// the reserved bits.
     reserved: B29,
+}
+
+/// A trait that allows different implementations of the account meta that
+/// support different tiers of the accounts storage.
+pub trait TieredAccountMeta: Sized {
+    /// Constructs a TieredAcountMeta instance.
+    fn new() -> Self;
+
+    /// A builder function that initializes lamports.
+    fn with_lamports(self, lamports: u64) -> Self;
+
+    /// A builder function that initializes the number of padding bytes
+    /// for the account data associated with the current meta.
+    fn with_account_data_padding(self, padding: u8) -> Self;
+
+    /// A builder function that initializes the owner's index.
+    fn with_owner_index(self, index: u32) -> Self;
+
+    /// A builder function that initializes the account data size.
+    /// The size here represents the logical data size without compression.
+    fn with_data_size(self, data_size: u64) -> Self;
+
+    /// A builder function that initializes the AccountMetaFlags of the current
+    /// meta.
+    fn with_flags(self, flags: &AccountMetaFlags) -> Self;
+
+    /// Returns the balance of the lamports associated with the account.
+    fn lamports(&self) -> u64;
+
+    /// Returns the number of padding bytes for the associated account data
+    fn account_data_padding(&self) -> u8;
+
+    /// Returns the size of its account data if the current accout meta
+    /// shares its account block with other account meta entries.
+    ///
+    /// Otherwise, None will be returned.
+    fn data_size_for_shared_block(&self) -> Option<usize>;
+
+    /// Returns the index to the accounts' owner in the current AccountsFile.
+    fn owner_index(&self) -> u32;
+
+    /// Returns the AccountMetaFlags of the current meta.
+    fn flags(&self) -> &AccountMetaFlags;
+
+    /// Returns true if the TieredAccountMeta implementation supports multiple
+    /// accounts sharing one account block.
+    fn supports_shared_account_block() -> bool;
+
+    /// Returns the epoch that this account will next owe rent by parsing
+    /// the specified account block.  None will be returned if this account
+    /// does not persist this optional field.
+    fn rent_epoch(&self, _account_block: &[u8]) -> Option<Epoch> {
+        None
+    }
+
+    /// Returns the account hash by parsing the specified account block.  None
+    /// will be returned if this account does not persist this optional field.
+    fn account_hash<'a>(&self, _account_block: &'a [u8]) -> Option<&'a Hash> {
+        None
+    }
+
+    /// Returns the write version by parsing the specified account block.  None
+    /// will be returned if this account does not persist this optional field.
+    fn write_version(&self, _account_block: &[u8]) -> Option<StoredMetaWriteVersion> {
+        None
+    }
+
+    /// Returns the offset of the optional fields based on the specified account
+    /// block.
+    fn optional_fields_offset(&self, _account_block: &[u8]) -> usize {
+        unimplemented!();
+    }
+
+    /// Returns the length of the data associated to this account based on the
+    /// specified account block.
+    fn data_len(&self, _account_block: &[u8]) -> usize {
+        unimplemented!();
+    }
+
+    /// Returns the data associated to this account based on the specified
+    /// account block.
+    fn account_data<'a>(&self, _account_block: &'a [u8]) -> &'a [u8] {
+        unimplemented!();
+    }
 }
 
 impl AccountMetaFlags {
@@ -55,6 +138,23 @@ impl AccountMetaOptionalFields {
             + self
                 .write_version
                 .map_or(0, |_| std::mem::size_of::<StoredMetaWriteVersion>())
+    }
+
+    /// Given the specified AccountMetaFlags, returns the size of its
+    /// associated AccountMetaOptionalFields.
+    pub fn size_from_flags(flags: &AccountMetaFlags) -> usize {
+        let mut fields_size = 0;
+        if flags.has_rent_epoch() {
+            fields_size += std::mem::size_of::<Epoch>();
+        }
+        if flags.has_account_hash() {
+            fields_size += std::mem::size_of::<Hash>();
+        }
+        if flags.has_write_version() {
+            fields_size += std::mem::size_of::<StoredMetaWriteVersion>();
+        }
+
+        fields_size
     }
 }
 
@@ -158,6 +258,12 @@ pub mod tests {
                             + account_hash.map_or(0, |_| std::mem::size_of::<Hash>())
                             + write_version
                                 .map_or(0, |_| std::mem::size_of::<StoredMetaWriteVersion>())
+                    );
+                    assert_eq!(
+                        opt_fields.size(),
+                        AccountMetaOptionalFields::size_from_flags(&AccountMetaFlags::new_from(
+                            &opt_fields
+                        ))
                     );
                 }
             }

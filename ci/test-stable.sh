@@ -58,6 +58,20 @@ test-stable-sbf)
   # SBF solana-sdk legacy compile test
   "$cargo_build_sbf" --manifest-path sdk/Cargo.toml
 
+  # Ensure the minimum supported "rust-version" matches platform tools to fail
+  # quickly if users try to build with an older platform tools install
+  cargo_toml=sdk/program/Cargo.toml
+  source "scripts/read-cargo-variable.sh"
+  crate_rust_version=$(readCargoVariable rust-version $cargo_toml)
+  platform_tools_rust_version=$("$cargo_build_sbf" --version | grep rustc)
+  platform_tools_rust_version=$(echo "$platform_tools_rust_version" | cut -d\  -f2) # Remove "rustc " prefix from a string like "rustc 1.68.0-dev"
+  platform_tools_rust_version=$(echo "$platform_tools_rust_version" | cut -d- -f1)  # Remove "-dev" suffix from a string like "1.68.0-dev"
+
+  if [[ $crate_rust_version != "$platform_tools_rust_version" ]]; then
+    echo "Error: Update 'rust-version' field in '$cargo_toml' from $crate_rust_version to $platform_tools_rust_version"
+    exit 1
+  fi
+
   # SBF C program system tests
   _ make -C programs/sbf/c tests
   if need_to_upload_test_result; then

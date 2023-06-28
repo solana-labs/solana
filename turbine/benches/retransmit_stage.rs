@@ -1,12 +1,11 @@
 #![feature(test)]
 
-extern crate solana_core;
+extern crate solana_turbine;
 extern crate test;
 
 use {
     crossbeam_channel::unbounded,
     log::*,
-    solana_core::{retransmit_stage::retransmitter, validator::TURBINE_QUIC_CONNECTION_POOL_SIZE},
     solana_entry::entry::Entry,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
@@ -27,6 +26,7 @@ use {
         timing::timestamp,
     },
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
+    solana_turbine::retransmit_stage::retransmitter,
     std::{
         iter::repeat_with,
         net::{IpAddr, Ipv4Addr, UdpSocket},
@@ -103,7 +103,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
             &keypair,
             IpAddr::V4(Ipv4Addr::LOCALHOST),
             &Arc::<RwLock<StakedNodes>>::default(),
-            TURBINE_QUIC_CONNECTION_POOL_SIZE,
+            4, // connection_pool_size
         )
         .unwrap(),
     );

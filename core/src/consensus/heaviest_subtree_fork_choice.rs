@@ -1,10 +1,10 @@
 #[cfg(test)]
 use trees::{Tree, TreeWalk};
 use {
-    crate::{
-        consensus::Tower, fork_choice::ForkChoice,
+    crate::consensus::{
+        fork_choice::ForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-        progress_map::ProgressMap, tree_diff::TreeDiff,
+        progress_map::ProgressMap, tree_diff::TreeDiff, Tower,
     },
     solana_measure::measure::Measure,
     solana_runtime::{bank::Bank, bank_forks::BankForks, epoch_stakes::EpochStakes},
