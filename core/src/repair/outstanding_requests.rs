@@ -1,5 +1,5 @@
 use {
-    crate::request_response::RequestResponse,
+    crate::repair::request_response::RequestResponse,
     lru::LruCache,
     rand::{thread_rng, Rng},
     solana_ledger::shred::Nonce,
@@ -86,7 +86,7 @@ pub struct RequestStatus<T> {
 pub(crate) mod tests {
     use {
         super::*,
-        crate::serve_repair::ShredRepairType,
+        crate::repair::serve_repair::ShredRepairType,
         solana_ledger::shred::{Shred, ShredFlags},
         solana_sdk::timing::timestamp,
     };

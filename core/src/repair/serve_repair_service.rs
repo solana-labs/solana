@@ -1,5 +1,5 @@
 use {
-    crate::serve_repair::ServeRepair,
+    crate::repair::serve_repair::ServeRepair,
     crossbeam_channel::{unbounded, Sender},
     solana_ledger::blockstore::Blockstore,
     solana_perf::recycler::Recycler,
