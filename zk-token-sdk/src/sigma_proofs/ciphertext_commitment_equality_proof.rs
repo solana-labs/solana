@@ -16,7 +16,8 @@ use {
             pedersen::{PedersenCommitment, PedersenOpening, G, H},
         },
         errors::ProofVerificationError,
-        sigma_proofs::canonical_scalar_from_slice,
+        sigma_proofs::{canonical_scalar_from_optional_slice, ristretto_point_from_optional_slice},
+        UNIT_LEN,
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -31,6 +32,9 @@ use {
     },
     merlin::Transcript,
 };
+
+/// Byte length of a ciphertext-commitment equality proof.
+const CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN: usize = UNIT_LEN * 6;
 
 /// Equality proof.
 ///
@@ -203,28 +207,26 @@ impl CiphertextCommitmentEqualityProof {
         }
     }
 
-    pub fn to_bytes(&self) -> [u8; 192] {
-        let mut buf = [0_u8; 192];
-        buf[..32].copy_from_slice(self.Y_0.as_bytes());
-        buf[32..64].copy_from_slice(self.Y_1.as_bytes());
-        buf[64..96].copy_from_slice(self.Y_2.as_bytes());
-        buf[96..128].copy_from_slice(self.z_s.as_bytes());
-        buf[128..160].copy_from_slice(self.z_x.as_bytes());
-        buf[160..192].copy_from_slice(self.z_r.as_bytes());
+    pub fn to_bytes(&self) -> [u8; CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN] {
+        let mut buf = [0_u8; CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN];
+        let mut chunks = buf.chunks_mut(UNIT_LEN);
+        chunks.next().unwrap().copy_from_slice(self.Y_0.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.Y_1.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.Y_2.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.z_s.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.z_x.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.z_r.as_bytes());
         buf
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EqualityProofError> {
-        if bytes.len() != 192 {
-            return Err(ProofVerificationError::Deserialization.into());
-        }
-
-        let Y_0 = CompressedRistretto::from_slice(&bytes[..32]);
-        let Y_1 = CompressedRistretto::from_slice(&bytes[32..64]);
-        let Y_2 = CompressedRistretto::from_slice(&bytes[64..96]);
-        let z_s = canonical_scalar_from_slice(&bytes[96..128])?;
-        let z_x = canonical_scalar_from_slice(&bytes[128..160])?;
-        let z_r = canonical_scalar_from_slice(&bytes[160..192])?;
+        let mut chunks = bytes.chunks(UNIT_LEN);
+        let Y_0 = ristretto_point_from_optional_slice(chunks.next())?;
+        let Y_1 = ristretto_point_from_optional_slice(chunks.next())?;
+        let Y_2 = ristretto_point_from_optional_slice(chunks.next())?;
+        let z_s = canonical_scalar_from_optional_slice(chunks.next())?;
+        let z_x = canonical_scalar_from_optional_slice(chunks.next())?;
+        let z_r = canonical_scalar_from_optional_slice(chunks.next())?;
 
         Ok(CiphertextCommitmentEqualityProof {
             Y_0,
