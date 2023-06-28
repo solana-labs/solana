@@ -398,10 +398,10 @@ fn test_stake_delegation_force_no_vote() {
     process_command(&config).unwrap();
 }
 
+[#test]
 fn test_stake_creation_and_delegation_force_min_delegation() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
-    let authorized_withdrawer = Keypair::new().pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
     let test_validator =
         TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
