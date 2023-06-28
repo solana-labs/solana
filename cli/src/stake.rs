@@ -199,6 +199,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("force")
                         .long("force")
+                        .hidden(hidden_unless_forced())
                         .takes_value(false)
                         .help("Don't enforce the minimum delegation check")
                 )
@@ -265,6 +266,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("force")
                         .long("force")
                         .takes_value(false)
+                        .hidden(hidden_unless_forced())
                         .help("Don't enforce the minimum delegation check")
                 )
                 .offline_args()
@@ -498,6 +500,13 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .help("Seed for address generation; if specified, the resulting account \
                                will be at a derived address of SPLIT_STAKE_ACCOUNT")
+                )
+                .arg(
+                    Arg::with_name("force")
+                        .long("force")
+                        .takes_value(false)
+                        .hidden(hidden_unless_forced()) // Don't document this argument to discourage its use
+                        .help("Don't enforce the minimum delegation check.")
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
@@ -1021,6 +1030,7 @@ pub fn parse_split_stake(
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
+    let force = matches.is_present("force");
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let memo = matches.value_of(MEMO_ARG.name).map(String::from);
     let (stake_authority, stake_authority_pubkey) =
@@ -1049,6 +1059,7 @@ pub fn parse_split_stake(
             memo,
             split_stake_account: signer_info.index_of(split_stake_account_pubkey).unwrap(),
             seed,
+            force,
             lamports,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
             compute_unit_price,
@@ -1910,23 +1921,26 @@ pub fn process_split_stake(
             return Err(CliError::BadParameter(err_msg).into());
         }
 
-        let minimum_balance = rpc_client
-            .get_minimum_balance_for_rent_exemption(StakeState::size_of())?
-            + rpc_client.get_stake_minimum_delegation()?;
-        if lamports < minimum_balance {
-            return Err(CliError::BadParameter(format!(
-                "need at least {minimum_balance} lamports for new stake account to be rent exempt and meet minimum delegation, provided lamports: {lamports}"
-            ))
-            .into());
+        if !force {
+            let minimum_balance = rpc_client
+                .get_minimum_balance_for_rent_exemption(StakeState::size_of())?
+                + rpc_client.get_stake_minimum_delegation()?;
+            if lamports < minimum_balance {
+                return Err(CliError::BadParameter(format!(
+                    "need at least {minimum_balance} lamports for new stake account to be rent exempt and meet minimum delegation, provided lamports: {lamports}. You can skip this check with --force."
+                ))
+                .into());
+            }
+
+            let source_post_balance = rpc_client.get_balance(stake_account_pubkey)?.saturating_sub(lamports);
+            if source_post_balance < minimum_balance {
+                return Err(CliError::BadParameter(format!(
+                    "need at least {minimum_balance} lamports to remain in source stake account to be rent exempt and meet minimum delegation, remaining lamports: {source_post_balance}. You can skip this check with --force."
+                ))
+                .into());
+            }
         }
 
-        let new_source_balance = rpc_client.get_balance(stake_account_pubkey)? - lamports;
-        if new_source_balance < minimum_balance {
-            return Err(CliError::BadParameter(format!(
-                "need at least {minimum_balance} lamports to remain in source stake account to be rent exempt and meet minimum delegation, remaining lamports: {new_source_balance}"
-            ))
-            .into());
-        }
     }
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
@@ -2534,7 +2548,6 @@ pub fn process_delegate_stake(
         (&config.signers[0].pubkey(), "cli keypair".to_string()),
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
-
     let redelegation_stake_account = redelegation_stake_account.map(|index| config.signers[index]);
     if let Some(redelegation_stake_account) = &redelegation_stake_account {
         check_unique_pubkeys(
@@ -2607,7 +2620,7 @@ pub fn process_delegate_stake(
 
         if stake_account_balance < minimum_balance {
             return Err(CliError::BadParameter(format!(
-                "need at least {minimum_balance} lamports to be rent exempt and meet minimum delegation, provided lamports: {stake_account_balance}"
+                "need at least {minimum_balance} lamports to be rent exempt and meet minimum balance, stake account balance: {stake_account_balance}"
             ))
             .into());
         }
@@ -4872,6 +4885,7 @@ mod tests {
                     memo: None,
                     split_stake_account: 1,
                     seed: None,
+                    force: false,
                     lamports: 50_000_000_000,
                     fee_payer: 0,
                     compute_unit_price: None,
@@ -4939,6 +4953,7 @@ mod tests {
                     memo: None,
                     split_stake_account: 2,
                     seed: None,
+                    force: false,
                     lamports: 50_000_000_000,
                     fee_payer: 1,
                     compute_unit_price: None,
