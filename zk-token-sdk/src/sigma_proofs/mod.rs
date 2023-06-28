@@ -28,12 +28,11 @@ use {
 fn ristretto_point_from_optional_slice(
     optional_slice: Option<&[u8]>,
 ) -> Result<CompressedRistretto, ProofVerificationError> {
-    let slice = optional_slice.ok_or(ProofVerificationError::Deserialization)?;
-    let point_bytes = slice[..32]
-        .try_into()
-        .map_err(|_| ProofVerificationError::Deserialization)?;
+    optional_slice
+        .and_then(|slice| (slice.len() == RISTRETTO_POINT_LEN).then(|| slice)) // if chunk is the wrong length, convert to None
+        .map(CompressedRistretto::from_slice)
+        .ok_or(ProofVerificationError::Deserialization)
 
-    Ok(CompressedRistretto::from_slice(point_bytes))
 }
 
 /// Deserializes an optional slice of bytes to a scalar.
@@ -44,10 +43,11 @@ fn ristretto_point_from_optional_slice(
 fn canonical_scalar_from_optional_slice(
     optional_slice: Option<&[u8]>,
 ) -> Result<Scalar, ProofVerificationError> {
-    let slice = optional_slice.ok_or(ProofVerificationError::Deserialization)?;
-    let scalar_bytes = slice[..32]
-        .try_into()
-        .map_err(|_| ProofVerificationError::Deserialization)?;
+    optional_slice
+        .and_then(|slice| (slice.len() == SCALAR_LEN).then(|| slice)) // if chunk is the wrong length, convert to None
+        .and_then(|slice| slice.try_into().ok()) // convert to array
+        .and_then(Scalar::from_canonical_bytes)
+        .ok_or(ProofVerificationError::Deserialization)
 
     let scalar = Scalar::from_canonical_bytes(scalar_bytes)
         .ok_or(ProofVerificationError::Deserialization)?;
