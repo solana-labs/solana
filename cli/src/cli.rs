@@ -259,6 +259,7 @@ pub enum CliCommand {
         pubkey: Pubkey,
         use_lamports_unit: bool,
         with_rewards: Option<usize>,
+        use_csv: bool,
     },
     StakeAuthorize {
         stake_account_pubkey: Pubkey,
@@ -1266,12 +1267,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             pubkey: stake_account_pubkey,
             use_lamports_unit,
             with_rewards,
+            use_csv,
         } => process_show_stake_account(
             &rpc_client,
             config,
             stake_account_pubkey,
             *use_lamports_unit,
             *with_rewards,
+            *use_csv,
         ),
         CliCommand::ShowStakeHistory {
             use_lamports_unit,

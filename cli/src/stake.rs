@@ -690,11 +690,17 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Display inflation rewards"),
                 )
                 .arg(
+                    Arg::with_name("csv")
+                        .long("csv")
+                        .takes_value(false)
+                        .help("Format stake account data in csv")
+                )
+                .arg(
                     Arg::with_name("num_rewards_epochs")
                         .long("num-rewards-epochs")
                         .takes_value(true)
                         .value_name("NUM")
-                        .validator(|s| is_within_range(s, 1..=10))
+                        .validator(|s| is_within_range(s, 1..=50))
                         .default_value_if("with_rewards", None, "1")
                         .requires("with_rewards")
                         .help("Display rewards for NUM recent epochs, max 10 [default: latest epoch only]"),
@@ -1274,6 +1280,7 @@ pub fn parse_show_stake_account(
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let use_lamports_unit = matches.is_present("lamports");
+    let use_csv = matches.is_present("csv");
     let with_rewards = if matches.is_present("with_rewards") {
         Some(value_of(matches, "num_rewards_epochs").unwrap())
     } else {
@@ -1284,6 +1291,7 @@ pub fn parse_show_stake_account(
             pubkey: stake_account_pubkey,
             use_lamports_unit,
             with_rewards,
+            use_csv,
         },
         signers: vec![],
     })
@@ -2192,6 +2200,7 @@ pub fn build_stake_state(
     stake_history: &StakeHistory,
     clock: &Clock,
     new_rate_activation_epoch: Option<Epoch>,
+    use_csv: bool,
 ) -> CliStakeState {
     match stake_state {
         StakeStateV2::Stake(
@@ -2248,6 +2257,7 @@ pub fn build_stake_state(
                 active_stake: u64_some_if_not_zero(effective),
                 activating_stake: u64_some_if_not_zero(activating),
                 deactivating_stake: u64_some_if_not_zero(deactivating),
+                use_csv,
                 ..CliStakeState::default()
             }
         }
@@ -2414,6 +2424,7 @@ pub fn process_show_stake_account(
     stake_account_address: &Pubkey,
     use_lamports_unit: bool,
     with_rewards: Option<usize>,
+    use_csv: bool,
 ) -> ProcessResult {
     let stake_account = rpc_client.get_account(stake_account_address)?;
     if stake_account.owner != stake::program::id() {
@@ -2444,6 +2455,7 @@ pub fn process_show_stake_account(
                 &stake_history,
                 &clock,
                 new_rate_activation_epoch,
+                use_csv,
             );
 
             if state.stake_type == CliStakeType::Stake && state.activation_epoch.is_some() {
