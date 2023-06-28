@@ -51,12 +51,6 @@ pub trait TieredAccountMeta: Sized {
     /// Returns the number of padding bytes for the associated account data
     fn account_data_padding(&self) -> u8;
 
-    /// Returns the size of its account data if the current accout meta
-    /// shares its account block with other account meta entries.
-    ///
-    /// Otherwise, None will be returned.
-    fn data_size_for_shared_block(&self) -> Option<usize>;
-
     /// Returns the index to the accounts' owner in the current AccountsFile.
     fn owner_index(&self) -> u32;
 
