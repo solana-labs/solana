@@ -16,7 +16,7 @@ pub mod zero_balance_proof;
 
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::errors::ProofVerificationError,
+    crate::{errors::ProofVerificationError, RISTRETTO_POINT_LEN, SCALAR_LEN},
     curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
 };
 
@@ -29,10 +29,9 @@ fn ristretto_point_from_optional_slice(
     optional_slice: Option<&[u8]>,
 ) -> Result<CompressedRistretto, ProofVerificationError> {
     optional_slice
-        .and_then(|slice| (slice.len() == RISTRETTO_POINT_LEN).then(|| slice)) // if chunk is the wrong length, convert to None
+        .and_then(|slice| (slice.len() == RISTRETTO_POINT_LEN).then_some(slice))
         .map(CompressedRistretto::from_slice)
         .ok_or(ProofVerificationError::Deserialization)
-
 }
 
 /// Deserializes an optional slice of bytes to a scalar.
@@ -44,12 +43,8 @@ fn canonical_scalar_from_optional_slice(
     optional_slice: Option<&[u8]>,
 ) -> Result<Scalar, ProofVerificationError> {
     optional_slice
-        .and_then(|slice| (slice.len() == SCALAR_LEN).then(|| slice)) // if chunk is the wrong length, convert to None
+        .and_then(|slice| (slice.len() == SCALAR_LEN).then_some(slice)) // if chunk is the wrong length, convert to None
         .and_then(|slice| slice.try_into().ok()) // convert to array
         .and_then(Scalar::from_canonical_bytes)
         .ok_or(ProofVerificationError::Deserialization)
-
-    let scalar = Scalar::from_canonical_bytes(scalar_bytes)
-        .ok_or(ProofVerificationError::Deserialization)?;
-    Ok(scalar)
 }
