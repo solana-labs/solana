@@ -76,7 +76,7 @@ if [[ $mode = "tree" || $mode = "full" ]]; then
 EOF
 )
 
-  abusers="$(_cargo "+${rust_nightly}" metadata --format-version=1 | jq -r "$query")"
+  abusers="$(_ cargo "+${rust_nightly}" metadata --format-version=1 | jq -r "$query")"
   if [[ -n "$abusers" ]]; then
     cat <<EOF 1>&2
     ${dev_utils_feature} must not be used as normal dependencies, but is by: \`[crate]: [dependency]\`
