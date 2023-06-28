@@ -806,7 +806,7 @@ mod tests {
                 .collect();
             let final_txs_cost = total_txs_cost + execute_units_adjustment * transaction_count;
 
-            // All transactions are committed, no costs should be modified
+            // All transactions are committed, no costs should be removed
             QosService::remove_costs(qos_cost_results.iter(), Some(&commited_status), &bank);
             assert_eq!(
                 total_txs_cost,
