@@ -21,17 +21,17 @@ const INNER_PRODUCT_PROOF_U64_LEN: usize = 448;
 const RANGE_PROOF_U64_LEN: usize =
     INNER_PRODUCT_PROOF_U64_LEN + RANGE_PROOF_MODULO_INNER_PRODUCT_PROOF_LEN;
 
-/// Byte length of an inner-product proof for a vector of length 64
+/// Byte length of an inner-product proof for a vector of length 128
 const INNER_PRODUCT_PROOF_U128_LEN: usize = 512;
 
-/// Byte length of a range proof for an unsigned 64-bit number
+/// Byte length of a range proof for an unsigned 128-bit number
 const RANGE_PROOF_U128_LEN: usize =
     INNER_PRODUCT_PROOF_U128_LEN + RANGE_PROOF_MODULO_INNER_PRODUCT_PROOF_LEN;
 
-/// Byte length of an inner-product proof for a vector of length 64
+/// Byte length of an inner-product proof for a vector of length 256
 const INNER_PRODUCT_PROOF_U256_LEN: usize = 576;
 
-/// Byte length of a range proof for an unsigned 64-bit number
+/// Byte length of a range proof for an unsigned 256-bit number
 const RANGE_PROOF_U256_LEN: usize =
     INNER_PRODUCT_PROOF_U256_LEN + RANGE_PROOF_MODULO_INNER_PRODUCT_PROOF_LEN;
 
