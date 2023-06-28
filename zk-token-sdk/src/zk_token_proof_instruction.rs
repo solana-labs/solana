@@ -305,6 +305,25 @@ pub enum ProofInstruction {
     ///   `BatchedGroupedCiphertextValidityProofContext`
     ///
     VerifyBatchedGroupedCiphertext2HandlesValidity,
+
+    /// Verify a fee sigma proof.
+    ///
+    /// A fee sigma proof certifies that a Pedersen commitment that encodes a transfer fee for SPL
+    /// Token 2022 is well-formed.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `FeeSigmaProofData`
+    ///
+    VerifyFeeSigma,
 }
 
 /// Pubkeys associated with a context state account to be used as parameters to functions.

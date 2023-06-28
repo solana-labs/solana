@@ -1,5 +1,6 @@
 use {
     bytemuck::Pod,
+    curve25519_dalek::scalar::Scalar,
     solana_program_test::*,
     solana_sdk::{
         instruction::InstructionError,
@@ -22,7 +23,7 @@ use {
     std::mem::size_of,
 };
 
-const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 13] = [
+const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 14] = [
     ProofInstruction::VerifyZeroBalance,
     ProofInstruction::VerifyWithdraw,
     ProofInstruction::VerifyCiphertextCiphertextEquality,
@@ -36,6 +37,7 @@ const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 13] = [
     ProofInstruction::VerifyCiphertextCommitmentEquality,
     ProofInstruction::VerifyGroupedCiphertext2HandlesValidity,
     ProofInstruction::VerifyBatchedGroupedCiphertext2HandlesValidity,
+    ProofInstruction::VerifyFeeSigma,
 ];
 
 #[tokio::test]
@@ -698,6 +700,75 @@ async fn test_batched_grouped_ciphertext_2_handles_validity() {
     test_close_context_state(
         ProofInstruction::VerifyBatchedGroupedCiphertext2HandlesValidity,
         size_of::<ProofContextState<BatchedGroupedCiphertext2HandlesValidityProofContext>>(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+#[allow(clippy::op_ref)]
+#[tokio::test]
+async fn test_fee_sigma() {
+    let transfer_amount: u64 = 1;
+    let max_fee: u64 = 3;
+
+    let fee_rate: u16 = 400;
+    let fee_amount: u64 = 1;
+    let delta_fee: u64 = 9600;
+
+    let (transfer_commitment, transfer_opening) = Pedersen::new(transfer_amount);
+    let (fee_commitment, fee_opening) = Pedersen::new(fee_amount);
+
+    let scalar_rate = Scalar::from(fee_rate);
+    let delta_commitment =
+        &fee_commitment * Scalar::from(10_000_u64) - &transfer_commitment * &scalar_rate;
+    let delta_opening = &fee_opening * &Scalar::from(10_000_u64) - &transfer_opening * &scalar_rate;
+
+    let (claimed_commitment, claimed_opening) = Pedersen::new(delta_fee);
+
+    let success_proof_data = FeeSigmaProofData::new(
+        &fee_commitment,
+        &delta_commitment,
+        &claimed_commitment,
+        &fee_opening,
+        &delta_opening,
+        &claimed_opening,
+        fee_amount,
+        delta_fee,
+        max_fee,
+    )
+    .unwrap();
+
+    let fail_proof_data = FeeSigmaProofData::new(
+        &fee_commitment,
+        &delta_commitment,
+        &claimed_commitment,
+        &fee_opening,
+        &delta_opening,
+        &claimed_opening,
+        fee_amount,
+        0,
+        max_fee,
+    )
+    .unwrap();
+
+    test_verify_proof_without_context(
+        ProofInstruction::VerifyFeeSigma,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofInstruction::VerifyFeeSigma,
+        size_of::<ProofContextState<FeeSigmaProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofInstruction::VerifyFeeSigma,
+        size_of::<ProofContextState<FeeSigmaProofContext>>(),
         &success_proof_data,
     )
     .await;

@@ -7135,6 +7135,7 @@ name = "solana-zk-token-proof-program-tests"
 version = "1.16.2"
 dependencies = [
  "bytemuck",
+ "curve25519-dalek",
  "solana-program-runtime",
  "solana-program-test",
  "solana-sdk",
