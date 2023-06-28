@@ -158,6 +158,12 @@ impl StakeReward {
             stake_account: validator_stake_account,
         }
     }
+
+    pub fn credit(&mut self, amount: u64) {
+        self.stake_reward_info.lamports = amount as i64;
+        self.stake_reward_info.post_balance += amount;
+        self.stake_account.checked_add_lamports(amount).unwrap();
+    }
 }
 
 impl VoteReward {
@@ -12722,6 +12728,51 @@ fn test_distribute_partitioned_epoch_rewards_empty() {
     bank.set_epoch_reward_status_active(vec![]);
 
     bank.distribute_partitioned_epoch_rewards();
+}
+
+/// Test partitioned credits of epoch rewards do cover all the rewards slice.
+#[test]
+fn test_epoch_credit_rewards() {
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+
+    // setup the expected number of stake rewards
+    let expected_num = 12345;
+
+    let mut stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    bank.store_accounts((bank.slot(), &stake_rewards[..], bank.include_slot_in_hash()));
+
+    // Simulate rewards
+    let mut expected_rewards = 0;
+    for stake_reward in &mut stake_rewards {
+        stake_reward.credit(1);
+        expected_rewards += 1;
+    }
+
+    let stake_rewards_bucket =
+        hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 100);
+    bank.set_epoch_reward_status_active(stake_rewards_bucket.clone());
+
+    // Test partitioned stores
+    let mut total_num = 0;
+    let mut total_rewards = 0;
+
+    for stake_rewards in stake_rewards_bucket {
+        let total_rewards_in_lamports = bank.store_stake_accounts_in_partition(&stake_rewards);
+
+        let num_in_history = bank.update_reward_history_in_partition(&stake_rewards);
+        assert_eq!(stake_rewards.len(), num_in_history);
+        total_num += stake_rewards.len();
+        total_rewards += total_rewards_in_lamports;
+    }
+
+    // assert that all rewards are credited
+    assert_eq!(total_num, expected_num);
+    assert_eq!(total_rewards, expected_rewards);
 }
 
 #[test]
