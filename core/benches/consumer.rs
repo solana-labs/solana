@@ -1,7 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 #![feature(test)]
 
-use solana_sdk::feature_set::apply_cost_tracker_during_replay;
 use {
     crossbeam_channel::{unbounded, Receiver},
     rayon::{
@@ -22,8 +21,9 @@ use {
     },
     solana_runtime::bank::Bank,
     solana_sdk::{
-        account::Account, signature::Keypair, signer::Signer, stake_history::Epoch, system_program,
-        system_transaction, transaction::SanitizedTransaction,
+        account::Account, feature_set::apply_cost_tracker_during_replay, signature::Keypair,
+        signer::Signer, stake_history::Epoch, system_program, system_transaction,
+        transaction::SanitizedTransaction,
     },
     std::sync::{
         atomic::{AtomicBool, Ordering},
