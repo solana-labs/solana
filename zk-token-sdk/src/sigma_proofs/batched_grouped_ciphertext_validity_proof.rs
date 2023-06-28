@@ -41,7 +41,7 @@ pub struct BatchedGroupedCiphertext2HandlesValidityProof(GroupedCiphertext2Handl
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
 impl BatchedGroupedCiphertext2HandlesValidityProof {
-    /// Batched grouped ciphertext validity proof constructor.
+    /// Creates a batched grouped ciphertext validity proof.
     ///
     /// The function simply batches the input openings and invokes the standard grouped ciphertext
     /// validity proof constructor.
@@ -66,7 +66,7 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
         ))
     }
 
-    /// Batched grouped ciphertext validity proof verifier.
+    /// Verifies a batched grouped ciphertext validity proof.
     ///
     /// The function does *not* hash the public keys, commitment, or decryption handles into the
     /// transcript. For security, the caller (the main protocol) should hash these public

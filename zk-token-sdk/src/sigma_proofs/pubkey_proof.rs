@@ -41,7 +41,7 @@ pub struct PubkeyValidityProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
 impl PubkeyValidityProof {
-    /// Public-key proof constructor.
+    /// Creates a public key validity proof.
     ///
     /// The function does *not* hash the public key and ciphertext into the transcript. For
     /// security, the caller (the main protocol) should hash these public key components prior to
@@ -80,7 +80,7 @@ impl PubkeyValidityProof {
         Self { Y, z }
     }
 
-    /// Public-key proof verifier.
+    /// Verifies a public key validity proof.
     ///
     /// * `elgamal_pubkey` - The ElGamal public key to be proved
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic

@@ -1,19 +1,9 @@
-//! Collection of sigma proofs (more precisely, "arguments") that are used in the Solana zk-token
-//! protocol.
+//! Collection of sigma proofs that are used in the ZK Token proof program.
 //!
-//! The module contains implementations of the following proof systems that work on Pedersen
-//! commitments and twisted ElGamal ciphertexts:
-//! - Equality proof: can be used to certify that a twisted ElGamal ciphertext encrypts the same
-//! message as either a Pedersen commitment or another ElGamal ciphertext.
-//! - Validity proof: can be used to certify that a twisted ElGamal ciphertext is a properly-formed
-//! ciphertext with respect to a pair of ElGamal public keys.
-//! - Zero-balance proof: can be used to certify that a twisted ElGamal ciphertext encrypts the
-//! message 0.
-//! - Fee proof: can be used to certify that an ElGamal ciphertext properly encrypts a transfer
-//! fee.
+//! Formal documentation and security proofs for the sigma proofs in this module can be found in
+//! [`ZK Token proof`] program documentation.
 //!
-//! We refer to the zk-token paper for the formal details and security proofs of these argument
-//! systems.
+//! [`ZK Token proof`]: https://edge.docs.solana.com/developing/runtime-facilities/zk-token-proof
 
 pub mod batched_grouped_ciphertext_validity_proof;
 pub mod ciphertext_ciphertext_equality_proof;
