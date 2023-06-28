@@ -156,6 +156,34 @@ impl AccountMetaOptionalFields {
 
         fields_size
     }
+
+    /// Given the specified AccountMetaFlags, returns the relative offset
+    /// of its rent_epoch field to the offset of its optional fields entry.
+    pub fn rent_epoch_offset(_flags: &AccountMetaFlags) -> usize {
+        0
+    }
+
+    /// Given the specified AccountMetaFlags, returns the relative offset
+    /// of its account_hash field to the offset of its optional fields entry.
+    pub fn account_hash_offset(flags: &AccountMetaFlags) -> usize {
+        let mut offset = Self::rent_epoch_offset(flags);
+        // rent_epoch is the previous field to account hash
+        if flags.has_rent_epoch() {
+            offset += std::mem::size_of::<Epoch>();
+        }
+        offset
+    }
+
+    /// Given the specified AccountMetaFlags, returns the relative offset
+    /// of its write_version field to the offset of its optional fields entry.
+    pub fn write_version_offset(flags: &AccountMetaFlags) -> usize {
+        let mut offset = Self::account_hash_offset(flags);
+        // account hash is the previous field to write version
+        if flags.has_account_hash() {
+            offset += std::mem::size_of::<Hash>();
+        }
+        offset
+    }
 }
 
 #[cfg(test)]
@@ -264,6 +292,54 @@ pub mod tests {
                         AccountMetaOptionalFields::size_from_flags(&AccountMetaFlags::new_from(
                             &opt_fields
                         ))
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_optional_fields_offset() {
+        let test_epoch = 5432312;
+        let test_write_version = 231;
+
+        for rent_epoch in [None, Some(test_epoch)] {
+            let rent_epoch_offset = 0;
+            for account_hash in [None, Some(Hash::new_unique())] {
+                let mut account_hash_offset = rent_epoch_offset;
+                if rent_epoch.is_some() {
+                    account_hash_offset += std::mem::size_of::<Epoch>();
+                }
+                for write_version in [None, Some(test_write_version)] {
+                    let mut write_version_offset = account_hash_offset;
+                    if account_hash.is_some() {
+                        write_version_offset += std::mem::size_of::<Hash>();
+                    }
+                    let opt_fields = AccountMetaOptionalFields {
+                        rent_epoch,
+                        account_hash,
+                        write_version,
+                    };
+                    let flags = AccountMetaFlags::new_from(&opt_fields);
+                    assert_eq!(
+                        AccountMetaOptionalFields::rent_epoch_offset(&flags),
+                        rent_epoch_offset
+                    );
+                    assert_eq!(
+                        AccountMetaOptionalFields::account_hash_offset(&flags),
+                        account_hash_offset
+                    );
+                    assert_eq!(
+                        AccountMetaOptionalFields::write_version_offset(&flags),
+                        write_version_offset
+                    );
+                    let mut derived_size = AccountMetaOptionalFields::write_version_offset(&flags);
+                    if flags.has_write_version() {
+                        derived_size += std::mem::size_of::<StoredMetaWriteVersion>();
+                    }
+                    assert_eq!(
+                        AccountMetaOptionalFields::size_from_flags(&flags),
+                        derived_size
                     );
                 }
             }
