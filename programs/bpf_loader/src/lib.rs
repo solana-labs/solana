@@ -275,7 +275,7 @@ pub fn create_vm<'a, 'b>(
     invoke_context: &'a mut InvokeContext<'b>,
     stack: &mut AlignedMemory<HOST_ALIGN>,
     heap: &mut AlignedMemory<HOST_ALIGN>,
-) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, Box<dyn std::error::Error>> {
+) -> Result<EbpfVm<'a, InvokeContext<'b>>, Box<dyn std::error::Error>> {
     let stack_size = stack.len();
     let heap_size = heap.len();
     let accounts = Arc::clone(invoke_context.transaction_context.accounts());
@@ -309,7 +309,8 @@ pub fn create_vm<'a, 'b>(
         trace_log: Vec::new(),
     })?;
     Ok(EbpfVm::new(
-        program,
+        program.get_config(),
+        program.get_sbpf_version(),
         invoke_context,
         memory_mapping,
         stack_size,
@@ -370,7 +371,10 @@ macro_rules! mock_create_vm {
             solana_rbpf::verifier::TautologyVerifier,
             InvokeContext,
         >::from_text_bytes(
-            &[0x95, 0, 0, 0, 0, 0, 0, 0], loader, function_registry
+            &[0x95, 0, 0, 0, 0, 0, 0, 0],
+            loader,
+            SBPFVersion::V2,
+            function_registry,
         )
         .unwrap();
         let verified_executable = solana_rbpf::elf::Executable::verified(executable).unwrap();
@@ -392,12 +396,13 @@ fn create_memory_mapping<'a, 'b, C: ContextObject>(
     cow_cb: Option<MemoryCowCallback>,
 ) -> Result<MemoryMapping<'a>, Box<dyn std::error::Error>> {
     let config = executable.get_config();
+    let sbpf_version = executable.get_sbpf_version();
     let regions: Vec<MemoryRegion> = vec![
         executable.get_ro_region(),
         MemoryRegion::new_writable_gapped(
             stack.as_slice_mut(),
             ebpf::MM_STACK_START,
-            if !config.dynamic_stack_frames && config.enable_stack_frame_gaps {
+            if !sbpf_version.dynamic_stack_frames() && config.enable_stack_frame_gaps {
                 config.stack_frame_size as u64
             } else {
                 0
@@ -410,9 +415,9 @@ fn create_memory_mapping<'a, 'b, C: ContextObject>(
     .collect();
 
     Ok(if let Some(cow_cb) = cow_cb {
-        MemoryMapping::new_with_cow(regions, cow_cb, config)?
+        MemoryMapping::new_with_cow(regions, cow_cb, config, sbpf_version)?
     } else {
-        MemoryMapping::new(regions, config)?
+        MemoryMapping::new(regions, config, sbpf_version)?
     })
 }
 
@@ -1544,6 +1549,11 @@ fn execute<'a, 'b: 'a>(
     executable: &'a Executable<RequisiteVerifier, InvokeContext<'static>>,
     invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // We dropped the lifetime tracking in the Executor by setting it to 'static,
+    // thus we need to reintroduce the correct lifetime of InvokeContext here again.
+    let executable = unsafe {
+        mem::transmute::<_, &'a Executable<RequisiteVerifier, InvokeContext<'b>>>(executable)
+    };
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -1580,19 +1590,7 @@ fn execute<'a, 'b: 'a>(
     let mut execute_time;
     let execution_result = {
         let compute_meter_prev = invoke_context.get_remaining();
-        create_vm!(
-            vm,
-            // We dropped the lifetime tracking in the Executor by setting it to 'static,
-            // thus we need to reintroduce the correct lifetime of InvokeContext here again.
-            unsafe {
-                mem::transmute::<_, &'a Executable<RequisiteVerifier, InvokeContext<'b>>>(
-                    executable,
-                )
-            },
-            regions,
-            account_lengths,
-            invoke_context,
-        );
+        create_vm!(vm, executable, regions, account_lengths, invoke_context,);
         let mut vm = match vm {
             Ok(info) => info,
             Err(e) => {
@@ -1603,7 +1601,7 @@ fn execute<'a, 'b: 'a>(
         create_vm_time.stop();
 
         execute_time = Measure::start("execute");
-        let (compute_units_consumed, result) = vm.execute_program(!use_jit);
+        let (compute_units_consumed, result) = vm.execute_program(executable, !use_jit);
         drop(vm);
         ic_logger_msg!(
             log_collector,
@@ -1761,6 +1759,7 @@ mod tests {
             invoke_context::mock_process_instruction, with_mock_invoke_context,
         },
         solana_rbpf::{
+            elf::SBPFVersion,
             verifier::Verifier,
             vm::{Config, ContextObject, FunctionRegistry},
         },
@@ -1833,7 +1832,13 @@ mod tests {
         let prog = &[
             0x18, 0x00, 0x00, 0x00, 0x88, 0x77, 0x66, 0x55, // first half of lddw
         ];
-        RequisiteVerifier::verify(prog, &Config::default(), &FunctionRegistry::default()).unwrap();
+        RequisiteVerifier::verify(
+            prog,
+            &Config::default(),
+            &SBPFVersion::V2,
+            &FunctionRegistry::default(),
+        )
+        .unwrap();
     }
 
     #[test]

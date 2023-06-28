@@ -1267,7 +1267,9 @@ mod tests {
         super::*,
         crate::mock_create_vm,
         solana_program_runtime::with_mock_invoke_context,
-        solana_rbpf::{ebpf::MM_INPUT_START, memory_region::MemoryRegion, vm::Config},
+        solana_rbpf::{
+            ebpf::MM_INPUT_START, elf::SBPFVersion, memory_region::MemoryRegion, vm::Config,
+        },
         solana_sdk::{
             account::{Account, AccountSharedData},
             clock::Epoch,
@@ -1366,7 +1368,8 @@ mod tests {
             aligned_memory_mapping: false,
             ..Config::default()
         };
-        let mut memory_mapping = MemoryMapping::new(vec![region], &config).unwrap();
+        let mut memory_mapping =
+            MemoryMapping::new(vec![region], &config, &SBPFVersion::V2).unwrap();
 
         let ins = SyscallInvokeSignedRust::translate_instruction(
             vm_addr,
@@ -1402,7 +1405,8 @@ mod tests {
             aligned_memory_mapping: false,
             ..Config::default()
         };
-        let mut memory_mapping = MemoryMapping::new(vec![region], &config).unwrap();
+        let mut memory_mapping =
+            MemoryMapping::new(vec![region], &config, &SBPFVersion::V2).unwrap();
 
         let signers = SyscallInvokeSignedRust::translate_signers(
             &program_id,
@@ -1437,7 +1441,7 @@ mod tests {
             aligned_memory_mapping: false,
             ..Config::default()
         };
-        let memory_mapping = MemoryMapping::new(vec![region], &config).unwrap();
+        let memory_mapping = MemoryMapping::new(vec![region], &config, &SBPFVersion::V2).unwrap();
 
         let account_info = translate_type::<AccountInfo>(&memory_mapping, vm_addr, false).unwrap();
 
@@ -1487,8 +1491,12 @@ mod tests {
             aligned_memory_mapping: false,
             ..Config::default()
         };
-        let mut memory_mapping =
-            MemoryMapping::new(mock_caller_account.regions.split_off(0), &config).unwrap();
+        let mut memory_mapping = MemoryMapping::new(
+            mock_caller_account.regions.split_off(0),
+            &config,
+            &SBPFVersion::V2,
+        )
+        .unwrap();
 
         let mut caller_account = mock_caller_account.caller_account();
 
@@ -1541,8 +1549,12 @@ mod tests {
             aligned_memory_mapping: false,
             ..Config::default()
         };
-        let mut memory_mapping =
-            MemoryMapping::new(mock_caller_account.regions.split_off(0), &config).unwrap();
+        let mut memory_mapping = MemoryMapping::new(
+            mock_caller_account.regions.split_off(0),
+            &config,
+            &SBPFVersion::V2,
+        )
+        .unwrap();
 
         let data_slice = mock_caller_account.data_slice();
         let len_ptr = unsafe {
@@ -1662,8 +1674,12 @@ mod tests {
             aligned_memory_mapping: false,
             ..Config::default()
         };
-        let mut memory_mapping =
-            MemoryMapping::new(mock_caller_account.regions.split_off(0), &config).unwrap();
+        let mut memory_mapping = MemoryMapping::new(
+            mock_caller_account.regions.split_off(0),
+            &config,
+            &SBPFVersion::V2,
+        )
+        .unwrap();
 
         let data_slice = mock_caller_account.data_slice();
         let len_ptr = unsafe {
@@ -1829,8 +1845,12 @@ mod tests {
             aligned_memory_mapping: false,
             ..Config::default()
         };
-        let mut memory_mapping =
-            MemoryMapping::new(mock_caller_account.regions.split_off(0), &config).unwrap();
+        let mut memory_mapping = MemoryMapping::new(
+            mock_caller_account.regions.split_off(0),
+            &config,
+            &SBPFVersion::V2,
+        )
+        .unwrap();
 
         let mut caller_account = mock_caller_account.caller_account();
 
@@ -2148,7 +2168,8 @@ mod tests {
             aligned_memory_mapping: false,
             ..Config::default()
         };
-        let mut memory_mapping = MemoryMapping::new(vec![region], &config).unwrap();
+        let mut memory_mapping =
+            MemoryMapping::new(vec![region], &config, &SBPFVersion::V2).unwrap();
 
         let accounts = SyscallInvokeSignedRust::translate_accounts(
             &[
