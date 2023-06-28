@@ -16,6 +16,7 @@ use {
         accounts_partition::{self, PartitionIndex, RentPayingAccountsByPartition},
         ancestors::Ancestors,
         bank_client::BankClient,
+        epoch_rewards_hasher::hash_rewards_into_partitions,
         genesis_utils::{
             self, activate_all_features, activate_feature, bootstrap_validator_stake_lamports,
             create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
@@ -12629,6 +12630,29 @@ fn test_is_partitioned_reward_feature_enable() {
     assert!(!bank.is_partitioned_rewards_feature_enabled());
     bank.activate_feature(&feature_set::enable_partitioned_epoch_reward::id());
     assert!(bank.is_partitioned_rewards_feature_enabled());
+}
+
+/// Test that reward partition range panics when passing out of range partition index
+#[test]
+#[should_panic(expected = "index out of bounds: the len is 10 but the index is 15")]
+fn test_get_stake_rewards_partition_range_panic() {
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+
+    // simulate 40K - 1 rewards, the expected num of credit blocks should be 10.
+    let expected_num = 40959;
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    let stake_rewards_bucket =
+        hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 10);
+
+    bank.set_epoch_reward_status_active(stake_rewards_bucket.clone());
+
+    // This call should panic, i.e. 15 is out of the num_credit_blocks
+    let _range = &stake_rewards_bucket[15];
 }
 
 #[test]
