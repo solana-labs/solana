@@ -1247,14 +1247,6 @@ mod tests {
             ));
             assert_eq!(retryable_transaction_indexes, vec![1]);
 
-            println!(
-                "block cost: {} cost model cost: {} executed cost: {:?}, apply_cost_tracker_during_replay_enabled: {}",
-                block_cost,
-                CostModel::calculate_cost(&transactions[0], &bank.feature_set).sum(),
-                commit_transactions_result.get(0).unwrap(),
-                apply_cost_tracker_during_replay_enabled
-            );
-
             // if apply_cost_tracker_during_replay_enabled is NOT live, then the expected block cost
             // needs to be adjusted by the actual cost executed. The adjusted should just be the final
             // cost
