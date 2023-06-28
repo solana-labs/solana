@@ -135,56 +135,62 @@ impl TieredAccountMeta for HotAccountMeta {
     /// Returns the epoch that this account will next owe rent by parsing
     /// the specified account block.  None will be returned if this account
     /// does not persist this optional field.
-    fn rent_epoch(&self, data_block: &[u8]) -> Option<Epoch> {
-        let offset = self.optional_fields_offset(data_block)
-            + AccountMetaOptionalFields::rent_epoch_offset(self.flags());
+    fn rent_epoch(&self, account_block: &[u8]) -> Option<Epoch> {
         self.flags()
             .has_rent_epoch()
-            .then(|| byte_block::read_type::<Epoch>(data_block, offset).copied())
+            .then(|| {
+                let offset = self.optional_fields_offset(account_block)
+                    + AccountMetaOptionalFields::rent_epoch_offset(self.flags());
+                byte_block::read_type::<Epoch>(account_block, offset).copied()
+            })
             .flatten()
     }
 
     /// Returns the account hash by parsing the specified account block.  None
     /// will be returned if this account does not persist this optional field.
-    fn account_hash<'a>(&self, data_block: &'a [u8]) -> Option<&'a Hash> {
-        let offset = self.optional_fields_offset(data_block)
-            + AccountMetaOptionalFields::account_hash_offset(self.flags());
+    fn account_hash<'a>(&self, account_block: &'a [u8]) -> Option<&'a Hash> {
         self.flags()
             .has_account_hash()
-            .then(|| byte_block::read_type::<Hash>(data_block, offset))
+            .then(|| {
+                let offset = self.optional_fields_offset(account_block)
+                    + AccountMetaOptionalFields::account_hash_offset(self.flags());
+                byte_block::read_type::<Hash>(account_block, offset)
+            })
             .flatten()
     }
 
     /// Returns the write version by parsing the specified account block.  None
     /// will be returned if this account does not persist this optional field.
-    fn write_version(&self, data_block: &[u8]) -> Option<StoredMetaWriteVersion> {
-        let offset = self.optional_fields_offset(data_block)
-            + AccountMetaOptionalFields::write_version_offset(self.flags());
+    fn write_version(&self, account_block: &[u8]) -> Option<StoredMetaWriteVersion> {
         self.flags
             .has_write_version()
-            .then(|| byte_block::read_type::<StoredMetaWriteVersion>(data_block, offset).copied())
+            .then(|| {
+                let offset = self.optional_fields_offset(account_block)
+                    + AccountMetaOptionalFields::write_version_offset(self.flags());
+                byte_block::read_type::<StoredMetaWriteVersion>(account_block, offset).copied()
+            })
             .flatten()
     }
 
     /// Returns the offset of the optional fields based on the specified account
     /// block.
-    fn optional_fields_offset(&self, data_block: &[u8]) -> usize {
-        data_block
+    fn optional_fields_offset(&self, account_block: &[u8]) -> usize {
+        account_block
             .len()
             .saturating_sub(AccountMetaOptionalFields::size_from_flags(&self.flags))
     }
 
     /// Returns the length of the data associated to this account based on the
     /// specified account block.
-    fn data_len(&self, data_block: &[u8]) -> usize {
-        self.optional_fields_offset(data_block)
+    fn data_len(&self, account_block: &[u8]) -> usize {
+        self.optional_fields_offset(account_block)
             .saturating_sub(self.account_data_padding() as usize)
     }
 
     /// Returns the data associated to this account based on the specified
     /// account block.
-    fn account_data<'a>(&self, data_block: &'a [u8]) -> &'a [u8] {
-        &data_block[..self.data_len(data_block)]
+    fn account_data<'a>(&self, account_block: &'a [u8]) -> &'a [u8] {
+        &account_block[..self.data_len(account_block)]
     }
 }
 
