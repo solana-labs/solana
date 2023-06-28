@@ -291,7 +291,7 @@ fn test_stake_redelegation() {
 }
 
 #[test]
-fn test_stake_delegation_force() {
+fn test_stake_delegation_force_no_vote() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let authorized_withdrawer = Keypair::new().pubkey();
@@ -396,6 +396,114 @@ fn test_stake_delegation_force() {
         compute_unit_price: None,
     };
     process_command(&config).unwrap();
+}
+
+fn test_stake_creation_and_delegation_force_min_delegation() {
+    let mint_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let authorized_withdrawer = Keypair::new().pubkey();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+    let default_signer = Keypair::new();
+
+    let mut config = CliConfig::recent_for_tests();
+    config.json_rpc_url = test_validator.rpc_url();
+    config.signers = vec![&default_signer];
+
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &config,
+        &config.signers[0].pubkey(),
+        100_000_000_000,
+    )
+    .unwrap();
+
+    // Create stake account with 22 lamports (rent exemption requires 20, min delegation is 5) - fails without force
+    let stake_keypair = Keypair::new();
+    config.signers = vec![&default_signer, &stake_keypair];
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: 1,
+        seed: None,
+        staker: None,
+        withdrawer: None,
+        withdrawer_signer: None,
+        lockup: Lockup::default(),
+        amount: SpendAmount::Some(22),
+        sign_only: false,
+        force: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        from: 0,
+        compute_unit_price: None,
+    };
+    process_command(&config).unwrap_err();
+
+    // Now we force it
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: 1,
+        seed: None,
+        staker: None,
+        withdrawer: None,
+        withdrawer_signer: None,
+        lockup: Lockup::default(),
+        amount: SpendAmount::Some(22),
+        sign_only: false,
+        force: true,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        from: 0,
+        compute_unit_price: None,
+    };
+    process_command(&config).unwrap();
+
+    // Delegate stake fails without foce because below balance requirement
+    config.signers = vec![&default_signer];
+    config.command = CliCommand::DelegateStake {
+        stake_account_pubkey: stake_keypair.pubkey(),
+        vote_account_pubkey: test_validator.vote_account_address(),
+        stake_authority: 0,
+        force: false,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        redelegation_stake_account: None,
+        compute_unit_price: None,
+    };
+    process_command(&config).unwrap_err();
+
+    // But if we force it, it still fails because the program will return an error
+    config.command = CliCommand::DelegateStake {
+        stake_account_pubkey: stake_keypair.pubkey(),
+        vote_account_pubkey: test_validator.vote_account_address(),
+        stake_authority: 0,
+        force: true,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        redelegation_stake_account: None,
+        compute_unit_price: None,
+    };
+    process_command(&config).unwrap_err();
 }
 
 #[test]
