@@ -1226,6 +1226,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             stake_account_pubkey,
             *stake_authority,
             *sign_only,
+            *force,
             *dump_transaction_message,
             blockhash_query,
             *nonce_account,

@@ -1866,6 +1866,7 @@ pub fn process_split_stake(
     stake_account_pubkey: &Pubkey,
     stake_authority: SignerIndex,
     sign_only: bool,
+    force: bool,
     dump_transaction_message: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
