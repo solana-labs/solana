@@ -41,7 +41,7 @@ pub struct ZeroBalanceProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
 impl ZeroBalanceProof {
-    /// Zero-balance proof constructor.
+    /// Creates a zero-balance proof.
     ///
     /// The function does *not* hash the public key and ciphertext into the transcript. For
     /// security, the caller (the main protocol) should hash these public components prior to
@@ -88,7 +88,7 @@ impl ZeroBalanceProof {
         Self { Y_P, Y_D, z }
     }
 
-    /// Zero-balance proof verifier.
+    /// Verifies a zero-balance proof.
     ///
     /// * `elgamal_pubkey` - The ElGamal pubkey associated with the ciphertext to be proved
     /// * `ciphertext` - The main ElGamal ciphertext to be proved
