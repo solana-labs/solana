@@ -398,7 +398,7 @@ fn test_stake_delegation_force_no_vote() {
     process_command(&config).unwrap();
 }
 
-[#test]
+#[test]
 fn test_stake_creation_and_delegation_force_min_delegation() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
