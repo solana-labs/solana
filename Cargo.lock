@@ -7270,6 +7270,7 @@ version = "1.17.0"
 dependencies = [
  "bytemuck",
  "criterion",
+ "curve25519-dalek",
  "getrandom 0.1.16",
  "num-derive",
  "num-traits",
@@ -7283,6 +7284,7 @@ name = "solana-zk-token-proof-program-tests"
 version = "1.17.0"
 dependencies = [
  "bytemuck",
+ "curve25519-dalek",
  "solana-program-runtime",
  "solana-program-test",
  "solana-sdk",

@@ -9,6 +9,7 @@ edition = { workspace = true }
 
 [dev-dependencies]
 bytemuck = { workspace = true, features = ["derive"] }
+curve25519-dalek = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-program-test = { workspace = true }
 solana-sdk = { workspace = true }
