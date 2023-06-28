@@ -7122,11 +7122,6 @@ name = "solana-zk-token-proof-program"
 version = "1.16.2"
 dependencies = [
  "bytemuck",
-<<<<<<< HEAD
-=======
- "criterion",
- "curve25519-dalek",
->>>>>>> 4bc8f90182 ([zk-token-sdk] Add fee sigma proof verification instruction (#32291))
  "getrandom 0.1.16",
  "num-derive",
  "num-traits",
