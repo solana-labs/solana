@@ -1933,7 +1933,9 @@ pub fn process_split_stake(
                 .into());
             }
 
-            let source_post_balance = rpc_client.get_balance(stake_account_pubkey)?.saturating_sub(lamports);
+            let source_post_balance = rpc_client
+                .get_balance(stake_account_pubkey)?
+                .saturating_sub(lamports);
             if source_post_balance < minimum_balance {
                 return Err(CliError::BadParameter(format!(
                     "need at least {minimum_balance} lamports to remain in source stake account to be rent exempt and meet minimum delegation, remaining lamports: {source_post_balance}. You can skip this check with --force."
@@ -1941,7 +1943,6 @@ pub fn process_split_stake(
                 .into());
             }
         }
-
     }
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
