@@ -80,6 +80,7 @@ pub enum ProgramCliCommand {
         max_len: Option<usize>,
         allow_excessive_balance: bool,
         skip_fee_check: bool,
+        batch_size: Option<usize>,
     },
     WriteBuffer {
         program_location: String,
@@ -88,6 +89,7 @@ pub enum ProgramCliCommand {
         buffer_authority_signer_index: SignerIndex,
         max_len: Option<usize>,
         skip_fee_check: bool,
+        batch_size: Option<usize>,
     },
     SetBufferAuthority {
         buffer_pubkey: Pubkey,
@@ -195,6 +197,15 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .long("allow-excessive-deploy-account-balance")
                                 .takes_value(false)
                                 .help("Use the designated program id even if the account already holds a large balance of SOL")
+                        )
+                        .arg(
+                            Arg::with_name("batch_size")
+                                .long("batch-size")
+                                .value_name("batch_size")
+                                .takes_value(true)
+                                .required(false)
+                                .help("Batch the transactions in batches limited by batch size, to avoid failures \
+                                      [default: Will send all transactions in same batch]")
                         ),
                 )
                 .subcommand(
@@ -471,6 +482,8 @@ pub fn parse_program_subcommand(
 
             let max_len = value_of(matches, "max_len");
 
+            let batch_size = value_of(matches, "batch_size");
+
             let signer_info =
                 default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
 
@@ -488,6 +501,7 @@ pub fn parse_program_subcommand(
                     max_len,
                     allow_excessive_balance: matches.is_present("allow_excessive_balance"),
                     skip_fee_check,
+                    batch_size,
                 }),
                 signers: signer_info.signers,
             }
@@ -515,6 +529,8 @@ pub fn parse_program_subcommand(
             let signer_info =
                 default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
 
+            let batch_size = value_of(matches, "batch_size");
+
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
                     program_location: matches.value_of("program_location").unwrap().to_string(),
@@ -525,6 +541,7 @@ pub fn parse_program_subcommand(
                         .unwrap(),
                     max_len,
                     skip_fee_check,
+                    batch_size,
                 }),
                 signers: signer_info.signers,
             }
@@ -696,6 +713,7 @@ pub fn process_program_subcommand(
             max_len,
             allow_excessive_balance,
             skip_fee_check,
+            batch_size,
         } => process_program_deploy(
             rpc_client,
             config,
@@ -709,6 +727,7 @@ pub fn process_program_subcommand(
             *max_len,
             *allow_excessive_balance,
             *skip_fee_check,
+            *batch_size,
         ),
         ProgramCliCommand::WriteBuffer {
             program_location,
@@ -717,6 +736,7 @@ pub fn process_program_subcommand(
             buffer_authority_signer_index,
             max_len,
             skip_fee_check,
+            batch_size,
         } => process_write_buffer(
             rpc_client,
             config,
@@ -726,6 +746,7 @@ pub fn process_program_subcommand(
             *buffer_authority_signer_index,
             *max_len,
             *skip_fee_check,
+            *batch_size,
         ),
         ProgramCliCommand::SetBufferAuthority {
             buffer_pubkey,
@@ -837,6 +858,7 @@ fn process_program_deploy(
     max_len: Option<usize>,
     allow_excessive_balance: bool,
     skip_fee_check: bool,
+    batch_size: Option<usize>,
 ) -> ProcessResult {
     let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
     let (buffer_provided, buffer_signer, buffer_pubkey) = if let Some(i) = buffer_signer_index {
@@ -858,6 +880,10 @@ fn process_program_deploy(
     } else if let Some(program_pubkey) = program_pubkey {
         (None, program_pubkey)
     } else {
+        // better to report the mnemonic before stating upload so that buffer is always recoverable
+        // if user decides to stop the upload they can use the same buffer else they have to wait for the error
+        // this is very tedious when trying to upload large programs
+        report_ephemeral_mnemonic(words, mnemonic);
         (
             Some(&default_program_keypair as &dyn Signer),
             default_program_keypair.pubkey(),
@@ -1017,6 +1043,7 @@ fn process_program_deploy(
             upgrade_authority_signer,
             allow_excessive_balance,
             skip_fee_check,
+            batch_size,
         )
     } else {
         do_process_program_upgrade(
@@ -1028,6 +1055,7 @@ fn process_program_deploy(
             &buffer_pubkey,
             buffer_signer,
             skip_fee_check,
+            batch_size,
         )
     };
     if result.is_ok() && is_final {
@@ -1039,9 +1067,6 @@ fn process_program_deploy(
             Some(upgrade_authority_signer_index),
             None,
         )?;
-    }
-    if result.is_err() && buffer_signer_index.is_none() {
-        report_ephemeral_mnemonic(words, mnemonic);
     }
     result
 }
@@ -1055,6 +1080,7 @@ fn process_write_buffer(
     buffer_authority_signer_index: SignerIndex,
     max_len: Option<usize>,
     skip_fee_check: bool,
+    batch_size: Option<usize>,
 ) -> ProcessResult {
     // Create ephemeral keypair to use for Buffer account, if not provided
     let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
@@ -1117,6 +1143,7 @@ fn process_write_buffer(
         buffer_authority,
         true,
         skip_fee_check,
+        batch_size,
     );
 
     if result.is_err() && buffer_signer_index.is_none() && buffer_signer.is_some() {
@@ -1750,6 +1777,7 @@ fn do_process_program_write_and_deploy(
     buffer_authority_signer: &dyn Signer,
     allow_excessive_balance: bool,
     skip_fee_check: bool,
+    batch_size: Option<usize>,
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
 
@@ -1875,6 +1903,7 @@ fn do_process_program_write_and_deploy(
         buffer_signer,
         Some(buffer_authority_signer),
         program_signers,
+        batch_size,
     )?;
 
     if let Some(program_signers) = program_signers {
@@ -1899,6 +1928,7 @@ fn do_process_program_upgrade(
     buffer_pubkey: &Pubkey,
     buffer_signer: Option<&dyn Signer>,
     skip_fee_check: bool,
+    batch_size: Option<usize>,
 ) -> ProcessResult {
     let loader_id = bpf_loader_upgradeable::id();
     let data_len = program_data.len();
@@ -2006,6 +2036,7 @@ fn do_process_program_upgrade(
         buffer_signer,
         Some(upgrade_authority),
         Some(&[upgrade_authority]),
+        batch_size,
     )?;
 
     let program_id = CliProgramId {
@@ -2133,6 +2164,7 @@ fn send_deploy_messages(
     initial_signer: Option<&dyn Signer>,
     write_signer: Option<&dyn Signer>,
     final_signers: Option<&[&dyn Signer]>,
+    batch_size: Option<usize>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let payer_signer = config.signers[0];
 
@@ -2160,47 +2192,50 @@ fn send_deploy_messages(
     }
 
     if !write_messages.is_empty() {
-        if let Some(write_signer) = write_signer {
-            trace!("Writing program data");
-            let connection_cache = if config.use_quic {
-                ConnectionCache::new_quic("connection_cache_cli_program_quic", 1)
-            } else {
-                ConnectionCache::with_udp("connection_cache_cli_program_udp", 1)
-            };
-            let transaction_errors = match connection_cache {
-                ConnectionCache::Udp(cache) => TpuClient::new_with_connection_cache(
-                    rpc_client.clone(),
-                    &config.websocket_url,
-                    TpuClientConfig::default(),
-                    cache,
-                )?
-                .send_and_confirm_messages_with_spinner(
-                    write_messages,
-                    &[payer_signer, write_signer],
-                ),
-                ConnectionCache::Quic(cache) => TpuClient::new_with_connection_cache(
-                    rpc_client.clone(),
-                    &config.websocket_url,
-                    TpuClientConfig::default(),
-                    cache,
-                )?
-                .send_and_confirm_messages_with_spinner(
-                    write_messages,
-                    &[payer_signer, write_signer],
-                ),
-            }
-            .map_err(|err| format!("Data writes to account failed: {err}"))?
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-
-            if !transaction_errors.is_empty() {
-                for transaction_error in &transaction_errors {
-                    error!("{:?}", transaction_error);
+        let batch_size = batch_size.unwrap_or(write_messages.len());
+        for write_messages_batch in write_messages.chunks(batch_size) {
+            if let Some(write_signer) = write_signer {
+                trace!("Writing program data");
+                let connection_cache = if config.use_quic {
+                    ConnectionCache::new_quic("connection_cache_cli_program_quic", 1)
+                } else {
+                    ConnectionCache::with_udp("connection_cache_cli_program_udp", 1)
+                };
+                let transaction_errors = match connection_cache {
+                    ConnectionCache::Udp(cache) => TpuClient::new_with_connection_cache(
+                        rpc_client.clone(),
+                        &config.websocket_url,
+                        TpuClientConfig::default(),
+                        cache,
+                    )?
+                    .send_and_confirm_messages_with_spinner(
+                        write_messages_batch,
+                        &[payer_signer, write_signer],
+                    ),
+                    ConnectionCache::Quic(cache) => TpuClient::new_with_connection_cache(
+                        rpc_client.clone(),
+                        &config.websocket_url,
+                        TpuClientConfig::default(),
+                        cache,
+                    )?
+                    .send_and_confirm_messages_with_spinner(
+                        write_messages_batch,
+                        &[payer_signer, write_signer],
+                    ),
                 }
-                return Err(
-                    format!("{} write transactions failed", transaction_errors.len()).into(),
-                );
+                .map_err(|err| format!("Data writes to account failed: {err}"))?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+
+                if !transaction_errors.is_empty() {
+                    for transaction_error in &transaction_errors {
+                        error!("{:?}", transaction_error);
+                    }
+                    return Err(
+                        format!("{} write transactions failed", transaction_errors.len()).into(),
+                    );
+                }
             }
         }
     }
@@ -2310,6 +2345,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    batch_size: None,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2337,6 +2373,7 @@ mod tests {
                     max_len: Some(42),
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    batch_size: None,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2366,6 +2403,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    batch_size: None,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2397,6 +2435,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    batch_size: None,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2427,6 +2466,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    batch_size: None,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2460,6 +2500,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    batch_size: None,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2489,6 +2530,7 @@ mod tests {
                     max_len: None,
                     skip_fee_check: false,
                     allow_excessive_balance: false,
+                    batch_size: None,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2522,6 +2564,7 @@ mod tests {
                     buffer_authority_signer_index: 0,
                     max_len: None,
                     skip_fee_check: false,
+                    batch_size: None,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2546,6 +2589,7 @@ mod tests {
                     buffer_authority_signer_index: 0,
                     max_len: Some(42),
                     skip_fee_check: false,
+                    batch_size: None,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2573,6 +2617,7 @@ mod tests {
                     buffer_authority_signer_index: 0,
                     max_len: None,
                     skip_fee_check: false,
+                    batch_size: None,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2603,6 +2648,7 @@ mod tests {
                     buffer_authority_signer_index: 1,
                     max_len: None,
                     skip_fee_check: false,
+                    batch_size: None,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2638,12 +2684,38 @@ mod tests {
                     buffer_authority_signer_index: 2,
                     max_len: None,
                     skip_fee_check: false,
+                    batch_size: None,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
                     read_keypair_file(&buffer_keypair_file).unwrap().into(),
                     read_keypair_file(&authority_keypair_file).unwrap().into(),
                 ],
+            }
+        );
+
+        // specify batch size
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program",
+            "write-buffer",
+            "/Users/test/program.so",
+            "--batch-size",
+            "256",
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
+                    program_location: "/Users/test/program.so".to_string(),
+                    buffer_signer_index: None,
+                    buffer_pubkey: None,
+                    buffer_authority_signer_index: 0,
+                    max_len: None,
+                    skip_fee_check: false,
+                    batch_size: Some(256),
+                }),
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
     }
@@ -3139,6 +3211,7 @@ mod tests {
                 max_len: None,
                 allow_excessive_balance: false,
                 skip_fee_check: false,
+                batch_size: None,
             }),
             signers: vec![&default_keypair],
             output_format: OutputFormat::JsonCompact,
