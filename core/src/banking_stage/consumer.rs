@@ -1234,7 +1234,8 @@ mod tests {
             assert_eq!(executed_with_successful_result_count, 1);
             assert!(commit_transactions_result.is_ok());
 
-            // first one should have been committed, second one not committed due to write-lock error
+            // first one should have been committed, second one not committed due to AccountInUse error during
+            // account locking
             let commit_transactions_result = commit_transactions_result.unwrap();
             assert_eq!(commit_transactions_result.len(), 2);
             assert!(matches!(
@@ -1247,9 +1248,6 @@ mod tests {
             ));
             assert_eq!(retryable_transaction_indexes, vec![1]);
 
-            // if apply_cost_tracker_during_replay_enabled is NOT live, then the expected block cost
-            // needs to be adjusted by the actual cost executed. The adjusted should just be the final
-            // cost
             let expected_block_cost = if !apply_cost_tracker_during_replay_enabled {
                 let actual_bpf_execution_cost = match commit_transactions_result.get(0).unwrap() {
                     CommitTransactionDetails::Committed { compute_units } => *compute_units,
