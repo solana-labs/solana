@@ -403,7 +403,7 @@ pub mod test {
             vote_state: VoteState1_14_11::from(vote_state),
             last_vote: vote.clone(),
             last_timestamp: BlockTimestamp::default(),
-            last_vote_tx_blockhash: Hash::default(),
+            last_vote_tx_blockhash: None,
             stray_restored_slot: Some(2),
             last_switch_threshold_check: Option::default(),
         };
