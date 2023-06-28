@@ -160,6 +160,8 @@ impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTran
         index: usize,
         pool: &SchedulerPool<T, Self, SEA>,
     ) {
+        // scheduler must properly prevent conflicting tx executions, so locking isn't needed
+        // here
         let batch = bank.prepare_sanitized_batch_without_locking(transaction);
         let batch_with_indexes = TransactionBatchWithIndexes {
             batch,
