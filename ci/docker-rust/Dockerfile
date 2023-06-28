@@ -2,7 +2,6 @@
 # ci/rust-version.sh to pick up the new image tag
 FROM rust:1.69.0
 
-# we need to pin wasm-pack due to https://github.com/rustwasm/wasm-pack/issues/1308
 RUN set -x \
  && apt update \
  && apt-get install apt-transport-https \
@@ -38,7 +37,7 @@ RUN set -x \
  && cargo install mdbook \
  && cargo install mdbook-linkcheck \
  && cargo install svgbob_cli \
- && cargo install --version 0.11.1 wasm-pack \
+ && cargo install wasm-pack \
  && cargo install sccache \
  && rustc --version \
  && cargo --version
