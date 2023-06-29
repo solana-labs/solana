@@ -6,10 +6,7 @@ use {
     },
     min_max_heap::MinMaxHeap,
     solana_sdk::{slot_history::Slot, transaction::SanitizedTransaction},
-    std::collections::{
-        hash_map::{Entry, OccupiedEntry},
-        HashMap,
-    },
+    std::collections::HashMap,
 };
 
 pub(crate) struct SanitizedTransactionTTL {
@@ -51,19 +48,18 @@ impl TransactionPacketContainer {
     }
 
     /// Get packet by id.
-    pub(crate) fn get_packet_entry(
-        &mut self,
-        id: TransactionId,
-    ) -> Option<OccupiedEntry<TransactionId, DeserializedPacket>> {
-        match self.id_to_packet.entry(id) {
-            Entry::Occupied(entry) => Some(entry),
-            Entry::Vacant(_) => None,
-        }
+    pub(crate) fn get_packet(&self, id: &TransactionId) -> Option<&DeserializedPacket> {
+        self.id_to_packet.get(id)
+    }
+
+    /// Get mutable packet by id.
+    pub(crate) fn get_mut_packet(&mut self, id: &TransactionId) -> Option<&mut DeserializedPacket> {
+        self.id_to_packet.get_mut(id)
     }
 
     /// Get transaction by id.
     /// Panics if the transaction does not exist.
-    pub(crate) fn get_transaction(&mut self, id: &TransactionId) -> &SanitizedTransactionTTL {
+    pub(crate) fn get_transaction(&self, id: &TransactionId) -> &SanitizedTransactionTTL {
         self.id_to_transaction_ttl
             .get(id)
             .expect("transaction must exist")
@@ -75,26 +71,6 @@ impl TransactionPacketContainer {
         self.id_to_transaction_ttl
             .remove(id)
             .expect("transaction must exist")
-    }
-
-    /// Get transaction and packet entries by id.
-    /// Panics if either does not exist.
-    pub(crate) fn get_transaction_and_packet_entries(
-        &mut self,
-        id: TransactionId,
-    ) -> (
-        OccupiedEntry<TransactionId, SanitizedTransactionTTL>,
-        OccupiedEntry<TransactionId, DeserializedPacket>,
-    ) {
-        let Entry::Occupied(transaction_entry) = self.id_to_transaction_ttl.entry(id) else {
-            panic!("transaction must exist");
-        };
-
-        let Entry::Occupied(packet_entry) = self.id_to_packet.entry(id) else {
-            panic!("packet must exist");
-        };
-
-        (transaction_entry, packet_entry)
     }
 
     /// Insert a new transaction into the container's queues and maps.
@@ -287,18 +263,14 @@ mod tests {
     fn test_get_packet_entry_missing() {
         let mut container = TransactionPacketContainer::with_capacity(5);
         push_to_container(&mut container, 5);
-
-        assert!(container.get_packet_entry(TransactionId::new(7)).is_none());
+        assert!(container.get_packet(&TransactionId::new(7)).is_none());
     }
 
     #[test]
     fn test_get_packet_entry() {
         let mut container = TransactionPacketContainer::with_capacity(5);
         push_to_container(&mut container, 5);
-
-        let transaction_id = TransactionId::new(3);
-        let packet_entry = container.get_packet_entry(transaction_id).unwrap();
-        assert_eq!(*packet_entry.key(), transaction_id);
+        assert!(container.get_packet(&TransactionId::new(3)).is_some());
     }
 
     #[test]

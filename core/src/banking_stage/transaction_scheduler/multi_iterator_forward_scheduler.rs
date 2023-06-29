@@ -1,7 +1,7 @@
 use {
     super::{
         central_scheduler_banking_stage::SchedulerError,
-        transaction_packet_container::{SanitizedTransactionTTL, TransactionPacketContainer},
+        transaction_packet_container::TransactionPacketContainer,
         transaction_priority_id::TransactionPriorityId,
     },
     crate::banking_stage::{
@@ -159,16 +159,16 @@ impl<'a> ActiveMultiIteratorForwardScheduler<'a> {
         id: &TransactionPriorityId,
         container: &mut TransactionPacketContainer,
     ) -> ProcessingDecision {
-        let (transaction_entry, packet_entry) = container.get_transaction_and_packet_entries(id.id);
-        let SanitizedTransactionTTL { transaction, .. } = transaction_entry.get();
-        let deserialized_packet = packet_entry.get();
-        let decision = self.make_scheduling_decision(transaction, deserialized_packet);
+        let transaction_ttl = container.get_transaction(&id.id);
+        let packet = container.get_packet(&id.id).expect("packet must exist");
+        let decision = self.make_scheduling_decision(&transaction_ttl.transaction, packet);
 
-        if let ProcessingDecision::Now = decision {
-            self.batch.ids.push(id.id);
-            self.batch
-                .packets
-                .push(deserialized_packet.immutable_section().clone());
+        match decision {
+            ProcessingDecision::Now => {
+                self.batch.ids.push(id.id);
+                self.batch.packets.push(packet.immutable_section().clone());
+            }
+            ProcessingDecision::Later | ProcessingDecision::Never => {}
         }
 
         decision

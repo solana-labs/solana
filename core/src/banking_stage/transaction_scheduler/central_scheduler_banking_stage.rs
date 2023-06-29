@@ -250,8 +250,8 @@ impl CentralSchedulerBankingStage {
     ) {
         if successful {
             for id in ids {
-                if let Some(mut deserialized_packet) = self.container.get_packet_entry(id) {
-                    deserialized_packet.get_mut().forwarded = true;
+                if let Some(deserialized_packet) = self.container.get_mut_packet(&id) {
+                    deserialized_packet.forwarded = true;
                 } else {
                     // If a packet is not in the map, then it was forwarded *without* holding
                     // and this can return early without iterating over the remaining ids.
