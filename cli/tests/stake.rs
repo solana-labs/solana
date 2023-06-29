@@ -424,7 +424,7 @@ fn test_stake_creation_and_delegation_force_min_delegation() {
 
     // Create stake account with just rent exempt lamports - fails without force
     let stake_rent_exempt_amount =
-        rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())?;
+        rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of());
     let stake_keypair = Keypair::new();
     config.signers = vec![&default_signer, &stake_keypair];
     config.command = CliCommand::CreateStakeAccount {
