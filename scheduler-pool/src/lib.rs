@@ -46,6 +46,16 @@ pub struct SchedulerPool<
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
     prioritization_fee_cache: Arc<PrioritizationFeeCache>,
+    // weak_self could be elided by changing InstalledScheduler::take_from_pool()'s receiver to
+    // Arc<Self> from &Self, because SchedulerPool is used as in the form of Arc<SchedulerPool>
+    // almost always. But, this would cause wasted and noisy Arc::clone()'s at every call sites.
+    //
+    // Alternatively, `impl InstalledScheduler for Arc<SchedulerPool>` approach could be explored
+    // but it entails its own problems due to rustc's coherence and necessitated newtype with the
+    // type graph of InstalledScheduler being quite elaborate.
+    //
+    // After these considerations, this weak_self approach is chosen at the cost of some additional
+    // memory increase.
     weak_self: Weak<Self>,
     _phantom: PhantomData<(T, SEA, TH)>,
 }
@@ -93,6 +103,7 @@ impl<
         )
     }
 
+    // See a comment at the weak_self field for justification of this.
     pub fn self_arc(&self) -> Arc<Self> {
         self.weak_self
             .upgrade()
