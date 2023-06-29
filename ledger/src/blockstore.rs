@@ -3325,7 +3325,8 @@ impl Blockstore {
 
     /// Scan for any ancestors of the supplied `start_root` that are not
     /// marked as roots themselves. Mark any found slots as roots since
-    /// the ancestor of a root is also inherently a root.
+    /// the ancestor of a root is also inherently a root. Returns the
+    /// number of slots that were actually updated.
     ///
     /// Arguments:
     ///  - `start_root`: The root to start scan from, or the highest root in
@@ -3338,7 +3339,7 @@ impl Blockstore {
         start_root: Option<Slot>,
         end_slot: Option<Slot>,
         exit: &AtomicBool,
-    ) -> Result<()> {
+    ) -> Result<usize> {
         // Hold the lowest_cleanup_slot read lock to prevent any cleaning of
         // the blockstore from another thread. Doing so will prevent a
         // possible inconsistency across column families where a slot is:
@@ -3363,7 +3364,7 @@ impl Blockstore {
         let mut roots_to_fix = vec![];
         for slot in ancestor_iterator.filter(|slot| !self.is_root(*slot)) {
             if exit.load(Ordering::Relaxed) {
-                return Ok(());
+                return Ok(0);
             }
             roots_to_fix.push(slot);
         }
@@ -3371,9 +3372,10 @@ impl Blockstore {
         let mut fix_roots = Measure::start("fix_roots");
         if !roots_to_fix.is_empty() {
             info!("{} slots to be rooted", roots_to_fix.len());
-            for chunk in roots_to_fix.chunks(100) {
+            let chunk_size = 100;
+            for (i, chunk) in roots_to_fix.chunks(chunk_size).enumerate() {
                 if exit.load(Ordering::Relaxed) {
-                    return Ok(());
+                    return Ok(i * chunk_size);
                 }
                 trace!("{:?}", chunk);
                 self.set_roots(chunk.iter())?;
@@ -3392,7 +3394,7 @@ impl Blockstore {
             ("num_roots_to_fix", roots_to_fix.len() as i64, i64),
             ("fix_roots_us", fix_roots.as_us() as i64, i64),
         );
-        Ok(())
+        Ok(roots_to_fix.len())
     }
 
     /// Mark a root `slot` as connected, traverse `slot`'s children and update

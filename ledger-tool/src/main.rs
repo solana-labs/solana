@@ -3974,12 +3974,13 @@ fn main() {
                     exit(1);
                 }
 
-                blockstore
+                let num_repaired_roots = blockstore
                     .scan_and_fix_roots(Some(start_root), Some(end_root), &AtomicBool::new(false))
                     .unwrap_or_else(|err| {
                         eprintln!("Unable to repair roots: {err}");
                         exit(1);
-                    })
+                    });
+                println!("Successfully repaired {num_repaired_roots} roots");
             }
             ("bounds", Some(arg_matches)) => {
                 let blockstore = open_blockstore(

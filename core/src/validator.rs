@@ -386,7 +386,7 @@ impl Default for ValidatorStartProgress {
 }
 
 struct BlockstoreRootScan {
-    thread: Option<JoinHandle<Result<(), BlockstoreError>>>,
+    thread: Option<JoinHandle<Result<usize, BlockstoreError>>>,
 }
 
 impl BlockstoreRootScan {
