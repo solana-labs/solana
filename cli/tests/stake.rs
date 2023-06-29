@@ -422,7 +422,9 @@ fn test_stake_creation_and_delegation_force_min_delegation() {
     )
     .unwrap();
 
-    // Create stake account with 22 lamports (rent exemption requires 20, min delegation is 5) - fails without force
+    // Create stake account with just rent exempt lamports - fails without force
+    let stake_rent_exempt_amount = rpc_client
+            .get_minimum_balance_for_rent_exemption(StakeState::size_of())?;
     let stake_keypair = Keypair::new();
     config.signers = vec![&default_signer, &stake_keypair];
     config.command = CliCommand::CreateStakeAccount {
@@ -432,7 +434,7 @@ fn test_stake_creation_and_delegation_force_min_delegation() {
         withdrawer: None,
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(22),
+        amount: SpendAmount::Some(stake_rent_exempt_amount),
         sign_only: false,
         force: false,
         dump_transaction_message: false,
@@ -454,7 +456,7 @@ fn test_stake_creation_and_delegation_force_min_delegation() {
         withdrawer: None,
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(22),
+        amount: SpendAmount::Some(stake_rent_exempt_amount),
         sign_only: false,
         force: true,
         dump_transaction_message: false,
@@ -468,7 +470,7 @@ fn test_stake_creation_and_delegation_force_min_delegation() {
     };
     process_command(&config).unwrap();
 
-    // Delegate stake fails without foce because below balance requirement
+    // Delegate stake fails without force because below balance requirement
     config.signers = vec![&default_signer];
     config.command = CliCommand::DelegateStake {
         stake_account_pubkey: stake_keypair.pubkey(),

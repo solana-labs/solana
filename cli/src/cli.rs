@@ -2149,6 +2149,7 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
+        // Test create stake without force with sufficient amount, should succeed
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
         let custodian = solana_sdk::pubkey::new_rand();
@@ -2166,6 +2167,37 @@ mod tests {
             amount: SpendAmount::Some(30),
             sign_only: false,
             force: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+            nonce_account: None,
+            nonce_authority: 0,
+            memo: None,
+            fee_payer: 0,
+            from: 0,
+            compute_unit_price: None,
+        };
+        config.signers = vec![&keypair, &bob_keypair];
+        let result = process_command(&config);
+        assert!(result.is_ok(), "{result:?}");
+
+        // Test create stake with enough for rent but not enough for min delegation but with force, should succeed
+        bob_keypair = Keypair::new();
+        bob_pubkey = bob_keypair.pubkey();
+        custodian = solana_sdk::pubkey::new_rand();
+        config.command = CliCommand::CreateStakeAccount {
+            stake_account: 1,
+            seed: None,
+            staker: None,
+            withdrawer: None,
+            withdrawer_signer: None,
+            lockup: Lockup {
+                epoch: 0,
+                unix_timestamp: 0,
+                custodian,
+            },
+            amount: SpendAmount::Some(22),
+            sign_only: false,
+            force: true,
             dump_transaction_message: false,
             blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
             nonce_account: None,
@@ -2389,6 +2421,33 @@ mod tests {
             amount: SpendAmount::Some(15),
             sign_only: false,
             force: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+            nonce_account: None,
+            nonce_authority: 0,
+            memo: None,
+            fee_payer: 0,
+            from: 0,
+            compute_unit_price: None,
+        };
+        config.signers = vec![&keypair, &bob_keypair];
+        assert!(process_command(&config).is_err());
+
+        // Check with force but amount is less than rent exempt, should fail
+        config.command = CliCommand::CreateStakeAccount {
+            stake_account: 1,
+            seed: None,
+            staker: None,
+            withdrawer: None,
+            withdrawer_signer: None,
+            lockup: Lockup {
+                epoch: 0,
+                unix_timestamp: 0,
+                custodian,
+            },
+            amount: SpendAmount::Some(15),
+            sign_only: false,
+            force: true,
             dump_transaction_message: false,
             blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
             nonce_account: None,
