@@ -2709,7 +2709,7 @@ impl ReplayStage {
                 // report cost tracker stats
                 cost_update_sender
                     .send(CostUpdate::FrozenBank {
-                        bank: <Arc<Bank>>::clone(bank),
+                        bank: bank.clone_without_scheduler(),
                     })
                     .unwrap_or_else(|err| {
                         warn!("cost_update_sender failed sending bank stats: {:?}", err)
@@ -2749,7 +2749,7 @@ impl ReplayStage {
                 );
                 if let Some(sender) = bank_notification_sender {
                     sender
-                        .send(BankNotification::Frozen(<Arc<Bank>>::clone(bank)))
+                        .send(BankNotification::Frozen(bank.clone_without_scheduler()))
                         .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
                 }
                 blockstore_processor::cache_block_meta(bank, cache_block_meta_sender);
