@@ -204,84 +204,64 @@ impl HashStats {
             ("sort", self.sort_time_total_us, i64),
             ("hash_total", self.hash_total, i64),
             ("storage_sort_us", self.storage_sort_us, i64),
-            ("unreduced_entries", self.unreduced_entries as i64, i64),
-            (
-                "collect_snapshots_us",
-                self.collect_snapshots_us as i64,
-                i64
-            ),
-            (
-                "num_snapshot_storage",
-                self.num_snapshot_storage as i64,
-                i64
-            ),
-            ("scan_chunks", self.scan_chunks as i64, i64),
-            ("num_slots", self.num_slots as i64, i64),
-            ("num_dirty_slots", self.num_dirty_slots as i64, i64),
-            ("min_bin_size", self.min_bin_size as i64, i64),
-            ("max_bin_size", self.max_bin_size as i64, i64),
-            (
-                "storage_size_min",
-                self.storage_size_quartiles[0] as i64,
-                i64
-            ),
+            ("unreduced_entries", self.unreduced_entries, i64),
+            ("collect_snapshots_us", self.collect_snapshots_us, i64),
+            ("num_snapshot_storage", self.num_snapshot_storage, i64),
+            ("scan_chunks", self.scan_chunks, i64),
+            ("num_slots", self.num_slots, i64),
+            ("num_dirty_slots", self.num_dirty_slots, i64),
+            ("min_bin_size", self.min_bin_size, i64),
+            ("max_bin_size", self.max_bin_size, i64),
+            ("storage_size_min", self.storage_size_quartiles[0], i64),
             (
                 "storage_size_quartile_1",
-                self.storage_size_quartiles[1] as i64,
+                self.storage_size_quartiles[1],
                 i64
             ),
             (
                 "storage_size_quartile_2",
-                self.storage_size_quartiles[2] as i64,
+                self.storage_size_quartiles[2],
                 i64
             ),
             (
                 "storage_size_quartile_3",
-                self.storage_size_quartiles[3] as i64,
+                self.storage_size_quartiles[3],
                 i64
             ),
-            (
-                "storage_size_max",
-                self.storage_size_quartiles[4] as i64,
-                i64
-            ),
-            (
-                "storage_size_avg",
-                self.storage_size_quartiles[5] as i64,
-                i64
-            ),
-            ("total_us", total_time_us as i64, i64),
+            ("storage_size_max", self.storage_size_quartiles[4], i64),
+            ("storage_size_avg", self.storage_size_quartiles[5], i64),
+            ("total_us", total_time_us, i64),
             (
                 "roots_older_than_epoch",
-                self.roots_older_than_epoch.load(Ordering::Relaxed) as i64,
+                self.roots_older_than_epoch.load(Ordering::Relaxed),
                 i64
             ),
-            ("oldest_root", self.oldest_root as i64, i64),
+            ("oldest_root", self.oldest_root, i64),
             (
                 "longest_ancient_scan_us",
-                self.longest_ancient_scan_us.load(Ordering::Relaxed) as i64,
+                self.longest_ancient_scan_us.load(Ordering::Relaxed),
                 i64
             ),
             (
                 "sum_ancient_scans_us",
-                self.sum_ancient_scans_us.load(Ordering::Relaxed) as i64,
+                self.sum_ancient_scans_us.load(Ordering::Relaxed),
                 i64
             ),
             (
                 "count_ancient_scans",
-                self.count_ancient_scans.load(Ordering::Relaxed) as i64,
+                self.count_ancient_scans.load(Ordering::Relaxed),
                 i64
             ),
             (
                 "append_vec_sizes_older_than_epoch",
                 self.append_vec_sizes_older_than_epoch
-                    .load(Ordering::Relaxed) as i64,
+                    .load(Ordering::Relaxed),
                 i64
             ),
             (
                 "accounts_in_roots_older_than_epoch",
                 self.accounts_in_roots_older_than_epoch
-                    .load(Ordering::Relaxed) as i64,
+                    .load(Ordering::Relaxed),
                 i64
             ),
         );
