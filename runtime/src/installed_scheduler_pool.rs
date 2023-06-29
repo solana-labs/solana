@@ -43,7 +43,6 @@ use {
     },
 };
 
-// Send + Sync is needed to be a field of BankForks
 #[cfg_attr(any(test, feature = "test-in-workspace"), automock)]
 pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>>;
@@ -107,7 +106,6 @@ pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Sync + Debug
 //   warning: `#[must_use]` has no effect when applied to a struct field
 //   warning: the following explicit lifetimes could be elided: 'a
 #[allow(unused_attributes, clippy::needless_lifetimes)]
-// Send + Sync is needed to be a field of Bank
 pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + 'static {
     fn id(&self) -> SchedulerId;
     fn pool(&self) -> InstalledSchedulerPoolArc<SEA>;
