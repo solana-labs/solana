@@ -209,12 +209,12 @@ impl<'a> ActiveMultiIteratorConsumeScheduler<'a> {
         id: &TransactionPriorityId,
         container: &mut TransactionPacketContainer,
     ) -> ProcessingDecision {
-        let transaction_entry = container.get_transaction_entry(id.id);
-        let SanitizedTransactionTTL { transaction, .. } = transaction_entry.get();
+        let transaction_ttl = container.get_transaction(&id.id);
+        let SanitizedTransactionTTL { transaction, .. } = transaction_ttl;
         let scheduling_decision = self.make_scheduling_decision(transaction);
         match scheduling_decision {
             ConsumeSchedulingDecision::Add(thread_id) => {
-                let transaction_ttl = transaction_entry.remove();
+                let transaction_ttl = container.take_transaction(&id.id);
                 self.add_transaction_to_batch(id, transaction_ttl, thread_id);
                 ProcessingDecision::Now
             }

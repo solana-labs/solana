@@ -63,14 +63,18 @@ impl TransactionPacketContainer {
 
     /// Get transaction by id.
     /// Panics if the transaction does not exist.
-    pub(crate) fn get_transaction_entry(
-        &mut self,
-        id: TransactionId,
-    ) -> OccupiedEntry<TransactionId, SanitizedTransactionTTL> {
-        match self.id_to_transaction_ttl.entry(id) {
-            Entry::Occupied(entry) => entry,
-            Entry::Vacant(_) => panic!("transaction must exist"),
-        }
+    pub(crate) fn get_transaction(&mut self, id: &TransactionId) -> &SanitizedTransactionTTL {
+        self.id_to_transaction_ttl
+            .get(id)
+            .expect("transaction must exist")
+    }
+
+    /// Take transaction by id.
+    /// Panics if the transaction does not exist.
+    pub(crate) fn take_transaction(&mut self, id: &TransactionId) -> SanitizedTransactionTTL {
+        self.id_to_transaction_ttl
+            .remove(id)
+            .expect("transaction must exist")
     }
 
     /// Get transaction and packet entries by id.
@@ -299,20 +303,41 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "transaction must exist")]
-    fn test_get_transaction_entry_panic() {
+    fn test_get_transaction_panic() {
         let mut container = TransactionPacketContainer::with_capacity(5);
         push_to_container(&mut container, 5);
 
-        let _ = container.get_transaction_entry(TransactionId::new(7));
+        let _ = container.get_transaction(&TransactionId::new(7));
     }
 
     #[test]
-    fn test_get_transaction_entry() {
+    fn test_get_transaction() {
         let mut container = TransactionPacketContainer::with_capacity(5);
         push_to_container(&mut container, 5);
 
         let transaction_id = TransactionId::new(3);
-        let transaction_ttl_entry = container.get_transaction_entry(transaction_id);
-        assert_eq!(*transaction_ttl_entry.key(), transaction_id);
+        let _ = container.get_transaction(&transaction_id);
+        let _ = container.get_transaction(&transaction_id);
+    }
+
+    #[test]
+    #[should_panic(expected = "transaction must exist")]
+    fn test_take_transaction_panic() {
+        let mut container = TransactionPacketContainer::with_capacity(5);
+        push_to_container(&mut container, 5);
+
+        let _ = container.take_transaction(&TransactionId::new(7));
+    }
+
+    #[test]
+    fn test_take_transaction() {
+        let mut container = TransactionPacketContainer::with_capacity(5);
+        push_to_container(&mut container, 5);
+
+        let transaction_id = TransactionId::new(3);
+        let _ = container.get_transaction(&transaction_id);
+        assert!(!container
+            .id_to_transaction_ttl
+            .contains_key(&transaction_id));
     }
 }
