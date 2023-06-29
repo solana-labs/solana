@@ -2151,7 +2151,6 @@ mod tests {
 
         // Test create stake without force with sufficient amount, should succeed
         let bob_keypair = Keypair::new();
-        let bob_pubkey = bob_keypair.pubkey();
         let custodian = solana_sdk::pubkey::new_rand();
         config.command = CliCommand::CreateStakeAccount {
             stake_account: 1,
@@ -2182,7 +2181,6 @@ mod tests {
 
         // Test create stake with enough for rent but not enough for min delegation but with force, should succeed
         let tom_keypair = Keypair::new();
-        let tom_pubkey = bob_keypair.pubkey();
         config.command = CliCommand::CreateStakeAccount {
             stake_account: 1,
             seed: None,
@@ -2206,7 +2204,7 @@ mod tests {
             from: 0,
             compute_unit_price: None,
         };
-        config.signers = vec![&keypair, &bob_keypair];
+        config.signers = vec![&keypair, &tom_keypair];
         let result = process_command(&config);
         assert!(result.is_ok(), "{result:?}");
 
