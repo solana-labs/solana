@@ -3103,6 +3103,15 @@ impl Blockstore {
         self.optimistic_slots_cf.put(slot, &slot_data)
     }
 
+    /// Returns information about a single optimistically confirmed slot
+    pub fn get_optimistic_slot(&self, slot: Slot) -> Result<Option<(Hash, UnixTimestamp)>> {
+        Ok(self
+            .optimistic_slots_cf
+            .get(slot)?
+            .map(|meta| (meta.hash(), meta.timestamp())))
+    }
+
+    /// Returns information about the `num` latest optimistically confirmed slot
     pub fn get_latest_optimistic_slots(
         &self,
         num: usize,
