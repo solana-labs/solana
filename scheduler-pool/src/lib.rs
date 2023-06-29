@@ -57,7 +57,7 @@ pub struct SchedulerPool<
     // After these considerations, this weak_self approach is chosen at the cost of some additional
     // memory increase.
     weak_self: Weak<Self>,
-    _phantom: PhantomData<(T, SEA, TH)>,
+    _phantom: PhantomData<(T, TH)>,
 }
 
 pub type DefaultSchedulerPool = SchedulerPool<
