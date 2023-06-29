@@ -4812,7 +4812,7 @@ impl Bank {
     }
 
     /// Prepare a transaction batch from a single transaction without locking accounts
-    pub(crate) fn prepare_sanitized_batch_without_locking<'a>(
+    pub(crate) fn prepare_unlocked_batch_from_single_tx<'a>(
         &'a self,
         transaction: &'a SanitizedTransaction,
     ) -> TransactionBatch<'_, '_> {
@@ -4848,7 +4848,7 @@ impl Bank {
         let account_keys = transaction.message().account_keys();
         let number_of_accounts = account_keys.len();
         let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
-        let batch = self.prepare_sanitized_batch_without_locking(&transaction);
+        let batch = self.prepare_unlocked_batch_from_single_tx(&transaction);
         let mut timings = ExecuteTimings::default();
 
         let LoadAndExecuteTransactionsOutput {
