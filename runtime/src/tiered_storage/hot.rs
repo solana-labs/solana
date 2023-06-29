@@ -110,12 +110,6 @@ impl TieredAccountMeta for HotAccountMeta {
         self.packed_fields.padding()
     }
 
-    /// Always return None as a HotAccountMeta entry never shares its account
-    /// block with other account meta entries.
-    fn data_size_for_shared_block(&self) -> Option<usize> {
-        None
-    }
-
     /// Returns the index to the accounts' owner in the current AccountsFile.
     fn owner_index(&self) -> u32 {
         self.packed_fields.owner_index()
@@ -282,7 +276,6 @@ pub mod tests {
 
         assert_eq!(meta.lamports(), TEST_LAMPORTS);
         assert_eq!(meta.account_data_padding(), TEST_PADDING);
-        assert_eq!(meta.data_size_for_shared_block(), None);
         assert_eq!(meta.owner_index(), TEST_OWNER_INDEX);
         assert_eq!(*meta.flags(), flags);
     }
