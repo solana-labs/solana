@@ -8,16 +8,9 @@ source ci/env.sh
 # previous CI job
 #
 (
-<<<<<<< HEAD
-  containers=$(docker ps -q)
-  if [[ $(hostname) != metrics-solana-com && -n $containers ]]; then
-    echo "+++ Killing stale docker containers"
-    docker ps
-=======
   echo "+++ Killing stale docker containers"
   while read -r line; do
     read -r id image _ <<<"$line"
->>>>>>> 3e5ee8de50 (ci: only kill containers that are based on the solanalabs/rust* images (#32292))
 
     if [[ $image =~ "solanalabs/rust" ]]; then
       if docker kill "$id" >/dev/null; then
