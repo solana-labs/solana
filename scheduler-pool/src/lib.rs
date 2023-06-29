@@ -34,7 +34,8 @@ use {
 };
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
-// types aren't available there...
+// types (currently TransactionStatusSender; also, PohRecorder in the future) aren't available
+// there...
 #[derive(Debug)]
 pub struct SchedulerPool<
     T: SpawnableScheduler<TH, SEA>,
