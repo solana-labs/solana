@@ -6,9 +6,8 @@ use {
     solana_clap_utils::{
         hidden_unless_forced,
         input_validators::{
-            is_keypair, is_keypair_or_ask_keyword, is_niceness_adjustment_valid, is_parsable,
-            is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
-            is_valid_percentage, is_within_range,
+            is_keypair, is_keypair_or_ask_keyword, is_parsable, is_pow2, is_pubkey,
+            is_pubkey_or_keypair, is_slot, is_url_or_moniker, is_valid_percentage, is_within_range,
             validate_maximum_full_snapshot_archives_to_retain,
             validate_maximum_incremental_snapshot_archives_to_retain,
         },
@@ -485,7 +484,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("snapshot-packager-niceness-adjustment")
                 .value_name("ADJUSTMENT")
                 .takes_value(true)
-                .validator(is_niceness_adjustment_valid)
+                .validator(solana_perf::thread::is_niceness_adjustment_valid)
                 .default_value(&default_args.snapshot_packager_niceness_adjustment)
                 .help("Add this value to niceness of snapshot packager thread. Negative value \
                       increases priority, positive value decreases priority.")
@@ -840,7 +839,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("rpc-niceness-adjustment")
                 .value_name("ADJUSTMENT")
                 .takes_value(true)
-                .validator(is_niceness_adjustment_valid)
+                .validator(solana_perf::thread::is_niceness_adjustment_valid)
                 .default_value(&default_args.rpc_niceness_adjustment)
                 .help("Add this value to niceness of RPC threads. Negative value \
                       increases priority, positive value decreases priority.")

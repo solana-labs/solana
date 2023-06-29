@@ -13,7 +13,6 @@ edition = { workspace = true }
 chrono = { workspace = true, features = ["default"] }
 clap = { version = "3.2.23", features = ["cargo"] }
 rpassword = { workspace = true }
-solana-perf = { workspace = true }
 solana-remote-wallet = { workspace = true }
 solana-sdk = { workspace = true }
 solana-zk-token-sdk = { workspace = true }
