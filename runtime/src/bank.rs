@@ -180,6 +180,7 @@ use {
         ops::{AddAssign, RangeInclusive},
         path::PathBuf,
         rc::Rc,
+        slice,
         sync::{
             atomic::{
                 AtomicBool, AtomicI64, AtomicU64, AtomicUsize,
@@ -4823,7 +4824,7 @@ impl Bank {
         let mut batch = TransactionBatch::new(
             vec![lock_result],
             self,
-            Cow::Borrowed(std::slice::from_ref(transaction)),
+            Cow::Borrowed(slice::from_ref(transaction)),
         );
         batch.set_needs_unlock(false);
         batch
