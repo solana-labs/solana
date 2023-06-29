@@ -338,8 +338,9 @@ impl BankWithSchedulerInner {
         reason: WaitReason,
     ) -> Option<ResultWithTimings> {
         debug!(
-            "wait_for_scheduler(slot: {}, reason: {reason:?}): started...",
-            bank.slot()
+            "wait_for_scheduler(slot: {}, reason: {:?}): started...",
+            bank.slot(),
+            reason,
         );
 
         let mut scheduler = scheduler.write().unwrap();
@@ -356,9 +357,10 @@ impl BankWithSchedulerInner {
             None
         };
         debug!(
-            "wait_for_scheduler(slot: {}, reason: {reason:?}): finished with: {:?}...",
+            "wait_for_scheduler(slot: {}, reason: {:?}): finished with: {:?}...",
             bank.slot(),
-            result_with_timings.as_ref().map(|(result, _)| result)
+            reason,
+            result_with_timings.as_ref().map(|(result, _)| result),
         );
 
         result_with_timings
