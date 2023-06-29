@@ -2181,9 +2181,8 @@ mod tests {
         assert!(result.is_ok(), "{result:?}");
 
         // Test create stake with enough for rent but not enough for min delegation but with force, should succeed
-        bob_keypair = Keypair::new();
-        bob_pubkey = bob_keypair.pubkey();
-        custodian = solana_sdk::pubkey::new_rand();
+        let tom_keypair = Keypair::new();
+        let tom_pubkey = bob_keypair.pubkey();
         config.command = CliCommand::CreateStakeAccount {
             stake_account: 1,
             seed: None,
