@@ -3964,7 +3964,6 @@ fn main() {
                     start_root.saturating_sub(max_slots)
                 };
                 assert!(start_root > end_root);
-                assert!(blockstore.is_root(start_root));
                 let num_slots = start_root - end_root - 1; // Adjust by one since start_root need not be checked
                 if arg_matches.is_present("end_root") && num_slots > max_slots {
                     eprintln!(
