@@ -295,7 +295,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
         if keep_result_with_timings {
             None
         } else {
-            drop::<Option<SchedulingContext>>(self.context.take());
+            drop(self.context.take());
             // current simplest form of this trait impl doesn't block the current thread materially
             // just with the following single mutex lock. Suppose more elaborated synchronization
             // across worker threads here in the future...
