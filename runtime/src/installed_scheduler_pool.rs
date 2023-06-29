@@ -166,10 +166,17 @@ pub enum WaitReason {
 
 pub type DefaultInstalledSchedulerBox = Box<dyn InstalledScheduler<DefaultScheduleExecutionArg>>;
 
+/// A small context to propagate a bank and its scheduling mode to the scheduler subsystem.
+///
+/// Note that this isn't called SchedulerContext because the context isn't necessarily tied to a
+/// particular scheduler. A scheduler will use many SchedulingContexts during its lifetime.
+/// "Scheduling" part of the context name refers to a slice of time to schedule and execute all
+/// transactions for a given bank for block verification or block production. A context is expected
+/// to be used by a particular scheduler only for that duration of time and to be disposed by the
+/// scheduler. Then, it will be able to work on subsequent SchedulingContexts.
 #[derive(Clone, Debug)]
 pub struct SchedulingContext {
     mode: SchedulingMode,
-    // Intentionally not using Weak<Bank> for performance reasons
     bank: Arc<Bank>,
 }
 
