@@ -389,7 +389,7 @@ impl Default for ValidatorStartProgress {
 }
 
 struct BlockstoreRootScan {
-    thread: Option<JoinHandle<Result<(), BlockstoreError>>>,
+    thread: Option<JoinHandle<Result<usize, BlockstoreError>>>,
 }
 
 impl BlockstoreRootScan {
@@ -402,7 +402,7 @@ impl BlockstoreRootScan {
             Some(
                 Builder::new()
                     .name("solBStoreRtScan".to_string())
-                    .spawn(move || blockstore.scan_and_fix_roots(&exit))
+                    .spawn(move || blockstore.scan_and_fix_roots(None, None, &exit))
                     .unwrap(),
             )
         } else {
