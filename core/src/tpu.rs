@@ -17,6 +17,7 @@ use {
         tpu_entry_notifier::TpuEntryNotifier,
         validator::GeneratorConfig,
     },
+    bytes::Bytes,
     crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_gossip::cluster_info::ClusterInfo,
@@ -25,7 +26,6 @@ use {
         entry_notifier_service::EntryNotifierSender,
     },
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
-    solana_quic_client::QuicConnectionCache,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::BankNotificationSender,
         rpc_subscriptions::RpcSubscriptions,
@@ -44,11 +44,12 @@ use {
     solana_turbine::broadcast_stage::{BroadcastStage, BroadcastStageType},
     std::{
         collections::HashMap,
-        net::UdpSocket,
+        net::{SocketAddr, UdpSocket},
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread,
         time::Duration,
     },
+    tokio::sync::mpsc::Sender as AsyncSender,
 };
 
 // allow multiple connections for NAT and any open/close overlap
@@ -102,7 +103,7 @@ impl Tpu {
         tpu_coalesce: Duration,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         connection_cache: &Arc<ConnectionCache>,
-        turbine_quic_connection_cache: Arc<QuicConnectionCache>,
+        turbine_quic_endpoint_sender: AsyncSender<(SocketAddr, Bytes)>,
         keypair: &Keypair,
         log_messages_bytes_limit: Option<usize>,
         staked_nodes: &Arc<RwLock<StakedNodes>>,
@@ -256,7 +257,7 @@ impl Tpu {
             blockstore.clone(),
             bank_forks,
             shred_version,
-            turbine_quic_connection_cache,
+            turbine_quic_endpoint_sender,
         );
 
         Self {
