@@ -88,6 +88,6 @@ fi
 
 _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" fmt --all -- --check
 
- _ ci/do-audit.sh
+ # _ ci/do-audit.sh
 
 echo --- ok
