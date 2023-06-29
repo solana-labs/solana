@@ -954,6 +954,19 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     Ok(())
 }
 
+/// Returns true if the supplied slot contains any nonvote transactions
+fn slot_contains_nonvote_tx(blockstore: &Blockstore, slot: Slot) -> bool {
+    let (entries, _, _) = blockstore
+        .get_slot_entries_with_shred_info(slot, 0, false)
+        .expect("Failed to get slot entries");
+    let contains_nonvote = entries
+        .iter()
+        .flat_map(|entry| entry.transactions.iter())
+        .flat_map(get_program_ids)
+        .any(|program_id| *program_id != solana_vote_program::id());
+    contains_nonvote
+}
+
 /// Finds the accounts needed to replay slots `snapshot_slot` to `ending_slot`.
 /// Removes all other accounts from accounts_db, and updates the accounts hash
 /// and capitalization. This is used by the --minimize option in create-snapshot
@@ -3907,15 +3920,12 @@ fn main() {
                     .reversed_optimistic_slots_iterator()
                     .expect("Failed to get reversed optimistic slots iterator")
                     .map(|(slot, hash, timestamp)| {
-                        let (entries, _, _) = blockstore
-                            .get_slot_entries_with_shred_info(slot, 0, false)
-                            .expect("Failed to get slot entries");
-                        let contains_nonvote = entries
-                            .iter()
-                            .flat_map(|entry| entry.transactions.iter())
-                            .flat_map(get_program_ids)
-                            .any(|program_id| *program_id != solana_vote_program::id());
-                        (slot, hash, timestamp, contains_nonvote)
+                        (
+                            slot,
+                            hash,
+                            timestamp,
+                            slot_contains_nonvote_tx(&blockstore, slot),
+                        )
                     });
 
                 let slots: Vec<_> = if exclude_vote_only_slots {
