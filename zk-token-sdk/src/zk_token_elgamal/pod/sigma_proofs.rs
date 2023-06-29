@@ -12,10 +12,31 @@ use crate::sigma_proofs::{
 };
 use crate::zk_token_elgamal::pod::{Pod, Zeroable};
 
+/// Byte length of a ciphertext-commitment equality proof
+const CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN: usize = 192;
+
+/// Byte length of a ciphertext-ciphertext equality proof
+const CIPHERTEXT_CIPHERTEXT_EQUALITY_PROOF_LEN: usize = 224;
+
+/// Byte length of a grouped ciphertext for 2 handles validity proof
+const GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_LEN: usize = 160;
+
+/// Byte length of a batched grouped ciphertext for 2 handles validity proof
+const BATCHED_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_LEN: usize = 160;
+
+/// Byte length of a zero-balance proof
+const ZERO_BALANCE_PROOF_LEN: usize = 96;
+
+/// Byte length of a fee sigma proof
+const FEE_SIGMA_PROOF_LEN: usize = 256;
+
+/// Byte length of a public key validity proof
+const PUBKEY_VALIDITY_PROOF_LEN: usize = 64;
+
 /// The `CiphertextCommitmentEqualityProof` type as a `Pod`.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct CiphertextCommitmentEqualityProof(pub [u8; 192]);
+pub struct CiphertextCommitmentEqualityProof(pub [u8; CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN]);
 
 #[cfg(not(target_os = "solana"))]
 impl From<DecodedCiphertextCommitmentEqualityProof> for CiphertextCommitmentEqualityProof {
@@ -36,7 +57,7 @@ impl TryFrom<CiphertextCommitmentEqualityProof> for DecodedCiphertextCommitmentE
 /// The `CiphertextCiphertextEqualityProof` type as a `Pod`.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct CiphertextCiphertextEqualityProof(pub [u8; 224]);
+pub struct CiphertextCiphertextEqualityProof(pub [u8; CIPHERTEXT_CIPHERTEXT_EQUALITY_PROOF_LEN]);
 
 #[cfg(not(target_os = "solana"))]
 impl From<DecodedCiphertextCiphertextEqualityProof> for CiphertextCiphertextEqualityProof {
@@ -57,7 +78,9 @@ impl TryFrom<CiphertextCiphertextEqualityProof> for DecodedCiphertextCiphertextE
 /// The `GroupedCiphertext2HandlesValidityProof` type as a `Pod`.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct GroupedCiphertext2HandlesValidityProof(pub [u8; 160]);
+pub struct GroupedCiphertext2HandlesValidityProof(
+    pub [u8; GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_LEN],
+);
 
 #[cfg(not(target_os = "solana"))]
 impl From<DecodedGroupedCiphertext2HandlesValidityProof>
@@ -82,7 +105,9 @@ impl TryFrom<GroupedCiphertext2HandlesValidityProof>
 /// The `BatchedGroupedCiphertext2HandlesValidityProof` type as a `Pod`.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct BatchedGroupedCiphertext2HandlesValidityProof(pub [u8; 160]);
+pub struct BatchedGroupedCiphertext2HandlesValidityProof(
+    pub [u8; BATCHED_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_LEN],
+);
 
 #[cfg(not(target_os = "solana"))]
 impl From<DecodedBatchedGroupedCiphertext2HandlesValidityProof>
@@ -109,7 +134,7 @@ impl TryFrom<BatchedGroupedCiphertext2HandlesValidityProof>
 /// The `ZeroBalanceProof` type as a `Pod`.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct ZeroBalanceProof(pub [u8; 96]);
+pub struct ZeroBalanceProof(pub [u8; ZERO_BALANCE_PROOF_LEN]);
 
 #[cfg(not(target_os = "solana"))]
 impl From<DecodedZeroBalanceProof> for ZeroBalanceProof {
@@ -130,7 +155,7 @@ impl TryFrom<ZeroBalanceProof> for DecodedZeroBalanceProof {
 /// The `FeeSigmaProof` type as a `Pod`.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(transparent)]
-pub struct FeeSigmaProof(pub [u8; 256]);
+pub struct FeeSigmaProof(pub [u8; FEE_SIGMA_PROOF_LEN]);
 
 #[cfg(not(target_os = "solana"))]
 impl From<DecodedFeeSigmaProof> for FeeSigmaProof {
@@ -151,7 +176,7 @@ impl TryFrom<FeeSigmaProof> for DecodedFeeSigmaProof {
 /// The `PubkeyValidityProof` type as a `Pod`.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(transparent)]
-pub struct PubkeyValidityProof(pub [u8; 64]);
+pub struct PubkeyValidityProof(pub [u8; PUBKEY_VALIDITY_PROOF_LEN]);
 
 #[cfg(not(target_os = "solana"))]
 impl From<DecodedPubkeyValidityProof> for PubkeyValidityProof {

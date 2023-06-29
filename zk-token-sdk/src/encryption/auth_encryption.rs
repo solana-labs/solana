@@ -31,6 +31,19 @@ use {
     zeroize::Zeroize,
 };
 
+/// Byte length of an authenticated encryption secret key
+const AE_KEY_LEN: usize = 16;
+
+/// Byte length of an authenticated encryption nonce component
+const NONCE_LEN: usize = 12;
+
+/// Byte lenth of an authenticated encryption ciphertext component
+const CIPHERTEXT_LEN: usize = 24;
+
+/// Byte length of a complete authenticated encryption ciphertext component that includes the
+/// ciphertext and nonce components
+const AE_CIPHERTEXT_LEN: usize = 36;
+
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum AuthenticatedEncryptionError {
     #[error("key derivation method not supported")]
@@ -46,7 +59,7 @@ impl AuthenticatedEncryption {
     /// This function is randomized. It internally samples a 128-bit key using `OsRng`.
     #[cfg(not(target_os = "solana"))]
     fn keygen() -> AeKey {
-        AeKey(OsRng.gen::<[u8; 16]>())
+        AeKey(OsRng.gen::<[u8; AE_KEY_LEN]>())
     }
 
     /// On input of an authenticated encryption key and an amount, the function returns a
@@ -54,7 +67,7 @@ impl AuthenticatedEncryption {
     #[cfg(not(target_os = "solana"))]
     fn encrypt(key: &AeKey, balance: u64) -> AeCiphertext {
         let mut plaintext = balance.to_le_bytes();
-        let nonce: Nonce = OsRng.gen::<[u8; 12]>();
+        let nonce: Nonce = OsRng.gen::<[u8; NONCE_LEN]>();
 
         // The balance and the nonce have fixed length and therefore, encryption should not fail.
         let ciphertext = Aes128GcmSiv::new(&key.0.into())
@@ -86,7 +99,7 @@ impl AuthenticatedEncryption {
 }
 
 #[derive(Debug, Zeroize)]
-pub struct AeKey([u8; 16]);
+pub struct AeKey([u8; AE_KEY_LEN]);
 impl AeKey {
     /// Deterministically derives an authenticated encryption key from a Solana signer and a public
     /// seed.
@@ -144,7 +157,7 @@ impl AeKey {
 
 impl EncodableKey for AeKey {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
-        let bytes: [u8; 16] = serde_json::from_reader(reader)?;
+        let bytes: [u8; AE_KEY_LEN] = serde_json::from_reader(reader)?;
         Ok(Self(bytes))
     }
 
@@ -158,7 +171,7 @@ impl EncodableKey for AeKey {
 
 impl SeedDerivable for AeKey {
     fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
-        const MINIMUM_SEED_LEN: usize = 16;
+        const MINIMUM_SEED_LEN: usize = AE_KEY_LEN;
 
         if seed.len() < MINIMUM_SEED_LEN {
             return Err(AuthenticatedEncryptionError::SeedLengthTooShort.into());
@@ -168,7 +181,7 @@ impl SeedDerivable for AeKey {
         hasher.update(seed);
         let result = hasher.finalize();
 
-        Ok(Self(result[..16].try_into()?))
+        Ok(Self(result[..AE_KEY_LEN].try_into()?))
     }
 
     fn from_seed_and_derivation_path(
@@ -191,8 +204,8 @@ impl SeedDerivable for AeKey {
 
 /// For the purpose of encrypting balances for the spl token accounts, the nonce and ciphertext
 /// sizes should always be fixed.
-type Nonce = [u8; 12];
-type Ciphertext = [u8; 24];
+type Nonce = [u8; NONCE_LEN];
+type Ciphertext = [u8; CIPHERTEXT_LEN];
 
 /// Authenticated encryption nonce and ciphertext
 #[derive(Debug, Default, Clone)]
@@ -205,20 +218,20 @@ impl AeCiphertext {
         AuthenticatedEncryption::decrypt(key, self)
     }
 
-    pub fn to_bytes(&self) -> [u8; 36] {
-        let mut buf = [0_u8; 36];
-        buf[..12].copy_from_slice(&self.nonce);
-        buf[12..].copy_from_slice(&self.ciphertext);
+    pub fn to_bytes(&self) -> [u8; AE_CIPHERTEXT_LEN] {
+        let mut buf = [0_u8; AE_CIPHERTEXT_LEN];
+        buf[..NONCE_LEN].copy_from_slice(&self.nonce);
+        buf[NONCE_LEN..].copy_from_slice(&self.ciphertext);
         buf
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<AeCiphertext> {
-        if bytes.len() != 36 {
+        if bytes.len() != AE_CIPHERTEXT_LEN {
             return None;
         }
 
-        let nonce = bytes[..32].try_into().ok()?;
-        let ciphertext = bytes[32..].try_into().ok()?;
+        let nonce = bytes[..NONCE_LEN].try_into().ok()?;
+        let ciphertext = bytes[NONCE_LEN..].try_into().ok()?;
 
         Some(AeCiphertext { nonce, ciphertext })
     }
