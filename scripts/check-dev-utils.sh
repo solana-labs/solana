@@ -58,7 +58,7 @@ if [[ $mode = "tree" || $mode = "full" ]]; then
       | map({
         "crate" : \$crate,
         "dependency" : .name,
-        "dependencyFeatures" : .features
+        "dependencyFeatures" : .features,
       })
     )
   )
@@ -101,7 +101,7 @@ EOF
         "crate" : .name,
         "crateFeatures" : .features,
         "dependant" : \$dependant,
-        "dependantFeatures" : \$dependant_features
+        "dependantFeatures" : \$dependant_features,
       })
     )
   )
