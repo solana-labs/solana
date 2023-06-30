@@ -12824,7 +12824,6 @@ fn test_rewards_computation() {
 }
 
 /// Test rewards compuation and partitioned rewards distribution at the epoch boundary
-#[allow(clippy::if_same_then_else)]
 #[test]
 fn test_rewards_computation_and_partitioned_distribution() {
     solana_logger::setup();
@@ -12853,10 +12852,9 @@ fn test_rewards_computation_and_partitioned_distribution() {
     ));
 
     // simulate block progress
-    for slot in 1..num_slots_in_epoch + 2 {
+    for slot in 2..=num_slots_in_epoch + 2 {
         let pre_cap = previous_bank.capitalization();
-        let curr_slot = slot + 1;
-        let curr_bank = Bank::new_from_parent(&previous_bank, &Pubkey::default(), curr_slot);
+        let curr_bank = Bank::new_from_parent(&previous_bank, &Pubkey::default(), slot);
         let post_cap = curr_bank.capitalization();
 
         // Fill banks with banks with votes landing in the next slot
@@ -12882,7 +12880,7 @@ fn test_rewards_computation_and_partitioned_distribution() {
             curr_bank.store_account_and_update_capitalization(&vote_id, &vote_account);
         }
 
-        if curr_slot == num_slots_in_epoch {
+        if slot == num_slots_in_epoch {
             // This is the first block of epoch 1. Reward computation should happen in this block.
             // assert reward compute status activated at epoch boundary
             assert!(matches!(
@@ -12892,25 +12890,17 @@ fn test_rewards_computation_and_partitioned_distribution() {
 
             // cap should increase because of new epoch rewards
             assert!(post_cap > pre_cap);
-        } else if curr_slot == num_slots_in_epoch + 1 {
-            // This is the 2nd block of epoch 1. Reward distribution should happen in this block.
-            // assert stake rewards are paid at the first block after epoch boundary and the reward_status
-            // transitioned to inactive.
+        } else if slot == num_slots_in_epoch + 1 || slot == num_slots_in_epoch + 2 {
+            // 1. when curr_slot == num_slots_in_epoch + 1, the 2nd block of epoch 1, reward distribution should happen in this block.
+            // however, all stake rewards are paid at the this block therefore reward_status should have transitioned to inactive. And since
+            // rewards are transfered from epoch_rewards sysvar to stake accounts. The cap should stay the same.
+            // 2. when curr_slot == num_slots_in_epoch+2, the 3rd block of epoch 1. reward distribution should have already completed. Thefore,
+            // reward_status should stay inactive and cap should stay the same.
             assert!(matches!(
                 curr_bank.get_reward_interval(),
                 RewardInterval::OutsideInterval
             ));
 
-            // Rewards are transfered from epoch_rewards sysvar to stake accounts. But cap should stay the same.
-            assert_eq!(post_cap, pre_cap);
-        } else if curr_slot == num_slots_in_epoch + 2 {
-            // This is the 3nd block of epoch 1. Reward distribution should have completed.
-            assert!(matches!(
-                curr_bank.get_reward_interval(),
-                RewardInterval::OutsideInterval
-            ));
-
-            // cap should not change.
             assert_eq!(post_cap, pre_cap);
         } else {
             // slot is not in rewards, cap should not change
