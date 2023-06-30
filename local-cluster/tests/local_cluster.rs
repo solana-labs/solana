@@ -4479,6 +4479,237 @@ fn test_slot_hash_expiry() {
     );
 }
 
+#[test]
+fn test_vote_refresh_outside_slothash() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+    solana_sdk::slot_hashes::set_entries_for_tests_only(8);
+
+    let slots_per_epoch = 2048;
+    let node_stakes = vec![
+        37 * DEFAULT_NODE_STAKE,
+        35 * DEFAULT_NODE_STAKE,
+        28 * DEFAULT_NODE_STAKE,
+    ];
+    let validator_keys = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
+        "4mx9yoFBeYasDKBGDWCTWGJdWuJCKbgqmuP8bN9umybCh5Jzngw7KQxe99Rf5uzfyzgba1i65rJW4Wqk7Ab5S8ye",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .collect::<Vec<_>>();
+    let node_vote_keys = vec![
+        "3NDQ3ud86RTVg8hTy2dDWnS4P8NfjhZ2gDgQAJbr3heaKaUVS1FW3sTLKA1GmDrY9aySzsa4QxpDkbLv47yHxzr3",
+        "46ZHpHE6PEvXYPu3hf9iQqjBk2ZNDaJ9ejqKWHEjxaQjpAGasKaWKbKHbP3646oZhfgDRzx95DH9PCBKKsoCVngk",
+        "3zsEPEDsjfEay7te9XqNjRTCE7vwuT6u4DHzBJC19yp7GS8BuNRMRjnpVrKCBzb3d44kxc4KPGSHkCmk6tEfswCg",
+    ]
+    .iter()
+    .map(|s| Arc::new(Keypair::from_base58_string(s)))
+    .collect::<Vec<_>>();
+    let vs = validator_keys
+        .iter()
+        .map(|(kp, _)| kp.pubkey())
+        .collect::<Vec<_>>();
+    let (a_pubkey, b_pubkey, c_pubkey) = (vs[0], vs[1], vs[2]);
+
+    // We want B to not vote (we are trying to simulate its votes not landing until it gets to the
+    // minority fork)
+    let mut validator_configs =
+        make_identical_validator_configs(&ValidatorConfig::default_for_test(), node_stakes.len());
+    validator_configs[1].voting_disabled = true;
+
+    let mut config = ClusterConfig {
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
+        node_stakes,
+        validator_configs,
+        validator_keys: Some(validator_keys),
+        node_vote_keys: Some(node_vote_keys),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+
+    let mut common_ancestor_slot = 8;
+
+    let a_ledger_path = cluster.ledger_path(&a_pubkey);
+    let b_ledger_path = cluster.ledger_path(&b_pubkey);
+    let c_ledger_path = cluster.ledger_path(&c_pubkey);
+
+    // Immediately kill B and C (we just needed it for the initial stake distribution)
+    info!("Killing B and C");
+    let mut b_info = cluster.exit_node(&b_pubkey);
+    let c_info = cluster.exit_node(&c_pubkey);
+
+    // Let A run for a while until we get to the common ancestor
+    info!("Letting A run until common_ancestor_slot");
+    loop {
+        if let Some((last_vote, _)) = last_vote_in_tower(&a_ledger_path, &a_pubkey) {
+            if last_vote >= common_ancestor_slot {
+                break;
+            }
+        }
+        sleep(Duration::from_millis(100));
+    }
+
+    // Keep A running, but setup B so that it thinks it has voted up until common ancestor (but
+    // doesn't know anything past that)
+    {
+        info!("Copying A's ledger to B");
+        std::fs::remove_dir_all(&b_info.info.ledger_path).unwrap();
+        let mut opt = fs_extra::dir::CopyOptions::new();
+        opt.copy_inside = true;
+        fs_extra::dir::copy(&a_ledger_path, &b_ledger_path, &opt).unwrap();
+
+        // remove A's tower in B's new copied ledger
+        info!("Removing A's tower in B's ledger dir");
+        remove_tower(&b_ledger_path, &a_pubkey);
+
+        // load A's tower and save it as B's tower
+        info!("Loading A's tower");
+        if let Some(mut a_tower) = restore_tower(&a_ledger_path, &a_pubkey) {
+            a_tower.node_pubkey = b_pubkey;
+            // Update common_ancestor_slot because A is still running
+            if let Some(s) = a_tower.last_voted_slot() {
+                common_ancestor_slot = s;
+                info!("New common_ancestor_slot {}", common_ancestor_slot);
+            } else {
+                panic!("A's tower has no votes");
+            }
+            info!("Increase lockout by 6 confirmation levels and save as B's tower");
+            a_tower.increase_lockout(6);
+            save_tower(&b_ledger_path, &a_tower, &b_info.info.keypair);
+            info!("B's new tower: {:?}", a_tower.tower_slots());
+        } else {
+            panic!("A's tower is missing");
+        }
+
+        // Get rid of any slots past common_ancestor_slot
+        info!("Removing extra slots from B's blockstore");
+        let blockstore = open_blockstore(&b_ledger_path);
+        purge_slots_with_count(&blockstore, common_ancestor_slot + 1, 100);
+    }
+
+    info!(
+        "Run A on majority fork until it reaches slot hash expiry {}",
+        solana_sdk::slot_hashes::get_entries()
+    );
+    let mut last_vote_on_a;
+    // Keep A running for a while longer so the majority fork has some decent size
+    loop {
+        last_vote_on_a = wait_for_last_vote_in_tower_to_land_in_ledger(&a_ledger_path, &a_pubkey);
+        if last_vote_on_a
+            >= common_ancestor_slot + 2 * (solana_sdk::slot_hashes::get_entries() as u64)
+        {
+            let blockstore = open_blockstore(&a_ledger_path);
+            info!(
+                "A majority fork: {:?}",
+                AncestorIterator::new(last_vote_on_a, &blockstore).collect::<Vec<Slot>>()
+            );
+            break;
+        }
+        sleep(Duration::from_millis(100));
+    }
+
+    // Kill A and restart B with voting. B should now fork off
+    info!("Killing A");
+    let a_info = cluster.exit_node(&a_pubkey);
+
+    info!("Restarting B");
+    b_info.config.voting_disabled = false;
+    cluster.restart_node(&b_pubkey, b_info, SocketAddrSpace::Unspecified);
+
+    // B will fork off and accumulate enough lockout
+    info!("Allowing B to fork");
+    loop {
+        let blockstore = open_blockstore(&b_ledger_path);
+        let last_vote = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
+        let mut ancestors = AncestorIterator::new(last_vote, &blockstore);
+        if let Some(index) = ancestors.position(|x| x == common_ancestor_slot) {
+            if index > 7 {
+                info!(
+                    "B has forked for enough lockout: {:?}",
+                    AncestorIterator::new(last_vote, &blockstore).collect::<Vec<Slot>>()
+                );
+                break;
+            }
+        }
+        sleep(Duration::from_millis(1000));
+    }
+
+    info!("Kill B");
+    b_info = cluster.exit_node(&b_pubkey);
+
+    info!("Resolve the partition");
+    {
+        // Here we let B know about the missing blocks that A had produced on its partition
+        let a_blockstore = open_blockstore(&a_ledger_path);
+        let b_blockstore = open_blockstore(&b_ledger_path);
+        copy_blocks(last_vote_on_a, &a_blockstore, &b_blockstore);
+    }
+
+    // Now restart A and B and see if B is able to eventually switch onto the majority fork
+    info!("Restarting A & B");
+    cluster.restart_node(&a_pubkey, a_info, SocketAddrSpace::Unspecified);
+    cluster.restart_node(&b_pubkey, b_info, SocketAddrSpace::Unspecified);
+
+    let blockstore = open_blockstore(&a_ledger_path);
+    info!(
+        "A majority fork: {:?}",
+        AncestorIterator::new(last_vote_on_a, &blockstore).collect::<Vec<Slot>>()
+    );
+    let last_vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
+    let blockstore = open_blockstore(&b_ledger_path);
+    info!(
+        "B last vote: {} minority fork: {:?}",
+        last_vote_on_b,
+        AncestorIterator::new(last_vote_on_b, &blockstore).collect::<Vec<Slot>>()
+    );
+
+    loop {
+        let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
+        if vote_on_b > last_vote_on_b {
+            info!(
+                "B has voted again: {} last vote {}",
+                vote_on_b, last_vote_on_b
+            );
+            break;
+        }
+    }
+
+    // Now copy B's ledger and tower to C, restart C and see if B and C can have the majority fork
+    info!("Copying B's ledger to C");
+    std::fs::remove_dir_all(&c_ledger_path).unwrap();
+    let mut opt = fs_extra::dir::CopyOptions::new();
+    opt.copy_inside = true;
+    fs_extra::dir::copy(&b_ledger_path, &c_ledger_path, &opt).unwrap();
+
+    // remove B's tower in C's new copied ledger
+    info!("Removing B's tower in C's ledger dir");
+    remove_tower(&c_ledger_path, &b_pubkey);
+
+    // load B's tower and save it as C's tower
+    info!("Loading B's tower");
+    if let Some(mut b_tower) = restore_tower(&b_ledger_path, &b_pubkey) {
+        b_tower.node_pubkey = c_pubkey;
+        save_tower(&c_ledger_path, &b_tower, &c_info.info.keypair);
+        info!("C's new tower: {:?}", b_tower.tower_slots());
+    } else {
+        panic!("B's tower is missing");
+    }
+    info!("Restarting C");
+    cluster.restart_node(&c_pubkey, c_info, SocketAddrSpace::Unspecified);
+
+    info!("Waiting for B and C to be the majority fork and make a root");
+    cluster_tests::check_for_new_roots(
+        16,
+        &[cluster.get_contact_info(&b_pubkey).unwrap().clone()],
+        &cluster.connection_cache,
+        "test_slot_hashes_expiry",
+    );
+}
+
 // This test simulates a case where a leader sends a duplicate block with different ancestory. One
 // version builds off of the rooted path, however the other version builds off a pruned branch. The
 // validators that receive the pruned version will need to repair in order to continue, which
