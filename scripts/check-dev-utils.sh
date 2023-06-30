@@ -82,6 +82,7 @@ EOF
     ${dev_utils_feature} must not be used as normal dependencies, but is by: \`[crate]: [dependency]\`
       $abusers
 EOF
+    exit 1
   fi
 
   # Sanity-check that tainted packages has undergone the proper tedious rituals
@@ -129,6 +130,7 @@ EOF
     \`$dev_utils_feature\`. The following crates are in violation. \`[crate]: [dependant]\`
       $misconfigured_crates
 EOF
+    exit 1
   fi
 fi
 
