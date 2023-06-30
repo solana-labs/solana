@@ -12823,6 +12823,49 @@ fn test_rewards_computation() {
     assert_eq!(stake_rewards.stake_rewards.len(), expected_num_delegations);
 }
 
+/// Test `EpochRewards` sysvar creation, distribution, and burning.
+/// This test covers the following epoch_rewards_sysvar bank member functions, i.e.
+/// `create_epoch_rewards_sysvar`, `update_epoch_rewards_sysvar`, `burn_and_purge_account`.
+#[test]
+fn test_epoch_rewards_sysvar() {
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    bank.activate_feature(&feature_set::enable_partitioned_epoch_reward::id());
+
+    let total_rewards = 1_000_000_000; // a large rewards so that the sysvar account is rent-exempted.
+
+    // create epoch rewards sysvar
+    let expected_epoch_rewards = sysvar::epoch_rewards::EpochRewards {
+        total_rewards,
+        distributed_rewards: 10,
+        distribution_complete_block_height: 42,
+    };
+
+    bank.create_epoch_rewards_sysvar(total_rewards, 10, 42);
+    let account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
+    assert_eq!(account.lamports(), total_rewards - 10);
+    let epoch_rewards: sysvar::epoch_rewards::EpochRewards = from_account(&account).unwrap();
+    assert_eq!(epoch_rewards, expected_epoch_rewards);
+
+    // make a distribution from epoch rewards sysvar
+    bank.update_epoch_rewards_sysvar(10);
+    let account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
+    assert_eq!(account.lamports(), total_rewards - 20);
+    let epoch_rewards: sysvar::epoch_rewards::EpochRewards = from_account(&account).unwrap();
+    let expected_epoch_rewards = sysvar::epoch_rewards::EpochRewards {
+        total_rewards,
+        distributed_rewards: 20,
+        distribution_complete_block_height: 42,
+    };
+    assert_eq!(epoch_rewards, expected_epoch_rewards);
+
+    // burn epoch rewards sysvar
+    bank.burn_and_purge_account(&sysvar::epoch_rewards::id(), account);
+    let account = bank.get_account(&sysvar::epoch_rewards::id());
+    assert!(account.is_none());
+}
+
 /// Test rewards compuation and partitioned rewards distribution at the epoch boundary
 #[test]
 fn test_store_stake_accounts_in_partition() {
