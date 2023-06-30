@@ -31,6 +31,7 @@ source ci/rust-version.sh nightly
 declare tainted_packages=(
   "solana-banking-bench"
   "solana-banking-bench2"
+  "solana-poh-bench"
 )
 
 # convert to comma separeted (ref: https://stackoverflow.com/a/53839433)

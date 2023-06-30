@@ -18,7 +18,7 @@ solana-entry = { workspace = true }
 solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-perf = { workspace = true }
-solana-sdk = { workspace = true }
+solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 solana-version = { workspace = true }
 
 [package.metadata.docs.rs]
