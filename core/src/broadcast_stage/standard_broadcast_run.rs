@@ -498,8 +498,16 @@ impl BroadcastRun for StandardBroadcastRun {
     }
 }
 
+<<<<<<< HEAD:core/src/broadcast_stage/standard_broadcast_run.rs
 fn should_use_merkle_variant(_slot: Slot, _cluster_type: ClusterType, _shred_version: u16) -> bool {
     false
+=======
+fn should_use_merkle_variant(slot: Slot, cluster_type: ClusterType, shred_version: u16) -> bool {
+    match cluster_type {
+        ClusterType::Testnet => shred_version == 28353,
+        _ => (slot % 19) == 1,
+    }
+>>>>>>> 43a5ed3139 (rolls out merkle shreds to ~5% of mainnet slots (#32337)):turbine/src/broadcast_stage/standard_broadcast_run.rs
 }
 
 #[cfg(test)]
