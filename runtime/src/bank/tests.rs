@@ -12730,9 +12730,10 @@ fn test_distribute_partitioned_epoch_rewards_empty() {
     bank.distribute_partitioned_epoch_rewards();
 }
 
-/// Test partitioned credits of epoch rewards do cover all the rewards slice.
+/// Test partitioned credits and reward history updates of epoch rewards do cover all the rewards
+/// slice.
 #[test]
-fn test_epoch_credit_rewards() {
+fn test_epoch_credit_rewards_and_history_update() {
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
     genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
     let mut bank = Bank::new_for_tests(&genesis_config);
@@ -12758,21 +12759,28 @@ fn test_epoch_credit_rewards() {
     bank.set_epoch_reward_status_active(stake_rewards_bucket.clone());
 
     // Test partitioned stores
-    let mut total_num = 0;
     let mut total_rewards = 0;
+    let mut total_num_updates = 0;
+
+    let pre_update_history_len = bank.rewards.read().unwrap().len();
 
     for stake_rewards in stake_rewards_bucket {
         let total_rewards_in_lamports = bank.store_stake_accounts_in_partition(&stake_rewards);
-
-        let num_in_history = bank.update_reward_history_in_partition(&stake_rewards);
-        assert_eq!(stake_rewards.len(), num_in_history);
-        total_num += stake_rewards.len();
+        let num_history_updates = bank.update_reward_history_in_partition(&stake_rewards);
+        assert_eq!(stake_rewards.len(), num_history_updates);
         total_rewards += total_rewards_in_lamports;
+        total_num_updates += num_history_updates;
     }
 
+    let post_update_history_len = bank.rewards.read().unwrap().len();
+
     // assert that all rewards are credited
-    assert_eq!(total_num, expected_num);
     assert_eq!(total_rewards, expected_rewards);
+    assert_eq!(total_num_updates, expected_num);
+    assert_eq!(
+        total_num_updates,
+        post_update_history_len - pre_update_history_len
+    );
 }
 
 #[test]
