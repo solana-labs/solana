@@ -32,13 +32,14 @@ declare dev_util_tainted_packages=(
 )
 
 mode=${1:-full}
-if [[ $mode != "tree" &&
-      $mode != "check-bins" &&
-      $mode != "check-all-targets" &&
-      $mode != "full" ]]; then
-  echo "$0: unrecognized mode: $mode";
-  exit 1
-fi
+case "$mode" in
+  tree | check-bins | check-all-targets | full)
+    ;;
+  *)
+    echo "$0: unrecognized mode: $mode";
+    exit 1
+    ;;
+esac
 
 if [[ $mode = "tree" || $mode = "full" ]]; then
   # Run against the entire workspace dep graph (sans $dev_util_tainted_packages)
