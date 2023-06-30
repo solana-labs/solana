@@ -39,7 +39,7 @@ pub trait TieredAccountMeta: Sized {
 
     /// A builder function that initializes the account data size.
     /// The size here represents the logical data size without compression.
-    fn with_account_data_size(self, data_size: u64) -> Self;
+    fn with_account_data_size(self, account_data_size: u64) -> Self;
 
     /// A builder function that initializes the AccountMetaFlags of the current
     /// meta.

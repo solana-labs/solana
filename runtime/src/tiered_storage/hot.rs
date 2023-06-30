@@ -87,7 +87,7 @@ impl TieredAccountMeta for HotAccountMeta {
     }
 
     /// A builder function that initializes the account data size.
-    fn with_account_data_size(self, _data_size: u64) -> Self {
+    fn with_account_data_size(self, _account_data_size: u64) -> Self {
         // Hot meta does not store its data size as it derives its data length
         // by comparing the offets of two consecutive account meta entries.
         self
