@@ -207,11 +207,6 @@ impl CostModel {
 mod tests {
     use {
         super::*,
-        crate::{
-            bank::Bank,
-            genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            inline_spl_token,
-        },
         solana_sdk::{
             compute_budget::{self, ComputeBudgetInstruction},
             hash::Hash,
@@ -222,19 +217,11 @@ mod tests {
             system_program, system_transaction,
             transaction::Transaction,
         },
-        std::sync::Arc,
     };
 
     fn test_setup() -> (Keypair, Hash) {
         solana_logger::setup();
-        let GenesisConfigInfo {
-            genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config(10);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
-        let start_hash = bank.last_blockhash();
-        (mint_keypair, start_hash)
+        (Keypair::new(), Hash::new_unique())
     }
 
     #[test]
@@ -325,7 +312,7 @@ mod tests {
                 solana_sdk::pubkey::new_rand(),
             ],
             start_hash,
-            vec![inline_spl_token::id()],
+            vec![Pubkey::new_unique()],
             instructions,
         );
         let token_transaction = SanitizedTransaction::from_transaction_for_tests(tx);
@@ -363,7 +350,7 @@ mod tests {
                 solana_sdk::pubkey::new_rand(),
             ],
             start_hash,
-            vec![inline_spl_token::id(), compute_budget::id()],
+            vec![Pubkey::new_unique(), compute_budget::id()],
             instructions,
         );
         let token_transaction = SanitizedTransaction::from_transaction_for_tests(tx);
@@ -413,7 +400,7 @@ mod tests {
                 solana_sdk::pubkey::new_rand(),
             ],
             start_hash,
-            vec![inline_spl_token::id(), compute_budget::id()],
+            vec![Pubkey::new_unique(), compute_budget::id()],
             instructions,
         );
         let token_transaction = SanitizedTransaction::from_transaction_for_tests(tx);

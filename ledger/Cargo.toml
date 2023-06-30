@@ -38,6 +38,7 @@ serde_bytes = { workspace = true }
 sha2 = { workspace = true }
 solana-account-decoder = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
+solana-cost-model = { workspace = true }
 solana-entry = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }

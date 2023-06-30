@@ -20,6 +20,7 @@ members = [
     "client-test",
     "connection-cache",
     "core",
+    "cost-model",
     "dos",
     "download-utils",
     "entry",
@@ -312,6 +313,7 @@ solana-client = { path = "client", version = "=1.17.0" }
 solana-compute-budget-program = { path = "programs/compute-budget", version = "=1.17.0" }
 solana-config-program = { path = "programs/config", version = "=1.17.0" }
 solana-core = { path = "core", version = "=1.17.0" }
+solana-cost-model = { path = "cost-model", version = "=1.17.0" }
 solana-download-utils = { path = "download-utils", version = "=1.17.0" }
 solana-entry = { path = "entry", version = "=1.17.0" }
 solana-faucet = { path = "faucet", version = "=1.17.0" }

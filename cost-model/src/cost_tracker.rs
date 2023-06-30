@@ -5,6 +5,7 @@
 //!
 use {
     crate::{block_cost_limits::*, transaction_cost::TransactionCost},
+    solana_metrics::datapoint_info,
     solana_sdk::{
         clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::TransactionError,
     },
@@ -286,10 +287,6 @@ impl CostTracker {
 mod tests {
     use {
         super::*,
-        crate::{
-            bank::Bank,
-            genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        },
         solana_sdk::{
             hash::Hash,
             signature::{Keypair, Signer},
@@ -299,7 +296,7 @@ mod tests {
             },
         },
         solana_vote_program::vote_transaction,
-        std::{cmp, sync::Arc},
+        std::cmp,
     };
 
     impl CostTracker {
@@ -323,14 +320,7 @@ mod tests {
 
     fn test_setup() -> (Keypair, Hash) {
         solana_logger::setup();
-        let GenesisConfigInfo {
-            genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config(10);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
-        let start_hash = bank.last_blockhash();
-        (mint_keypair, start_hash)
+        (Keypair::new(), Hash::new_unique())
     }
 
     fn build_simple_transaction(
