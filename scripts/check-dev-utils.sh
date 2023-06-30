@@ -88,7 +88,8 @@ EOF
 
   # Sanity-check that tainted packages has undergone the proper tedious rituals
   # to be justified as such.
-  query=$(cat <<EOF
+  if [[ $allowed != '""' ]]; then
+    query=$(cat <<EOF
 .packages
   | map(select(
     .dependencies
@@ -121,17 +122,18 @@ EOF
 EOF
 )
 
-  # dev-utils-ci-marker is special proxy feature needed only when using
-  # dev-utils code as part of normal dependency. dev-utils will be enabled
-  # indirectly via this feature only if prepared correctly
-  misconfigured_crates=$(_ cargo "+${rust_nightly}" metadata --format-version=1 --features dev-utils-ci-marker | jq -r "$query")
-  if [[ -n "$misconfigured_crates" ]]; then
-    cat <<EOF 1>&2
+    # dev-utils-ci-marker is special proxy feature needed only when using
+    # dev-utils code as part of normal dependency. dev-utils will be enabled
+    # indirectly via this feature only if prepared correctly
+    misconfigured_crates=$(_ cargo "+${rust_nightly}" metadata  --format-version=1  --features dev-utils-ci-marker | jq -r "$query")
+    if [[ -n "$misconfigured_crates" ]]; then
+      cat <<EOF 1>&2
     All crates marked \`tainted\`, as well as their dependents, MUST declare the
     \`$dev_utils_feature\`. The following crates are in violation. \`[crate]: [dependant]\`
       $misconfigured_crates
 EOF
-    exit 1
+      exit 1
+    fi
   fi
 fi
 
