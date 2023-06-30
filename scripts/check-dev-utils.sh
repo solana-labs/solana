@@ -32,13 +32,9 @@ declare -r dev_utils_feature="dev-utils"
 declare dev_util_tainted_packages=(
 )
 
-tainted=("${dev_util_tainted_packages[@]}")
-if [[ ${#tainted[@]} -gt 0 ]]; then
-  allowed="\"${tainted[0]}\""
-  for package in "${tainted[@]:1}"; do
-    allowed="${allowed},\"$package\""
-  done
-fi
+# convert to comma separeted (ref: https://stackoverflow.com/a/53839433)
+printf -v allowed '"%s",' "${dev_util_tainted_packages[@]}"
+allowed="${allowed%,}"
 
 mode=${1:-full}
 case "$mode" in
