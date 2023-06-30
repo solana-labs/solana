@@ -26,8 +26,6 @@ source ci/rust-version.sh nightly
 # dev) dependencies, only if you're sure that there's good reason to bend
 # dev-util's original intention and that listed package isn't part of released
 # binaries.
-# Note also that dev-utils-ci-marker feature must be added and all of its
-# dependencies should be edited likewise if any.
 declare -r dev_utils_feature="dev-utils"
 declare dev_util_tainted_packages=(
 )
@@ -73,7 +71,7 @@ if [[ $mode = "tree" || $mode = "full" ]]; then
     )
   ))
   | map([.crate, .dependency] | join(": "))
-  | join("\n      ")
+  | join("\n    ")
 EOF
   )
 
@@ -85,68 +83,59 @@ EOF
       but is by "([crate]: [dependency])")"
     cat <<EOF 1>&2
 $error:
-  $abusers
+    $abusers
 EOF
     exit 1
   fi
 
   # Sanity-check that tainted packages has undergone the proper tedious rituals
   # to be justified as such.
-  if [[ $allowed != '""' ]]; then
-    query=$(cat <<EOF
+  query=$(cat <<EOF
 .packages
-  | map(select(
-    .dependencies
-      | any(.name as \$needle
-        | ([$allowed] | index(\$needle))
-      )
-  ))
-  | map([.name, (.features | keys)] as [\$dependant, \$dependant_features]
-    | (.dependencies
-      | map({
-        "crate" : .name,
-        "crateFeatures" : .features,
-        "dependant" : \$dependant,
-        "dependantFeatures" : \$dependant_features,
-      })
-    )
+  | map([.name, (.features | keys)] as [\$this_crate, \$this_feature]
+  | if .name as \$needle | ([$allowed] | index(\$needle))
+  then
+    {
+      "crate": \$this_crate,
+      "crateFeatures": \$this_feature,
+    }
+  elif .dependencies | any(
+    .name as \$needle | ([$allowed] | index(\$needle))
   )
+  then
+    .dependencies
+      | map({
+        "crate": \$this_crate,
+        "crateFeatures": \$this_feature,
+      })
+  else
+    []
+  end)
   | flatten
   | map(select(
-    ((.crateFeatures
-      | index("${dev_utils_feature}"))
-      | not
-    ) or ((.dependantFeatures
-      | index("${dev_utils_feature}"))
-      | not
-    )
+    (.crateFeatures | index("${dev_utils_feature}")) | not
   ))
-  | map([.crate, .dependant] | join(": "))
-  | join("\n      ")
+  | map(.crate)
+  | join("\n    ")
 EOF
     )
 
-    # dev-utils-ci-marker is special proxy feature needed only when using
-    # dev-utils code as part of normal dependency. dev-utils will be enabled
-    # indirectly via this feature only if prepared correctly
     misconfigured_crates=$(
       _ cargo "+${rust_nightly}" metadata \
         --format-version=1 \
-        --features dev-utils-ci-marker | jq -r "$query"
+        | jq -r "$query"
     )
     if [[ -n "$misconfigured_crates" ]]; then
       # Fold message for heredoc while stripping white-spaces by echo
       # shellcheck disable=SC2116
       error="$(echo All crates marked \`tainted\', as well as their \
-        dependents, MUST declare the \`${dev_utils_feature}\` and \
-        \`dev-utils-ci-marker\`. The following crates are in violation \
-        "([crate]: [dependant])")"
+        dependents, MUST declare the \`${dev_utils_feature}\`. The \
+        following crates are in violation)"
       cat <<EOF 1>&2
 $error:
-  $misconfigured_crates
+    $misconfigured_crates
 EOF
-      exit 1
-    fi
+    exit 1
   fi
 fi
 
