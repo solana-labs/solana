@@ -75,13 +75,15 @@ if [[ $mode = "tree" || $mode = "full" ]]; then
   | map([.crate, .dependency] | join(": "))
   | join("\n      ")
 EOF
-)
+  )
 
   abusers="$(_ cargo "+${rust_nightly}" metadata --format-version=1 | jq -r "$query")"
   if [[ -n "$abusers" ]]; then
+    error="$(echo "${dev_utils_feature}" must not be used as normal dependencies, \
+      but is by "([crate]: [dependency])")"
     cat <<EOF 1>&2
-    ${dev_utils_feature} must not be used as normal dependencies, but is by: \`[crate]: [dependency]\`
-      $abusers
+$error:
+  $abusers
 EOF
     exit 1
   fi
@@ -120,17 +122,24 @@ EOF
   | map([.crate, .dependant] | join(": "))
   | join("\n      ")
 EOF
-)
+    )
 
     # dev-utils-ci-marker is special proxy feature needed only when using
     # dev-utils code as part of normal dependency. dev-utils will be enabled
     # indirectly via this feature only if prepared correctly
-    misconfigured_crates=$(_ cargo "+${rust_nightly}" metadata  --format-version=1  --features dev-utils-ci-marker | jq -r "$query")
+    misconfigured_crates=$(
+      _ cargo "+${rust_nightly}" metadata \
+        --format-version=1 \
+        --features dev-utils-ci-marker | jq -r "$query"
+    )
     if [[ -n "$misconfigured_crates" ]]; then
+      error="$(echo All crates marked '`tainted`', as well as their \
+        dependents, MUST declare the \`${dev_utils_feature}\` and \
+        '`dev-utils-ci-marker`'. The following crates are in violation \
+        "([crate]: [dependant])")"
       cat <<EOF 1>&2
-    All crates marked \`tainted\`, as well as their dependents, MUST declare the
-    \`$dev_utils_feature\`. The following crates are in violation. \`[crate]: [dependant]\`
-      $misconfigured_crates
+$error:
+  $misconfigured_crates
 EOF
       exit 1
     fi
