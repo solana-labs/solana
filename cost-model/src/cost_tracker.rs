@@ -48,7 +48,7 @@ impl From<CostTrackerError> for TransactionError {
     }
 }
 
-#[derive(AbiExample, Debug)]
+#[derive(Debug)]
 pub struct CostTracker {
     account_cost_limit: u64,
     block_cost_limit: u64,
@@ -62,6 +62,14 @@ pub struct CostTracker {
     /// The amount of total account data size remaining.  If `Some`, then do not add transactions
     /// that would cause `account_data_size` to exceed this limit.
     account_data_size_limit: Option<u64>,
+}
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl ::solana_frozen_abi::abi_example::AbiExample for CostTracker {
+    fn example() -> Self {
+        // CostTracker is not Serialize so just rely on Default.
+        CostTracker::default()
+    }
 }
 
 impl Default for CostTracker {
