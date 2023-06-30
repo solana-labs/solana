@@ -16,7 +16,6 @@ use {
         accounts_partition::{self, PartitionIndex, RentPayingAccountsByPartition},
         ancestors::Ancestors,
         bank_client::BankClient,
-        bank_forks::BankForks,
         epoch_rewards_hasher::hash_rewards_into_partitions,
         genesis_utils::{
             self, activate_all_features, activate_feature, bootstrap_validator_stake_lamports,
@@ -12846,21 +12845,19 @@ fn test_rewards_computation_and_partitioned_distribution() {
     let num_slots_in_epoch = bank0.get_slots_in_epoch(bank0.epoch());
     assert_eq!(num_slots_in_epoch, 32);
 
-    let mut bank_forks = BankForks::new(bank0);
-
     // simulate block progress
+    let mut previous_bank = Arc::new(bank0);
     for slot in 0..num_slots_in_epoch + 2 {
-        let previous_bank = bank_forks.get(slot).unwrap();
         let pre_cap = previous_bank.capitalization();
         let curr_slot = slot + 1;
-        let bank = Bank::new_from_parent(&previous_bank, &Pubkey::default(), curr_slot);
-        let post_cap = bank.capitalization();
+        let curr_bank = Bank::new_from_parent(&previous_bank, &Pubkey::default(), curr_slot);
+        let post_cap = curr_bank.capitalization();
 
-        // Fill bank_forks with banks with votes landing in the next slot
+        // Fill banks with banks with votes landing in the next slot
         // Create enough banks such that vote account will root
         for validator_vote_keypairs in validator_keypairs.iter() {
             let vote_id = validator_vote_keypairs.vote_keypair.pubkey();
-            let mut vote_account = bank.get_account(&vote_id).unwrap();
+            let mut vote_account = curr_bank.get_account(&vote_id).unwrap();
             // generate some rewards
             let mut vote_state = Some(vote_state::from(&vote_account).unwrap());
             for i in 0..MAX_LOCKOUT_HISTORY + 42 {
@@ -12876,7 +12873,7 @@ fn test_rewards_computation_and_partitioned_distribution() {
                     _ => panic!("Has to be of type Current"),
                 };
             }
-            bank.store_account_and_update_capitalization(&vote_id, &vote_account);
+            curr_bank.store_account_and_update_capitalization(&vote_id, &vote_account);
         }
 
         match curr_slot {
@@ -12884,7 +12881,7 @@ fn test_rewards_computation_and_partitioned_distribution() {
                 // This is the first block of epoch 1. Reward computation should happen in this block.
                 // assert reward compute status activated at epoch boundary
                 assert!(matches!(
-                    bank.get_reward_interval(),
+                    curr_bank.get_reward_interval(),
                     RewardInterval::InsideInterval
                 ));
 
@@ -12897,7 +12894,7 @@ fn test_rewards_computation_and_partitioned_distribution() {
                 // assert stake rewards are paid at the first block after epoch boundary and the reward_status
                 // transitioned to inactive.
                 assert!(matches!(
-                    bank.get_reward_interval(),
+                    curr_bank.get_reward_interval(),
                     RewardInterval::OutsideInterval
                 ));
 
@@ -12908,7 +12905,7 @@ fn test_rewards_computation_and_partitioned_distribution() {
             34 => {
                 // This is the 3nd block of epoch 1. Reward distribution should have completed.
                 assert!(matches!(
-                    bank.get_reward_interval(),
+                    curr_bank.get_reward_interval(),
                     RewardInterval::OutsideInterval
                 ));
 
@@ -12923,7 +12920,7 @@ fn test_rewards_computation_and_partitioned_distribution() {
 
             _ => {}
         }
-        bank_forks.insert(bank);
+        previous_bank = Arc::new(curr_bank);
     }
 }
 
