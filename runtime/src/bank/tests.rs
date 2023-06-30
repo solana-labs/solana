@@ -12819,7 +12819,7 @@ fn test_rewards_computation() {
 /// This test covers the following epoch_rewards_sysvar bank member functions, i.e.
 /// `create_epoch_rewards_sysvar`, `update_epoch_rewards_sysvar`, `burn_and_purge_account`.
 #[test]
-fn test_epoch_reward_sysvar() {
+fn test_epoch_rewards_sysvar() {
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
     genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
     let mut bank = Bank::new_for_tests(&genesis_config);
