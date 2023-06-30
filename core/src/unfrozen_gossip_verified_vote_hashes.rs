@@ -1,5 +1,5 @@
 use {
-    crate::latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
+    crate::consensus::latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
     std::collections::{BTreeMap, HashMap},
 };

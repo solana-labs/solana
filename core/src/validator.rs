@@ -9,7 +9,11 @@ use {
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
-        consensus::{reconcile_blockstore_roots_with_external_source, ExternalRootSource, Tower},
+        consensus::{
+            reconcile_blockstore_roots_with_external_source,
+            tower_storage::{NullTowerStorage, TowerStorage},
+            ExternalRootSource, Tower,
+        },
         ledger_metric_report_service::LedgerMetricReportService,
         poh_timing_report_service::PohTimingReportService,
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
@@ -22,7 +26,6 @@ use {
         system_monitor_service::{
             verify_net_stats_access, SystemMonitorService, SystemMonitorStatsReportConfig,
         },
-        tower_storage::TowerStorage,
         tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE},
         tvu::{Tvu, TvuConfig, TvuSockets},
     },
@@ -289,7 +292,7 @@ impl Default for ValidatorConfig {
             wal_recovery_mode: None,
             run_verification: true,
             require_tower: false,
-            tower_storage: Arc::new(crate::tower_storage::NullTowerStorage::default()),
+            tower_storage: Arc::new(NullTowerStorage::default()),
             debug_keys: None,
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
             contact_save_interval: DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
@@ -386,7 +389,7 @@ impl Default for ValidatorStartProgress {
 }
 
 struct BlockstoreRootScan {
-    thread: Option<JoinHandle<Result<(), BlockstoreError>>>,
+    thread: Option<JoinHandle<Result<usize, BlockstoreError>>>,
 }
 
 impl BlockstoreRootScan {
@@ -399,7 +402,7 @@ impl BlockstoreRootScan {
             Some(
                 Builder::new()
                     .name("solBStoreRtScan".to_string())
-                    .spawn(move || blockstore.scan_and_fix_roots(&exit))
+                    .spawn(move || blockstore.scan_and_fix_roots(None, None, &exit))
                     .unwrap(),
             )
         } else {

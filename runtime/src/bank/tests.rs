@@ -16,6 +16,7 @@ use {
         accounts_partition::{self, PartitionIndex, RentPayingAccountsByPartition},
         ancestors::Ancestors,
         bank_client::BankClient,
+        epoch_rewards_hasher::hash_rewards_into_partitions,
         genesis_utils::{
             self, activate_all_features, activate_feature, bootstrap_validator_stake_lamports,
             create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
@@ -156,6 +157,12 @@ impl StakeReward {
 
             stake_account: validator_stake_account,
         }
+    }
+
+    pub fn credit(&mut self, amount: u64) {
+        self.stake_reward_info.lamports = amount as i64;
+        self.stake_reward_info.post_balance += amount;
+        self.stake_account.checked_add_lamports(amount).unwrap();
     }
 }
 
@@ -12631,6 +12638,29 @@ fn test_is_partitioned_reward_feature_enable() {
     assert!(bank.is_partitioned_rewards_feature_enabled());
 }
 
+/// Test that reward partition range panics when passing out of range partition index
+#[test]
+#[should_panic(expected = "index out of bounds: the len is 10 but the index is 15")]
+fn test_get_stake_rewards_partition_range_panic() {
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+
+    // simulate 40K - 1 rewards, the expected num of credit blocks should be 10.
+    let expected_num = 40959;
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    let stake_rewards_bucket =
+        hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 10);
+
+    bank.set_epoch_reward_status_active(stake_rewards_bucket.clone());
+
+    // This call should panic, i.e. 15 is out of the num_credit_blocks
+    let _range = &stake_rewards_bucket[15];
+}
+
 #[test]
 fn test_deactivate_epoch_reward_status() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
@@ -12700,6 +12730,59 @@ fn test_distribute_partitioned_epoch_rewards_empty() {
     bank.distribute_partitioned_epoch_rewards();
 }
 
+/// Test partitioned credits and reward history updates of epoch rewards do cover all the rewards
+/// slice.
+#[test]
+fn test_epoch_credit_rewards_and_history_update() {
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+
+    // setup the expected number of stake rewards
+    let expected_num = 12345;
+
+    let mut stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    bank.store_accounts((bank.slot(), &stake_rewards[..], bank.include_slot_in_hash()));
+
+    // Simulate rewards
+    let mut expected_rewards = 0;
+    for stake_reward in &mut stake_rewards {
+        stake_reward.credit(1);
+        expected_rewards += 1;
+    }
+
+    let stake_rewards_bucket =
+        hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 100);
+    bank.set_epoch_reward_status_active(stake_rewards_bucket.clone());
+
+    // Test partitioned stores
+    let mut total_rewards = 0;
+    let mut total_num_updates = 0;
+
+    let pre_update_history_len = bank.rewards.read().unwrap().len();
+
+    for stake_rewards in stake_rewards_bucket {
+        let total_rewards_in_lamports = bank.store_stake_accounts_in_partition(&stake_rewards);
+        let num_history_updates = bank.update_reward_history_in_partition(&stake_rewards);
+        assert_eq!(stake_rewards.len(), num_history_updates);
+        total_rewards += total_rewards_in_lamports;
+        total_num_updates += num_history_updates;
+    }
+
+    let post_update_history_len = bank.rewards.read().unwrap().len();
+
+    // assert that all rewards are credited
+    assert_eq!(total_rewards, expected_rewards);
+    assert_eq!(total_num_updates, expected_num);
+    assert_eq!(
+        total_num_updates,
+        post_update_history_len - pre_update_history_len
+    );
+}
+
 #[test]
 /// Test rewards compuation and partitioned rewards distribution at the epoch boundary
 fn test_rewards_computation() {
@@ -12738,6 +12821,49 @@ fn test_rewards_computation() {
 
     // assert that number of stake rewards matches
     assert_eq!(stake_rewards.stake_rewards.len(), expected_num_delegations);
+}
+
+/// Test `EpochRewards` sysvar creation, distribution, and burning.
+/// This test covers the following epoch_rewards_sysvar bank member functions, i.e.
+/// `create_epoch_rewards_sysvar`, `update_epoch_rewards_sysvar`, `burn_and_purge_account`.
+#[test]
+fn test_epoch_rewards_sysvar() {
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    bank.activate_feature(&feature_set::enable_partitioned_epoch_reward::id());
+
+    let total_rewards = 1_000_000_000; // a large rewards so that the sysvar account is rent-exempted.
+
+    // create epoch rewards sysvar
+    let expected_epoch_rewards = sysvar::epoch_rewards::EpochRewards {
+        total_rewards,
+        distributed_rewards: 10,
+        distribution_complete_block_height: 42,
+    };
+
+    bank.create_epoch_rewards_sysvar(total_rewards, 10, 42);
+    let account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
+    assert_eq!(account.lamports(), total_rewards - 10);
+    let epoch_rewards: sysvar::epoch_rewards::EpochRewards = from_account(&account).unwrap();
+    assert_eq!(epoch_rewards, expected_epoch_rewards);
+
+    // make a distribution from epoch rewards sysvar
+    bank.update_epoch_rewards_sysvar(10);
+    let account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
+    assert_eq!(account.lamports(), total_rewards - 20);
+    let epoch_rewards: sysvar::epoch_rewards::EpochRewards = from_account(&account).unwrap();
+    let expected_epoch_rewards = sysvar::epoch_rewards::EpochRewards {
+        total_rewards,
+        distributed_rewards: 20,
+        distribution_complete_block_height: 42,
+    };
+    assert_eq!(epoch_rewards, expected_epoch_rewards);
+
+    // burn epoch rewards sysvar
+    bank.burn_and_purge_account(&sysvar::epoch_rewards::id(), account);
+    let account = bank.get_account(&sysvar::epoch_rewards::id());
+    assert!(account.is_none());
 }
 
 /// Test rewards compuation and partitioned rewards distribution at the epoch boundary

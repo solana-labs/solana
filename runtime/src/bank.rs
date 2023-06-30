@@ -180,6 +180,7 @@ use {
         ops::{AddAssign, RangeInclusive},
         path::PathBuf,
         rc::Rc,
+        slice,
         sync::{
             atomic::{
                 AtomicBool, AtomicI64, AtomicU64, AtomicUsize,
@@ -4811,17 +4812,20 @@ impl Bank {
         TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
     }
 
-    /// Prepare a transaction batch without locking accounts for transaction simulation.
-    pub(crate) fn prepare_simulation_batch(
-        &self,
-        transaction: SanitizedTransaction,
+    /// Prepare a transaction batch from a single transaction without locking accounts
+    pub(crate) fn prepare_unlocked_batch_from_single_tx<'a>(
+        &'a self,
+        transaction: &'a SanitizedTransaction,
     ) -> TransactionBatch<'_, '_> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_result = transaction
             .get_account_locks(tx_account_lock_limit)
             .map(|_| ());
-        let mut batch =
-            TransactionBatch::new(vec![lock_result], self, Cow::Owned(vec![transaction]));
+        let mut batch = TransactionBatch::new(
+            vec![lock_result],
+            self,
+            Cow::Borrowed(slice::from_ref(transaction)),
+        );
         batch.set_needs_unlock(false);
         batch
     }
@@ -4845,7 +4849,7 @@ impl Bank {
         let account_keys = transaction.message().account_keys();
         let number_of_accounts = account_keys.len();
         let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
-        let batch = self.prepare_simulation_batch(transaction);
+        let batch = self.prepare_unlocked_batch_from_single_tx(&transaction);
         let mut timings = ExecuteTimings::default();
 
         let LoadAndExecuteTransactionsOutput {

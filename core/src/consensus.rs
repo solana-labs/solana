@@ -1,5 +1,15 @@
+pub mod fork_choice;
+pub mod heaviest_subtree_fork_choice;
+pub(crate) mod latest_validator_votes_for_frozen_banks;
+pub mod progress_map;
+mod tower1_14_11;
+mod tower1_7_14;
+pub mod tower_storage;
+pub mod tree_diff;
+pub mod vote_stake_tracker;
+
 use {
-    crate::{
+    self::{
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
         progress_map::{LockoutIntervals, ProgressMap},
@@ -1535,8 +1545,11 @@ pub mod test {
     use {
         super::*,
         crate::{
-            fork_choice::ForkChoice, heaviest_subtree_fork_choice::SlotHashKey,
-            replay_stage::HeaviestForkFailures, tower_storage::FileTowerStorage,
+            consensus::{
+                fork_choice::ForkChoice, heaviest_subtree_fork_choice::SlotHashKey,
+                tower_storage::FileTowerStorage,
+            },
+            replay_stage::HeaviestForkFailures,
             vote_simulator::VoteSimulator,
         },
         itertools::Itertools,

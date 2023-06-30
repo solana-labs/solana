@@ -11,6 +11,7 @@ use {
         },
         cluster_slots_service::{cluster_slots::ClusterSlots, ClusterSlotsService},
         completed_data_sets_service::CompletedDataSetsSender,
+        consensus::tower_storage::TowerStorage,
         cost_update_service::CostUpdateService,
         drop_bank_service::DropBankService,
         ledger_cleanup_service::LedgerCleanupService,
@@ -18,7 +19,6 @@ use {
         replay_stage::{ReplayStage, ReplayStageConfig},
         rewards_recorder_service::RewardsRecorderSender,
         shred_fetch_stage::ShredFetchStage,
-        tower_storage::TowerStorage,
         validator::ProcessBlockStore,
         voting_service::VotingService,
         warm_quic_cache_service::WarmQuicCacheService,
@@ -369,7 +369,10 @@ impl Tvu {
 pub mod tests {
     use {
         super::*,
-        crate::validator::TURBINE_QUIC_CONNECTION_POOL_SIZE,
+        crate::{
+            consensus::tower_storage::FileTowerStorage,
+            validator::TURBINE_QUIC_CONNECTION_POOL_SIZE,
+        },
         serial_test::serial,
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
@@ -470,7 +473,7 @@ pub mod tests {
             )),
             &poh_recorder,
             None,
-            Arc::new(crate::tower_storage::FileTowerStorage::default()),
+            Arc::new(FileTowerStorage::default()),
             &leader_schedule_cache,
             exit.clone(),
             block_commitment_cache,
