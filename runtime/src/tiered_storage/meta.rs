@@ -39,7 +39,7 @@ pub trait TieredAccountMeta: Sized {
 
     /// A builder function that initializes the account data size.
     /// The size here represents the logical data size without compression.
-    fn with_data_size(self, data_size: u64) -> Self;
+    fn with_account_data_size(self, account_data_size: u64) -> Self;
 
     /// A builder function that initializes the AccountMetaFlags of the current
     /// meta.
@@ -88,7 +88,7 @@ pub trait TieredAccountMeta: Sized {
 
     /// Returns the length of the data associated to this account based on the
     /// specified account block.
-    fn data_len(&self, _account_block: &[u8]) -> usize {
+    fn account_data_size(&self, _account_block: &[u8]) -> usize {
         unimplemented!();
     }
 

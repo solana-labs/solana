@@ -87,7 +87,7 @@ impl TieredAccountMeta for HotAccountMeta {
     }
 
     /// A builder function that initializes the account data size.
-    fn with_data_size(self, _data_size: u64) -> Self {
+    fn with_account_data_size(self, _account_data_size: u64) -> Self {
         // Hot meta does not store its data size as it derives its data length
         // by comparing the offets of two consecutive account meta entries.
         self
@@ -176,7 +176,7 @@ impl TieredAccountMeta for HotAccountMeta {
 
     /// Returns the length of the data associated to this account based on the
     /// specified account block.
-    fn data_len(&self, account_block: &[u8]) -> usize {
+    fn account_data_size(&self, account_block: &[u8]) -> usize {
         self.optional_fields_offset(account_block)
             .saturating_sub(self.account_data_padding() as usize)
     }
@@ -184,7 +184,7 @@ impl TieredAccountMeta for HotAccountMeta {
     /// Returns the data associated to this account based on the specified
     /// account block.
     fn account_data<'a>(&self, account_block: &'a [u8]) -> &'a [u8] {
-        &account_block[..self.data_len(account_block)]
+        &account_block[..self.account_data_size(account_block)]
     }
 }
 
@@ -324,7 +324,7 @@ pub mod tests {
                 .len()
                 .saturating_sub(AccountMetaOptionalFields::size_from_flags(&flags))
         );
-        assert_eq!(account_data.len(), meta.data_len(account_block));
+        assert_eq!(account_data.len(), meta.account_data_size(account_block));
         assert_eq!(account_data, meta.account_data(account_block));
         assert_eq!(meta.rent_epoch(account_block), optional_fields.rent_epoch);
         assert_eq!(
