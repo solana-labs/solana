@@ -12876,49 +12876,39 @@ fn test_rewards_computation_and_partitioned_distribution() {
             curr_bank.store_account_and_update_capitalization(&vote_id, &vote_account);
         }
 
-        match curr_slot {
-            32 => {
-                // This is the first block of epoch 1. Reward computation should happen in this block.
-                // assert reward compute status activated at epoch boundary
-                assert!(matches!(
-                    curr_bank.get_reward_interval(),
-                    RewardInterval::InsideInterval
-                ));
+        if curr_slot == num_slots_in_epoch {
+            // This is the first block of epoch 1. Reward computation should happen in this block.
+            // assert reward compute status activated at epoch boundary
+            assert!(matches!(
+                curr_bank.get_reward_interval(),
+                RewardInterval::InsideInterval
+            ));
 
-                // cap should increase because of new epoch rewards
-                assert!(post_cap > pre_cap);
-            }
+            // cap should increase because of new epoch rewards
+            assert!(post_cap > pre_cap);
+        } else if curr_slot == num_slots_in_epoch + 1 {
+            // This is the 2nd block of epoch 1. Reward distribution should happen in this block.
+            // assert stake rewards are paid at the first block after epoch boundary and the reward_status
+            // transitioned to inactive.
+            assert!(matches!(
+                curr_bank.get_reward_interval(),
+                RewardInterval::OutsideInterval
+            ));
 
-            33 => {
-                // This is the 2nd block of epoch 1. Reward distribution should happen in this block.
-                // assert stake rewards are paid at the first block after epoch boundary and the reward_status
-                // transitioned to inactive.
-                assert!(matches!(
-                    curr_bank.get_reward_interval(),
-                    RewardInterval::OutsideInterval
-                ));
+            // Rewards are transfered from epoch_rewards sysvar to stake accounts. But cap should stay the same.
+            assert_eq!(post_cap, pre_cap);
+        } else if curr_slot == num_slots_in_epoch + 2 {
+            // This is the 3nd block of epoch 1. Reward distribution should have completed.
+            assert!(matches!(
+                curr_bank.get_reward_interval(),
+                RewardInterval::OutsideInterval
+            ));
 
-                // Rewards are transfered from epoch_rewards sysvar to stake accounts. But cap should stay the same.
-                assert_eq!(post_cap, pre_cap);
-            }
-
-            34 => {
-                // This is the 3nd block of epoch 1. Reward distribution should have completed.
-                assert!(matches!(
-                    curr_bank.get_reward_interval(),
-                    RewardInterval::OutsideInterval
-                ));
-
-                // cap should not change.
-                assert_eq!(post_cap, pre_cap);
-            }
-
-            2.. => {
-                // slot is not in rewards, cap should not change
-                assert_eq!(post_cap, pre_cap);
-            }
-
-            _ => {}
+            // cap should not change.
+            assert_eq!(post_cap, pre_cap);
+        } else if curr_slot >= 2 {
+            // slot is not in rewards, cap should not change
+            assert_eq!(post_cap, pre_cap);
         }
         previous_bank = Arc::new(curr_bank);
     }
