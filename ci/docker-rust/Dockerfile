@@ -13,6 +13,7 @@ RUN set -x \
       buildkite-agent \
       clang \
       cmake \
+      jq \
       lcov \
       libudev-dev \
       mscgen \
