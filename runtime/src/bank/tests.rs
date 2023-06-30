@@ -12824,6 +12824,7 @@ fn test_rewards_computation() {
 }
 
 /// Test rewards compuation and partitioned rewards distribution at the epoch boundary
+#[allow(clippy::if_same_then_else)]
 #[test]
 fn test_rewards_computation_and_partitioned_distribution() {
     solana_logger::setup();
