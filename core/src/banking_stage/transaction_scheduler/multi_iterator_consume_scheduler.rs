@@ -17,7 +17,7 @@ use {
     },
     crossbeam_channel::Sender,
     itertools::Itertools,
-    solana_sdk::{slot_history::Slot, transaction::SanitizedTransaction},
+    solana_sdk::{pubkey::Pubkey, slot_history::Slot, transaction::SanitizedTransaction},
 };
 
 const QUEUED_TRANSACTION_LIMIT: usize = 64 * 100;
@@ -26,7 +26,7 @@ const QUEUED_TRANSACTION_LIMIT: usize = 64 * 100;
 /// Using a multi-iterator approach.
 pub struct MultiIteratorConsumeScheduler {
     in_flight_tracker: InFlightTracker,
-    account_locks: ThreadAwareAccountLocks,
+    account_locks: ThreadAwareAccountLocks<Pubkey>,
     batch_id_generator: BatchIdGenerator,
     consume_work_senders: Vec<Sender<ConsumeWork>>,
 }
@@ -145,7 +145,7 @@ impl MultiIteratorConsumeScheduler {
 
 struct ActiveMultiIteratorConsumeScheduler<'a> {
     in_flight_tracker: &'a mut InFlightTracker,
-    account_locks: &'a mut ThreadAwareAccountLocks,
+    account_locks: &'a mut ThreadAwareAccountLocks<Pubkey>,
 
     batch_account_locks: ReadWriteAccountSet,
     batches: Batches,

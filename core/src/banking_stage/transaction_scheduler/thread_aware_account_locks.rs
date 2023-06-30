@@ -1,10 +1,8 @@
-use {
-    solana_sdk::pubkey::Pubkey,
-    std::{
-        collections::{hash_map::Entry, HashMap},
-        fmt::{Debug, Display},
-        ops::{BitAnd, BitAndAssign, Sub},
-    },
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    fmt::{Debug, Display},
+    hash::Hash,
+    ops::{BitAnd, BitAndAssign, Sub},
 };
 
 pub(crate) const MAX_THREADS: usize = u64::BITS as usize;
@@ -28,23 +26,30 @@ struct AccountReadLocks {
     lock_counts: [LockCount; MAX_THREADS],
 }
 
+/// Trait alias for resource keys (account keys)
+pub(crate) trait ResourceKey:
+    Copy + Hash + PartialEq + Eq + Sized + Display + 'static
+{
+}
+impl<K: Copy + Hash + PartialEq + Eq + Sized + Display + 'static> ResourceKey for K {}
+
 /// Thread-aware account locks which allows for scheduling on threads
 /// that already hold locks on the account. This is useful for allowing
 /// queued transactions to be scheduled on a thread while the transaction
 /// is still being executed on the thread.
-pub(crate) struct ThreadAwareAccountLocks {
+pub(crate) struct ThreadAwareAccountLocks<K: ResourceKey> {
     /// Number of threads.
     num_threads: usize, // 0..MAX_THREADS
     /// Write locks - only one thread can hold a write lock at a time.
     /// Contains how many write locks are held by the thread.
-    write_locks: HashMap<Pubkey, AccountWriteLocks>,
+    write_locks: HashMap<K, AccountWriteLocks>,
     /// Read locks - multiple threads can hold a read lock at a time.
     /// Contains thread-set for easily checking which threads are scheduled.
     /// Contains how many read locks are held by each thread.
-    read_locks: HashMap<Pubkey, AccountReadLocks>,
+    read_locks: HashMap<K, AccountReadLocks>,
 }
 
-impl ThreadAwareAccountLocks {
+impl<K: ResourceKey> ThreadAwareAccountLocks<K> {
     /// Creates a new `ThreadAwareAccountLocks` with the given number of threads.
     pub(crate) fn new(num_threads: usize) -> Self {
         assert!(num_threads > 0, "num threads must be > 0");
@@ -67,8 +72,8 @@ impl ThreadAwareAccountLocks {
     /// selected by the `thread_selector` function.
     pub(crate) fn try_lock_accounts<'a>(
         &mut self,
-        write_account_locks: impl Iterator<Item = &'a Pubkey> + Clone,
-        read_account_locks: impl Iterator<Item = &'a Pubkey> + Clone,
+        write_account_locks: impl Iterator<Item = &'a K> + Clone,
+        read_account_locks: impl Iterator<Item = &'a K> + Clone,
         allowed_threads: ThreadSet,
         thread_selector: impl FnOnce(ThreadSet) -> ThreadId,
     ) -> Option<ThreadId> {
@@ -86,8 +91,8 @@ impl ThreadAwareAccountLocks {
     /// Unlocks the accounts for the given thread.
     pub(crate) fn unlock_accounts<'a>(
         &mut self,
-        write_account_locks: impl Iterator<Item = &'a Pubkey>,
-        read_account_locks: impl Iterator<Item = &'a Pubkey>,
+        write_account_locks: impl Iterator<Item = &'a K>,
+        read_account_locks: impl Iterator<Item = &'a K>,
         thread_id: ThreadId,
     ) {
         for account in write_account_locks {
@@ -102,8 +107,8 @@ impl ThreadAwareAccountLocks {
     /// Returns `ThreadSet` that the given accounts can be scheduled on.
     fn accounts_schedulable_threads<'a>(
         &self,
-        write_account_locks: impl Iterator<Item = &'a Pubkey>,
-        read_account_locks: impl Iterator<Item = &'a Pubkey>,
+        write_account_locks: impl Iterator<Item = &'a K>,
+        read_account_locks: impl Iterator<Item = &'a K>,
     ) -> Option<ThreadSet> {
         let mut schedulable_threads = ThreadSet::any(self.num_threads);
 
@@ -125,12 +130,12 @@ impl ThreadAwareAccountLocks {
     }
 
     /// Returns `ThreadSet` of schedulable threads for the given readable account.
-    fn read_schedulable_threads(&self, account: &Pubkey) -> ThreadSet {
+    fn read_schedulable_threads(&self, account: &K) -> ThreadSet {
         self.schedulable_threads::<false>(account)
     }
 
     /// Returns `ThreadSet` of schedulable threads for the given writable account.
-    fn write_schedulable_threads(&self, account: &Pubkey) -> ThreadSet {
+    fn write_schedulable_threads(&self, account: &K) -> ThreadSet {
         self.schedulable_threads::<true>(account)
     }
 
@@ -141,7 +146,7 @@ impl ThreadAwareAccountLocks {
     /// If only read-locked, the only write-schedulable thread is if a single thread
     ///   holds all read locks. Otherwise, no threads are write-schedulable.
     /// If only read-locked, all threads are read-schedulable.
-    fn schedulable_threads<const WRITE: bool>(&self, account: &Pubkey) -> ThreadSet {
+    fn schedulable_threads<const WRITE: bool>(&self, account: &K) -> ThreadSet {
         match (self.write_locks.get(account), self.read_locks.get(account)) {
             (None, None) => ThreadSet::any(self.num_threads),
             (None, Some(read_locks)) => {
@@ -169,8 +174,8 @@ impl ThreadAwareAccountLocks {
     /// Add locks for all writable and readable accounts on `thread_id`.
     fn lock_accounts<'a>(
         &mut self,
-        write_account_locks: impl Iterator<Item = &'a Pubkey>,
-        read_account_locks: impl Iterator<Item = &'a Pubkey>,
+        write_account_locks: impl Iterator<Item = &'a K>,
+        read_account_locks: impl Iterator<Item = &'a K>,
         thread_id: ThreadId,
     ) {
         assert!(
@@ -188,7 +193,7 @@ impl ThreadAwareAccountLocks {
 
     /// Locks the given `account` for writing on `thread_id`.
     /// Panics if the account is already locked for writing on another thread.
-    fn write_lock_account(&mut self, account: &Pubkey, thread_id: ThreadId) {
+    fn write_lock_account(&mut self, account: &K, thread_id: ThreadId) {
         match self.write_locks.entry(*account) {
             Entry::Occupied(mut entry) => {
                 let AccountWriteLocks {
@@ -222,7 +227,7 @@ impl ThreadAwareAccountLocks {
 
     /// Unlocks the given `account` for writing on `thread_id`.
     /// Panics if the account is not locked for writing on `thread_id`.
-    fn write_unlock_account(&mut self, account: &Pubkey, thread_id: ThreadId) {
+    fn write_unlock_account(&mut self, account: &K, thread_id: ThreadId) {
         match self.write_locks.entry(*account) {
             Entry::Occupied(mut entry) => {
                 let AccountWriteLocks {
@@ -246,7 +251,7 @@ impl ThreadAwareAccountLocks {
 
     /// Locks the given `account` for reading on `thread_id`.
     /// Panics if the account is already locked for writing on another thread.
-    fn read_lock_account(&mut self, account: &Pubkey, thread_id: ThreadId) {
+    fn read_lock_account(&mut self, account: &K, thread_id: ThreadId) {
         match self.read_locks.entry(*account) {
             Entry::Occupied(mut entry) => {
                 let AccountReadLocks {
@@ -277,7 +282,7 @@ impl ThreadAwareAccountLocks {
 
     /// Unlocks the given `account` for reading on `thread_id`.
     /// Panics if the account is not locked for reading on `thread_id`.
-    fn read_unlock_account(&mut self, account: &Pubkey, thread_id: ThreadId) {
+    fn read_unlock_account(&mut self, account: &K, thread_id: ThreadId) {
         match self.read_locks.entry(*account) {
             Entry::Occupied(mut entry) => {
                 let AccountReadLocks {
@@ -400,7 +405,7 @@ impl ThreadSet {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, solana_sdk::pubkey::Pubkey};
 
     const TEST_NUM_THREADS: usize = 4;
     const TEST_ANY_THREADS: ThreadSet = ThreadSet::any(TEST_NUM_THREADS);
@@ -413,13 +418,13 @@ mod tests {
     #[test]
     #[should_panic(expected = "num threads must be > 0")]
     fn test_too_few_num_threads() {
-        ThreadAwareAccountLocks::new(0);
+        ThreadAwareAccountLocks::<Pubkey>::new(0);
     }
 
     #[test]
     #[should_panic(expected = "num threads must be <=")]
     fn test_too_many_num_threads() {
-        ThreadAwareAccountLocks::new(MAX_THREADS + 1);
+        ThreadAwareAccountLocks::<Pubkey>::new(MAX_THREADS + 1);
     }
 
     #[test]
