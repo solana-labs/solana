@@ -99,9 +99,8 @@ impl ClusterConfig {
         cluster_lamports: u64,
         lamports_per_node: u64,
     ) -> Self {
-        let stakes: Vec<_> = vec![lamports_per_node; num_nodes];
         Self {
-            node_stakes: stakes,
+            node_stakes: vec![lamports_per_node; num_nodes],
             cluster_lamports,
             validator_configs: make_identical_validator_configs(
                 &ValidatorConfig::default_for_test(),
