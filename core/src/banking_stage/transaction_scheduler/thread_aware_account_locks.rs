@@ -1,8 +1,10 @@
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    fmt::{Debug, Display},
-    hash::Hash,
-    ops::{BitAnd, BitAndAssign, Sub},
+use {
+    super::transaction::ResourceKey,
+    std::{
+        collections::{hash_map::Entry, HashMap},
+        fmt::{Debug, Display},
+        ops::{BitAnd, BitAndAssign, Sub},
+    },
 };
 
 pub(crate) const MAX_THREADS: usize = u64::BITS as usize;
@@ -25,13 +27,6 @@ struct AccountReadLocks {
     thread_set: ThreadSet,
     lock_counts: [LockCount; MAX_THREADS],
 }
-
-/// Trait alias for resource keys (account keys)
-pub(crate) trait ResourceKey:
-    Copy + Hash + PartialEq + Eq + Sized + Display + 'static
-{
-}
-impl<K: Copy + Hash + PartialEq + Eq + Sized + Display + 'static> ResourceKey for K {}
 
 /// Thread-aware account locks which allows for scheduling on threads
 /// that already hold locks on the account. This is useful for allowing
