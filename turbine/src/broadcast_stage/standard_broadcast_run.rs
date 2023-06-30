@@ -501,8 +501,11 @@ impl BroadcastRun for StandardBroadcastRun {
     }
 }
 
-fn should_use_merkle_variant(_: Slot, cluster_type: ClusterType, shred_version: u16) -> bool {
-    cluster_type == ClusterType::Testnet && shred_version == 28353
+fn should_use_merkle_variant(slot: Slot, cluster_type: ClusterType, shred_version: u16) -> bool {
+    match cluster_type {
+        ClusterType::Testnet => shred_version == 28353,
+        _ => (slot % 19) == 1,
+    }
 }
 
 #[cfg(test)]
