@@ -4615,13 +4615,12 @@ fn test_vote_refresh_outside_slothash() {
 
     // Kill A and restart B with voting. B should now fork off
     info!("Killing A");
-    let _a_info = cluster.exit_node(&a_pubkey);
+    let a_info = cluster.exit_node(&a_pubkey);
 
     info!("Restarting B");
     b_info.config.voting_disabled = false;
     cluster.restart_node(&b_pubkey, b_info, SocketAddrSpace::Unspecified);
 
-    /*
     // B will fork off and accumulate enough lockout
     info!("Allowing B to fork");
     loop {
@@ -4656,6 +4655,7 @@ fn test_vote_refresh_outside_slothash() {
     cluster.restart_node(&a_pubkey, a_info, SocketAddrSpace::Unspecified);
     cluster.restart_node(&b_pubkey, b_info, SocketAddrSpace::Unspecified);
 
+    /*
     let blockstore = open_blockstore(&a_ledger_path);
     info!(
         "A majority fork: {:?}",
