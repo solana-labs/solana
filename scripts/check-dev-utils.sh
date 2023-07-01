@@ -77,12 +77,9 @@ EOF
 
   abusers="$(_ cargo "+${rust_nightly}" metadata --format-version=1 | jq -r "$query")"
   if [[ -n "$abusers" ]]; then
-    # Fold message for heredoc while stripping white-spaces by echo
-    # shellcheck disable=SC2116
-    error="$(echo "${dev_utils_feature}" must not be used as normal dependencies, \
-      but is by "([crate]: [dependency])")"
     cat <<EOF 1>&2
-$error:
+${dev_utils_feature} must not be used as normal dependencies, but is by \
+"([crate]: [dependency])":
     $abusers
 EOF
     exit 1
@@ -126,13 +123,9 @@ EOF
         | jq -r "$query"
     )
     if [[ -n "$misconfigured_crates" ]]; then
-      # Fold message for heredoc while stripping white-spaces by echo
-      # shellcheck disable=SC2116
-      error="$(echo All crates marked \`tainted\', as well as their \
-        dependents, MUST declare the \`${dev_utils_feature}\`. The \
-        following crates are in violation)"
       cat <<EOF 1>&2
-$error:
+All crates marked \`tainted\`, as well as their dependents, MUST declare the \
+\`$dev_utils_feature\`. The following crates are in violation:
     $misconfigured_crates
 EOF
     exit 1
