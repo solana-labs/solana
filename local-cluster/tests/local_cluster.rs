@@ -4481,6 +4481,7 @@ fn test_slot_hash_expiry() {
 }
 
 #[test]
+#[serial]
 fn test_vote_refresh_outside_slothash() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     solana_sdk::slot_hashes::set_entries_for_tests_only(8);
