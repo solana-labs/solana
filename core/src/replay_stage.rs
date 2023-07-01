@@ -2350,9 +2350,14 @@ impl ReplayStage {
                 last_voted_slot
             );
         }
+
+        // If we are a non voting validator or have an incorrect setup preventing us from
+        // generating vote txs, no need to refresh
+        let Some(last_vote_tx_blockhash) = tower.last_vote_tx_blockhash() else { return };
+
         if my_latest_landed_vote >= last_voted_slot
             || heaviest_bank_on_same_fork
-                .is_hash_valid_for_age(&tower.last_vote_tx_blockhash(), MAX_PROCESSING_AGE)
+                .is_hash_valid_for_age(&last_vote_tx_blockhash, MAX_PROCESSING_AGE)
             || {
                 // In order to avoid voting on multiple forks all past MAX_PROCESSING_AGE that don't
                 // include the last voted blockhash
@@ -6786,7 +6791,10 @@ pub(crate) mod tests {
         assert_eq!(votes.len(), 1);
         let vote_tx = &votes[0];
         assert_eq!(vote_tx.message.recent_blockhash, bank0.last_blockhash());
-        assert_eq!(tower.last_vote_tx_blockhash(), bank0.last_blockhash());
+        assert_eq!(
+            tower.last_vote_tx_blockhash().unwrap(),
+            bank0.last_blockhash()
+        );
         assert_eq!(tower.last_voted_slot().unwrap(), 0);
         bank1.process_transaction(vote_tx).unwrap();
         bank1.freeze();
@@ -6815,7 +6823,10 @@ pub(crate) mod tests {
             let votes = cluster_info.get_votes(&mut cursor);
             assert!(votes.is_empty());
             // Tower's latest vote tx blockhash hasn't changed either
-            assert_eq!(tower.last_vote_tx_blockhash(), bank0.last_blockhash());
+            assert_eq!(
+                tower.last_vote_tx_blockhash().unwrap(),
+                bank0.last_blockhash()
+            );
             assert_eq!(tower.last_voted_slot().unwrap(), 0);
         }
 
@@ -6848,7 +6859,10 @@ pub(crate) mod tests {
         assert_eq!(votes.len(), 1);
         let vote_tx = &votes[0];
         assert_eq!(vote_tx.message.recent_blockhash, bank1.last_blockhash());
-        assert_eq!(tower.last_vote_tx_blockhash(), bank1.last_blockhash());
+        assert_eq!(
+            tower.last_vote_tx_blockhash().unwrap(),
+            bank1.last_blockhash()
+        );
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
 
         // Trying to refresh the vote for bank 1 in bank 2 won't succeed because
@@ -6870,7 +6884,10 @@ pub(crate) mod tests {
         // No new votes have been submitted to gossip
         let votes = cluster_info.get_votes(&mut cursor);
         assert!(votes.is_empty());
-        assert_eq!(tower.last_vote_tx_blockhash(), bank1.last_blockhash());
+        assert_eq!(
+            tower.last_vote_tx_blockhash().unwrap(),
+            bank1.last_blockhash()
+        );
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
 
         // Create a bank where the last vote transaction will have expired
@@ -6929,7 +6946,7 @@ pub(crate) mod tests {
             expired_bank.last_blockhash()
         );
         assert_eq!(
-            tower.last_vote_tx_blockhash(),
+            tower.last_vote_tx_blockhash().unwrap(),
             expired_bank.last_blockhash()
         );
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
@@ -6985,7 +7002,7 @@ pub(crate) mod tests {
             expired_bank.last_blockhash()
         );
         assert_eq!(
-            tower.last_vote_tx_blockhash(),
+            tower.last_vote_tx_blockhash().unwrap(),
             expired_bank.last_blockhash()
         );
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
