@@ -44,16 +44,12 @@ case "$mode" in
     ;;
 esac
 
-# cargo metadata uses null for normal dep. while "dev", "build" are natually
-# used by other dep. kinds.
-declare -r normal_dependency="null";
-
 if [[ $mode = "tree" || $mode = "full" ]]; then
   query=$(cat <<EOF
 .packages
   | map(.name as \$crate
     | (.dependencies
-      | map(select(.kind == ${normal_dependency}))
+      | map(select((.kind // "normal") == "normal"))
       | map({
         "crate" : \$crate,
         "dependency" : .name,
