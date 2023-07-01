@@ -224,7 +224,8 @@ pub struct Tower {
     // blockhash of the voted block itself, depending if the vote slot was refreshed.
     // For instance, a vote for slot 5, may be refreshed/resubmitted for inclusion in
     //  block 10, in  which case `last_vote_tx_blockhash` equals the blockhash of 10, not 5.
-    last_vote_tx_blockhash: Hash,
+    // For non voting validators this is None
+    last_vote_tx_blockhash: Option<Hash>,
     last_timestamp: BlockTimestamp,
     #[serde(skip)]
     // Restored last voted slot which cannot be found in SlotHistory at replayed root
@@ -247,7 +248,7 @@ impl Default for Tower {
             vote_state: VoteState::default(),
             last_vote: VoteTransaction::from(VoteStateUpdate::default()),
             last_timestamp: BlockTimestamp::default(),
-            last_vote_tx_blockhash: Hash::default(),
+            last_vote_tx_blockhash: None,
             stray_restored_slot: Option::default(),
             last_switch_threshold_check: Option::default(),
         };
@@ -460,7 +461,7 @@ impl Tower {
         self.vote_state.tower()
     }
 
-    pub fn last_vote_tx_blockhash(&self) -> Hash {
+    pub fn last_vote_tx_blockhash(&self) -> Option<Hash> {
         self.last_vote_tx_blockhash
     }
 
@@ -504,7 +505,7 @@ impl Tower {
     }
 
     pub fn refresh_last_vote_tx_blockhash(&mut self, new_vote_tx_blockhash: Hash) {
-        self.last_vote_tx_blockhash = new_vote_tx_blockhash;
+        self.last_vote_tx_blockhash = Some(new_vote_tx_blockhash);
     }
 
     // Returns true if we have switched the new vote instruction that directly sets vote state
