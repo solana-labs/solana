@@ -4536,12 +4536,11 @@ fn test_vote_refresh_outside_slothash() {
 
     let a_ledger_path = cluster.ledger_path(&a_pubkey);
     let b_ledger_path = cluster.ledger_path(&b_pubkey);
-    let c_ledger_path = cluster.ledger_path(&c_pubkey);
 
     // Immediately kill B and C (we just needed it for the initial stake distribution)
     info!("Killing B and C");
     let mut b_info = cluster.exit_node(&b_pubkey);
-    let c_info = cluster.exit_node(&c_pubkey);
+    cluster.exit_node(&c_pubkey);
 
     // Let A run for a while until we get to the common ancestor
     info!("Letting A run until common_ancestor_slot");
@@ -4678,37 +4677,8 @@ fn test_vote_refresh_outside_slothash() {
             break;
         }
     }
-
-    // Now copy B's ledger and tower to C, restart C and see if B and C can have the majority fork
-    info!("Copying B's ledger to C");
-    std::fs::remove_dir_all(&c_ledger_path).unwrap();
-    let mut opt = fs_extra::dir::CopyOptions::new();
-    opt.copy_inside = true;
-    fs_extra::dir::copy(&b_ledger_path, &c_ledger_path, &opt).unwrap();
-
-    // remove B's tower in C's new copied ledger
-    info!("Removing B's tower in C's ledger dir");
-    remove_tower(&c_ledger_path, &b_pubkey);
-
-    // load B's tower and save it as C's tower
-    info!("Loading B's tower");
-    if let Some(mut b_tower) = restore_tower(&b_ledger_path, &b_pubkey) {
-        b_tower.node_pubkey = c_pubkey;
-        save_tower(&c_ledger_path, &b_tower, &c_info.info.keypair);
-        info!("C's new tower: {:?}", b_tower.tower_slots());
-    } else {
-        panic!("B's tower is missing");
-    }
-    info!("Restarting C");
-    cluster.restart_node(&c_pubkey, c_info, SocketAddrSpace::Unspecified);
-
-    info!("Waiting for B and C to be the majority fork and make a root");
-    cluster_tests::check_for_new_roots(
-        16,
-        &[cluster.get_contact_info(&b_pubkey).unwrap().clone()],
-        &cluster.connection_cache,
-        "test_slot_hashes_expiry",
-    );
+    let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
+    assert!(vote_on_b > last_vote_on_b);
 }
 
 // This test simulates a case where a leader sends a duplicate block with different ancestory. One
