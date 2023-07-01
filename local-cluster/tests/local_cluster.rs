@@ -4668,20 +4668,19 @@ fn test_vote_refresh_outside_slothash() {
         AncestorIterator::new(last_vote_on_b, &blockstore).collect::<Vec<Slot>>()
     );
 
-    /*
-    loop {
+    for i in 0..1000 {
         let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
         if vote_on_b > last_vote_on_b {
             info!(
-                "B has voted again: {} last vote {}",
-                vote_on_b, last_vote_on_b
+                "B has voted again: {} last vote {} loop {}",
+                vote_on_b, last_vote_on_b, i,
             );
             break;
         }
+        sleep(Duration::from_millis(1000));
     }
     let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
     assert!(vote_on_b > last_vote_on_b);
-    */
 }
 
 // This test simulates a case where a leader sends a duplicate block with different ancestory. One
