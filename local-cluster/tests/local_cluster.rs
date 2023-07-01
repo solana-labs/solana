@@ -4591,7 +4591,7 @@ fn test_vote_refresh_outside_slothash() {
         let blockstore = open_blockstore(&b_ledger_path);
         purge_slots_with_count(&blockstore, common_ancestor_slot + 1, 100);
     }
-/* 
+/*
     info!(
         "Run A on majority fork until it reaches slot hash expiry {}",
         solana_sdk::slot_hashes::get_entries()
