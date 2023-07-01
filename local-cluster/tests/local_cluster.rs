@@ -4655,7 +4655,6 @@ fn test_vote_refresh_outside_slothash() {
     cluster.restart_node(&a_pubkey, a_info, SocketAddrSpace::Unspecified);
     cluster.restart_node(&b_pubkey, b_info, SocketAddrSpace::Unspecified);
 
-    /*
     let blockstore = open_blockstore(&a_ledger_path);
     info!(
         "A majority fork: {:?}",
@@ -4669,6 +4668,7 @@ fn test_vote_refresh_outside_slothash() {
         AncestorIterator::new(last_vote_on_b, &blockstore).collect::<Vec<Slot>>()
     );
 
+    /*
     loop {
         let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
         if vote_on_b > last_vote_on_b {
