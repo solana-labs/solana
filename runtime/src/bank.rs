@@ -8769,6 +8769,10 @@ impl Bank {
         if slot < &self.slot {
             if let Ok(sysvar_cache) = self.sysvar_cache.read() {
                 if let Ok(slot_hashes) = sysvar_cache.get_slot_hashes() {
+                    error!(
+                        "is_in_slot_hashes_history {} {} {:?}",
+                        self.slot, slot, slot_hashes
+                    );
                     return slot_hashes.get(slot).is_some();
                 }
             }

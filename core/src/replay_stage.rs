@@ -3226,6 +3226,12 @@ impl ReplayStage {
                             Some(my_latest_landed_vote) =>
                             // Last vote did not land
                             {
+                                error!(
+                                    "last_vote_unable_to_land {} {} {}",
+                                    last_voted_slot,
+                                    my_latest_landed_vote,
+                                    heaviest_bank_on_same_voted_fork.slot()
+                                );
                                 my_latest_landed_vote < last_voted_slot
                                     // If we are already voting at the tip, there is nothing we can do.
                                     && last_voted_slot < heaviest_bank_on_same_voted_fork.slot()
