@@ -4615,7 +4615,7 @@ fn test_vote_refresh_outside_slothash() {
 
     // Kill A and restart B with voting. B should now fork off
     info!("Killing A");
-    let a_info = cluster.exit_node(&a_pubkey);
+    let _a_info = cluster.exit_node(&a_pubkey);
 
     info!("Restarting B");
     b_info.config.voting_disabled = false;
