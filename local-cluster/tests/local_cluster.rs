@@ -4540,7 +4540,7 @@ fn test_vote_refresh_outside_slothash() {
 
     // Immediately kill B and C (we just needed it for the initial stake distribution)
     info!("Killing B and C");
-    let mut b_info = cluster.exit_node(&b_pubkey);
+    let b_info = cluster.exit_node(&b_pubkey);
     cluster.exit_node(&c_pubkey);
 
     // Let A run for a while until we get to the common ancestor
