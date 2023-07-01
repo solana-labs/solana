@@ -4540,7 +4540,7 @@ fn test_vote_refresh_outside_slothash() {
 
     // Immediately kill B and C (we just needed it for the initial stake distribution)
     info!("Killing B and C");
-    let b_info = cluster.exit_node(&b_pubkey);
+    let mut b_info = cluster.exit_node(&b_pubkey);
     cluster.exit_node(&c_pubkey);
 
     // Let A run for a while until we get to the common ancestor
@@ -4591,7 +4591,7 @@ fn test_vote_refresh_outside_slothash() {
         let blockstore = open_blockstore(&b_ledger_path);
         purge_slots_with_count(&blockstore, common_ancestor_slot + 1, 100);
     }
-    /*
+
     info!(
         "Run A on majority fork until it reaches slot hash expiry {}",
         solana_sdk::slot_hashes::get_entries()
@@ -4621,6 +4621,7 @@ fn test_vote_refresh_outside_slothash() {
     b_info.config.voting_disabled = false;
     cluster.restart_node(&b_pubkey, b_info, SocketAddrSpace::Unspecified);
 
+    /*
     // B will fork off and accumulate enough lockout
     info!("Allowing B to fork");
     loop {
