@@ -201,7 +201,7 @@ impl HashStats {
             ("accounts_scan_us", self.scan_time_total_us, i64),
             ("eliminate_zeros_us", self.zeros_time_total_us, i64),
             ("hash_us", self.hash_time_total_us, i64),
-            ("sort", self.sort_time_total_us, i64),
+            ("sort_us", self.sort_time_total_us, i64),
             ("hash_total", self.hash_total, i64),
             ("storage_sort_us", self.storage_sort_us, i64),
             ("unreduced_entries", self.unreduced_entries, i64),
