@@ -4623,20 +4623,33 @@ fn test_vote_refresh_outside_slothash() {
 
     // B will fork off and accumulate enough lockout
     info!("Allowing B to fork");
-    loop {
+    let mut exit = false;
+    while !exit {
+        sleep(Duration::from_millis(200));
         let blockstore = open_blockstore(&b_ledger_path);
-        let last_vote = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
-        let mut ancestors = AncestorIterator::new(last_vote, &blockstore);
-        if let Some(index) = ancestors.position(|x| x == common_ancestor_slot) {
-            if index > 7 {
-                info!(
-                    "B has forked for enough lockout: {:?}",
-                    AncestorIterator::new(last_vote, &blockstore).collect::<Vec<Slot>>()
-                );
+        let (last_vote, _) = last_vote_in_tower(&b_ledger_path, &b_pubkey).unwrap();
+        let ancestors = AncestorIterator::new(last_vote, &blockstore);
+        let mut length_of_block = 0;
+        let mut prev = 0;
+        for (index, slot) in ancestors.enumerate() {
+            if (prev == 0 || prev - slot == 1) && index < 4 {
+                length_of_block += 1;
+                prev = slot;
+            }
+            if index == 4 && length_of_block < 4 {
+                break;
+            }
+            if slot == common_ancestor_slot {
+                if index > 7 {
+                    info!(
+                        "B has forked for enough lockout: {:?}",
+                        AncestorIterator::new(last_vote, &blockstore).collect::<Vec<Slot>>()
+                    );
+                    exit = true;
+                }
                 break;
             }
         }
-        sleep(Duration::from_millis(1000));
     }
 
     info!("Kill B");
@@ -4668,12 +4681,13 @@ fn test_vote_refresh_outside_slothash() {
         AncestorIterator::new(last_vote_on_b, &blockstore).collect::<Vec<Slot>>()
     );
 
-    loop {
+    for i in 0..100 {
+        sleep(Duration::from_millis(500));
         let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
         if vote_on_b > last_vote_on_b {
             info!(
-                "B has voted again: {} last vote {}",
-                vote_on_b, last_vote_on_b
+                "B has voted again: {} last vote {} loop {}",
+                vote_on_b, last_vote_on_b, i,
             );
             break;
         }
