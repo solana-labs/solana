@@ -135,6 +135,25 @@ pub fn wait_for_last_vote_in_tower_to_land_in_ledger(
     last_vote
 }
 
+// Fetches the last vote in the tower, blocking until it is different from last vote in ledger
+pub fn wait_for_last_vote_in_tower_differ_from_ledger(
+    ledger_path: &Path,
+    node_pubkey: &Pubkey,
+) -> Slot {
+    let mut my_vote = 0;
+    loop {
+        let (last_vote, _) = last_vote_in_tower(ledger_path, node_pubkey).unwrap();
+        my_vote = last_vote;
+        // We reopen in a loop to make sure we get updates
+        let blockstore = open_blockstore(ledger_path);
+        if !blockstore.is_full(last_vote) {
+            break;
+        }
+        sleep(Duration::from_millis(100));
+    }
+    my_vote
+}
+
 pub fn copy_blocks(end_slot: Slot, source: &Blockstore, dest: &Blockstore) {
     for slot in std::iter::once(end_slot).chain(AncestorIterator::new(end_slot, source)) {
         let source_meta = source.meta(slot).unwrap().unwrap();
