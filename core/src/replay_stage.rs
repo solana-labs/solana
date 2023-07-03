@@ -3116,7 +3116,12 @@ impl ReplayStage {
                     stats.my_latest_landed_vote = my_latest_landed_vote;
                     stats.computed = true;
                     new_stats.push(bank_slot);
-                    error!("{} my_latest_landed_vote {} {}", my_vote_pubkey, bank_slot, my_latest_landed_vote.unwrap_or(0));
+                    error!(
+                        "{} my_latest_landed_vote {} {}",
+                        my_vote_pubkey,
+                        bank_slot,
+                        my_latest_landed_vote.unwrap_or(0)
+                    );
                     datapoint_info!(
                         "bank_weight",
                         ("slot", bank_slot, i64),
