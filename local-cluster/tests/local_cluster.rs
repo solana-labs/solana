@@ -4625,7 +4625,7 @@ fn test_vote_refresh_outside_slothash() {
     info!("Allowing B to fork");
     let mut exit = false;
     while !exit {
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(200));
         let blockstore = open_blockstore(&b_ledger_path);
         let (last_vote, _) = last_vote_in_tower(&b_ledger_path, &b_pubkey).unwrap();
         let ancestors = AncestorIterator::new(last_vote, &blockstore);
@@ -4639,10 +4639,6 @@ fn test_vote_refresh_outside_slothash() {
             if index == 4 && length_of_block < 4 {
                 break;
             }
-            error!(
-                "{} {} {} {} {}",
-                &index, &slot, &prev, &length_of_block, &common_ancestor_slot
-            );
             if slot == common_ancestor_slot {
                 if index > 7 {
                     info!(
