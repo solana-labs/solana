@@ -55,25 +55,10 @@ extern "C" {
  */
 /* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/sbf/c/inc/sol/inc/alt_bn128.inc AND RUN `cargo run --bin gen-headers` */
 #ifndef SOL_SBFV2
-uint64_t sol_alt_bn128_group_op(
-        const uint64_t group_op,
-        const uint8_t *input,
-        const uint64_t input_size,
-        uint8_t *result
-);
+uint64_t sol_alt_bn128_group_op(const uint64_t, const uint8_t *, const uint64_t, uint8_t *);
 #else
-typedef uint64_t(*sol_alt_bn128_group_op_pointer_type)(
-        const uint64_t group_op,
-        const uint8_t *input,
-        const uint64_t input_size,
-        uint8_t *result
-);
-static uint64_t sol_alt_bn128_group_op(
-        const uint64_t group_op arg1,
-        const uint8_t *input arg2,
-        const uint64_t input_size arg3,
-        uint8_t *result
- arg4) {
+typedef uint64_t(*sol_alt_bn128_group_op_pointer_type)(const uint64_t, const uint8_t *, const uint64_t, uint8_t *);
+static uint64_t sol_alt_bn128_group_op(const uint64_t arg1, const uint8_t * arg2, const uint64_t arg3, uint8_t * arg4) {
   sol_alt_bn128_group_op_pointer_type sol_alt_bn128_group_op_pointer = (sol_alt_bn128_group_op_pointer_type) 2920034699;
   return sol_alt_bn128_group_op_pointer(arg1, arg2, arg3, arg4);
 }
