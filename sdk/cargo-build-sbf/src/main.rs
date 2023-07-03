@@ -166,6 +166,9 @@ fn get_base_rust_version(platform_tools_version: &str) -> String {
     let target_path =
         make_platform_tools_path_for_version("platform-tools", platform_tools_version);
     let rustc = target_path.join("rust").join("bin").join("rustc");
+    if !rustc.exists() {
+        return String::from("");
+    }
     let args = vec!["--version"];
     let output = spawn(&rustc, args, false);
     let rustc_re = Regex::new(r"(rustc [0-9]+\.[0-9]+\.[0-9]+).*").unwrap();
