@@ -140,7 +140,7 @@ pub fn wait_for_last_vote_in_tower_differ_from_ledger(
     ledger_path: &Path,
     node_pubkey: &Pubkey,
 ) -> Slot {
-    let mut my_vote = 0;
+    let mut my_vote;
     loop {
         let (last_vote, _) = last_vote_in_tower(ledger_path, node_pubkey).unwrap();
         my_vote = last_vote;
