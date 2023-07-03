@@ -7616,7 +7616,12 @@ impl AccountsDb {
         let slot = storages.max_slot_inclusive();
         let use_bg_thread_pool = config.use_bg_thread_pool;
         let scan_and_hash = || {
-            let cache_hash_data = Self::get_cache_hash_data(accounts_hash_cache_path, config, slot);
+            let (cache_hash_data, cache_hash_data_us) = measure_us!(Self::get_cache_hash_data(
+                accounts_hash_cache_path,
+                config,
+                slot
+            ));
+            stats.cache_hash_data_us += cache_hash_data_us;
 
             let bounds = Range {
                 start: 0,
