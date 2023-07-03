@@ -79,7 +79,7 @@ especially for the case of running staked validators.
 
 Running validator for live clusters (including mainnet-beta) inside Docker is
 not recommended and generally not supported. This is due to concerns of general
-Docker's containerzation overhead and resultant performance degradation unless
+Docker's containerization overhead and resultant performance degradation unless
 specially configured.
 
 We use Docker only for development purposes. Docker Hub contains images for all
