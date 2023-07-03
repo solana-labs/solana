@@ -4636,10 +4636,13 @@ fn test_vote_refresh_outside_slothash() {
                 length_of_block += 1;
                 prev = slot;
             }
-            if index ==4 && length_of_block < 4 {
+            if index == 4 && length_of_block < 4 {
                 break;
             }
-            error!("{} {} {} {} {}", &index, &slot, &prev, &length_of_block, &common_ancestor_slot);
+            error!(
+                "{} {} {} {} {}",
+                &index, &slot, &prev, &length_of_block, &common_ancestor_slot
+            );
             if slot == common_ancestor_slot {
                 if index > 7 {
                     info!(
