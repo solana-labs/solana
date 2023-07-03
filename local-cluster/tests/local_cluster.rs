@@ -4441,12 +4441,10 @@ fn test_slot_hash_expiry() {
     info!("Allowing B to fork");
     loop {
         let blockstore = open_blockstore(&b_ledger_path);
-        let last_vote = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
+        let last_vote = wait_for_last_vote_in_tower_differ_from_ledger(&b_ledger_path, &b_pubkey);
         let mut ancestors = AncestorIterator::new(last_vote, &blockstore);
         if let Some(index) = ancestors.position(|x| x == common_ancestor_slot) {
-            if index > 7 {
-                let last_vote =
-                    wait_for_last_vote_in_tower_differ_from_ledger(&b_ledger_path, &b_pubkey);
+            if index > 8 {
                 info!(
                     "B has forked for enough lockout: {:?}",
                     AncestorIterator::new(last_vote, &blockstore).collect::<Vec<Slot>>()
