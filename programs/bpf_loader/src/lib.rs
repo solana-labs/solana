@@ -1433,7 +1433,7 @@ fn process_loader_upgradeable_instruction(
                 invoke_context,
                 program_key,
                 &program_id,
-                UpgradeableLoaderState::size_of_program().saturating_add(new_len),
+                new_len,
                 clock_slot,
                 {
                     drop(programdata_account);
