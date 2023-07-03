@@ -46,4 +46,4 @@ For older accounts instead of `iconUrl` you might see `keybaseUsername` as those
 
 ## Keybase
 
-Previously Keybase was used by validators to provide their validator icon, however Keybase has sunset its service and thus is no longer supported. Some old validator info accounts will still contain keybase usernames this is reflected in the serialized data returend when querying these validator info accounts.
+Previously Keybase was used by validators to provide their validator icon, however Keybase has sunset its service and thus is no longer supported. Some old validator info accounts will still contain keybase usernames this is reflected in the serialized data returned when querying these validator info accounts.

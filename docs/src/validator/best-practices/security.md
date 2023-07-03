@@ -18,7 +18,7 @@ sudo apt upgrade
 
 Your withdrawer key gives the operator full control of the vote account. It is highly sensitive information and should not be stored on the validator itself.
 
-There are a number of options for withdrawer key management.  Some operators choose to use hardware wallets or paper wallets for the withdrawer keypair.  Another option is a multisig where each key of the miltisig is a hardware wallet or paper wallet. Whichever option you choose, make sure the authorized withdrawer key is stored securely and that it has been generated on a trusted computer (other than your validator computer).
+There are a number of options for withdrawer key management.  Some operators choose to use hardware wallets or paper wallets for the withdrawer keypair.  Another option is a multisig where each key of the multisig is a hardware wallet or paper wallet. Whichever option you choose, make sure the authorized withdrawer key is stored securely and that it has been generated on a trusted computer (other than your validator computer).
 
 To reiterate, the withdrawer keypair should never be stored on your validator at any time.
 
