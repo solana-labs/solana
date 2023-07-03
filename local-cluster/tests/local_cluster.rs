@@ -4625,16 +4625,29 @@ fn test_vote_refresh_outside_slothash() {
     info!("Allowing B to fork");
     loop {
         let blockstore = open_blockstore(&b_ledger_path);
-        let last_vote = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
-        let mut ancestors = AncestorIterator::new(last_vote, &blockstore);
-        if let Some(index) = ancestors.position(|x| x == common_ancestor_slot) {
-            if index > 7 {
+        let (last_vote, _) = last_vote_in_tower(&b_ledger_path, &b_pubkey).unwrap();
+        let ancestors = AncestorIterator::new(last_vote, &blockstore);
+        let mut exit = false;
+        let mut length_of_block = 0;
+        let mut prev = 0;
+        for (index, slot) in ancestors.enumerate() {
+            if prev == 0 || prev - slot == 1 {
+                length_of_block += 1;
+                prev = slot;
+            } else if length_of_block < 4 {
+                break;
+            }
+            if slot == common_ancestor_slot && index > 7 {
                 info!(
                     "B has forked for enough lockout: {:?}",
                     AncestorIterator::new(last_vote, &blockstore).collect::<Vec<Slot>>()
                 );
+                exit = true;
                 break;
             }
+        }
+        if exit {
+            break;
         }
         sleep(Duration::from_millis(1000));
     }
