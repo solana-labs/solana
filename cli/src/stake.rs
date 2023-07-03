@@ -506,7 +506,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .long("force")
                         .takes_value(false)
                         .hidden(hidden_unless_forced()) // Don't document this argument to discourage its use
-                        .help("Don't enforce the minimum delegation check.")
+                        .help("Override minimum delegation sanity checks")
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
