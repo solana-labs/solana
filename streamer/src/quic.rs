@@ -28,7 +28,7 @@ use {
 pub const MAX_STAKED_CONNECTIONS: usize = 2000;
 pub const MAX_UNSTAKED_CONNECTIONS: usize = 500;
 
-struct SkipClientVerification;
+pub struct SkipClientVerification;
 
 impl SkipClientVerification {
     pub fn new() -> Arc<Self> {

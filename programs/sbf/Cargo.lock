@@ -6174,13 +6174,18 @@ name = "solana-turbine"
 version = "1.17.0"
 dependencies = [
  "bincode",
+ "bytes",
  "crossbeam-channel",
+ "futures 0.3.28",
  "itertools",
  "log",
  "lru",
+ "quinn",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
+ "rcgen",
+ "rustls 0.20.8",
  "solana-client",
  "solana-entry",
  "solana-gossip",
@@ -6197,6 +6202,7 @@ dependencies = [
  "solana-sdk",
  "solana-streamer",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
