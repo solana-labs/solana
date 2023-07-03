@@ -3116,6 +3116,7 @@ impl ReplayStage {
                     stats.my_latest_landed_vote = my_latest_landed_vote;
                     stats.computed = true;
                     new_stats.push(bank_slot);
+                    error!("{} my_latest_landed_vote {} {}", my_vote_pubkey, bank_slot, my_latest_landed_vote.unwrap_or(0));
                     datapoint_info!(
                         "bank_weight",
                         ("slot", bank_slot, i64),
@@ -3228,8 +3229,8 @@ impl ReplayStage {
                             {
                                 error!(
                                     "last_vote_unable_to_land {} {} {}",
-                                    last_voted_slot,
                                     my_latest_landed_vote,
+                                    last_voted_slot,
                                     heaviest_bank_on_same_voted_fork.slot()
                                 );
                                 my_latest_landed_vote < last_voted_slot
