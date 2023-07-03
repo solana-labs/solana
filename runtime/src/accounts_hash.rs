@@ -190,9 +190,11 @@ impl HashStats {
     }
 
     pub fn log(&mut self) {
-        let total_time_us = self.scan_time_total_us
+        let total_time_us = self.mark_time_us
+            + self.scan_time_total_us
             + self.zeros_time_total_us
             + self.hash_time_total_us
+            + self.sort_time_total_us
             + self.collect_snapshots_us
             + self.storage_sort_us;
         datapoint_info!(
