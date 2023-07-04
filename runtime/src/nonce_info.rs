@@ -3,10 +3,10 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         message::SanitizedMessage,
+        nonce_account,
         pubkey::Pubkey,
-        transaction::TransactionError,
+        transaction::{self, TransactionError},
         transaction_context::TransactionAccount,
-        {nonce_account, transaction},
     },
 };
 
