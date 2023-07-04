@@ -78,7 +78,7 @@ block.
 Together the two merkle proofs show a transaction `T` was included in a block
 with bank hash `B`.
 
-An Accounts-Hash is the hash of the concatentation of the state hashes of
+An Accounts-Hash is the hash of the concatenation of the state hashes of
 each account modified during the current slot.
 
 Transaction status is necessary for the receipt because the state receipt is
