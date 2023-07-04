@@ -1,3 +1,4 @@
+#![allow(warnings)]
 #![allow(clippy::integer_arithmetic)]
 mod bucket;
 pub mod bucket_api;

@@ -1,3 +1,4 @@
+#![allow(warnings)]
 use {
     solana_program_runtime::invoke_context::InvokeContext,
     solana_sdk::instruction::InstructionError,

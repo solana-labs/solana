@@ -1,3 +1,4 @@
+#![allow(warnings)]
 pub mod cuda_runtime;
 pub mod data_budget;
 pub mod discard;

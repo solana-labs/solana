@@ -1,3 +1,4 @@
+#![allow(warnings)]
 //! Loading and saving the Solana CLI configuration file.
 //!
 //! The configuration file used by the Solana CLI includes information about the

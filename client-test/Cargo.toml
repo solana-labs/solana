@@ -29,7 +29,7 @@ solana-test-validator = { path = "../test-validator", version = "=1.14.13" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.14.13" }
 solana-version = { path = "../version", version = "=1.14.13" }
 systemstat = "0.1.11"
-tokio = { version = "~1.14.1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
 solana-logger = { path = "../logger", version = "=1.14.13" }

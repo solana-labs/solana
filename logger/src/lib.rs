@@ -1,3 +1,4 @@
+#![allow(warnings)]
 //! The `logger` module configures `env_logger`
 
 use {

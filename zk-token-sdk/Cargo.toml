@@ -15,7 +15,7 @@ num-traits = "0.2"
 solana-program = { path = "../sdk/program", version = "=1.14.13" }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
-aes-gcm-siv = "0.10.3"
+aes-gcm-siv = "0.11.1"
 arrayref = "0.3.6"
 bincode = "1"
 byteorder = "1"

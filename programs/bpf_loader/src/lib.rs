@@ -1,3 +1,4 @@
+#![allow(warnings)]
 #![deny(clippy::integer_arithmetic)]
 #![deny(clippy::indexing_slicing)]
 

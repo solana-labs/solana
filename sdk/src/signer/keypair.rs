@@ -61,14 +61,14 @@ impl Keypair {
     }
 
     /// Gets this `Keypair`'s SecretKey
-    pub fn secret(&self) -> &ed25519_dalek::SecretKey {
-        &self.0.secret
+    pub fn secret(&self) -> ed25519_dalek::SecretKey {
+        self.0.secret_key()
     }
 }
 
 impl Signer for Keypair {
     fn pubkey(&self) -> Pubkey {
-        Pubkey::new(self.0.public.as_ref())
+        Pubkey::new(self.0.public_key().as_ref())
     }
 
     fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
@@ -159,9 +159,7 @@ pub fn keypair_from_seed(seed: &[u8]) -> Result<Keypair, Box<dyn error::Error>> 
     }
     let secret = ed25519_dalek::SecretKey::from_bytes(&seed[..ed25519_dalek::SECRET_KEY_LENGTH])
         .map_err(|e| e.to_string())?;
-    let public = ed25519_dalek::PublicKey::from(&secret);
-    let dalek_keypair = ed25519_dalek::Keypair { secret, public };
-    Ok(Keypair(dalek_keypair))
+    Ok(Keypair(ed25519_dalek::Keypair::from(secret)))
 }
 
 /// Generates a Keypair using Bip32 Hierarchical Derivation if derivation-path is provided;
@@ -181,11 +179,7 @@ fn bip32_derived_keypair(
 ) -> Result<Keypair, Bip32Error> {
     let extended = ed25519_dalek_bip32::ExtendedSecretKey::from_seed(seed)
         .and_then(|extended| extended.derive(&derivation_path))?;
-    let extended_public_key = extended.public_key();
-    Ok(Keypair(ed25519_dalek::Keypair {
-        secret: extended.secret_key,
-        public: extended_public_key,
-    }))
+    Ok(Keypair(ed25519_dalek::Keypair::from(extended.secret_key)))
 }
 
 pub fn generate_seed_from_seed_phrase_and_passphrase(

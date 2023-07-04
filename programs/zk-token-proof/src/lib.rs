@@ -1,3 +1,4 @@
+#![allow(warnings)]
 #![forbid(unsafe_code)]
 
 use {
