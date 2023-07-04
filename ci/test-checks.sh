@@ -112,7 +112,7 @@ else
   _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" sort --workspace --check
 fi
 
-_ scripts/check-dev-utils.sh tree
+_ scripts/check-dev-context-only-utils.sh tree
 
 _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" fmt --all -- --check
 
