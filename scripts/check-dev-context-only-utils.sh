@@ -76,7 +76,7 @@ EOF
     jq -r "$query")"
   if [[ -n "$abusers" ]]; then
     cat <<EOF 1>&2
-\`dev-context-only-utils\' must not be used as normal dependencies, but is by \
+\`dev-context-only-utils\` must not be used as normal dependencies, but is by \
 "([crate]: [dependency])":
     $abusers
 EOF
