@@ -3985,8 +3985,8 @@ fn main() {
 
                             (datetime.to_rfc3339(), format!("{hash}"))
                         } else {
-                            let na = "N/A";
-                            (String::from(na), String::from(na))
+                            let unknown = "Unknown";
+                            (String::from(unknown), String::from(unknown))
                         };
                     println!(
                         "{:>20} {:>44} {:>32} {:>13}",
@@ -4182,12 +4182,10 @@ pub mod tests {
         blockstore.insert_shreds(shreds, None, false).unwrap();
 
         // Mark even shreds as optimistically confirmed
-        (0..num_slots).for_each(|slot| {
-            if slot % 2 == 0 {
-                blockstore
-                    .insert_optimistic_slot(slot, &Hash::default(), UnixTimestamp::default())
-                    .unwrap();
-            }
+        (0..num_slots).step_by(2).for_each(|slot| {
+            blockstore
+                .insert_optimistic_slot(slot, &Hash::default(), UnixTimestamp::default())
+                .unwrap();
         });
 
         let exclude_vote_only_slots = false;
