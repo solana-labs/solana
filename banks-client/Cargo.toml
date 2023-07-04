@@ -17,7 +17,7 @@ solana-program = { path = "../sdk/program", version = "=1.14.13" }
 solana-sdk = { path = "../sdk", version = "=1.14.13" }
 tarpc = { version = "0.29.0", features = ["full"] }
 thiserror = "1.0"
-tokio = { version = "~1.14.1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 tokio-serde = { version = "0.8", features = ["bincode"] }
 
 [dev-dependencies]

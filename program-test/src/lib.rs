@@ -1,3 +1,4 @@
+#![allow(warnings)]
 //! The solana-program-test provides a BanksClient-based test framework BPF programs
 #![allow(clippy::integer_arithmetic)]
 

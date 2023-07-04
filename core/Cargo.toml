@@ -63,7 +63,7 @@ solana-vote-program = { path = "../programs/vote", version = "=1.14.13" }
 sys-info = "0.9.1"
 tempfile = "3.3.0"
 thiserror = "1.0"
-tokio = { version = "~1.14.1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 trees = "0.4.2"
 
 [dev-dependencies]

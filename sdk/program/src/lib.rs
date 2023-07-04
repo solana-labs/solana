@@ -1,3 +1,4 @@
+#![allow(warnings)]
 //! The base library for all Solana on-chain Rust programs.
 //!
 //! All Solana Rust programs that run on-chain will link to this crate, which

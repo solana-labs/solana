@@ -53,7 +53,7 @@ spl-token = { version = "=3.5.0", features = ["no-entrypoint"] }
 spl-token-2022 = { version = "=0.5.0", features = ["no-entrypoint"] }
 stream-cancel = "0.8.1"
 thiserror = "1.0"
-tokio = { version = "~1.14.1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.6", features = ["codec", "compat"] }
 
 [dev-dependencies]

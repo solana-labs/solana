@@ -1,3 +1,4 @@
+#![allow(warnings)]
 //! Convenience macro to declare a static public key and functions to interact with it
 //!
 //! Input: a single literal base58 string representation of a program's id

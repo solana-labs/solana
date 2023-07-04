@@ -1,3 +1,4 @@
+#![allow(warnings)]
 #![allow(clippy::integer_arithmetic, clippy::op_ref)]
 
 // The warning `clippy::op_ref` is disabled to allow efficient operator arithmetic of structs that

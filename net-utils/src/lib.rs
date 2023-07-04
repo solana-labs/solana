@@ -1,3 +1,4 @@
+#![allow(warnings)]
 //! The `net_utils` module assists with networking
 #![allow(clippy::integer_arithmetic)]
 use {

@@ -1,3 +1,4 @@
+#![allow(warnings)]
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
 
 extern crate serde_derive;

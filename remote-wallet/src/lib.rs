@@ -1,3 +1,4 @@
+#![allow(warnings)]
 #![allow(clippy::integer_arithmetic)]
 #![allow(dead_code)]
 pub mod ledger;

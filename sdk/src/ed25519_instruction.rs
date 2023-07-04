@@ -28,7 +28,7 @@ pub struct Ed25519SignatureOffsets {
 
 pub fn new_ed25519_instruction(keypair: &ed25519_dalek::Keypair, message: &[u8]) -> Instruction {
     let signature = keypair.sign(message).to_bytes();
-    let pubkey = keypair.public.to_bytes();
+    let pubkey = keypair.public_key().to_bytes();
 
     assert_eq!(pubkey.len(), PUBKEY_SERIALIZED_SIZE);
     assert_eq!(signature.len(), SIGNATURE_SERIALIZED_SIZE);

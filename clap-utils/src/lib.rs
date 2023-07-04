@@ -1,3 +1,4 @@
+#![allow(warnings)]
 use thiserror::Error;
 
 pub struct ArgConstant<'a> {
