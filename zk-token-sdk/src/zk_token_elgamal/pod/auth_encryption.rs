@@ -8,10 +8,13 @@ use {
     std::fmt,
 };
 
+/// Byte length of an authenticated encryption ciphertext
+const AE_CIPHERTEXT_LEN: usize = 36;
+
 /// The `AeCiphertext` type as a `Pod`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
-pub struct AeCiphertext(pub [u8; 36]);
+pub struct AeCiphertext(pub [u8; AE_CIPHERTEXT_LEN]);
 
 // `AeCiphertext` is a wrapper type for a byte array, which is both `Pod` and `Zeroable`. However,
 // the marker traits `bytemuck::Pod` and `bytemuck::Zeroable` can only be derived for power-of-two

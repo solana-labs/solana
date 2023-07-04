@@ -36,10 +36,7 @@ use {
         },
         time::{Duration, Instant},
     },
-    tokio::{
-        task::JoinHandle,
-        time::{sleep, timeout},
-    },
+    tokio::{task::JoinHandle, time::timeout},
 };
 
 const WAIT_FOR_STREAM_TIMEOUT: Duration = Duration::from_millis(100);
@@ -135,7 +132,6 @@ async fn run_server(
     coalesce: Duration,
 ) {
     const WAIT_FOR_CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);
-    const WAIT_BETWEEN_NEW_CONNECTIONS: Duration = Duration::from_millis(1);
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
     let unstaked_connection_table: Arc<Mutex<ConnectionTable>> = Arc::new(Mutex::new(
@@ -173,7 +169,6 @@ async fn run_server(
                 stats.clone(),
                 wait_for_chunk_timeout,
             ));
-            sleep(WAIT_BETWEEN_NEW_CONNECTIONS).await;
         } else {
             debug!("accept(): Timed out waiting for connection");
         }
@@ -195,18 +190,22 @@ fn prune_unstaked_connection_table(
     }
 }
 
-fn get_connection_stake(
-    connection: &Connection,
-    staked_nodes: &RwLock<StakedNodes>,
-) -> Option<(Pubkey, u64, u64, u64, u64)> {
+pub fn get_remote_pubkey(connection: &Connection) -> Option<Pubkey> {
     // Use the client cert only if it is self signed and the chain length is 1.
-    let pubkey = connection
+    connection
         .peer_identity()?
         .downcast::<Vec<rustls::Certificate>>()
         .ok()
         .filter(|certs| certs.len() == 1)?
         .first()
-        .and_then(get_pubkey_from_tls_certificate)?;
+        .and_then(get_pubkey_from_tls_certificate)
+}
+
+fn get_connection_stake(
+    connection: &Connection,
+    staked_nodes: &RwLock<StakedNodes>,
+) -> Option<(Pubkey, u64, u64, u64, u64)> {
+    let pubkey = get_remote_pubkey(connection)?;
     debug!("Peer public key is {pubkey:?}");
     let staked_nodes = staked_nodes.read().unwrap();
     Some((

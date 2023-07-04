@@ -14,9 +14,14 @@
 //! discrete log to recover the originally encrypted value.
 
 use {
-    crate::encryption::{
-        discrete_log::DiscreteLog,
-        pedersen::{Pedersen, PedersenCommitment, PedersenOpening, G, H},
+    crate::{
+        encryption::{
+            discrete_log::DiscreteLog,
+            pedersen::{
+                Pedersen, PedersenCommitment, PedersenOpening, G, H, PEDERSEN_COMMITMENT_LEN,
+            },
+        },
+        RISTRETTO_POINT_LEN, SCALAR_LEN,
     },
     base64::{prelude::BASE64_STANDARD, Engine},
     core::ops::{Add, Mul, Sub},
@@ -49,6 +54,21 @@ use {
         path::Path,
     },
 };
+
+/// Byte length of a decrypt handle
+const DECRYPT_HANDLE_LEN: usize = RISTRETTO_POINT_LEN;
+
+/// Byte length of an ElGamal ciphertext
+const ELGAMAL_CIPHERTEXT_LEN: usize = PEDERSEN_COMMITMENT_LEN + DECRYPT_HANDLE_LEN;
+
+/// Byte length of an ElGamal public key
+const ELGAMAL_PUBKEY_LEN: usize = RISTRETTO_POINT_LEN;
+
+/// Byte length of an ElGamal secret key
+const ELGAMAL_SECRET_KEY_LEN: usize = SCALAR_LEN;
+
+/// Byte length of an ElGamal keypair
+const ELGAMAL_KEYPAIR_LEN: usize = ELGAMAL_PUBKEY_LEN + ELGAMAL_SECRET_KEY_LEN;
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum ElGamalError {
@@ -133,7 +153,7 @@ impl ElGamal {
     fn decrypt(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> DiscreteLog {
         DiscreteLog::new(
             *G,
-            &ciphertext.commitment.0 - &(&secret.0 * &ciphertext.handle.0),
+            ciphertext.commitment.get_point() - &(&secret.0 * &ciphertext.handle.0),
         )
     }
 
@@ -155,13 +175,22 @@ impl ElGamal {
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Zeroize)]
 pub struct ElGamalKeypair {
     /// The public half of this keypair.
-    pub public: ElGamalPubkey,
+    public: ElGamalPubkey,
     /// The secret half of this keypair.
-    pub secret: ElGamalSecretKey,
+    secret: ElGamalSecretKey,
 }
 
 impl ElGamalKeypair {
-    /// Deterministically derives an ElGamal keypair from a Solana signer and a public seed..
+    /// Create an ElGamal keypair from an ElGamal public key and an ElGamal secret key.
+    ///
+    /// An ElGamal keypair should never be instantiated manually; `ElGamalKeypair::new_rand` or
+    /// `ElGamalKeypair::new_from_signer` should be used instead. This function exists to create
+    /// custom ElGamal keypairs for tests.
+    pub fn new_for_tests(public: ElGamalPubkey, secret: ElGamalSecretKey) -> Self {
+        Self { public, secret }
+    }
+
+    /// Deterministically derives an ElGamal keypair from a Solana signer and a public seed.
     ///
     /// This function exists for applications where a user may not wish to maintain a Solana signer
     /// and an ElGamal keypair separately. Instead, a user can derive the ElGamal keypair
@@ -192,21 +221,29 @@ impl ElGamalKeypair {
         ElGamal::keygen()
     }
 
-    pub fn to_bytes(&self) -> [u8; 64] {
-        let mut bytes = [0u8; 64];
-        bytes[..32].copy_from_slice(&self.public.to_bytes());
-        bytes[32..].copy_from_slice(self.secret.as_bytes());
+    pub fn pubkey(&self) -> &ElGamalPubkey {
+        &self.public
+    }
+
+    pub fn secret(&self) -> &ElGamalSecretKey {
+        &self.secret
+    }
+
+    pub fn to_bytes(&self) -> [u8; ELGAMAL_KEYPAIR_LEN] {
+        let mut bytes = [0u8; ELGAMAL_KEYPAIR_LEN];
+        bytes[..ELGAMAL_PUBKEY_LEN].copy_from_slice(&self.public.to_bytes());
+        bytes[ELGAMAL_PUBKEY_LEN..].copy_from_slice(self.secret.as_bytes());
         bytes
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() != 64 {
+        if bytes.len() != ELGAMAL_KEYPAIR_LEN {
             return None;
         }
 
         Some(Self {
-            public: ElGamalPubkey::from_bytes(&bytes[..32])?,
-            secret: ElGamalSecretKey::from_bytes(bytes[32..].try_into().ok()?)?,
+            public: ElGamalPubkey::from_bytes(&bytes[..ELGAMAL_PUBKEY_LEN])?,
+            secret: ElGamalSecretKey::from_bytes(bytes[ELGAMAL_PUBKEY_LEN..].try_into().ok()?)?,
         })
     }
 
@@ -300,12 +337,12 @@ impl ElGamalPubkey {
         &self.0
     }
 
-    pub fn to_bytes(&self) -> [u8; 32] {
+    pub fn to_bytes(&self) -> [u8; ELGAMAL_PUBKEY_LEN] {
         self.0.compress().to_bytes()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalPubkey> {
-        if bytes.len() != 32 {
+        if bytes.len() != ELGAMAL_PUBKEY_LEN {
             return None;
         }
 
@@ -411,7 +448,7 @@ impl ElGamalSecretKey {
 
     /// Derive an ElGamal secret key from an entropy seed.
     pub fn from_seed(seed: &[u8]) -> Result<Self, ElGamalError> {
-        const MINIMUM_SEED_LEN: usize = 32;
+        const MINIMUM_SEED_LEN: usize = ELGAMAL_SECRET_KEY_LEN;
 
         if seed.len() < MINIMUM_SEED_LEN {
             return Err(ElGamalError::SeedLengthTooShort);
@@ -436,11 +473,11 @@ impl ElGamalSecretKey {
         ElGamal::decrypt_u32(self, ciphertext)
     }
 
-    pub fn as_bytes(&self) -> &[u8; 32] {
+    pub fn as_bytes(&self) -> &[u8; ELGAMAL_SECRET_KEY_LEN] {
         self.0.as_bytes()
     }
 
-    pub fn to_bytes(&self) -> [u8; 32] {
+    pub fn to_bytes(&self) -> [u8; ELGAMAL_SECRET_KEY_LEN] {
         self.0.to_bytes()
     }
 
@@ -520,7 +557,8 @@ pub struct ElGamalCiphertext {
 }
 impl ElGamalCiphertext {
     pub fn add_amount<T: Into<Scalar>>(&self, amount: T) -> Self {
-        let commitment_to_add = PedersenCommitment(amount.into() * &(*G));
+        let point = amount.into() * &(*G);
+        let commitment_to_add = PedersenCommitment::new(point);
         ElGamalCiphertext {
             commitment: &self.commitment + &commitment_to_add,
             handle: self.handle,
@@ -528,28 +566,29 @@ impl ElGamalCiphertext {
     }
 
     pub fn subtract_amount<T: Into<Scalar>>(&self, amount: T) -> Self {
-        let commitment_to_subtract = PedersenCommitment(amount.into() * &(*G));
+        let point = amount.into() * &(*G);
+        let commitment_to_subtract = PedersenCommitment::new(point);
         ElGamalCiphertext {
             commitment: &self.commitment - &commitment_to_subtract,
             handle: self.handle,
         }
     }
 
-    pub fn to_bytes(&self) -> [u8; 64] {
-        let mut bytes = [0u8; 64];
-        bytes[..32].copy_from_slice(&self.commitment.to_bytes());
-        bytes[32..].copy_from_slice(&self.handle.to_bytes());
+    pub fn to_bytes(&self) -> [u8; ELGAMAL_CIPHERTEXT_LEN] {
+        let mut bytes = [0u8; ELGAMAL_CIPHERTEXT_LEN];
+        bytes[..PEDERSEN_COMMITMENT_LEN].copy_from_slice(&self.commitment.to_bytes());
+        bytes[PEDERSEN_COMMITMENT_LEN..].copy_from_slice(&self.handle.to_bytes());
         bytes
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalCiphertext> {
-        if bytes.len() != 64 {
+        if bytes.len() != ELGAMAL_CIPHERTEXT_LEN {
             return None;
         }
 
         Some(ElGamalCiphertext {
-            commitment: PedersenCommitment::from_bytes(&bytes[..32])?,
-            handle: DecryptHandle::from_bytes(&bytes[32..])?,
+            commitment: PedersenCommitment::from_bytes(&bytes[..PEDERSEN_COMMITMENT_LEN])?,
+            handle: DecryptHandle::from_bytes(&bytes[PEDERSEN_COMMITMENT_LEN..])?,
         })
     }
 
@@ -650,19 +689,19 @@ define_mul_variants!(
 pub struct DecryptHandle(RistrettoPoint);
 impl DecryptHandle {
     pub fn new(public: &ElGamalPubkey, opening: &PedersenOpening) -> Self {
-        Self(&public.0 * &opening.0)
+        Self(&public.0 * opening.get_scalar())
     }
 
     pub fn get_point(&self) -> &RistrettoPoint {
         &self.0
     }
 
-    pub fn to_bytes(&self) -> [u8; 32] {
+    pub fn to_bytes(&self) -> [u8; DECRYPT_HANDLE_LEN] {
         self.0.compress().to_bytes()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<DecryptHandle> {
-        if bytes.len() != 32 {
+        if bytes.len() != DECRYPT_HANDLE_LEN {
             return None;
         }
 

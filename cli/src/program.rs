@@ -994,7 +994,7 @@ fn process_program_deploy(
         program_len * 2
     };
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
-        UpgradeableLoaderState::size_of_programdata(program_len),
+        UpgradeableLoaderState::size_of_programdata(programdata_len),
     )?;
 
     let result = if do_deploy {

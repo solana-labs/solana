@@ -13,6 +13,7 @@ RUN set -x \
       buildkite-agent \
       clang \
       cmake \
+      jq \
       lcov \
       libudev-dev \
       mscgen \
@@ -32,6 +33,7 @@ RUN set -x \
  && rustup component add clippy \
  && rustup target add wasm32-unknown-unknown \
  && cargo install cargo-audit \
+ && cargo install cargo-hack \
  && cargo install cargo-sort \
  && cargo install mdbook \
  && cargo install mdbook-linkcheck \

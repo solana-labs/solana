@@ -11,6 +11,8 @@ use {
             pedersen::{PedersenOpening, G, H},
         },
         errors::ProofVerificationError,
+        sigma_proofs::{canonical_scalar_from_optional_slice, ristretto_point_from_optional_slice},
+        UNIT_LEN,
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -18,7 +20,6 @@ use {
 };
 use {
     crate::{sigma_proofs::errors::EqualityProofError, transcript::TranscriptProtocol},
-    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -26,6 +27,9 @@ use {
     },
     merlin::Transcript,
 };
+
+/// Byte length of a ciphertext-ciphertext equality proof.
+const CIPHERTEXT_CIPHERTEXT_EQUALITY_PROOF_LEN: usize = UNIT_LEN * 7;
 
 /// The ciphertext-ciphertext equality proof.
 ///
@@ -45,7 +49,7 @@ pub struct CiphertextCiphertextEqualityProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
 impl CiphertextCiphertextEqualityProof {
-    /// The ciphertext-ciphertext equality proof constructor.
+    /// Creates a ciphertext-ciphertext equality proof.
     ///
     /// The function does *not* hash the public key, ciphertext, or commitment into the transcript.
     /// For security, the caller (the main protocol) should hash these public components prior to
@@ -68,14 +72,14 @@ impl CiphertextCiphertextEqualityProof {
         amount: u64,
         transcript: &mut Transcript,
     ) -> Self {
-        transcript.equality_proof_domain_sep();
+        transcript.equality_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
-        let P_source = source_keypair.public.get_point();
+        let P_source = source_keypair.pubkey().get_point();
         let D_source = source_ciphertext.handle.get_point();
         let P_destination = destination_pubkey.get_point();
 
-        let s = source_keypair.secret.get_scalar();
+        let s = source_keypair.secret().get_scalar();
         let x = Scalar::from(amount);
         let r = destination_opening.get_scalar();
 
@@ -120,8 +124,7 @@ impl CiphertextCiphertextEqualityProof {
         }
     }
 
-    /// The ciphertext-ciphertext equality proof verifier. The proof is with respect to two
-    /// ciphertexts.
+    /// Verifies a ciphertext-ciphertext equality proof.
     ///
     /// * `source_pubkey` - The ElGamal pubkey associated with the first ciphertext to be proved
     /// * `destination_pubkey` - The ElGamal pubkey associated with the second ciphertext to be proved
@@ -136,7 +139,7 @@ impl CiphertextCiphertextEqualityProof {
         destination_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), EqualityProofError> {
-        transcript.equality_proof_domain_sep();
+        transcript.equality_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
         let P_source = source_pubkey.get_point();
@@ -222,37 +225,31 @@ impl CiphertextCiphertextEqualityProof {
         }
     }
 
-    pub fn to_bytes(&self) -> [u8; 224] {
-        let mut buf = [0_u8; 224];
-        buf[..32].copy_from_slice(self.Y_0.as_bytes());
-        buf[32..64].copy_from_slice(self.Y_1.as_bytes());
-        buf[64..96].copy_from_slice(self.Y_2.as_bytes());
-        buf[96..128].copy_from_slice(self.Y_3.as_bytes());
-        buf[128..160].copy_from_slice(self.z_s.as_bytes());
-        buf[160..192].copy_from_slice(self.z_x.as_bytes());
-        buf[192..224].copy_from_slice(self.z_r.as_bytes());
+    pub fn to_bytes(&self) -> [u8; CIPHERTEXT_CIPHERTEXT_EQUALITY_PROOF_LEN] {
+        let mut buf = [0_u8; CIPHERTEXT_CIPHERTEXT_EQUALITY_PROOF_LEN];
+        let mut chunks = buf.chunks_mut(UNIT_LEN);
+
+        chunks.next().unwrap().copy_from_slice(self.Y_0.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.Y_1.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.Y_2.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.Y_3.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.z_s.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.z_x.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.z_r.as_bytes());
+
         buf
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EqualityProofError> {
-        if bytes.len() != 224 {
-            return Err(ProofVerificationError::Deserialization.into());
-        }
+        let mut chunks = bytes.chunks(UNIT_LEN);
 
-        let bytes = array_ref![bytes, 0, 224];
-        let (Y_0, Y_1, Y_2, Y_3, z_s, z_x, z_r) = array_refs![bytes, 32, 32, 32, 32, 32, 32, 32];
-
-        let Y_0 = CompressedRistretto::from_slice(Y_0);
-        let Y_1 = CompressedRistretto::from_slice(Y_1);
-        let Y_2 = CompressedRistretto::from_slice(Y_2);
-        let Y_3 = CompressedRistretto::from_slice(Y_3);
-
-        let z_s =
-            Scalar::from_canonical_bytes(*z_s).ok_or(ProofVerificationError::Deserialization)?;
-        let z_x =
-            Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
-        let z_r =
-            Scalar::from_canonical_bytes(*z_r).ok_or(ProofVerificationError::Deserialization)?;
+        let Y_0 = ristretto_point_from_optional_slice(chunks.next())?;
+        let Y_1 = ristretto_point_from_optional_slice(chunks.next())?;
+        let Y_2 = ristretto_point_from_optional_slice(chunks.next())?;
+        let Y_3 = ristretto_point_from_optional_slice(chunks.next())?;
+        let z_s = canonical_scalar_from_optional_slice(chunks.next())?;
+        let z_x = canonical_scalar_from_optional_slice(chunks.next())?;
+        let z_r = canonical_scalar_from_optional_slice(chunks.next())?;
 
         Ok(CiphertextCiphertextEqualityProof {
             Y_0,
@@ -277,11 +274,11 @@ mod test {
         let destination_keypair = ElGamalKeypair::new_rand();
         let message: u64 = 55;
 
-        let source_ciphertext = source_keypair.public.encrypt(message);
+        let source_ciphertext = source_keypair.pubkey().encrypt(message);
 
         let destination_opening = PedersenOpening::new_rand();
         let destination_ciphertext = destination_keypair
-            .public
+            .pubkey()
             .encrypt_with(message, &destination_opening);
 
         let mut prover_transcript = Transcript::new(b"Test");
@@ -289,7 +286,7 @@ mod test {
 
         let proof = CiphertextCiphertextEqualityProof::new(
             &source_keypair,
-            &destination_keypair.public,
+            destination_keypair.pubkey(),
             &source_ciphertext,
             &destination_opening,
             message,
@@ -298,8 +295,8 @@ mod test {
 
         assert!(proof
             .verify(
-                &source_keypair.public,
-                &destination_keypair.public,
+                source_keypair.pubkey(),
+                destination_keypair.pubkey(),
                 &source_ciphertext,
                 &destination_ciphertext,
                 &mut verifier_transcript
@@ -310,11 +307,11 @@ mod test {
         let source_message: u64 = 55;
         let destination_message: u64 = 77;
 
-        let source_ciphertext = source_keypair.public.encrypt(source_message);
+        let source_ciphertext = source_keypair.pubkey().encrypt(source_message);
 
         let destination_opening = PedersenOpening::new_rand();
         let destination_ciphertext = destination_keypair
-            .public
+            .pubkey()
             .encrypt_with(destination_message, &destination_opening);
 
         let mut prover_transcript = Transcript::new(b"Test");
@@ -322,7 +319,7 @@ mod test {
 
         let proof = CiphertextCiphertextEqualityProof::new(
             &source_keypair,
-            &destination_keypair.public,
+            destination_keypair.pubkey(),
             &source_ciphertext,
             &destination_opening,
             message,
@@ -331,8 +328,8 @@ mod test {
 
         assert!(proof
             .verify(
-                &source_keypair.public,
-                &destination_keypair.public,
+                source_keypair.pubkey(),
+                destination_keypair.pubkey(),
                 &source_ciphertext,
                 &destination_ciphertext,
                 &mut verifier_transcript

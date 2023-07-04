@@ -267,5 +267,12 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
                 BatchedGroupedCiphertext2HandlesValidityProofContext,
             >(invoke_context)
         }
+        ProofInstruction::VerifyFeeSigma => {
+            invoke_context
+                .consume_checked(6_547)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            ic_msg!(invoke_context, "VerifyFeeSigma");
+            process_verify_proof::<FeeSigmaProofData, FeeSigmaProofContext>(invoke_context)
+        }
     }
 });

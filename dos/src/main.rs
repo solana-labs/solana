@@ -444,7 +444,6 @@ fn get_target(
                 target = match mode {
                     Mode::Gossip => Some((*node.pubkey(), node.gossip().unwrap())),
                     Mode::Tvu => Some((*node.pubkey(), node.tvu(Protocol::UDP).unwrap())),
-                    Mode::TvuForwards => Some((*node.pubkey(), node.tvu_forwards().unwrap())),
                     Mode::Tpu => Some((*node.pubkey(), node.tpu(protocol).unwrap())),
                     Mode::TpuForwards => {
                         Some((*node.pubkey(), node.tpu_forwards(protocol).unwrap()))

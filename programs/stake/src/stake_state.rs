@@ -15,8 +15,8 @@ use {
         account_utils::StateMut,
         clock::{Clock, Epoch},
         feature_set::{
-            self, clean_up_delegation_errors, stake_allow_zero_undelegated_amount,
-            stake_merge_with_unmatched_credits_observed, stake_split_uses_rent_sysvar, FeatureSet,
+            self, clean_up_delegation_errors, stake_merge_with_unmatched_credits_observed,
+            stake_split_uses_rent_sysvar, FeatureSet,
         },
         instruction::{checked_add, InstructionError},
         pubkey::Pubkey,
@@ -33,7 +33,7 @@ use {
         },
     },
     solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
-    std::{collections::HashSet, convert::TryFrom},
+    std::{cmp::Ordering, collections::HashSet, convert::TryFrom},
 };
 
 #[derive(Debug)]
@@ -183,7 +183,6 @@ fn redeem_stake_rewards(
     vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-    credits_auto_rewind: bool,
 ) -> Option<(u64, u64)> {
     if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
         inflation_point_calc_tracer(&InflationPointCalculationEvent::CreditsObserved(
@@ -198,7 +197,6 @@ fn redeem_stake_rewards(
         vote_state,
         stake_history,
         inflation_point_calc_tracer.as_ref(),
-        credits_auto_rewind,
     )
     .map(|calculated_stake_rewards| {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
@@ -227,8 +225,6 @@ fn calculate_stake_points(
         vote_state,
         stake_history,
         inflation_point_calc_tracer,
-        true, // this is safe because this flag shouldn't affect the
-              // `points` field of the returned struct in any way
     )
     .points
 }
@@ -248,13 +244,12 @@ fn calculate_stake_points_and_credits(
     new_vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-    credits_auto_rewind: bool,
 ) -> CalculatedStakePoints {
     let credits_in_stake = stake.credits_observed;
     let credits_in_vote = new_vote_state.credits();
     // if there is no newer credits since observed, return no point
-    if credits_in_vote <= credits_in_stake {
-        if credits_auto_rewind && credits_in_vote < credits_in_stake {
+    match credits_in_vote.cmp(&credits_in_stake) {
+        Ordering::Less => {
             if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
                 inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnRewinded.into());
             }
@@ -281,22 +276,19 @@ fn calculate_stake_points_and_credits(
                 new_credits_observed: credits_in_vote,
                 force_credits_update_with_skipped_reward: true,
             };
-        } else {
-            // change the above `else` to `else if credits_in_vote == credits_in_stake`
-            // (and remove the outermost enclosing `if`) when cleaning credits_auto_rewind
-            // after activation
-
+        }
+        Ordering::Equal => {
             if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
                 inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnCurrent.into());
             }
-            // don't hint the caller and return current value if credits_auto_rewind is off or
-            // credits remain to be unchanged (= delinquent)
+            // don't hint caller and return current value if credits remain unchanged (= delinquent)
             return CalculatedStakePoints {
                 points: 0,
                 new_credits_observed: credits_in_stake,
                 force_credits_update_with_skipped_reward: false,
             };
-        };
+        }
+        Ordering::Greater => {}
     }
 
     let mut points = 0;
@@ -366,7 +358,6 @@ fn calculate_stake_rewards(
     vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-    credits_auto_rewind: bool,
 ) -> Option<CalculatedStakeRewards> {
     // ensure to run to trigger (optional) inflation_point_calc_tracer
     let CalculatedStakePoints {
@@ -378,7 +369,6 @@ fn calculate_stake_rewards(
         vote_state,
         stake_history,
         inflation_point_calc_tracer.as_ref(),
-        credits_auto_rewind,
     );
 
     // Drive credits_observed forward unconditionally when rewards are disabled
@@ -464,22 +454,13 @@ pub fn initialize(
     authorized: &Authorized,
     lockup: &Lockup,
     rent: &Rent,
-    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     if stake_account.get_data().len() != StakeState::size_of() {
         return Err(InstructionError::InvalidAccountData);
     }
     if let StakeState::Uninitialized = stake_account.get_state()? {
         let rent_exempt_reserve = rent.minimum_balance(stake_account.get_data().len());
-        // when removing this feature, remove `minimum_balance` and just use `rent_exempt_reserve`
-        let minimum_balance = if feature_set.is_active(&stake_allow_zero_undelegated_amount::id()) {
-            rent_exempt_reserve
-        } else {
-            let minimum_delegation = crate::get_minimum_delegation(feature_set);
-            rent_exempt_reserve + minimum_delegation
-        };
-
-        if stake_account.get_lamports() >= minimum_balance {
+        if stake_account.get_lamports() >= rent_exempt_reserve {
             stake_account.set_state(&StakeState::Initialized(Meta {
                 rent_exempt_reserve,
                 authorized: *authorized,
@@ -774,14 +755,6 @@ pub fn split(
         }
         StakeState::Initialized(meta) => {
             meta.authorized.check(signers, StakeAuthorize::Staker)?;
-            let additional_required_lamports = if invoke_context
-                .feature_set
-                .is_active(&stake_allow_zero_undelegated_amount::id())
-            {
-                0
-            } else {
-                crate::get_minimum_delegation(&invoke_context.feature_set)
-            };
             let validated_split_info = validate_split_amount(
                 invoke_context,
                 transaction_context,
@@ -791,7 +764,7 @@ pub fn split(
                 lamports,
                 &meta,
                 None,
-                additional_required_lamports,
+                0, // additional_required_lamports
             )?;
             let mut split_meta = meta;
             split_meta.rent_exempt_reserve = validated_split_info.destination_rent_exempt_reserve;
@@ -1026,7 +999,6 @@ pub fn withdraw(
     stake_history: &StakeHistory,
     withdraw_authority_index: IndexOfAccount,
     custodian_index: Option<IndexOfAccount>,
-    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let withdraw_authority_pubkey = transaction_context.get_key_of_account_at_index(
         instruction_context
@@ -1061,16 +1033,7 @@ pub fn withdraw(
             meta.authorized
                 .check(&signers, StakeAuthorize::Withdrawer)?;
             // stake accounts must have a balance >= rent_exempt_reserve
-            let reserve = if feature_set.is_active(&stake_allow_zero_undelegated_amount::id()) {
-                meta.rent_exempt_reserve
-            } else {
-                checked_add(
-                    meta.rent_exempt_reserve,
-                    crate::get_minimum_delegation(feature_set),
-                )?
-            };
-
-            (meta.lockup, reserve, false)
+            (meta.lockup, meta.rent_exempt_reserve, false)
         }
         StakeState::Uninitialized => {
             if !signers.contains(stake_account.get_key()) {
@@ -1200,10 +1163,7 @@ fn validate_delegated_amount(
 
     // Stake accounts may be initialized with a stake amount below the minimum delegation so check
     // that the minimum is met before delegation.
-    if (feature_set.is_active(&stake_allow_zero_undelegated_amount::id())
-        || feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_1_sol::id()))
-        && stake_amount < crate::get_minimum_delegation(feature_set)
-    {
+    if stake_amount < crate::get_minimum_delegation(feature_set) {
         return Err(StakeError::InsufficientDelegation.into());
     }
     Ok(ValidatedDelegatedInfo { stake_amount })
@@ -1584,7 +1544,6 @@ pub fn redeem_rewards(
     point_value: &PointValue,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-    credits_auto_rewind: bool,
 ) -> Result<(u64, u64), InstructionError> {
     if let StakeState::Stake(meta, mut stake) = stake_state {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
@@ -1608,7 +1567,6 @@ pub fn redeem_rewards(
             vote_state,
             stake_history,
             inflation_point_calc_tracer,
-            credits_auto_rewind,
         ) {
             stake_account.checked_add_lamports(stakers_reward)?;
             stake_account.set_state(&StakeState::Stake(meta, stake))?;
@@ -2540,7 +2498,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2561,7 +2518,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2599,7 +2555,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2643,7 +2598,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2668,7 +2622,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2690,7 +2643,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2715,7 +2667,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2738,7 +2689,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2763,7 +2713,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2782,7 +2731,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
         vote_state.commission = 99;
@@ -2798,7 +2746,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2821,7 +2768,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2844,7 +2790,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2854,21 +2799,12 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: false,
             },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
+            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer())
         );
 
         // credits_observed is auto-rewinded when vote_state credits are assumed to have been
         // recreated
         stake.credits_observed = 1000;
-        // this is old behavior; return the pre-recreation (large) credits from stake account
-        assert_eq!(
-            CalculatedStakePoints {
-                points: 0,
-                new_credits_observed: 1000,
-                force_credits_update_with_skipped_reward: false,
-            },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), false)
-        );
         // this is new behavior 1; return the post-recreation rewinded credits from the vote account
         assert_eq!(
             CalculatedStakePoints {
@@ -2876,7 +2812,7 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: true,
             },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
+            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer())
         );
         // this is new behavior 2; don't hint when credits both from stake and vote are identical
         stake.credits_observed = 4;
@@ -2886,7 +2822,7 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: false,
             },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
+            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer())
         );
 
         // get rewards and credits observed when not the activation epoch
@@ -2909,7 +2845,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
 
@@ -2933,7 +2868,6 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-                true,
             )
         );
     }

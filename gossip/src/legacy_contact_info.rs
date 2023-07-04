@@ -1,8 +1,8 @@
 use {
     crate::{
         contact_info::{
-            get_quic_socket, sanitize_quic_offset, sanitize_socket, socket_addr_unspecified,
-            ContactInfo, Error, Protocol,
+            get_quic_socket, sanitize_quic_offset, sanitize_socket, ContactInfo, Error, Protocol,
+            SOCKET_ADDR_UNSPECIFIED,
         },
         crds_value::MAX_WALLCLOCK,
     },
@@ -196,7 +196,6 @@ impl LegacyContactInfo {
 
     get_socket!(gossip);
     get_socket!(@quic tvu);
-    get_socket!(tvu_forwards);
     get_socket!(repair);
     get_socket!(@quic tpu);
     get_socket!(@quic tpu_forwards);
@@ -244,12 +243,12 @@ impl TryFrom<&ContactInfo> for LegacyContactInfo {
     fn try_from(node: &ContactInfo) -> Result<Self, Self::Error> {
         macro_rules! unwrap_socket {
             ($name:ident) => {
-                node.$name().ok().unwrap_or_else(socket_addr_unspecified)
+                node.$name().ok().unwrap_or(SOCKET_ADDR_UNSPECIFIED)
             };
             ($name:ident, $protocol:expr) => {
                 node.$name($protocol)
                     .ok()
-                    .unwrap_or_else(socket_addr_unspecified)
+                    .unwrap_or(SOCKET_ADDR_UNSPECIFIED)
             };
         }
         sanitize_quic_offset(
@@ -264,7 +263,7 @@ impl TryFrom<&ContactInfo> for LegacyContactInfo {
             id: *node.pubkey(),
             gossip: unwrap_socket!(gossip),
             tvu: unwrap_socket!(tvu, Protocol::UDP),
-            tvu_forwards: unwrap_socket!(tvu_forwards),
+            tvu_forwards: SOCKET_ADDR_UNSPECIFIED,
             repair: unwrap_socket!(repair),
             tpu: unwrap_socket!(tpu, Protocol::UDP),
             tpu_forwards: unwrap_socket!(tpu_forwards, Protocol::UDP),

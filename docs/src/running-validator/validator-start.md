@@ -95,6 +95,16 @@ EOF"
 ### Close all open sessions (log out then, in again) ###
 ```
 
+#### System Clock
+
+Large system clock drift can prevent a node from properly participating in Solana's [gossip protocol](../validator/gossip.md).  Ensure that your system clock is accurate.  To check the current system clock, use:
+
+```bash
+timedatectl
+```
+
+Operators commonly use an ntp server to maintain an accurate system clock.
+
 ## Generate identity
 
 Create an identity keypair for your validator by running:
@@ -436,7 +446,7 @@ partition.
 Example configuration:
 
 1. `sudo mkdir /mnt/solana-accounts`
-2. Add a 300GB tmpfs parition by adding a new line containing `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` to `/etc/fstab`
+2. Add a 300GB tmpfs partition by adding a new line containing `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` to `/etc/fstab`
    (assuming your validator is running under the user "sol"). **CAREFUL: If you
    incorrectly edit /etc/fstab your machine may no longer boot**
 3. Create at least 250GB of swap space

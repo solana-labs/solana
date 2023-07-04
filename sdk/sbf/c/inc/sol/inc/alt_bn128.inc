@@ -53,12 +53,7 @@ extern "C" {
  * @param result 64 byte array to hold the result. ...
  * @return 0 if executed successfully
  */
-@SYSCALL uint64_t sol_alt_bn128_group_op(
-        const uint64_t group_op,
-        const uint8_t *input,
-        const uint64_t input_size,
-        uint8_t *result
-);
+@SYSCALL uint64_t sol_alt_bn128_group_op(const uint64_t, const uint8_t *, const uint64_t, uint8_t *);
 
 #ifdef __cplusplus
 }

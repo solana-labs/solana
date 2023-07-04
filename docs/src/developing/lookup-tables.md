@@ -84,9 +84,7 @@ Similar to requesting another account (or PDA) from the cluster, you can fetch a
 const lookupTableAddress = new web3.PublicKey("");
 
 // get the table from the cluster
-const lookupTableAccount = await connection
-  .getAddressLookupTable(lookupTableAddress)
-  .then((res) => res.value);
+const lookupTableAccount = (await connection.getAddressLookupTable(lookupTableAddress)).value;
 
 // `lookupTableAccount` will now be a `AddressLookupTableAccount` object
 
@@ -135,7 +133,7 @@ transactionV0.sign([payer]);
 const txid = await web3.sendAndConfirmTransaction(connection, transactionV0);
 
 console.log(
-  `Transaction: https://explorer.solana.com/tx/${txidV0}?cluster=devnet`,
+  `Transaction: https://explorer.solana.com/tx/${txid}?cluster=devnet`,
 );
 ```
 

@@ -5,9 +5,13 @@
 
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::encryption::{
-        elgamal::{ElGamalKeypair, ElGamalPubkey},
-        pedersen::H,
+    crate::{
+        encryption::{
+            elgamal::{ElGamalKeypair, ElGamalPubkey},
+            pedersen::H,
+        },
+        sigma_proofs::{canonical_scalar_from_optional_slice, ristretto_point_from_optional_slice},
+        UNIT_LEN,
     },
     rand::rngs::OsRng,
     zeroize::Zeroize,
@@ -17,7 +21,6 @@ use {
         errors::ProofVerificationError, sigma_proofs::errors::PubkeyValidityProofError,
         transcript::TranscriptProtocol,
     },
-    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -25,6 +28,9 @@ use {
     },
     merlin::Transcript,
 };
+
+/// Byte length of a public key validity proof.
+const PUBKEY_VALIDITY_PROOF_LEN: usize = UNIT_LEN * 2;
 
 /// Public-key proof.
 ///
@@ -39,7 +45,7 @@ pub struct PubkeyValidityProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
 impl PubkeyValidityProof {
-    /// Public-key proof constructor.
+    /// Creates a public key validity proof.
     ///
     /// The function does *not* hash the public key and ciphertext into the transcript. For
     /// security, the caller (the main protocol) should hash these public key components prior to
@@ -54,10 +60,10 @@ impl PubkeyValidityProof {
     /// proved
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new(elgamal_keypair: &ElGamalKeypair, transcript: &mut Transcript) -> Self {
-        transcript.pubkey_proof_domain_sep();
+        transcript.pubkey_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the input
-        let s = elgamal_keypair.secret.get_scalar();
+        let s = elgamal_keypair.secret().get_scalar();
 
         assert!(s != &Scalar::zero());
         let s_inv = s.invert();
@@ -78,7 +84,7 @@ impl PubkeyValidityProof {
         Self { Y, z }
     }
 
-    /// Public-key proof verifier.
+    /// Verifies a public key validity proof.
     ///
     /// * `elgamal_pubkey` - The ElGamal public key to be proved
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
@@ -87,7 +93,7 @@ impl PubkeyValidityProof {
         elgamal_pubkey: &ElGamalPubkey,
         transcript: &mut Transcript,
     ) -> Result<(), PubkeyValidityProofError> {
-        transcript.pubkey_proof_domain_sep();
+        transcript.pubkey_proof_domain_separator();
 
         // extract the relvant scalar and Ristretto points from the input
         let P = elgamal_pubkey.get_point();
@@ -114,24 +120,18 @@ impl PubkeyValidityProof {
         }
     }
 
-    pub fn to_bytes(&self) -> [u8; 64] {
-        let mut buf = [0_u8; 64];
-        buf[..32].copy_from_slice(self.Y.as_bytes());
-        buf[32..64].copy_from_slice(self.z.as_bytes());
+    pub fn to_bytes(&self) -> [u8; PUBKEY_VALIDITY_PROOF_LEN] {
+        let mut buf = [0_u8; PUBKEY_VALIDITY_PROOF_LEN];
+        let mut chunks = buf.chunks_mut(UNIT_LEN);
+        chunks.next().unwrap().copy_from_slice(self.Y.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.z.as_bytes());
         buf
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, PubkeyValidityProofError> {
-        if bytes.len() != 64 {
-            return Err(ProofVerificationError::Deserialization.into());
-        }
-
-        let bytes = array_ref![bytes, 0, 64];
-        let (Y, z) = array_refs![bytes, 32, 32];
-
-        let Y = CompressedRistretto::from_slice(Y);
-        let z = Scalar::from_canonical_bytes(*z).ok_or(ProofVerificationError::Deserialization)?;
-
+        let mut chunks = bytes.chunks(UNIT_LEN);
+        let Y = ristretto_point_from_optional_slice(chunks.next())?;
+        let z = canonical_scalar_from_optional_slice(chunks.next())?;
         Ok(PubkeyValidityProof { Y, z })
     }
 }
@@ -153,7 +153,7 @@ mod test {
 
         let proof = PubkeyValidityProof::new(&keypair, &mut prover_transcript);
         assert!(proof
-            .verify(&keypair.public, &mut verifier_transcript)
+            .verify(keypair.pubkey(), &mut verifier_transcript)
             .is_ok());
 
         // derived ElGamal keypair
@@ -165,7 +165,7 @@ mod test {
 
         let proof = PubkeyValidityProof::new(&keypair, &mut prover_transcript);
         assert!(proof
-            .verify(&keypair.public, &mut verifier_transcript)
+            .verify(keypair.pubkey(), &mut verifier_transcript)
             .is_ok());
     }
 }

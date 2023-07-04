@@ -114,7 +114,7 @@ To turn on SBF interpreter trace messages in a local cluster configure the
 
 Source level debugging of on-chain programs written in Rust or C can
 be done using the `program run` subcommand of `solana-ledger-tool`,
-and lldb, distrubuted with Solana Rust and Clang compiler binary
+and lldb, distributed with Solana Rust and Clang compiler binary
 package platform-tools.
 
 The `solana-ledger-tool program run` subcommand loads a compiled
@@ -137,7 +137,7 @@ with `-e debugger` command line option. For example, a crate named
 `target/deploy` directory. There should be three files in that
 directory
 - helloworld-keypair.json -- a keypair for deploying the program,
-- helloworld.debug -- a binary file containg debug information,
+- helloworld.debug -- a binary file containing debug information,
 - helloworld.so -- an executable file loadable into the virtual machine.
 The command line for running `solana-ledger-tool` would be something like this
 ```
@@ -146,7 +146,7 @@ solana-ledger-tool program run -l test-ledger -e debugger target/deploy/hellowor
 Note that `solana-ledger-tool` always loads a ledger database. Most
 on-chain programs interact with a ledger in some manner. Even if for
 debugging purpose a ledger is not needed, it has to be provided to
-`solana-ledger-tool`. A minimal ladger database can be created by
+`solana-ledger-tool`. A minimal ledger database can be created by
 running `solana-test-validator`, which creates a ledger in
 `test-ledger` subdirectory.
 
@@ -262,5 +262,5 @@ task. The next step is to run `solana-debugger` task. The tasks specified in
 VSCode. When `solana-ledger-tool` is running and listening from incoming
 connections, it's time to start the debugger.  Launch it from VSCode
 `Run and Debug` menu.  If everything is set up correctly, VSCode will
-start a debugging session and the porogram execution should stop on
+start a debugging session and the program execution should stop on
 the entrance into the `entrypoint` function.

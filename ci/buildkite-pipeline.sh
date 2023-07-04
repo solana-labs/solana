@@ -291,7 +291,10 @@ pull_or_push_steps() {
   wait_step
 
   # Check for any .sh file changes
-  if affects .sh$; then
+  if affects \
+              .sh$ \
+              ^.buildkite/hooks \
+      ; then
     command_step shellcheck "ci/shellcheck.sh" 5 check
     wait_step
   fi

@@ -10,11 +10,12 @@ use {
     log::*,
     serde::{de::Deserializer, Deserialize, Serialize},
     solana_core::{
-        admin_rpc_post_init::AdminRpcRequestMetadataPostInit, consensus::Tower,
-        tower_storage::TowerStorage, validator::ValidatorStartProgress,
+        admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
+        consensus::{tower_storage::TowerStorage, Tower},
+        validator::ValidatorStartProgress,
     },
     solana_geyser_plugin_manager::GeyserPluginManagerRequest,
-    solana_gossip::contact_info::{ContactInfo, Protocol},
+    solana_gossip::contact_info::{ContactInfo, Protocol, SOCKET_ADDR_UNSPECIFIED},
     solana_rpc::rpc::verify_pubkey,
     solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
     solana_runtime::accounts_index::AccountIndex,
@@ -27,7 +28,7 @@ use {
         collections::{HashMap, HashSet},
         error,
         fmt::{self, Display},
-        net::{IpAddr, Ipv4Addr, SocketAddr},
+        net::SocketAddr,
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
         thread::{self, Builder},
@@ -91,14 +92,10 @@ impl From<ContactInfo> for AdminRpcContactInfo {
     fn from(node: ContactInfo) -> Self {
         macro_rules! unwrap_socket {
             ($name:ident) => {
-                node.$name().unwrap_or_else(|_| {
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), /*port:*/ 0u16)
-                })
+                node.$name().unwrap_or(SOCKET_ADDR_UNSPECIFIED)
             };
             ($name:ident, $protocol:expr) => {
-                node.$name($protocol).unwrap_or_else(|_| {
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), /*port:*/ 0u16)
-                })
+                node.$name($protocol).unwrap_or(SOCKET_ADDR_UNSPECIFIED)
             };
         }
         Self {
@@ -106,7 +103,7 @@ impl From<ContactInfo> for AdminRpcContactInfo {
             last_updated_timestamp: node.wallclock(),
             gossip: unwrap_socket!(gossip),
             tvu: unwrap_socket!(tvu, Protocol::UDP),
-            tvu_forwards: unwrap_socket!(tvu_forwards),
+            tvu_forwards: SOCKET_ADDR_UNSPECIFIED,
             repair: unwrap_socket!(repair),
             tpu: unwrap_socket!(tpu, Protocol::UDP),
             tpu_forwards: unwrap_socket!(tpu_forwards, Protocol::UDP),
@@ -868,7 +865,7 @@ mod tests {
         super::*,
         rand::{distributions::Uniform, thread_rng, Rng},
         serde_json::Value,
-        solana_core::tower_storage::NullTowerStorage,
+        solana_core::consensus::tower_storage::NullTowerStorage,
         solana_gossip::cluster_info::ClusterInfo,
         solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
         solana_rpc::rpc::create_validator_exit,

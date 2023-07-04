@@ -6,9 +6,8 @@ use {
     solana_clap_utils::{
         hidden_unless_forced,
         input_validators::{
-            is_keypair, is_keypair_or_ask_keyword, is_niceness_adjustment_valid, is_parsable,
-            is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
-            is_valid_percentage, is_within_range,
+            is_keypair, is_keypair_or_ask_keyword, is_parsable, is_pow2, is_pubkey,
+            is_pubkey_or_keypair, is_slot, is_url_or_moniker, is_valid_percentage, is_within_range,
             validate_maximum_full_snapshot_archives_to_retain,
             validate_maximum_incremental_snapshot_archives_to_retain,
         },
@@ -19,6 +18,7 @@ use {
         validator::{BlockProductionMethod, BlockVerificationMethod},
     },
     solana_faucet::faucet::{self, FAUCET_PORT},
+    solana_ledger::use_snapshot_archives_at_startup,
     solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     solana_rpc::{rpc::MAX_REQUEST_BODY_SIZE, rpc_pubsub_service::PubSubConfig},
     solana_rpc_client_api::request::MAX_MULTIPLE_ACCOUNTS,
@@ -292,6 +292,16 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Use DIR as snapshot location [default: --ledger value]"),
         )
         .arg(
+            Arg::with_name(use_snapshot_archives_at_startup::cli::NAME)
+                .long(use_snapshot_archives_at_startup::cli::LONG_ARG)
+                .hidden(hidden_unless_forced())
+                .takes_value(true)
+                .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
+                .default_value(use_snapshot_archives_at_startup::cli::default_value())
+                .help(use_snapshot_archives_at_startup::cli::HELP)
+                .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP)
+        )
+        .arg(
             Arg::with_name("incremental_snapshot_archive_path")
                 .long("incremental-snapshot-archive-path")
                 .conflicts_with("no-incremental-snapshots")
@@ -474,7 +484,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("snapshot-packager-niceness-adjustment")
                 .value_name("ADJUSTMENT")
                 .takes_value(true)
-                .validator(is_niceness_adjustment_valid)
+                .validator(solana_perf::thread::is_niceness_adjustment_valid)
                 .default_value(&default_args.snapshot_packager_niceness_adjustment)
                 .help("Add this value to niceness of snapshot packager thread. Negative value \
                       increases priority, positive value decreases priority.")
@@ -541,21 +551,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("no-os-disk-stats-reporting")
                 .hidden(hidden_unless_forced())
                 .help("Disable reporting of OS disk statistics.")
-        )
-        .arg(
-            Arg::with_name("accounts-hash-interval-slots")
-                .long("accounts-hash-interval-slots")
-                .value_name("NUMBER")
-                .takes_value(true)
-                .default_value(&default_args.accounts_hash_interval_slots)
-                .help("Number of slots between generating accounts hash.")
-                .validator(|val| {
-                    if val.eq("0") {
-                        Err(String::from("Accounts hash interval cannot be zero"))
-                    } else {
-                        Ok(())
-                    }
-                }),
         )
         .arg(
             Arg::with_name("snapshot_version")
@@ -844,7 +839,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("rpc-niceness-adjustment")
                 .value_name("ADJUSTMENT")
                 .takes_value(true)
-                .validator(is_niceness_adjustment_valid)
+                .validator(solana_perf::thread::is_niceness_adjustment_valid)
                 .default_value(&default_args.rpc_niceness_adjustment)
                 .help("Add this value to niceness of RPC threads. Negative value \
                       increases priority, positive value decreases priority.")
@@ -1717,6 +1712,18 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
             .help("Enables faster starting of validators by skipping startup clean and shrink."),
         usage_warning: "Enabled by default",
     );
+    add_arg!(Arg::with_name("accounts_hash_interval_slots")
+        .long("accounts-hash-interval-slots")
+        .value_name("NUMBER")
+        .takes_value(true)
+        .help("Number of slots between verifying accounts hash.")
+        .validator(|val| {
+            if val.eq("0") {
+                Err(String::from("Accounts hash interval cannot be zero"))
+            } else {
+                Ok(())
+            }
+        }));
     add_arg!(
         Arg::with_name("disable_quic_servers")
             .long("disable-quic-servers")
@@ -1881,7 +1888,6 @@ pub struct DefaultArgs {
 
     pub contact_debug_interval: String,
 
-    pub accounts_hash_interval_slots: String,
     pub accounts_filler_count: String,
     pub accounts_filler_size: String,
     pub accountsdb_repl_threads: String,
@@ -1970,7 +1976,6 @@ impl DefaultArgs {
             max_snapshot_download_abort: MAX_SNAPSHOT_DOWNLOAD_ABORT.to_string(),
             snapshot_archive_format: DEFAULT_ARCHIVE_COMPRESSION.to_string(),
             contact_debug_interval: "120000".to_string(),
-            accounts_hash_interval_slots: "100".to_string(),
             snapshot_version: SnapshotVersion::default(),
             rocksdb_shred_compaction: "level".to_string(),
             rocksdb_ledger_compression: "none".to_string(),

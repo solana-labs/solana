@@ -245,7 +245,7 @@ async fn stake_rewards_from_warp() {
     // go forward and see that rewards have been distributed
     let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
     context
-        .warp_to_slot(first_normal_slot + slots_per_epoch)
+        .warp_to_slot(first_normal_slot + slots_per_epoch + 1) // when partitioned rewards are enabled, the rewards are paid at 1 slot after the first slot of the epoch
         .unwrap();
 
     let account = context
@@ -350,7 +350,7 @@ async fn stake_rewards_filter_bench_core(num_stake_accounts: u64) {
     // go forward and see that rewards have been distributed
     let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
     context
-        .warp_to_slot(first_normal_slot + slots_per_epoch)
+        .warp_to_slot(first_normal_slot + slots_per_epoch + 1) // when partitioned rewards are enabled, the rewards are paid at 1 slot after the first slot of the epoch
         .unwrap();
 
     let account = context
@@ -427,6 +427,7 @@ async fn stake_merge_immediately_after_activation() {
     let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
     let mut current_slot = first_normal_slot + slots_per_epoch;
     context.warp_to_slot(current_slot).unwrap();
+    context.warp_forward_force_reward_interval_end().unwrap();
 
     // this is annoying, but if no stake has earned rewards, the bank won't
     // iterate through the stakes at all, which means we can only test the
@@ -442,6 +443,7 @@ async fn stake_merge_immediately_after_activation() {
 
     current_slot += slots_per_epoch;
     context.warp_to_slot(current_slot).unwrap();
+    context.warp_forward_force_reward_interval_end().unwrap();
 
     // make another stake which will just have its credits observed advanced
     let absorbed_stake_address =
@@ -454,6 +456,7 @@ async fn stake_merge_immediately_after_activation() {
     context.increment_vote_account_credits(&vote_address, 100);
     current_slot += slots_per_epoch;
     context.warp_to_slot(current_slot).unwrap();
+    context.warp_forward_force_reward_interval_end().unwrap();
 
     // check that base stake has earned rewards and credits moved forward
     let stake_account = context

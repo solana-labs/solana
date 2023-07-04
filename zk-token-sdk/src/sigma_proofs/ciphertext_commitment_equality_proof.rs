@@ -16,6 +16,8 @@ use {
             pedersen::{PedersenCommitment, PedersenOpening, G, H},
         },
         errors::ProofVerificationError,
+        sigma_proofs::{canonical_scalar_from_optional_slice, ristretto_point_from_optional_slice},
+        UNIT_LEN,
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -23,7 +25,6 @@ use {
 };
 use {
     crate::{sigma_proofs::errors::EqualityProofError, transcript::TranscriptProtocol},
-    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -31,6 +32,9 @@ use {
     },
     merlin::Transcript,
 };
+
+/// Byte length of a ciphertext-commitment equality proof.
+const CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN: usize = UNIT_LEN * 6;
 
 /// Equality proof.
 ///
@@ -49,7 +53,7 @@ pub struct CiphertextCommitmentEqualityProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
 impl CiphertextCommitmentEqualityProof {
-    /// Equality proof constructor. The proof is with respect to a ciphertext and commitment.
+    /// Creates a ciphertext-commitment equality proof.
     ///
     /// The function does *not* hash the public key, ciphertext, or commitment into the transcript.
     /// For security, the caller (the main protocol) should hash these public components prior to
@@ -72,13 +76,13 @@ impl CiphertextCommitmentEqualityProof {
         amount: u64,
         transcript: &mut Transcript,
     ) -> Self {
-        transcript.equality_proof_domain_sep();
+        transcript.equality_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
-        let P_source = source_keypair.public.get_point();
+        let P_source = source_keypair.pubkey().get_point();
         let D_source = source_ciphertext.handle.get_point();
 
-        let s = source_keypair.secret.get_scalar();
+        let s = source_keypair.secret().get_scalar();
         let x = Scalar::from(amount);
         let r = opening.get_scalar();
 
@@ -120,7 +124,7 @@ impl CiphertextCommitmentEqualityProof {
         }
     }
 
-    /// Equality proof verifier. The proof is with respect to a single ciphertext and commitment.
+    /// Verifies a ciphertext-commitment equality proof.
     ///
     /// * `source_pubkey` - The ElGamal pubkey associated with the ciphertext to be proved
     /// * `source_ciphertext` - The main ElGamal ciphertext to be proved
@@ -133,7 +137,7 @@ impl CiphertextCommitmentEqualityProof {
         destination_commitment: &PedersenCommitment,
         transcript: &mut Transcript,
     ) -> Result<(), EqualityProofError> {
-        transcript.equality_proof_domain_sep();
+        transcript.equality_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
         let P_source = source_pubkey.get_point();
@@ -203,35 +207,26 @@ impl CiphertextCommitmentEqualityProof {
         }
     }
 
-    pub fn to_bytes(&self) -> [u8; 192] {
-        let mut buf = [0_u8; 192];
-        buf[..32].copy_from_slice(self.Y_0.as_bytes());
-        buf[32..64].copy_from_slice(self.Y_1.as_bytes());
-        buf[64..96].copy_from_slice(self.Y_2.as_bytes());
-        buf[96..128].copy_from_slice(self.z_s.as_bytes());
-        buf[128..160].copy_from_slice(self.z_x.as_bytes());
-        buf[160..192].copy_from_slice(self.z_r.as_bytes());
+    pub fn to_bytes(&self) -> [u8; CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN] {
+        let mut buf = [0_u8; CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN];
+        let mut chunks = buf.chunks_mut(UNIT_LEN);
+        chunks.next().unwrap().copy_from_slice(self.Y_0.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.Y_1.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.Y_2.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.z_s.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.z_x.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.z_r.as_bytes());
         buf
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EqualityProofError> {
-        if bytes.len() != 192 {
-            return Err(ProofVerificationError::Deserialization.into());
-        }
-
-        let bytes = array_ref![bytes, 0, 192];
-        let (Y_0, Y_1, Y_2, z_s, z_x, z_r) = array_refs![bytes, 32, 32, 32, 32, 32, 32];
-
-        let Y_0 = CompressedRistretto::from_slice(Y_0);
-        let Y_1 = CompressedRistretto::from_slice(Y_1);
-        let Y_2 = CompressedRistretto::from_slice(Y_2);
-
-        let z_s =
-            Scalar::from_canonical_bytes(*z_s).ok_or(ProofVerificationError::Deserialization)?;
-        let z_x =
-            Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
-        let z_r =
-            Scalar::from_canonical_bytes(*z_r).ok_or(ProofVerificationError::Deserialization)?;
+        let mut chunks = bytes.chunks(UNIT_LEN);
+        let Y_0 = ristretto_point_from_optional_slice(chunks.next())?;
+        let Y_1 = ristretto_point_from_optional_slice(chunks.next())?;
+        let Y_2 = ristretto_point_from_optional_slice(chunks.next())?;
+        let z_s = canonical_scalar_from_optional_slice(chunks.next())?;
+        let z_x = canonical_scalar_from_optional_slice(chunks.next())?;
+        let z_r = canonical_scalar_from_optional_slice(chunks.next())?;
 
         Ok(CiphertextCommitmentEqualityProof {
             Y_0,
@@ -257,7 +252,7 @@ mod test {
         let source_keypair = ElGamalKeypair::new_rand();
         let message: u64 = 55;
 
-        let source_ciphertext = source_keypair.public.encrypt(message);
+        let source_ciphertext = source_keypair.pubkey().encrypt(message);
         let (destination_commitment, destination_opening) = Pedersen::new(message);
 
         let mut prover_transcript = Transcript::new(b"Test");
@@ -273,7 +268,7 @@ mod test {
 
         assert!(proof
             .verify(
-                &source_keypair.public,
+                source_keypair.pubkey(),
                 &source_ciphertext,
                 &destination_commitment,
                 &mut verifier_transcript
@@ -285,7 +280,7 @@ mod test {
         let encrypted_message: u64 = 55;
         let committed_message: u64 = 77;
 
-        let source_ciphertext = source_keypair.public.encrypt(encrypted_message);
+        let source_ciphertext = source_keypair.pubkey().encrypt(encrypted_message);
         let (destination_commitment, destination_opening) = Pedersen::new(committed_message);
 
         let mut prover_transcript = Transcript::new(b"Test");
@@ -301,7 +296,7 @@ mod test {
 
         assert!(proof
             .verify(
-                &source_keypair.public,
+                source_keypair.pubkey(),
                 &source_ciphertext,
                 &destination_commitment,
                 &mut verifier_transcript
@@ -315,10 +310,10 @@ mod test {
         let public = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
         let secret = ElGamalSecretKey::new_rand();
 
-        let elgamal_keypair = ElGamalKeypair { public, secret };
+        let elgamal_keypair = ElGamalKeypair::new_for_tests(public, secret);
 
         let message: u64 = 55;
-        let ciphertext = elgamal_keypair.public.encrypt(message);
+        let ciphertext = elgamal_keypair.pubkey().encrypt(message);
         let (commitment, opening) = Pedersen::new(message);
 
         let mut prover_transcript = Transcript::new(b"Test");
@@ -334,7 +329,7 @@ mod test {
 
         assert!(proof
             .verify(
-                &elgamal_keypair.public,
+                elgamal_keypair.pubkey(),
                 &ciphertext,
                 &commitment,
                 &mut verifier_transcript
@@ -363,7 +358,7 @@ mod test {
 
         assert!(proof
             .verify(
-                &elgamal_keypair.public,
+                elgamal_keypair.pubkey(),
                 &ciphertext,
                 &commitment,
                 &mut verifier_transcript
@@ -375,7 +370,7 @@ mod test {
         let elgamal_keypair = ElGamalKeypair::new_rand();
 
         let message: u64 = 0;
-        let ciphertext = elgamal_keypair.public.encrypt(message);
+        let ciphertext = elgamal_keypair.pubkey().encrypt(message);
         let commitment = PedersenCommitment::from_bytes(&[0u8; 32]).unwrap();
         let opening = PedersenOpening::from_bytes(&[0u8; 32]).unwrap();
 
@@ -392,7 +387,7 @@ mod test {
 
         assert!(proof
             .verify(
-                &elgamal_keypair.public,
+                elgamal_keypair.pubkey(),
                 &ciphertext,
                 &commitment,
                 &mut verifier_transcript
@@ -420,7 +415,7 @@ mod test {
 
         assert!(proof
             .verify(
-                &elgamal_keypair.public,
+                elgamal_keypair.pubkey(),
                 &ciphertext,
                 &commitment,
                 &mut verifier_transcript

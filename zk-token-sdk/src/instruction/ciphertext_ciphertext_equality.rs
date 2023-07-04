@@ -66,7 +66,7 @@ impl CiphertextCiphertextEqualityProofData {
         destination_opening: &PedersenOpening,
         amount: u64,
     ) -> Result<Self, ProofError> {
-        let pod_source_pubkey = pod::ElGamalPubkey(source_keypair.public.to_bytes());
+        let pod_source_pubkey = pod::ElGamalPubkey(source_keypair.pubkey().to_bytes());
         let pod_destination_pubkey = pod::ElGamalPubkey(destination_pubkey.to_bytes());
         let pod_source_ciphertext = pod::ElGamalCiphertext(source_ciphertext.to_bytes());
         let pod_destination_ciphertext = pod::ElGamalCiphertext(destination_ciphertext.to_bytes());
@@ -151,16 +151,16 @@ mod test {
         let destination_keypair = ElGamalKeypair::new_rand();
 
         let amount: u64 = 0;
-        let source_ciphertext = source_keypair.public.encrypt(amount);
+        let source_ciphertext = source_keypair.pubkey().encrypt(amount);
 
         let destination_opening = PedersenOpening::new_rand();
         let destination_ciphertext = destination_keypair
-            .public
+            .pubkey()
             .encrypt_with(amount, &destination_opening);
 
         let proof_data = CiphertextCiphertextEqualityProofData::new(
             &source_keypair,
-            &destination_keypair.public,
+            destination_keypair.pubkey(),
             &source_ciphertext,
             &destination_ciphertext,
             &destination_opening,
@@ -171,16 +171,16 @@ mod test {
         assert!(proof_data.verify_proof().is_ok());
 
         let amount: u64 = 55;
-        let source_ciphertext = source_keypair.public.encrypt(amount);
+        let source_ciphertext = source_keypair.pubkey().encrypt(amount);
 
         let destination_opening = PedersenOpening::new_rand();
         let destination_ciphertext = destination_keypair
-            .public
+            .pubkey()
             .encrypt_with(amount, &destination_opening);
 
         let proof_data = CiphertextCiphertextEqualityProofData::new(
             &source_keypair,
-            &destination_keypair.public,
+            destination_keypair.pubkey(),
             &source_ciphertext,
             &destination_ciphertext,
             &destination_opening,
@@ -191,16 +191,16 @@ mod test {
         assert!(proof_data.verify_proof().is_ok());
 
         let amount = u64::max_value();
-        let source_ciphertext = source_keypair.public.encrypt(amount);
+        let source_ciphertext = source_keypair.pubkey().encrypt(amount);
 
         let destination_opening = PedersenOpening::new_rand();
         let destination_ciphertext = destination_keypair
-            .public
+            .pubkey()
             .encrypt_with(amount, &destination_opening);
 
         let proof_data = CiphertextCiphertextEqualityProofData::new(
             &source_keypair,
-            &destination_keypair.public,
+            destination_keypair.pubkey(),
             &source_ciphertext,
             &destination_ciphertext,
             &destination_opening,

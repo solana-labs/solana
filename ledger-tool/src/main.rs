@@ -41,6 +41,7 @@ use {
         },
         blockstore_processor::ProcessOptions,
         shred::Shred,
+        use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
@@ -979,10 +980,10 @@ fn assert_capitalization(bank: &Bank) {
 
 /// Get the AccessType required, based on `process_options`
 fn get_access_type(process_options: &ProcessOptions) -> AccessType {
-    if process_options.boot_from_local_state {
-        AccessType::PrimaryForMaintenance
-    } else {
-        AccessType::Secondary
+    match process_options.use_snapshot_archives_at_startup {
+        UseSnapshotArchivesAtStartup::Always => AccessType::Secondary,
+        UseSnapshotArchivesAtStartup::Never => AccessType::PrimaryForMaintenance,
+        UseSnapshotArchivesAtStartup::WhenNewest => AccessType::PrimaryForMaintenance,
     }
 }
 
@@ -1169,21 +1170,15 @@ fn main() {
         .multiple(true)
         .takes_value(true)
         .help("Log when transactions are processed that reference the given key(s).");
-    let boot_from_local_state = Arg::with_name("boot_from_local_state")
-        .long("boot-from-local-state")
-        .takes_value(false)
-        .hidden(hidden_unless_forced())
-        .help("Boot from state already on disk")
-        .long_help(
-            "Boot from state already on disk, instead of \
-            extracting it from a snapshot archive. \
-            This requires primary access, so another instance of \
-            solana-ledger-tool or solana-validator cannot \
-            simultaneously use the same ledger/accounts. \
-            Note, this will use the latest state available, \
-            which may be newer than the latest snapshot archive.",
-        )
-        .conflicts_with("no_snapshot");
+    let use_snapshot_archives_at_startup =
+        Arg::with_name(use_snapshot_archives_at_startup::cli::NAME)
+            .long(use_snapshot_archives_at_startup::cli::LONG_ARG)
+            .hidden(hidden_unless_forced())
+            .takes_value(true)
+            .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
+            .default_value(use_snapshot_archives_at_startup::cli::default_value())
+            .help(use_snapshot_archives_at_startup::cli::HELP)
+            .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP);
 
     let default_max_full_snapshot_archives_to_retain =
         &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
@@ -1543,7 +1538,7 @@ fn main() {
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&debug_key_arg)
             .arg(&geyser_plugin_args)
-            .arg(&boot_from_local_state)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("skip_poh_verify")
                     .long("skip-poh-verify")
@@ -1599,7 +1594,7 @@ fn main() {
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
-            .arg(&boot_from_local_state)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("include_all_votes")
                     .long("include-all-votes")
@@ -1639,6 +1634,7 @@ fn main() {
             .arg(&maximum_full_snapshot_archives_to_retain)
             .arg(&maximum_incremental_snapshot_archives_to_retain)
             .arg(&geyser_plugin_args)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("snapshot_slot")
                     .index(1)
@@ -1827,7 +1823,7 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&geyser_plugin_args)
             .arg(&accounts_data_encoding_arg)
-            .arg(&boot_from_local_state)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("include_sysvars")
                     .long("include-sysvars")
@@ -1860,7 +1856,7 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&geyser_plugin_args)
-            .arg(&boot_from_local_state)
+            .arg(&use_snapshot_archives_at_startup)
             .arg(
                 Arg::with_name("warp_epoch")
                     .required(false)
@@ -2242,15 +2238,7 @@ fn main() {
                             "{}",
                             compute_shred_version(
                                 &genesis_config.hash(),
-                                Some(
-                                    &bank_forks
-                                        .read()
-                                        .unwrap()
-                                        .working_bank()
-                                        .hard_forks()
-                                        .read()
-                                        .unwrap()
-                                )
+                                Some(&bank_forks.read().unwrap().working_bank().hard_forks())
                             )
                         );
                     }
@@ -2547,7 +2535,11 @@ fn main() {
                         .is_present("accounts_db_test_hash_calculation"),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                     runtime_config: RuntimeConfig::default(),
-                    boot_from_local_state: arg_matches.is_present("boot_from_local_state"),
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
@@ -2595,7 +2587,11 @@ fn main() {
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                    boot_from_local_state: arg_matches.is_present("boot_from_local_state"),
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
                     ..ProcessOptions::default()
                 };
 
@@ -2717,9 +2713,21 @@ fn main() {
                     NonZeroUsize
                 );
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+                let mut process_options = ProcessOptions {
+                    new_hard_forks,
+                    run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
+                    accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
+                    ..ProcessOptions::default()
+                };
                 let blockstore = Arc::new(open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
                 ));
@@ -2745,6 +2753,7 @@ fn main() {
                     );
                     exit(1);
                 }
+                process_options.halt_at_slot = Some(snapshot_slot);
 
                 let ending_slot = if is_minimized {
                     let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
@@ -2779,14 +2788,7 @@ fn main() {
                     arg_matches,
                     &genesis_config,
                     blockstore.clone(),
-                    ProcessOptions {
-                        new_hard_forks,
-                        halt_at_slot: Some(snapshot_slot),
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
-                        ..ProcessOptions::default()
-                    },
+                    process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
                 ) {
@@ -3117,10 +3119,7 @@ fn main() {
 
                         println!(
                             "Shred version: {}",
-                            compute_shred_version(
-                                &genesis_config.hash(),
-                                Some(&bank.hard_forks().read().unwrap())
-                            )
+                            compute_shred_version(&genesis_config.hash(), Some(&bank.hard_forks()))
                         );
                     }
                     Err(err) => {
@@ -3136,7 +3135,11 @@ fn main() {
                     halt_at_slot,
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                    boot_from_local_state: arg_matches.is_present("boot_from_local_state"),
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -3227,7 +3230,11 @@ fn main() {
                     halt_at_slot,
                     run_verification: false,
                     accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                    boot_from_local_state: arg_matches.is_present("boot_from_local_state"),
+                    use_snapshot_archives_at_startup: value_t_or_exit!(
+                        arg_matches,
+                        use_snapshot_archives_at_startup::cli::NAME,
+                        UseSnapshotArchivesAtStartup
+                    ),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -3958,7 +3965,6 @@ fn main() {
                     start_root.saturating_sub(max_slots)
                 };
                 assert!(start_root > end_root);
-                assert!(blockstore.is_root(start_root));
                 let num_slots = start_root - end_root - 1; // Adjust by one since start_root need not be checked
                 if arg_matches.is_present("end_root") && num_slots > max_slots {
                     eprintln!(
@@ -3968,25 +3974,14 @@ fn main() {
                     );
                     exit(1);
                 }
-                let ancestor_iterator = AncestorIterator::new(start_root, &blockstore)
-                    .take_while(|&slot| slot >= end_root);
-                let roots_to_fix: Vec<_> = ancestor_iterator
-                    .filter(|slot| !blockstore.is_root(*slot))
-                    .collect();
-                if !roots_to_fix.is_empty() {
-                    eprintln!("{} slots to be rooted", roots_to_fix.len());
-                    for chunk in roots_to_fix.chunks(100) {
-                        eprintln!("{chunk:?}");
-                        blockstore
-                            .set_roots(roots_to_fix.iter())
-                            .unwrap_or_else(|err| {
-                                eprintln!("Unable to set roots {roots_to_fix:?}: {err}");
-                                exit(1);
-                            });
-                    }
-                } else {
-                    println!("No missing roots found in range {end_root} to {start_root}");
-                }
+
+                let num_repaired_roots = blockstore
+                    .scan_and_fix_roots(Some(start_root), Some(end_root), &AtomicBool::new(false))
+                    .unwrap_or_else(|err| {
+                        eprintln!("Unable to repair roots: {err}");
+                        exit(1);
+                    });
+                println!("Successfully repaired {num_repaired_roots} roots");
             }
             ("bounds", Some(arg_matches)) => {
                 let blockstore = open_blockstore(

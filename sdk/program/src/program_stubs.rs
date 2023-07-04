@@ -51,6 +51,12 @@ pub trait SyscallStubs: Sync + Send {
     fn sol_get_rent_sysvar(&self, _var_addr: *mut u8) -> u64 {
         UNSUPPORTED_SYSVAR
     }
+    fn sol_get_epoch_rewards_sysvar(&self, _var_addr: *mut u8) -> u64 {
+        UNSUPPORTED_SYSVAR
+    }
+    fn sol_get_last_restart_slot(&self, _var_addr: *mut u8) -> u64 {
+        UNSUPPORTED_SYSVAR
+    }
     /// # Safety
     unsafe fn sol_memcpy(&self, dst: *mut u8, src: *const u8, n: usize) {
         // cannot be overlapping
@@ -150,6 +156,13 @@ pub(crate) fn sol_get_rent_sysvar(var_addr: *mut u8) -> u64 {
     SYSCALL_STUBS.read().unwrap().sol_get_rent_sysvar(var_addr)
 }
 
+pub(crate) fn sol_get_last_restart_slot(var_addr: *mut u8) -> u64 {
+    SYSCALL_STUBS
+        .read()
+        .unwrap()
+        .sol_get_last_restart_slot(var_addr)
+}
+
 pub(crate) fn sol_memcpy(dst: *mut u8, src: *const u8, n: usize) {
     unsafe {
         SYSCALL_STUBS.read().unwrap().sol_memcpy(dst, src, n);
@@ -195,6 +208,13 @@ pub(crate) fn sol_get_processed_sibling_instruction(index: usize) -> Option<Inst
 
 pub(crate) fn sol_get_stack_height() -> u64 {
     SYSCALL_STUBS.read().unwrap().sol_get_stack_height()
+}
+
+pub(crate) fn sol_get_epoch_rewards_sysvar(var_addr: *mut u8) -> u64 {
+    SYSCALL_STUBS
+        .read()
+        .unwrap()
+        .sol_get_epoch_rewards_sysvar(var_addr)
 }
 
 /// Check that two regions do not overlap.

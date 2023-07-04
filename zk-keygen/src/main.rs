@@ -200,7 +200,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                         let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
                         println!(
                             "{}\npubkey: {}\n{}\nSave this seed phrase{} to recover your new ElGamal keypair:\n{}\n{}",
-                            &divider, elgamal_keypair.public, &divider, passphrase_message, phrase, &divider
+                            &divider, elgamal_keypair.pubkey(), &divider, passphrase_message, phrase, &divider
                         );
                     }
                 }
@@ -241,8 +241,9 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             // future
             match key_type {
                 KeyType::ElGamal => {
-                    let elgamal_pubkey =
-                        elgamal_keypair_from_path(matches, path, "pubkey recovery", false)?.public;
+                    let elgamal_keypair =
+                        elgamal_keypair_from_path(matches, path, "pubkey recovery", false)?;
+                    let elgamal_pubkey = elgamal_keypair.pubkey();
                     println!("{elgamal_pubkey}");
                 }
                 _ => unreachable!(),
