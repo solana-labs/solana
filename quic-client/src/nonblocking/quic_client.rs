@@ -38,7 +38,7 @@ use {
     tokio::{sync::OnceCell, time::timeout},
 };
 
-struct SkipServerVerification;
+pub struct SkipServerVerification;
 
 impl SkipServerVerification {
     pub fn new() -> Arc<Self> {
