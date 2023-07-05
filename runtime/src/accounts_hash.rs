@@ -139,6 +139,7 @@ pub type StorageSizeQuartileStats = [usize; 6];
 #[derive(Debug, Default)]
 pub struct HashStats {
     pub mark_time_us: u64,
+    pub cache_hash_data_us: u64,
     pub scan_time_total_us: u64,
     pub zeros_time_total_us: u64,
     pub hash_time_total_us: u64,
@@ -193,6 +194,7 @@ impl HashStats {
         // NOTE: Purposely do *not* include `sort_time_total_us` in `total_time_us`, since it is
         // overlapping parallel scans, which is not the wallclock time.
         let total_time_us = self.mark_time_us
+            + self.cache_hash_data_us
             + self.scan_time_total_us
             + self.zeros_time_total_us
             + self.hash_time_total_us
@@ -201,6 +203,7 @@ impl HashStats {
         datapoint_info!(
             "calculate_accounts_hash_from_storages",
             ("mark_time_us", self.mark_time_us, i64),
+            ("cache_hash_data_us", self.cache_hash_data_us, i64),
             ("accounts_scan_us", self.scan_time_total_us, i64),
             ("eliminate_zeros_us", self.zeros_time_total_us, i64),
             ("hash_us", self.hash_time_total_us, i64),
