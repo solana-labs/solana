@@ -1,5 +1,3 @@
-use solana_sdk::instruction::TRANSACTION_LEVEL_STACK_HEIGHT;
-use solana_sdk::transaction_context::TransactionContext;
 use {
     crate::{
         nonce_info::{NonceFull, NonceInfo, NoncePartial},
@@ -7,8 +5,9 @@ use {
     },
     solana_program_runtime::loaded_programs::LoadedProgramsForTxBatch,
     solana_sdk::{
-        instruction::CompiledInstruction, transaction, transaction::TransactionError,
-        transaction_context::TransactionReturnData,
+        instruction::{CompiledInstruction, TRANSACTION_LEVEL_STACK_HEIGHT},
+        transaction::{self, TransactionError},
+        transaction_context::{TransactionContext, TransactionReturnData},
     },
 };
 
