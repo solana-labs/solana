@@ -19,16 +19,12 @@ use {
         },
     },
     solana_measure::measure,
-    solana_rpc::{
-        transaction_notifier_interface::TransactionNotifierLock,
-        transaction_status_service::TransactionStatusService,
-    },
+    solana_rpc::transaction_status_service::TransactionStatusService,
     solana_runtime::{
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank_forks::BankForks,
         hardened_unpack::open_genesis_config,
         snapshot_config::SnapshotConfig,
@@ -207,26 +203,29 @@ pub fn load_and_process_ledger(
         exit(1);
     }
 
-    let mut accounts_update_notifier = Option::<AccountsUpdateNotifier>::default();
-    let mut transaction_notifier = Option::<TransactionNotifierLock>::default();
-    if arg_matches.is_present("geyser_plugin_config") {
-        let geyser_config_files = values_t_or_exit!(arg_matches, "geyser_plugin_config", String)
-            .into_iter()
-            .map(PathBuf::from)
-            .collect::<Vec<_>>();
+    let (accounts_update_notifier, transaction_notifier) =
+        if arg_matches.is_present("geyser_plugin_config") {
+            let geyser_config_files =
+                values_t_or_exit!(arg_matches, "geyser_plugin_config", String)
+                    .into_iter()
+                    .map(PathBuf::from)
+                    .collect::<Vec<_>>();
 
-        let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
-        drop(confirmed_bank_sender);
-        let geyser_service =
-            GeyserPluginService::new(confirmed_bank_receiver, &geyser_config_files).unwrap_or_else(
-                |err| {
-                    eprintln!("Failed to setup Geyser service: {err}");
-                    exit(1);
-                },
-            );
-        accounts_update_notifier = geyser_service.get_accounts_update_notifier();
-        transaction_notifier = geyser_service.get_transaction_notifier();
-    }
+            let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
+            drop(confirmed_bank_sender);
+            let geyser_service =
+                GeyserPluginService::new(confirmed_bank_receiver, &geyser_config_files)
+                    .unwrap_or_else(|err| {
+                        eprintln!("Failed to setup Geyser service: {err}");
+                        exit(1);
+                    });
+            (
+                geyser_service.get_accounts_update_notifier(),
+                geyser_service.get_transaction_notifier(),
+            )
+        } else {
+            (None, None)
+        };
 
     let exit = Arc::new(AtomicBool::new(false));
     let (bank_forks, leader_schedule_cache, starting_snapshot_hashes, ..) =
