@@ -35,6 +35,7 @@ solana-tpu-client = { workspace = true, features = ["default"] }
 solana-udp-client = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+dashmap = { workspace = true }
 
 [dev-dependencies]
 crossbeam-channel = { workspace = true }

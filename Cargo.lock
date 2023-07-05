@@ -5487,6 +5487,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "crossbeam-channel",
+ "dashmap 4.0.2",
  "futures 0.3.28",
  "futures-util",
  "indexmap 1.9.3",
