@@ -17,7 +17,7 @@ pub struct TieredReadableAccount<'a, T: TieredAccountMeta> {
     pub(crate) meta: &'a T,
     /// The address of the account
     pub(crate) address: &'a Pubkey,
-    /// The pubkey of the account owner
+    /// The address of the account owner
     pub(crate) owner: &'a Pubkey,
     /// The index for accessing the account inside its belonging AccountsFile
     pub(crate) index: usize,
@@ -79,13 +79,10 @@ impl<'a, T: TieredAccountMeta> ReadableAccount for TieredReadableAccount<'a, T> 
     }
 
     /// Returns the epoch that this account will next owe rent by parsing
-    /// the specified account block.  u64::MAX will be returned if the account
+    /// the specified account block.  Epoch::MAX will be returned if the account
     /// is rent-exempt.
     fn rent_epoch(&self) -> Epoch {
-        if let Some(rent_epoch) = self.meta.rent_epoch(self.account_block) {
-            return rent_epoch;
-        }
-        std::u64::MAX
+        self.meta.rent_epoch(self.account_block).unwrap_or(Epoch::MAX)
     }
 
     /// Returns the data associated to this account.
