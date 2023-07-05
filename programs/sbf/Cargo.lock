@@ -4666,6 +4666,7 @@ version = "1.17.0"
 dependencies = [
  "async-trait",
  "bincode",
+ "dashmap",
  "futures 0.3.28",
  "futures-util",
  "indexmap 1.9.3",
