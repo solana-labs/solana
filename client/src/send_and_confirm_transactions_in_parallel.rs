@@ -2,6 +2,7 @@ use {
     crate::{
         connection_cache::ConnectionCache,
         nonblocking::{rpc_client::RpcClient, tpu_client::TpuClient},
+        rpc_client::RpcClient as BlockingRpcClient,
     },
     bincode::serialize,
     dashmap::DashMap,
@@ -38,6 +39,21 @@ struct TransactionData {
     last_valid_blockheight: u64,
     transaction: Transaction,
     index: usize,
+}
+
+pub fn send_and_confirm_transactions_in_parallel_with_spinner_blocking<T: Signers + ?Sized>(
+    rpc_client: Arc<BlockingRpcClient>,
+    websocket_url: String,
+    messages: &[Message],
+    signers: &T,
+) -> Result<Vec<Option<TransactionError>>> {
+    let fut = send_and_confirm_transactions_in_parallel_with_spinner(
+        rpc_client.get_inner_client().clone(),
+        websocket_url,
+        messages,
+        signers,
+    );
+    tokio::task::block_in_place(|| rpc_client.runtime().block_on(fut))
 }
 
 // This is a new method which will be able to send and confirm a large amount of transactions
