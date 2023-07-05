@@ -7,14 +7,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 and follows a [Backwards Compatability Policy]
 (https://docs.solana.com/developing/backwards-compatibility)
 
-## Unreleased
-### [1.17.0]
-* Changes
-  * Added a changelog!
-* Upgrade Notes
+Release branches have their own copy of this changelog:
+* [beta - v1.16](https://github.com/solana-labs/solana/blob/v1.16/CHANGELOG.md)
+* [stable - v1.14](https://github.com/solana-labs/solana/blob/v1.14/CHANGELOG.md)
 
-## Released
-### 2023-05-31 - [1.16.0](https://github.com/solana-labs/solana/releases/tag/v1.16.0)
+## [1.17.0] - Unreleased
+* Changes
+  * Added a changelog.
+* Upgrade Notes
 
 ## Adding to this Changelog
 ### Audience
@@ -40,12 +40,21 @@ makes the feature code complete.
   * Add a description of your change to the Changes section.
   * Add Upgrade Notes if the change is likely to require:
     * validator or rpc operators to update their configs, or
-    * dapp developers to make changes.
+    * dapp or client developers to make changes.
 * Link to any relevant feature gate issues or SIMDs.
 * If you add entries on multiple branches use the same wording if possible.
 This simplifies the process of diffing between versions of the log.
 
 ## Maintaining This Changelog
-* When a release is tagged and the version is bumped:
-  * Move that release's notes to the Released section.
-  * Add a new section to Unreleased for the next anticipated release.
+### When creating a new release branch:
+* Commit to master updating the changelog:
+  * Remove `Unreleased` annotation from vx.y.0 section.
+  * Create new section: `vx.y+1.0 - Unreleased`
+* Create vx.y branch starting at that commit
+* Tag that commit as vx.y.0
+
+### When creating a new patch release:
+* Commit to the release branch updating the changelog:
+  * Remove `Unreleased` annotation from `vx.y.z` section
+  * Add a new section at the top for `vx.y.z+1 - Unreleased`
+* Tag that new commit as the new release
