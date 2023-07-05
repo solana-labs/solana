@@ -190,7 +190,10 @@ impl HashStats {
     }
 
     pub fn log(&mut self) {
-        let total_time_us = self.scan_time_total_us
+        // NOTE: Purposely do *not* include `sort_time_total_us` in `total_time_us`, since it is
+        // overlapping parallel scans, which is not the wallclock time.
+        let total_time_us = self.mark_time_us
+            + self.scan_time_total_us
             + self.zeros_time_total_us
             + self.hash_time_total_us
             + self.collect_snapshots_us
