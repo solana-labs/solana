@@ -7608,6 +7608,7 @@ impl AccountsDb {
         flavor: CalcAccountsHashFlavor,
         accounts_hash_cache_path: PathBuf,
     ) -> Result<(AccountsHashEnum, u64), AccountsHashVerificationError> {
+        let total_time = Measure::start("");
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         stats.oldest_root = storages.range().start;
 
@@ -7673,7 +7674,7 @@ impl AccountsDb {
                     AccountsHashEnum::Incremental(IncrementalAccountsHash(accounts_hash))
                 }
             };
-            info!("calculate_accounts_hash_from_storages: slot: {slot}, {accounts_hash:?}, capitalization: {capitalization}");
+            info!("calculate_accounts_hash_from_storages: slot: {slot}, {accounts_hash:?}, capitalization: {capitalization},{total_time}");
             Ok((accounts_hash, capitalization))
         };
 
@@ -7682,6 +7683,7 @@ impl AccountsDb {
         } else {
             scan_and_hash()
         };
+        stats.total_us = total_time.end_as_us();
         stats.log();
         result
     }
