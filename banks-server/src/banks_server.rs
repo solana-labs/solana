@@ -9,9 +9,10 @@ use {
     },
     solana_client::connection_cache::ConnectionCache,
     solana_runtime::{
-        bank::{Bank, TransactionExecutionResult, TransactionSimulationResult},
+        bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
+        transaction_results::TransactionExecutionResult,
     },
     solana_sdk::{
         account::Account,

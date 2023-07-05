@@ -17,9 +17,10 @@ use {
     },
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
-        bank::{Bank, LoadAndExecuteTransactionsOutput, TransactionCheckResult},
+        bank::{Bank, LoadAndExecuteTransactionsOutput},
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
+        transaction_results::TransactionCheckResult,
     },
     solana_sdk::{
         clock::{Slot, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},

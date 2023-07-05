@@ -28,10 +28,7 @@ use {
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        bank::{
-            Bank, TransactionBalancesSet, TransactionExecutionDetails, TransactionExecutionResult,
-            TransactionResults,
-        },
+        bank::{Bank, TransactionBalancesSet},
         bank_forks::BankForks,
         bank_utils,
         commitment::VOTE_THRESHOLD_SIZE,
@@ -41,6 +38,9 @@ use {
         rent_debits::RentDebits,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
+        transaction_results::{
+            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
+        },
         vote_account::VoteAccountsHashMap,
         vote_sender_types::ReplayVoteSender,
     },
