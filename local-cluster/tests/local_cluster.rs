@@ -4710,7 +4710,7 @@ fn test_vote_refresh_outside_slothash() {
     // check that B is voting on its own fork, not on A's fork. Reopen blockstore to refresh.
     let blockstore = open_blockstore(&b_ledger_path);
     let mut ancestors = AncestorIterator::new(vote_on_b, &blockstore);
-    assert!(ancestors.any(|x| &x == &last_vote_on_b));
+    assert!(ancestors.any(|x| x == last_vote_on_b));
 }
 
 // This test simulates a case where a leader sends a duplicate block with different ancestory. One
