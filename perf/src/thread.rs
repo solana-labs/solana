@@ -90,7 +90,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    #[cfg(target_os = "linux")]
     use super::*;
 
     #[cfg(target_os = "linux")]
