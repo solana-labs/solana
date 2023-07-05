@@ -1,3 +1,7 @@
+use crate::banking_stage::forward_packet_batches_by_accounts::{
+    ForwardBatch, FORWARDED_BLOCK_COMPUTE_RATIO,
+};
+
 use {
     super::{
         central_scheduler_banking_stage::SchedulerError,
@@ -6,10 +10,8 @@ use {
     },
     crate::banking_stage::{
         consumer::TARGET_NUM_TRANSACTIONS_PER_BATCH,
-        immutable_deserialized_packet::ImmutableDeserializedPacket,
         multi_iterator_scanner::{MultiIteratorScanner, ProcessingDecision},
-        read_write_account_set::ReadWriteAccountSet,
-        scheduler_messages::{ForwardWork, TransactionId},
+        scheduler_messages::ForwardWork,
         unprocessed_packet_batches::DeserializedPacket,
     },
     crossbeam_channel::Sender,
@@ -28,7 +30,7 @@ use {
         nonce::state::DurableNonce,
         transaction::SanitizedTransaction,
     },
-    std::sync::{Arc, RwLockReadGuard},
+    std::sync::RwLockReadGuard,
 };
 
 /// Interface to perform scheduling for forwarding transactions.
@@ -61,37 +63,42 @@ impl MultiIteratorForwardScheduler {
             next_durable_nonce,
             max_age,
             error_counters: TransactionErrorMetrics::default(),
-            batch: Batch::new(),
-            batch_account_locks: ReadWriteAccountSet::default(),
+            forward_batch: ForwardBatch::new(FORWARDED_BLOCK_COMPUTE_RATIO),
         };
 
         const MAX_TRANSACTIONS_PER_SCHEDULING_PASS: usize = 100_000;
-        let target_scanner_batch_size: usize = TARGET_NUM_TRANSACTIONS_PER_BATCH;
+        const TARGET_SCANNER_BATCH_SIZE: usize = 20 * TARGET_NUM_TRANSACTIONS_PER_BATCH;
         let ids = container
             .take_top_n(MAX_TRANSACTIONS_PER_SCHEDULING_PASS)
             .collect_vec();
 
         let mut scanner = MultiIteratorScanner::new(
             &ids,
-            target_scanner_batch_size,
+            TARGET_SCANNER_BATCH_SIZE,
             active_scheduler,
             |id, payload| payload.should_schedule(id, container),
         );
 
         while let Some((ids, payload)) = scanner.iterate() {
-            if !ids.is_empty() {
-                let (ids, packets) = payload.batch.take_batch();
-                assert!(!ids.is_empty());
-                assert!(!packets.is_empty());
+            let ids = ids.iter().map(|id| id.id);
+            let forwardable_packets = payload.forward_batch.get_forwardable_packets();
 
+            for chunk in forwardable_packets
+                .iter()
+                .zip(ids)
+                .map(|(packet, id)| (packet.clone(), id))
+                .chunks(64)
+                .into_iter()
+            {
+                let (packets, ids) = chunk.unzip();
                 let work = ForwardWork { ids, packets };
                 self.forward_work_sender
                     .send(work)
                     .map_err(|_| SchedulerError::DisconnectedSendChannel("forward work sender"))?;
-
-                // clear account locks for the next iteration
-                payload.batch_account_locks.clear();
             }
+
+            // reset the forward batch for the next batch
+            payload.forward_batch = ForwardBatch::new(FORWARDED_BLOCK_COMPUTE_RATIO);
         }
 
         if !hold {
@@ -122,35 +129,7 @@ struct ActiveMultiIteratorForwardScheduler<'a> {
     max_age: usize,
     error_counters: TransactionErrorMetrics,
 
-    batch: Batch,
-    batch_account_locks: ReadWriteAccountSet,
-}
-
-struct Batch {
-    ids: Vec<TransactionId>,
-    packets: Vec<Arc<ImmutableDeserializedPacket>>,
-}
-
-impl Batch {
-    fn new() -> Self {
-        Self {
-            ids: Vec::with_capacity(TARGET_NUM_TRANSACTIONS_PER_BATCH),
-            packets: Vec::with_capacity(TARGET_NUM_TRANSACTIONS_PER_BATCH),
-        }
-    }
-
-    fn take_batch(&mut self) -> (Vec<TransactionId>, Vec<Arc<ImmutableDeserializedPacket>>) {
-        (
-            core::mem::replace(
-                &mut self.ids,
-                Vec::with_capacity(TARGET_NUM_TRANSACTIONS_PER_BATCH),
-            ),
-            core::mem::replace(
-                &mut self.packets,
-                Vec::with_capacity(TARGET_NUM_TRANSACTIONS_PER_BATCH),
-            ),
-        )
-    }
+    forward_batch: ForwardBatch,
 }
 
 impl<'a> ActiveMultiIteratorForwardScheduler<'a> {
@@ -161,17 +140,7 @@ impl<'a> ActiveMultiIteratorForwardScheduler<'a> {
     ) -> ProcessingDecision {
         let transaction_ttl = container.get_transaction(&id.id);
         let packet = container.get_packet(&id.id).expect("packet must exist");
-        let decision = self.make_scheduling_decision(&transaction_ttl.transaction, packet);
-
-        match decision {
-            ProcessingDecision::Now => {
-                self.batch.ids.push(id.id);
-                self.batch.packets.push(packet.immutable_section().clone());
-            }
-            ProcessingDecision::Later | ProcessingDecision::Never => {}
-        }
-
-        decision
+        self.make_scheduling_decision(&transaction_ttl.transaction, packet)
     }
 
     fn make_scheduling_decision(
@@ -206,10 +175,13 @@ impl<'a> ActiveMultiIteratorForwardScheduler<'a> {
             return ProcessingDecision::Never;
         }
 
-        if self.batch_account_locks.try_locking(transaction.message()) {
-            ProcessingDecision::Now
-        } else {
-            ProcessingDecision::Later
+        match self.forward_batch.try_add(
+            transaction,
+            packet.immutable_section().clone(),
+            &self.bank.feature_set,
+        ) {
+            Ok(_) => ProcessingDecision::Now,
+            Err(_) => ProcessingDecision::Later,
         }
     }
 }

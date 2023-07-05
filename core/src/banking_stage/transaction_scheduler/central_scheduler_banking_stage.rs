@@ -970,7 +970,7 @@ mod tests {
             .unwrap();
 
         // We expect 2 batches to be scheduled since the transactions conflict
-        let forward_works = (0..2)
+        let forward_works = (0..1)
             .map(|_| forward_work_receiver.recv_timeout(TEST_TIMEOUT).unwrap())
             .collect_vec();
 

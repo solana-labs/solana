@@ -103,7 +103,7 @@ impl Forwarder {
                 let (_forward_result, sucessful_forwarded_packets_count, leader_pubkey) = self
                     .forward_buffered_packets(
                         &forward_option,
-                        forward_batch.get_forwardable_packets(),
+                        forward_batch.get_forwardable_packets_iter(),
                         banking_stage_stats,
                     );
 

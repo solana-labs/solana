@@ -13,7 +13,7 @@ use {
 /// `ForwardBatch` to have half of default cost_tracker limits, as smaller batch
 /// allows better granularity in composing forwarding transactions; e.g.,
 /// transactions in each batch are potentially more evenly distributed across accounts.
-const FORWARDED_BLOCK_COMPUTE_RATIO: u32 = 2;
+pub const FORWARDED_BLOCK_COMPUTE_RATIO: u32 = 2;
 /// this number divided by`FORWARDED_BLOCK_COMPUTE_RATIO` is the total blocks to forward.
 /// To accommodate transactions without `compute_budget` instruction, which will
 /// have default 200_000 compute units, it has 100 batches as default to forward
@@ -43,7 +43,7 @@ impl ForwardBatch {
     /// Number of packets are limited by `cost_tracker` with customized `limit_ratio` to lower
     /// (when `limit_ratio` > 1) `cost_tracker`'s default limits.
     /// Lower limits yield smaller batch for forwarding.
-    fn new(limit_ratio: u32) -> Self {
+    pub fn new(limit_ratio: u32) -> Self {
         let mut cost_tracker = CostTracker::default();
         cost_tracker.set_limits(
             block_cost_limits::MAX_WRITABLE_ACCOUNT_UNITS.saturating_div(limit_ratio as u64),
@@ -56,7 +56,7 @@ impl ForwardBatch {
         }
     }
 
-    fn try_add(
+    pub fn try_add(
         &mut self,
         sanitized_transaction: &SanitizedTransaction,
         immutable_packet: Arc<ImmutableDeserializedPacket>,
@@ -70,7 +70,11 @@ impl ForwardBatch {
         res
     }
 
-    pub fn get_forwardable_packets(&self) -> impl Iterator<Item = &Packet> {
+    pub fn get_forwardable_packets(&self) -> &[Arc<ImmutableDeserializedPacket>] {
+        &self.forwardable_packets
+    }
+
+    pub fn get_forwardable_packets_iter(&self) -> impl Iterator<Item = &Packet> {
         self.forwardable_packets
             .iter()
             .map(|immutable_packet| immutable_packet.original_packet())
