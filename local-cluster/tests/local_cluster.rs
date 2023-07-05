@@ -4520,7 +4520,7 @@ fn test_slot_hash_expiry() {
 #[serial]
 fn test_duplicate_with_pruned_ancestor() {
     solana_logger::setup_with("info,solana_metrics=off");
-    solana_core::duplicate_repair_status::set_ancestor_hash_repair_sample_size_for_tests_only(3);
+    solana_core::repair::duplicate_repair_status::set_ancestor_hash_repair_sample_size_for_tests_only(3);
 
     let majority_leader_stake = 10_000_000 * DEFAULT_NODE_STAKE;
     let minority_leader_stake = 2_000_000 * DEFAULT_NODE_STAKE;

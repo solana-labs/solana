@@ -2,18 +2,20 @@
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
 #[cfg(test)]
 use {
-    crate::duplicate_repair_status::DuplicateSlotRepairStatus,
+    crate::repair::duplicate_repair_status::DuplicateSlotRepairStatus,
     solana_sdk::clock::DEFAULT_MS_PER_SLOT,
 };
 use {
     crate::{
-        ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
         cluster_info_vote_listener::VerifiedVoteReceiver,
         cluster_slots_service::cluster_slots::ClusterSlots,
-        duplicate_repair_status::AncestorDuplicateSlotsToRepair,
-        outstanding_requests::OutstandingRequests,
-        repair_weight::RepairWeight,
-        serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
+        repair::{
+            ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
+            duplicate_repair_status::AncestorDuplicateSlotsToRepair,
+            outstanding_requests::OutstandingRequests,
+            repair_weight::RepairWeight,
+            serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
+        },
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
