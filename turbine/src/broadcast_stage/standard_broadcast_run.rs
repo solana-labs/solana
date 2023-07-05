@@ -199,9 +199,6 @@ impl StandardBroadcastRun {
         let (bsend, brecv) = unbounded();
         let (ssend, srecv) = unbounded();
         self.process_receive_results(keypair, blockstore, &ssend, &bsend, receive_results)?;
-        let srecv = Arc::new(Mutex::new(srecv));
-        let brecv = Arc::new(Mutex::new(brecv));
-
         //data
         let _ = self.transmit(&srecv, cluster_info, sock, bank_forks);
         let _ = self.record(&brecv, blockstore);
@@ -486,16 +483,16 @@ impl BroadcastRun for StandardBroadcastRun {
     }
     fn transmit(
         &mut self,
-        receiver: &Mutex<TransmitReceiver>,
+        receiver: &TransmitReceiver,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
         bank_forks: &RwLock<BankForks>,
     ) -> Result<()> {
-        let (shreds, batch_info) = receiver.lock().unwrap().recv()?;
+        let (shreds, batch_info) = receiver.recv()?;
         self.broadcast(sock, cluster_info, shreds, batch_info, bank_forks)
     }
-    fn record(&mut self, receiver: &Mutex<RecordReceiver>, blockstore: &Blockstore) -> Result<()> {
-        let (shreds, slot_start_ts) = receiver.lock().unwrap().recv()?;
+    fn record(&mut self, receiver: &RecordReceiver, blockstore: &Blockstore) -> Result<()> {
+        let (shreds, slot_start_ts) = receiver.recv()?;
         self.insert(blockstore, shreds, slot_start_ts);
         Ok(())
     }
