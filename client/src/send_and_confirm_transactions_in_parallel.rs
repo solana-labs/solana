@@ -179,6 +179,10 @@ pub async fn send_and_confirm_transactions_in_parallel_with_spinner<T: Signers +
                 .collect()
         };
 
+        if messages.is_empty() {
+            break;
+        }
+
         // clear the map so that we can start resending
         transaction_map.clear();
 
@@ -239,7 +243,7 @@ pub async fn send_and_confirm_transactions_in_parallel_with_spinner<T: Signers +
                 confirmed_transactions.load(std::sync::atomic::Ordering::Relaxed),
                 total_transactions,
                 Some(blockheight),
-                blockheight + MAX_PROCESSING_AGE as u64,
+                wait_till_blockheight,
                 "Checking transaction status...",
             );
             // retry sending transaction only over TPU port / usually we should send transaction once over RPC port but multiple times over tpu port
@@ -255,6 +259,10 @@ pub async fn send_and_confirm_transactions_in_parallel_with_spinner<T: Signers +
                 .try_send_wire_transaction_batch(txs_to_resend_over_tpu)
                 .await;
             tokio::time::sleep(TPU_RESEND_REFRESH_RATE).await;
+        }
+
+        if transaction_map.is_empty() {
+            break;
         }
 
         progress_bar.println(format!(
