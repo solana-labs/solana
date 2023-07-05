@@ -227,7 +227,8 @@ pub(crate) mod tests {
         solana_account_decoder::parse_token::token_amount_to_ui_amount,
         solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path},
         solana_runtime::{
-            bank::{Bank, NonceFull, NoncePartial, TransactionBalancesSet},
+            bank::{Bank, TransactionBalancesSet},
+            nonce_info::{NonceFull, NoncePartial},
             rent_debits::RentDebits,
         },
         solana_sdk::{

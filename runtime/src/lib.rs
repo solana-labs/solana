@@ -49,6 +49,7 @@ pub mod inline_spl_token;
 pub mod inline_spl_token_2022;
 pub mod loader_utils;
 pub mod non_circulating_supply;
+pub mod nonce_info;
 pub mod partitioned_rewards;
 pub mod prioritization_fee;
 pub mod prioritization_fee_cache;
