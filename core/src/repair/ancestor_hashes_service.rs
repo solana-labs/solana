@@ -1,16 +1,18 @@
 use {
     crate::{
         cluster_slots_service::cluster_slots::ClusterSlots,
-        duplicate_repair_status::{
-            AncestorRequestDecision, AncestorRequestStatus, AncestorRequestType,
+        repair::{
+            duplicate_repair_status::{
+                AncestorRequestDecision, AncestorRequestStatus, AncestorRequestType,
+            },
+            outstanding_requests::OutstandingRequests,
+            packet_threshold::DynamicPacketToProcessThreshold,
+            repair_service::{AncestorDuplicateSlotsSender, RepairInfo, RepairStatsGroup},
+            serve_repair::{
+                AncestorHashesRepairType, AncestorHashesResponse, RepairProtocol, ServeRepair,
+            },
         },
-        outstanding_requests::OutstandingRequests,
-        packet_threshold::DynamicPacketToProcessThreshold,
-        repair_service::{AncestorDuplicateSlotsSender, RepairInfo, RepairStatsGroup},
         replay_stage::DUPLICATE_THRESHOLD,
-        serve_repair::{
-            AncestorHashesRepairType, AncestorHashesResponse, RepairProtocol, ServeRepair,
-        },
     },
     bincode::serialize,
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
@@ -865,13 +867,15 @@ mod test {
     use {
         super::*,
         crate::{
-            cluster_slot_state_verifier::{DuplicateSlotsToRepair, PurgeRepairSlotCounter},
-            duplicate_repair_status::DuplicateAncestorDecision,
+            repair::{
+                cluster_slot_state_verifier::{DuplicateSlotsToRepair, PurgeRepairSlotCounter},
+                duplicate_repair_status::DuplicateAncestorDecision,
+                serve_repair::MAX_ANCESTOR_RESPONSES,
+            },
             replay_stage::{
                 tests::{replay_blockstore_components, ReplayBlockstoreComponents},
                 ReplayStage,
             },
-            serve_repair::MAX_ANCESTOR_RESPONSES,
             vote_simulator::VoteSimulator,
         },
         solana_gossip::{

@@ -1,8 +1,10 @@
 use {
     crate::{
-        ancestor_hashes_service::{AncestorHashesReplayUpdate, AncestorHashesReplayUpdateSender},
         consensus::{
             fork_choice::ForkChoice, heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        },
+        repair::ancestor_hashes_service::{
+            AncestorHashesReplayUpdate, AncestorHashesReplayUpdateSender,
         },
     },
     solana_ledger::blockstore::Blockstore,

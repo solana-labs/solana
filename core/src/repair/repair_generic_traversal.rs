@@ -1,8 +1,7 @@
 use {
     crate::{
         consensus::{heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, tree_diff::TreeDiff},
-        repair_service::RepairService,
-        serve_repair::ShredRepairType,
+        repair::{repair_service::RepairService, serve_repair::ShredRepairType},
     },
     solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta},
     solana_sdk::{clock::Slot, hash::Hash},
@@ -205,7 +204,7 @@ pub fn get_closest_completion(
 pub mod test {
     use {
         super::*,
-        crate::repair_service::sleep_shred_deferment_period,
+        crate::repair::repair_service::sleep_shred_deferment_period,
         solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
         solana_sdk::hash::Hash,
         trees::{tr, Tree, TreeWalk},

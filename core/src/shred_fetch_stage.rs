@@ -1,7 +1,7 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
 use {
-    crate::serve_repair::ServeRepair,
+    crate::repair::serve_repair::ServeRepair,
     crossbeam_channel::{unbounded, Sender},
     solana_gossip::{cluster_info::ClusterInfo, contact_info::Protocol},
     solana_ledger::shred::{should_discard_shred, ShredFetchStats},

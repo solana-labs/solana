@@ -128,12 +128,12 @@ impl BroadcastRun for BroadcastFakeShredsRun {
     }
     fn transmit(
         &mut self,
-        receiver: &Mutex<TransmitReceiver>,
+        receiver: &TransmitReceiver,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
         _bank_forks: &RwLock<BankForks>,
     ) -> Result<()> {
-        for (data_shreds, batch_info) in receiver.lock().unwrap().iter() {
+        for (data_shreds, batch_info) in receiver {
             let fake = batch_info.is_some();
             let peers = cluster_info.tvu_peers();
             peers.iter().enumerate().for_each(|(i, peer)| {
@@ -149,8 +149,8 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         }
         Ok(())
     }
-    fn record(&mut self, receiver: &Mutex<RecordReceiver>, blockstore: &Blockstore) -> Result<()> {
-        for (data_shreds, _) in receiver.lock().unwrap().iter() {
+    fn record(&mut self, receiver: &RecordReceiver, blockstore: &Blockstore) -> Result<()> {
+        for (data_shreds, _) in receiver {
             blockstore.insert_shreds(data_shreds.to_vec(), None, true)?;
         }
         Ok(())
