@@ -4480,6 +4480,18 @@ fn test_slot_hash_expiry() {
     );
 }
 
+// This tests that when vote refresh should be sent, but the old vote is too old such that it's
+// outside slothash of the newest bank already so it will never land, we should send vote at the
+// tip of the current fork.
+// It creates validators A, B, and C, (C is only needed for stake distribution), then do this:
+// 1. kill B and C, let A run for a while to create its own fork A
+// 2. kill A, make sure B has everything until the common ancestor, let B run long enough to
+//    create a new fork B
+// 3. bring back A and B only, A now has 37% of the stake so its fork is heavier, B has only 35%
+//    so it wants to switch to fork B, but can't do it because of lockout. Also, B has voted on
+//    fork B, and last_voted < last_landed_vote (we do this by stopping B after its 4-block leader
+//    slot), and last vote is old enough so it's outside slothash
+// 4. we check that B will be able to vote again and the new vote is further down the B fork.
 #[test]
 #[serial]
 fn test_vote_refresh_outside_slothash() {
@@ -4693,7 +4705,12 @@ fn test_vote_refresh_outside_slothash() {
         }
     }
     let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
+    // check that B has voted past last voted slot.
     assert!(vote_on_b > last_vote_on_b);
+    // check that B is voting on its own fork, not on A's fork. Reopen blockstore to refresh.
+    let blockstore = open_blockstore(&b_ledger_path);
+    let mut ancestors = AncestorIterator::new(vote_on_b, &blockstore);
+    assert!(ancestors.find(|x| x == &last_vote_on_b).is_some());
 }
 
 // This test simulates a case where a leader sends a duplicate block with different ancestory. One
