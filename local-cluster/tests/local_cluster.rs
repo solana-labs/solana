@@ -4600,8 +4600,7 @@ fn test_vote_refresh_outside_slothash() {
     // Keep A running for a while longer so the majority fork has some decent size
     loop {
         last_vote_on_a = wait_for_last_vote_in_tower_to_land_in_ledger(&a_ledger_path, &a_pubkey);
-        if last_vote_on_a > common_ancestor_slot
-        {
+        if last_vote_on_a > common_ancestor_slot {
             let blockstore = open_blockstore(&a_ledger_path);
             info!(
                 "A majority fork: {:?}",
