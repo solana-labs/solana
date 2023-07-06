@@ -114,9 +114,9 @@ fn create_transaction_confirmation_task(
                     .iter()
                     .filter(|x| {
                         // all transactions that are not expired
-                        let is_not_expired = current_blockheight < x.last_valid_blockheight;
+                        let is_not_expired = current_blockheight <= x.last_valid_blockheight;
                         // all transaction that expired between last and current check
-                        let is_recently_expired = last_block_height < x.last_valid_blockheight
+                        let is_recently_expired = last_block_height <= x.last_valid_blockheight
                             && current_blockheight > x.last_valid_blockheight;
                         is_not_expired || is_recently_expired
                     })
@@ -159,8 +159,9 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
     blockhash_data_rw: Arc<RwLock<BlockHashData>>,
     signers: &T,
     confirmed_transactions: Arc<AtomicU32>,
+    total_transactions: usize,
 ) -> Result<()> {
-    let nb_transaction = messages_with_index.len();
+    let current_transaction_count = messages_with_index.len();
     // send all the transaction meesages
     for (counter, (index, message)) in messages_with_index.iter().enumerate() {
         let mut transaction = Transaction::new_unsigned(message.clone());
@@ -188,10 +189,14 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
             set_message_for_confirmed_transactions(
                 progress_bar,
                 confirmed_transactions.load(std::sync::atomic::Ordering::Relaxed),
-                nb_transaction,
+                total_transactions,
                 None,
                 blockhashdata.last_valid_blockheight,
-                &format!("Sending {}/{} transactions", counter + 1, nb_transaction,),
+                &format!(
+                    "Sending {}/{} transactions",
+                    counter + 1,
+                    current_transaction_count,
+                ),
             );
         }
     }
@@ -368,6 +373,7 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
             blockhash_data_rw.clone(),
             signers,
             confirmed_transactions.clone(),
+            total_transactions,
         )
         .await?;
 
