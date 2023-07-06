@@ -101,6 +101,7 @@ use {
         vote_state::{
             self, BlockTimestamp, Vote, VoteInit, VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY,
         },
+        vote_transaction,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -12771,6 +12772,70 @@ fn test_epoch_rewards_sysvar() {
     bank.burn_and_purge_account(&sysvar::epoch_rewards::id(), account);
     let account = bank.get_account(&sysvar::epoch_rewards::id());
     assert!(account.is_none());
+}
+
+/// Test that program execution that involves stake accounts should fail during reward period.
+/// Any programs, which result in stake account changes, will throw `ProgramExecutionTemporarilyRestricted` error when
+/// in reward period.
+#[test]
+fn test_program_execution_restricted_for_stake_account_in_reward_period() {
+    use solana_sdk::transaction::TransactionError::ProgramExecutionTemporarilyRestricted;
+
+    let validator_vote_keypairs = ValidatorVoteKeypairs::new_rand();
+    let validator_keypairs = vec![&validator_vote_keypairs];
+    let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
+        1_000_000_000,
+        &validator_keypairs,
+        vec![1_000_000_000; 1],
+    );
+
+    let node_key = &validator_keypairs[0].node_keypair;
+    let stake_key = &validator_keypairs[0].stake_keypair;
+
+    let bank0 = Bank::new_for_tests(&genesis_config);
+    let num_slots_in_epoch = bank0.get_slots_in_epoch(bank0.epoch());
+    assert_eq!(num_slots_in_epoch, 32);
+
+    let mut previous_bank = Arc::new(bank0);
+    for slot in 1..=num_slots_in_epoch + 2 {
+        let bank = Bank::new_from_parent(&previous_bank, &Pubkey::default(), slot);
+
+        // Fill bank_forks with banks with votes landing in the next slot
+        // So that rewards will be paid out at the epoch boundary, i.e. slot = 32
+        let vote = vote_transaction::new_vote_transaction(
+            vec![slot - 1],
+            previous_bank.hash(),
+            previous_bank.last_blockhash(),
+            &validator_vote_keypairs.node_keypair,
+            &validator_vote_keypairs.vote_keypair,
+            &validator_vote_keypairs.vote_keypair,
+            None,
+        );
+        bank.process_transaction(&vote).unwrap();
+
+        // Insert a transfer transaction from node account to stake account
+        let tx =
+            system_transaction::transfer(node_key, &stake_key.pubkey(), 1, bank.last_blockhash());
+        let r = bank.process_transaction(&tx);
+
+        if slot == num_slots_in_epoch {
+            // When the bank is at the beginning of the new epoch, i.e. slot 32,
+            // ProgramExecutionTemporarilyRestricted should be thrown for the transfer transaction.
+            assert_eq!(
+                r,
+                Err(ProgramExecutionTemporarilyRestricted { account_index: 1 })
+            );
+        } else {
+            // When the bank is outside of reward interval, the transfer transaction should not be affected and will succeed.
+            assert!(r.is_ok());
+        }
+
+        // Push a dummy blockhash, so that the latest_blockhash() for the transfer transaction in each
+        // iteration are different. Otherwise, all those transactions will be the same, and will not be
+        // executed by the bank except the first one.
+        bank.register_recent_blockhash(&Hash::new_unique());
+        previous_bank = Arc::new(bank);
+    }
 }
 
 /// Test rewards compuation and partitioned rewards distribution at the epoch boundary
