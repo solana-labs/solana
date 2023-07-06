@@ -121,6 +121,11 @@ module.exports = {
           type: "doc",
           id: "getstarted/transaction",
           label: "Create a transaction",
+        },
+        {
+          type: "doc",
+          id: "getstarted/client",
+          label: "Create a dApp client",
         }
         // {
         //   type: "doc",
