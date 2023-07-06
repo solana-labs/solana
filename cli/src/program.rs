@@ -21,7 +21,6 @@ use {
     },
     solana_client::{
         connection_cache::ConnectionCache,
-        send_and_confirm_transactions_in_parallel::send_and_confirm_transactions_in_parallel_with_spinner_blocking,
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
@@ -2163,37 +2162,37 @@ fn send_deploy_messages(
     if !write_messages.is_empty() {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
-            let transaction_errors = if config.use_quic {
-                send_and_confirm_transactions_in_parallel_with_spinner_blocking(
+            let connection_cache = if config.use_quic {
+                ConnectionCache::new_quic("connection_cache_cli_program_quic", 1)
+            } else {
+                ConnectionCache::with_udp("connection_cache_cli_program_udp", 1)
+            };
+            let transaction_errors = match connection_cache {
+                ConnectionCache::Udp(cache) => TpuClient::new_with_connection_cache(
                     rpc_client.clone(),
-                    config.websocket_url.clone(),
+                    &config.websocket_url,
+                    TpuClientConfig::default(),
+                    cache,
+                )?
+                .send_and_confirm_messages_with_spinner(
                     write_messages,
                     &[payer_signer, write_signer],
-                )
-            } else {
-                let connection_cache =
-                    ConnectionCache::with_udp("connection_cache_cli_program_udp", 1);
-                if let ConnectionCache::Udp(cache) = connection_cache {
-                    TpuClient::new_with_connection_cache(
-                        rpc_client.clone(),
-                        &config.websocket_url,
-                        TpuClientConfig::default(),
-                        cache,
-                    )?
-                    .send_and_confirm_messages_with_spinner(
-                        write_messages,
-                        &[payer_signer, write_signer],
-                    )
-                } else {
-                    // should not happen
-                    return Err("Expected UDP connection cache".into());
-                }
-            };
-            let transaction_errors = transaction_errors
-                .map_err(|err| format!("Data writes to account failed: {err}"))?
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>();
+                ),
+                ConnectionCache::Quic(cache) => TpuClient::new_with_connection_cache(
+                    rpc_client.clone(),
+                    &config.websocket_url,
+                    TpuClientConfig::default(),
+                    cache,
+                )?
+                .send_and_confirm_messages_with_spinner(
+                    write_messages,
+                    &[payer_signer, write_signer],
+                ),
+            }
+            .map_err(|err| format!("Data writes to account failed: {err}"))?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
 
             if !transaction_errors.is_empty() {
                 for transaction_error in &transaction_errors {
