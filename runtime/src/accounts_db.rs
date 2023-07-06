@@ -933,7 +933,9 @@ impl<'a> LoadedAccount<'a> {
 
     pub fn take_account(self) -> AccountSharedData {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.clone_account(),
+            LoadedAccount::Stored(stored_account_meta) => {
+                stored_account_meta.to_account_shared_data()
+            }
             LoadedAccount::Cached(cached_account) => match cached_account {
                 Cow::Owned(cached_account) => cached_account.account.clone(),
                 Cow::Borrowed(cached_account) => cached_account.account.clone(),
@@ -12720,7 +12722,7 @@ pub mod tests {
             stored_size: CACHE_VIRTUAL_STORED_SIZE as usize,
             hash: &hash,
         });
-        let account = stored_account.clone_account();
+        let account = stored_account.to_account_shared_data();
 
         let expected_account_hash = if cfg!(debug_assertions) {
             Hash::from_str("6qtBXmRrLdTdAV5bK6bZZJxQA4fPSUBxzQGq2BQSat25").unwrap()

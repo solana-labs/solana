@@ -215,7 +215,7 @@ pub mod tests {
             self.accounts_notified
                 .entry(*account.pubkey())
                 .or_default()
-                .push((slot, account.clone_account()));
+                .push((slot, account.to_account_shared_data()));
         }
 
         fn notify_end_of_restore_from_snapshot(&self) {

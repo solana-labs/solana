@@ -1,11 +1,6 @@
 use {
     crate::{append_vec::AppendVecStoredAccountMeta, storable_accounts::StorableAccounts},
-    solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
-        hash::Hash,
-        pubkey::Pubkey,
-        stake_history::Epoch,
-    },
+    solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
     std::{borrow::Borrow, marker::PhantomData},
 };
 
@@ -108,13 +103,6 @@ pub enum StoredAccountMeta<'a> {
 }
 
 impl<'a> StoredAccountMeta<'a> {
-    /// Return a new Account by copying all the data referenced by the `StoredAccountMeta`.
-    pub fn clone_account(&self) -> AccountSharedData {
-        match self {
-            Self::AppendVec(av) => av.clone_account(),
-        }
-    }
-
     pub fn pubkey(&self) -> &'a Pubkey {
         match self {
             Self::AppendVec(av) => av.pubkey(),
