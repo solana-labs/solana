@@ -119,9 +119,16 @@ impl ReadOnlyAccountsCache {
                 entry.index = queue.insert_last(key);
             }
         };
+    }
+
+    pub(crate) fn should_evict(&self) -> bool {
+        self.data_size.load(Ordering::Relaxed) > self.max_data_size
+    }
+
+    pub(crate) fn evict_old(&self) {
         // Evict entries from the front of the queue.
         let mut num_evicts = 0;
-        while self.data_size.load(Ordering::Relaxed) > self.max_data_size {
+        while self.should_evict() {
             let (pubkey, slot) = match self.queue.lock().unwrap().get_first() {
                 None => break,
                 Some(key) => *key,
@@ -282,6 +289,7 @@ mod tests {
                 let key = (pubkey, slot);
                 hash_map.insert(key, (account.clone(), ix));
                 cache.store(pubkey, slot, account);
+                cache.evict_old();
             }
         }
         assert_eq!(cache.cache_len(), 17);
