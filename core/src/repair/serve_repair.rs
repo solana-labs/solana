@@ -1298,7 +1298,7 @@ impl ServeRepair {
         nonce: Nonce,
     ) -> Option<PacketBatch> {
         let mut res =
-            PacketBatch::new_unpinned_with_recycler(recycler.clone(), max_responses, "run_orphan");
+            PacketBatch::new_unpinned_with_recycler(recycler, max_responses, "run_orphan");
         // Try to find the next "n" parent slots of the input slot
         let packets = std::iter::successors(blockstore.meta(slot).ok()?, |meta| {
             blockstore.meta(meta.parent_slot?).ok()?

@@ -502,7 +502,7 @@ impl ClusterInfo {
                 .packets_sent_gossip_requests_count
                 .add_relaxed(pings.len() as u64);
             let packet_batch = PacketBatch::new_unpinned_with_recycler_data_and_dests(
-                recycler.clone(),
+                recycler,
                 "refresh_push_active_set",
                 &pings,
             );
@@ -1653,7 +1653,7 @@ impl ClusterInfo {
         );
         if !reqs.is_empty() {
             let packet_batch = PacketBatch::new_unpinned_with_recycler_data_and_dests(
-                recycler.clone(),
+                recycler,
                 "run_gossip",
                 &reqs,
             );
@@ -2034,7 +2034,7 @@ impl ClusterInfo {
         let output_size_limit =
             self.update_data_budget(stakes.len()) / PULL_RESPONSE_MIN_SERIALIZED_SIZE;
         let mut packet_batch =
-            PacketBatch::new_unpinned_with_recycler(recycler.clone(), 64, "handle_pull_requests");
+            PacketBatch::new_unpinned_with_recycler(recycler, 64, "handle_pull_requests");
         let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
             let mut rng = rand::thread_rng();
             let check_pull_request =
@@ -2276,7 +2276,7 @@ impl ClusterInfo {
             None
         } else {
             let packet_batch = PacketBatch::new_unpinned_with_recycler_data_and_dests(
-                recycler.clone(),
+                recycler,
                 "handle_ping_messages",
                 &pongs_and_dests,
             );
@@ -2372,7 +2372,7 @@ impl ClusterInfo {
             return;
         }
         let mut packet_batch = PacketBatch::new_unpinned_with_recycler_data_and_dests(
-            recycler.clone(),
+            recycler,
             "handle_batch_push_messages",
             &prune_messages,
         );
@@ -3087,7 +3087,7 @@ pub fn push_messages_to_peer(
         .map(move |payload| (peer_gossip, Protocol::PushMessage(self_id, payload)))
         .collect();
     let packet_batch = PacketBatch::new_unpinned_with_recycler_data_and_dests(
-        PacketBatchRecycler::default(),
+        &PacketBatchRecycler::default(),
         "push_messages_to_peer",
         &reqs,
     );

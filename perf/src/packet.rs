@@ -43,7 +43,7 @@ impl PacketBatch {
     }
 
     pub fn new_unpinned_with_recycler(
-        recycler: PacketBatchRecycler,
+        recycler: &PacketBatchRecycler,
         capacity: usize,
         name: &'static str,
     ) -> Self {
@@ -53,7 +53,7 @@ impl PacketBatch {
     }
 
     pub fn new_with_recycler(
-        recycler: PacketBatchRecycler,
+        recycler: &PacketBatchRecycler,
         capacity: usize,
         name: &'static str,
     ) -> Self {
@@ -67,13 +67,13 @@ impl PacketBatch {
         name: &'static str,
         mut packets: Vec<Packet>,
     ) -> Self {
-        let mut batch = Self::new_with_recycler(recycler.clone(), packets.len(), name);
+        let mut batch = Self::new_with_recycler(recycler, packets.len(), name);
         batch.packets.append(&mut packets);
         batch
     }
 
     pub fn new_unpinned_with_recycler_data_and_dests<T: Serialize>(
-        recycler: PacketBatchRecycler,
+        recycler: &PacketBatchRecycler,
         name: &'static str,
         dests_and_data: &[(SocketAddr, T)],
     ) -> Self {
@@ -102,7 +102,7 @@ impl PacketBatch {
         name: &'static str,
         mut packets: Vec<Packet>,
     ) -> Self {
-        let mut batch = Self::new_unpinned_with_recycler(recycler.clone(), packets.len(), name);
+        let mut batch = Self::new_unpinned_with_recycler(recycler, packets.len(), name);
         batch.packets.append(&mut packets);
         batch
     }
@@ -278,8 +278,7 @@ mod tests {
     fn test_to_packets_pinning() {
         let recycler = PacketBatchRecycler::default();
         for i in 0..2 {
-            let _first_packets =
-                PacketBatch::new_with_recycler(recycler.clone(), i + 1, "first one");
+            let _first_packets = PacketBatch::new_with_recycler(&recycler, i + 1, "first one");
         }
     }
 }

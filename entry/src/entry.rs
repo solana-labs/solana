@@ -539,7 +539,7 @@ fn start_verify_transactions_gpu(
         .map(|slice| {
             let vec_size = slice.len();
             let mut packet_batch = PacketBatch::new_with_recycler(
-                verify_recyclers.packet_recycler.clone(),
+                &verify_recyclers.packet_recycler,
                 vec_size,
                 "entry-sig-verify",
             );
