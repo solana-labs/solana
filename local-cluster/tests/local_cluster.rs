@@ -4619,32 +4619,11 @@ fn test_vote_refresh_outside_slothash() {
 
     // B will fork off and accumulate enough lockout
     info!("Allowing B to fork");
-    let mut exit = false;
-    while !exit {
+    loop {
         sleep(Duration::from_millis(200));
-        let blockstore = open_blockstore(&b_ledger_path);
         let (last_vote, _) = last_vote_in_tower(&b_ledger_path, &b_pubkey).unwrap();
-        let ancestors = AncestorIterator::new(last_vote, &blockstore);
-        let mut length_of_block = 0;
-        let mut prev = 0;
-        for (index, slot) in ancestors.enumerate() {
-            if (prev == 0 || prev - slot == 1) && index < 4 {
-                length_of_block += 1;
-                prev = slot;
-            }
-            if index == 4 && length_of_block < 4 {
-                break;
-            }
-            if slot == common_ancestor_slot {
-                if index > 7 {
-                    info!(
-                        "B has forked for enough lockout: {:?}",
-                        AncestorIterator::new(last_vote, &blockstore).collect::<Vec<Slot>>()
-                    );
-                    exit = true;
-                }
-                break;
-            }
+        if last_vote % 4 == 1 && last_vote > common_ancestor_slot {
+            break;
         }
     }
 
