@@ -12643,6 +12643,93 @@ fn test_rewards_computation() {
     assert_eq!(stake_rewards.stake_rewards.len(), expected_num_delegations);
 }
 
+/// Test rewards compuation and partitioned rewards distribution at the epoch boundary
+#[test]
+fn test_rewards_computation_and_partitioned_distribution() {
+    solana_logger::setup();
+
+    // setup the expected number of stake delegations
+    let expected_num_delegations = 100;
+
+    let validator_keypairs = (0..expected_num_delegations)
+        .map(|_| ValidatorVoteKeypairs::new_rand())
+        .collect::<Vec<_>>();
+
+    let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
+        1_000_000_000,
+        &validator_keypairs,
+        vec![2_000_000_000; expected_num_delegations],
+    );
+
+    let bank0 = Bank::new_for_tests(&genesis_config);
+    let num_slots_in_epoch = bank0.get_slots_in_epoch(bank0.epoch());
+    assert_eq!(num_slots_in_epoch, 32);
+
+    let mut previous_bank = Arc::new(Bank::new_from_parent(
+        &Arc::new(bank0),
+        &Pubkey::default(),
+        1,
+    ));
+
+    // simulate block progress
+    for slot in 2..=num_slots_in_epoch + 2 {
+        let pre_cap = previous_bank.capitalization();
+        let curr_bank = Bank::new_from_parent(&previous_bank, &Pubkey::default(), slot);
+        let post_cap = curr_bank.capitalization();
+
+        // Fill banks with banks with votes landing in the next slot
+        // Create enough banks such that vote account will root
+        for validator_vote_keypairs in validator_keypairs.iter() {
+            let vote_id = validator_vote_keypairs.vote_keypair.pubkey();
+            let mut vote_account = curr_bank.get_account(&vote_id).unwrap();
+            // generate some rewards
+            let mut vote_state = Some(vote_state::from(&vote_account).unwrap());
+            for i in 0..MAX_LOCKOUT_HISTORY + 42 {
+                if let Some(v) = vote_state.as_mut() {
+                    vote_state::process_slot_vote_unchecked(v, i as u64)
+                }
+                let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
+                vote_state::to(&versioned, &mut vote_account).unwrap();
+                match versioned {
+                    VoteStateVersions::Current(v) => {
+                        vote_state = Some(*v);
+                    }
+                    _ => panic!("Has to be of type Current"),
+                };
+            }
+            curr_bank.store_account_and_update_capitalization(&vote_id, &vote_account);
+        }
+
+        if slot == num_slots_in_epoch {
+            // This is the first block of epoch 1. Reward computation should happen in this block.
+            // assert reward compute status activated at epoch boundary
+            assert!(matches!(
+                curr_bank.get_reward_interval(),
+                RewardInterval::InsideInterval
+            ));
+
+            // cap should increase because of new epoch rewards
+            assert!(post_cap > pre_cap);
+        } else if slot == num_slots_in_epoch + 1 || slot == num_slots_in_epoch + 2 {
+            // 1. when curr_slot == num_slots_in_epoch + 1, the 2nd block of epoch 1, reward distribution should happen in this block.
+            // however, all stake rewards are paid at the this block therefore reward_status should have transitioned to inactive. And since
+            // rewards are transfered from epoch_rewards sysvar to stake accounts. The cap should stay the same.
+            // 2. when curr_slot == num_slots_in_epoch+2, the 3rd block of epoch 1. reward distribution should have already completed. Thefore,
+            // reward_status should stay inactive and cap should stay the same.
+            assert!(matches!(
+                curr_bank.get_reward_interval(),
+                RewardInterval::OutsideInterval
+            ));
+
+            assert_eq!(post_cap, pre_cap);
+        } else {
+            // slot is not in rewards, cap should not change
+            assert_eq!(post_cap, pre_cap);
+        }
+        previous_bank = Arc::new(curr_bank);
+    }
+}
+
 /// Test `EpochRewards` sysvar creation, distribution, and burning.
 /// This test covers the following epoch_rewards_sysvar bank member functions, i.e.
 /// `create_epoch_rewards_sysvar`, `update_epoch_rewards_sysvar`, `burn_and_purge_account`.
