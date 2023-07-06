@@ -65,7 +65,7 @@ fn is_account_zeroed(account: &StoredAccountMeta) -> bool {
         && account.data_len() == 0
         && account.write_version() == 0
         && account.pubkey() == &Pubkey::default()
-        && account.clone_account() == AccountSharedData::default()
+        && account.to_account_shared_data() == AccountSharedData::default()
 }
 
 #[cfg(test)]
