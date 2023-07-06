@@ -42,17 +42,6 @@ impl<'a, M: TieredAccountMeta> TieredReadableAccount<'a, M> {
         self.index
     }
 
-    /// Returns a cloned AccountSharedData from this account.
-    pub fn clone_account(&self) -> AccountSharedData {
-        AccountSharedData::from(Account {
-            lamports: self.lamports(),
-            owner: *self.owner(),
-            executable: self.executable(),
-            rent_epoch: self.rent_epoch(),
-            data: self.data().to_vec(),
-        })
-    }
-
     /// Returns the write version of the account.
     pub fn write_version(&self) -> Option<StoredMetaWriteVersion> {
         self.meta.write_version(self.account_block)
