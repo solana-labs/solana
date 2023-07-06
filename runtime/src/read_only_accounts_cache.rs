@@ -3,6 +3,7 @@
 use {
     dashmap::{mapref::entry::Entry, DashMap},
     index_list::{Index, IndexList},
+    solana_measure::measure_us,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
@@ -39,6 +40,7 @@ pub(crate) struct ReadOnlyAccountsCache {
     hits: AtomicU64,
     misses: AtomicU64,
     evicts: AtomicU64,
+    eviction_us: AtomicU64,
 }
 
 impl ReadOnlyAccountsCache {
@@ -51,6 +53,7 @@ impl ReadOnlyAccountsCache {
             hits: AtomicU64::default(),
             misses: AtomicU64::default(),
             evicts: AtomicU64::default(),
+            eviction_us: AtomicU64::default(),
         }
     }
 
@@ -128,15 +131,18 @@ impl ReadOnlyAccountsCache {
     pub(crate) fn evict_old(&self) {
         // Evict entries from the front of the queue.
         let mut num_evicts = 0;
-        while self.should_evict() {
-            let (pubkey, slot) = match self.queue.lock().unwrap().get_first() {
-                None => break,
-                Some(key) => *key,
-            };
-            num_evicts += 1;
-            self.remove(pubkey, slot);
-        }
+        let (_, eviction_us) = measure_us!({
+            while self.should_evict() {
+                let (pubkey, slot) = match self.queue.lock().unwrap().get_first() {
+                    None => break,
+                    Some(key) => *key,
+                };
+                num_evicts += 1;
+                self.remove(pubkey, slot);
+            }
+        });
         self.evicts.fetch_add(num_evicts, Ordering::Relaxed);
+        self.eviction_us.fetch_add(eviction_us, Ordering::Relaxed);
     }
 
     pub(crate) fn remove(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
@@ -158,12 +164,13 @@ impl ReadOnlyAccountsCache {
         self.data_size.load(Ordering::Relaxed)
     }
 
-    pub(crate) fn get_and_reset_stats(&self) -> (u64, u64, u64) {
+    pub(crate) fn get_and_reset_stats(&self) -> (u64, u64, u64, u64) {
         let hits = self.hits.swap(0, Ordering::Relaxed);
         let misses = self.misses.swap(0, Ordering::Relaxed);
         let evicts = self.evicts.swap(0, Ordering::Relaxed);
+        let eviction_us = self.eviction_us.swap(0, Ordering::Relaxed);
 
-        (hits, misses, evicts)
+        (hits, misses, evicts, eviction_us)
     }
 }
 

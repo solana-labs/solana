@@ -8426,7 +8426,7 @@ impl AccountsDb {
 
     fn report_store_timings(&self) {
         if self.stats.last_store_report.should_update(1000) {
-            let (read_only_cache_hits, read_only_cache_misses, read_only_cache_evicts) =
+            let (read_only_cache_hits, read_only_cache_misses, read_only_cache_evicts, eviction_us) =
                 self.read_only_accounts_cache.get_and_reset_stats();
             datapoint_info!(
                 "accounts_db_store_timings",
@@ -8498,6 +8498,7 @@ impl AccountsDb {
                     self.stats.calc_stored_meta.swap(0, Ordering::Relaxed),
                     i64
                 ),
+                ("read_only_accounts_cache_eviction_us", eviction_us, i64),
             );
 
             let recycle_stores = self.recycle_stores.read().unwrap();
