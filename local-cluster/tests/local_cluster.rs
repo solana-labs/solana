@@ -4488,9 +4488,10 @@ fn test_slot_hash_expiry() {
 // 2. kill A, make sure B has everything until the common ancestor, let B run long enough to
 //    create a new fork B
 // 3. bring back A and B only, A now has 37% of the stake so its fork is heavier, B has only 35%
-//    so it wants to switch to fork B, but can't do it because of lockout. Also, B has voted on
-//    fork B, and last_voted < last_landed_vote (we do this by stopping B after its 4-block leader
-//    slot), and last vote is old enough so it's outside slothash
+//    so it wants to switch to fork B, but can't do it because of A's stake under switch proof
+//    threshold of 38%. Also, B has voted on fork B, and last_voted < last_landed_vote (we do this
+//    by stopping B after its 4-block leader slot), and last vote is old enough so it's outside
+//    slothash
 // 4. we check that B will be able to vote again and the new vote is further down the B fork.
 #[test]
 #[serial]
@@ -4590,8 +4591,7 @@ fn test_vote_refresh_outside_slothash() {
             } else {
                 panic!("A's tower has no votes");
             }
-            info!("Increase lockout by 6 confirmation levels and save as B's tower");
-            a_tower.increase_lockout(6);
+            info!("Save as B's tower");
             save_tower(&b_ledger_path, &a_tower, &b_info.info.keypair);
             info!("B's new tower: {:?}", a_tower.tower_slots());
         } else {
@@ -4604,17 +4604,12 @@ fn test_vote_refresh_outside_slothash() {
         purge_slots_with_count(&blockstore, common_ancestor_slot + 1, 100);
     }
 
-    info!(
-        "Run A on majority fork until it reaches slot hash expiry {}",
-        solana_sdk::slot_hashes::get_entries()
-    );
+    info!("Run A on majority fork until it creates its own fork");
     let mut last_vote_on_a;
-    // Keep A running for a while longer so the majority fork has some decent size
+    // Keep A running for a while longer so A has its own fork.
     loop {
         last_vote_on_a = wait_for_last_vote_in_tower_to_land_in_ledger(&a_ledger_path, &a_pubkey);
-        if last_vote_on_a
-            >= common_ancestor_slot + 2 * (solana_sdk::slot_hashes::get_entries() as u64)
-        {
+        if last_vote_on_a > common_ancestor_slot {
             let blockstore = open_blockstore(&a_ledger_path);
             info!(
                 "A majority fork: {:?}",
@@ -4633,34 +4628,13 @@ fn test_vote_refresh_outside_slothash() {
     b_info.config.voting_disabled = false;
     cluster.restart_node(&b_pubkey, b_info, SocketAddrSpace::Unspecified);
 
-    // B will fork off and accumulate enough lockout
+    // Allow B to fork now.
     info!("Allowing B to fork");
-    let mut exit = false;
-    while !exit {
+    loop {
         sleep(Duration::from_millis(200));
-        let blockstore = open_blockstore(&b_ledger_path);
         let (last_vote, _) = last_vote_in_tower(&b_ledger_path, &b_pubkey).unwrap();
-        let ancestors = AncestorIterator::new(last_vote, &blockstore);
-        let mut length_of_block = 0;
-        let mut prev = 0;
-        for (index, slot) in ancestors.enumerate() {
-            if (prev == 0 || prev - slot == 1) && index < 4 {
-                length_of_block += 1;
-                prev = slot;
-            }
-            if index == 4 && length_of_block < 4 {
-                break;
-            }
-            if slot == common_ancestor_slot {
-                if index > 7 {
-                    info!(
-                        "B has forked for enough lockout: {:?}",
-                        AncestorIterator::new(last_vote, &blockstore).collect::<Vec<Slot>>()
-                    );
-                    exit = true;
-                }
-                break;
-            }
+        if last_vote % 4 == 1 && last_vote > common_ancestor_slot {
+            break;
         }
     }
 
