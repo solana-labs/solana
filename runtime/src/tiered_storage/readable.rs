@@ -82,7 +82,9 @@ impl<'a, T: TieredAccountMeta> ReadableAccount for TieredReadableAccount<'a, T> 
     /// the specified account block.  Epoch::MAX will be returned if the account
     /// is rent-exempt.
     fn rent_epoch(&self) -> Epoch {
-        self.meta.rent_epoch(self.account_block).unwrap_or(Epoch::MAX)
+        self.meta
+            .rent_epoch(self.account_block)
+            .unwrap_or(Epoch::MAX)
     }
 
     /// Returns the data associated to this account.
