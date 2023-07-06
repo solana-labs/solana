@@ -4632,8 +4632,15 @@ fn test_vote_refresh_outside_slothash() {
     info!("Allowing B to fork");
     loop {
         sleep(Duration::from_millis(200));
+        let blockstore = open_blockstore(&b_ledger_path);
         let (last_vote, _) = last_vote_in_tower(&b_ledger_path, &b_pubkey).unwrap();
-        if last_vote % 4 == 1 && last_vote > common_ancestor_slot {
+        let mut iterator = AncestorIterator::new(last_vote, &blockstore);
+        let first_ancestor = iterator.next().unwrap();
+        let second_ancestor = iterator.next().unwrap();
+        if second_ancestor > common_ancestor_slot
+            && first_ancestor % 4 == 3
+            && first_ancestor == second_ancestor + 1
+        {
             break;
         }
     }
