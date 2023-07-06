@@ -11267,50 +11267,6 @@ fn test_skip_rewrite() {
     }
 }
 
-#[test]
-fn test_inner_instructions_list_from_instruction_trace() {
-    let instruction_trace = [1, 2, 1, 1, 2, 3, 2];
-    let mut transaction_context = TransactionContext::new(vec![], None, 3, instruction_trace.len());
-    for (index_in_trace, stack_height) in instruction_trace.into_iter().enumerate() {
-        while stack_height <= transaction_context.get_instruction_context_stack_height() {
-            transaction_context.pop().unwrap();
-        }
-        if stack_height > transaction_context.get_instruction_context_stack_height() {
-            transaction_context
-                .get_next_instruction_context()
-                .unwrap()
-                .configure(&[], &[], &[index_in_trace as u8]);
-            transaction_context.push().unwrap();
-        }
-    }
-    let inner_instructions = inner_instructions_list_from_instruction_trace(&transaction_context);
-
-    assert_eq!(
-        inner_instructions,
-        vec![
-            vec![InnerInstruction {
-                instruction: CompiledInstruction::new_from_raw_parts(0, vec![1], vec![]),
-                stack_height: 2,
-            }],
-            vec![],
-            vec![
-                InnerInstruction {
-                    instruction: CompiledInstruction::new_from_raw_parts(0, vec![4], vec![]),
-                    stack_height: 2,
-                },
-                InnerInstruction {
-                    instruction: CompiledInstruction::new_from_raw_parts(0, vec![5], vec![]),
-                    stack_height: 3,
-                },
-                InnerInstruction {
-                    instruction: CompiledInstruction::new_from_raw_parts(0, vec![6], vec![]),
-                    stack_height: 2,
-                },
-            ]
-        ]
-    );
-}
-
 #[derive(Serialize, Deserialize)]
 enum MockReallocInstruction {
     Realloc(usize, u64, Pubkey),

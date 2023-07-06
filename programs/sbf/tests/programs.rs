@@ -19,14 +19,15 @@ use {
     solana_program_runtime::{compute_budget::ComputeBudget, timings::ExecuteTimings},
     solana_rbpf::vm::ContextObject,
     solana_runtime::{
-        bank::{
-            DurableNonceFee, InnerInstruction, TransactionBalancesSet, TransactionExecutionDetails,
-            TransactionExecutionResult, TransactionResults,
-        },
+        bank::TransactionBalancesSet,
         loader_utils::{
             create_program, load_and_finalize_program, load_program, load_program_from_file,
             load_upgradeable_buffer, load_upgradeable_program, set_upgrade_authority,
             upgrade_program,
+        },
+        transaction_results::{
+            DurableNonceFee, InnerInstruction, TransactionExecutionDetails,
+            TransactionExecutionResult, TransactionResults,
         },
     },
     solana_sbf_rust_invoke::instructions::*,

@@ -83,6 +83,7 @@ pub mod transaction_batch;
 pub mod transaction_cost;
 pub mod transaction_error_metrics;
 pub mod transaction_priority_details;
+pub mod transaction_results;
 mod verify_accounts_hash_in_background;
 pub mod vote_account;
 pub mod vote_parser;
