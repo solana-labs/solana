@@ -4578,8 +4578,6 @@ fn test_vote_refresh_outside_slothash() {
             } else {
                 panic!("A's tower has no votes");
             }
-            info!("Increase lockout by 6 confirmation levels and save as B's tower");
-            a_tower.increase_lockout(6);
             save_tower(&b_ledger_path, &a_tower, &b_info.info.keypair);
             info!("B's new tower: {:?}", a_tower.tower_slots());
         } else {
