@@ -2,12 +2,7 @@ use {
     crate::{
         account_storage::meta::StoredMetaWriteVersion, tiered_storage::meta::TieredAccountMeta,
     },
-    solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount},
-        hash::Hash,
-        pubkey::Pubkey,
-        stake_history::Epoch,
-    },
+    solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
 };
 
 /// The struct that offers read APIs for accessing a TieredAccount.
