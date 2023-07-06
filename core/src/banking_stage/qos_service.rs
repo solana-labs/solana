@@ -6,8 +6,9 @@
 use {
     super::{committer::CommitTransactionDetails, BatchedTransactionDetails},
     crossbeam_channel::{unbounded, Receiver, Sender},
+    solana_cost_model::{cost_model::CostModel, transaction_cost::TransactionCost},
     solana_measure::measure::Measure,
-    solana_runtime::{bank::Bank, cost_model::CostModel, transaction_cost::TransactionCost},
+    solana_runtime::bank::Bank,
     solana_sdk::{
         clock::Slot,
         feature_set::FeatureSet,

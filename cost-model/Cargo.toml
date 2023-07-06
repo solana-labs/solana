@@ -1,0 +1,42 @@
+[package]
+name = "solana-cost-model"
+description = "Solana cost model"
+documentation = "https://docs.rs/solana-cost-model"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+lazy_static = { workspace = true }
+log = { workspace = true }
+solana-address-lookup-table-program = { workspace = true }
+solana-bpf-loader-program = { workspace = true }
+solana-compute-budget-program = { workspace = true }
+solana-config-program = { workspace = true }
+solana-frozen-abi = { workspace = true }
+solana-frozen-abi-macro = { workspace = true }
+solana-loader-v4-program = { workspace = true }
+solana-metrics = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-stake-program = { workspace = true }
+solana-system-program = { workspace = true }
+solana-vote-program = { workspace = true }
+
+[lib]
+crate-type = ["lib"]
+name = "solana_cost_model"
+
+[dev-dependencies]
+solana-logger = { workspace = true }
+static_assertions = { workspace = true }
+test-case = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[build-dependencies]
+rustc_version = { workspace = true }

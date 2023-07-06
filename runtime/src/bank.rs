@@ -57,8 +57,6 @@ use {
         bank::metrics::*,
         blockhash_queue::BlockhashQueue,
         builtins::{BuiltinPrototype, BUILTINS},
-        cost_model::CostModel,
-        cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_rewards_hasher::hash_rewards_into_partitions,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
@@ -98,6 +96,7 @@ use {
         ThreadPool, ThreadPoolBuilder,
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment,
+    solana_cost_model::{cost_model::CostModel, cost_tracker::CostTracker},
     solana_measure::{measure, measure::Measure, measure_us},
     solana_perf::perf_libs,
     solana_program_runtime::{

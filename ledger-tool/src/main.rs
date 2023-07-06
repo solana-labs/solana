@@ -30,6 +30,7 @@ use {
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
         validator::BlockVerificationMethod,
     },
+    solana_cost_model::{cost_model::CostModel, cost_tracker::CostTracker},
     solana_entry::entry::Entry,
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
@@ -50,8 +51,6 @@ use {
         accounts_index::ScanConfig,
         bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
         bank_forks::BankForks,
-        cost_model::CostModel,
-        cost_tracker::CostTracker,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
