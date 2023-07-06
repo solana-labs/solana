@@ -933,7 +933,9 @@ impl<'a> LoadedAccount<'a> {
 
     pub fn take_account(self) -> AccountSharedData {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.clone_account(),
+            LoadedAccount::Stored(stored_account_meta) => {
+                stored_account_meta.to_account_shared_data()
+            }
             LoadedAccount::Cached(cached_account) => match cached_account {
                 Cow::Owned(cached_account) => cached_account.account.clone(),
                 Cow::Borrowed(cached_account) => cached_account.account.clone(),
@@ -7608,6 +7610,7 @@ impl AccountsDb {
         flavor: CalcAccountsHashFlavor,
         accounts_hash_cache_path: PathBuf,
     ) -> Result<(AccountsHashEnum, u64), AccountsHashVerificationError> {
+        let total_time = Measure::start("");
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         stats.oldest_root = storages.range().start;
 
@@ -7616,7 +7619,12 @@ impl AccountsDb {
         let slot = storages.max_slot_inclusive();
         let use_bg_thread_pool = config.use_bg_thread_pool;
         let scan_and_hash = || {
-            let cache_hash_data = Self::get_cache_hash_data(accounts_hash_cache_path, config, slot);
+            let (cache_hash_data, cache_hash_data_us) = measure_us!(Self::get_cache_hash_data(
+                accounts_hash_cache_path,
+                config,
+                slot
+            ));
+            stats.cache_hash_data_us += cache_hash_data_us;
 
             let bounds = Range {
                 start: 0,
@@ -7668,7 +7676,7 @@ impl AccountsDb {
                     AccountsHashEnum::Incremental(IncrementalAccountsHash(accounts_hash))
                 }
             };
-            info!("calculate_accounts_hash_from_storages: slot: {slot}, {accounts_hash:?}, capitalization: {capitalization}");
+            info!("calculate_accounts_hash_from_storages: slot: {slot}, {accounts_hash:?}, capitalization: {capitalization},{total_time}");
             Ok((accounts_hash, capitalization))
         };
 
@@ -7677,6 +7685,7 @@ impl AccountsDb {
         } else {
             scan_and_hash()
         };
+        stats.total_us = total_time.end_as_us();
         stats.log();
         result
     }
@@ -12713,7 +12722,7 @@ pub mod tests {
             stored_size: CACHE_VIRTUAL_STORED_SIZE as usize,
             hash: &hash,
         });
-        let account = stored_account.clone_account();
+        let account = stored_account.to_account_shared_data();
 
         let expected_account_hash = if cfg!(debug_assertions) {
             Hash::from_str("6qtBXmRrLdTdAV5bK6bZZJxQA4fPSUBxzQGq2BQSat25").unwrap()

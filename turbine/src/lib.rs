@@ -2,6 +2,7 @@
 
 pub mod broadcast_stage;
 pub mod cluster_nodes;
+pub mod quic_endpoint;
 pub mod retransmit_stage;
 pub mod sigverify_shreds;
 

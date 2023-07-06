@@ -50,6 +50,7 @@ solana-bpf-loader-program = { workspace = true }
 solana-bucket-map = { workspace = true }
 solana-compute-budget-program = { workspace = true }
 solana-config-program = { workspace = true }
+solana-cost-model = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
 solana-loader-v4-program = { workspace = true }

@@ -1,11 +1,13 @@
 use {
     crate::{
         cluster_slots_service::cluster_slots::ClusterSlots,
-        duplicate_repair_status::get_ancestor_hash_repair_sample_size,
-        repair_response,
-        repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
-        request_response::RequestResponse,
-        result::{Error, Result},
+        repair::{
+            duplicate_repair_status::get_ancestor_hash_repair_sample_size,
+            repair_response,
+            repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
+            request_response::RequestResponse,
+            result::{Error, RepairVerifyError, Result},
+        },
     },
     bincode::serialize,
     crossbeam_channel::RecvTimeoutError,
@@ -55,7 +57,6 @@ use {
         thread::{Builder, JoinHandle},
         time::{Duration, Instant},
     },
-    thiserror::Error,
 };
 
 /// the number of slots to respond with when responding to `Orphan` requests
@@ -86,22 +87,6 @@ const SIGNED_REPAIR_TIME_WINDOW: Duration = Duration::from_secs(60 * 10); // 10 
 
 #[cfg(test)]
 static_assertions::const_assert_eq!(MAX_ANCESTOR_RESPONSES, 30);
-
-#[derive(Error, Debug)]
-pub enum RepairVerifyError {
-    #[error("IdMismatch")]
-    IdMismatch,
-    #[error("Malformed")]
-    Malformed,
-    #[error("SelfRepair")]
-    SelfRepair,
-    #[error("SigVerify")]
-    SigVerify,
-    #[error("TimeSkew")]
-    TimeSkew,
-    #[error("Unsigned")]
-    Unsigned,
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ShredRepairType {
@@ -229,7 +214,7 @@ pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
 #[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize, strum_macros::Display)]
-#[frozen_abi(digest = "6VyBwHjkAMXAN97fdhQgFv6VdPEnfJo9LdUAd2SFtwF3")]
+#[frozen_abi(digest = "HXKJuZAK4LsweUTRbsxEcG9jHA9JR9s8MYmmjx2Nb5X1")]
 pub enum RepairProtocol {
     LegacyWindowIndex(LegacyContactInfo, Slot, u64),
     LegacyHighestWindowIndex(LegacyContactInfo, Slot, u64),
@@ -1371,7 +1356,7 @@ impl ServeRepair {
 mod tests {
     use {
         super::*,
-        crate::repair_response,
+        crate::repair::repair_response,
         solana_gossip::{contact_info::ContactInfo, socketaddr, socketaddr_any},
         solana_ledger::{
             blockstore::make_many_slot_entries,

@@ -57,11 +57,10 @@ use {
         bank::metrics::*,
         blockhash_queue::BlockhashQueue,
         builtins::{BuiltinPrototype, BUILTINS},
-        cost_model::CostModel,
-        cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_rewards_hasher::hash_rewards_into_partitions,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
+        nonce_info::{NonceInfo, NoncePartial},
         partitioned_rewards::PartitionedEpochRewardsConfig,
         rent_collector::{CollectedInfo, RentCollector},
         rent_debits::RentDebits,
@@ -81,6 +80,11 @@ use {
         storable_accounts::StorableAccounts,
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
+        transaction_results::{
+            inner_instructions_list_from_instruction_trace, DurableNonceFee,
+            TransactionCheckResult, TransactionExecutionDetails, TransactionExecutionResult,
+            TransactionResults,
+        },
         vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
     },
     byteorder::{ByteOrder, LittleEndian},
@@ -92,6 +96,7 @@ use {
         ThreadPool, ThreadPoolBuilder,
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment,
+    solana_cost_model::{cost_model::CostModel, cost_tracker::CostTracker},
     solana_measure::{measure, measure::Measure, measure_us},
     solana_perf::perf_libs,
     solana_program_runtime::{
@@ -139,7 +144,6 @@ use {
         hash::{extend_and_hash, hashv, Hash},
         incinerator,
         inflation::Inflation,
-        instruction::{CompiledInstruction, TRANSACTION_LEVEL_STACK_HEIGHT},
         lamports::LamportsError,
         loader_v4,
         message::{AccountKeys, SanitizedMessage},
@@ -290,77 +294,6 @@ impl BankRc {
     }
 }
 
-pub type TransactionCheckResult = (Result<()>, Option<NoncePartial>);
-
-pub struct TransactionResults {
-    pub fee_collection_results: Vec<Result<()>>,
-    pub execution_results: Vec<TransactionExecutionResult>,
-    pub rent_debits: Vec<RentDebits>,
-}
-
-#[derive(Debug, Clone)]
-pub struct TransactionExecutionDetails {
-    pub status: Result<()>,
-    pub log_messages: Option<Vec<String>>,
-    pub inner_instructions: Option<InnerInstructionsList>,
-    pub durable_nonce_fee: Option<DurableNonceFee>,
-    pub return_data: Option<TransactionReturnData>,
-    pub executed_units: u64,
-    /// The change in accounts data len for this transaction.
-    /// NOTE: This value is valid IFF `status` is `Ok`.
-    pub accounts_data_len_delta: i64,
-}
-
-/// Type safe representation of a transaction execution attempt which
-/// differentiates between a transaction that was executed (will be
-/// committed to the ledger) and a transaction which wasn't executed
-/// and will be dropped.
-///
-/// Note: `Result<TransactionExecutionDetails, TransactionError>` is not
-/// used because it's easy to forget that the inner `details.status` field
-/// is what should be checked to detect a successful transaction. This
-/// enum provides a convenience method `Self::was_executed_successfully` to
-/// make such checks hard to do incorrectly.
-#[derive(Debug, Clone)]
-pub enum TransactionExecutionResult {
-    Executed {
-        details: TransactionExecutionDetails,
-        programs_modified_by_tx: Box<LoadedProgramsForTxBatch>,
-        programs_updated_only_for_global_cache: Box<LoadedProgramsForTxBatch>,
-    },
-    NotExecuted(TransactionError),
-}
-
-impl TransactionExecutionResult {
-    pub fn was_executed_successfully(&self) -> bool {
-        match self {
-            Self::Executed { details, .. } => details.status.is_ok(),
-            Self::NotExecuted { .. } => false,
-        }
-    }
-
-    pub fn was_executed(&self) -> bool {
-        match self {
-            Self::Executed { .. } => true,
-            Self::NotExecuted(_) => false,
-        }
-    }
-
-    pub fn details(&self) -> Option<&TransactionExecutionDetails> {
-        match self {
-            Self::Executed { details, .. } => Some(details),
-            Self::NotExecuted(_) => None,
-        }
-    }
-
-    pub fn flattened_result(&self) -> Result<()> {
-        match self {
-            Self::Executed { details, .. } => details.status.clone(),
-            Self::NotExecuted(err) => Err(err.clone()),
-        }
-    }
-}
-
 pub struct LoadAndExecuteTransactionsOutput {
     pub loaded_transactions: Vec<TransactionLoadResult>,
     // Vector of results indicating whether a transaction was executed or could not
@@ -376,30 +309,6 @@ pub struct LoadAndExecuteTransactionsOutput {
     pub executed_with_successful_result_count: usize,
     pub signature_count: u64,
     pub error_counters: TransactionErrorMetrics,
-}
-
-#[derive(Debug, Clone)]
-pub enum DurableNonceFee {
-    Valid(u64),
-    Invalid,
-}
-
-impl From<&NonceFull> for DurableNonceFee {
-    fn from(nonce: &NonceFull) -> Self {
-        match nonce.lamports_per_signature() {
-            Some(lamports_per_signature) => Self::Valid(lamports_per_signature),
-            None => Self::Invalid,
-        }
-    }
-}
-
-impl DurableNonceFee {
-    pub fn lamports_per_signature(&self) -> Option<u64> {
-        match self {
-            Self::Valid(lamports_per_signature) => Some(*lamports_per_signature),
-            Self::Invalid => None,
-        }
-    }
 }
 
 pub struct TransactionSimulationResult {
@@ -424,74 +333,6 @@ impl TransactionBalancesSet {
     }
 }
 pub type TransactionBalances = Vec<Vec<u64>>;
-
-/// An ordered list of compiled instructions that were invoked during a
-/// transaction instruction
-pub type InnerInstructions = Vec<InnerInstruction>;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct InnerInstruction {
-    pub instruction: CompiledInstruction,
-    /// Invocation stack height of this instruction. Instruction stack height
-    /// starts at 1 for transaction instructions.
-    pub stack_height: u8,
-}
-
-/// A list of compiled instructions that were invoked during each instruction of
-/// a transaction
-pub type InnerInstructionsList = Vec<InnerInstructions>;
-
-/// Extract the InnerInstructionsList from a TransactionContext
-pub fn inner_instructions_list_from_instruction_trace(
-    transaction_context: &TransactionContext,
-) -> InnerInstructionsList {
-    debug_assert!(transaction_context
-        .get_instruction_context_at_index_in_trace(0)
-        .map(|instruction_context| instruction_context.get_stack_height()
-            == TRANSACTION_LEVEL_STACK_HEIGHT)
-        .unwrap_or(true));
-    let mut outer_instructions = Vec::new();
-    for index_in_trace in 0..transaction_context.get_instruction_trace_length() {
-        if let Ok(instruction_context) =
-            transaction_context.get_instruction_context_at_index_in_trace(index_in_trace)
-        {
-            let stack_height = instruction_context.get_stack_height();
-            if stack_height == TRANSACTION_LEVEL_STACK_HEIGHT {
-                outer_instructions.push(Vec::new());
-            } else if let Some(inner_instructions) = outer_instructions.last_mut() {
-                let stack_height = u8::try_from(stack_height).unwrap_or(u8::MAX);
-                let instruction = CompiledInstruction::new_from_raw_parts(
-                    instruction_context
-                        .get_index_of_program_account_in_transaction(
-                            instruction_context
-                                .get_number_of_program_accounts()
-                                .saturating_sub(1),
-                        )
-                        .unwrap_or_default() as u8,
-                    instruction_context.get_instruction_data().to_vec(),
-                    (0..instruction_context.get_number_of_instruction_accounts())
-                        .map(|instruction_account_index| {
-                            instruction_context
-                                .get_index_of_instruction_account_in_transaction(
-                                    instruction_account_index,
-                                )
-                                .unwrap_or_default() as u8
-                        })
-                        .collect(),
-                );
-                inner_instructions.push(InnerInstruction {
-                    instruction,
-                    stack_height,
-                });
-            } else {
-                debug_assert!(false);
-            }
-        } else {
-            debug_assert!(false);
-        }
-    }
-    outer_instructions
-}
 
 /// A list of log messages emitted during a transaction
 pub type TransactionLogMessages = Vec<String>;
@@ -549,108 +390,6 @@ impl TransactionLogCollector {
                     .collect()
             }),
         }
-    }
-}
-
-pub trait NonceInfo {
-    fn address(&self) -> &Pubkey;
-    fn account(&self) -> &AccountSharedData;
-    fn lamports_per_signature(&self) -> Option<u64>;
-    fn fee_payer_account(&self) -> Option<&AccountSharedData>;
-}
-
-/// Holds limited nonce info available during transaction checks
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct NoncePartial {
-    address: Pubkey,
-    account: AccountSharedData,
-}
-impl NoncePartial {
-    pub fn new(address: Pubkey, account: AccountSharedData) -> Self {
-        Self { address, account }
-    }
-}
-impl NonceInfo for NoncePartial {
-    fn address(&self) -> &Pubkey {
-        &self.address
-    }
-    fn account(&self) -> &AccountSharedData {
-        &self.account
-    }
-    fn lamports_per_signature(&self) -> Option<u64> {
-        nonce_account::lamports_per_signature_of(&self.account)
-    }
-    fn fee_payer_account(&self) -> Option<&AccountSharedData> {
-        None
-    }
-}
-
-/// Holds fee subtracted nonce info
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct NonceFull {
-    address: Pubkey,
-    account: AccountSharedData,
-    fee_payer_account: Option<AccountSharedData>,
-}
-impl NonceFull {
-    pub fn new(
-        address: Pubkey,
-        account: AccountSharedData,
-        fee_payer_account: Option<AccountSharedData>,
-    ) -> Self {
-        Self {
-            address,
-            account,
-            fee_payer_account,
-        }
-    }
-    pub fn from_partial(
-        partial: NoncePartial,
-        message: &SanitizedMessage,
-        accounts: &[TransactionAccount],
-        rent_debits: &RentDebits,
-    ) -> Result<Self> {
-        let fee_payer = (0..message.account_keys().len()).find_map(|i| {
-            if let Some((k, a)) = &accounts.get(i) {
-                if message.is_non_loader_key(i) {
-                    return Some((k, a));
-                }
-            }
-            None
-        });
-
-        if let Some((fee_payer_address, fee_payer_account)) = fee_payer {
-            let mut fee_payer_account = fee_payer_account.clone();
-            let rent_debit = rent_debits.get_account_rent_debit(fee_payer_address);
-            fee_payer_account.set_lamports(fee_payer_account.lamports().saturating_add(rent_debit));
-
-            let nonce_address = *partial.address();
-            if *fee_payer_address == nonce_address {
-                Ok(Self::new(nonce_address, fee_payer_account, None))
-            } else {
-                Ok(Self::new(
-                    nonce_address,
-                    partial.account().clone(),
-                    Some(fee_payer_account),
-                ))
-            }
-        } else {
-            Err(TransactionError::AccountNotFound)
-        }
-    }
-}
-impl NonceInfo for NonceFull {
-    fn address(&self) -> &Pubkey {
-        &self.address
-    }
-    fn account(&self) -> &AccountSharedData {
-        &self.account
-    }
-    fn lamports_per_signature(&self) -> Option<u64> {
-        nonce_account::lamports_per_signature_of(&self.account)
-    }
-    fn fee_payer_account(&self) -> Option<&AccountSharedData> {
-        self.fee_payer_account.as_ref()
     }
 }
 

@@ -168,12 +168,12 @@ trait BroadcastRun {
     ) -> Result<()>;
     fn transmit(
         &mut self,
-        receiver: &Mutex<TransmitReceiver>,
+        receiver: &TransmitReceiver,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
         bank_forks: &RwLock<BankForks>,
     ) -> Result<()>;
-    fn record(&mut self, receiver: &Mutex<RecordReceiver>, blockstore: &Blockstore) -> Result<()>;
+    fn record(&mut self, receiver: &RecordReceiver, blockstore: &Blockstore) -> Result<()>;
 }
 
 // Implement a destructor for the BroadcastStage thread to signal it exited
@@ -291,7 +291,6 @@ impl BroadcastStage {
                 .unwrap()
         };
         let mut thread_hdls = vec![thread_hdl];
-        let socket_receiver = Arc::new(Mutex::new(socket_receiver));
         thread_hdls.extend(socks.into_iter().map(|sock| {
             let socket_receiver = socket_receiver.clone();
             let mut bs_transmit = broadcast_stage_run.clone();
@@ -309,7 +308,6 @@ impl BroadcastStage {
                 .spawn(run_transmit)
                 .unwrap()
         }));
-        let blockstore_receiver = Arc::new(Mutex::new(blockstore_receiver));
         thread_hdls.extend(
             repeat_with(|| {
                 let blockstore_receiver = blockstore_receiver.clone();

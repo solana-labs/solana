@@ -160,12 +160,12 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
     }
     fn transmit(
         &mut self,
-        receiver: &Mutex<TransmitReceiver>,
+        receiver: &TransmitReceiver,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
         bank_forks: &RwLock<BankForks>,
     ) -> Result<()> {
-        let (shreds, _) = receiver.lock().unwrap().recv()?;
+        let (shreds, _) = receiver.recv()?;
         broadcast_shreds(
             sock,
             &shreds,
@@ -178,8 +178,8 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             cluster_info.socket_addr_space(),
         )
     }
-    fn record(&mut self, receiver: &Mutex<RecordReceiver>, blockstore: &Blockstore) -> Result<()> {
-        let (all_shreds, _) = receiver.lock().unwrap().recv()?;
+    fn record(&mut self, receiver: &RecordReceiver, blockstore: &Blockstore) -> Result<()> {
+        let (all_shreds, _) = receiver.recv()?;
         blockstore
             .insert_shreds(all_shreds.to_vec(), None, true)
             .expect("Failed to insert shreds in blockstore");

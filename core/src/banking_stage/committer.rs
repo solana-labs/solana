@@ -7,13 +7,11 @@ use {
     solana_measure::measure_us,
     solana_runtime::{
         accounts::TransactionLoadResult,
-        bank::{
-            Bank, CommitTransactionCounts, TransactionBalancesSet, TransactionExecutionResult,
-            TransactionResults,
-        },
+        bank::{Bank, CommitTransactionCounts, TransactionBalancesSet},
         bank_utils,
         prioritization_fee_cache::PrioritizationFeeCache,
         transaction_batch::TransactionBatch,
+        transaction_results::{TransactionExecutionResult, TransactionResults},
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{pubkey::Pubkey, saturating_add_assign},

@@ -3,13 +3,15 @@
 //!
 use {
     crate::{
-        ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
         cluster_info_vote_listener::VerifiedVoteReceiver,
         completed_data_sets_service::CompletedDataSetsSender,
-        repair_response,
-        repair_service::{
-            DumpedSlotsReceiver, OutstandingShredRepairs, PopularPrunedForksSender, RepairInfo,
-            RepairService,
+        repair::{
+            ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
+            repair_response,
+            repair_service::{
+                DumpedSlotsReceiver, OutstandingShredRepairs, PopularPrunedForksSender, RepairInfo,
+                RepairService,
+            },
         },
         result::{Error, Result},
     },
@@ -482,6 +484,7 @@ impl WindowService {
 mod test {
     use {
         super::*,
+        crate::repair::serve_repair::ShredRepairType,
         solana_entry::entry::{create_ticks, Entry},
         solana_gossip::contact_info::ContactInfo,
         solana_ledger::{
@@ -576,7 +579,6 @@ mod test {
 
     #[test]
     fn test_prune_shreds() {
-        use crate::serve_repair::ShredRepairType;
         solana_logger::setup();
         let shred = Shred::new_from_parity_shard(
             5,   // slot

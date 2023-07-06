@@ -17,9 +17,10 @@ use {
     },
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
-        bank::{Bank, LoadAndExecuteTransactionsOutput, TransactionCheckResult},
+        bank::{Bank, LoadAndExecuteTransactionsOutput},
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
+        transaction_results::TransactionCheckResult,
     },
     solana_sdk::{
         clock::{Slot, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
@@ -735,6 +736,7 @@ mod tests {
         },
         crossbeam_channel::{unbounded, Receiver},
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
+        solana_cost_model::cost_model::CostModel,
         solana_entry::entry::{next_entry, next_versioned_entry},
         solana_ledger::{
             blockstore::{entries_to_test_shreds, Blockstore},
@@ -747,7 +749,7 @@ mod tests {
         solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
         solana_program_runtime::timings::ProgramTiming,
         solana_rpc::transaction_status_service::TransactionStatusService,
-        solana_runtime::{cost_model::CostModel, prioritization_fee_cache::PrioritizationFeeCache},
+        solana_runtime::prioritization_fee_cache::PrioritizationFeeCache,
         solana_sdk::{
             account::AccountSharedData,
             instruction::InstructionError,

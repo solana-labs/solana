@@ -491,7 +491,10 @@ impl<'a> DoubleEndedIterator for MemoryChunkIterator<'a> {
 #[cfg(test)]
 #[allow(clippy::indexing_slicing)]
 mod tests {
-    use {super::*, solana_rbpf::ebpf::MM_PROGRAM_START};
+    use {
+        super::*,
+        solana_rbpf::{ebpf::MM_PROGRAM_START, elf::SBPFVersion},
+    };
 
     fn to_chunk_vec<'a>(
         iter: impl Iterator<Item = Result<(&'a MemoryRegion, u64, usize), Error>>,
@@ -507,7 +510,7 @@ mod tests {
             aligned_memory_mapping: false,
             ..Config::default()
         };
-        let memory_mapping = MemoryMapping::new(vec![], &config).unwrap();
+        let memory_mapping = MemoryMapping::new(vec![], &config, &SBPFVersion::V2).unwrap();
 
         let mut src_chunk_iter =
             MemoryChunkIterator::new(&memory_mapping, AccessType::Load, 0, 1).unwrap();
@@ -521,7 +524,7 @@ mod tests {
             aligned_memory_mapping: false,
             ..Config::default()
         };
-        let memory_mapping = MemoryMapping::new(vec![], &config).unwrap();
+        let memory_mapping = MemoryMapping::new(vec![], &config, &SBPFVersion::V2).unwrap();
 
         let mut src_chunk_iter =
             MemoryChunkIterator::new(&memory_mapping, AccessType::Load, u64::MAX, 1).unwrap();
@@ -538,6 +541,7 @@ mod tests {
         let memory_mapping = MemoryMapping::new(
             vec![MemoryRegion::new_readonly(&mem1, MM_PROGRAM_START)],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -593,6 +597,7 @@ mod tests {
         let memory_mapping = MemoryMapping::new(
             vec![MemoryRegion::new_readonly(&mem1, MM_PROGRAM_START)],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -647,6 +652,7 @@ mod tests {
                 MemoryRegion::new_readonly(&mem2, MM_PROGRAM_START + 8),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -689,6 +695,7 @@ mod tests {
                 MemoryRegion::new_readonly(&mem2, MM_PROGRAM_START + 8),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -738,6 +745,7 @@ mod tests {
                 MemoryRegion::new_readonly(&mem2, MM_PROGRAM_START + 8),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -762,6 +770,7 @@ mod tests {
                 MemoryRegion::new_writable(&mut mem4, MM_PROGRAM_START + 6),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -795,6 +804,7 @@ mod tests {
                 MemoryRegion::new_writable(&mut mem4, MM_PROGRAM_START + 6),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -825,6 +835,7 @@ mod tests {
                 MemoryRegion::new_readonly(&mem2, MM_PROGRAM_START + 8),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -852,6 +863,7 @@ mod tests {
                 MemoryRegion::new_writable(&mut mem4, MM_PROGRAM_START + 6),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -881,6 +893,7 @@ mod tests {
                 MemoryRegion::new_readonly(&mem3, MM_PROGRAM_START + 9),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
