@@ -12,9 +12,9 @@ use {
 
 /// The struct that offers read APIs for accessing a TieredAccount.
 #[derive(PartialEq, Eq, Debug)]
-pub struct TieredReadableAccount<'a, T: TieredAccountMeta> {
+pub struct TieredReadableAccount<'a, M: TieredAccountMeta> {
     /// TieredAccountMeta
-    pub(crate) meta: &'a T,
+    pub(crate) meta: &'a M,
     /// The address of the account
     pub(crate) address: &'a Pubkey,
     /// The address of the account owner
@@ -26,7 +26,7 @@ pub struct TieredReadableAccount<'a, T: TieredAccountMeta> {
     pub(crate) account_block: &'a [u8],
 }
 
-impl<'a, T: TieredAccountMeta> TieredReadableAccount<'a, T> {
+impl<'a, M: TieredAccountMeta> TieredReadableAccount<'a, M> {
     /// Returns the address of this account.
     pub fn address(&self) -> &'a Pubkey {
         self.address
@@ -59,7 +59,7 @@ impl<'a, T: TieredAccountMeta> TieredReadableAccount<'a, T> {
     }
 }
 
-impl<'a, T: TieredAccountMeta> ReadableAccount for TieredReadableAccount<'a, T> {
+impl<'a, M: TieredAccountMeta> ReadableAccount for TieredReadableAccount<'a, M> {
     /// Returns the balance of the lamports of this account.
     fn lamports(&self) -> u64 {
         self.meta.lamports()
