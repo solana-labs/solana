@@ -2373,7 +2373,9 @@ impl ReplayStage {
 
         // If we are a non voting validator or have an incorrect setup preventing us from
         // generating vote txs, no need to refresh
-        let Some(last_vote_tx_blockhash) = tower.last_vote_tx_blockhash() else { return };
+        let Some(last_vote_tx_blockhash) = tower.last_vote_tx_blockhash() else {
+            return;
+        };
 
         if my_latest_landed_vote >= last_voted_slot
             || heaviest_bank_on_same_fork

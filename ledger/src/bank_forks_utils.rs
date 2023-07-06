@@ -112,7 +112,7 @@ pub fn load_bank_forks(
 
         let Some(full_snapshot_archive_info) =
             snapshot_utils::get_highest_full_snapshot_archive_info(
-                &snapshot_config.full_snapshot_archives_dir
+                &snapshot_config.full_snapshot_archives_dir,
             )
         else {
             warn!(

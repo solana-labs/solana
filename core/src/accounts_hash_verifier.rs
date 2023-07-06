@@ -75,7 +75,8 @@ impl AccountsHashVerifier {
                     )) = Self::get_next_accounts_package(
                         &accounts_package_sender,
                         &accounts_package_receiver,
-                    ) else {
+                    )
+                    else {
                         std::thread::sleep(LOOP_LIMITER);
                         continue;
                     };
@@ -302,7 +303,9 @@ impl AccountsHashVerifier {
                 (accounts_hash.into(), accounts_hash, None)
             }
             CalcAccountsHashFlavor::Incremental => {
-                let AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(base_slot)) = accounts_package.package_type else {
+                let AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(base_slot)) =
+                    accounts_package.package_type
+                else {
                     panic!("Calculating incremental accounts hash requires a base slot");
                 };
                 let (base_accounts_hash, base_capitalization) = accounts_package
