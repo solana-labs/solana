@@ -102,13 +102,24 @@ fn create_transaction_confirmation_task(
 ) -> JoinHandle<Vec<Option<TransactionError>>> {
     tokio::spawn(async move {
         let mut transaction_errors = vec![None; nb_transasction_count];
+
+        // we also check last time all transaction that have just expired between two checks
+        let mut last_block_height = current_blockheight.load(Ordering::Relaxed);
+
         while !exit_signal.load(Ordering::Relaxed) {
             let instant = Instant::now();
             if !transaction_map.is_empty() {
                 let current_blockheight = current_blockheight.load(Ordering::Relaxed);
                 let transactions_to_verify: Vec<Signature> = transaction_map
                     .iter()
-                    .filter(|x| current_blockheight < x.last_valid_blockheight)
+                    .filter(|x| {
+                        // all transactions that are not expired
+                        let is_not_expired = current_blockheight < x.last_valid_blockheight;
+                        // all transaction that expired between last and current check
+                        let is_recently_expired = last_block_height < x.last_valid_blockheight
+                            && current_blockheight > x.last_valid_blockheight;
+                        is_not_expired || is_recently_expired
+                    })
                     .map(|x| *x.key())
                     .collect();
                 for signatures in
@@ -128,6 +139,8 @@ fn create_transaction_confirmation_task(
                         }
                     }
                 }
+
+                last_block_height = current_blockheight;
             }
             let elapsed = instant.elapsed();
             if elapsed < CONFIRMATION_REFRESH_RATE {
@@ -146,10 +159,10 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
     blockhash_data_rw: Arc<RwLock<BlockHashData>>,
     signers: &T,
     confirmed_transactions: Arc<AtomicU32>,
-    total_transactions: usize,
 ) -> Result<()> {
+    let nb_transaction = messages_with_index.len();
     // send all the transaction meesages
-    for (index, message) in messages_with_index.iter() {
+    for (counter, (index, message)) in messages_with_index.iter().enumerate() {
         let mut transaction = Transaction::new_unsigned(message.clone());
         let blockhashdata = *blockhash_data_rw.read().await;
         transaction.try_sign(signers, blockhashdata.blockhash)?;
@@ -175,10 +188,10 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
             set_message_for_confirmed_transactions(
                 progress_bar,
                 confirmed_transactions.load(std::sync::atomic::Ordering::Relaxed),
-                total_transactions,
+                nb_transaction,
                 None,
                 blockhashdata.last_valid_blockheight,
-                &format!("Sending {}/{} transactions", index + 1, total_transactions,),
+                &format!("Sending {}/{} transactions", counter + 1, nb_transaction,),
             );
         }
     }
@@ -355,7 +368,6 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
             blockhash_data_rw.clone(),
             signers,
             confirmed_transactions.clone(),
-            total_transactions,
         )
         .await?;
 
