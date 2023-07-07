@@ -12605,6 +12605,54 @@ fn test_epoch_credit_rewards_and_history_update() {
     );
 }
 
+/// Test distribute partitioned epoch rewards
+#[test]
+fn test_distribute_partitioned_epoch_rewards_bank_capital_and_sysvar_balance() {
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    bank.activate_feature(&feature_set::enable_partitioned_epoch_reward::id());
+
+    // Set up epoch_rewards sysvar with rewards with 1e9 lamports to distribute.
+    let total_rewards = 1_000_000_000;
+    bank.create_epoch_rewards_sysvar(total_rewards, 0, 42);
+    let pre_epoch_rewards_account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
+    assert_eq!(pre_epoch_rewards_account.lamports(), total_rewards);
+
+    // Set up a partition of rewards to distribute
+    let expected_num = 100;
+    let mut stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+    let mut rewards_to_distribute = 0;
+    for stake_reward in &mut stake_rewards {
+        stake_reward.credit(100);
+        rewards_to_distribute += 100;
+    }
+    let all_rewards = vec![stake_rewards];
+
+    // Distribute rewards
+    let pre_cap = bank.capitalization();
+    bank.distribute_epoch_rewards_in_partition(&all_rewards, 0);
+    let post_cap = bank.capitalization();
+    let post_epoch_rewards_account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
+    let expected_epoch_rewards_sysvar_lamports_remaining = total_rewards - rewards_to_distribute;
+
+    // Assert that epoch rewards sysvar lamports decreases by the distributed rewards
+    assert_eq!(
+        post_epoch_rewards_account.lamports(),
+        expected_epoch_rewards_sysvar_lamports_remaining
+    );
+
+    let epoch_rewards: sysvar::epoch_rewards::EpochRewards =
+        from_account(&post_epoch_rewards_account).unwrap();
+    assert_eq!(epoch_rewards.total_rewards, total_rewards);
+    assert_eq!(epoch_rewards.distributed_rewards, rewards_to_distribute,);
+
+    // Assert that the bank total capital didn't change
+    assert_eq!(pre_cap, post_cap);
+}
+
 #[test]
 /// Test rewards computation and partitioned rewards distribution at the epoch boundary
 fn test_rewards_computation() {
@@ -12650,20 +12698,46 @@ fn test_rewards_computation() {
 fn test_rewards_computation_and_partitioned_distribution() {
     solana_logger::setup();
 
-    // setup the expected number of stake delegations
+    // Set up the expected number of stake delegations 100
     let expected_num_delegations = 100;
 
     let validator_keypairs = (0..expected_num_delegations)
         .map(|_| ValidatorVoteKeypairs::new_rand())
         .collect::<Vec<_>>();
 
-    let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
+    let GenesisConfigInfo {
+        mut genesis_config, ..
+    } = create_genesis_config_with_vote_accounts(
         1_000_000_000,
         &validator_keypairs,
         vec![2_000_000_000; expected_num_delegations],
     );
+    genesis_config.epoch_schedule = EpochSchedule::custom(32, 32, false);
 
-    let bank0 = Bank::new_for_tests(&genesis_config);
+    // Config stake reward distribution to be 50 per block
+    // We will need two blocks for reward distribution. And we can assert that the expected bank
+    // capital changes before/during/after reward distribution.
+    let mut accounts_db_config: AccountsDbConfig = ACCOUNTS_DB_CONFIG_FOR_TESTING.clone();
+    accounts_db_config.test_partitioned_epoch_rewards =
+        TestPartitionedEpochRewards::PartitionedEpochRewardsConfigRewardBlocks {
+            reward_calculation_num_blocks: 1,
+            stake_account_stores_per_block: 50,
+        };
+
+    let bank0 = Bank::new_with_paths(
+        &genesis_config,
+        Arc::new(RuntimeConfig::default()),
+        Vec::new(),
+        None,
+        None,
+        AccountSecondaryIndexes::default(),
+        AccountShrinkThreshold::default(),
+        false,
+        Some(accounts_db_config),
+        None,
+        Arc::default(),
+    );
+
     let num_slots_in_epoch = bank0.get_slots_in_epoch(bank0.epoch());
     assert_eq!(num_slots_in_epoch, 32);
 
@@ -12674,7 +12748,7 @@ fn test_rewards_computation_and_partitioned_distribution() {
     ));
 
     // simulate block progress
-    for slot in 2..=num_slots_in_epoch + 2 {
+    for slot in 2..=num_slots_in_epoch + 3 {
         let pre_cap = previous_bank.capitalization();
         let curr_bank = Bank::new_from_parent(&previous_bank, &Pubkey::default(), slot);
         let post_cap = curr_bank.capitalization();
@@ -12712,8 +12786,17 @@ fn test_rewards_computation_and_partitioned_distribution() {
 
             // cap should increase because of new epoch rewards
             assert!(post_cap > pre_cap);
-        } else if slot == num_slots_in_epoch + 1 || slot == num_slots_in_epoch + 2 {
-            // 1. when curr_slot == num_slots_in_epoch + 1, the 2nd block of epoch 1, reward distribution should happen in this block.
+        } else if slot == num_slots_in_epoch + 1 {
+            // When curr_slot == num_slots_in_epoch + 1, the 2nd block of epoch 1, reward distribution should happen in this block.
+            // however, since rewards are transferred from epoch_rewards sysvar to stake accounts. The cap should stay the same.
+            assert!(matches!(
+                curr_bank.get_reward_interval(),
+                RewardInterval::InsideInterval
+            ));
+
+            assert_eq!(post_cap, pre_cap);
+        } else if slot == num_slots_in_epoch + 2 || slot == num_slots_in_epoch + 3 {
+            // 1. when curr_slot == num_slots_in_epoch + 2, the 3nd block of epoch 1, reward distribution should happen in this block.
             // however, all stake rewards are paid at the this block therefore reward_status should have transitioned to inactive. And since
             // rewards are transferred from epoch_rewards sysvar to stake accounts. The cap should stay the same.
             // 2. when curr_slot == num_slots_in_epoch+2, the 3rd block of epoch 1. reward distribution should have already completed. Therefore,
