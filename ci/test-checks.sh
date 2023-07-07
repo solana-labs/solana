@@ -42,6 +42,8 @@ echo --- build environment
   cargo clippy --version --verbose
   $cargoNightly clippy --version --verbose
 
+  $cargoNightly hack --version --verbose
+
   # audit is done only with "$cargo stable"
   cargo audit --version
 
@@ -109,6 +111,8 @@ if [[ -n $CI ]]; then
 else
   _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" sort --workspace --check
 fi
+
+_ scripts/check-dev-context-only-utils.sh tree
 
 _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" fmt --all -- --check
 
