@@ -12605,7 +12605,7 @@ fn test_epoch_credit_rewards_and_history_update() {
 }
 
 #[test]
-/// Test rewards compuation and partitioned rewards distribution at the epoch boundary
+/// Test rewards computation and partitioned rewards distribution at the epoch boundary
 fn test_rewards_computation() {
     solana_logger::setup();
 
@@ -12838,7 +12838,7 @@ fn test_program_execution_restricted_for_stake_account_in_reward_period() {
     }
 }
 
-/// Test rewards compuation and partitioned rewards distribution at the epoch boundary
+/// Test rewards computation and partitioned rewards distribution at the epoch boundary
 #[test]
 fn test_store_stake_accounts_in_partition() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
