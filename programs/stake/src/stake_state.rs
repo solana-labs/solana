@@ -16,11 +16,11 @@ use {
         clock::{Clock, Epoch},
         feature_set::{
             self, clean_up_delegation_errors, stake_merge_with_unmatched_credits_observed,
-            stake_split_uses_rent_sysvar, FeatureSet,
+            FeatureSet,
         },
         instruction::{checked_add, InstructionError},
         pubkey::Pubkey,
-        rent::{Rent, ACCOUNT_STORAGE_OVERHEAD},
+        rent::Rent,
         stake::{
             config::Config,
             instruction::{LockupArgs, StakeError},
@@ -1195,7 +1195,6 @@ fn validate_split_amount(
     let source_account = instruction_context
         .try_borrow_instruction_account(transaction_context, source_account_index)?;
     let source_lamports = source_account.get_lamports();
-    let source_data_len = source_account.get_data().len();
     drop(source_account);
     let destination_account = instruction_context
         .try_borrow_instruction_account(transaction_context, destination_account_index)?;
@@ -1236,19 +1235,8 @@ fn validate_split_amount(
     // This must handle:
     // 1. The destination account having a different rent exempt reserve due to data size changes
     // 2. The destination account being prefunded, which would lower the minimum split amount
-    let destination_rent_exempt_reserve = if invoke_context
-        .feature_set
-        .is_active(&stake_split_uses_rent_sysvar::ID)
-    {
-        let rent = invoke_context.get_sysvar_cache().get_rent()?;
-        rent.minimum_balance(destination_data_len)
-    } else {
-        calculate_split_rent_exempt_reserve(
-            source_meta.rent_exempt_reserve,
-            source_data_len as u64,
-            destination_data_len as u64,
-        )
-    };
+    let rent = invoke_context.get_sysvar_cache().get_rent()?;
+    let destination_rent_exempt_reserve = rent.minimum_balance(destination_data_len);
     let destination_minimum_balance =
         destination_rent_exempt_reserve.saturating_add(additional_required_lamports);
     let destination_balance_deficit =
@@ -1597,19 +1585,6 @@ pub fn calculate_points(
     } else {
         Err(InstructionError::InvalidAccountData)
     }
-}
-
-// utility function, used by Split
-//This emulates current Rent math in order to preserve backward compatibility. In the future, and
-//to support variable rent, the Split instruction should pass in the Rent sysvar instead.
-fn calculate_split_rent_exempt_reserve(
-    source_rent_exempt_reserve: u64,
-    source_data_len: u64,
-    split_data_len: u64,
-) -> u64 {
-    let lamports_per_byte_year =
-        source_rent_exempt_reserve / (source_data_len + ACCOUNT_STORAGE_OVERHEAD);
-    lamports_per_byte_year * (split_data_len + ACCOUNT_STORAGE_OVERHEAD)
 }
 
 pub type RewriteStakeStatus = (&'static str, (u64, u64), (u64, u64));
@@ -2936,43 +2911,6 @@ mod tests {
             "stake minimum_balance: {} lamports, {} SOL",
             minimum_balance,
             minimum_balance as f64 / solana_sdk::native_token::LAMPORTS_PER_SOL as f64
-        );
-    }
-
-    #[test]
-    fn test_calculate_lamports_per_byte_year() {
-        let rent = Rent::default();
-        let data_len = 200u64;
-        let rent_exempt_reserve = rent.minimum_balance(data_len as usize);
-        assert_eq!(
-            calculate_split_rent_exempt_reserve(rent_exempt_reserve, data_len, data_len),
-            rent_exempt_reserve
-        );
-
-        let larger_data = 4008u64;
-        let larger_rent_exempt_reserve = rent.minimum_balance(larger_data as usize);
-        assert_eq!(
-            calculate_split_rent_exempt_reserve(rent_exempt_reserve, data_len, larger_data),
-            larger_rent_exempt_reserve
-        );
-        assert_eq!(
-            calculate_split_rent_exempt_reserve(larger_rent_exempt_reserve, larger_data, data_len),
-            rent_exempt_reserve
-        );
-
-        let even_larger_data = solana_sdk::system_instruction::MAX_PERMITTED_DATA_LENGTH;
-        let even_larger_rent_exempt_reserve = rent.minimum_balance(even_larger_data as usize);
-        assert_eq!(
-            calculate_split_rent_exempt_reserve(rent_exempt_reserve, data_len, even_larger_data),
-            even_larger_rent_exempt_reserve
-        );
-        assert_eq!(
-            calculate_split_rent_exempt_reserve(
-                even_larger_rent_exempt_reserve,
-                even_larger_data,
-                data_len
-            ),
-            rent_exempt_reserve
         );
     }
 
