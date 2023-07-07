@@ -1,8 +1,8 @@
 //! ReadOnlyAccountsCache used to store accounts, such as executable accounts,
 //! which can be large, loaded many times, and rarely change.
 use {
+    crate::index_list::{Index, IndexList},
     dashmap::{mapref::entry::Entry, DashMap},
-    index_list::{Index, IndexList},
     solana_measure::measure_us,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -86,8 +86,7 @@ impl ReadOnlyAccountsCache {
             // so that another thread cannot write to the same key.
             {
                 let mut queue = self.queue.lock().unwrap();
-                queue.remove(entry.index());
-                entry.set_index(queue.insert_last(key));
+                queue.move_to_last(entry.index());
             }
             let account = entry.account.clone();
             drop(entry);
