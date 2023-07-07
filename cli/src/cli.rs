@@ -1135,7 +1135,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             lockup,
             *amount,
             *sign_only,
-            *force,
+            *skip_balance_checks,
             *dump_transaction_message,
             blockhash_query,
             nonce_account.as_ref(),
