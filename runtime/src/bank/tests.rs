@@ -12714,8 +12714,8 @@ fn test_rewards_computation_and_partitioned_distribution() {
         } else if slot == num_slots_in_epoch + 1 || slot == num_slots_in_epoch + 2 {
             // 1. when curr_slot == num_slots_in_epoch + 1, the 2nd block of epoch 1, reward distribution should happen in this block.
             // however, all stake rewards are paid at the this block therefore reward_status should have transitioned to inactive. And since
-            // rewards are transfered from epoch_rewards sysvar to stake accounts. The cap should stay the same.
-            // 2. when curr_slot == num_slots_in_epoch+2, the 3rd block of epoch 1. reward distribution should have already completed. Thefore,
+            // rewards are transferred from epoch_rewards sysvar to stake accounts. The cap should stay the same.
+            // 2. when curr_slot == num_slots_in_epoch+2, the 3rd block of epoch 1. reward distribution should have already completed. Therefore,
             // reward_status should stay inactive and cap should stay the same.
             assert!(matches!(
                 curr_bank.get_reward_interval(),
