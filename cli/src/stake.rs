@@ -197,9 +197,8 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Source account of funds [default: cli config keypair]"),
                 )
                 .arg(
-                    Arg::with_name("force")
-                        .long("force")
-                        .hidden(hidden_unless_forced())
+                    Arg::with_name("skip_balance_checks")
+                        .long("skip-balance-checks")
                         .takes_value(false)
                         .help("Override minimum delegation sanity checks")
                 )
@@ -263,8 +262,8 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Source account of funds [default: cli config keypair]"),
                 )
                 .arg(
-                    Arg::with_name("force")
-                        .long("force")
+                    Arg::with_name("skip_balance_checks")
+                        .long("skip-balance-checks")
                         .takes_value(false)
                         .hidden(hidden_unless_forced())
                         .help("Override minimum delegation sanity checks")
@@ -776,7 +775,7 @@ pub fn parse_create_stake_account(
 
     let amount = SpendAmount::new_from_matches(matches, "amount");
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
-    let force = matches.is_present("force");
+    let skip_balance_checks = matches.is_present("skip_balance_checks");
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of_signer(matches, NONCE_ARG.name, wallet_manager)?;
@@ -817,7 +816,7 @@ pub fn parse_create_stake_account(
             },
             amount,
             sign_only,
-            force,
+            skip_balance_checks,
             dump_transaction_message,
             blockhash_query,
             nonce_account,
@@ -1343,7 +1342,7 @@ pub fn process_create_stake_account(
     lockup: &Lockup,
     amount: SpendAmount,
     sign_only: bool,
-    force: bool,
+    skip_balance_checks: bool,
     dump_transaction_message: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<&Pubkey>,
@@ -1445,7 +1444,7 @@ pub fn process_create_stake_account(
             return Err(CliError::BadParameter(err_msg).into());
         }
 
-        if !force {
+        if !skip_balance_checks {
             let minimum_balance = rpc_client
                 .get_minimum_balance_for_rent_exemption(StakeState::size_of())?
                 + rpc_client.get_stake_minimum_delegation()?;
@@ -3872,7 +3871,7 @@ mod tests {
                     },
                     amount: SpendAmount::Some(50_000_000_000),
                     sign_only: false,
-                    force: false,
+                    skip_balance_checks: false,
                     dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
@@ -3914,7 +3913,7 @@ mod tests {
                     lockup: Lockup::default(),
                     amount: SpendAmount::Some(50_000_000_000),
                     sign_only: false,
-                    force: false,
+                    skip_balance_checks: false,
                     dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
@@ -3955,7 +3954,7 @@ mod tests {
                     lockup: Lockup::default(),
                     amount: SpendAmount::Some(50_000_000_000),
                     sign_only: false,
-                    force: false,
+                    skip_balance_checks: false,
                     dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
@@ -4026,7 +4025,7 @@ mod tests {
                     lockup: Lockup::default(),
                     amount: SpendAmount::Some(50_000_000_000),
                     sign_only: false,
-                    force: false,
+                    skip_balance_checks: false,
                     dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_account),
