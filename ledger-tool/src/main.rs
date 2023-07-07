@@ -989,10 +989,11 @@ fn get_latest_optimistic_slots(
     let Some(latest_slot) = blockstore
         .get_latest_optimistic_slots(1)
         .expect("get_latest_optimistic_slots() failed")
-        .pop() else {
-            eprintln!("Blockstore does not contain any optimistically confirmed slots");
-            return vec![];
-        };
+        .pop()
+    else {
+        eprintln!("Blockstore does not contain any optimistically confirmed slots");
+        return vec![];
+    };
     let latest_slot = latest_slot.0;
 
     let slot_iter = AncestorIterator::new_inclusive(latest_slot, blockstore).map(|slot| {

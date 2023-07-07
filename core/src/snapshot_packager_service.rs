@@ -51,13 +51,13 @@ impl SnapshotPackagerService {
             .spawn(move || {
                 info!("SnapshotPackagerService has started");
                 renice_this_thread(snapshot_config.packager_thread_niceness_adj).unwrap();
-                let mut snapshot_gossip_manager = enable_gossip_push.then(||
+                let mut snapshot_gossip_manager = enable_gossip_push.then(|| {
                     SnapshotGossipManager::new(
                         cluster_info,
                         max_full_snapshot_hashes,
                         starting_snapshot_hashes,
                     )
-                );
+                });
 
                 loop {
                     if exit.load(Ordering::Relaxed) {
@@ -68,7 +68,11 @@ impl SnapshotPackagerService {
                         snapshot_package,
                         num_outstanding_snapshot_packages,
                         num_re_enqueued_snapshot_packages,
-                    )) = Self::get_next_snapshot_package(&snapshot_package_sender, &snapshot_package_receiver) else {
+                    )) = Self::get_next_snapshot_package(
+                        &snapshot_package_sender,
+                        &snapshot_package_receiver,
+                    )
+                    else {
                         std::thread::sleep(Self::LOOP_LIMITER);
                         continue;
                     };
@@ -102,7 +106,8 @@ impl SnapshotPackagerService {
                         measure_us!(snapshot_utils::purge_bank_snapshots_older_than_slot(
                             &snapshot_config.bank_snapshots_dir,
                             snapshot_package.slot(),
-                        )).1
+                        ))
+                        .1
                     });
 
                     datapoint_info!(
@@ -119,7 +124,11 @@ impl SnapshotPackagerService {
                         ),
                         ("enqueued_time_us", enqueued_time.as_micros(), i64),
                         ("handling_time_us", handling_time_us, i64),
-                        ("purge_old_snapshots_time_us", purge_bank_snapshots_time_us, i64),
+                        (
+                            "purge_old_snapshots_time_us",
+                            purge_bank_snapshots_time_us,
+                            i64
+                        ),
                     );
                 }
                 info!("SnapshotPackagerService has stopped");
