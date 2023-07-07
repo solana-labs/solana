@@ -796,9 +796,8 @@ async fn handle_chunk(
                     stats.total_invalid_chunks.fetch_add(1, Ordering::Relaxed);
                     return true;
                 }
-                let end_of_chunk = match chunk.offset.checked_add(chunk_len) {
-                    Some(end) => end,
-                    None => return true,
+                let Some(end_of_chunk) = chunk.offset.checked_add(chunk_len) else {
+                    return true;
                 };
                 if end_of_chunk > PACKET_DATA_SIZE as u64 {
                     stats
@@ -819,10 +818,9 @@ async fn handle_chunk(
 
                 if let Some(accum) = packet_accum.as_mut() {
                     let offset = chunk.offset;
-                    let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len())
-                    {
-                        Some(end) => end,
-                        None => return true,
+                    let Some(end_of_chunk) = (chunk.offset as usize).checked_add(chunk.bytes.len())
+                    else {
+                        return true;
                     };
                     accum.chunks.push(PacketChunk {
                         bytes: chunk.bytes,

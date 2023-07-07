@@ -186,9 +186,8 @@ impl ShredData {
         // Deserialize headers.
         let mut cursor = Cursor::new(&shard[..]);
         let common_header: ShredCommonHeader = deserialize_from_with_limit(&mut cursor)?;
-        let proof_size = match common_header.shred_variant {
-            ShredVariant::MerkleData(proof_size) => proof_size,
-            _ => return Err(Error::InvalidShredVariant),
+        let ShredVariant::MerkleData(proof_size) = common_header.shred_variant else {
+            return Err(Error::InvalidShredVariant);
         };
         if ShredCode::capacity(proof_size)? != shard_size {
             return Err(Error::InvalidShardSize(shard_size));
@@ -293,9 +292,8 @@ impl ShredCode {
         coding_header: CodingShredHeader,
         mut shard: Vec<u8>,
     ) -> Result<Self, Error> {
-        let proof_size = match common_header.shred_variant {
-            ShredVariant::MerkleCode(proof_size) => proof_size,
-            _ => return Err(Error::InvalidShredVariant),
+        let ShredVariant::MerkleCode(proof_size) = common_header.shred_variant else {
+            return Err(Error::InvalidShredVariant);
         };
         let shard_size = shard.len();
         if Self::capacity(proof_size)? != shard_size {
@@ -630,9 +628,8 @@ pub(super) fn recover(
 ) -> Result<Vec<Shred>, Error> {
     // Grab {common, coding} headers from first coding shred.
     let headers = shreds.iter().find_map(|shred| {
-        let shred = match shred {
-            Shred::ShredCode(shred) => shred,
-            Shred::ShredData(_) => return None,
+        let Shred::ShredCode(shred) = shred else {
+            return None;
         };
         let position = u32::from(shred.coding_header.position);
         let common_header = ShredCommonHeader {

@@ -746,9 +746,8 @@ impl Tower {
         latest_validator_votes_for_frozen_banks: &LatestValidatorVotesForFrozenBanks,
         heaviest_subtree_fork_choice: &HeaviestSubtreeForkChoice,
     ) -> SwitchForkDecision {
-        let (last_voted_slot, last_voted_hash) = match self.last_voted_slot_hash() {
-            None => return SwitchForkDecision::SameFork,
-            Some(slot_hash) => slot_hash,
+        let Some((last_voted_slot, last_voted_hash)) = self.last_voted_slot_hash() else {
+            return SwitchForkDecision::SameFork;
         };
         let root = self.root();
         let empty_ancestors = HashSet::default();

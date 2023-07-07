@@ -552,15 +552,13 @@ impl JsonRpcRequestProcessor {
                 slot: first_slot_in_epoch,
             })?;
 
-        let first_confirmed_block = if let Ok(Some(first_confirmed_block)) = self
+        let Ok(Some(first_confirmed_block)) = self
             .get_block(
                 first_confirmed_block_in_epoch,
                 Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
             )
             .await
-        {
-            first_confirmed_block
-        } else {
+        else {
             return Err(RpcCustomError::BlockNotAvailable {
                 slot: first_confirmed_block_in_epoch,
             }

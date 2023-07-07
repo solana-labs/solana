@@ -358,31 +358,22 @@ impl AncestorHashesService {
         ancestor_socket: &UdpSocket,
     ) -> Option<AncestorRequestDecision> {
         let from_addr = packet.meta().socket_addr();
-        let packet_data = match packet.data(..) {
-            Some(data) => data,
-            None => {
-                stats.invalid_packets += 1;
-                return None;
-            }
+        let Some(packet_data) = packet.data(..) else {
+            stats.invalid_packets += 1;
+            return None;
         };
         let mut cursor = Cursor::new(packet_data);
-        let response = match deserialize_from_with_limit(&mut cursor) {
-            Ok(response) => response,
-            Err(_) => {
-                stats.invalid_packets += 1;
-                return None;
-            }
+        let Ok(response) = deserialize_from_with_limit(&mut cursor) else {
+            stats.invalid_packets += 1;
+            return None;
         };
 
         match response {
             AncestorHashesResponse::Hashes(ref hashes) => {
                 // deserialize trailing nonce
-                let nonce = match deserialize_from_with_limit(&mut cursor) {
-                    Ok(nonce) => nonce,
-                    Err(_) => {
-                        stats.invalid_packets += 1;
-                        return None;
-                    }
+                let Ok(nonce) = deserialize_from_with_limit(&mut cursor) else {
+                    stats.invalid_packets += 1;
+                    return None;
                 };
 
                 // verify that packet does not contain extraneous data

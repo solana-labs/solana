@@ -686,15 +686,11 @@ pub mod serde_compact_vote_state_update {
         let lockout_offsets = vote_state_update.lockouts.iter().scan(
             vote_state_update.root.unwrap_or_default(),
             |slot, lockout| {
-                let offset = match lockout.slot().checked_sub(*slot) {
-                    None => return Some(Err(serde::ser::Error::custom("Invalid vote lockout"))),
-                    Some(offset) => offset,
+                let Some(offset) = lockout.slot().checked_sub(*slot) else {
+                    return Some(Err(serde::ser::Error::custom("Invalid vote lockout")));
                 };
-                let confirmation_count = match u8::try_from(lockout.confirmation_count()) {
-                    Ok(confirmation_count) => confirmation_count,
-                    Err(_) => {
-                        return Some(Err(serde::ser::Error::custom("Invalid confirmation count")))
-                    }
+                let Ok(confirmation_count) = u8::try_from(lockout.confirmation_count()) else {
+                    return Some(Err(serde::ser::Error::custom("Invalid confirmation count")));
                 };
                 let lockout_offset = LockoutOffset {
                     offset,

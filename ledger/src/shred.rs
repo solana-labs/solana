@@ -586,9 +586,8 @@ pub mod layout {
     }
 
     pub(super) fn get_shred_variant(shred: &[u8]) -> Result<ShredVariant, Error> {
-        let shred_variant = match shred.get(OFFSET_OF_SHRED_VARIANT) {
-            None => return Err(Error::InvalidPayloadSize(shred.len())),
-            Some(shred_variant) => *shred_variant,
+        let Some(&shred_variant) = shred.get(OFFSET_OF_SHRED_VARIANT) else {
+            return Err(Error::InvalidPayloadSize(shred.len()));
         };
         ShredVariant::try_from(shred_variant).map_err(|_| Error::InvalidShredVariant)
     }
@@ -673,9 +672,8 @@ pub mod layout {
         if get_shred_type(shred)? != ShredType::Data {
             return Err(Error::InvalidShredType);
         }
-        let flags = match shred.get(85) {
-            None => return Err(Error::InvalidPayloadSize(shred.len())),
-            Some(flags) => flags,
+        let Some(flags) = shred.get(85) else {
+            return Err(Error::InvalidPayloadSize(shred.len()));
         };
         Ok(flags & ShredFlags::SHRED_TICK_REFERENCE_MASK.bits())
     }
@@ -915,12 +913,9 @@ pub fn should_discard_shred(
             }
         }
     }
-    let shred_variant = match layout::get_shred_variant(shred) {
-        Ok(shred_variant) => shred_variant,
-        Err(_) => {
-            stats.bad_shred_type += 1;
-            return true;
-        }
+    let Ok(shred_variant) = layout::get_shred_variant(shred) else {
+        stats.bad_shred_type += 1;
+        return true;
     };
     let slot = match layout::get_slot(shred) {
         Some(slot) => {
@@ -935,12 +930,9 @@ pub fn should_discard_shred(
             return true;
         }
     };
-    let index = match layout::get_index(shred) {
-        Some(index) => index,
-        None => {
-            stats.index_bad_deserialize += 1;
-            return true;
-        }
+    let Some(index) = layout::get_index(shred) else {
+        stats.index_bad_deserialize += 1;
+        return true;
     };
     match ShredType::from(shred_variant) {
         ShredType::Code => {
@@ -958,19 +950,13 @@ pub fn should_discard_shred(
                 stats.index_out_of_bounds += 1;
                 return true;
             }
-            let parent_offset = match layout::get_parent_offset(shred) {
-                Some(parent_offset) => parent_offset,
-                None => {
-                    stats.bad_parent_offset += 1;
-                    return true;
-                }
+            let Some(parent_offset) = layout::get_parent_offset(shred) else {
+                stats.bad_parent_offset += 1;
+                return true;
             };
-            let parent = match slot.checked_sub(Slot::from(parent_offset)) {
-                Some(parent) => parent,
-                None => {
-                    stats.bad_parent_offset += 1;
-                    return true;
-                }
+            let Some(parent) = slot.checked_sub(Slot::from(parent_offset)) else {
+                stats.bad_parent_offset += 1;
+                return true;
             };
             if !blockstore::verify_shred_slots(slot, parent, root) {
                 stats.slot_out_of_range += 1;

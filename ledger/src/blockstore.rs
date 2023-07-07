@@ -1966,12 +1966,9 @@ impl Blockstore {
         require_previous_blockhash: bool,
     ) -> Result<VersionedConfirmedBlock> {
         let slot_meta_cf = self.db.column::<cf::SlotMeta>();
-        let slot_meta = match slot_meta_cf.get(slot)? {
-            Some(slot_meta) => slot_meta,
-            None => {
-                info!("SlotMeta not found for slot {}", slot);
-                return Err(BlockstoreError::SlotUnavailable);
-            }
+        let Some(slot_meta) = slot_meta_cf.get(slot)? else {
+            info!("SlotMeta not found for slot {}", slot);
+            return Err(BlockstoreError::SlotUnavailable);
         };
         if slot_meta.is_full() {
             let slot_entries = self.get_slot_entries(slot, 0)?;

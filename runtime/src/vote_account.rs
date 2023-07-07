@@ -179,9 +179,8 @@ impl VoteAccounts {
         if stake == 0u64 {
             return;
         }
-        let staked_nodes = match self.staked_nodes.get_mut() {
-            None => return,
-            Some(staked_nodes) => staked_nodes,
+        let Some(staked_nodes) = self.staked_nodes.get_mut() else {
+            return;
         };
         if let Some(node_pubkey) = vote_account.node_pubkey() {
             Arc::make_mut(staked_nodes)
@@ -195,9 +194,8 @@ impl VoteAccounts {
         if stake == 0u64 {
             return;
         }
-        let staked_nodes = match self.staked_nodes.get_mut() {
-            None => return,
-            Some(staked_nodes) => staked_nodes,
+        let Some(staked_nodes) = self.staked_nodes.get_mut() else {
+            return;
         };
         if let Some(node_pubkey) = vote_account.node_pubkey() {
             match Arc::make_mut(staked_nodes).entry(node_pubkey) {

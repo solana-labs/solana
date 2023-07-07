@@ -251,9 +251,8 @@ fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<Option<PathBuf>> {
     }
 
     // Skip entries without a parent (i.e. outside of FS root)
-    let parent = match file_dst.parent() {
-        Some(p) => p,
-        None => return SKIP,
+    let Some(parent) = file_dst.parent() else {
+        return SKIP;
     };
 
     fs::create_dir_all(parent)?;

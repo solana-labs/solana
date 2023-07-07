@@ -2667,15 +2667,12 @@ impl Bank {
                     if invalid_vote_keys.contains_key(vote_pubkey) {
                         return;
                     }
-                    let stake_account = match self.get_account_with_fixed_root(stake_pubkey) {
-                        Some(stake_account) => stake_account,
-                        None => {
+                    let Some(stake_account) = self.get_account_with_fixed_root(stake_pubkey) else {
                             invalid_stake_keys
                                 .insert(*stake_pubkey, InvalidCacheEntryReason::Missing);
                             invalid_cached_stake_accounts.fetch_add(1, Relaxed);
                             return;
-                        }
-                    };
+                        };
                     if cached_stake_account.account() != &stake_account {
                         if self.rc.accounts.accounts_db.assert_stakes_cache_consistency {
                             panic!(
@@ -2886,23 +2883,17 @@ impl Bank {
         };
         let invalid_vote_keys = DashMap::<Pubkey, InvalidCacheEntryReason>::new();
         let make_vote_delegations_entry = |vote_pubkey| {
-            let vote_account = match get_vote_account(&vote_pubkey) {
-                Some(vote_account) => vote_account,
-                None => {
-                    invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::Missing);
-                    return None;
-                }
+            let Some(vote_account) = get_vote_account(&vote_pubkey) else {
+                invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::Missing);
+                return None;
             };
             if vote_account.owner() != &solana_vote_program {
                 invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::WrongOwner);
                 return None;
             }
-            let vote_state = match vote_account.vote_state().cloned() {
-                Ok(vote_state) => vote_state,
-                Err(_) => {
-                    invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::BadState);
-                    return None;
-                }
+            let Ok(vote_state) = vote_account.vote_state().cloned() else {
+                invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::BadState);
+                return None;
             };
             let vote_with_stake_delegations = VoteWithStakeDelegations {
                 vote_state: Arc::new(vote_state),
@@ -2921,11 +2912,11 @@ impl Bank {
         // Join stake accounts with vote-accounts.
         let push_stake_delegation = |(stake_pubkey, stake_account): (&Pubkey, &StakeAccount<_>)| {
             let delegation = stake_account.delegation();
-            let mut vote_delegations =
-                match vote_with_stake_delegations_map.get_mut(&delegation.voter_pubkey) {
-                    Some(vote_delegations) => vote_delegations,
-                    None => return,
-                };
+            let Some(mut vote_delegations) =
+                vote_with_stake_delegations_map.get_mut(&delegation.voter_pubkey)
+            else {
+                return;
+            };
             if let Some(reward_calc_tracer) = reward_calc_tracer.as_ref() {
                 let delegation =
                     InflationPointCalculationEvent::Delegation(delegation, solana_vote_program);
@@ -3233,20 +3224,14 @@ impl Bank {
                     let delegation = stake_account.delegation();
                     let vote_pubkey = delegation.voter_pubkey;
 
-                    let vote_account = match get_vote_account(&vote_pubkey) {
-                        Some(vote_account) => vote_account,
-                        None => {
-                            return 0;
-                        }
+                    let Some(vote_account) = get_vote_account(&vote_pubkey) else {
+                        return 0;
                     };
                     if vote_account.owner() != &solana_vote_program {
                         return 0;
                     }
-                    let vote_state = match vote_account.vote_state() {
-                        Ok(vote_state) => vote_state,
-                        Err(_) => {
-                            return 0;
-                        }
+                    let Ok(vote_state) = vote_account.vote_state() else {
+                        return 0;
                     };
 
                     stake_state::calculate_points(
@@ -3355,20 +3340,14 @@ impl Bank {
                     let (mut stake_account, stake_state) =
                         <(AccountSharedData, StakeState)>::from(stake_account);
                     let vote_pubkey = delegation.voter_pubkey;
-                    let vote_account = match get_vote_account(&vote_pubkey) {
-                        Some(vote_account) => vote_account,
-                        None => {
-                            return None;
-                        }
+                    let Some(vote_account) = get_vote_account(&vote_pubkey) else {
+                        return None;
                     };
                     if vote_account.owner() != &solana_vote_program {
                         return None;
                     }
-                    let vote_state = match vote_account.vote_state().cloned() {
-                        Ok(vote_state) => vote_state,
-                        Err(_) => {
-                            return None;
-                        }
+                    let Ok(vote_state) = vote_account.vote_state().cloned() else {
+                        return None;
                     };
 
                     let pre_lamport = stake_account.lamports();
@@ -4866,9 +4845,7 @@ impl Bank {
     }
 
     pub fn load_program(&self, pubkey: &Pubkey) -> Arc<LoadedProgram> {
-        let program = if let Some(program) = self.get_account_with_fixed_root(pubkey) {
-            program
-        } else {
+        let Some(program) = self.get_account_with_fixed_root(pubkey) else {
             return Arc::new(LoadedProgram::new_tombstone(
                 self.slot,
                 LoadedProgramType::Closed,
