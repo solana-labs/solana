@@ -85,7 +85,6 @@ pub struct AccountLocks {
     readonly_locks: HashMap<Pubkey, u64>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub(crate) enum RewardInterval {
     /// the slot within the epoch is INSIDE the reward distribution interval

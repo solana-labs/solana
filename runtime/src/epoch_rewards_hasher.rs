@@ -40,7 +40,6 @@ fn hash_to_partition(hash: u64, partitions: usize) -> usize {
         .saturating_div(u128::from(u64::MAX).saturating_add(1))) as usize
 }
 
-#[allow(dead_code)]
 pub(crate) fn hash_rewards_into_partitions(
     stake_rewards: StakeRewards,
     parent_block_hash: &Hash,
