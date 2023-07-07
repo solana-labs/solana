@@ -301,7 +301,7 @@ pub fn load_and_process_ledger(
             let tss_blockstore = if enable_rpc_transaction_history {
                 Arc::new(open_blockstore(
                     blockstore.ledger_path(),
-                    AccessType::Primary,
+                    AccessType::PrimaryForMaintenance,
                     None,
                     false,
                 ))
