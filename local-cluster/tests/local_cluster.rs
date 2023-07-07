@@ -4485,8 +4485,8 @@ fn test_slot_hash_expiry() {
 // tip of the current fork.
 // It creates validators A, B, and C, (C is only needed for stake distribution), then do this:
 // 1. kill B and C, let A run for a while to create its own fork A
-// 2. kill A, make sure B has everything until the common ancestor, let B run long enough to
-//    create a new fork B
+// 2. kill A, copy ledger of A to B so B has everything until the common ancestor, restart B and
+//    let it run long enough to create a new fork B
 // 3. bring back A and B only, A now has 37% of the stake so its fork is heavier, B has only 35%
 //    so it wants to switch to fork B, but can't do it because of A's stake under switch proof
 //    threshold of 38%. Also, B has voted on fork B, and last_voted < last_landed_vote (we do this
