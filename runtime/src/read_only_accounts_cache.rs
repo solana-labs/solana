@@ -214,6 +214,7 @@ mod tests {
         assert!(accounts_equal(&cache.load(key1, slot).unwrap(), &account1));
         assert_eq!(1, cache.cache_len());
         cache.store(key2, slot, account2.clone());
+        cache.evict_old();
         assert_eq!(100 + per_account_size, cache.data_size());
         assert!(accounts_equal(&cache.load(key2, slot).unwrap(), &account2));
         assert_eq!(1, cache.cache_len());
@@ -243,6 +244,7 @@ mod tests {
         assert!(accounts_equal(&cache.load(key2, slot).unwrap(), &account1));
         assert_eq!(2, cache.cache_len());
         cache.store(key3, slot, account3.clone());
+        cache.evict_old();
         assert_eq!(max, cache.data_size());
         assert!(cache.load(key1, slot).is_none()); // was lru purged
         assert!(accounts_equal(&cache.load(key2, slot).unwrap(), &account1));
