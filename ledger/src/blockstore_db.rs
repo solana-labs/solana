@@ -21,8 +21,9 @@ use {
         compaction_filter::CompactionFilter,
         compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory},
         properties as RocksProperties, ColumnFamily, ColumnFamilyDescriptor, CompactionDecision,
-        DBCompactionStyle, DBIterator, DBPinnableSlice, DBRawIterator, FifoCompactOptions,
-        IteratorMode as RocksIteratorMode, LiveFile, Options, WriteBatch as RWriteBatch, DB,
+        DBCompactionStyle, DBCompressionType, DBIterator, DBPinnableSlice, DBRawIterator,
+        FifoCompactOptions, IteratorMode as RocksIteratorMode, LiveFile, Options,
+        WriteBatch as RWriteBatch, DB,
     },
     serde::{de::DeserializeOwned, Serialize},
     solana_runtime::hardened_unpack::UnpackError,
@@ -1709,6 +1710,10 @@ fn process_cf_options_advanced<C: 'static + Column + ColumnName>(
     cf_options: &mut Options,
     column_options: &LedgerColumnOptions,
 ) {
+    // Explicitly disable compression on all columns by default
+    // See https://docs.rs/rocksdb/0.21.0/rocksdb/struct.Options.html#method.set_compression_type
+    cf_options.set_compression_type(DBCompressionType::None);
+
     if should_enable_compression::<C>() {
         cf_options.set_compression_type(
             column_options
