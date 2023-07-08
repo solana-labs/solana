@@ -1139,7 +1139,7 @@ impl Validator {
             node.sockets.tvu_quic,
             node.info
                 .tvu(Protocol::QUIC)
-                .expect("Operator must spin up node with valid TVU address")
+                .expect("Operator must spin up node with valid QUIC TVU address")
                 .ip(),
             turbine_quic_endpoint_sender,
         )
