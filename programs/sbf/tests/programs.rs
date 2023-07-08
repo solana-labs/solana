@@ -4000,89 +4000,37 @@ fn test_cpi_account_ownership_writability() {
             (2, 3),                                     // first realloc byte
             (2, 2 + MAX_PERMITTED_DATA_INCREASE as u8), // last realloc byte
         ] {
-            bank.register_recent_blockhash(&Hash::new_unique());
-            let account = AccountSharedData::new(42, account_size, &invoke_program_id);
-            bank.store_account(&account_keypair.pubkey(), &account);
+            for instruction_id in [
+                TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLEE,
+                TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLER,
+            ] {
+                bank.register_recent_blockhash(&Hash::new_unique());
+                let account = AccountSharedData::new(42, account_size, &invoke_program_id);
+                bank.store_account(&account_keypair.pubkey(), &account);
 
-            let instruction = Instruction::new_with_bytes(
-                invoke_program_id,
-                &[
-                    TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_TO_SYSTEM_ACCOUNT,
-                    byte_index,
-                    42,
-                    42,
-                ],
-                account_metas.clone(),
-            );
-            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
-            if (byte_index as usize) < account_size || direct_mapping {
-                assert_eq!(
-                    result.unwrap_err().unwrap(),
-                    TransactionError::InstructionError(
-                        0,
-                        InstructionError::ExternalAccountDataModified
-                    )
+                let instruction = Instruction::new_with_bytes(
+                    invoke_program_id,
+                    &[instruction_id, byte_index, 42, 42],
+                    account_metas.clone(),
                 );
-            } else {
-                // without direct mapping, changes to the realloc padding
-                // outside the account length are ignored
-                assert!(result.is_ok(), "{result:?}");
-            }
 
-            let account = AccountSharedData::new(42, account_size, &invoke_program_id);
-            bank.store_account(&account_keypair.pubkey(), &account);
-            let instruction = Instruction::new_with_bytes(
-                invoke_program_id,
-                &[
-                    TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_TO_OTHER_PROGRAM,
-                    byte_index,
-                    42,
-                    42,
-                ],
-                account_metas.clone(),
-            );
-            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
-            if (byte_index as usize) < account_size || direct_mapping {
-                assert_eq!(
-                    result.unwrap_err().unwrap(),
-                    TransactionError::InstructionError(
-                        0,
-                        InstructionError::ExternalAccountDataModified
-                    )
-                );
-            } else {
-                // without direct mapping, changes to the realloc padding
-                // outside the account length are ignored
-                assert!(result.is_ok(), "{result:?}");
-            }
+                let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
 
-            // assign the account to invoked_program_id, which will then assign to invoke_program_id
-            // let mut account = bank.get_account(&account_keypair.pubkey()).unwrap();
-            // account.set_owner(invoked_program_id);
-            // bank.store_account(&account_keypair.pubkey(), &account);
-            let account = AccountSharedData::new(42, account_size, &invoked_program_id);
-            bank.store_account(&account_keypair.pubkey(), &account);
-
-            let instruction = Instruction::new_with_bytes(
-                invoke_program_id,
-                &[
-                    TEST_ALLOW_WRITE_AFTER_OWNERSHIP_CHANGE_TO_CALLER,
-                    byte_index,
-                    42,
-                    42,
-                ],
-                account_metas.clone(),
-            );
-            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
-            assert!(result.is_ok(), "{result:?}");
-            let account = bank.get_account(&account_keypair.pubkey()).unwrap();
-            let mut data = vec![0; account.data().len()];
-            if (byte_index as usize) < data.len() {
-                data[byte_index as usize] = 42;
+                if (byte_index as usize) < account_size || direct_mapping {
+                    assert_eq!(
+                        result.unwrap_err().unwrap(),
+                        TransactionError::InstructionError(
+                            0,
+                            InstructionError::ExternalAccountDataModified
+                        )
+                    );
+                } else {
+                    // without direct mapping, changes to the realloc padding
+                    // outside the account length are ignored
+                    assert!(result.is_ok(), "{result:?}");
+                }
             }
-            assert_eq!(account.data(), data);
         }
-
         // Test that the CPI code that updates `ref_to_len_in_vm` fails if we
         // make it write to an invalid location. This is the first variant which
         // correctly triggers ExternalAccountDataModified when direct mapping is

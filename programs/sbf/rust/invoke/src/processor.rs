@@ -692,8 +692,8 @@ fn process_instruction(
             invoked_instruction.accounts[1].is_writable = true;
             invoke(&invoked_instruction, accounts)?;
         }
-        TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_TO_SYSTEM_ACCOUNT => {
-            msg!("TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_TO_SYSTEM_ACCOUNT");
+        TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLEE => {
+            msg!("TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLEE");
             invoke(
                 &create_instruction(
                     *program_id,
@@ -702,7 +702,7 @@ fn process_instruction(
                         (accounts[ARGUMENT_INDEX].key, true, false),
                     ],
                     vec![
-                        TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_TO_SYSTEM_ACCOUNT_NESTED,
+                        TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLEE_NESTED,
                         42,
                         42,
                         42,
@@ -712,8 +712,7 @@ fn process_instruction(
             )
             .unwrap();
             let account = &accounts[ARGUMENT_INDEX];
-            // this should cause the tx to fail with ReadonlyDataModified since
-            // the system program now owns the account
+            // this should cause the tx to fail since the callee changed ownership
             unsafe {
                 *account
                     .data
@@ -721,14 +720,14 @@ fn process_instruction(
                     .get_unchecked_mut(instruction_data[1] as usize) = 42
             };
         }
-        TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_TO_SYSTEM_ACCOUNT_NESTED => {
-            msg!("TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_TO_SYSTEM_ACCOUNT_NESTED");
+        TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLEE_NESTED => {
+            msg!("TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLEE_NESTED");
             let account = &accounts[ARGUMENT_INDEX];
             account.data.borrow_mut().fill(0);
             account.assign(&system_program::id());
         }
-        TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_TO_OTHER_PROGRAM => {
-            msg!("TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_TO_OTHER_PROGRAM");
+        TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLER => {
+            msg!("TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLER");
             let account = &accounts[ARGUMENT_INDEX];
             let invoked_program_id = accounts[INVOKED_PROGRAM_INDEX].key;
             account.data.borrow_mut().fill(0);
@@ -745,8 +744,8 @@ fn process_instruction(
                 accounts,
             )
             .unwrap();
-            // this should cause the tx to fail with ReadonlyDataModified since
-            // invoked_program_id now owns the account
+            // this should cause the tx to failsince invoked_program_id now owns
+            // the account
             unsafe {
                 *account
                     .data
