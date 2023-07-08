@@ -1621,6 +1621,12 @@ fn main() {
                     .help("Skip ledger PoH and transaction verification."),
             )
             .arg(
+                Arg::with_name("enable_rpc_transaction_history")
+                    .long("enable-rpc-transaction-history")
+                    .takes_value(false)
+                    .help("Store transaction info for processed slots into local ledger"),
+            )
+            .arg(
                 Arg::with_name("run_final_hash_calc")
                     .long("run-final-accounts-hash-calculation")
                     .takes_value(false)

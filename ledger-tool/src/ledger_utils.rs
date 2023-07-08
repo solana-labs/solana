@@ -19,16 +19,12 @@ use {
         },
     },
     solana_measure::measure,
-    solana_rpc::{
-        transaction_notifier_interface::TransactionNotifierLock,
-        transaction_status_service::TransactionStatusService,
-    },
+    solana_rpc::transaction_status_service::TransactionStatusService,
     solana_runtime::{
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank_forks::BankForks,
         hardened_unpack::open_genesis_config,
         snapshot_config::SnapshotConfig,
@@ -207,9 +203,8 @@ pub fn load_and_process_ledger(
         exit(1);
     }
 
-    let mut accounts_update_notifier = Option::<AccountsUpdateNotifier>::default();
-    let mut transaction_notifier = Option::<TransactionNotifierLock>::default();
-    if arg_matches.is_present("geyser_plugin_config") {
+    let geyser_plugin_active = arg_matches.is_present("geyser_plugin_config");
+    let (accounts_update_notifier, transaction_notifier) = if geyser_plugin_active {
         let geyser_config_files = values_t_or_exit!(arg_matches, "geyser_plugin_config", String)
             .into_iter()
             .map(PathBuf::from)
@@ -224,9 +219,13 @@ pub fn load_and_process_ledger(
                     exit(1);
                 },
             );
-        accounts_update_notifier = geyser_service.get_accounts_update_notifier();
-        transaction_notifier = geyser_service.get_transaction_notifier();
-    }
+        (
+            geyser_service.get_accounts_update_notifier(),
+            geyser_service.get_transaction_notifier(),
+        )
+    } else {
+        (None, None)
+    };
 
     let exit = Arc::new(AtomicBool::new(false));
     let (bank_forks, leader_schedule_cache, starting_snapshot_hashes, ..) =
@@ -294,27 +293,41 @@ pub fn load_and_process_ledger(
         None,
     );
 
-    let (transaction_status_sender, transaction_status_service) = if transaction_notifier.is_some()
-    {
-        let (transaction_status_sender, transaction_status_receiver) = unbounded();
-        let transaction_status_service = TransactionStatusService::new(
-            transaction_status_receiver,
-            Arc::default(),
-            false,
-            transaction_notifier,
-            blockstore.clone(),
-            false,
-            exit.clone(),
-        );
-        (
-            Some(TransactionStatusSender {
-                sender: transaction_status_sender,
-            }),
-            Some(transaction_status_service),
-        )
-    } else {
-        (None, None)
-    };
+    let enable_rpc_transaction_history = arg_matches.is_present("enable_rpc_transaction_history");
+
+    let (transaction_status_sender, transaction_status_service) =
+        if geyser_plugin_active || enable_rpc_transaction_history {
+            // Need Primary (R/W) access to insert transaction data
+            let tss_blockstore = if enable_rpc_transaction_history {
+                Arc::new(open_blockstore(
+                    blockstore.ledger_path(),
+                    AccessType::PrimaryForMaintenance,
+                    None,
+                    false,
+                ))
+            } else {
+                blockstore.clone()
+            };
+
+            let (transaction_status_sender, transaction_status_receiver) = unbounded();
+            let transaction_status_service = TransactionStatusService::new(
+                transaction_status_receiver,
+                Arc::default(),
+                enable_rpc_transaction_history,
+                transaction_notifier,
+                tss_blockstore,
+                false,
+                exit.clone(),
+            );
+            (
+                Some(TransactionStatusSender {
+                    sender: transaction_status_sender,
+                }),
+                Some(transaction_status_service),
+            )
+        } else {
+            (None, None)
+        };
 
     let result = blockstore_processor::process_blockstore_from_root(
         blockstore.as_ref(),
