@@ -331,7 +331,7 @@ fn retransmit_shred(
     let num_addrs = addrs.len();
     let num_nodes = match cluster_nodes::get_broadcast_protocol(key) {
         Protocol::QUIC => {
-            let shred = Bytes::from(Vec::from(shred));
+            let shred = Bytes::copy_from_slice(shred);
             addrs
                 .into_iter()
                 .filter_map(|addr| quic_endpoint_sender.try_send((addr, shred.clone())).ok())
