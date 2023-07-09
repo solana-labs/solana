@@ -2464,11 +2464,11 @@ fn test_program_sbf_upgrade_via_cpi() {
         .advance_slot(1, &Pubkey::default())
         .expect("Failed to advance the slot");
     let program_account = bank_client.get_account(&program_id).unwrap().unwrap();
-    let programdata_address = match program_account.state() {
-        Ok(bpf_loader_upgradeable::UpgradeableLoaderState::Program {
-            programdata_address,
-        }) => programdata_address,
-        _ => unreachable!(),
+    let Ok(bpf_loader_upgradeable::UpgradeableLoaderState::Program {
+        programdata_address,
+    }) = program_account.state()
+    else {
+        unreachable!()
     };
     let original_programdata = bank_client
         .get_account_data(&programdata_address)

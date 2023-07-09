@@ -72,12 +72,9 @@ impl ReadOnlyAccountsCache {
 
     pub(crate) fn load(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
         let key = (pubkey, slot);
-        let mut entry = match self.cache.get_mut(&key) {
-            None => {
-                self.misses.fetch_add(1, Ordering::Relaxed);
-                return None;
-            }
-            Some(entry) => entry,
+        let Some(mut entry) = self.cache.get_mut(&key) else {
+            self.misses.fetch_add(1, Ordering::Relaxed);
+            return None;
         };
         self.hits.fetch_add(1, Ordering::Relaxed);
         // Move the entry to the end of the queue.
@@ -122,9 +119,8 @@ impl ReadOnlyAccountsCache {
         // Evict entries from the front of the queue.
         let mut num_evicts = 0;
         while self.data_size.load(Ordering::Relaxed) > self.max_data_size {
-            let (pubkey, slot) = match self.queue.lock().unwrap().get_first() {
-                None => break,
-                Some(key) => *key,
+            let Some(&(pubkey, slot)) = self.queue.lock().unwrap().get_first() else {
+                break;
             };
             num_evicts += 1;
             self.remove(pubkey, slot);

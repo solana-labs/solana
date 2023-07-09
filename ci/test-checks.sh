@@ -90,6 +90,7 @@ _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace -
   --deny=warnings \
   --deny=clippy::default_trait_access \
   --deny=clippy::integer_arithmetic \
+  --deny=clippy::manual_let_else \
   --deny=clippy::used_underscore_binding \
   "${nightly_clippy_allows[@]}"
 
@@ -103,6 +104,7 @@ _ scripts/cargo-for-all-lock-files.sh -- clippy --workspace  --tests --bins --ex
   --deny=warnings \
   --deny=clippy::default_trait_access \
   --deny=clippy::integer_arithmetic \
+  --deny=clippy::manual_let_else \
   --deny=clippy::used_underscore_binding
 
 if [[ -n $CI ]]; then

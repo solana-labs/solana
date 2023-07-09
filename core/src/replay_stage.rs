@@ -2272,17 +2272,14 @@ impl ReplayStage {
             return None;
         }
 
-        let authorized_voter_pubkey =
-            if let Some(authorized_voter_pubkey) = vote_state.get_authorized_voter(bank.epoch()) {
-                authorized_voter_pubkey
-            } else {
-                warn!(
-                    "Vote account {} has no authorized voter for epoch {}.  Unable to vote",
-                    vote_account_pubkey,
-                    bank.epoch()
-                );
-                return None;
-            };
+        let Some(authorized_voter_pubkey) = vote_state.get_authorized_voter(bank.epoch()) else {
+            warn!(
+                "Vote account {} has no authorized voter for epoch {}.  Unable to vote",
+                vote_account_pubkey,
+                bank.epoch()
+            );
+            return None;
+        };
 
         let authorized_voter_keypair = match authorized_voter_keypairs
             .iter()

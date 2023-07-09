@@ -125,9 +125,8 @@ fn wait_for_restart_window(
         .block_on(async move { admin_client.await?.rpc_addr().await })
         .map_err(|err| format!("Unable to get validator RPC address: {err}"))?;
 
-    let rpc_client = match rpc_addr {
-        None => return Err("RPC not available".into()),
-        Some(rpc_addr) => RpcClient::new_socket(rpc_addr),
+    let Some(rpc_client) = rpc_addr.map(RpcClient::new_socket) else {
+        return Err("RPC not available".into());
     };
 
     let my_identity = rpc_client.get_identity()?;

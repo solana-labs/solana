@@ -224,13 +224,10 @@ fn retransmit(
             // and if the leader is unknown they should fail signature check.
             // So here we should expect to know the slot leader and otherwise
             // skip the shred.
-            let slot_leader = match leader_schedule_cache.slot_leader_at(slot, Some(&working_bank))
-            {
-                Some(pubkey) => pubkey,
-                None => {
-                    stats.unknown_shred_slot_leader += shreds.len();
-                    return None;
-                }
+            let Some(slot_leader) = leader_schedule_cache.slot_leader_at(slot, Some(&working_bank))
+            else {
+                stats.unknown_shred_slot_leader += shreds.len();
+                return None;
             };
             let cluster_nodes =
                 cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);

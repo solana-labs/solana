@@ -4474,16 +4474,13 @@ impl AccountsDb {
 
         let len = sorted_slots.len();
         for slot in sorted_slots {
-            let old_storage = match self.get_storage_to_move_to_ancient_append_vec(
+            let Some(old_storage) = self.get_storage_to_move_to_ancient_append_vec(
                 slot,
                 &mut current_ancient,
                 can_randomly_shrink,
-            ) {
-                Some(old_storages) => old_storages,
-                None => {
-                    // nothing to squash for this slot
-                    continue;
-                }
+            ) else {
+                // nothing to squash for this slot
+                continue;
             };
 
             if guard.is_none() {

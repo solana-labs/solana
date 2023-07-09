@@ -345,9 +345,8 @@ impl ErasureMeta {
     // Returns true if the erasure fields on the shred
     // are consistent with the erasure-meta.
     pub(crate) fn check_coding_shred(&self, shred: &Shred) -> bool {
-        let mut other = match Self::from_coding_shred(shred) {
-            Some(erasure_meta) => erasure_meta,
-            None => return false,
+        let Some(mut other) = Self::from_coding_shred(shred) else {
+            return false;
         };
         other.__unused_size = self.__unused_size;
         self == &other

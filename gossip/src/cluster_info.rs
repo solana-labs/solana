@@ -1412,9 +1412,8 @@ impl ClusterInfo {
         const THROTTLE_DELAY: u64 = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2;
         let entrypoint = {
             let mut entrypoints = self.entrypoints.write().unwrap();
-            let entrypoint = match entrypoints.choose_mut(&mut rand::thread_rng()) {
-                Some(entrypoint) => entrypoint,
-                None => return,
+            let Some(entrypoint) = entrypoints.choose_mut(&mut rand::thread_rng()) else {
+                return;
             };
             if !pulls.is_empty() {
                 let now = timestamp();

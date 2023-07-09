@@ -549,11 +549,8 @@ declare_syscall!(
         } else {
             align_of::<u8>()
         };
-        let layout = match Layout::from_size_align(size as usize, align) {
-            Ok(layout) => layout,
-            Err(_) => {
-                return Ok(0);
-            }
+        let Ok(layout) = Layout::from_size_align(size as usize, align) else {
+            return Ok(0);
         };
         let allocator = &mut invoke_context.get_syscall_context_mut()?.allocator;
         if free_addr == 0 {
@@ -631,11 +628,8 @@ declare_syscall!(
             invoke_context.get_check_size(),
         )?;
 
-        let new_address = match Pubkey::create_program_address(&seeds, program_id) {
-            Ok(address) => address,
-            Err(_) => {
-                return Ok(1);
-            }
+        let Ok(new_address) = Pubkey::create_program_address(&seeds, program_id) else {
+            return Ok(1);
         };
         let address = translate_slice_mut::<u8>(
             memory_mapping,
@@ -879,23 +873,14 @@ declare_syscall!(
             invoke_context.get_check_size(),
         )?;
 
-        let message = match libsecp256k1::Message::parse_slice(hash) {
-            Ok(msg) => msg,
-            Err(_) => {
-                return Ok(Secp256k1RecoverError::InvalidHash.into());
-            }
+        let Ok(message) = libsecp256k1::Message::parse_slice(hash) else {
+            return Ok(Secp256k1RecoverError::InvalidHash.into());
         };
-        let adjusted_recover_id_val = match recovery_id_val.try_into() {
-            Ok(adjusted_recover_id_val) => adjusted_recover_id_val,
-            Err(_) => {
-                return Ok(Secp256k1RecoverError::InvalidRecoveryId.into());
-            }
+        let Ok(adjusted_recover_id_val) = recovery_id_val.try_into() else {
+            return Ok(Secp256k1RecoverError::InvalidRecoveryId.into());
         };
-        let recovery_id = match libsecp256k1::RecoveryId::parse(adjusted_recover_id_val) {
-            Ok(id) => id,
-            Err(_) => {
-                return Ok(Secp256k1RecoverError::InvalidRecoveryId.into());
-            }
+        let Ok(recovery_id) = libsecp256k1::RecoveryId::parse(adjusted_recover_id_val) else {
+            return Ok(Secp256k1RecoverError::InvalidRecoveryId.into());
         };
         let sig_parse_result = if invoke_context
             .feature_set
@@ -906,11 +891,8 @@ declare_syscall!(
             libsecp256k1::Signature::parse_overflowing_slice(signature)
         };
 
-        let signature = match sig_parse_result {
-            Ok(sig) => sig,
-            Err(_) => {
-                return Ok(Secp256k1RecoverError::InvalidSignature.into());
-            }
+        let Ok(signature) = sig_parse_result else {
+            return Ok(Secp256k1RecoverError::InvalidSignature.into());
         };
 
         let public_key = match libsecp256k1::recover(&message, &signature, &recovery_id) {

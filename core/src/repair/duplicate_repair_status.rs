@@ -884,10 +884,9 @@ pub mod tests {
 
         // We don't have the earlier ancestors because we just started up, however sample should
         // not be rejected as invalid.
-        let DuplicateAncestorDecision::EarliestMismatchFound(repair_status) = run_add_multiple_correct_and_incorrect_responses(
-            vec![],
-            &mut test_setup,
-        ) else {
+        let DuplicateAncestorDecision::EarliestMismatchFound(repair_status) =
+            run_add_multiple_correct_and_incorrect_responses(vec![], &mut test_setup)
+        else {
             panic!("Incorrect decision")
         };
         assert_eq!(
@@ -938,10 +937,12 @@ pub mod tests {
         )];
 
         // We have no entries in the blockstore, so all the ancestors will be missing
-        let DuplicateAncestorDecision::EarliestMismatchFound(repair_status) = run_add_multiple_correct_and_incorrect_responses(
-            desired_incorrect_responses,
-            &mut test_setup,
-        ) else {
+        let DuplicateAncestorDecision::EarliestMismatchFound(repair_status) =
+            run_add_multiple_correct_and_incorrect_responses(
+                desired_incorrect_responses,
+                &mut test_setup,
+            )
+        else {
             panic!("Incorrect decision")
         };
         assert_eq!(
@@ -1089,10 +1090,9 @@ pub mod tests {
         }
 
         // All the ancestors matched, only the requested slot should be dumped
-        let DuplicateAncestorDecision::EarliestMismatchFound(repair_status) = run_add_multiple_correct_and_incorrect_responses(
-            vec![],
-            &mut test_setup,
-        ) else {
+        let DuplicateAncestorDecision::EarliestMismatchFound(repair_status) =
+            run_add_multiple_correct_and_incorrect_responses(vec![], &mut test_setup)
+        else {
             panic!("Incorrect decision")
         };
         assert_eq!(
@@ -1133,10 +1133,9 @@ pub mod tests {
             .add_tree(tree, true, true, 2, Hash::default());
 
         // All the ancestors matched, only the requested slot should be dumped
-        let DuplicateAncestorDecision::EarliestPrunedMismatchFound(repair_status) = run_add_multiple_correct_and_incorrect_responses(
-            vec![],
-            &mut test_setup,
-        ) else {
+        let DuplicateAncestorDecision::EarliestPrunedMismatchFound(repair_status) =
+            run_add_multiple_correct_and_incorrect_responses(vec![], &mut test_setup)
+        else {
             panic!("Incorrect decision")
         };
         assert_eq!(

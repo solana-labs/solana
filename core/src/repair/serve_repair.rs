@@ -867,25 +867,19 @@ impl ServeRepair {
                 if u128::from(time_diff_ms) > SIGNED_REPAIR_TIME_WINDOW.as_millis() {
                     return Err(Error::from(RepairVerifyError::TimeSkew));
                 }
-                let leading_buf = match packet.data(..4) {
-                    Some(buf) => buf,
-                    None => {
-                        debug_assert!(
-                            false,
-                            "request should have failed deserialization: {request:?}",
-                        );
-                        return Err(Error::from(RepairVerifyError::Malformed));
-                    }
+                let Some(leading_buf) = packet.data(..4) else {
+                    debug_assert!(
+                        false,
+                        "request should have failed deserialization: {request:?}",
+                    );
+                    return Err(Error::from(RepairVerifyError::Malformed));
                 };
-                let trailing_buf = match packet.data(4 + SIGNATURE_BYTES..) {
-                    Some(buf) => buf,
-                    None => {
-                        debug_assert!(
-                            false,
-                            "request should have failed deserialization: {request:?}",
-                        );
-                        return Err(Error::from(RepairVerifyError::Malformed));
-                    }
+                let Some(trailing_buf) = packet.data(4 + SIGNATURE_BYTES..) else {
+                    debug_assert!(
+                        false,
+                        "request should have failed deserialization: {request:?}",
+                    );
+                    return Err(Error::from(RepairVerifyError::Malformed));
                 };
                 let from_id = request.sender();
                 let signed_data = [leading_buf, trailing_buf].concat();
@@ -978,11 +972,10 @@ impl ServeRepair {
                 }
             }
             stats.processed += 1;
-            let rsp = match Self::handle_repair(
-                recycler, &from_addr, blockstore, request, stats, ping_cache,
-            ) {
-                None => continue,
-                Some(rsp) => rsp,
+            let Some(rsp) =
+                Self::handle_repair(recycler, &from_addr, blockstore, request, stats, ping_cache)
+            else {
+                continue;
             };
             let num_response_packets = rsp.len();
             let num_response_bytes = rsp.iter().map(|p| p.meta().size).sum();

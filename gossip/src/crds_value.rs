@@ -462,9 +462,8 @@ impl NodeInstance {
     // the same owner. Otherwise returns true if self has more recent timestamp
     // than other, and so overrides it.
     pub(crate) fn overrides(&self, other: &CrdsValue) -> Option<bool> {
-        let other = match &other.data {
-            CrdsData::NodeInstance(other) => other,
-            _ => return None,
+        let CrdsData::NodeInstance(other) = &other.data else {
+            return None;
         };
         if self.token == other.token || self.from != other.from {
             return None;

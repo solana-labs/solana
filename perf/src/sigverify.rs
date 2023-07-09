@@ -131,21 +131,17 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) -> bool {
 
     for _ in 0..packet_offsets.sig_len {
         let pubkey_end = pubkey_start.saturating_add(size_of::<Pubkey>());
-        let sig_end = match sig_start.checked_add(size_of::<Signature>()) {
-            Some(sig_end) => sig_end,
-            None => return false,
+        let Some(sig_end) = sig_start.checked_add(size_of::<Signature>()) else {
+            return false;
         };
-        let signature = match packet.data(sig_start..sig_end) {
-            Some(signature) => Signature::new(signature),
-            None => return false,
+        let Some(signature) = packet.data(sig_start..sig_end).map(Signature::new) else {
+            return false;
         };
-        let pubkey = match packet.data(pubkey_start..pubkey_end) {
-            Some(pubkey) => pubkey,
-            None => return false,
+        let Some(pubkey) = packet.data(pubkey_start..pubkey_end) else {
+            return false;
         };
-        let message = match packet.data(msg_start..) {
-            Some(message) => message,
-            None => return false,
+        let Some(message) = packet.data(msg_start..) else {
+            return false;
         };
         if !signature.verify(pubkey, message) {
             return false;
@@ -317,9 +313,8 @@ fn do_get_packet_offsets(
 
 pub fn check_for_tracer_packet(packet: &mut Packet) -> bool {
     let first_pubkey_start: usize = TRACER_KEY_OFFSET_IN_TRANSACTION;
-    let first_pubkey_end = match first_pubkey_start.checked_add(size_of::<Pubkey>()) {
-        Some(offset) => offset,
-        None => return false,
+    let Some(first_pubkey_end) = first_pubkey_start.checked_add(size_of::<Pubkey>()) else {
+        return false;
     };
     // Check for tracer pubkey
     match packet.data(first_pubkey_start..first_pubkey_end) {
@@ -610,9 +605,8 @@ pub fn ed25519_verify(
     reject_non_vote: bool,
     valid_packet_count: usize,
 ) {
-    let api = match perf_libs::api() {
-        None => return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count),
-        Some(api) => api,
+    let Some(api) = perf_libs::api() else {
+        return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
     };
     let total_packet_count = count_packets_in_batches(batches);
     // micro-benchmarks show GPU time for smallest batch around 15-20ms

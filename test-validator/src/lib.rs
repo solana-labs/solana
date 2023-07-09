@@ -367,9 +367,8 @@ impl TestValidatorGenesis {
         accounts: &[AccountInfo],
     ) -> Result<&mut Self, String> {
         for account in accounts {
-            let account_path = match solana_program_test::find_file(account.filename) {
-                Some(path) => path,
-                None => return Err(format!("Unable to locate {}", account.filename)),
+            let Some(account_path) = solana_program_test::find_file(account.filename) else {
+                return Err(format!("Unable to locate {}", account.filename));
             };
             let mut file = File::open(&account_path).unwrap();
             let mut account_info_raw = String::new();
