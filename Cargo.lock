@@ -5649,6 +5649,7 @@ dependencies = [
  "solana-address-lookup-table-program",
  "solana-bloom",
  "solana-client",
+ "solana-core",
  "solana-cost-model",
  "solana-entry",
  "solana-frozen-abi",
