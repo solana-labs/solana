@@ -289,7 +289,8 @@ impl SlotMeta {
         self.is_connected()
     }
 
-    /// Dangerous. Currently only needed for a local-cluster test
+    /// Dangerous.
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn unset_parent(&mut self) {
         self.parent_slot = None;
     }

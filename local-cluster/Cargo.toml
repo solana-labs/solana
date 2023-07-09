@@ -41,6 +41,7 @@ fs_extra = { workspace = true }
 gag = { workspace = true }
 serial_test = { workspace = true }
 solana-download-utils = { workspace = true }
+solana-ledger = { workspace = true, features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }
 
 [package.metadata.docs.rs]
