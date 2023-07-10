@@ -223,6 +223,7 @@ impl BaseClientConnection for Quic {
 
 pub struct QuicConnectionManager {
     connection_config: QuicConfig,
+    endpoint: Arc<QuicLazyInitializedEndpoint>,
 }
 
 impl ConnectionManager for QuicConnectionManager {
@@ -234,7 +235,7 @@ impl ConnectionManager for QuicConnectionManager {
     fn new_connection_pool(&self) -> Self::ConnectionPool {
         QuicPool {
             connections: Vec::default(),
-            endpoint: Arc::new(self.connection_config.create_endpoint()),
+            endpoint: self.endpoint.clone(),
         }
     }
 
@@ -250,7 +251,8 @@ impl ConnectionManager for QuicConnectionManager {
 
 impl QuicConnectionManager {
     pub fn new_with_connection_config(connection_config: QuicConfig) -> Self {
-        Self { connection_config }
+        let endpoint = Arc::new(connection_config.create_endpoint());
+        Self { connection_config, endpoint }
     }
 }
 
