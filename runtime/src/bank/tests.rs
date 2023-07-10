@@ -13343,6 +13343,10 @@ fn test_get_reward_distribution_num_blocks_cap() {
         PartitionedEpochRewardsConfig::default().stake_account_stores_per_block;
     assert_eq!(stake_account_stores_per_block, 4096);
 
+    let mut stake_rewards = (0..4096 * 5)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
     let check_num_reward_distribution_blocks =
         |num_stakes: u64,
          expected_num_reward_distribution_blocks: u64,
@@ -13367,12 +13371,20 @@ fn test_get_reward_distribution_num_blocks_cap() {
             );
         };
 
-    check_num_reward_distribution_blocks(stake_account_stores_per_block, 1, 1);
-    check_num_reward_distribution_blocks(2 * stake_account_stores_per_block, 2, 1);
-    check_num_reward_distribution_blocks(3 * stake_account_stores_per_block, 3, 1);
-    check_num_reward_distribution_blocks(4 * stake_account_stores_per_block, 3, 1); // cap at 3
-    check_num_reward_distribution_blocks(5 * stake_account_stores_per_block, 3, 1);
-    //cap at 3
+    for test_record in [
+        (5 * stake_account_stores_per_block, 3, 1), //cap at 3
+        (4 * stake_account_stores_per_block, 3, 1), // cap at 3
+        (3 * stake_account_stores_per_block, 3, 1),
+        (3 * stake_account_stores_per_block - 1, 3, 1),
+        (2 * stake_account_stores_per_block, 2, 1),
+        (2 * stake_account_stores_per_block - 1, 2, 1),
+        (stake_account_stores_per_block, 1, 1),
+        (1, 1, 1),
+        (0, 1, 1),
+    ] {
+        stake_rewards.truncate(test_record.0 as usize);
+        check_num_reward_distribution_blocks(test_record.0, test_record.1, test_record.2);
+    }
 }
 
 /// Test get_reward_distribution_num_blocks, get_reward_calculation_num_blocks, get_reward_total_num_blocks during warm up epoch gives the expected result.
