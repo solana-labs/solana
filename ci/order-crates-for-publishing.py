@@ -21,6 +21,36 @@ def load_metadata():
     return json.loads(subprocess.Popen(
         cmd, shell=True, stdout=subprocess.PIPE).communicate()[0])
 
+no_explicit_version_specified = '*'
+
+def is_special_cased_self_dep(package, dependency):
+    is_special_cased = False
+
+    # Sometimes self-dev-dep with dev-context-only-utils is needed and this dep
+    # pattern is actually legalized by cargo:
+    #   https://releases.rs/docs/1.40.0/#cargo
+    #   https://github.com/rust-lang/cargo/pull/7333
+    if (dependency['kind'] == 'dev' and
+        dependency['name'] == package['name'] and
+        'dev-context-only-utils' in dependency['features'] and
+        'path' in dependency):
+        if dependency['req'] == no_explicit_version_specified:
+            is_special_cased = True
+        else:
+            sys.exit(
+                'Error: wrong dev-context-only-utils circular dependency. try: ' +
+                    '{} = {{ path = ".", features = {} }}\n'
+                    .format(dependency['name'], json.dumps(dependency['features']))
+            )
+
+    return is_special_cased
+
+def should_check(package, dependency):
+    is_related_to_solana = dependency['name'].startswith('solana')
+    return (
+        is_related_to_solana and not is_special_cased_self_dep(package, dependency)
+    )
+
 def get_packages():
     metadata = load_metadata()
 
@@ -30,7 +60,7 @@ def get_packages():
     dependency_graph = dict()
     for pkg in metadata['packages']:
         manifest_path[pkg['name']] = pkg['manifest_path'];
-        dependency_graph[pkg['name']] = [x['name'] for x in pkg['dependencies'] if x['name'].startswith('solana')];
+        dependency_graph[pkg['name']] = [x['name'] for x in pkg['dependencies'] if should_check(pkg, x)];
 
     # Check for direct circular dependencies
     circular_dependencies = set()
