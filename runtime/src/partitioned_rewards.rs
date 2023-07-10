@@ -12,7 +12,7 @@ pub(crate) struct PartitionedEpochRewardsConfig {
     /// Normally, this will be 1.
     /// if force_one_slot_partitioned_rewards, this will be 0 (ie. we take 0 blocks just for reward calculation)
     pub(crate) reward_calculation_num_blocks: Slot,
-    /// number of stake accounts to store in one block during partititioned reward interval
+    /// number of stake accounts to store in one block during partitioned reward interval
     /// normally, this is a number tuned for reasonable performance, such as 4096 accounts/block
     /// if force_one_slot_partitioned_rewards, this will usually be u64::MAX so that all stake accounts are written in the first block
     pub(crate) stake_account_stores_per_block: Slot,
@@ -47,6 +47,10 @@ pub enum TestPartitionedEpochRewards {
     None,
     CompareResults,
     ForcePartitionedEpochRewardsInOneBlock,
+    PartitionedEpochRewardsConfigRewardBlocks {
+        reward_calculation_num_blocks: u64,
+        stake_account_stores_per_block: u64,
+    },
 }
 
 #[allow(dead_code)]
@@ -60,10 +64,17 @@ impl PartitionedEpochRewardsConfig {
             TestPartitionedEpochRewards::ForcePartitionedEpochRewardsInOneBlock => {
                 Self::set_test_enable_partitioned_rewards()
             }
+            TestPartitionedEpochRewards::PartitionedEpochRewardsConfigRewardBlocks {
+                    reward_calculation_num_blocks, stake_account_stores_per_block } => {
+                   Self::set_test_enable_partitioned_rewards_with_custom_number_of_stake_accounts_per_block(
+                    reward_calculation_num_blocks,
+                    stake_account_stores_per_block)
+                }
+
         }
     }
 
-    /// All rewards will be distributed in the first block in the epoch, maching
+    /// All rewards will be distributed in the first block in the epoch, matching
     /// consensus for the non-partitioned rewards, but running all the partitioned rewards
     /// code.
     fn set_test_enable_partitioned_rewards() -> Self {
@@ -83,6 +94,21 @@ impl PartitionedEpochRewardsConfig {
         Self {
             test_compare_partitioned_epoch_rewards: true,
             ..PartitionedEpochRewardsConfig::default()
+        }
+    }
+
+    /// A method that configures how many reward reward calculation blocks and how many stake
+    /// accounts to store per reward block.
+    fn set_test_enable_partitioned_rewards_with_custom_number_of_stake_accounts_per_block(
+        reward_calculation_num_blocks: u64,
+        stake_account_stores_per_block: u64,
+    ) -> Self {
+        Self {
+            reward_calculation_num_blocks,
+            stake_account_stores_per_block,
+            test_enable_partitioned_rewards: true,
+            // irrelevant if we are not running old code path
+            test_compare_partitioned_epoch_rewards: false,
         }
     }
 }
