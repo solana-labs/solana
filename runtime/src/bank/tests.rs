@@ -13339,20 +13339,40 @@ fn test_get_reward_distribution_num_blocks_cap() {
 
     let bank = Bank::new_for_tests(&genesis_config);
 
-    // Given 16k rewards, normally it will take 4 blocks to credit all the rewards. However, because of
-    // the short epoch, i.e. 32 slots, we should cap the number of credit blocks to 32/10 = 3.
-    let expected_num = 4096 * 4;
-    let stake_rewards = (0..expected_num)
-        .map(|_| StakeReward::new_random())
-        .collect::<Vec<_>>();
+    let stake_account_stores_per_block =
+        PartitionedEpochRewardsConfig::default().stake_account_stores_per_block;
+    assert_eq!(stake_account_stores_per_block, 4096);
 
-    assert_eq!(bank.get_reward_distribution_num_blocks(&stake_rewards), 3);
-    assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
-    assert_eq!(
-        bank.get_reward_total_num_blocks(&stake_rewards),
-        bank.get_reward_distribution_num_blocks(&stake_rewards)
-            + bank.get_reward_calculation_num_blocks(),
-    );
+    let check_num_reward_distribution_blocks =
+        |num_stakes: u64,
+         expected_num_reward_distribution_blocks: u64,
+         expected_num_reward_computation_blocks: u64| {
+            // Given the short epoch, i.e. 32 slots, we should cap the number of reward distribution blocks to 32/10 = 3.
+            let stake_rewards = (0..num_stakes)
+                .map(|_| StakeReward::new_random())
+                .collect::<Vec<_>>();
+
+            assert_eq!(
+                bank.get_reward_distribution_num_blocks(&stake_rewards),
+                expected_num_reward_distribution_blocks
+            );
+            assert_eq!(
+                bank.get_reward_calculation_num_blocks(),
+                expected_num_reward_computation_blocks
+            );
+            assert_eq!(
+                bank.get_reward_total_num_blocks(&stake_rewards),
+                bank.get_reward_distribution_num_blocks(&stake_rewards)
+                    + bank.get_reward_calculation_num_blocks(),
+            );
+        };
+
+    check_num_reward_distribution_blocks(stake_account_stores_per_block, 1, 1);
+    check_num_reward_distribution_blocks(2 * stake_account_stores_per_block, 2, 1);
+    check_num_reward_distribution_blocks(3 * stake_account_stores_per_block, 3, 1);
+    check_num_reward_distribution_blocks(4 * stake_account_stores_per_block, 3, 1); // cap at 3
+    check_num_reward_distribution_blocks(5 * stake_account_stores_per_block, 3, 1);
+    //cap at 3
 }
 
 /// Test get_reward_distribution_num_blocks, get_reward_calculation_num_blocks, get_reward_total_num_blocks during warm up epoch gives the expected result.
