@@ -1,8 +1,11 @@
 use {
     crate::{
-        account_storage::meta::StoredMetaWriteVersion, tiered_storage::meta::TieredAccountMeta,
+        account_storage::meta::{StoredAccountMeta, StoredMetaWriteVersion},
+        append_vec::MatchAccountOwnerError,
+        tiered_storage::{meta::TieredAccountMeta, TieredStorageResult},
     },
     solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
+    std::path::Path,
 };
 
 /// The struct that offers read APIs for accessing a TieredAccount.
@@ -79,5 +82,41 @@ impl<'a, M: TieredAccountMeta> ReadableAccount for TieredReadableAccount<'a, M> 
     /// Returns the data associated to this account.
     fn data(&self) -> &'a [u8] {
         self.data()
+    }
+}
+
+#[derive(Debug)]
+/// The reader of a tiered accounts file.
+pub enum TieredAccountsFileReader {}
+
+impl TieredAccountsFileReader {
+    /// Creates a reader for the specified tiered storage accounts file.
+    pub fn new_from_path<P: AsRef<Path>>(_path: P) -> TieredStorageResult<Self> {
+        unimplemented!();
+    }
+
+    /// Returns the total number of accounts.
+    pub fn num_accounts(&self) -> usize {
+        unimplemented!();
+    }
+
+    /// Given the account associated with the specified index, this
+    /// function returns the index to the specified input `owners` vector if the
+    /// specified account is owned by the owner located at the returned index.
+    ///
+    /// Otherwise, MatchAccountOwnerError will be returned.
+    pub fn account_matches_owners(
+        &self,
+        _index: usize,
+        _owners: &[&Pubkey],
+    ) -> Result<usize, MatchAccountOwnerError> {
+        unimplemented!();
+    }
+
+    /// Returns (account metadata, next_index) pair for the account at the
+    /// specified `index` if any.  Otherwise return None.  The function also
+    /// returns the multiplied index to the next entry.
+    pub fn get_account(&self, _index: usize) -> Option<(StoredAccountMeta<'_>, usize)> {
+        unimplemented!();
     }
 }
