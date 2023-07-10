@@ -41,6 +41,11 @@ impl<'a, M: TieredAccountMeta> TieredReadableAccount<'a, M> {
     pub fn write_version(&self) -> Option<StoredMetaWriteVersion> {
         self.meta.write_version(self.account_block)
     }
+
+    /// Returns the data associated to this account.
+    pub fn data(&self) -> &'a [u8] {
+        self.meta.account_data(self.account_block)
+    }
 }
 
 impl<'a, M: TieredAccountMeta> ReadableAccount for TieredReadableAccount<'a, M> {
