@@ -13331,7 +13331,7 @@ fn test_get_reward_distribution_num_blocks_normal() {
 }
 
 /// Test get_reward_distribution_num_blocks, get_reward_calculation_num_blocks, get_reward_total_num_blocks during small epoch
-/// The num_credit_blocks should be cap to 5% of the total number of blocks in the epoch.
+/// The num_credit_blocks should be cap to 10% of the total number of blocks in the epoch.
 #[test]
 fn test_get_reward_distribution_num_blocks_cap() {
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
@@ -13339,14 +13339,14 @@ fn test_get_reward_distribution_num_blocks_cap() {
 
     let bank = Bank::new_for_tests(&genesis_config);
 
-    // Given 8k rewards, normally it will take 2 blocks to credit all the rewards. However, because of
-    // the short epoch, i.e. 32 slots, we should cap the number of credit blocks to 32/20 = 1.
-    let expected_num = 8192;
+    // Given 16k rewards, normally it will take 4 blocks to credit all the rewards. However, because of
+    // the short epoch, i.e. 32 slots, we should cap the number of credit blocks to 32/10 = 3.
+    let expected_num = 4096 * 4;
     let stake_rewards = (0..expected_num)
         .map(|_| StakeReward::new_random())
         .collect::<Vec<_>>();
 
-    assert_eq!(bank.get_reward_distribution_num_blocks(&stake_rewards), 1);
+    assert_eq!(bank.get_reward_distribution_num_blocks(&stake_rewards), 3);
     assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
     assert_eq!(
         bank.get_reward_total_num_blocks(&stake_rewards),

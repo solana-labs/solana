@@ -1278,13 +1278,17 @@ impl Bank {
         if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
             1
         } else {
+            const MAX_FACTOR_OF_REWARD_BLOCKS_IN_EPOCH: u64 = 10;
             let num_chunks = crate::accounts_hash::AccountsHasher::div_ceil(
                 total_stake_accounts,
                 self.partitioned_rewards_stake_account_stores_per_block() as usize,
             ) as u64;
 
-            // Limit the reward credit interval to 5% of the total number of slots in a epoch
-            num_chunks.clamp(1, (self.epoch_schedule.slots_per_epoch / 20).max(1))
+            // Limit the reward credit interval to 10% of the total number of slots in a epoch
+            num_chunks.clamp(
+                1,
+                (self.epoch_schedule.slots_per_epoch / MAX_FACTOR_OF_REWARD_BLOCKS_IN_EPOCH).max(1),
+            )
         }
     }
 
