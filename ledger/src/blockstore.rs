@@ -4505,6 +4505,7 @@ pub mod tests {
         solana_entry::entry::{next_entry, next_entry_mut},
         solana_runtime::bank::{Bank, RewardType},
         solana_sdk::{
+            clock::{DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
             hash::{self, hash, Hash},
             instruction::CompiledInstruction,
             message::v0::LoadedAddresses,
@@ -6293,6 +6294,13 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
+        // Blockstore::find_missing_data_indexes() compares timestamps, so
+        // set a small value for defer_threshold_ticks to avoid flakiness.
+        let defer_threshold_ticks = DEFAULT_TICKS_PER_SLOT / 16;
+        let start_index = 0;
+        let end_index = 50;
+        let max_missing = 9;
+
         // Write entries
         let gap: u64 = 10;
         let shreds: Vec<_> = (0..64)
@@ -6316,10 +6324,10 @@ pub mod tests {
             blockstore.find_missing_data_indexes(
                 slot,
                 timestamp(), // first_timestamp
-                0,           // defer_threshold_ticks
-                0,           // start_index
-                50,          // end_index
-                1,           // max_missing
+                defer_threshold_ticks,
+                start_index,
+                end_index,
+                max_missing,
             ),
             empty
         );
@@ -6327,11 +6335,11 @@ pub mod tests {
         assert_eq!(
             blockstore.find_missing_data_indexes(
                 slot,
-                timestamp() - 400, // first_timestamp
-                0,                 // defer_threshold_ticks
-                0,                 // start_index
-                50,                // end_index
-                9,                 // max_missing
+                timestamp() - DEFAULT_MS_PER_SLOT, // first_timestamp
+                defer_threshold_ticks,
+                start_index,
+                end_index,
+                max_missing,
             ),
             expected
         );
