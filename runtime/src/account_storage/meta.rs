@@ -98,18 +98,18 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
 /// References to account data stored elsewhere. Getting an `Account` requires cloning
 /// (see `StoredAccountMeta::clone_account()`).
 #[derive(PartialEq, Eq, Debug)]
-pub enum StoredAccountMeta<'a> {
-    AppendVec(AppendVecStoredAccountMeta<'a>),
+pub enum StoredAccountMeta<'storage> {
+    AppendVec(AppendVecStoredAccountMeta<'storage>),
 }
 
-impl<'a> StoredAccountMeta<'a> {
-    pub fn pubkey(&self) -> &'a Pubkey {
+impl<'storage> StoredAccountMeta<'storage> {
+    pub fn pubkey(&self) -> &'storage Pubkey {
         match self {
             Self::AppendVec(av) => av.pubkey(),
         }
     }
 
-    pub fn hash(&self) -> &'a Hash {
+    pub fn hash(&self) -> &'storage Hash {
         match self {
             Self::AppendVec(av) => av.hash(),
         }
@@ -127,7 +127,7 @@ impl<'a> StoredAccountMeta<'a> {
         }
     }
 
-    pub fn data(&self) -> &'a [u8] {
+    pub fn data(&self) -> &'storage [u8] {
         match self {
             Self::AppendVec(av) => av.data(),
         }
@@ -151,7 +151,7 @@ impl<'a> StoredAccountMeta<'a> {
         }
     }
 
-    pub fn set_meta(&mut self, meta: &'a StoredMeta) {
+    pub fn set_meta(&mut self, meta: &'storage StoredMeta) {
         match self {
             Self::AppendVec(av) => av.set_meta(meta),
         }
@@ -164,7 +164,7 @@ impl<'a> StoredAccountMeta<'a> {
     }
 }
 
-impl<'a> ReadableAccount for StoredAccountMeta<'a> {
+impl<'storage> ReadableAccount for StoredAccountMeta<'storage> {
     fn lamports(&self) -> u64 {
         match self {
             Self::AppendVec(av) => av.lamports(),
