@@ -24,6 +24,7 @@ use {
         },
         inline_spl_token,
         nonce_info::NonceFull,
+        partitioned_rewards::TestPartitionedEpochRewards,
         rent_collector::RENT_EXEMPT_RENT_EPOCH,
         status_cache::MAX_CACHE_ENTRIES,
         transaction_error_metrics::TransactionErrorMetrics,
@@ -13337,15 +13338,30 @@ fn test_get_reward_distribution_num_blocks_cap() {
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
     genesis_config.epoch_schedule = EpochSchedule::custom(32, 32, false);
 
-    let bank = Bank::new_for_tests(&genesis_config);
+    // Config stake reward distribution to be 10 per block
+    let mut accounts_db_config: AccountsDbConfig = ACCOUNTS_DB_CONFIG_FOR_TESTING.clone();
+    accounts_db_config.test_partitioned_epoch_rewards =
+        TestPartitionedEpochRewards::PartitionedEpochRewardsConfigRewardBlocks {
+            reward_calculation_num_blocks: 1,
+            stake_account_stores_per_block: 10,
+        };
 
-    let stake_account_stores_per_block =
-        PartitionedEpochRewardsConfig::default().stake_account_stores_per_block;
-    assert_eq!(stake_account_stores_per_block, 4096);
+    let bank = Bank::new_with_paths(
+        &genesis_config,
+        Arc::new(RuntimeConfig::default()),
+        Vec::new(),
+        None,
+        None,
+        AccountSecondaryIndexes::default(),
+        AccountShrinkThreshold::default(),
+        false,
+        Some(accounts_db_config),
+        None,
+        Arc::default(),
+    );
 
-    let mut stake_rewards = (0..4096 * 5)
-        .map(|_| StakeReward::new_random())
-        .collect::<Vec<_>>();
+    let stake_account_stores_per_block = bank.partitioned_rewards_stake_account_stores_per_block();
+    assert_eq!(stake_account_stores_per_block, 10);
 
     let check_num_reward_distribution_blocks =
         |num_stakes: u64,
@@ -13372,17 +13388,17 @@ fn test_get_reward_distribution_num_blocks_cap() {
         };
 
     for test_record in [
-        (5 * stake_account_stores_per_block, 3, 1), //cap at 3
-        (4 * stake_account_stores_per_block, 3, 1), // cap at 3
-        (3 * stake_account_stores_per_block, 3, 1),
-        (3 * stake_account_stores_per_block - 1, 3, 1),
-        (2 * stake_account_stores_per_block, 2, 1),
-        (2 * stake_account_stores_per_block - 1, 2, 1),
-        (stake_account_stores_per_block, 1, 1),
-        (1, 1, 1),
+        // num_stakes, expected_num_reward_distribution_blocks, expected_num_reward_computation_blocks
         (0, 1, 1),
+        (1, 1, 1),
+        (stake_account_stores_per_block, 1, 1),
+        (2 * stake_account_stores_per_block - 1, 2, 1),
+        (2 * stake_account_stores_per_block, 2, 1),
+        (3 * stake_account_stores_per_block - 1, 3, 1),
+        (3 * stake_account_stores_per_block, 3, 1),
+        (4 * stake_account_stores_per_block, 3, 1), // cap at 3
+        (5 * stake_account_stores_per_block, 3, 1), //cap at 3
     ] {
-        stake_rewards.truncate(test_record.0 as usize);
         check_num_reward_distribution_blocks(test_record.0, test_record.1, test_record.2);
     }
 }
