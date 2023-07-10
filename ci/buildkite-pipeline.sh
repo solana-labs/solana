@@ -326,7 +326,7 @@ pull_or_push_steps() {
 
   # Run the full test suite by default, skipping only if modifications are local
   # to some particular areas of the tree
-  if affects_other_than ^.buildkite ^.mergify .md$ ^docs/ ^.gitbook; then
+  if affects_other_than ^.mergify .md$ ^docs/ ^.gitbook; then
     all_test_steps
   fi
 
