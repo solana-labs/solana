@@ -78,6 +78,6 @@ impl<'a, M: TieredAccountMeta> ReadableAccount for TieredReadableAccount<'a, M> 
 
     /// Returns the data associated to this account.
     fn data(&self) -> &'a [u8] {
-        self.meta.account_data(self.account_block)
+        self.data()
     }
 }
