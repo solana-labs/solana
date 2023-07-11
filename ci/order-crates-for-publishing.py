@@ -47,7 +47,7 @@ def load_metadata():
 # This script follows the same safe discarding logic to exclude these
 # special-cased dev dependencies from its `dependency_graph` and further
 # processing.
-def is_self_dev_dep_with_dev_context_only_utils(package, dependency):
+def is_self_dev_dep_with_dev_context_only_utils(package, dependency, wrong_self_dev_dependencies):
     no_explicit_version = '*'
 
     is_special_cased = False
@@ -55,24 +55,21 @@ def is_self_dev_dep_with_dev_context_only_utils(package, dependency):
         dependency['name'] == package['name'] and
         'dev-context-only-utils' in dependency['features'] and
         'path' in dependency):
-        if dependency['req'] == no_explicit_version:
-            is_special_cased = True
-        else:
+        is_special_cased = True
+        if dependency['req'] != no_explicit_version:
             # it's likely `{ workspace = true, ... }` is used, which implicitly pulls the
             # version in...
-            sys.exit(
-                'Error: wrong dev-context-only-utils circular dependency. try: ' +
-                    '{} = {{ path = ".", features = {} }}\n'
-                    .format(dependency['name'], json.dumps(dependency['features']))
-            )
+            wrong_self_dev_dependencies.append(dependency)
 
     return is_special_cased
 
-def should_add(package, dependency):
-    is_related_to_solana = dependency['name'].startswith('solana')
-    return (
-        is_related_to_solana and not is_self_dev_dep_with_dev_context_only_utils(package, dependency)
+def should_add(package, dependency, wrong_self_dev_dependencies):
+    related_to_solana = dependency['name'].startswith('solana')
+    self_dev_dep_with_dev_context_only_utils = is_self_dev_dep_with_dev_context_only_utils(
+        package, dependency, wrong_self_dev_dependencies
     )
+
+    return related_to_solana and not self_dev_dep_with_dev_context_only_utils
 
 def get_packages():
     metadata = load_metadata()
@@ -81,9 +78,13 @@ def get_packages():
 
     # Build dictionary of packages and their immediate solana-only dependencies
     dependency_graph = dict()
+    wrong_self_dev_dependencies = list()
+
     for pkg in metadata['packages']:
         manifest_path[pkg['name']] = pkg['manifest_path'];
-        dependency_graph[pkg['name']] = [x['name'] for x in pkg['dependencies'] if should_add(pkg, x)];
+        dependency_graph[pkg['name']] = [
+            x['name'] for x in pkg['dependencies'] if should_add(pkg, x, wrong_self_dev_dependencies)
+        ];
 
     # Check for direct circular dependencies
     circular_dependencies = set()
@@ -94,8 +95,13 @@ def get_packages():
 
     for dependency in circular_dependencies:
         sys.stderr.write('Error: Circular dependency: {}\n'.format(dependency))
+    for dependency in wrong_self_dev_dependencies:
+        sys.stderr.write('Error: wrong dev-context-only-utils circular dependency. try: ' +
+            '{} = {{ path = ".", features = {} }}\n'
+            .format(dependency['name'], json.dumps(dependency['features']))
+        )
 
-    if len(circular_dependencies) != 0:
+    if len(circular_dependencies) != 0 or len(wrong_self_dev_dependencies) != 0:
         sys.exit(1)
 
     # Order dependencies
