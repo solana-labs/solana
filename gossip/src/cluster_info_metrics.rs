@@ -2,10 +2,14 @@ use {
     crate::crds_gossip::CrdsGossip,
     itertools::Itertools,
     solana_measure::measure::Measure,
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::{
+        clock::Slot, 
+        pubkey::Pubkey, 
+        signature::Signature
+    },
     std::{
         cmp::Reverse,
-        collections::HashMap,
+        collections::{HashMap, VecDeque},
         ops::{Deref, DerefMut},
         sync::atomic::{AtomicU64, Ordering},
         time::Instant,
@@ -189,7 +193,7 @@ pub(crate) fn submit_gossip_stats(
     gossip: &CrdsGossip,
     stakes: &HashMap<Pubkey, u64>,
 ) {
-    let (crds_stats, table_size, num_nodes, num_pubkeys, purged_values_size, failed_inserts_size) = {
+    let (mut crds_stats, table_size, num_nodes, num_pubkeys, purged_values_size, failed_inserts_size) = {
         let gossip_crds = gossip.crds.read().unwrap();
         (
             gossip_crds.take_stats(),
@@ -675,6 +679,8 @@ pub(crate) fn submit_gossip_stats(
         ("all-push", crds_stats.push.fails.iter().sum::<usize>(), i64),
         ("all-pull", crds_stats.pull.fails.iter().sum::<usize>(), i64),
     );
+
+    submit_message_signature_stats("cluster_info_crds_stats_message_signatures_received", &mut crds_stats.push.message_signatures);
     if !log::log_enabled!(log::Level::Trace) {
         return;
     }
@@ -702,5 +708,26 @@ where
     }
     for (slot, num_votes) in votes.into_iter().take(NUM_SLOTS) {
         datapoint_trace!(name, ("slot", slot, i64), ("num_votes", num_votes, i64));
+    }
+}
+
+// greg
+fn submit_message_signature_stats<'a>(
+    name: &'static str, 
+    message_signatures: &mut VecDeque<Signature>
+) {
+    // we want to submit all message signatures we have here. 
+    // Need to pop them to remove them
+    // NOTE: we need to filter the signatures before we call this
+    // so only signatures with ending 0xFF or whatever end up here. 
+    while !message_signatures.is_empty() {
+        match message_signatures.pop_front() {
+            Some(signature) => {
+                datapoint_info!(name, ("crds_signature", signature.to_string(), String));
+            },
+            None => {
+                error!("Error reporting submitting Crds signature. Invalid read from message signature queue");
+            }
+        }
     }
 }

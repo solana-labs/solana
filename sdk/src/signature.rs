@@ -51,6 +51,19 @@ impl Signature {
     pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
         self.verify_verbose(pubkey_bytes, message_bytes).is_ok()
     }
+
+    pub fn check_ending_characters(
+        &self,
+        specific_ending: &[u8],
+    ) -> bool {
+        let signature_bytes: &[u8] = self.0.as_slice();
+        if signature_bytes.len() < specific_ending.len() {
+            return false;
+        }
+        // info!("cmp bytes: {:?}, signature bytes: {:?}", specific_ending, signature_bytes);
+        let start_index = signature_bytes.len() - specific_ending.len();
+        &signature_bytes[start_index..] == specific_ending
+    }
 }
 
 pub trait Signable {

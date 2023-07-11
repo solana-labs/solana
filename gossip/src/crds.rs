@@ -44,6 +44,7 @@ use {
         clock::Slot,
         hash::{hash, Hash},
         pubkey::Pubkey,
+        signature::Signature,
     },
     std::{
         cmp::Ordering,
@@ -101,6 +102,7 @@ pub(crate) struct CrdsDataStats {
     pub(crate) counts: CrdsCountsArray,
     pub(crate) fails: CrdsCountsArray,
     pub(crate) votes: LruCache<Slot, /*count:*/ usize>,
+    pub(crate) message_signatures: VecDeque<Signature>, //TODO: change to fixed size
 }
 
 #[derive(Default)]
@@ -656,6 +658,7 @@ impl Default for CrdsDataStats {
             counts: CrdsCountsArray::default(),
             fails: CrdsCountsArray::default(),
             votes: LruCache::new(VOTE_SLOTS_METRICS_CAP),
+            message_signatures: VecDeque::with_capacity(1024),
         }
     }
 }
@@ -669,6 +672,16 @@ impl CrdsDataStats {
                 self.votes.put(slot, num_nodes + 1);
             }
         }
+        let specific_ending: [u8; 1] = [01];
+        // let specific_ending: [u8; 2] = [57, 01];
+        if entry.value.signature.check_ending_characters(&specific_ending) {
+            info!("gregg signature ends in a: {:?}", entry.value.signature);
+            self.message_signatures.push_back(entry.value.signature);
+        } 
+        // else {
+        //     info!("gregg signature does not end in a: {:?}", entry.value.signature);
+        // }
+        // self.message_signatures.push_back(entry.value.signature);
     }
 
     fn record_fail(&mut self, entry: &VersionedCrdsValue) {
