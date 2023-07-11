@@ -230,77 +230,10 @@ fn bank_forks_from_snapshot(
             accounts_update_notifier,
             exit,
         )
-<<<<<<< HEAD
-        .expect("Load from snapshot failed");
-=======
         .unwrap_or_else(|err| {
-            error!(
-                "Failed to load bank: {err} \
-                \nfull snapshot archive: {} \
-                \nincremental snapshot archive: {}",
-                full_snapshot_archive_info.path().display(),
-                incremental_snapshot_archive_info
-                    .as_ref()
-                    .map(|archive| archive.path().display().to_string())
-                    .unwrap_or("none".to_string()),
-            );
+            error!("Failed to load bank from snapshot archives: {err}");
             process::exit(1);
         });
-        bank
-    } else {
-        let Some(bank_snapshot) = latest_bank_snapshot else {
-            error!(
-                "There is no local state to startup from. Ensure --{} is *not* set to \"{}\" and restart.",
-                use_snapshot_archives_at_startup::cli::LONG_ARG,
-                UseSnapshotArchivesAtStartup::Never.to_string(),
-            );
-            process::exit(1);
-        };
-
-        // If a newer snapshot archive was downloaded, it is possible that its slot is
-        // higher than the local bank we will load.  Did the user intend for this?
-        if bank_snapshot.slot < latest_snapshot_archive_slot {
-            assert_eq!(
-                process_options.use_snapshot_archives_at_startup,
-                UseSnapshotArchivesAtStartup::Never,
-            );
-            warn!(
-                "Starting up from local state at slot {}, which is *older* than \
-                the latest snapshot archive at slot {}. If this is not desired, \
-                change the --{} CLI option to *not* \"{}\" and restart.",
-                bank_snapshot.slot,
-                latest_snapshot_archive_slot,
-                use_snapshot_archives_at_startup::cli::LONG_ARG,
-                UseSnapshotArchivesAtStartup::Never.to_string(),
-            );
-        }
-
-        let (bank, _) = snapshot_utils::bank_from_snapshot_dir(
-            &account_paths,
-            &bank_snapshot,
-            genesis_config,
-            &process_options.runtime_config,
-            process_options.debug_keys.clone(),
-            None,
-            process_options.account_indexes.clone(),
-            process_options.limit_load_slot_count_from_snapshot,
-            process_options.shrink_ratio,
-            process_options.verify_index,
-            process_options.accounts_db_config.clone(),
-            accounts_update_notifier,
-            exit,
-        )
-        .unwrap_or_else(|err| {
-            error!(
-                "Failed to load bank: {err} \
-                \nsnapshot: {}",
-                bank_snapshot.snapshot_path().display(),
-            );
-            process::exit(1);
-        });
-        bank
-    };
->>>>>>> 0177a1629c (Display more information if loading bank fails at startup (#32457))
 
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);
