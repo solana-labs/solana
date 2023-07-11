@@ -3729,11 +3729,15 @@ impl Bank {
         let (total_rewards_in_lamports, store_stake_accounts_us) =
             measure_us!(self.store_stake_accounts_in_partition(this_partition_stake_rewards));
 
-        self.update_reward_history_in_partition(this_partition_stake_rewards);
-
         // increase total capitalization by the distributed rewards
         self.capitalization
             .fetch_add(total_rewards_in_lamports, Relaxed);
+
+        // decrease distributed capital from epoch rewards sysvar
+        self.update_epoch_rewards_sysvar(total_rewards_in_lamports);
+
+        // update reward history for this partitioned distribution
+        self.update_reward_history_in_partition(this_partition_stake_rewards);
 
         let metrics = RewardsStoreMetrics {
             pre_capitalization,
