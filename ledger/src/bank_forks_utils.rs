@@ -268,7 +268,19 @@ fn bank_forks_from_snapshot(
             accounts_update_notifier,
             exit,
         )
-        .expect("load bank from snapshot archives");
+        .unwrap_or_else(|err| {
+            error!(
+                "Failed to load bank: {err} \
+                \nfull snapshot archive: {} \
+                \nincremental snapshot archive: {}",
+                full_snapshot_archive_info.path().display(),
+                incremental_snapshot_archive_info
+                    .as_ref()
+                    .map(|archive| archive.path().display().to_string())
+                    .unwrap_or("none".to_string()),
+            );
+            process::exit(1);
+        });
         bank
     } else {
         let Some(bank_snapshot) = latest_bank_snapshot else {
@@ -313,7 +325,14 @@ fn bank_forks_from_snapshot(
             accounts_update_notifier,
             exit,
         )
-        .expect("load bank from local state");
+        .unwrap_or_else(|err| {
+            error!(
+                "Failed to load bank: {err} \
+                \nsnapshot: {}",
+                bank_snapshot.snapshot_path().display(),
+            );
+            process::exit(1);
+        });
         bank
     };
 
