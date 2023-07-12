@@ -1451,7 +1451,7 @@ pub fn process_create_stake_account(
 
             if lamports < minimum_balance {
                 return Err(CliError::BadParameter(format!(
-                    "need at least {minimum_balance} lamports for new stake account to be rent exempt and meet minimum delegation, provided lamports: {lamports}."
+                    "need at least {minimum_balance} lamports for new stake account to be rent exempt and meet minimum delegation, provided lamports: {lamports}"
                 ))
                 .into());
             }
@@ -1927,7 +1927,7 @@ pub fn process_split_stake(
                 + rpc_client.get_stake_minimum_delegation()?;
             if lamports < minimum_balance {
                 return Err(CliError::BadParameter(format!(
-                    "need at least {minimum_balance} lamports for new stake account to be rent exempt and meet minimum delegation, provided lamports: {lamports}."
+                    "need at least {minimum_balance} lamports for new stake account to be rent exempt and meet minimum delegation, provided lamports: {lamports}"
                 ))
                 .into());
             }
@@ -1937,7 +1937,7 @@ pub fn process_split_stake(
                 .saturating_sub(lamports);
             if source_post_balance < minimum_balance {
                 return Err(CliError::BadParameter(format!(
-                    "need at least {minimum_balance} lamports to remain in source stake account to be rent exempt and meet minimum delegation, remaining lamports: {source_post_balance}."
+                    "need at least {minimum_balance} lamports to remain in source stake account to be rent exempt and meet minimum delegation, remaining lamports: {source_post_balance}"
                 ))
                 .into());
             }
