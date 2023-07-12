@@ -3,18 +3,14 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     common::*,
+    crossbeam_channel::unbounded,
     log::*,
     serial_test::serial,
     solana_core::{
-        broadcast_stage::{
-            broadcast_duplicates_run::{BroadcastDuplicatesConfig, ClusterPartition},
-            BroadcastStageType,
-        },
-        consensus::SWITCH_FORK_THRESHOLD,
-        replay_stage::DUPLICATE_THRESHOLD,
+        consensus::SWITCH_FORK_THRESHOLD, replay_stage::DUPLICATE_THRESHOLD,
         validator::ValidatorConfig,
     },
-    solana_gossip::{contact_info::Protocol, gossip_service::discover_cluster},
+    solana_gossip::gossip_service::discover_cluster,
     solana_ledger::{
         ancestor_iterator::AncestorIterator, blockstore_meta::DuplicateSlotProof,
         leader_schedule::FixedSchedule, shred::Shred,
@@ -34,10 +30,13 @@ use {
         vote::state::VoteStateUpdate,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_turbine::broadcast_stage::{
+        broadcast_duplicates_run::{BroadcastDuplicatesConfig, ClusterPartition},
+        BroadcastStageType,
+    },
     solana_vote_program::{vote_state::MAX_LOCKOUT_HISTORY, vote_transaction},
     std::{
         collections::{BTreeSet, HashSet},
-        net::UdpSocket,
         path::Path,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -388,32 +387,33 @@ fn test_kill_partition_switch_threshold_progress() {
     );
 }
 
-fn wait_for_duplicate_proof(ledger_path: &Path) -> (Slot, DuplicateSlotProof) {
-    let mut duplicate_proof;
-    loop {
+fn wait_for_duplicate_proof(ledger_path: &Path, dup_slot: Slot) -> Option<DuplicateSlotProof> {
+    for _ in 0..10 {
         let duplicate_fork_validator_blockstore = open_blockstore(ledger_path);
-        duplicate_proof = duplicate_fork_validator_blockstore.get_first_duplicate_proof();
-        if duplicate_proof.is_some() {
-            break;
+        if let Some((found_dup_slot, found_duplicate_proof)) =
+            duplicate_fork_validator_blockstore.get_first_duplicate_proof()
+        {
+            if found_dup_slot == dup_slot {
+                return Some(found_duplicate_proof);
+            };
         }
+
         sleep(Duration::from_millis(1000));
     }
-    duplicate_proof.unwrap()
+    None
 }
 
-fn wait_for_duplicate_fork(ledger_path: &Path, dup_slot: Slot) {
+fn wait_for_duplicate_fork_frozen(ledger_path: &Path, dup_slot: Slot) -> Hash {
     // Ensure all the slots <= dup_slot are also full so we know we can replay up to dup_slot
     // on restart
     info!(
-        "Waiting to receive entire duplicate fork with tip {}",
+        "Waiting to receive and replay entire duplicate fork with tip {}",
         dup_slot
     );
     loop {
         let duplicate_fork_validator_blockstore = open_blockstore(ledger_path);
-        if duplicate_fork_validator_blockstore.is_full(dup_slot)
-            && duplicate_fork_validator_blockstore.is_connected(dup_slot)
-        {
-            break;
+        if let Some(frozen_hash) = duplicate_fork_validator_blockstore.get_bank_hash(dup_slot) {
+            return frozen_hash;
         }
         sleep(Duration::from_millis(1000));
     }
@@ -466,20 +466,9 @@ fn restart_dup_validator(
     }
     disable_turbine.store(false, Ordering::Relaxed);
 
-    // Send the node the other version of the shred so they realize it's duplicate
+    // Send the validator the other version of the shred so they realize it's duplicate
     info!("Resending duplicate shreds to duplicate fork validator");
-    let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let duplicate_fork_validator_tvu = cluster
-        .get_contact_info(pubkey)
-        .unwrap()
-        .tvu(Protocol::UDP)
-        .unwrap();
-    send_socket
-        .send_to(dup_shred1.payload().as_ref(), duplicate_fork_validator_tvu)
-        .unwrap();
-    send_socket
-        .send_to(dup_shred2.payload().as_ref(), duplicate_fork_validator_tvu)
-        .unwrap();
+    cluster.send_shreds_to_validator(vec![dup_shred1, dup_shred2], pubkey);
 
     // Check the validator detected a duplicate proof
     info!("Waiting on duplicate fork validator to see duplicate shreds and make a proof",);
@@ -578,8 +567,8 @@ fn test_duplicate_shreds_switch_failure() {
     );
 
     let validator_to_slots = vec![
-        (duplicate_leader_validator_pubkey, 80),
-        (target_switch_fork_validator_pubkey, 80),
+        (duplicate_leader_validator_pubkey, 50),
+        (target_switch_fork_validator_pubkey, 5),
         // The ideal sequence of events for the `duplicate_fork_validator1_pubkey` validator would go:
         // 1. Vote for duplicate block `D`
         // 2. See `D` is duplicate, remove from fork choice and reset to ancestor `A`, potentially generating a fork off that ancestor
@@ -590,22 +579,32 @@ fn test_duplicate_shreds_switch_failure() {
         // The `target_switch_fork_validator_pubkey` fork is necessary in 2. to force the validator stall trying to switch
         // vote on that other fork and prevent the validator from making a freebie vote from `A` and allowing consensus to continue.
 
-        // It's important we give the `duplicate_fork_validator1_pubkey` very few leader slots so that
+        // It's important we give the `duplicate_fork_validator1_pubkey` very few leader slots so that:
         // 1. We have ample time to ensure he doesn't have a chance to make a block until after 2 when they see the block is duplicate.
         // Otherwise, they'll build the block on top of the duplicate block, which will possibly include a vote for the duplicate block.
         // We want to avoid this because this will make fork choice pick the duplicate block.
-        // 2. Ensure the `duplicate_fork_validator1_pubkey`1 sees the target switch fork before it can make another vote
+        // 2. Ensure the `duplicate_fork_validator1_pubkey` sees the target switch fork before it can make another vote
         // on any forks he himself generates from A. Otherwise, he will make a freebie vote on his own fork from `A` and
         // consensus will continue on that fork.
-        (duplicate_fork_validator1_pubkey, 4),
+
+        // Give the duplicate fork validator plenty of leader slots after the initial delay to prevent
+        // 1. Switch fork from getting locked out for too long
+        // 2. A lot of consecutive slots in which to build up lockout in tower and make new roots
+        // to resolve the partition
+        (duplicate_fork_validator1_pubkey, 500),
     ];
 
     let leader_schedule = create_custom_leader_schedule(validator_to_slots.into_iter());
 
     // 1) Set up the cluster
+    let (duplicate_slot_sender, duplicate_slot_receiver) = unbounded();
     let (mut cluster, _validator_keypairs) = test_faulty_node(
         BroadcastStageType::BroadcastDuplicates(BroadcastDuplicatesConfig {
-            partition: ClusterPartition::Pubkey(vec![duplicate_fork_validator1_pubkey]),
+            partition: ClusterPartition::Pubkey(vec![
+                duplicate_fork_validator1_pubkey,
+                duplicate_fork_validator2_pubkey,
+            ]),
+            duplicate_slot_sender: Some(duplicate_slot_sender),
         }),
         node_stakes,
         Some(validator_keypairs),
@@ -614,18 +613,54 @@ fn test_duplicate_shreds_switch_failure() {
         }),
     );
 
-    // 2) Wait for duplicate fork validators to see a duplicate proof
-    info!("Waiting for duplicate proof");
-    let (dup_slot, duplicate_proof) =
-        wait_for_duplicate_proof(&cluster.ledger_path(&duplicate_fork_validator1_pubkey));
-    wait_for_duplicate_fork(
-        &cluster.ledger_path(&duplicate_fork_validator1_pubkey),
-        dup_slot,
-    );
-    wait_for_duplicate_fork(
-        &cluster.ledger_path(&duplicate_fork_validator2_pubkey),
-        dup_slot,
-    );
+    // 2) Wait for a duplicate slot to land on both validators and for the target switch
+    // fork validator to get another version of the slot. Also ensure all versions of
+    // the block are playable
+    let mut dup_slot;
+    loop {
+        dup_slot = duplicate_slot_receiver
+            .recv_timeout(Duration::from_millis(30_000))
+            .expect("Duplicate leader failed to make a duplicate slot in allotted time");
+        // Make sure both validators received and replay the complete blocks
+        let dup_frozen_hash1 = wait_for_duplicate_fork_frozen(
+            &cluster.ledger_path(&duplicate_fork_validator1_pubkey),
+            dup_slot,
+        );
+        let dup_frozen_hash2 = wait_for_duplicate_fork_frozen(
+            &cluster.ledger_path(&duplicate_fork_validator2_pubkey),
+            dup_slot,
+        );
+        let original_frozen_hash = wait_for_duplicate_fork_frozen(
+            &cluster.ledger_path(&target_switch_fork_validator_pubkey),
+            dup_slot,
+        );
+        if dup_frozen_hash1 == dup_frozen_hash2 && original_frozen_hash != dup_frozen_hash1 {
+            break;
+        }
+    }
+
+    // 3) Force `duplicate_fork_validator1_pubkey` to see a duplicate proof
+    info!("Waiting for duplicate proof for slot: {}", dup_slot);
+    let duplicate_proof = {
+        let ledger_path = cluster.ledger_path(&duplicate_fork_validator2_pubkey);
+        let blockstore = open_blockstore(&ledger_path);
+        let dup_shred = blockstore
+            .get_data_shreds_for_slot(dup_slot, 0)
+            .unwrap()
+            .pop()
+            .unwrap();
+        info!(
+            "Sending duplicate shred: {:?} to {:?}",
+            dup_shred.signature(),
+            duplicate_fork_validator1_pubkey
+        );
+        cluster.send_shreds_to_validator(vec![&dup_shred], &duplicate_fork_validator1_pubkey);
+        wait_for_duplicate_proof(
+            &cluster.ledger_path(&duplicate_fork_validator1_pubkey),
+            dup_slot,
+        )
+        .unwrap_or_else(|| panic!("Duplicate proof for slot {} not found", dup_slot))
+    };
 
     // 3) Kill all the validators
     info!("Killing all validators");
@@ -810,6 +845,7 @@ fn test_duplicate_shreds_broadcast_leader() {
     let (mut cluster, validator_keys) = test_faulty_node(
         BroadcastStageType::BroadcastDuplicates(BroadcastDuplicatesConfig {
             partition: ClusterPartition::Stake(partition_node_stake),
+            duplicate_slot_sender: None,
         }),
         node_stakes,
         None,

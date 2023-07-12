@@ -1,6 +1,7 @@
 use {
     super::*,
     crate::cluster_nodes::ClusterNodesCache,
+    crossbeam_channel::Sender,
     itertools::Itertools,
     solana_entry::entry::Entry,
     solana_ledger::shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
@@ -21,11 +22,14 @@ pub enum ClusterPartition {
     Pubkey(Vec<Pubkey>),
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct BroadcastDuplicatesConfig {
     /// Amount of stake (excluding the leader) to send different version of slots to.
     /// Note this is sampled from a list of stakes sorted least to greatest.
     pub partition: ClusterPartition,
+    /// If passed `Some(receiver)`, will signal all the duplicate slots via the given
+    /// `receiver`
+    pub duplicate_slot_sender: Option<Sender<Slot>>,
 }
 
 #[derive(Clone)]
@@ -213,6 +217,9 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     bank.slot(),
                     sigs,
                 );
+                if let Some(duplicate_slot_sender) = &self.config.duplicate_slot_sender {
+                    let _ = duplicate_slot_sender.send(bank.slot());
+                }
 
                 self.next_shred_index += 1;
                 (original_last_data_shred, partition_last_data_shred)

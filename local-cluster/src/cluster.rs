@@ -2,6 +2,7 @@ use {
     solana_client::thin_client::ThinClient,
     solana_core::validator::{Validator, ValidatorConfig},
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
+    solana_ledger::shred::Shred,
     solana_sdk::{pubkey::Pubkey, signature::Keypair},
     solana_streamer::socket::SocketAddrSpace,
     std::{path::PathBuf, sync::Arc},
@@ -63,4 +64,5 @@ pub trait Cluster {
         socket_addr_space: SocketAddrSpace,
     );
     fn set_entry_point(&mut self, entry_point_info: ContactInfo);
+    fn send_shreds_to_validator(&self, dup_shreds: Vec<&Shred>, validator_key: &Pubkey);
 }

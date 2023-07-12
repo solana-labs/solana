@@ -8,10 +8,6 @@ use {
     serial_test::serial,
     solana_client::thin_client::ThinClient,
     solana_core::{
-        broadcast_stage::{
-            broadcast_duplicates_run::{BroadcastDuplicatesConfig, ClusterPartition},
-            BroadcastStageType,
-        },
         consensus::{
             tower_storage::FileTowerStorage, Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH,
         },
@@ -72,7 +68,8 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_turbine::broadcast_stage::{
-        broadcast_duplicates_run::BroadcastDuplicatesConfig, BroadcastStageType,
+        broadcast_duplicates_run::{BroadcastDuplicatesConfig, ClusterPartition},
+        BroadcastStageType,
     },
     solana_vote_program::{vote_state::MAX_LOCKOUT_HISTORY, vote_transaction},
     std::{
@@ -3769,6 +3766,7 @@ fn test_duplicate_shreds_broadcast_leader() {
     let (mut cluster, validator_keys) = test_faulty_node(
         BroadcastStageType::BroadcastDuplicates(BroadcastDuplicatesConfig {
             partition: ClusterPartition::Stake(partition_node_stake),
+            duplicate_slot_sender: None,
         }),
         node_stakes,
         None,

@@ -13,10 +13,10 @@ use {
     },
     solana_gossip::{
         cluster_info::Node,
-        contact_info::{ContactInfo, LegacyContactInfo},
+        contact_info::{ContactInfo, LegacyContactInfo, Protocol},
         gossip_service::discover_cluster,
     },
-    solana_ledger::create_new_tmp_ledger,
+    solana_ledger::{create_new_tmp_ledger, shred::Shred},
     solana_runtime::{
         genesis_utils::{
             create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,
@@ -57,6 +57,7 @@ use {
         collections::HashMap,
         io::{Error, ErrorKind, Result},
         iter,
+        net::UdpSocket,
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
     },
@@ -937,6 +938,20 @@ impl Cluster for LocalCluster {
 
     fn get_contact_info(&self, pubkey: &Pubkey) -> Option<&ContactInfo> {
         self.validators.get(pubkey).map(|v| &v.info.contact_info)
+    }
+
+    fn send_shreds_to_validator(&self, dup_shreds: Vec<&Shred>, validator_key: &Pubkey) {
+        let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let validator_tvu = self
+            .get_contact_info(validator_key)
+            .unwrap()
+            .tvu(Protocol::UDP)
+            .unwrap();
+        for shred in dup_shreds {
+            send_socket
+                .send_to(shred.payload().as_ref(), validator_tvu)
+                .unwrap();
+        }
     }
 }
 

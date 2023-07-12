@@ -613,7 +613,6 @@ impl ReplayStage {
                 let mut ancestors = bank_forks.read().unwrap().ancestors();
                 let mut descendants = bank_forks.read().unwrap().descendants();
                 let did_complete_bank = Self::replay_active_banks(
-                    &my_pubkey,
                     &blockstore,
                     &bank_forks,
                     &my_pubkey,
@@ -922,8 +921,7 @@ impl ReplayStage {
                 if let Some(reset_bank) = reset_bank {
                     if last_reset != reset_bank.last_blockhash() {
                         info!(
-                            "{} vote bank: {:?} reset bank: {:?}",
-                            my_pubkey,
+                            "vote bank: {:?} reset bank: {:?}",
                             vote_bank
                                 .as_ref()
                                 .map(|(b, switch_fork_decision)| (b.slot(), switch_fork_decision)),
@@ -2701,7 +2699,6 @@ impl ReplayStage {
 
     #[allow(clippy::too_many_arguments)]
     fn process_replay_results(
-        id: &Pubkey,
         blockstore: &Blockstore,
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
@@ -2786,12 +2783,6 @@ impl ReplayStage {
                     transaction_status_sender.send_transaction_status_freeze_message(bank);
                 }
                 bank.freeze();
-                info!(
-                    "{} bank frozen slot: {}, hash: {:?}",
-                    id,
-                    bank_slot,
-                    bank.hash()
-                );
                 datapoint_info!(
                     "bank_frozen",
                     ("slot", bank_slot, i64),
@@ -2896,7 +2887,6 @@ impl ReplayStage {
 
     #[allow(clippy::too_many_arguments)]
     fn replay_active_banks(
-        id: &Pubkey,
         blockstore: &Blockstore,
         bank_forks: &RwLock<BankForks>,
         my_pubkey: &Pubkey,
@@ -2975,7 +2965,6 @@ impl ReplayStage {
             };
 
             Self::process_replay_results(
-                id,
                 blockstore,
                 bank_forks,
                 progress,
