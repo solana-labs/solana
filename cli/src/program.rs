@@ -2023,7 +2023,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
 
     // Verify the program
     let program_runtime_environment = create_program_runtime_environment(
-        &FeatureSet::default(),
+        &FeatureSet::all_enabled(),
         &ComputeBudget::default(),
         true,
         false,
