@@ -259,7 +259,6 @@ fn bench_create_vm(bencher: &mut Bencher) {
             .transaction_context
             .get_current_instruction_context()
             .unwrap(),
-        true,            // should_cap_ix_accounts
         !direct_mapping, // copy_account_data
     )
     .unwrap();
@@ -294,7 +293,6 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
             .transaction_context
             .get_current_instruction_context()
             .unwrap(),
-        true,            // should_cap_ix_accounts
         !direct_mapping, // copy_account_data
     )
     .unwrap();
