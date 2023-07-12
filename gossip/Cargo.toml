@@ -49,6 +49,7 @@ solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 static_assertions = { workspace = true }
 thiserror = { workspace = true }
+ringbuf = { workspace = true }
 
 [dev-dependencies]
 num_cpus = { workspace = true }

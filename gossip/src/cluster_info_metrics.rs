@@ -14,6 +14,7 @@ use {
         sync::atomic::{AtomicU64, Ordering},
         time::Instant,
     },
+    ringbuf::{HeapRb, Rb}
 };
 
 #[derive(Default)]
@@ -680,7 +681,8 @@ pub(crate) fn submit_gossip_stats(
         ("all-pull", crds_stats.pull.fails.iter().sum::<usize>(), i64),
     );
 
-    submit_message_signature_stats("cluster_info_crds_stats_message_signatures_received", &mut crds_stats.push.message_signatures);
+    // submit_message_signature_stats("cluster_info_crds_stats_message_signatures_received", &mut crds_stats.push.message_signatures);
+    submit_message_signature_stats_2("cluster_info_crds_stats_message_signatures_received", &mut crds_stats.push.message_signatures_2);
     if !log::log_enabled!(log::Level::Trace) {
         return;
     }
@@ -729,5 +731,18 @@ fn submit_message_signature_stats<'a>(
                 error!("Error reporting submitting Crds signature. Invalid read from message signature queue");
             }
         }
+    }
+}
+
+fn submit_message_signature_stats_2<'a>(
+    name: &'static str, 
+    message_signatures: &mut HeapRb<Signature>,
+) {
+    // we want to submit all message signatures we have here. 
+    // Need to pop them to remove them
+    // NOTE: we need to filter the signatures before we call this
+    // so only signatures with ending 0xFF or whatever end up here. 
+    while let Some(signature) = message_signatures.pop() {
+        datapoint_info!(name, ("crds_signature", signature.to_string(), String));
     }
 }

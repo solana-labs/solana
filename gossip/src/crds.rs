@@ -24,6 +24,8 @@
 //! A value is updated to a new version if the labels match, and the value
 //! wallclock is later, or the value hash is greater.
 
+use ringbuf::Rb;
+
 use {
     crate::{
         crds_entry::CrdsEntry,
@@ -52,6 +54,7 @@ use {
         ops::{Bound, Index, IndexMut},
         sync::Mutex,
     },
+    ringbuf::HeapRb,
 };
 
 const CRDS_SHARDS_BITS: u32 = 12;
@@ -103,6 +106,7 @@ pub(crate) struct CrdsDataStats {
     pub(crate) fails: CrdsCountsArray,
     pub(crate) votes: LruCache<Slot, /*count:*/ usize>,
     pub(crate) message_signatures: VecDeque<Signature>, //TODO: change to fixed size
+    pub(crate) message_signatures_2: HeapRb<Signature>,
 }
 
 #[derive(Default)]
@@ -659,6 +663,7 @@ impl Default for CrdsDataStats {
             fails: CrdsCountsArray::default(),
             votes: LruCache::new(VOTE_SLOTS_METRICS_CAP),
             message_signatures: VecDeque::with_capacity(1024),
+            message_signatures_2: HeapRb::<Signature>::new(1024),
         }
     }
 }
@@ -677,7 +682,13 @@ impl CrdsDataStats {
         if entry.value.signature.check_ending_characters(&specific_ending) {
             info!("gregg signature ends in a: {:?}", entry.value.signature);
             self.message_signatures.push_back(entry.value.signature);
+
+            // fixed length ring buffer. overwrite latest element if buffer full
+            self.message_signatures_2.push_overwrite(entry.value.signature);
+
         } 
+
+
         // else {
         //     info!("gregg signature does not end in a: {:?}", entry.value.signature);
         // }
