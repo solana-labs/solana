@@ -230,7 +230,10 @@ fn bank_forks_from_snapshot(
             accounts_update_notifier,
             exit,
         )
-        .expect("Load from snapshot failed");
+        .unwrap_or_else(|err| {
+            error!("Failed to load bank from snapshot archives: {err}");
+            process::exit(1);
+        });
 
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);
