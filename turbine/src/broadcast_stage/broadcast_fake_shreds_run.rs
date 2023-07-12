@@ -132,6 +132,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
         _bank_forks: &RwLock<BankForks>,
+        _quic_endpoint_sender: &AsyncSender<(SocketAddr, Bytes)>,
     ) -> Result<()> {
         for (data_shreds, batch_info) in receiver {
             let fake = batch_info.is_some();

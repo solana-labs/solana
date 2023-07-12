@@ -23,7 +23,6 @@ use {
     },
     thiserror::Error,
     tokio::{
-        runtime::Runtime,
         sync::{
             mpsc::{Receiver as AsyncReceiver, Sender as AsyncSender},
             RwLock,
@@ -47,6 +46,7 @@ const CONNECTION_CLOSE_REASON_DROPPED: &[u8] = b"DROPPED";
 const CONNECTION_CLOSE_REASON_INVALID_IDENTITY: &[u8] = b"INVALID_IDENTITY";
 const CONNECTION_CLOSE_REASON_REPLACED: &[u8] = b"REPLACED";
 
+pub type AsyncTryJoinHandle = TryJoin<JoinHandle<()>, JoinHandle<()>>;
 type ConnectionCache = HashMap<(SocketAddr, Option<Pubkey>), Arc<RwLock<Option<Connection>>>>;
 
 #[derive(Error, Debug)]
@@ -71,7 +71,7 @@ pub enum Error {
 
 #[allow(clippy::type_complexity)]
 pub fn new_quic_endpoint(
-    runtime: &Runtime,
+    runtime: &tokio::runtime::Handle,
     keypair: &Keypair,
     socket: UdpSocket,
     address: IpAddr,
@@ -80,7 +80,7 @@ pub fn new_quic_endpoint(
     (
         Endpoint,
         AsyncSender<(SocketAddr, Bytes)>,
-        TryJoin<JoinHandle<()>, JoinHandle<()>>,
+        AsyncTryJoinHandle,
     ),
     Error,
 > {
@@ -156,6 +156,7 @@ async fn run_server(
 ) {
     while let Some(connecting) = endpoint.accept().await {
         tokio::task::spawn(handle_connecting_error(
+            endpoint.clone(),
             connecting,
             sender.clone(),
             cache.clone(),
@@ -182,16 +183,18 @@ async fn run_client(
 }
 
 async fn handle_connecting_error(
+    endpoint: Endpoint,
     connecting: Connecting,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
     cache: Arc<RwLock<ConnectionCache>>,
 ) {
-    if let Err(err) = handle_connecting(connecting, sender, cache).await {
+    if let Err(err) = handle_connecting(endpoint, connecting, sender, cache).await {
         error!("handle_connecting: {err:?}");
     }
 }
 
 async fn handle_connecting(
+    endpoint: Endpoint,
     connecting: Connecting,
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
     cache: Arc<RwLock<ConnectionCache>>,
@@ -199,11 +202,20 @@ async fn handle_connecting(
     let connection = connecting.await?;
     let remote_address = connection.remote_address();
     let remote_pubkey = get_remote_pubkey(&connection)?;
-    handle_connection_error(remote_address, remote_pubkey, connection, sender, cache).await;
+    handle_connection_error(
+        endpoint,
+        remote_address,
+        remote_pubkey,
+        connection,
+        sender,
+        cache,
+    )
+    .await;
     Ok(())
 }
 
 async fn handle_connection_error(
+    endpoint: Endpoint,
     remote_address: SocketAddr,
     remote_pubkey: Pubkey,
     connection: Connection,
@@ -211,23 +223,37 @@ async fn handle_connection_error(
     cache: Arc<RwLock<ConnectionCache>>,
 ) {
     cache_connection(remote_address, remote_pubkey, connection.clone(), &cache).await;
-    if let Err(err) = handle_connection(remote_address, remote_pubkey, &connection, sender).await {
+    if let Err(err) = handle_connection(
+        &endpoint,
+        remote_address,
+        remote_pubkey,
+        &connection,
+        &sender,
+    )
+    .await
+    {
         drop_connection(remote_address, remote_pubkey, &connection, &cache).await;
         error!("handle_connection: {remote_pubkey}, {remote_address}, {err:?}");
     }
 }
 
 async fn handle_connection(
+    endpoint: &Endpoint,
     remote_address: SocketAddr,
     remote_pubkey: Pubkey,
     connection: &Connection,
-    sender: Sender<(Pubkey, SocketAddr, Bytes)>,
+    sender: &Sender<(Pubkey, SocketAddr, Bytes)>,
 ) -> Result<(), Error> {
     // Assert that send won't block.
     debug_assert_eq!(sender.capacity(), None);
     loop {
         match connection.read_datagram().await {
-            Ok(bytes) => sender.send((remote_pubkey, remote_address, bytes))?,
+            Ok(bytes) => {
+                if let Err(err) = sender.send((remote_pubkey, remote_address, bytes)) {
+                    close_quic_endpoint(endpoint);
+                    return Err(Error::from(err));
+                }
+            }
             Err(err) => {
                 if let Some(err) = connection.close_reason() {
                     return Err(Error::from(err));
@@ -293,6 +319,7 @@ async fn get_connection(
         entry.insert(connection).clone()
     };
     tokio::task::spawn(handle_connection_error(
+        endpoint.clone(),
         connection.remote_address(),
         get_remote_pubkey(&connection)?,
         connection.clone(),
@@ -404,7 +431,7 @@ mod tests {
             multiunzip(keypairs.iter().zip(sockets).zip(senders).map(
                 |((keypair, socket), sender)| {
                     new_quic_endpoint(
-                        &runtime,
+                        runtime.handle(),
                         keypair,
                         socket,
                         IpAddr::V4(Ipv4Addr::LOCALHOST),

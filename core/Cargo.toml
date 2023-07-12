@@ -17,6 +17,7 @@ codecov = { repository = "solana-labs/solana", branch = "master", service = "git
 base64 = { workspace = true }
 bincode = { workspace = true }
 bs58 = { workspace = true }
+bytes = { workspace = true }
 chrono = { workspace = true, features = ["default", "serde"] }
 crossbeam-channel = { workspace = true }
 dashmap = { workspace = true, features = ["rayon", "raw-api"] }
@@ -29,6 +30,7 @@ log = { workspace = true }
 lru = { workspace = true }
 min-max-heap = { workspace = true }
 num_enum = { workspace = true }
+quinn = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }

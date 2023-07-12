@@ -23,7 +23,6 @@ rand_chacha = { workspace = true }
 rayon = { workspace = true }
 rcgen = { workspace = true }
 rustls = { workspace = true }
-solana-client = { workspace = true }
 solana-entry = { workspace = true }
 solana-gossip = { workspace = true }
 solana-ledger = { workspace = true }

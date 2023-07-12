@@ -30,6 +30,7 @@ use {
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     lazy_static::lazy_static,
+    quinn::Endpoint,
     rand::{thread_rng, Rng},
     solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_entry::poh::compute_hash_time_ns,
@@ -113,7 +114,7 @@ use {
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
-    solana_turbine::broadcast_stage::BroadcastStageType,
+    solana_turbine::{self, broadcast_stage::BroadcastStageType},
     solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
@@ -132,8 +133,6 @@ use {
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
-
-pub const TURBINE_QUIC_CONNECTION_POOL_SIZE: usize = 4;
 
 #[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
@@ -461,6 +460,9 @@ pub struct Validator {
     ledger_metric_report_service: LedgerMetricReportService,
     accounts_background_service: AccountsBackgroundService,
     accounts_hash_verifier: AccountsHashVerifier,
+    turbine_quic_endpoint: Endpoint,
+    turbine_quic_endpoint_runtime: Option<tokio::runtime::Runtime>,
+    turbine_quic_endpoint_join_handle: solana_turbine::quic_endpoint::AsyncTryJoinHandle,
 }
 
 impl Validator {
@@ -1111,19 +1113,40 @@ impl Validator {
         let entry_notification_sender = entry_notifier_service
             .as_ref()
             .map(|service| service.sender_cloned());
-        let turbine_quic_connection_cache = Arc::new(
-            solana_quic_client::new_quic_connection_cache(
-                "connection_cache_tvu_quic",
-                &identity_keypair,
-                node.info
-                    .tvu(Protocol::QUIC)
-                    .expect("Operator must spin up node with valid TVU address")
-                    .ip(),
-                &staked_nodes,
-                TURBINE_QUIC_CONNECTION_POOL_SIZE,
-            )
-            .unwrap(),
-        );
+
+        // test-validator crate may start the validator in a tokio runtime
+        // context which forces us to use the same runtime because a nested
+        // runtime will cause panic at drop.
+        // Outside test-validator crate, we always need a tokio runtime (and
+        // the respective handle) to initialize the turbine QUIC endpoint.
+        let current_runtime_handle = tokio::runtime::Handle::try_current();
+        let turbine_quic_endpoint_runtime = current_runtime_handle.is_err().then(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .thread_name("solTurbineQuic")
+                .build()
+                .unwrap()
+        });
+        let (turbine_quic_endpoint_sender, turbine_quic_endpoint_receiver) = unbounded();
+        let (
+            turbine_quic_endpoint,
+            turbine_quic_endpoint_sender,
+            turbine_quic_endpoint_join_handle,
+        ) = solana_turbine::quic_endpoint::new_quic_endpoint(
+            turbine_quic_endpoint_runtime
+                .as_ref()
+                .map(tokio::runtime::Runtime::handle)
+                .unwrap_or_else(|| current_runtime_handle.as_ref().unwrap()),
+            &identity_keypair,
+            node.sockets.tvu_quic,
+            node.info
+                .tvu(Protocol::QUIC)
+                .expect("Operator must spin up node with valid QUIC TVU address")
+                .ip(),
+            turbine_quic_endpoint_sender,
+        )
+        .unwrap();
+
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
@@ -1134,7 +1157,6 @@ impl Validator {
                 repair: node.sockets.repair,
                 retransmit: node.sockets.retransmit_sockets,
                 fetch: node.sockets.tvu,
-                fetch_quic: node.sockets.tvu_quic,
                 ancestor_hashes_requests: node.sockets.ancestor_hashes_requests,
             },
             blockstore.clone(),
@@ -1175,8 +1197,8 @@ impl Validator {
             &connection_cache,
             &prioritization_fee_cache,
             banking_tracer.clone(),
-            staked_nodes.clone(),
-            turbine_quic_connection_cache.clone(),
+            turbine_quic_endpoint_sender.clone(),
+            turbine_quic_endpoint_receiver,
         )?;
 
         let tpu = Tpu::new(
@@ -1209,7 +1231,7 @@ impl Validator {
             config.tpu_coalesce,
             cluster_confirmed_slot_sender,
             &connection_cache,
-            turbine_quic_connection_cache,
+            turbine_quic_endpoint_sender,
             &identity_keypair,
             config.runtime_config.log_messages_bytes_limit,
             &staked_nodes,
@@ -1258,6 +1280,9 @@ impl Validator {
             ledger_metric_report_service,
             accounts_background_service,
             accounts_hash_verifier,
+            turbine_quic_endpoint,
+            turbine_quic_endpoint_runtime,
+            turbine_quic_endpoint_join_handle,
         })
     }
 
@@ -1302,6 +1327,7 @@ impl Validator {
     pub fn join(self) {
         drop(self.bank_forks);
         drop(self.cluster_info);
+        solana_turbine::quic_endpoint::close_quic_endpoint(&self.turbine_quic_endpoint);
 
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
@@ -1384,6 +1410,10 @@ impl Validator {
             .expect("accounts_hash_verifier");
         self.tpu.join().expect("tpu");
         self.tvu.join().expect("tvu");
+        self.turbine_quic_endpoint_runtime
+            .map(|runtime| runtime.block_on(self.turbine_quic_endpoint_join_handle))
+            .transpose()
+            .unwrap();
         self.completed_data_sets_service
             .join()
             .expect("completed_data_sets_service");

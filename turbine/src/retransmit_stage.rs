@@ -3,12 +3,12 @@
 
 use {
     crate::cluster_nodes::{self, ClusterNodes, ClusterNodesCache, Error, MAX_NUM_TURBINE_HOPS},
+    bytes::Bytes,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     itertools::{izip, Itertools},
     lru::LruCache,
     rand::Rng,
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
-    solana_client::tpu_connection::TpuConnection,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::Protocol},
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache,
@@ -16,7 +16,6 @@ use {
     },
     solana_measure::measure::Measure,
     solana_perf::deduper::Deduper,
-    solana_quic_client::QuicConnectionCache,
     solana_rayon_threadlimit::get_thread_count,
     solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
     solana_rpc_client_api::response::SlotUpdate,
@@ -29,7 +28,7 @@ use {
     std::{
         collections::HashMap,
         iter::repeat,
-        net::UdpSocket,
+        net::{SocketAddr, UdpSocket},
         ops::AddAssign,
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -38,6 +37,7 @@ use {
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
     },
+    tokio::sync::mpsc::Sender as AsyncSender,
 };
 
 const MAX_DUPLICATE_COUNT: usize = 2;
@@ -173,7 +173,7 @@ fn retransmit(
     cluster_info: &ClusterInfo,
     shreds_receiver: &Receiver<Vec</*shred:*/ Vec<u8>>>,
     sockets: &[UdpSocket],
-    quic_connection_cache: &QuicConnectionCache,
+    quic_endpoint_sender: &AsyncSender<(SocketAddr, Bytes)>,
     stats: &mut RetransmitStats,
     cluster_nodes_cache: &ClusterNodesCache<RetransmitStage>,
     shred_deduper: &mut ShredDeduper<2>,
@@ -257,7 +257,7 @@ fn retransmit(
                     &cluster_nodes,
                     socket_addr_space,
                     &sockets[index % sockets.len()],
-                    quic_connection_cache,
+                    quic_endpoint_sender,
                     stats,
                 )
                 .map_err(|err| {
@@ -282,7 +282,7 @@ fn retransmit(
                         &cluster_nodes,
                         socket_addr_space,
                         &sockets[index % sockets.len()],
-                        quic_connection_cache,
+                        quic_endpoint_sender,
                         stats,
                     )
                     .map_err(|err| {
@@ -311,7 +311,7 @@ fn retransmit_shred(
     cluster_nodes: &ClusterNodes<RetransmitStage>,
     socket_addr_space: &SocketAddrSpace,
     socket: &UdpSocket,
-    quic_connection_cache: &QuicConnectionCache,
+    quic_endpoint_sender: &AsyncSender<(SocketAddr, Bytes)>,
     stats: &RetransmitStats,
 ) -> Result<(/*root_distance:*/ usize, /*num_nodes:*/ usize), Error> {
     let mut compute_turbine_peers = Measure::start("turbine_start");
@@ -328,16 +328,15 @@ fn retransmit_shred(
         .fetch_add(compute_turbine_peers.as_us(), Ordering::Relaxed);
 
     let mut retransmit_time = Measure::start("retransmit_to");
+    let num_addrs = addrs.len();
     let num_nodes = match cluster_nodes::get_broadcast_protocol(key) {
-        Protocol::QUIC => addrs
-            .iter()
-            .filter_map(|addr| {
-                quic_connection_cache
-                    .get_connection(addr)
-                    .send_data(shred)
-                    .ok()
-            })
-            .count(),
+        Protocol::QUIC => {
+            let shred = Bytes::copy_from_slice(shred);
+            addrs
+                .into_iter()
+                .filter_map(|addr| quic_endpoint_sender.try_send((addr, shred.clone())).ok())
+                .count()
+        }
         Protocol::UDP => match multi_target_send(socket, shred, &addrs) {
             Ok(()) => addrs.len(),
             Err(SendPktsError::IoError(ioerr, num_failed)) => {
@@ -354,7 +353,7 @@ fn retransmit_shred(
     retransmit_time.stop();
     stats
         .num_addrs_failed
-        .fetch_add(addrs.len() - num_nodes, Ordering::Relaxed);
+        .fetch_add(num_addrs - num_nodes, Ordering::Relaxed);
     stats.num_nodes.fetch_add(num_nodes, Ordering::Relaxed);
     stats
         .retransmit_total
@@ -372,7 +371,7 @@ fn retransmit_shred(
 /// * `r` - Receive channel for shreds to be retransmitted to all the layer 1 nodes.
 pub fn retransmitter(
     sockets: Arc<Vec<UdpSocket>>,
-    quic_connection_cache: Arc<QuicConnectionCache>,
+    quic_endpoint_sender: AsyncSender<(SocketAddr, Bytes)>,
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     cluster_info: Arc<ClusterInfo>,
@@ -404,7 +403,7 @@ pub fn retransmitter(
                 &cluster_info,
                 &shreds_receiver,
                 &sockets,
-                &quic_connection_cache,
+                &quic_endpoint_sender,
                 &mut stats,
                 &cluster_nodes_cache,
                 &mut shred_deduper,
@@ -429,14 +428,14 @@ impl RetransmitStage {
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         cluster_info: Arc<ClusterInfo>,
         retransmit_sockets: Arc<Vec<UdpSocket>>,
-        quic_connection_cache: Arc<QuicConnectionCache>,
+        quic_endpoint_sender: AsyncSender<(SocketAddr, Bytes)>,
         retransmit_receiver: Receiver<Vec</*shred:*/ Vec<u8>>>,
         max_slots: Arc<MaxSlots>,
         rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
     ) -> Self {
         let retransmit_thread_handle = retransmitter(
             retransmit_sockets,
-            quic_connection_cache,
+            quic_endpoint_sender,
             bank_forks,
             leader_schedule_cache,
             cluster_info,
