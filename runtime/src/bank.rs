@@ -1282,12 +1282,6 @@ impl Bank {
         }
     }
 
-    /// Return the total number of blocks in reward interval (including both calculation and crediting).
-    #[cfg(test)]
-    fn get_reward_total_num_blocks(&self, rewards: &StakeRewards) -> u64 {
-        self.get_reward_calculation_num_blocks() + self.get_reward_distribution_num_blocks(rewards)
-    }
-
     /// Return `RewardInterval` enum for current bank
     fn get_reward_interval(&self) -> RewardInterval {
         if matches!(self.epoch_reward_status, EpochRewardStatus::Active(_)) {
