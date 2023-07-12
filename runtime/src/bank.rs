@@ -845,7 +845,6 @@ struct VoteReward {
 }
 
 type VoteRewards = DashMap<Pubkey, VoteReward>;
-#[allow(dead_code)]
 #[derive(Debug, Default)]
 struct VoteRewardsAccounts {
     /// reward info for each vote account pubkey.
@@ -864,7 +863,6 @@ struct EpochRewardCalculateParamInfo<'a> {
     cached_vote_accounts: &'a VoteAccounts,
 }
 
-#[allow(dead_code)]
 /// Hold all results from calculating the rewards for partitioned distribution.
 /// This struct exists so we can have a function which does all the calculation with no
 /// side effects.
@@ -879,7 +877,6 @@ struct PartitionedRewardsCalculation {
     capitalization: u64,
 }
 
-#[allow(dead_code)]
 /// result of calculating the stake rewards at beginning of new epoch
 struct StakeRewardCalculationPartitioned {
     /// each individual stake account to reward, grouped by partition
@@ -888,7 +885,6 @@ struct StakeRewardCalculationPartitioned {
     total_stake_rewards_lamports: u64,
 }
 
-#[allow(dead_code)]
 struct CalculateRewardsAndDistributeVoteRewardsResult {
     /// total rewards for the epoch (including both vote rewards and stake rewards)
     total_rewards: u64,
@@ -958,7 +954,6 @@ impl WorkingSlot for Bank {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Default)]
 /// result of calculating the stake rewards at end of epoch
 struct StakeRewardCalculation {
@@ -1231,13 +1226,11 @@ impl Bank {
         rent_collector.clone_with_epoch(epoch)
     }
 
-    #[allow(dead_code)]
     fn is_partitioned_rewards_feature_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::enable_partitioned_epoch_reward::id())
     }
 
-    #[allow(dead_code)]
     pub(crate) fn set_epoch_reward_status_active(
         &mut self,
         stake_rewards_by_partition: Vec<StakeRewards>,
@@ -1257,7 +1250,6 @@ impl Bank {
     }
 
     /// # stake accounts to store in one block during partitioned reward interval
-    #[allow(dead_code)]
     fn partitioned_rewards_stake_account_stores_per_block(&self) -> u64 {
         self.partitioned_epoch_rewards_config()
             .stake_account_stores_per_block
@@ -1265,13 +1257,11 @@ impl Bank {
 
     /// reward calculation happens synchronously during the first block of the epoch boundary.
     /// So, # blocks for reward calculation is 1.
-    #[allow(dead_code)]
     fn get_reward_calculation_num_blocks(&self) -> Slot {
         self.partitioned_epoch_rewards_config()
             .reward_calculation_num_blocks
     }
 
-    #[allow(dead_code)]
     /// Calculate the number of blocks required to distribute rewards to all stake accounts.
     fn get_reward_distribution_num_blocks(&self, rewards: &StakeRewards) -> u64 {
         let total_stake_accounts = rewards.len();
@@ -1292,13 +1282,6 @@ impl Bank {
         }
     }
 
-    #[allow(dead_code)]
-    /// Return the total number of blocks in reward interval (including both calculation and crediting).
-    fn get_reward_total_num_blocks(&self, rewards: &StakeRewards) -> u64 {
-        self.get_reward_calculation_num_blocks() + self.get_reward_distribution_num_blocks(rewards)
-    }
-
-    #[allow(dead_code)]
     /// Return `RewardInterval` enum for current bank
     fn get_reward_interval(&self) -> RewardInterval {
         if matches!(self.epoch_reward_status, EpochRewardStatus::Active(_)) {
@@ -1612,7 +1595,6 @@ impl Bank {
         );
     }
 
-    #[allow(dead_code)]
     /// partitioned reward distribution is complete.
     /// So, deactivate the epoch rewards sysvar.
     fn deactivate_epoch_reward_status(&mut self) {
@@ -1634,7 +1616,6 @@ impl Bank {
         }
     }
 
-    #[allow(dead_code)]
     /// Begin the process of calculating and distributing rewards.
     /// This process can take multiple slots.
     fn begin_partitioned_rewards(
@@ -2389,7 +2370,6 @@ impl Bank {
         }
     }
 
-    #[allow(dead_code)]
     /// Calculate rewards from previous epoch to prepare for partitioned distribution.
     fn calculate_rewards_for_partitioning(
         &self,
@@ -2440,7 +2420,6 @@ impl Bank {
         }
     }
 
-    #[allow(dead_code)]
     // Calculate rewards from previous epoch and distribute vote rewards
     fn calculate_rewards_and_distribute_vote_rewards(
         &self,
@@ -2530,7 +2509,6 @@ impl Bank {
         }
     }
 
-    #[allow(dead_code)]
     fn assert_validator_rewards_paid(&self, validator_rewards_paid: u64) {
         assert_eq!(
             validator_rewards_paid,
@@ -2947,7 +2925,6 @@ impl Bank {
         }
     }
 
-    #[allow(dead_code)]
     /// calculate and return some reward calc info to avoid recalculation across functions
     fn get_epoch_reward_calculate_param_info<'a>(
         &self,
@@ -2966,7 +2943,6 @@ impl Bank {
         }
     }
 
-    #[allow(dead_code)]
     /// Calculate epoch reward and return vote and stake rewards.
     fn calculate_validator_rewards(
         &self,
@@ -3055,7 +3031,6 @@ impl Bank {
         }
     }
 
-    #[allow(dead_code)]
     /// compare the vote and stake accounts between the normal rewards calculation code
     /// and the partitioned rewards calculation code
     /// `stake_rewards_expected` and `vote_rewards_expected` are the results of the normal rewards calculation code
@@ -3124,7 +3099,6 @@ impl Bank {
         );
     }
 
-    #[allow(dead_code)]
     /// compare the vote and stake accounts between the normal rewards calculation code
     /// and the partitioned rewards calculation code
     /// `stake_rewards_expected` and `vote_rewards_expected` are the results of the normal rewards calculation code
@@ -3193,7 +3167,6 @@ impl Bank {
 
     /// Calculates epoch reward points from stake/vote accounts.
     /// Returns reward lamports and points for the epoch or none if points == 0.
-    #[allow(dead_code)]
     fn calculate_reward_points_partitioned(
         &self,
         reward_calculate_params: &EpochRewardCalculateParamInfo,
@@ -3291,7 +3264,6 @@ impl Bank {
         (points > 0).then_some(PointValue { rewards, points })
     }
 
-    #[allow(dead_code)]
     /// Calculates epoch rewards for stake/vote accounts
     /// Returns vote rewards, stake rewards, and the sum of all stake rewards in lamports
     fn calculate_stake_vote_rewards(
@@ -3531,7 +3503,6 @@ impl Bank {
             .fetch_add(measure.as_us(), Relaxed);
     }
 
-    #[allow(dead_code)]
     /// store stake rewards in partition
     /// return the sum of all the stored rewards
     ///
@@ -3565,7 +3536,6 @@ impl Bank {
             .sum::<i64>() as u64
     }
 
-    #[allow(dead_code)]
     fn store_vote_accounts_partitioned(
         &self,
         vote_account_rewards: VoteRewardsAccounts,
@@ -3637,7 +3607,6 @@ impl Bank {
         vote_rewards
     }
 
-    #[allow(dead_code)]
     /// return reward info for each vote account
     /// return account data for each vote account that needs to be stored
     /// This return value is a little awkward at the moment so that downstream existing code in the non-partitioned rewards code path can be re-used without duplication or modification.
@@ -3701,7 +3670,6 @@ impl Bank {
             .for_each(|x| rewards.push((x.stake_pubkey, x.stake_reward_info)));
     }
 
-    #[allow(dead_code)]
     /// insert non-zero stake rewards to self.rewards
     /// Return the number of rewards inserted
     fn update_reward_history_in_partition(&self, stake_rewards: &[StakeReward]) -> usize {
@@ -3715,7 +3683,6 @@ impl Bank {
         rewards.len().saturating_sub(initial_len)
     }
 
-    #[allow(dead_code)]
     /// Process reward credits for a partition of rewards
     /// Store the rewards to AccountsDB, update reward history record and total capitalization.
     fn distribute_epoch_rewards_in_partition(
@@ -3751,7 +3718,6 @@ impl Bank {
         report_partitioned_reward_metrics(self, metrics);
     }
 
-    #[allow(dead_code)]
     /// true if it is ok to run partitioned rewards code.
     /// This means the feature is activated or certain testing situations.
     fn is_partitioned_rewards_code_enabled(&self) -> bool {
@@ -3761,7 +3727,6 @@ impl Bank {
                 .test_enable_partitioned_rewards
     }
 
-    #[allow(dead_code)]
     /// Helper fn to log epoch_rewards sysvar
     fn log_epoch_rewards_sysvar(&self, prefix: &str) {
         if let Some(account) = self.get_account(&sysvar::epoch_rewards::id()) {
@@ -3776,7 +3741,6 @@ impl Bank {
         }
     }
 
-    #[allow(dead_code)]
     /// Create EpochRewards syavar with calculated rewards
     fn create_epoch_rewards_sysvar(
         &self,
@@ -3805,7 +3769,6 @@ impl Bank {
         self.log_epoch_rewards_sysvar("create");
     }
 
-    #[allow(dead_code)]
     /// Update EpochRewards sysvar with distributed rewards
     fn update_epoch_rewards_sysvar(&self, distributed: u64) {
         assert!(self.is_partitioned_rewards_code_enabled());

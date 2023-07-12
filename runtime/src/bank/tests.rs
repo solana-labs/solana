@@ -13478,6 +13478,13 @@ fn test_calc_vote_accounts_to_store_normal() {
     }
 }
 
+impl Bank {
+    /// Return the total number of blocks in reward interval (including both calculation and crediting).
+    fn get_reward_total_num_blocks(&self, rewards: &StakeRewards) -> u64 {
+        self.get_reward_calculation_num_blocks() + self.get_reward_distribution_num_blocks(rewards)
+    }
+}
+
 /// Test get_reward_distribution_num_blocks, get_reward_calculation_num_blocks, get_reward_total_num_blocks during normal epoch gives the expected result
 #[test]
 fn test_get_reward_distribution_num_blocks_normal() {

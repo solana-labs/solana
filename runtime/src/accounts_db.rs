@@ -1504,7 +1504,6 @@ pub struct AccountsDb {
 
     /// this will live here until the feature for partitioned epoch rewards is activated.
     /// At that point, this and other code can be deleted.
-    #[allow(dead_code)]
     pub(crate) partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig,
 
     /// the full accounts hash calculation as of a predetermined block height 'N'
