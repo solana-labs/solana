@@ -4448,14 +4448,7 @@ impl Bank {
     }
 
     pub fn is_block_boundary(&self, tick_height: u64) -> bool {
-        if self
-            .feature_set
-            .is_active(&feature_set::fix_recent_blockhashes::id())
-        {
-            tick_height == self.max_tick_height
-        } else {
-            tick_height % self.ticks_per_slot == 0
-        }
+        tick_height == self.max_tick_height
     }
 
     /// Get the max number of accounts that a transaction may lock in this block
