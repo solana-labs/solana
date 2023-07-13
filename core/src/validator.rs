@@ -487,13 +487,12 @@ impl Validator {
         let id = identity_keypair.pubkey();
         assert_eq!(&id, node.info.pubkey());
 
-        warn!("identity: {}", id);
-        warn!("vote account: {}", vote_account);
+        info!("identity pubkey: {id}");
+        info!("vote account pubkey: {vote_account}");
 
         if !config.no_os_network_stats_reporting {
-            if let Err(e) = verify_net_stats_access() {
-                return Err(format!("Failed to access Network stats: {e}",));
-            }
+            verify_net_stats_access()
+                .map_err(|err| format!("Failed to access network stats: {err:?}"))?;
         }
 
         let mut bank_notification_senders = Vec::new();
@@ -506,17 +505,14 @@ impl Validator {
                 bank_notification_senders.push(confirmed_bank_sender);
                 let rpc_to_plugin_manager_receiver_and_exit =
                     rpc_to_plugin_manager_receiver.map(|receiver| (receiver, exit.clone()));
-                let result = GeyserPluginService::new_with_receiver(
-                    confirmed_bank_receiver,
-                    geyser_plugin_config_files,
-                    rpc_to_plugin_manager_receiver_and_exit,
-                );
-                match result {
-                    Ok(geyser_plugin_service) => Some(geyser_plugin_service),
-                    Err(err) => {
-                        return Err(format!("Failed to load the Geyser plugin: {err:?}"));
-                    }
-                }
+                Some(
+                    GeyserPluginService::new_with_receiver(
+                        confirmed_bank_receiver,
+                        geyser_plugin_config_files,
+                        rpc_to_plugin_manager_receiver_and_exit,
+                    )
+                    .map_err(|err| format!("Failed to load the Geyser plugin: {err:?}"))?,
+                )
             } else {
                 None
             };
@@ -548,7 +544,7 @@ impl Validator {
             info!("Initializing sigverify...");
         }
         sigverify::init();
-        info!("Done.");
+        info!("Initializing sigverify done.");
 
         if !ledger_path.is_dir() {
             return Err(format!(
@@ -570,10 +566,10 @@ impl Validator {
 
         info!("Cleaning accounts paths..");
         *start_progress.write().unwrap() = ValidatorStartProgress::CleaningAccounts;
-        let mut start = Measure::start("clean_accounts_paths");
+        let mut timer = Measure::start("clean_accounts_paths");
         cleanup_accounts_paths(config);
-        start.stop();
-        info!("done. {}", start);
+        timer.stop();
+        info!("Cleaning accounts paths done. {timer}");
 
         snapshot_utils::purge_incomplete_bank_snapshots(&config.snapshot_config.bank_snapshots_dir);
         snapshot_utils::purge_old_bank_snapshots_at_startup(
@@ -581,14 +577,14 @@ impl Validator {
         );
 
         info!("Cleaning orphaned account snapshot directories..");
-        if let Err(e) = clean_orphaned_account_snapshot_dirs(
+        let mut timer = Measure::start("clean_orphaned_account_snapshot_dirs");
+        clean_orphaned_account_snapshot_dirs(
             &config.snapshot_config.bank_snapshots_dir,
             &config.account_snapshot_paths,
-        ) {
-            return Err(format!(
-                "Failed to clean orphaned account snapshot directories: {e:?}"
-            ));
-        }
+        )
+        .map_err(|err| format!("Failed to clean orphaned account snapshot directories: {err:?}"))?;
+        timer.stop();
+        info!("Cleaning orphaned account snapshot directories done. {timer}");
 
         {
             let exit = exit.clone();
@@ -1048,17 +1044,15 @@ impl Validator {
             repair_whitelist: config.repair_whitelist.clone(),
         });
 
-        let waited_for_supermajority = match wait_for_supermajority(
+        let waited_for_supermajority = wait_for_supermajority(
             config,
             Some(&mut process_blockstore),
             &bank_forks,
             &cluster_info,
             rpc_override_health_check,
             &start_progress,
-        ) {
-            Ok(waited) => waited,
-            Err(e) => return Err(format!("wait_for_supermajority failed: {e:?}")),
-        };
+        )
+        .map_err(|err| format!("wait_for_supermajority failed: {err:?}"))?;
 
         let ledger_metric_report_service =
             LedgerMetricReportService::new(blockstore.clone(), exit.clone());
@@ -1812,7 +1806,7 @@ impl<'a> ProcessBlockStore<'a> {
                     })
                     .unwrap();
             }
-            if let Err(e) = blockstore_processor::process_blockstore_from_root(
+            blockstore_processor::process_blockstore_from_root(
                 self.blockstore,
                 self.bank_forks,
                 self.leader_schedule_cache,
@@ -1821,11 +1815,11 @@ impl<'a> ProcessBlockStore<'a> {
                 self.cache_block_meta_sender.as_ref(),
                 self.entry_notification_sender,
                 &self.accounts_background_request_sender,
-            ) {
+            )
+            .map_err(|err| {
                 exit.store(true, Ordering::Relaxed);
-                return Err(format!("Failed to load ledger: {e:?}"));
-            }
-
+                format!("Failed to load ledger: {err:?}")
+            })?;
             exit.store(true, Ordering::Relaxed);
 
             if let Some(blockstore_root_scan) = self.blockstore_root_scan.take() {
@@ -1836,13 +1830,12 @@ impl<'a> ProcessBlockStore<'a> {
                 let restored_tower = Tower::restore(self.config.tower_storage.as_ref(), self.id);
                 if let Ok(tower) = &restored_tower {
                     // reconciliation attempt 1 of 2 with tower
-                    if let Err(e) = reconcile_blockstore_roots_with_external_source(
+                    reconcile_blockstore_roots_with_external_source(
                         ExternalRootSource::Tower(tower.root()),
                         self.blockstore,
                         &mut self.original_blockstore_root,
-                    ) {
-                        return Err(format!("Failed to reconcile blockstore with tower: {e:?}"));
-                    }
+                    )
+                    .map_err(|err| format!("Failed to reconcile blockstore with tower: {err:?}"))?;
                 }
 
                 post_process_restored_tower(
@@ -1860,15 +1853,12 @@ impl<'a> ProcessBlockStore<'a> {
             ) {
                 // reconciliation attempt 2 of 2 with hard fork
                 // this should be #2 because hard fork root > tower root in almost all cases
-                if let Err(e) = reconcile_blockstore_roots_with_external_source(
+                reconcile_blockstore_roots_with_external_source(
                     ExternalRootSource::HardFork(hard_fork_restart_slot),
                     self.blockstore,
                     &mut self.original_blockstore_root,
-                ) {
-                    return Err(format!(
-                        "Failed to reconcile blockstore with hard fork: {e:?}"
-                    ));
-                }
+                )
+                .map_err(|err| format!("Failed to reconcile blockstore with hard fork: {err:?}"))?;
             }
 
             *self.start_progress.write().unwrap() = previous_start_process;
