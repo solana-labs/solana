@@ -85,8 +85,8 @@ impl<'a, M: TieredAccountMeta> ReadableAccount for TieredReadableAccount<'a, M> 
     }
 }
 
-#[derive(Debug)]
 /// The reader of a tiered accounts file.
+#[derive(Debug)]
 pub enum TieredAccountsFileReader {}
 
 impl TieredAccountsFileReader {
