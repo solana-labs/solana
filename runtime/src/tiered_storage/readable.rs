@@ -7,28 +7,28 @@ use {
 
 /// The struct that offers read APIs for accessing a TieredAccount.
 #[derive(PartialEq, Eq, Debug)]
-pub struct TieredReadableAccount<'tiered_account, M: TieredAccountMeta> {
+pub struct TieredReadableAccount<'accounts_file, M: TieredAccountMeta> {
     /// TieredAccountMeta
-    pub(crate) meta: &'tiered_account M,
+    pub(crate) meta: &'accounts_file M,
     /// The address of the account
-    pub(crate) address: &'tiered_account Pubkey,
+    pub(crate) address: &'accounts_file Pubkey,
     /// The address of the account owner
-    pub(crate) owner: &'tiered_account Pubkey,
+    pub(crate) owner: &'accounts_file Pubkey,
     /// The index for accessing the account inside its belonging AccountsFile
     pub(crate) index: usize,
     /// The account block that contains this account.  Note that this account
     /// block may be shared with other accounts.
-    pub(crate) account_block: &'tiered_account [u8],
+    pub(crate) account_block: &'accounts_file [u8],
 }
 
-impl<'tiered_account, M: TieredAccountMeta> TieredReadableAccount<'tiered_account, M> {
+impl<'accounts_file, M: TieredAccountMeta> TieredReadableAccount<'accounts_file, M> {
     /// Returns the address of this account.
-    pub fn address(&self) -> &'tiered_account Pubkey {
+    pub fn address(&self) -> &'accounts_file Pubkey {
         self.address
     }
 
     /// Returns the hash of this account.
-    pub fn hash(&self) -> Option<&'tiered_account Hash> {
+    pub fn hash(&self) -> Option<&'accounts_file Hash> {
         self.meta.account_hash(self.account_block)
     }
 
@@ -43,13 +43,13 @@ impl<'tiered_account, M: TieredAccountMeta> TieredReadableAccount<'tiered_accoun
     }
 
     /// Returns the data associated to this account.
-    pub fn data(&self) -> &'tiered_account [u8] {
+    pub fn data(&self) -> &'accounts_file [u8] {
         self.meta.account_data(self.account_block)
     }
 }
 
-impl<'tiered_account, M: TieredAccountMeta> ReadableAccount
-    for TieredReadableAccount<'tiered_account, M>
+impl<'accounts_file, M: TieredAccountMeta> ReadableAccount
+    for TieredReadableAccount<'accounts_file, M>
 {
     /// Returns the balance of the lamports of this account.
     fn lamports(&self) -> u64 {
@@ -57,7 +57,7 @@ impl<'tiered_account, M: TieredAccountMeta> ReadableAccount
     }
 
     /// Returns the address of the owner of this account.
-    fn owner(&self) -> &'tiered_account Pubkey {
+    fn owner(&self) -> &'accounts_file Pubkey {
         self.owner
     }
 
@@ -79,7 +79,7 @@ impl<'tiered_account, M: TieredAccountMeta> ReadableAccount
     }
 
     /// Returns the data associated to this account.
-    fn data(&self) -> &'tiered_account [u8] {
+    fn data(&self) -> &'accounts_file [u8] {
         self.data()
     }
 }
