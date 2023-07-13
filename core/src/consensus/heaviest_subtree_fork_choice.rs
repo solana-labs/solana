@@ -510,7 +510,7 @@ impl HeaviestSubtreeForkChoice {
     pub fn split_off(&mut self, slot_hash_key: &SlotHashKey) -> Self {
         assert_ne!(self.tree_root, *slot_hash_key);
         let mut split_tree_root = {
-            let mut node_to_split_at = self
+            let node_to_split_at = self
                 .fork_infos
                 .get_mut(slot_hash_key)
                 .expect("Slot hash key must exist in tree");

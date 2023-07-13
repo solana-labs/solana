@@ -1958,14 +1958,14 @@ pub fn process_show_validators(
 
     let mut stake_by_version: BTreeMap<CliVersion, CliValidatorsStakeByVersion> = BTreeMap::new();
     for validator in current_validators.iter() {
-        let mut entry = stake_by_version
+        let entry = stake_by_version
             .entry(validator.version.clone())
             .or_default();
         entry.current_validators += 1;
         entry.current_active_stake += validator.activated_stake;
     }
     for validator in delinquent_validators.iter() {
-        let mut entry = stake_by_version
+        let entry = stake_by_version
             .entry(validator.version.clone())
             .or_default();
         entry.delinquent_validators += 1;

@@ -598,7 +598,7 @@ impl SendTransactionService {
         let mut batched_transactions = HashSet::new();
         let retry_rate = Duration::from_millis(config.retry_rate_ms);
 
-        transactions.retain(|signature, mut transaction_info| {
+        transactions.retain(|signature, transaction_info| {
             if transaction_info.durable_nonce_info.is_some() {
                 stats.nonced_transactions.fetch_add(1, Ordering::Relaxed);
             }
@@ -1399,7 +1399,7 @@ mod test {
         );
         // Advance nonce, simulate the transaction was again last sent 4 seconds ago.
         // This time the transaction should have been dropped.
-        for mut transaction in transactions.values_mut() {
+        for transaction in transactions.values_mut() {
             transaction.last_sent_time = Some(Instant::now().sub(Duration::from_millis(4000)));
         }
         let new_durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());

@@ -2913,7 +2913,7 @@ pub mod rpc_bank {
                     }
                 }
 
-                let mut entry = block_production.entry(identity).or_default();
+                let entry = block_production.entry(identity).or_default();
                 if slot_history.check(slot) == solana_sdk::slot_history::Check::Found {
                     entry.1 += 1; // Increment blocks_produced
                 }
@@ -7448,7 +7448,7 @@ pub mod tests {
                 account_state
                     .init_extension::<ImmutableOwner>(true)
                     .unwrap();
-                let mut memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
+                let memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
                 memo_transfer.require_incoming_transfer_memos = true.into();
 
                 let token_account = AccountSharedData::from(Account {
@@ -7476,7 +7476,7 @@ pub mod tests {
                 mint_state.base = mint_base;
                 mint_state.pack_base();
                 mint_state.init_account_type().unwrap();
-                let mut mint_close_authority = mint_state
+                let mint_close_authority = mint_state
                     .init_extension::<MintCloseAuthority>(true)
                     .unwrap();
                 mint_close_authority.close_authority =
@@ -7940,7 +7940,7 @@ pub mod tests {
                 account_state
                     .init_extension::<ImmutableOwner>(true)
                     .unwrap();
-                let mut memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
+                let memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
                 memo_transfer.require_incoming_transfer_memos = true.into();
 
                 let token_account = AccountSharedData::from(Account {
@@ -7967,7 +7967,7 @@ pub mod tests {
                 mint_state.base = mint_base;
                 mint_state.pack_base();
                 mint_state.init_account_type().unwrap();
-                let mut mint_close_authority = mint_state
+                let mint_close_authority = mint_state
                     .init_extension::<MintCloseAuthority>(true)
                     .unwrap();
                 mint_close_authority.close_authority =
