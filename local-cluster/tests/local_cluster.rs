@@ -4480,7 +4480,7 @@ fn test_slot_hash_expiry() {
     );
 }
 
-// This tests that when vote refresh should be sent, but the old vote is too old such that it's
+// This tests vote refreshes on votes that are too old to be in slot hash history. Suchvotes will never land, so we should instead send a new vote for the tip of the heaviest fork descending from the old vote.
 // outside slothash of the newest bank already so it will never land, we should send vote at the
 // tip of the current fork.
 // It creates validators A, B, and C, (C is only needed for stake distribution), then do this:
