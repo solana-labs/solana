@@ -64,39 +64,27 @@ pub trait TieredAccountMeta: Sized {
     /// Returns the epoch that this account will next owe rent by parsing
     /// the specified account block.  None will be returned if this account
     /// does not persist this optional field.
-    fn rent_epoch(&self, _account_block: &[u8]) -> Option<Epoch> {
-        None
-    }
+    fn rent_epoch(&self, _account_block: &[u8]) -> Option<Epoch>;
 
     /// Returns the account hash by parsing the specified account block.  None
     /// will be returned if this account does not persist this optional field.
-    fn account_hash<'a>(&self, _account_block: &'a [u8]) -> Option<&'a Hash> {
-        None
-    }
+    fn account_hash<'a>(&self, _account_block: &'a [u8]) -> Option<&'a Hash>;
 
     /// Returns the write version by parsing the specified account block.  None
     /// will be returned if this account does not persist this optional field.
-    fn write_version(&self, _account_block: &[u8]) -> Option<StoredMetaWriteVersion> {
-        None
-    }
+    fn write_version(&self, _account_block: &[u8]) -> Option<StoredMetaWriteVersion>;
 
     /// Returns the offset of the optional fields based on the specified account
     /// block.
-    fn optional_fields_offset(&self, _account_block: &[u8]) -> usize {
-        unimplemented!();
-    }
+    fn optional_fields_offset(&self, _account_block: &[u8]) -> usize;
 
     /// Returns the length of the data associated to this account based on the
     /// specified account block.
-    fn account_data_size(&self, _account_block: &[u8]) -> usize {
-        unimplemented!();
-    }
+    fn account_data_size(&self, _account_block: &[u8]) -> usize;
 
     /// Returns the data associated to this account based on the specified
     /// account block.
-    fn account_data<'a>(&self, _account_block: &'a [u8]) -> &'a [u8] {
-        unimplemented!();
-    }
+    fn account_data<'a>(&self, _account_block: &'a [u8]) -> &'a [u8];
 }
 
 impl AccountMetaFlags {
