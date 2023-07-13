@@ -80,10 +80,7 @@ matches = { workspace = true }
 raptorq = { workspace = true }
 serde_json = { workspace = true }
 serial_test = { workspace = true }
-# Even if we want to activate features only for dev-dep., `cargo publish`
-# complains about self-dep with version specified. So don't inherit with
-# `workspace = true`. In this way, `cargo publish` will strip this self-dep
-# according to https://github.com/rust-lang/cargo/pull/7333
+# See order-crates-for-publishing.py for using this unusual `path = "."`
 solana-core = { path = ".", features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }
 solana-program-runtime = { workspace = true }
