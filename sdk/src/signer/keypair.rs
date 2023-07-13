@@ -35,7 +35,7 @@ impl Keypair {
 
     /// Constructs a new, random `Keypair` using `OsRng`
     pub fn new() -> Self {
-        let mut rng = OsRng::default();
+        let mut rng = OsRng;
         Self::generate(&mut rng)
     }
 

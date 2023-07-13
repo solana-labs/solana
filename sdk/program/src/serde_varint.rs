@@ -58,7 +58,7 @@ where
     deserializer.deserialize_tuple(
         (std::mem::size_of::<T>() * 8 + 6) / 7,
         VarIntVisitor {
-            phantom: PhantomData::default(),
+            phantom: PhantomData,
         },
     )
 }

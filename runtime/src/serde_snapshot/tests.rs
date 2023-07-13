@@ -166,7 +166,7 @@ where
                 accounts_db,
                 slot,
                 account_storage_entries,
-                phantom: std::marker::PhantomData::default(),
+                phantom: std::marker::PhantomData,
             },
         ),
     }
