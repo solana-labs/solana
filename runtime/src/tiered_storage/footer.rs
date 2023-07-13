@@ -85,6 +85,7 @@ pub enum OwnersBlockFormat {
     LocalIndex = 0,
 }
 
+/// The index format of a tiered accounts file.
 #[repr(u16)]
 #[derive(
     Clone,
@@ -98,13 +99,11 @@ pub enum OwnersBlockFormat {
     num_enum::TryFromPrimitive,
 )]
 pub enum AccountIndexFormat {
-    // This format does not support any fast lookup.
-    // Any query from account hash to account meta requires linear search.
+    /// This format optimizes the storage size by storing only account addresses
+    /// and offsets.  It skips storing the size of account data by storing account
+    /// block entries and index block entries in the same order.
     #[default]
-    Linear = 0,
-    // Similar to index, but this format also stores the offset of each account
-    // meta in the index block.
-    LinearIndex = 1,
+    AddressAndOffset = 0,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -262,7 +261,7 @@ mod tests {
         let expected_footer = TieredStorageFooter {
             account_meta_format: AccountMetaFormat::Hot,
             owners_block_format: OwnersBlockFormat::LocalIndex,
-            account_index_format: AccountIndexFormat::Linear,
+            account_index_format: AccountIndexFormat::AddressAndOffset,
             account_block_format: AccountBlockFormat::AlignedRaw,
             account_entry_count: 300,
             account_meta_entry_size: 24,
