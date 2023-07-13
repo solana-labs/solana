@@ -16,6 +16,7 @@ spl() {
       memo/program
       name-service/program
       stake-pool/program
+      stake-pool/single-pool
     )
     set -x
     rm -rf spl
