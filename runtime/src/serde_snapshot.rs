@@ -402,7 +402,7 @@ where
             &SerializableBankAndStorage::<newer::Context> {
                 bank,
                 snapshot_storages,
-                phantom: std::marker::PhantomData::default(),
+                phantom: std::marker::PhantomData,
             },
         ),
     }
@@ -424,7 +424,7 @@ where
             &SerializableBankAndStorageNoExtra::<newer::Context> {
                 bank,
                 snapshot_storages,
-                phantom: std::marker::PhantomData::default(),
+                phantom: std::marker::PhantomData,
             },
         ),
     }

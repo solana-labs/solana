@@ -32,7 +32,7 @@ impl<const K: usize, T: ?Sized + Hash> Deduper<K, T> {
             clock: Instant::now(),
             bits: repeat_with(AtomicU64::default).take(size).collect(),
             popcount: AtomicU64::default(),
-            _phantom: PhantomData::<T>::default(),
+            _phantom: PhantomData::<T>,
         }
     }
 
