@@ -15,8 +15,7 @@ pub trait TreeDiff<'a> {
         }
         let mut pending_keys = vec![root1];
         let mut reachable_set = HashSet::new();
-        while !pending_keys.is_empty() {
-            let current_key = pending_keys.pop().unwrap();
+        while let Some(current_key) = pending_keys.pop() {
             if current_key == root2 {
                 continue;
             }
