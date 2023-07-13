@@ -3169,7 +3169,7 @@ impl ReplayStage {
         }
 
         // Otherwise we have to check the votes for confirmation
-        let mut propagated_stats = progress
+        let propagated_stats = progress
             .get_propagated_stats_mut(slot)
             .unwrap_or_else(|| panic!("slot={slot} must exist in ProgressMap"));
 
