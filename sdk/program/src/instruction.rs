@@ -11,7 +11,7 @@
 //! [`AccountMeta`] values. The runtime uses this information to efficiently
 //! schedule execution of transactions.
 
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {
     crate::{pubkey::Pubkey, sanitize::Sanitize, short_vec, wasm_bindgen},

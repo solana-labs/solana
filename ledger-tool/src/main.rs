@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     crate::{args::*, bigtable::*, ledger_path::*, ledger_utils::*, output::*, program::*},
     chrono::{DateTime, Utc},

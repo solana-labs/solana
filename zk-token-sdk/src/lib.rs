@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic, clippy::op_ref)]
+#![allow(clippy::arithmetic_side_effects, clippy::op_ref)]
 
 // The warning `clippy::op_ref` is disabled to allow efficient operator arithmetic of structs that
 // implement the `Copy` trait.

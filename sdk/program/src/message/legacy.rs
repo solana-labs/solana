@@ -9,7 +9,7 @@
 //! [`v0`]: crate::message::v0
 //! [future message format]: https://docs.solana.com/proposals/versioned-transactions
 
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {
     crate::{
@@ -597,7 +597,7 @@ impl Message {
         // `bench_has_duplicates` in benches/message_processor.rs shows that this implementation is
         // ~50 times faster than using HashSet for very short slices.
         for i in 1..self.account_keys.len() {
-            #[allow(clippy::integer_arithmetic)]
+            #[allow(clippy::arithmetic_side_effects)]
             if self.account_keys[i..].contains(&self.account_keys[i - 1]) {
                 return true;
             }

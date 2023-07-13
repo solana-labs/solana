@@ -38,7 +38,7 @@
 //! solana-dos $COMMON --valid-blockhash --transaction-type account-creation
 //! ```
 //!
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     crossbeam_channel::{select, tick, unbounded, Receiver, Sender},
     itertools::Itertools,

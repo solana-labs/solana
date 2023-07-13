@@ -22,7 +22,7 @@ pub fn set_syscall_stubs(syscall_stubs: Box<dyn SyscallStubs>) -> Box<dyn Syscal
     std::mem::replace(&mut SYSCALL_STUBS.write().unwrap(), syscall_stubs)
 }
 
-#[allow(clippy::integer_arithmetic)]
+#[allow(clippy::arithmetic_side_effects)]
 pub trait SyscallStubs: Sync + Send {
     fn sol_log(&self, message: &str) {
         println!("{message}");

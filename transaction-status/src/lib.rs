@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 pub use {crate::extract_memos::extract_and_fmt_memos, solana_sdk::reward_type::RewardType};
 use {

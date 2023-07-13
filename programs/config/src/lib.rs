@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 pub mod config_instruction;
 pub mod config_processor;
 pub mod date_instruction;

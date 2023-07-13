@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 macro_rules! ACCOUNT_STRING {
     () => {
         r#", one of:

@@ -1,5 +1,5 @@
 //! A command-line executable for generating the chain's genesis config.
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {
     base64::{prelude::BASE64_STANDARD, Engine},

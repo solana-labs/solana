@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     clap::{crate_description, crate_name, crate_version, Arg, ArgMatches, Command},
     rand::{thread_rng, Rng},
