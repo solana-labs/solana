@@ -60,7 +60,7 @@ use {
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
         epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
         feature::{self, Feature},
-        feature_set::{self, FeatureSet},
+        feature_set::{self, enable_request_heap_frame_ix, FeatureSet},
         fee::FeeStructure,
         fee_calculator::FeeRateGovernor,
         genesis_config::{create_genesis_config, ClusterType, GenesisConfig},
@@ -2870,19 +2870,16 @@ fn test_bank_tx_compute_unit_fee() {
     } = create_genesis_config_with_leader(mint, &leader, 3);
     genesis_config.fee_rate_governor = FeeRateGovernor::new(4, 0); // something divisible by 2
 
-    let expected_fee_paid = Bank::calculate_fee(
+    let expected_fee_paid = calculate_test_fee(
         &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
         genesis_config
             .fee_rate_governor
             .create_fee_calculator()
             .lamports_per_signature,
         &FeeStructure::default(),
-        true,
         false,
         true,
         true,
-        true,
-        false,
     );
 
     let (expected_fee_collected, expected_fee_burned) =
@@ -3058,16 +3055,13 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
     let tx = system_transaction::transfer(&mint_keypair, &key, 1, cheap_blockhash);
     assert_eq!(bank.process_transaction(&tx), Ok(()));
     assert_eq!(bank.get_balance(&key), 1);
-    let cheap_fee = Bank::calculate_fee(
+    let cheap_fee = calculate_test_fee(
         &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
         cheap_lamports_per_signature,
         &FeeStructure::default(),
-        true,
         false,
         true,
         true,
-        true,
-        false,
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -3080,16 +3074,13 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
     let tx = system_transaction::transfer(&mint_keypair, &key, 1, expensive_blockhash);
     assert_eq!(bank.process_transaction(&tx), Ok(()));
     assert_eq!(bank.get_balance(&key), 1);
-    let expensive_fee = Bank::calculate_fee(
+    let expensive_fee = calculate_test_fee(
         &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
         expensive_lamports_per_signature,
         &FeeStructure::default(),
-        true,
         false,
         true,
         true,
-        true,
-        false,
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -3193,7 +3184,7 @@ fn test_filter_program_errors_and_collect_compute_unit_fee() {
             + bank
                 .fee_rate_governor
                 .burn(
-                    Bank::calculate_fee(
+                    calculate_test_fee(
                         &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique())))
                             .unwrap(),
                         genesis_config
@@ -3201,12 +3192,9 @@ fn test_filter_program_errors_and_collect_compute_unit_fee() {
                             .create_fee_calculator()
                             .lamports_per_signature,
                         &FeeStructure::default(),
-                        true,
                         false,
                         true,
                         true,
-                        true,
-                        false,
                     ) * 2
                 )
                 .0
@@ -10122,6 +10110,37 @@ fn test_call_precomiled_program() {
     bank.process_transaction(&tx).unwrap();
 }
 
+fn calculate_test_fee(
+    message: &SanitizedMessage,
+    lamports_per_signature: u64,
+    fee_structure: &FeeStructure,
+    support_set_accounts_data_size_limit_ix: bool,
+    enable_request_heap_frame_ix: bool,
+    remove_congestion_multiplier: bool,
+) -> u64 {
+    let mut feature_set = FeatureSet::all_enabled();
+    feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+
+    if !support_set_accounts_data_size_limit_ix {
+        feature_set.deactivate(&include_loaded_accounts_data_size_in_fee_calculation::id());
+    }
+
+    if !enable_request_heap_frame_ix {
+        feature_set.deactivate(&enable_request_heap_frame_ix::id());
+    }
+
+    let budget_limits =
+        ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set, None);
+    Bank::calculate_fee(
+        message,
+        lamports_per_signature,
+        fee_structure,
+        &budget_limits,
+        remove_congestion_multiplier,
+        false,
+    )
+}
+
 #[test]
 fn test_calculate_fee() {
     // Default: no fee.
@@ -10129,19 +10148,16 @@ fn test_calculate_fee() {
         SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
     for support_set_accounts_data_size_limit_ix in [true, false] {
         assert_eq!(
-            Bank::calculate_fee(
+            calculate_test_fee(
                 &message,
                 0,
                 &FeeStructure {
                     lamports_per_signature: 0,
                     ..FeeStructure::default()
                 },
-                true,
-                false,
-                true,
-                true,
                 support_set_accounts_data_size_limit_ix,
-                false,
+                true,
+                true,
             ),
             0
         );
@@ -10150,19 +10166,16 @@ fn test_calculate_fee() {
     // One signature, a fee.
     for support_set_accounts_data_size_limit_ix in [true, false] {
         assert_eq!(
-            Bank::calculate_fee(
+            calculate_test_fee(
                 &message,
                 1,
                 &FeeStructure {
                     lamports_per_signature: 1,
                     ..FeeStructure::default()
                 },
-                true,
-                false,
-                true,
-                true,
                 support_set_accounts_data_size_limit_ix,
-                false,
+                true,
+                true,
             ),
             1
         );
@@ -10176,19 +10189,16 @@ fn test_calculate_fee() {
     let message = SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&key0))).unwrap();
     for support_set_accounts_data_size_limit_ix in [true, false] {
         assert_eq!(
-            Bank::calculate_fee(
+            calculate_test_fee(
                 &message,
                 2,
                 &FeeStructure {
                     lamports_per_signature: 2,
                     ..FeeStructure::default()
                 },
-                true,
-                false,
-                true,
-                true,
                 support_set_accounts_data_size_limit_ix,
-                false,
+                true,
+                true,
             ),
             4
         );
@@ -10210,16 +10220,13 @@ fn test_calculate_fee_compute_units() {
         SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
     for support_set_accounts_data_size_limit_ix in [true, false] {
         assert_eq!(
-            Bank::calculate_fee(
+            calculate_test_fee(
                 &message,
                 1,
                 &fee_structure,
-                true,
-                false,
-                true,
-                true,
                 support_set_accounts_data_size_limit_ix,
-                false,
+                true,
+                true,
             ),
             max_fee + lamports_per_signature
         );
@@ -10233,16 +10240,13 @@ fn test_calculate_fee_compute_units() {
         SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique()))).unwrap();
     for support_set_accounts_data_size_limit_ix in [true, false] {
         assert_eq!(
-            Bank::calculate_fee(
+            calculate_test_fee(
                 &message,
                 1,
                 &fee_structure,
-                true,
-                false,
-                true,
-                true,
                 support_set_accounts_data_size_limit_ix,
-                false,
+                true,
+                true,
             ),
             max_fee + 3 * lamports_per_signature
         );
@@ -10278,16 +10282,13 @@ fn test_calculate_fee_compute_units() {
         ))
         .unwrap();
         for support_set_accounts_data_size_limit_ix in [true, false] {
-            let fee = Bank::calculate_fee(
+            let fee = calculate_test_fee(
                 &message,
                 1,
                 &fee_structure,
-                true,
-                false,
-                true,
-                true,
                 support_set_accounts_data_size_limit_ix,
-                false,
+                true,
+                true,
             );
             assert_eq!(
                 fee,
@@ -10321,16 +10322,13 @@ fn test_calculate_prioritization_fee() {
     ))
     .unwrap();
 
-    let fee = Bank::calculate_fee(
+    let fee = calculate_test_fee(
         &message,
         fee_structure.lamports_per_signature,
         &fee_structure,
-        true,  // use_default_units_per_instruction
-        false, // not support_request_units_deprecated
-        true,  // remove_congestion_multiplier
-        true,  // enable_request_heap_frame_ix
-        true,  // support_set_accounts_data_size_limit_ix,
-        false, // include_loaded_account_data_size_in_fee
+        true,
+        true,
+        true,
     );
     assert_eq!(
         fee,
@@ -10370,16 +10368,13 @@ fn test_calculate_fee_secp256k1() {
     .unwrap();
     for support_set_accounts_data_size_limit_ix in [true, false] {
         assert_eq!(
-            Bank::calculate_fee(
+            calculate_test_fee(
                 &message,
                 1,
                 &fee_structure,
-                true,
-                false,
-                true,
-                true,
                 support_set_accounts_data_size_limit_ix,
-                false,
+                true,
+                true,
             ),
             2
         );
@@ -10394,16 +10389,13 @@ fn test_calculate_fee_secp256k1() {
     .unwrap();
     for support_set_accounts_data_size_limit_ix in [true, false] {
         assert_eq!(
-            Bank::calculate_fee(
+            calculate_test_fee(
                 &message,
                 1,
                 &fee_structure,
-                true,
-                false,
-                true,
-                true,
                 support_set_accounts_data_size_limit_ix,
-                false,
+                true,
+                true,
             ),
             11
         );
@@ -12051,16 +12043,13 @@ fn test_calculate_fee_with_congestion_multiplier() {
     // congestion_multiplier has no effect on fee.
     for remove_congestion_multiplier in [true, false] {
         assert_eq!(
-            Bank::calculate_fee(
+            calculate_test_fee(
                 &message,
                 cheap_lamports_per_signature,
                 &fee_structure,
                 true,
-                false,
+                true,
                 remove_congestion_multiplier,
-                true,
-                true,
-                false,
             ),
             signature_fee * signature_count
         );
@@ -12076,16 +12065,13 @@ fn test_calculate_fee_with_congestion_multiplier() {
         };
 
         assert_eq!(
-            Bank::calculate_fee(
+            calculate_test_fee(
                 &message,
                 expensive_lamports_per_signature,
                 &fee_structure,
                 true,
-                false,
+                true,
                 remove_congestion_multiplier,
-                true,
-                true,
-                false,
             ),
             signature_fee * signature_count / denominator
         );
@@ -12119,16 +12105,13 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
     // into transaction fee
     let mut enable_request_heap_frame_ix = true;
     assert_eq!(
-        Bank::calculate_fee(
+        calculate_test_fee(
             &message,
             lamports_per_signature,
             &fee_structure,
             true,
-            false,
-            true,
             enable_request_heap_frame_ix,
             true,
-            false,
         ),
         signature_fee + request_cu * lamports_per_cu
     );
@@ -12137,16 +12120,13 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
     // into transaction fee
     enable_request_heap_frame_ix = false;
     assert_eq!(
-        Bank::calculate_fee(
+        calculate_test_fee(
             &message,
             lamports_per_signature,
             &fee_structure,
             true,
-            false,
-            true,
             enable_request_heap_frame_ix,
             true,
-            false,
         ),
         signature_fee
     );

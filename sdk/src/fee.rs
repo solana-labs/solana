@@ -11,6 +11,13 @@ pub struct FeeBin {
     pub fee: u64,
 }
 
+pub struct FeeBudgetLimits {
+    pub loaded_accounts_data_size_limit: usize,
+    pub heap_cost: u64,
+    pub compute_unit_limit: u64,
+    pub prioritization_fee: u64,
+}
+
 /// Information used to calculate fees
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FeeStructure {
@@ -21,6 +28,8 @@ pub struct FeeStructure {
     /// Compute unit fee bins
     pub compute_fee_bins: Vec<FeeBin>,
 }
+
+pub const ACCOUNT_DATA_COST_PAGE_SIZE: u64 = 32_u64.saturating_mul(1024);
 
 impl FeeStructure {
     pub fn new(
@@ -52,6 +61,16 @@ impl FeeStructure {
                     .map(|bin| bin.fee)
                     .unwrap_or_default(),
             )
+    }
+
+    pub fn calculate_memory_usage_cost(
+        loaded_accounts_data_size_limit: usize,
+        heap_cost: u64,
+    ) -> u64 {
+        (loaded_accounts_data_size_limit as u64)
+            .saturating_add(ACCOUNT_DATA_COST_PAGE_SIZE.saturating_sub(1))
+            .saturating_div(ACCOUNT_DATA_COST_PAGE_SIZE)
+            .saturating_mul(heap_cost)
     }
 }
 
