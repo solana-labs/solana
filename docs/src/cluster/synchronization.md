@@ -4,14 +4,21 @@ title: Synchronization
 
 Fast, reliable synchronization is the biggest reason Solana is able to achieve such high throughput. Traditional blockchains synchronize on large chunks of transactions called blocks. By synchronizing on blocks, a transaction cannot be processed until a duration, called "block time", has passed. In Proof of Work consensus, these block times need to be very large \(~10 minutes\) to minimize the odds of multiple validators producing a new valid block at the same time. There's no such constraint in Proof of Stake consensus, but without reliable timestamps, a validator cannot determine the order of incoming blocks. The popular workaround is to tag each block with a [wallclock timestamp](https://en.bitcoin.it/wiki/Block_timestamp). Because of clock drift and variance in network latencies, the timestamp is only accurate within an hour or two. To workaround the workaround, these systems lengthen block times to provide reasonable certainty that the median timestamp on each block is always increasing.
 
-Solana takes a very different approach, which it calls _Proof of History_ or _PoH_. Leader nodes "timestamp" blocks with cryptographic proofs that some duration of time has passed since the last proof. All data hashed into the proof most certainly occurred before the proof was generated.To make this timestamp possible at the accuracy of milliseconds Solana has its own universal clock which doesn't take outside feedback but runs on the time it takes to create one hahs of SHA-256. As a minimal ceiling has been reached on how fast a SHA-256 can be hashed it gives a uniform measurement. Every node makes a tick during the hashing operation and to the Ledger ticks are the only way to know the passage of time. The node then shares the new block with validator nodes, which are able to verify those proofs. The blocks can arrive at validators in any order or even could be replayed years later. With such reliable synchronization guarantees, Solana is able to break blocks into smaller batches of transactions called _entries_. Entries are streamed to validators in realtime, before any notion of block consensus.
+Solana takes a very different approach, which it calls _Proof of History_ or _PoH_. Leader nodes "timestamp" blocks with cryptographic proofs that some duration of time has passed since the last proof. All data hashed into the proof most certainly occurred before the proof was generated.To make this timestamp possible at the accuracy of milliseconds Solana has its own universal clock which doesn't take outside feedback but runs on the time it takes to create one hash of SHA-256. As a minimal ceiling has been reached on how fast a SHA-256 can be hashed it gives a uniform measurement of the time needed to compute an arbitrary hash. Every node makes a tick during the hashing operation and for the Ledger, ticks are the only way to know the passage of time. Each tick is about the duration of 12,500 hashes.
+
+
+>static_assertions::const_assert_eq!(DEFAULT_HASHES_PER_TICK, 12_500);
+pub const DEFAULT_HASHES_PER_TICK: u64 = DEFAULT_HASHES_PER_SECOND / DEFAULT_TICKS_PER_SECOND;
+
+one block has a duration of 64 ticks or 64*12500 = 800,000 hashes giving us roughly 0.4 milliseconds.
+The node then shares the new block with validator nodes, which are able to verify those proofs. The blocks can arrive at validators in any order or even could be replayed years later. With such reliable synchronization guarantees, Solana is able to break blocks into smaller batches of transactions called _entries_. Entries are streamed to validators in real time, before any notion of block consensus.
 
 Solana technically never sends a _block_, but uses the term to describe the sequence of entries that validators vote on to achieve _confirmation_. In that way, Solana's confirmation times can be compared apples to apples to block-based systems. The current implementation sets block time to 400 milliseconds. 
 
 Validators send blocks in the form of small data packets called [shreds](https://github.com/solana-labs/solana/blob/master/ledger/src/shred.rs) that are sent over Turbine. 
 
 What's happening under the hood is that entries are streamed to validators as quickly as a leader node can batch a set of valid transactions into an entry. Validators process those entries long before it is time to vote on their validity. By processing the transactions optimistically, there is effectively no delay between the time the last entry is received and the time when the node can vote. In the event consensus is **not** achieved, a node simply rolls back its state. This optimistic processing technique was introduced in 1981 and called [Optimistic Concurrency Control](https://en.wikipedia.org/wiki/Optimistic_concurrency_control). It can be applied to blockchain architecture where a cluster votes on a hash that represents the full ledger up to some _block height_. In Solana, it is implemented trivially using the last entry's PoH hash.
-It can execute transactions and instructions optimisitcally because even if it's a non compatible or rogue transaction it will crash in the bpf bytecode compliation making use of the safe memory as operations are isolated from each other not harming other concurrent exectuions. 
+It can execute transactions and instructions optimistically because even if it's a noncompatible or rogue transaction it will crash in the bpf bytecode compilation making use of the safe memory as operations are isolated from each other not harming other concurrent executions. 
 
 ## Relationship to VDFs
 
@@ -23,7 +30,7 @@ Another difference between PoH and VDFs is that a VDF is used only for tracking 
 
 ## Relationship to Consensus Mechanisms
 
-Proof of History is not a consensus mechanism, but it is used to improve the performance of Solana's Proof of Stake consensus.In simple terms Proof of History is a way to scale Proof of stake to sub second accuracy not reliaging on external time.It is also used to improve the performance of the data plane protocols.
+Proof of History is not a consensus mechanism, but it is used to improve the performance of Solana's Proof of Stake consensus.In simple terms Proof of History is a way to scale Proof of stake to sub-second accuracy not relying on external time. It is also used to improve the performance of the data plane protocols.
 
 ## More on Proof of History
 
