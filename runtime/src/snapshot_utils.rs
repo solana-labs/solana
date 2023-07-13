@@ -919,7 +919,7 @@ fn do_get_highest_bank_snapshot(
     mut bank_snapshots: Vec<BankSnapshotInfo>,
 ) -> Option<BankSnapshotInfo> {
     bank_snapshots.sort_unstable();
-    bank_snapshots.into_iter().rev().next()
+    bank_snapshots.into_iter().next_back()
 }
 
 pub fn serialize_snapshot_data_file<F>(data_file_path: &Path, serializer: F) -> Result<u64>
@@ -2285,7 +2285,7 @@ pub fn get_highest_full_snapshot_archive_info(
 ) -> Option<FullSnapshotArchiveInfo> {
     let mut full_snapshot_archives = get_full_snapshot_archives(full_snapshot_archives_dir);
     full_snapshot_archives.sort_unstable();
-    full_snapshot_archives.into_iter().rev().next()
+    full_snapshot_archives.into_iter().next_back()
 }
 
 /// Get the path for the incremental snapshot archive with the highest slot, for a given full
@@ -2305,7 +2305,7 @@ pub fn get_highest_incremental_snapshot_archive_info(
             })
             .collect::<Vec<_>>();
     incremental_snapshot_archives.sort_unstable();
-    incremental_snapshot_archives.into_iter().rev().next()
+    incremental_snapshot_archives.into_iter().next_back()
 }
 
 pub fn purge_old_snapshot_archives(
