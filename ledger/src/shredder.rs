@@ -988,7 +988,7 @@ mod tests {
             // Also randomize the signatre bytes.
             let mut signature = [0u8; 64];
             rng.fill(&mut signature[..]);
-            tx.signatures = vec![Signature::new(&signature)];
+            tx.signatures = vec![Signature::from(signature)];
             tx
         })
         .take(num_tx)

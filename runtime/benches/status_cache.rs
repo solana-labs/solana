@@ -24,7 +24,7 @@ fn bench_status_cache_serialize(bencher: &mut Bencher) {
             let mut sigbytes = Vec::from(id.as_ref());
             id = hash(id.as_ref());
             sigbytes.extend(id.as_ref());
-            let sig = Signature::new(&sigbytes);
+            let sig = Signature::try_from(sigbytes).unwrap();
             status_cache.insert(&blockhash, sig, 0, Ok(()));
         }
     }
