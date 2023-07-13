@@ -112,8 +112,7 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         use SingleValidatorVotes::*;
-        while !self.vote_account_keys.is_empty() {
-            let vote_account_key = self.vote_account_keys.pop().unwrap();
+        while let Some(vote_account_key) = self.vote_account_keys.pop() {
             // Get all the gossip votes we've queued up for this validator
             // that are:
             // 1) missing from the current leader bank
