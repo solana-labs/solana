@@ -64,7 +64,7 @@ const VOTE_SLOTS_METRICS_CAP: usize = 100;
 //      mainnet: ~280k
 // target: 1-2 signatures reported per minute
 // log2(250k) = ~17.9. 
-const TRAILING_ZEROS: u8 = 8;
+const TRAILING_ZEROS: u8 = 18;
 // size of ring buffer to store signatures for metrics
 const SIGNATURE_SLOTS_METRICS_CAP: usize = 64;
 

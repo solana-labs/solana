@@ -13,7 +13,6 @@ use {
         str::FromStr,
     },
     thiserror::Error,
-    log::info,
 };
 
 /// Number of bytes in a signature

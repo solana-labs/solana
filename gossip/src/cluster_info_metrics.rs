@@ -9,7 +9,7 @@ use {
     },
     std::{
         cmp::Reverse,
-        collections::{HashMap, VecDeque},
+        collections::HashMap,
         ops::{Deref, DerefMut},
         sync::atomic::{AtomicU64, Ordering},
         time::Instant,
