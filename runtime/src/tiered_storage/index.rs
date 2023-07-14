@@ -77,7 +77,7 @@ impl AccountIndexFormat {
 
     /// Returns the offset to the account given the specified index
     /// to the index block.
-    pub fn get_account_offset(
+    pub fn get_account_block_offset(
         &self,
         map: &Mmap,
         footer: &TieredStorageFooter,
@@ -88,8 +88,8 @@ impl AccountIndexFormat {
                 let offset = footer.account_index_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
                     + index * std::mem::size_of::<u64>();
-                let (meta_offset, _) = get_type(map, offset)?;
-                Ok(*meta_offset)
+                let (account_block_offset, _) = get_type(map, offset)?;
+                Ok(*account_block_offset)
             }
         }
     }
@@ -147,7 +147,7 @@ mod tests {
         for (i, index_entry) in index_entries.iter().enumerate() {
             assert_eq!(
                 index_entry.block_offset,
-                indexer.get_account_offset(&map, &footer, i).unwrap()
+                indexer.get_account_block_offset(&map, &footer, i).unwrap()
             );
             let address = indexer.get_account_address(&map, &footer, i).unwrap();
             assert_eq!(index_entry.address, address);
