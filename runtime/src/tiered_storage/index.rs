@@ -117,10 +117,7 @@ pub mod tests {
             ..TieredStorageFooter::default()
         };
         let temp_dir = TempDir::new().unwrap();
-        let path = temp_dir
-            .path()
-            .join("test_address_and_offset_indexer")
-            .to_path_buf();
+        let path = temp_dir.path().join("test_address_and_offset_indexer");
         let addresses: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
             .take(ENTRY_COUNT.try_into().unwrap())
             .collect();
