@@ -1807,9 +1807,22 @@ impl Blockstore {
         self.put_meta_bytes(slot, &bincode::serialize(meta)?)
     }
 
-    // Given a start and end entry index, find all the missing
-    // indexes in the ledger in the range [start_index, end_index)
-    // for the slot with the specified slot
+    /// Find missing shred indices for a given `slot` within the range
+    /// [`start_index`, `end_index`]. Missing shreds will only be reported as
+    /// missing if they should be present by the time this function is called,
+    /// as controlled by`first_timestamp` and `defer_threshold_ticks`.
+    ///
+    /// Arguments:
+    ///  - `db_iterator`: Iterator to run search over.
+    ///  - `slot`: The slot to search for missing shreds for.
+    ///  - 'first_timestamp`: Timestamp (ms) for slot's first shred insertion.
+    ///  - `defer_threshold_ticks`: A grace period to allow shreds that are
+    ///    missing to be excluded from the reported missing list. This allows
+    ///    tuning on how aggressively missing shreds should be reported and
+    ///    acted upon.
+    ///  - `start_index`: Begin search (inclusively) at this shred index.
+    ///  - `end_index`: Finish search (exclusively) at this shred index.
+    ///  - `max_missing`: Limit result to this many indices.
     fn find_missing_indexes<C>(
         db_iterator: &mut DBRawIterator,
         slot: Slot,
@@ -1836,14 +1849,10 @@ impl Blockstore {
 
         // The index of the first missing shred in the slot
         let mut prev_index = start_index;
-        'outer: loop {
+        loop {
             if !db_iterator.valid() {
-                for i in prev_index..end_index {
-                    missing_indexes.push(i);
-                    if missing_indexes.len() == max_missing {
-                        break;
-                    }
-                }
+                let num_to_take = max_missing - missing_indexes.len();
+                missing_indexes.extend((prev_index..end_index).take(num_to_take));
                 break;
             }
             let (current_slot, index) = C::index(db_iterator.key().expect("Expect a valid key"));
@@ -1862,20 +1871,16 @@ impl Blockstore {
             let reference_tick = u64::from(shred::layout::get_reference_tick(data).unwrap());
             if ticks_since_first_insert < reference_tick + defer_threshold_ticks {
                 // The higher index holes have not timed out yet
-                break 'outer;
-            }
-            for i in prev_index..upper_index {
-                missing_indexes.push(i);
-                if missing_indexes.len() == max_missing {
-                    break 'outer;
-                }
-            }
-
-            if current_slot > slot {
                 break;
             }
 
-            if current_index >= end_index {
+            let num_to_take = max_missing - missing_indexes.len();
+            missing_indexes.extend((prev_index..upper_index).take(num_to_take));
+
+            if missing_indexes.len() == max_missing
+                || current_slot > slot
+                || current_index >= end_index
+            {
                 break;
             }
 
@@ -1886,6 +1891,9 @@ impl Blockstore {
         missing_indexes
     }
 
+    /// Find missing data shreds for the given `slot`.
+    ///
+    /// For more details on the arguments, see [`find_missing_indexes`].
     pub fn find_missing_data_indexes(
         &self,
         slot: Slot,
