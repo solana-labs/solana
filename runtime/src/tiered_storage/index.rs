@@ -43,18 +43,18 @@ impl AccountIndexFormat {
     pub fn write_index_block(
         &self,
         file: &TieredStorageFile,
-        index_entries: &Vec<AccountIndexWriterEntry>,
-    ) -> TieredStorageResult<u64> {
+        index_entries: &[AccountIndexWriterEntry],
+    ) -> TieredStorageResult<usize> {
         match self {
             Self::AddressAndOffset => {
-                let mut cursor: u64 = 0;
+                let mut bytes_written: usize = 0;
                 for index_entry in index_entries {
-                    cursor += file.write_type(index_entry.address)? as u64;
+                    bytes_written += file.write_type(index_entry.address)?;
                 }
                 for index_entry in index_entries {
-                    cursor += file.write_type(&index_entry.block_offset)? as u64;
+                    bytes_written += file.write_type(&index_entry.block_offset)?;
                 }
-                Ok(cursor)
+                Ok(bytes_written)
             }
         }
     }
@@ -75,7 +75,7 @@ impl AccountIndexFormat {
         Ok(address)
     }
 
-    /// Returns the offset to the accout given the specified index
+    /// Returns the offset to the account given the specified index
     /// to the index block.
     pub fn get_account_offset(
         &self,
@@ -103,7 +103,7 @@ impl AccountIndexFormat {
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use {
         super::*, crate::tiered_storage::file::TieredStorageFile, memmap2::MmapOptions, rand::Rng,
         std::fs::OpenOptions, tempfile::TempDir,
@@ -111,15 +111,15 @@ pub mod tests {
 
     #[test]
     fn test_address_and_offset_indexer() {
-        const ENTRY_COUNT: u32 = 100;
+        const ENTRY_COUNT: usize = 100;
         let footer = TieredStorageFooter {
-            account_entry_count: ENTRY_COUNT,
+            account_entry_count: ENTRY_COUNT as u32,
             ..TieredStorageFooter::default()
         };
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("test_address_and_offset_indexer");
         let addresses: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
-            .take(ENTRY_COUNT.try_into().unwrap())
+            .take(ENTRY_COUNT)
             .collect();
         let mut rng = rand::thread_rng();
         let index_entries: Vec<_> = addresses
