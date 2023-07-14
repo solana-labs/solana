@@ -681,8 +681,8 @@ pub(crate) fn submit_gossip_stats(
         ("all-pull", crds_stats.pull.fails.iter().sum::<usize>(), i64),
     );
 
-    // submit_message_signature_stats("cluster_info_crds_stats_message_signatures_received", &mut crds_stats.push.message_signatures);
-    submit_message_signature_stats_2("cluster_info_crds_stats_message_signatures_received", &mut crds_stats.push.message_signatures_2);
+    submit_message_signature_stats("cluster_info_crds_stats_message_signatures_received", &mut crds_stats.push.crds_signatures);
+    
     if !log::log_enabled!(log::Level::Trace) {
         return;
     }
@@ -713,28 +713,10 @@ where
     }
 }
 
-// greg
+// ring buffer "CrdsDataStats.message_signatures" is RWLocked
+// This won't spin since other threads cannot add to message_signature
+// ring buffer while we're reading from it
 fn submit_message_signature_stats<'a>(
-    name: &'static str, 
-    message_signatures: &mut VecDeque<Signature>
-) {
-    // we want to submit all message signatures we have here. 
-    // Need to pop them to remove them
-    // NOTE: we need to filter the signatures before we call this
-    // so only signatures with ending 0xFF or whatever end up here. 
-    while !message_signatures.is_empty() {
-        match message_signatures.pop_front() {
-            Some(signature) => {
-                datapoint_info!(name, ("crds_signature", signature.to_string(), String));
-            },
-            None => {
-                error!("Error reporting submitting Crds signature. Invalid read from message signature queue");
-            }
-        }
-    }
-}
-
-fn submit_message_signature_stats_2<'a>(
     name: &'static str, 
     message_signatures: &mut HeapRb<Signature>,
 ) {

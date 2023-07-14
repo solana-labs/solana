@@ -24,8 +24,6 @@
 //! A value is updated to a new version if the labels match, and the value
 //! wallclock is later, or the value hash is greater.
 
-use ringbuf::Rb;
-
 use {
     crate::{
         crds_entry::CrdsEntry,
@@ -54,12 +52,22 @@ use {
         ops::{Bound, Index, IndexMut},
         sync::Mutex,
     },
-    ringbuf::HeapRb,
+    ringbuf::{HeapRb, Rb},
 };
 
 const CRDS_SHARDS_BITS: u32 = 12;
 // Number of vote slots to track in an lru-cache for metrics.
 const VOTE_SLOTS_METRICS_CAP: usize = 100;
+// Number of ending zero bits for crds signature to get reported to influx
+// mean new push messages received per minute per node
+//      testnet: ~500k, 
+//      mainnet: ~280k
+// target: 1-2 signatures reported per minute
+// log2(250k) = ~17.9. 
+const TRAILING_ZEROS: u8 = 18;
+// size of ring buffer to store signatures for metrics
+const SIGNATURE_SLOTS_METRICS_CAP: usize = 64;
+
 
 pub struct Crds {
     /// Stores the map of labels and values
@@ -105,8 +113,7 @@ pub(crate) struct CrdsDataStats {
     pub(crate) counts: CrdsCountsArray,
     pub(crate) fails: CrdsCountsArray,
     pub(crate) votes: LruCache<Slot, /*count:*/ usize>,
-    pub(crate) message_signatures: VecDeque<Signature>, //TODO: change to fixed size
-    pub(crate) message_signatures_2: HeapRb<Signature>,
+    pub(crate) crds_signatures: HeapRb<Signature>, // fixed size ring buffer
 }
 
 #[derive(Default)]
@@ -662,8 +669,7 @@ impl Default for CrdsDataStats {
             counts: CrdsCountsArray::default(),
             fails: CrdsCountsArray::default(),
             votes: LruCache::new(VOTE_SLOTS_METRICS_CAP),
-            message_signatures: VecDeque::with_capacity(1024),
-            message_signatures_2: HeapRb::<Signature>::new(1024),
+            crds_signatures: HeapRb::<Signature>::new(SIGNATURE_SLOTS_METRICS_CAP),
         }
     }
 }
@@ -677,24 +683,11 @@ impl CrdsDataStats {
                 self.votes.put(slot, num_nodes + 1);
             }
         }
-        // let specific_ending: [u8; 1] = [01];
-        let ending_zeros = 9;
-        // let specific_ending: [u8; 2] = [57, 01];
-        // if entry.value.signature.check_ending_characters(&specific_ending) {
-        if entry.value.signature.last_n_bits_are_zero(ending_zeros) {
-            info!("greg signature ends in a: {:?}", entry.value.signature);
-            self.message_signatures.push_back(entry.value.signature);
 
-            // fixed length ring buffer. overwrite latest element if buffer full
-            self.message_signatures_2.push_overwrite(entry.value.signature);
-
+        // check trailing zero bits on signature for metrics
+        if entry.value.signature.last_n_bits_are_zero(TRAILING_ZEROS) {
+            self.crds_signatures.push_overwrite(entry.value.signature);
         } 
-
-
-        // else {
-        //     info!("greg signature does not end in a: {:?}", entry.value.signature);
-        // }
-        // self.message_signatures.push_back(entry.value.signature);
     }
 
     fn record_fail(&mut self, entry: &VersionedCrdsValue) {
