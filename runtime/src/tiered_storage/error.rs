@@ -7,4 +7,7 @@ pub enum TieredStorageError {
 
     #[error("MagicNumberMismatch: expected {0}, found {1}")]
     MagicNumberMismatch(u64, u64),
+
+    #[error("unable to initialize reader")]
+    ReaderInitializationFailure(),
 }

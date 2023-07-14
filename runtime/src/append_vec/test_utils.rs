@@ -45,3 +45,17 @@ pub fn create_test_account(sample: usize) -> (StoredMeta, AccountSharedData) {
     };
     (stored_meta, account)
 }
+
+pub fn create_test_account_from_len(data_len: usize) -> (StoredMeta, AccountSharedData) {
+    let mut account = AccountSharedData::new(data_len as u64, 0, &Pubkey::new_unique());
+    let data_byte: u8 = (data_len % 256) as u8;
+    account.set_data((0..data_len).map(|_| data_byte).collect());
+    account.executable = data_len % 2 > 0;
+    account.rent_epoch = if data_len % 3 > 0 { data_len as u64 } else { 0 };
+    let stored_meta = StoredMeta {
+        write_version_obsolete: data_len as u64,
+        pubkey: Pubkey::new_unique(),
+        data_len: data_len as u64,
+    };
+    (stored_meta, account)
+}

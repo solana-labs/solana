@@ -1,7 +1,9 @@
 #![allow(dead_code)]
 //! The account meta and related structs for the tiered storage.
 use {
-    crate::account_storage::meta::StoredMetaWriteVersion,
+    crate::{
+        account_storage::meta::StoredMetaWriteVersion, tiered_storage::footer::TieredStorageFooter,
+    },
     ::solana_sdk::{hash::Hash, stake_history::Epoch},
     modular_bitfield::prelude::*,
 };
@@ -17,8 +19,10 @@ pub struct AccountMetaFlags {
     pub has_account_hash: bool,
     /// whether the account meta has write version
     pub has_write_version: bool,
+    /// executable flag
+    pub executable: bool,
     /// the reserved bits.
-    reserved: B29,
+    reserved: B28,
 }
 
 /// A trait that allows different implementations of the account meta that
@@ -85,6 +89,12 @@ pub trait TieredAccountMeta: Sized {
     /// Returns the data associated to this account based on the specified
     /// account block.
     fn account_data<'a>(&self, _account_block: &'a [u8]) -> &'a [u8];
+
+    fn stored_size(
+        _footer: &TieredStorageFooter,
+        _metas: &Vec<impl TieredAccountMeta>,
+        _i: usize,
+    ) -> usize;
 }
 
 impl AccountMetaFlags {

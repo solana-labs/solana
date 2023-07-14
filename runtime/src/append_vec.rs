@@ -599,6 +599,7 @@ impl AppendVec {
         let mut offsets = Vec::with_capacity(len);
         for i in skip..len {
             let (account, pubkey, hash, write_version_obsolete) = accounts.get(i);
+            println!("av hash = {}", hash);
             let account_meta = account
                 .map(|account| AccountMeta {
                     lamports: account.lamports(),
@@ -675,7 +676,10 @@ pub mod tests {
             self.current_len.store(len, Ordering::Release);
         }
 
-        fn append_account_test(&self, data: &(StoredMeta, AccountSharedData)) -> Option<usize> {
+        pub(crate) fn append_account_test(
+            &self,
+            data: &(StoredMeta, AccountSharedData),
+        ) -> Option<usize> {
             let slot_ignored = Slot::MAX;
             let accounts = [(&data.0.pubkey, &data.1)];
             let slice = &accounts[..];
@@ -697,6 +701,8 @@ pub mod tests {
         pub(crate) fn ref_executable_byte(&self) -> &u8 {
             match self {
                 Self::AppendVec(av) => av.ref_executable_byte(),
+                // Self::Cold(_) => unimplemented!(),
+                Self::Hot(_) => unimplemented!(),
             }
         }
     }
@@ -1180,20 +1186,23 @@ pub mod tests {
         av.append_account_test(&create_test_account(10)).unwrap();
 
         let accounts = av.accounts(0);
-        let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
-        account.set_data_len_unsafe(crafted_data_len);
-        assert_eq!(account.data_len(), crafted_data_len);
+        if let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap() {
+            account.set_data_len_unsafe(crafted_data_len);
+            assert_eq!(account.data_len(), crafted_data_len);
 
-        // Reload accounts and observe crafted_data_len
-        let accounts = av.accounts(0);
-        let account = accounts.first().unwrap();
-        assert_eq!(account.data_len(), crafted_data_len);
+            // Reload accounts and observe crafted_data_len
+            let accounts = av.accounts(0);
+            let account = accounts.first().unwrap();
+            assert_eq!(account.data_len(), crafted_data_len);
 
-        av.flush().unwrap();
-        let accounts_len = av.len();
-        drop(av);
-        let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
+            av.flush().unwrap();
+            let accounts_len = av.len();
+            drop(av);
+            let result = AppendVec::new_from_file(path, accounts_len);
+            assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
+        } else {
+            unreachable!();
+        }
     }
 
     #[test]
@@ -1207,19 +1216,22 @@ pub mod tests {
         av.append_account_test(&create_test_account(10)).unwrap();
 
         let accounts = av.accounts(0);
-        let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
-        account.set_data_len_unsafe(too_large_data_len);
-        assert_eq!(account.data_len(), too_large_data_len);
+        if let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap() {
+            account.set_data_len_unsafe(too_large_data_len);
+            assert_eq!(account.data_len(), too_large_data_len);
 
-        // Reload accounts and observe no account with bad offset
-        let accounts = av.accounts(0);
-        assert_matches!(accounts.first(), None);
+            // Reload accounts and observe no account with bad offset
+            let accounts = av.accounts(0);
+            assert_matches!(accounts.first(), None);
 
-        av.flush().unwrap();
-        let accounts_len = av.len();
-        drop(av);
-        let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
+            av.flush().unwrap();
+            let accounts_len = av.len();
+            drop(av);
+            let result = AppendVec::new_from_file(path, accounts_len);
+            assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
+        } else {
+            unreachable!();
+        }
     }
 
     #[test]
@@ -1242,46 +1254,52 @@ pub mod tests {
         assert_eq!(*accounts[0].ref_executable_byte(), 0);
         assert_eq!(*accounts[1].ref_executable_byte(), 1);
 
-        let StoredAccountMeta::AppendVec(account) = &accounts[0];
-        let crafted_executable = u8::max_value() - 1;
+        let crafted_executable: u8;
+        if let StoredAccountMeta::AppendVec(account) = &accounts[0] {
+            crafted_executable = u8::max_value() - 1;
 
-        account.set_executable_as_byte(crafted_executable);
+            account.set_executable_as_byte(crafted_executable);
+        } else {
+            unreachable!();
+        }
 
         // reload crafted accounts
         let accounts = av.accounts(0);
-        let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
+        if let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap() {
+            // upper 7-bits are not 0, so sanitization should fail
+            assert!(!account.sanitize_executable());
 
-        // upper 7-bits are not 0, so sanitization should fail
-        assert!(!account.sanitize_executable());
-
-        // we can observe crafted value by ref
-        {
-            let executable_bool: &bool = &account.account_meta.executable;
-            // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
-            // assert_eq! thinks *executable_bool is equal to false but the if condition thinks it's not, contradictorily.
-            assert!(!*executable_bool);
-            #[cfg(not(target_arch = "aarch64"))]
+            // we can observe crafted value by ref
             {
-                const FALSE: bool = false; // keep clippy happy
-                if *executable_bool == FALSE {
-                    panic!("This didn't occur if this test passed.");
+                let executable_bool: &bool = &account.account_meta.executable;
+                // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
+                // assert_eq! thinks *executable_bool is equal to false but the if condition thinks it's not, contradictorily.
+                assert!(!*executable_bool);
+                #[cfg(not(target_arch = "aarch64"))]
+                {
+                    const FALSE: bool = false; // keep clippy happy
+                    if *executable_bool == FALSE {
+                        panic!("This didn't occur if this test passed.");
+                    }
                 }
+                assert_eq!(*account.ref_executable_byte(), crafted_executable);
             }
-            assert_eq!(*account.ref_executable_byte(), crafted_executable);
-        }
 
-        // we can NOT observe crafted value by value
-        {
-            let executable_bool: bool = account.executable();
-            assert!(!executable_bool);
-            assert_eq!(account.get_executable_byte(), 0); // Wow, not crafted_executable!
-        }
+            // we can NOT observe crafted value by value
+            {
+                let executable_bool: bool = account.executable();
+                assert!(!executable_bool);
+                assert_eq!(account.get_executable_byte(), 0); // Wow, not crafted_executable!
+            }
 
-        av.flush().unwrap();
-        let accounts_len = av.len();
-        drop(av);
-        let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
+            av.flush().unwrap();
+            let accounts_len = av.len();
+            drop(av);
+            let result = AppendVec::new_from_file(path, accounts_len);
+            assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
+        } else {
+            unreachable!();
+        }
     }
 
     #[test]

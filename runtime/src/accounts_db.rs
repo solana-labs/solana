@@ -67,6 +67,7 @@ use {
         snapshot_utils::create_accounts_run_and_snapshot_dirs,
         sorted_storages::SortedStorages,
         storable_accounts::StorableAccounts,
+        tiered_storage::{hot::HOT_FORMAT, TieredStorage},
         verify_accounts_hash_in_background::VerifyAccountsHashInBackground,
     },
     blake3::traits::digest::Digest,
@@ -1048,9 +1049,48 @@ pub struct AccountStorageEntry {
 
 impl AccountStorageEntry {
     pub fn new(path: &Path, slot: Slot, id: AppendVecId, file_size: u64) -> Self {
+        // Self::new_cold(path, slot, id, file_size)
+        Self::new_hot(path, slot, id, file_size)
+    }
+
+    pub fn new_av(path: &Path, slot: Slot, id: AppendVecId, file_size: u64) -> Self {
         let tail = AccountsFile::file_name(slot, id);
         let path = Path::new(path).join(tail);
         let accounts = AccountsFile::AppendVec(AppendVec::new(&path, true, file_size as usize));
+
+        Self {
+            id: AtomicAppendVecId::new(id),
+            slot: AtomicU64::new(slot),
+            accounts,
+            count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
+            approx_store_count: AtomicUsize::new(0),
+            alive_bytes: AtomicUsize::new(0),
+        }
+    }
+
+    /*
+    pub fn new_cold(path: &Path, slot: Slot, id: AppendVecId, _file_size: u64) -> Self {
+        let tail = AccountsFile::file_name(slot, id);
+        let path = Path::new(path).join(tail);
+        let accounts = AccountsFile::Tiered(TieredStorage::new(&path, Some(&COLD_FORMAT)));
+        info!("[Cold]: Create new cold storage at path {:?}", path);
+
+        Self {
+            id: AtomicAppendVecId::new(id),
+            slot: AtomicU64::new(slot),
+            accounts,
+            count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
+            approx_store_count: AtomicUsize::new(0),
+            alive_bytes: AtomicUsize::new(0),
+        }
+    }
+    */
+
+    pub fn new_hot(path: &Path, slot: Slot, id: AppendVecId, _file_size: u64) -> Self {
+        let tail = AccountsFile::file_name(slot, id);
+        let path = Path::new(path).join(tail);
+        let accounts = AccountsFile::Tiered(TieredStorage::new(&path, Some(&HOT_FORMAT)));
+        info!("[Hot]: Create new hot storage at path {:?}", path);
 
         Self {
             id: AtomicAppendVecId::new(id),
@@ -3967,6 +4007,7 @@ impl AccountsDb {
             .fetch_add(time.as_us(), Ordering::Relaxed);
     }
 
+    /// Perform shrink on the speficied slot if the slot is eligible for shrink.
     fn do_shrink_slot_store(&self, slot: Slot, store: &Arc<AccountStorageEntry>) {
         if self.accounts_cache.contains(slot) {
             // It is not correct to shrink a slot while it is in the write cache until flush is complete and the slot is removed from the write cache.
@@ -3993,6 +4034,7 @@ impl AccountsDb {
             self.shrink_stats
                 .skipped_shrink
                 .fetch_add(1, Ordering::Relaxed);
+            // comment(YH): undo the unref to the locked entry in the accounts_index.
             for pubkey in shrink_collect.unrefed_pubkeys {
                 if let Some(locked_entry) = self.accounts_index.get_account_read_entry(pubkey) {
                     // pubkeys in `unrefed_pubkeys` were unref'd in `shrink_collect` above under the assumption that we would shrink everything.
@@ -4151,6 +4193,7 @@ impl AccountsDb {
         slot: Slot,
         aligned_total: u64,
     ) -> ShrinkInProgress<'_> {
+        /*
         let shrunken_store = self
             .try_recycle_store(slot, aligned_total, aligned_total + 1024)
             .unwrap_or_else(|| {
@@ -4161,6 +4204,13 @@ impl AccountsDb {
                     .unwrap_or_else(|| (&self.paths, "shrink"));
                 self.create_store(slot, aligned_total, from, shrink_paths)
             });
+            */
+        let maybe_shrink_paths = self.shrink_paths.read().unwrap();
+        let (shrink_paths, from) = maybe_shrink_paths
+            .as_ref()
+            .map(|paths| (paths, "shrink-w-path"))
+            .unwrap_or_else(|| (&self.paths, "shrink"));
+        let shrunken_store = self.create_store(slot, aligned_total, from, shrink_paths);
         self.storage.shrinking_in_progress(slot, shrunken_store)
     }
 

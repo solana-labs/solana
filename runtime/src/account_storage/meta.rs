@@ -1,5 +1,9 @@
 use {
-    crate::{append_vec::AppendVecStoredAccountMeta, storable_accounts::StorableAccounts},
+    crate::{
+        append_vec::AppendVecStoredAccountMeta,
+        storable_accounts::StorableAccounts,
+        tiered_storage::{hot::HotAccountMeta, readable::TieredReadableAccount},
+    },
     solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
     std::{borrow::Borrow, marker::PhantomData},
 };
@@ -11,6 +15,13 @@ pub struct StoredAccountInfo {
     pub offset: usize,
     pub size: usize,
 }
+
+lazy_static! {
+    pub static ref DEFAULT_ACCOUNT_HASH: Hash = Hash::default();
+}
+
+pub const DEFAULT_WRITE_VERSION: StoredMetaWriteVersion = 0;
+pub const DEFAULT_RENT_EPOCH: Epoch = Epoch::MAX;
 
 /// Goal is to eliminate copies and data reshaping given various code paths that store accounts.
 /// This struct contains what is needed to store accounts to a storage
@@ -100,66 +111,88 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
 #[derive(PartialEq, Eq, Debug)]
 pub enum StoredAccountMeta<'storage> {
     AppendVec(AppendVecStoredAccountMeta<'storage>),
+    // Cold(TieredReadableAccount<'storage, ColdAccountMeta>),
+    Hot(TieredReadableAccount<'storage, HotAccountMeta>),
 }
 
 impl<'storage> StoredAccountMeta<'storage> {
     pub fn pubkey(&self) -> &'storage Pubkey {
         match self {
             Self::AppendVec(av) => av.pubkey(),
+            // Self::Cold(cs) => cs.pubkey(),
+            Self::Hot(hs) => hs.address(),
         }
     }
 
     pub fn hash(&self) -> &'storage Hash {
         match self {
             Self::AppendVec(av) => av.hash(),
+            // Self::Cold(cs) => cs.hash(),
+            Self::Hot(hs) => hs.hash().unwrap_or(&DEFAULT_ACCOUNT_HASH),
         }
     }
 
     pub fn stored_size(&self) -> usize {
         match self {
             Self::AppendVec(av) => av.stored_size(),
+            // Self::Cold(cs) => cs.stored_size(),
+            Self::Hot(hs) => hs.stored_size(),
         }
     }
 
     pub fn offset(&self) -> usize {
         match self {
             Self::AppendVec(av) => av.offset(),
+            // Self::Cold(cs) => cs.offset(),
+            Self::Hot(hs) => hs.index(),
         }
     }
 
     pub fn data(&self) -> &'storage [u8] {
         match self {
             Self::AppendVec(av) => av.data(),
+            // Self::Cold(cs) => cs.data(),
+            Self::Hot(hs) => hs.data(),
         }
     }
 
     pub fn data_len(&self) -> u64 {
         match self {
             Self::AppendVec(av) => av.data_len(),
+            // Self::Cold(cs) => cs.data_len(),
+            Self::Hot(hs) => hs.data().len() as u64,
         }
     }
 
     pub fn write_version(&self) -> StoredMetaWriteVersion {
         match self {
             Self::AppendVec(av) => av.write_version(),
+            // Self::Cold(cs) => cs.write_version(),
+            Self::Hot(hs) => hs.write_version().unwrap_or(DEFAULT_WRITE_VERSION),
         }
     }
 
     pub fn meta(&self) -> &StoredMeta {
         match self {
             Self::AppendVec(av) => av.meta(),
+            // Self::Cold(_) => unreachable!(),
+            Self::Hot(_) => unreachable!(),
         }
     }
 
     pub fn set_meta(&mut self, meta: &'storage StoredMeta) {
         match self {
             Self::AppendVec(av) => av.set_meta(meta),
+            // Self::Cold(_) => unreachable!(),
+            Self::Hot(_) => unreachable!(),
         }
     }
 
     pub(crate) fn sanitize(&self) -> bool {
         match self {
             Self::AppendVec(av) => av.sanitize(),
+            // Self::Cold(_) => unimplemented!(),
+            Self::Hot(_) => unreachable!(),
         }
     }
 }
@@ -168,26 +201,36 @@ impl<'storage> ReadableAccount for StoredAccountMeta<'storage> {
     fn lamports(&self) -> u64 {
         match self {
             Self::AppendVec(av) => av.lamports(),
+            // Self::Cold(cs) => cs.lamports(),
+            Self::Hot(hs) => hs.lamports(),
         }
     }
     fn data(&self) -> &[u8] {
         match self {
             Self::AppendVec(av) => av.data(),
+            // Self::Cold(cs) => cs.data(),
+            Self::Hot(hs) => hs.data(),
         }
     }
     fn owner(&self) -> &Pubkey {
         match self {
             Self::AppendVec(av) => av.owner(),
+            // Self::Cold(cs) => cs.owner(),
+            Self::Hot(hs) => hs.owner(),
         }
     }
     fn executable(&self) -> bool {
         match self {
             Self::AppendVec(av) => av.executable(),
+            // Self::Cold(cs) => cs.executable(),
+            Self::Hot(hs) => hs.executable(),
         }
     }
     fn rent_epoch(&self) -> Epoch {
         match self {
             Self::AppendVec(av) => av.rent_epoch(),
+            // Self::Cold(cs) => cs.rent_epoch(),
+            Self::Hot(hs) => hs.rent_epoch(),
         }
     }
 }

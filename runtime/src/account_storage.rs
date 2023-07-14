@@ -270,6 +270,8 @@ pub(crate) mod tests {
     use {super::*, std::path::Path};
 
     #[test]
+    /// The new cold storage will fail this test as it does not have
+    /// the concept of capacity yet.
     fn test_shrink_in_progress() {
         // test that we check in order map then shrink_in_progress_map
         let storage = AccountStorage::default();
@@ -283,13 +285,13 @@ pub(crate) mod tests {
         let store_file_size = 4000;
         let store_file_size2 = store_file_size * 2;
         // 2 append vecs with same id, but different sizes
-        let entry = Arc::new(AccountStorageEntry::new(
+        let entry = Arc::new(AccountStorageEntry::new_av(
             common_store_path,
             slot,
             id,
             store_file_size,
         ));
-        let entry2 = Arc::new(AccountStorageEntry::new(
+        let entry2 = Arc::new(AccountStorageEntry::new_av(
             common_store_path,
             slot,
             id,
