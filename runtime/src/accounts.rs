@@ -36,11 +36,10 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
-            self, add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
+            self, add_set_tx_loaded_accounts_data_size_instruction,
             include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
-            simplify_writable_program_account_check, use_default_units_in_fee_calculation,
-            FeatureSet,
+            simplify_writable_program_account_check, FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -727,11 +726,8 @@ impl Accounts {
                             tx.message(),
                             lamports_per_signature,
                             fee_structure,
-                            feature_set.is_active(&use_default_units_in_fee_calculation::id()),
-                            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+                            &ComputeBudget::fee_budget_limits(tx.message().program_instructions_iter(), feature_set, Some(self.accounts_db.expected_cluster_type())),
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
-                            feature_set.is_active(&enable_request_heap_frame_ix::id()) || self.accounts_db.expected_cluster_type() != ClusterType::MainnetBeta,
-                            feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
                             feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                         )
                     } else {
@@ -1761,14 +1757,19 @@ mod tests {
             instructions,
         );
 
+        let mut feature_set = FeatureSet::all_enabled();
+        feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+
+        let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = Bank::calculate_fee(
-            &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+            &message,
             lamports_per_signature,
             &FeeStructure::default(),
-            true,
-            false,
-            true,
-            true,
+            &ComputeBudget::fee_budget_limits(
+                message.program_instructions_iter(),
+                &feature_set,
+                None,
+            ),
             true,
             false,
         );
@@ -4324,14 +4325,19 @@ mod tests {
             Hash::default(),
         );
 
+        let mut feature_set = FeatureSet::all_enabled();
+        feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+
+        let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = Bank::calculate_fee(
-            &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+            &message,
             lamports_per_signature,
             &FeeStructure::default(),
-            true,
-            false,
-            true,
-            true,
+            &ComputeBudget::fee_budget_limits(
+                message.program_instructions_iter(),
+                &feature_set,
+                None,
+            ),
             true,
             false,
         );

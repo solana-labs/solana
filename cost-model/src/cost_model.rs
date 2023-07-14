@@ -17,6 +17,7 @@ use {
             include_loaded_accounts_data_size_in_fee_calculation,
             remove_deprecated_request_unit_ix, FeatureSet,
         },
+        fee::FeeStructure,
         instruction::CompiledInstruction,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
@@ -25,8 +26,6 @@ use {
         transaction::SanitizedTransaction,
     },
 };
-
-const ACCOUNT_DATA_COST_PAGE_SIZE: u64 = 32_u64.saturating_mul(1024);
 
 pub struct CostModel;
 
@@ -57,10 +56,10 @@ impl CostModel {
     // limit of 64MB; which will convert to (64M/32K)*8CU = 16_000 CUs
     //
     pub fn calculate_loaded_accounts_data_size_cost(compute_budget: &ComputeBudget) -> u64 {
-        (compute_budget.loaded_accounts_data_size_limit as u64)
-            .saturating_add(ACCOUNT_DATA_COST_PAGE_SIZE.saturating_sub(1))
-            .saturating_div(ACCOUNT_DATA_COST_PAGE_SIZE)
-            .saturating_mul(compute_budget.heap_cost)
+        FeeStructure::calculate_memory_usage_cost(
+            compute_budget.loaded_accounts_data_size_limit,
+            compute_budget.heap_cost,
+        )
     }
 
     fn get_signature_cost(transaction: &SanitizedTransaction) -> u64 {
@@ -209,6 +208,7 @@ mod tests {
         super::*,
         solana_sdk::{
             compute_budget::{self, ComputeBudgetInstruction},
+            fee::ACCOUNT_DATA_COST_PAGE_SIZE,
             hash::Hash,
             instruction::CompiledInstruction,
             message::Message,

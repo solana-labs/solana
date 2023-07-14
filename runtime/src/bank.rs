@@ -96,7 +96,7 @@ use {
         ThreadPool, ThreadPoolBuilder,
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment,
-    solana_cost_model::{cost_model::CostModel, cost_tracker::CostTracker},
+    solana_cost_model::cost_tracker::CostTracker,
     solana_measure::{measure, measure::Measure, measure_us},
     solana_perf::perf_libs,
     solana_program_runtime::{
@@ -131,10 +131,10 @@ use {
         feature,
         feature_set::{
             self, add_set_tx_loaded_accounts_data_size_instruction,
-            enable_early_verification_of_account_modifications, enable_request_heap_frame_ix,
+            enable_early_verification_of_account_modifications,
             include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
-            use_default_units_in_fee_calculation, FeatureSet,
+            FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -267,6 +267,7 @@ pub struct BankRc {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
+use solana_sdk::fee::FeeBudgetLimits;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
@@ -4226,23 +4227,7 @@ impl Bank {
                     NoncePartial::new(address, account).lamports_per_signature()
                 })
         })?;
-        Some(Self::calculate_fee(
-            message,
-            lamports_per_signature,
-            &self.fee_structure,
-            self.feature_set
-                .is_active(&use_default_units_in_fee_calculation::id()),
-            !self
-                .feature_set
-                .is_active(&remove_deprecated_request_unit_ix::id()),
-            self.feature_set
-                .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
-            self.enable_request_heap_frame_ix(),
-            self.feature_set
-                .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-            self.feature_set
-                .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
-        ))
+        Some(self.get_fee_for_message_with_lamports_per_signature(message, lamports_per_signature))
     }
 
     pub fn get_startup_verification_complete(&self) -> &Arc<AtomicBool> {
@@ -4281,16 +4266,13 @@ impl Bank {
             message,
             lamports_per_signature,
             &self.fee_structure,
-            self.feature_set
-                .is_active(&use_default_units_in_fee_calculation::id()),
-            !self
-                .feature_set
-                .is_active(&remove_deprecated_request_unit_ix::id()),
+            &ComputeBudget::fee_budget_limits(
+                message.program_instructions_iter(),
+                &self.feature_set,
+                Some(self.cluster_type()),
+            ),
             self.feature_set
                 .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
-            self.enable_request_heap_frame_ix(),
-            self.feature_set
-                .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
             self.feature_set
                 .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
         )
@@ -5083,15 +5065,6 @@ impl Bank {
         }
     }
 
-    // A cluster specific feature gate, when not activated it keeps v1.13 behavior in mainnet-beta;
-    // once activated for v1.14+, it allows compute_budget::request_heap_frame and
-    // compute_budget::set_compute_unit_price co-exist in same transaction.
-    fn enable_request_heap_frame_ix(&self) -> bool {
-        self.feature_set
-            .is_active(&enable_request_heap_frame_ix::id())
-            || self.cluster_type() != ClusterType::MainnetBeta
-    }
-
     fn replenish_program_cache(
         &self,
         program_accounts_map: &HashMap<Pubkey, (&Pubkey, u64)>,
@@ -5556,11 +5529,8 @@ impl Bank {
         message: &SanitizedMessage,
         lamports_per_signature: u64,
         fee_structure: &FeeStructure,
-        use_default_units_per_instruction: bool,
-        support_request_units_deprecated: bool,
+        budget_limits: &FeeBudgetLimits,
         remove_congestion_multiplier: bool,
-        enable_request_heap_frame_ix: bool,
-        support_set_accounts_data_size_limit_ix: bool,
         include_loaded_account_data_size_in_fee: bool,
     ) -> u64 {
         // Fee based on compute units and signatures
@@ -5574,17 +5544,6 @@ impl Bank {
             BASE_CONGESTION / current_congestion
         };
 
-        let mut compute_budget = ComputeBudget::default();
-        let prioritization_fee_details = compute_budget
-            .process_instructions(
-                message.program_instructions_iter(),
-                use_default_units_per_instruction,
-                support_request_units_deprecated,
-                enable_request_heap_frame_ix,
-                support_set_accounts_data_size_limit_ix,
-            )
-            .unwrap_or_default();
-        let prioritization_fee = prioritization_fee_details.get_fee();
         let signature_fee = message
             .num_signatures()
             .saturating_mul(fee_structure.lamports_per_signature);
@@ -5595,12 +5554,15 @@ impl Bank {
         // `compute_fee` covers costs for both requested_compute_units and
         // requested_loaded_account_data_size
         let loaded_accounts_data_size_cost = if include_loaded_account_data_size_in_fee {
-            CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget)
+            FeeStructure::calculate_memory_usage_cost(
+                budget_limits.loaded_accounts_data_size_limit,
+                budget_limits.heap_cost,
+            )
         } else {
             0_u64
         };
         let total_compute_units =
-            loaded_accounts_data_size_cost.saturating_add(compute_budget.compute_unit_limit);
+            loaded_accounts_data_size_cost.saturating_add(budget_limits.compute_unit_limit);
         let compute_fee = fee_structure
             .compute_fee_bins
             .iter()
@@ -5614,7 +5576,8 @@ impl Bank {
                     .unwrap_or_default()
             });
 
-        ((prioritization_fee
+        ((budget_limits
+            .prioritization_fee
             .saturating_add(signature_fee)
             .saturating_add(write_lock_fee)
             .saturating_add(compute_fee) as f64)
@@ -5653,22 +5616,9 @@ impl Bank {
 
                 let lamports_per_signature =
                     lamports_per_signature.ok_or(TransactionError::BlockhashNotFound)?;
-                let fee = Self::calculate_fee(
+                let fee = self.get_fee_for_message_with_lamports_per_signature(
                     tx.message(),
                     lamports_per_signature,
-                    &self.fee_structure,
-                    self.feature_set
-                        .is_active(&use_default_units_in_fee_calculation::id()),
-                    !self
-                        .feature_set
-                        .is_active(&remove_deprecated_request_unit_ix::id()),
-                    self.feature_set
-                        .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
-                    self.enable_request_heap_frame_ix(),
-                    self.feature_set
-                        .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-                    self.feature_set
-                        .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                 );
 
                 // In case of instruction error, even though no accounts
