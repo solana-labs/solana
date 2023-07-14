@@ -1,6 +1,8 @@
 //! Fee structures.
 
 use crate::native_token::sol_to_lamports;
+#[cfg(not(target_os = "solana"))]
+use solana_program::message::SanitizedMessage;
 
 /// A fee and its associated compute unit limit
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
@@ -74,10 +76,11 @@ impl FeeStructure {
     }
 
     /// Calculate fee for `SanitizedMessage`
+    #[cfg(not(target_os = "solana"))]
     pub fn calculate_fee(
+        &self,
         message: &SanitizedMessage,
         lamports_per_signature: u64,
-        fee_structure: &FeeStructure,
         budget_limits: &FeeBudgetLimits,
         remove_congestion_multiplier: bool,
         include_loaded_account_data_size_in_fee: bool,
@@ -95,10 +98,10 @@ impl FeeStructure {
 
         let signature_fee = message
             .num_signatures()
-            .saturating_mul(fee_structure.lamports_per_signature);
+            .saturating_mul(self.lamports_per_signature);
         let write_lock_fee = message
             .num_write_locks()
-            .saturating_mul(fee_structure.lamports_per_write_lock);
+            .saturating_mul(self.lamports_per_write_lock);
 
         // `compute_fee` covers costs for both requested_compute_units and
         // requested_loaded_account_data_size
@@ -112,14 +115,13 @@ impl FeeStructure {
         };
         let total_compute_units =
             loaded_accounts_data_size_cost.saturating_add(budget_limits.compute_unit_limit);
-        let compute_fee = fee_structure
+        let compute_fee = self
             .compute_fee_bins
             .iter()
             .find(|bin| total_compute_units <= bin.limit)
             .map(|bin| bin.fee)
             .unwrap_or_else(|| {
-                fee_structure
-                    .compute_fee_bins
+                self.compute_fee_bins
                     .last()
                     .map(|bin| bin.fee)
                     .unwrap_or_default()

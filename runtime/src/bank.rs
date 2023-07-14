@@ -267,7 +267,6 @@ pub struct BankRc {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
-use solana_sdk::fee::FeeBudgetLimits;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
@@ -4262,10 +4261,9 @@ impl Bank {
         message: &SanitizedMessage,
         lamports_per_signature: u64,
     ) -> u64 {
-        Self::calculate_fee(
+        self.fee_structure.calculate_fee(
             message,
             lamports_per_signature,
-            &self.fee_structure,
             &ComputeBudget::fee_budget_limits(
                 message.program_instructions_iter(),
                 &self.feature_set,
