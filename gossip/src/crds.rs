@@ -677,10 +677,12 @@ impl CrdsDataStats {
                 self.votes.put(slot, num_nodes + 1);
             }
         }
-        let specific_ending: [u8; 1] = [01];
+        // let specific_ending: [u8; 1] = [01];
+        let ending_zeros = 9;
         // let specific_ending: [u8; 2] = [57, 01];
-        if entry.value.signature.check_ending_characters(&specific_ending) {
-            info!("gregg signature ends in a: {:?}", entry.value.signature);
+        // if entry.value.signature.check_ending_characters(&specific_ending) {
+        if entry.value.signature.last_n_bits_are_zero(ending_zeros) {
+            info!("greg signature ends in a: {:?}", entry.value.signature);
             self.message_signatures.push_back(entry.value.signature);
 
             // fixed length ring buffer. overwrite latest element if buffer full
@@ -690,7 +692,7 @@ impl CrdsDataStats {
 
 
         // else {
-        //     info!("gregg signature does not end in a: {:?}", entry.value.signature);
+        //     info!("greg signature does not end in a: {:?}", entry.value.signature);
         // }
         // self.message_signatures.push_back(entry.value.signature);
     }
