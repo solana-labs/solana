@@ -1,5 +1,6 @@
 //! Functionality for public and private keys.
 #![cfg(feature = "full")]
+#![allow(clippy::integer_arithmetic)]
 
 // legacy module paths
 pub use crate::signer::{keypair::*, null_signer::*, presigner::*, *};
