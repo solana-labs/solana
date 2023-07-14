@@ -41,7 +41,6 @@ pub mod epoch_stakes;
 pub mod genesis_utils;
 pub mod hardened_unpack;
 pub mod in_mem_accounts_index;
-mod index_list;
 pub mod inline_spl_associated_token_account;
 pub mod inline_spl_token;
 pub mod inline_spl_token_2022;
