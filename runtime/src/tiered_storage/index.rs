@@ -75,8 +75,8 @@ impl AccountIndexFormat {
         Ok(address)
     }
 
-    /// Returns the offset to the account given the specified index
-    /// to the index block.
+    /// Returns the offset to the account block that contains the account
+    /// associated with the specified index to the index block.
     pub fn get_account_block_offset(
         &self,
         map: &Mmap,
