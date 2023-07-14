@@ -105,13 +105,8 @@ impl AccountIndexFormat {
 #[cfg(test)]
 pub mod tests {
     use {
-        super::*,
-        crate::{
-            append_vec::test_utils::get_append_vec_path, tiered_storage::file::TieredStorageFile,
-        },
-        memmap2::MmapOptions,
-        rand::Rng,
-        std::fs::OpenOptions,
+        super::*, crate::tiered_storage::file::TieredStorageFile, memmap2::MmapOptions, rand::Rng,
+        std::fs::OpenOptions, tempfile::TempDir,
     };
 
     #[test]
@@ -121,7 +116,11 @@ pub mod tests {
             account_entry_count: ENTRY_COUNT,
             ..TieredStorageFooter::default()
         };
-        let path = get_append_vec_path("test_address_and_offset_indexer");
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir
+            .path()
+            .join("test_address_and_offset_indexer")
+            .to_path_buf();
         let addresses: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
             .take(ENTRY_COUNT.try_into().unwrap())
             .collect();
@@ -136,7 +135,7 @@ pub mod tests {
             .collect();
 
         {
-            let file = TieredStorageFile::new_writable(&path.path);
+            let file = TieredStorageFile::new_writable(&path);
             let indexer = AccountIndexFormat::AddressAndOffset;
             indexer.write_index_block(&file, &index_entries).unwrap();
         }
@@ -145,7 +144,7 @@ pub mod tests {
         let file = OpenOptions::new()
             .read(true)
             .create(false)
-            .open(&path.path)
+            .open(&path)
             .unwrap();
         let map = unsafe { MmapOptions::new().map(&file).unwrap() };
         for (i, index_entry) in index_entries.iter().enumerate() {
