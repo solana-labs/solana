@@ -1,7 +1,7 @@
 use {
     crate::tiered_storage::{
-        error::TieredStorageError, file::TieredStorageFile, mmap_utils::get_type,
-        TieredStorageResult as TsResult,
+        error::TieredStorageError, file::TieredStorageFile, index::AccountIndexFormat,
+        mmap_utils::get_type, TieredStorageResult as TsResult,
     },
     memmap2::Mmap,
     solana_sdk::{hash::Hash, pubkey::Pubkey},
@@ -83,27 +83,6 @@ pub enum AccountBlockFormat {
 pub enum OwnersBlockFormat {
     #[default]
     LocalIndex = 0,
-}
-
-/// The index format of a tiered accounts file.
-#[repr(u16)]
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Default,
-    Eq,
-    Hash,
-    PartialEq,
-    num_enum::IntoPrimitive,
-    num_enum::TryFromPrimitive,
-)]
-pub enum AccountIndexFormat {
-    /// This format optimizes the storage size by storing only account addresses
-    /// and offsets.  It skips storing the size of account data by storing account
-    /// block entries and index block entries in the same order.
-    #[default]
-    AddressAndOffset = 0,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

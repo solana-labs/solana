@@ -16,15 +16,28 @@ pub struct AccountIndexWriterEntry<'a> {
     pub intra_block_offset: u64,
 }
 
-#[derive(Debug)]
-pub enum TieredStorageIndexer {
+/// The index format of a tiered accounts file.
+#[repr(u16)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Hash,
+    PartialEq,
+    num_enum::IntoPrimitive,
+    num_enum::TryFromPrimitive,
+)]
+pub enum AccountIndexFormat {
     /// This format optimizes the storage size by storing only account addresses
     /// and offsets.  It skips storing the size of account data by storing account
     /// block entries and index block entries in the same order.
-    AddressAndOffset,
+    #[default]
+    AddressAndOffset = 0,
 }
 
-impl TieredStorageIndexer {
+impl AccountIndexFormat {
     /// Persists the specified index_entries to the specified file and returns
     /// the total number of bytes written.
     pub fn write_index_block(
@@ -103,35 +116,32 @@ pub mod tests {
 
     #[test]
     fn test_address_and_offset_indexer() {
-        const ENTRY_COUNT: usize = 100;
+        const ENTRY_COUNT: u32 = 100;
         let footer = TieredStorageFooter {
-            account_entry_count: ENTRY_COUNT as u32,
+            account_entry_count: ENTRY_COUNT,
             ..TieredStorageFooter::default()
         };
         let path = get_append_vec_path("test_address_and_offset_indexer");
-
-        let mut addresses = vec![];
-        let mut index_entries = vec![];
+        let addresses: Vec<_> = std::iter::repeat_with(|| Pubkey::new_unique())
+            .take(ENTRY_COUNT.try_into().unwrap())
+            .collect();
         let mut rng = rand::thread_rng();
-        for _ in 0..ENTRY_COUNT {
-            addresses.push(Pubkey::new_unique());
-        }
-
-        for address in addresses.iter() {
-            index_entries.push(AccountIndexWriterEntry {
+        let index_entries: Vec<_> = addresses
+            .iter()
+            .map(|address| AccountIndexWriterEntry {
                 address,
                 block_offset: rng.gen_range(128, 2048),
                 intra_block_offset: 0,
-            });
-        }
+            })
+            .collect();
 
         {
             let file = TieredStorageFile::new_writable(&path.path);
-            let indexer = TieredStorageIndexer::AddressAndOffset;
+            let indexer = AccountIndexFormat::AddressAndOffset;
             indexer.write_index_block(&file, &index_entries).unwrap();
         }
 
-        let indexer = TieredStorageIndexer::AddressAndOffset;
+        let indexer = AccountIndexFormat::AddressAndOffset;
         let file = OpenOptions::new()
             .read(true)
             .create(false)
