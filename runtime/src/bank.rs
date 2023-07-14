@@ -126,7 +126,6 @@ use {
             MAX_TRANSACTION_FORWARDING_DELAY, MAX_TRANSACTION_FORWARDING_DELAY_GPU,
             SECONDS_PER_DAY,
         },
-        ed25519_program,
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
         feature,
@@ -154,7 +153,7 @@ use {
         packet::PACKET_DATA_SIZE,
         precompiles::get_precompiles,
         pubkey::Pubkey,
-        saturating_add_assign, secp256k1_program,
+        saturating_add_assign,
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
         slot_history::{Check, SlotHistory},
@@ -5552,27 +5551,6 @@ impl Bank {
         self.update_accounts_data_size_delta_off_chain(amount)
     }
 
-    fn get_num_signatures_in_message(message: &SanitizedMessage) -> u64 {
-        let mut num_signatures = u64::from(message.header().num_required_signatures);
-        // This next part is really calculating the number of pre-processor
-        // operations being done and treating them like a signature
-        for (program_id, instruction) in message.program_instructions_iter() {
-            if secp256k1_program::check_id(program_id) || ed25519_program::check_id(program_id) {
-                if let Some(num_verifies) = instruction.data.first() {
-                    num_signatures = num_signatures.saturating_add(u64::from(*num_verifies));
-                }
-            }
-        }
-        num_signatures
-    }
-
-    fn get_num_write_locks_in_message(message: &SanitizedMessage) -> u64 {
-        message
-            .account_keys()
-            .len()
-            .saturating_sub(message.num_readonly_accounts()) as u64
-    }
-
     /// Calculate fee for `SanitizedMessage`
     pub fn calculate_fee(
         message: &SanitizedMessage,
@@ -5607,9 +5585,11 @@ impl Bank {
             )
             .unwrap_or_default();
         let prioritization_fee = prioritization_fee_details.get_fee();
-        let signature_fee = Self::get_num_signatures_in_message(message)
+        let signature_fee = message
+            .num_signatures()
             .saturating_mul(fee_structure.lamports_per_signature);
-        let write_lock_fee = Self::get_num_write_locks_in_message(message)
+        let write_lock_fee = message
+            .num_write_locks()
             .saturating_mul(fee_structure.lamports_per_write_lock);
 
         // `compute_fee` covers costs for both requested_compute_units and
