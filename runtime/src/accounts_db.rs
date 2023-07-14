@@ -7672,7 +7672,7 @@ impl AccountsDb {
                     AccountsHashEnum::Incremental(IncrementalAccountsHash(accounts_hash))
                 }
             };
-            info!("calculate_accounts_hash_from_storages: slot: {slot}, {accounts_hash:?}, capitalization: {capitalization},{total_time}");
+            info!("calculate_accounts_hash_from_storages: slot: {slot}, {accounts_hash:?}, capitalization: {capitalization}");
             Ok((accounts_hash, capitalization))
         };
 
