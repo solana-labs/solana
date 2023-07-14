@@ -135,9 +135,14 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) -> bool {
             Some(sig_end) => sig_end,
             None => return false,
         };
+<<<<<<< HEAD
         let signature = match packet.data(sig_start..sig_end) {
             Some(signature) => Signature::new(signature),
             None => return false,
+=======
+        let Some(Ok(signature)) = packet.data(sig_start..sig_end).map(Signature::try_from) else {
+            return false;
+>>>>>>> cfb028819a (deprecates Signature::new in favor of Signature::{try_,}from (#32481))
         };
         let pubkey = match packet.data(pubkey_start..pubkey_end) {
             Some(pubkey) => pubkey,

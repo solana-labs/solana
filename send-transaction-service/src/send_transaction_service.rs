@@ -1068,7 +1068,7 @@ mod test {
 
         info!("Transactions are only retried until max_retries");
         transactions.insert(
-            Signature::new(&[1; 64]),
+            Signature::from([1; 64]),
             TransactionInfo::new(
                 Signature::default(),
                 vec![],
@@ -1079,7 +1079,7 @@ mod test {
             ),
         );
         transactions.insert(
-            Signature::new(&[2; 64]),
+            Signature::from([2; 64]),
             TransactionInfo::new(
                 Signature::default(),
                 vec![],
