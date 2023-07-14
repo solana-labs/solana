@@ -719,7 +719,7 @@ where
     }
 }
 
-fn submit_crds_signature_stats<'a>(
+fn submit_crds_signature_stats(
     name: &'static str,
     crds_signatures: &mut HeapRb<(Pubkey, Signature)>,
 ) {
