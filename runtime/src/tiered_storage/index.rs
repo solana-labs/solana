@@ -122,7 +122,7 @@ pub mod tests {
             ..TieredStorageFooter::default()
         };
         let path = get_append_vec_path("test_address_and_offset_indexer");
-        let addresses: Vec<_> = std::iter::repeat_with(|| Pubkey::new_unique())
+        let addresses: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
             .take(ENTRY_COUNT.try_into().unwrap())
             .collect();
         let mut rng = rand::thread_rng();
