@@ -98,8 +98,13 @@ pub fn spawn_server(
     info!("Start {name} quic server on {sock:?}");
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
-    let endpoint = Endpoint::new(EndpointConfig::default(), Some(config), sock, TokioRuntime)
-        .map_err(QuicServerError::EndpointFailed)?;
+    let endpoint = Endpoint::new(
+        EndpointConfig::default(),
+        Some(config),
+        sock,
+        Arc::new(TokioRuntime),
+    )
+    .map_err(QuicServerError::EndpointFailed)?;
     let stats = Arc::<StreamStats>::default();
     let handle = tokio::spawn(run_server(
         name,
@@ -1132,7 +1137,7 @@ pub mod test {
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_single_cert(vec![cert], key)
+            .with_client_auth_cert(vec![cert], key)
             .expect("Failed to use client certificate");
 
         crypto.enable_early_data = true;
@@ -1189,9 +1194,13 @@ pub mod test {
         client_keypair: Option<&Keypair>,
     ) -> Connection {
         let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let mut endpoint =
-            quinn::Endpoint::new(EndpointConfig::default(), None, client_socket, TokioRuntime)
-                .unwrap();
+        let mut endpoint = quinn::Endpoint::new(
+            EndpointConfig::default(),
+            None,
+            client_socket,
+            Arc::new(TokioRuntime),
+        )
+        .unwrap();
         let default_keypair = Keypair::new();
         endpoint.set_default_client_config(get_client_config(
             client_keypair.unwrap_or(&default_keypair),
@@ -1459,9 +1468,13 @@ pub mod test {
         let (t, exit, _receiver, server_address, stats) = setup_quic_server(None, 2);
 
         let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let mut endpoint =
-            quinn::Endpoint::new(EndpointConfig::default(), None, client_socket, TokioRuntime)
-                .unwrap();
+        let mut endpoint = quinn::Endpoint::new(
+            EndpointConfig::default(),
+            None,
+            client_socket,
+            Arc::new(TokioRuntime),
+        )
+        .unwrap();
         let default_keypair = Keypair::new();
         endpoint.set_default_client_config(get_client_config(&default_keypair));
         let conn1 = endpoint

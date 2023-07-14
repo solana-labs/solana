@@ -117,7 +117,7 @@ impl QuicLazyInitializedEndpoint {
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_single_cert(
+            .with_client_auth_cert(
                 vec![self.client_certificate.certificate.clone()],
                 self.client_certificate.key.clone(),
             )
@@ -203,7 +203,7 @@ impl QuicNewConnection {
     }
 
     fn create_endpoint(config: EndpointConfig, client_socket: UdpSocket) -> Endpoint {
-        quinn::Endpoint::new(config, None, client_socket, TokioRuntime)
+        quinn::Endpoint::new(config, None, client_socket, Arc::new(TokioRuntime))
             .expect("QuicNewConnection::create_endpoint quinn::Endpoint::new")
     }
 
