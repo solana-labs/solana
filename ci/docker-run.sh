@@ -107,12 +107,23 @@ ARGS+=(
   --env CRATES_IO_TOKEN
 )
 
-# Also propagate environment variables needed for codecov
-# https://docs.codecov.io/docs/testing-with-docker#section-codecov-inside-docker
-# We normalize CI to `1`; but codecov expects it to be `true` to detect Buildkite...
-# Unfortunately, codecov.io fails sometimes:
-#   curl: (7) Failed to connect to codecov.io port 443: Connection timed out
-CODECOV_ENVS=$(CI=true bash <(while ! curl -sS --retry 5 --retry-delay 2 --retry-connrefused https://codecov.io/env; do sleep 10; done))
+# https://docs.codecov.com/docs/testing-with-docker
+# inline those environment variables for avoiding various curl errors
+# coverage env
+ARGS+=(
+  --env CODECOV_ENV
+  --env CODECOV_TOKEN
+  --env CODECOV_URL
+  --env CODECOV_SLUG
+  --env VCS_COMMIT_ID
+  --env VCS_BRANCH_NAME
+  --env VCS_PULL_REQUEST
+  --env VCS_SLUG
+  --env VCS_TAG
+  --env CI_BUILD_URL
+  --env CI_BUILD_ID
+  --env CI_JOB_ID
+)
 
 if $INTERACTIVE; then
   if [[ -n $1 ]]; then
@@ -122,9 +133,9 @@ if $INTERACTIVE; then
   fi
   set -x
   # shellcheck disable=SC2086
-  exec docker run --interactive --tty "${ARGS[@]}" $CODECOV_ENVS "$IMAGE" bash
+  exec docker run --interactive --tty "${ARGS[@]}" "$IMAGE" bash
 fi
 
 set -x
 # shellcheck disable=SC2086
-exec docker run "${ARGS[@]}" $CODECOV_ENVS -t "$IMAGE" "$@"
+exec docker run "${ARGS[@]}" -t "$IMAGE" "$@"
