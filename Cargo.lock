@@ -8986,8 +8986,3 @@ dependencies = [
  "cc",
  "libc",
 ]
-
-[[patch.unused]]
-name = "ntapi"
-version = "0.3.7"
-source = "git+https://github.com/solana-labs/ntapi?rev=97ede981a1777883ff86d142b75024b023f04fad#97ede981a1777883ff86d142b75024b023f04fad"
