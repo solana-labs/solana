@@ -681,7 +681,7 @@ pub(crate) fn submit_gossip_stats(
         ("all-pull", crds_stats.pull.fails.iter().sum::<usize>(), i64),
     );
 
-    submit_message_signature_stats("cluster_info_crds_stats_message_signatures_received", &mut crds_stats.push.crds_signatures);
+    submit_crds_signature_stats("cluster_info_crds_stats_message_signatures_received", &mut crds_stats.push.crds_signatures);
     
     if !log::log_enabled!(log::Level::Trace) {
         return;
@@ -713,18 +713,12 @@ where
     }
 }
 
-// ring buffer "CrdsDataStats.message_signatures" is RWLocked
-// This won't spin since other threads cannot add to message_signature
-// ring buffer while we're reading from it
-fn submit_message_signature_stats<'a>(
+fn submit_crds_signature_stats<'a>(
     name: &'static str, 
-    message_signatures: &mut HeapRb<Signature>,
+    crds_signatures: &mut HeapRb<(Pubkey, Signature)>,
 ) {
-    // we want to submit all message signatures we have here. 
-    // Need to pop them to remove them
-    // NOTE: we need to filter the signatures before we call this
-    // so only signatures with ending 0xFF or whatever end up here. 
-    while let Some(signature) = message_signatures.pop() {
-        datapoint_info!(name, ("crds_signature", signature.to_string(), String));
+    // submit all message signatures to metrics. 
+    while let Some((origin, signature)) = crds_signatures.pop() {
+        datapoint_info!(name, ("crds_origin", origin.to_string(), String), ("crds_signature", signature.to_string(), String));
     }
 }

@@ -64,7 +64,7 @@ const VOTE_SLOTS_METRICS_CAP: usize = 100;
 //      mainnet: ~280k
 // target: 1-2 signatures reported per minute
 // log2(250k) = ~17.9. 
-const TRAILING_ZEROS: u8 = 18;
+const TRAILING_ZEROS: u8 = 8;
 // size of ring buffer to store signatures for metrics
 const SIGNATURE_SLOTS_METRICS_CAP: usize = 64;
 
@@ -113,7 +113,7 @@ pub(crate) struct CrdsDataStats {
     pub(crate) counts: CrdsCountsArray,
     pub(crate) fails: CrdsCountsArray,
     pub(crate) votes: LruCache<Slot, /*count:*/ usize>,
-    pub(crate) crds_signatures: HeapRb<Signature>, // fixed size ring buffer
+    pub(crate) crds_signatures: HeapRb<(Pubkey, Signature)>, // crds origin and signature
 }
 
 #[derive(Default)]
@@ -669,7 +669,7 @@ impl Default for CrdsDataStats {
             counts: CrdsCountsArray::default(),
             fails: CrdsCountsArray::default(),
             votes: LruCache::new(VOTE_SLOTS_METRICS_CAP),
-            crds_signatures: HeapRb::<Signature>::new(SIGNATURE_SLOTS_METRICS_CAP),
+            crds_signatures: HeapRb::<(Pubkey, Signature)>::new(SIGNATURE_SLOTS_METRICS_CAP),
         }
     }
 }
@@ -686,7 +686,7 @@ impl CrdsDataStats {
 
         // check trailing zero bits on signature for metrics
         if entry.value.signature.last_n_bits_are_zero(TRAILING_ZEROS) {
-            self.crds_signatures.push_overwrite(entry.value.signature);
+            self.crds_signatures.push_overwrite((entry.value.pubkey(), entry.value.signature));
         } 
     }
 
