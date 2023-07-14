@@ -10,6 +10,7 @@ use {
 /// The in-memory struct for the writing index block.
 /// The actual storage format of a tiered account index entry might be different
 /// from this.
+#[derive(Debug)]
 pub struct AccountIndexWriterEntry<'a> {
     pub address: &'a Pubkey,
     pub block_offset: u64,
@@ -47,7 +48,7 @@ impl AccountIndexFormat {
     ) -> TieredStorageResult<usize> {
         match self {
             Self::AddressAndOffset => {
-                let mut bytes_written: usize = 0;
+                let mut bytes_written = 0;
                 for index_entry in index_entries {
                     bytes_written += file.write_type(index_entry.address)?;
                 }
