@@ -47,22 +47,10 @@ impl DecisionMaker {
             let poh_recorder = self.poh_recorder.read().unwrap();
             decision = Self::consume_or_forward_packets(
                 &self.my_pubkey,
-                || {
-                    poh_recorder.bank_start().filter(|bank_start| {
-                        bank_start.should_working_bank_still_be_processing_txs()
-                    })
-                },
-                || {
-                    poh_recorder.would_be_leader(
-                        (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1)
-                            * DEFAULT_TICKS_PER_SLOT,
-                    )
-                },
-                || {
-                    poh_recorder
-                        .would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT)
-                },
-                || poh_recorder.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
+                || Self::bank_start(&poh_recorder),
+                || Self::would_be_leader_shortly(&poh_recorder),
+                || Self::would_be_leader(&poh_recorder),
+                || Self::leader_pubkey(&poh_recorder),
             );
         }
 
@@ -100,6 +88,26 @@ impl DecisionMaker {
             // We don't know the leader. Hold the packets for now
             BufferedPacketsDecision::Hold
         }
+    }
+
+    fn bank_start(poh_recorder: &PohRecorder) -> Option<BankStart> {
+        poh_recorder
+            .bank_start()
+            .filter(|bank_start| bank_start.should_working_bank_still_be_processing_txs())
+    }
+
+    fn would_be_leader_shortly(poh_recorder: &PohRecorder) -> bool {
+        poh_recorder.would_be_leader(
+            (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1) * DEFAULT_TICKS_PER_SLOT,
+        )
+    }
+
+    fn would_be_leader(poh_recorder: &PohRecorder) -> bool {
+        poh_recorder.would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT)
+    }
+
+    fn leader_pubkey(poh_recorder: &PohRecorder) -> Option<Pubkey> {
+        poh_recorder.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET)
     }
 }
 
