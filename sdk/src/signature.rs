@@ -52,22 +52,19 @@ impl Signature {
         self.verify_verbose(pubkey_bytes, message_bytes).is_ok()
     }
 
-    pub fn last_n_bits_are_zero(
-        &self,
-        n: u8,
-    ) -> bool {
+    pub fn last_n_bits_are_zero(&self, n: u8) -> bool {
         let signature_bytes: &[u8] = self.0.as_slice();
-        let num_bytes = (n as usize + 7) / 8;  // Number of bytes required to represent n bits. if n=8, need 1 byte
-        let last_signature_byte_index = signature_bytes.len() - 1; //with 64 byte signatures, this will be 56
-        
-        let mut combined_value: u64 = 0;
+        let num_bytes = (n as usize + 7) / 8; // Number of bytes required to represent n bits
+        let last_signature_byte_index = signature_bytes.len() - 1;
+
+        let mut signature_ending: u64 = 0;
         for i in 0..num_bytes {
-            let shift = (num_bytes - i - 1) * 8; // if n = 8, shift = 0
-            combined_value |= (signature_bytes[last_signature_byte_index - i] as u64) << shift;
+            let shift = (num_bytes - i - 1) * 8;
+            signature_ending |= (signature_bytes[last_signature_byte_index - i] as u64) << shift;
         }
-        
-        // check if last n bits of signature (aka combined_value) are all 0.
-        (combined_value & ((1 << n) - 1)) == 0
+
+        // check if last n bits of signature (aka signature_ending) are all 0.
+        (signature_ending & ((1 << n) - 1)) == 0
     }
 }
 

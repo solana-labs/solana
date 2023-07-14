@@ -1,12 +1,9 @@
 use {
     crate::crds_gossip::CrdsGossip,
     itertools::Itertools,
+    ringbuf::{HeapRb, Rb},
     solana_measure::measure::Measure,
-    solana_sdk::{
-        clock::Slot, 
-        pubkey::Pubkey, 
-        signature::Signature
-    },
+    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
     std::{
         cmp::Reverse,
         collections::HashMap,
@@ -14,7 +11,6 @@ use {
         sync::atomic::{AtomicU64, Ordering},
         time::Instant,
     },
-    ringbuf::{HeapRb, Rb}
 };
 
 #[derive(Default)]
@@ -194,7 +190,14 @@ pub(crate) fn submit_gossip_stats(
     gossip: &CrdsGossip,
     stakes: &HashMap<Pubkey, u64>,
 ) {
-    let (mut crds_stats, table_size, num_nodes, num_pubkeys, purged_values_size, failed_inserts_size) = {
+    let (
+        mut crds_stats,
+        table_size,
+        num_nodes,
+        num_pubkeys,
+        purged_values_size,
+        failed_inserts_size,
+    ) = {
         let gossip_crds = gossip.crds.read().unwrap();
         (
             gossip_crds.take_stats(),
@@ -681,8 +684,11 @@ pub(crate) fn submit_gossip_stats(
         ("all-pull", crds_stats.pull.fails.iter().sum::<usize>(), i64),
     );
 
-    submit_crds_signature_stats("cluster_info_crds_stats_message_signatures_received", &mut crds_stats.push.crds_signatures);
-    
+    submit_crds_signature_stats(
+        "cluster_info_crds_stats_message_signatures_received",
+        &mut crds_stats.push.crds_signatures,
+    );
+
     if !log::log_enabled!(log::Level::Trace) {
         return;
     }
@@ -714,11 +720,15 @@ where
 }
 
 fn submit_crds_signature_stats<'a>(
-    name: &'static str, 
+    name: &'static str,
     crds_signatures: &mut HeapRb<(Pubkey, Signature)>,
 ) {
-    // submit all message signatures to metrics. 
+    // submit all message signatures to metrics.
     while let Some((origin, signature)) = crds_signatures.pop() {
-        datapoint_info!(name, ("crds_origin", origin.to_string(), String), ("crds_signature", signature.to_string(), String));
+        datapoint_info!(
+            name,
+            ("crds_origin", origin.to_string(), String),
+            ("crds_signature", signature.to_string(), String)
+        );
     }
 }

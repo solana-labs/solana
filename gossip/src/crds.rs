@@ -40,6 +40,7 @@ use {
     lru::LruCache,
     matches::debug_assert_matches,
     rayon::{prelude::*, ThreadPool},
+    ringbuf::{HeapRb, Rb},
     solana_sdk::{
         clock::Slot,
         hash::{hash, Hash},
@@ -52,7 +53,6 @@ use {
         ops::{Bound, Index, IndexMut},
         sync::Mutex,
     },
-    ringbuf::{HeapRb, Rb},
 };
 
 const CRDS_SHARDS_BITS: u32 = 12;
@@ -60,14 +60,13 @@ const CRDS_SHARDS_BITS: u32 = 12;
 const VOTE_SLOTS_METRICS_CAP: usize = 100;
 // Number of ending zero bits for crds signature to get reported to influx
 // mean new push messages received per minute per node
-//      testnet: ~500k, 
+//      testnet: ~500k,
 //      mainnet: ~280k
 // target: 1-2 signatures reported per minute
-// log2(250k) = ~17.9. 
+// log2(250k) = ~17.9.
 const TRAILING_ZEROS: u8 = 18;
 // size of ring buffer to store signatures for metrics
 const SIGNATURE_SLOTS_METRICS_CAP: usize = 64;
-
 
 pub struct Crds {
     /// Stores the map of labels and values
@@ -686,8 +685,9 @@ impl CrdsDataStats {
 
         // check trailing zero bits on signature for metrics
         if entry.value.signature.last_n_bits_are_zero(TRAILING_ZEROS) {
-            self.crds_signatures.push_overwrite((entry.value.pubkey(), entry.value.signature));
-        } 
+            self.crds_signatures
+                .push_overwrite((entry.value.pubkey(), entry.value.signature));
+        }
     }
 
     fn record_fail(&mut self, entry: &VersionedCrdsValue) {
