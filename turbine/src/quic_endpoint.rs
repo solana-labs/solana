@@ -32,7 +32,7 @@ use {
 };
 
 const CLIENT_CHANNEL_CAPACITY: usize = 1 << 20;
-const INITIAL_MAX_UDP_PAYLOAD_SIZE: u16 = 1280;
+const INITIAL_MAXIMUM_TRANSMISSION_UNIT: u16 = 1280;
 const ALPN_TURBINE_PROTOCOL_ID: &[u8] = b"solana-turbine";
 const CONNECT_SERVER_NAME: &str = "solana-turbine";
 
@@ -95,7 +95,7 @@ pub fn new_quic_endpoint(
             EndpointConfig::default(),
             Some(server_config),
             socket,
-            TokioRuntime,
+            Arc::new(TokioRuntime),
         )?
     };
     endpoint.set_default_client_config(client_config);
@@ -132,7 +132,7 @@ fn new_client_config(cert: Certificate, key: PrivateKey) -> Result<ClientConfig,
     let mut config = rustls::ClientConfig::builder()
         .with_safe_defaults()
         .with_custom_certificate_verifier(Arc::new(SkipServerVerification {}))
-        .with_single_cert(vec![cert], key)?;
+        .with_client_auth_cert(vec![cert], key)?;
     config.enable_early_data = true;
     config.alpn_protocols = vec![ALPN_TURBINE_PROTOCOL_ID.to_vec()];
     let mut config = ClientConfig::new(Arc::new(config));
@@ -145,7 +145,7 @@ fn new_transport_config() -> TransportConfig {
     config
         .max_concurrent_bidi_streams(VarInt::from(0u8))
         .max_concurrent_uni_streams(VarInt::from(0u8))
-        .initial_max_udp_payload_size(INITIAL_MAX_UDP_PAYLOAD_SIZE);
+        .initial_mtu(INITIAL_MAXIMUM_TRANSMISSION_UNIT);
     config
 }
 
