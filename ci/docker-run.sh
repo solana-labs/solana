@@ -108,11 +108,27 @@ ARGS+=(
 )
 
 # Also propagate environment variables needed for codecov
-# https://docs.codecov.io/docs/testing-with-docker#section-codecov-inside-docker
+# https://docs.codecov.com/docs/testing-with-docker
 # We normalize CI to `1`; but codecov expects it to be `true` to detect Buildkite...
-# Unfortunately, codecov.io fails sometimes:
-#   curl: (7) Failed to connect to codecov.io port 443: Connection timed out
-CODECOV_ENVS=$(CI=true bash <(while ! curl -sS --retry 5 --retry-delay 2 --retry-connrefused https://codecov.io/env; do sleep 10; done))
+retry=5
+while :; do
+  if ((retry > 0)); then
+    echo "fetching coverage_env_script..."
+  else
+    echo "can't fetch coverage_env_script successfully"
+    exit 1
+  fi
+
+  http_code=$(curl -s -o coverage_env_script -w "%{http_code}" https://codecov.io/env)
+  if [[ "$http_code" = "200" ]]; then
+    break
+  fi
+
+  echo "got http_code $http_code"
+  retry="$((retry - 1))"
+  sleep 5
+done
+CODECOV_ENVS=$(CI=true bash < coverage_env_script)
 
 if $INTERACTIVE; then
   if [[ -n $1 ]]; then
