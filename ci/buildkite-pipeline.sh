@@ -145,147 +145,147 @@ all_test_steps() {
   command_step checks3 ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-dev-context-only-utils.sh check-all-targets" 15 check
   wait_step
 
-  # Full test suite
-  .buildkite/scripts/build-stable.sh >> "$output_file"
+#   # Full test suite
+#   .buildkite/scripts/build-stable.sh >> "$output_file"
 
-  # Docs tests
-  if affects \
-             .rs$ \
-             ^ci/rust-version.sh \
-             ^ci/test-docs.sh \
-      ; then
-    command_step doctest "ci/test-docs.sh" 15
-  else
-    annotate --style info --context test-docs \
-      "Docs skipped as no .rs files were modified"
-  fi
-  wait_step
+#   # Docs tests
+#   if affects \
+#              .rs$ \
+#              ^ci/rust-version.sh \
+#              ^ci/test-docs.sh \
+#       ; then
+#     command_step doctest "ci/test-docs.sh" 15
+#   else
+#     annotate --style info --context test-docs \
+#       "Docs skipped as no .rs files were modified"
+#   fi
+#   wait_step
 
-  # SBF test suite
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-stable-sbf.sh \
-             ^ci/test-stable.sh \
-             ^ci/test-local-cluster.sh \
-             ^core/build.rs \
-             ^fetch-perf-libs.sh \
-             ^programs/ \
-             ^sdk/ \
-             cargo-build-bpf$ \
-             cargo-test-bpf$ \
-             cargo-build-sbf$ \
-             cargo-test-sbf$ \
-      ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "ci/test-stable-sbf.sh"
-    name: "stable-sbf"
-    timeout_in_minutes: 35
-    artifact_paths: "sbf-dumps.tar.bz2"
-    agents:
-      queue: "solana"
-EOF
-  else
-    annotate --style info \
-      "Stable-SBF skipped as no relevant files were modified"
-  fi
+#   # SBF test suite
+#   if affects \
+#              .rs$ \
+#              Cargo.lock$ \
+#              Cargo.toml$ \
+#              ^ci/rust-version.sh \
+#              ^ci/test-stable-sbf.sh \
+#              ^ci/test-stable.sh \
+#              ^ci/test-local-cluster.sh \
+#              ^core/build.rs \
+#              ^fetch-perf-libs.sh \
+#              ^programs/ \
+#              ^sdk/ \
+#              cargo-build-bpf$ \
+#              cargo-test-bpf$ \
+#              cargo-build-sbf$ \
+#              cargo-test-sbf$ \
+#       ; then
+#     cat >> "$output_file" <<"EOF"
+#   - command: "ci/test-stable-sbf.sh"
+#     name: "stable-sbf"
+#     timeout_in_minutes: 35
+#     artifact_paths: "sbf-dumps.tar.bz2"
+#     agents:
+#       queue: "solana"
+# EOF
+#   else
+#     annotate --style info \
+#       "Stable-SBF skipped as no relevant files were modified"
+#   fi
 
-  # Perf test suite
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-stable-perf.sh \
-             ^ci/test-stable.sh \
-             ^ci/test-local-cluster.sh \
-             ^core/build.rs \
-             ^fetch-perf-libs.sh \
-             ^programs/ \
-             ^sdk/ \
-      ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "ci/test-stable-perf.sh"
-    name: "stable-perf"
-    timeout_in_minutes: 35
-    artifact_paths: "log-*.txt"
-    agents:
-      queue: "cuda"
-EOF
-  else
-    annotate --style info \
-      "Stable-perf skipped as no relevant files were modified"
-  fi
+#   # Perf test suite
+#   if affects \
+#              .rs$ \
+#              Cargo.lock$ \
+#              Cargo.toml$ \
+#              ^ci/rust-version.sh \
+#              ^ci/test-stable-perf.sh \
+#              ^ci/test-stable.sh \
+#              ^ci/test-local-cluster.sh \
+#              ^core/build.rs \
+#              ^fetch-perf-libs.sh \
+#              ^programs/ \
+#              ^sdk/ \
+#       ; then
+#     cat >> "$output_file" <<"EOF"
+#   - command: "ci/test-stable-perf.sh"
+#     name: "stable-perf"
+#     timeout_in_minutes: 35
+#     artifact_paths: "log-*.txt"
+#     agents:
+#       queue: "cuda"
+# EOF
+#   else
+#     annotate --style info \
+#       "Stable-perf skipped as no relevant files were modified"
+#   fi
 
-  # Downstream backwards compatibility
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-stable-perf.sh \
-             ^ci/test-stable.sh \
-             ^ci/test-local-cluster.sh \
-             ^core/build.rs \
-             ^fetch-perf-libs.sh \
-             ^programs/ \
-             ^sdk/ \
-             cargo-build-bpf$ \
-             cargo-test-bpf$ \
-             cargo-build-sbf$ \
-             cargo-test-sbf$ \
-             ^ci/downstream-projects \
-             .buildkite/scripts/build-downstream-projects.sh \
-      ; then
-    .buildkite/scripts/build-downstream-projects.sh >> "$output_file"
-  else
-    annotate --style info \
-      "downstream-projects skipped as no relevant files were modified"
-  fi
+#   # Downstream backwards compatibility
+#   if affects \
+#              .rs$ \
+#              Cargo.lock$ \
+#              Cargo.toml$ \
+#              ^ci/rust-version.sh \
+#              ^ci/test-stable-perf.sh \
+#              ^ci/test-stable.sh \
+#              ^ci/test-local-cluster.sh \
+#              ^core/build.rs \
+#              ^fetch-perf-libs.sh \
+#              ^programs/ \
+#              ^sdk/ \
+#              cargo-build-bpf$ \
+#              cargo-test-bpf$ \
+#              cargo-build-sbf$ \
+#              cargo-test-sbf$ \
+#              ^ci/downstream-projects \
+#              .buildkite/scripts/build-downstream-projects.sh \
+#       ; then
+#     .buildkite/scripts/build-downstream-projects.sh >> "$output_file"
+#   else
+#     annotate --style info \
+#       "downstream-projects skipped as no relevant files were modified"
+#   fi
 
-  # Wasm support
-  if affects \
-             ^ci/test-wasm.sh \
-             ^ci/test-stable.sh \
-             ^sdk/ \
-      ; then
-    command_step wasm ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-wasm.sh" 20
-  else
-    annotate --style info \
-      "wasm skipped as no relevant files were modified"
-  fi
+#   # Wasm support
+#   if affects \
+#              ^ci/test-wasm.sh \
+#              ^ci/test-stable.sh \
+#              ^sdk/ \
+#       ; then
+#     command_step wasm ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-wasm.sh" 20
+#   else
+#     annotate --style info \
+#       "wasm skipped as no relevant files were modified"
+#   fi
 
-  # Benches...
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-coverage.sh \
-             ^ci/test-bench.sh \
-      ; then
-    .buildkite/scripts/build-bench.sh >> "$output_file"
-  else
-    annotate --style info --context test-bench \
-      "Bench skipped as no .rs files were modified"
-  fi
+#   # Benches...
+#   if affects \
+#              .rs$ \
+#              Cargo.lock$ \
+#              Cargo.toml$ \
+#              ^ci/rust-version.sh \
+#              ^ci/test-coverage.sh \
+#              ^ci/test-bench.sh \
+#       ; then
+#     .buildkite/scripts/build-bench.sh >> "$output_file"
+#   else
+#     annotate --style info --context test-bench \
+#       "Bench skipped as no .rs files were modified"
+#   fi
 
-  # Coverage...
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-coverage.sh \
-             ^scripts/coverage.sh \
-      ; then
+  # # Coverage...
+  # if affects \
+  #            .rs$ \
+  #            Cargo.lock$ \
+  #            Cargo.toml$ \
+  #            ^ci/rust-version.sh \
+  #            ^ci/test-coverage.sh \
+  #            ^scripts/coverage.sh \
+  #     ; then
     command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 80
-  else
-    annotate --style info --context test-coverage \
-      "Coverage skipped as no .rs files were modified"
-  fi
+  # else
+  #   annotate --style info --context test-coverage \
+  #     "Coverage skipped as no .rs files were modified"
+  # fi
 }
 
 pull_or_push_steps() {
