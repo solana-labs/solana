@@ -134,7 +134,7 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) -> bool {
         let Some(sig_end) = sig_start.checked_add(size_of::<Signature>()) else {
             return false;
         };
-        let Some(signature) = packet.data(sig_start..sig_end).map(Signature::new) else {
+        let Some(Ok(signature)) = packet.data(sig_start..sig_end).map(Signature::try_from) else {
             return false;
         };
         let Some(pubkey) = packet.data(pubkey_start..pubkey_end) else {
