@@ -1,8 +1,8 @@
 //! ReadOnlyAccountsCache used to store accounts, such as executable accounts,
 //! which can be large, loaded many times, and rarely change.
 use {
+    crate::index_list::{Index, IndexList},
     dashmap::{mapref::entry::Entry, DashMap},
-    index_list::{Index, IndexList},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
