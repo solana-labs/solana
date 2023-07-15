@@ -722,6 +722,7 @@ impl ProgramTest {
         self.deactivate_feature_set.insert(feature_id);
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     fn setup_bank(
         &mut self,
     ) -> (
