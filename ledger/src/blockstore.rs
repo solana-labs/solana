@@ -171,6 +171,7 @@ pub struct Blockstore {
     meta_cf: LedgerColumn<cf::SlotMeta>,
     dead_slots_cf: LedgerColumn<cf::DeadSlots>,
     duplicate_slots_cf: LedgerColumn<cf::DuplicateSlots>,
+    roots_cf: LedgerColumn<cf::Root>,
     erasure_meta_cf: LedgerColumn<cf::ErasureMeta>,
     orphans_cf: LedgerColumn<cf::Orphans>,
     index_cf: LedgerColumn<cf::Index>,
@@ -275,6 +276,7 @@ impl Blockstore {
         // Create the dead slots column family
         let dead_slots_cf = db.column();
         let duplicate_slots_cf = db.column();
+        let roots_cf = db.column();
         let erasure_meta_cf = db.column();
 
         // Create the orphans column family. An "orphan" is defined as
@@ -331,6 +333,7 @@ impl Blockstore {
             meta_cf,
             dead_slots_cf,
             duplicate_slots_cf,
+            roots_cf,
             erasure_meta_cf,
             orphans_cf,
             index_cf,
@@ -700,6 +703,7 @@ impl Blockstore {
         self.meta_cf.submit_rocksdb_cf_metrics();
         self.dead_slots_cf.submit_rocksdb_cf_metrics();
         self.duplicate_slots_cf.submit_rocksdb_cf_metrics();
+        self.roots_cf.submit_rocksdb_cf_metrics();
         self.erasure_meta_cf.submit_rocksdb_cf_metrics();
         self.orphans_cf.submit_rocksdb_cf_metrics();
         self.index_cf.submit_rocksdb_cf_metrics();
