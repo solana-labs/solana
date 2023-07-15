@@ -719,14 +719,12 @@ impl Blockstore {
     }
 
     fn try_shred_recovery(
-        db: &Database,
+        &self,
         erasure_metas: &HashMap<ErasureSetId, ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         prev_inserted_shreds: &HashMap<ShredId, Shred>,
         reed_solomon_cache: &ReedSolomonCache,
     ) -> Vec<Shred> {
-        let data_cf = db.column::<cf::ShredData>();
-        let code_cf = db.column::<cf::ShredCode>();
         let mut recovered_shreds = vec![];
         // Recovery rules:
         // 1. Only try recovery around indexes for which new data or coding shreds are received
@@ -744,8 +742,8 @@ impl Blockstore {
                         erasure_meta,
                         prev_inserted_shreds,
                         &mut recovered_shreds,
-                        &data_cf,
-                        &code_cf,
+                        &self.data_shred_cf,
+                        &self.code_shred_cf,
                         reed_solomon_cache,
                     );
                 }
@@ -838,8 +836,7 @@ impl Blockstore {
         start.stop();
         metrics.insert_lock_elapsed_us += start.as_us();
 
-        let db = &*self.db;
-        let mut write_batch = db.batch()?;
+        let mut write_batch = self.db.batch()?;
 
         let mut just_inserted_shreds = HashMap::with_capacity(shreds.len());
         let mut erasure_metas = HashMap::new();
@@ -915,8 +912,7 @@ impl Blockstore {
         metrics.insert_shreds_elapsed_us += start.as_us();
         let mut start = Measure::start("Shred recovery");
         if let Some(leader_schedule_cache) = leader_schedule {
-            let recovered_shreds = Self::try_shred_recovery(
-                db,
+            let recovered_shreds = self.try_shred_recovery(
                 &erasure_metas,
                 &mut index_working_set,
                 &just_inserted_shreds,
@@ -995,7 +991,7 @@ impl Blockstore {
         let mut start = Measure::start("Shred recovery");
         // Handle chaining for the members of the slot_meta_working_set that were inserted into,
         // drop the others
-        handle_chaining(&self.db, &mut write_batch, &mut slot_meta_working_set)?;
+        self.handle_chaining(&mut write_batch, &mut slot_meta_working_set)?;
         start.stop();
         metrics.chaining_elapsed_us += start.as_us();
 
@@ -1146,7 +1142,7 @@ impl Blockstore {
         let shred_index = u64::from(shred.index());
 
         let index_meta_working_set_entry =
-            get_index_meta_entry(&self.db, slot, index_working_set, index_meta_time_us);
+            self.get_index_meta_entry(slot, index_working_set, index_meta_time_us);
 
         let index_meta = &mut index_meta_working_set_entry.index;
 
@@ -1321,11 +1317,9 @@ impl Blockstore {
         let shred_index = u64::from(shred.index());
 
         let index_meta_working_set_entry =
-            get_index_meta_entry(&self.db, slot, index_working_set, index_meta_time_us);
-
+            self.get_index_meta_entry(slot, index_working_set, index_meta_time_us);
         let index_meta = &mut index_meta_working_set_entry.index;
-        let slot_meta_entry = get_slot_meta_entry(
-            &self.db,
+        let slot_meta_entry = self.get_slot_meta_entry(
             slot_meta_working_set,
             slot,
             shred
@@ -3480,7 +3474,7 @@ impl Blockstore {
     /// - `working_set`: a slot-id to SlotMetaWorkingSetEntry map.  This function
     ///   will remove all entries which insertion did not actually occur.
     fn handle_chaining(
-        db: &Database,
+        &self,
         write_batch: &mut WriteBatch,
         working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
     ) -> Result<()> {
@@ -3489,7 +3483,7 @@ impl Blockstore {
         let mut new_chained_slots = HashMap::new();
         let working_set_slots: Vec<_> = working_set.keys().collect();
         for slot in working_set_slots {
-            handle_chaining_for_slot(db, write_batch, working_set, &mut new_chained_slots, *slot)?;
+            self.handle_chaining_for_slot(write_batch, working_set, &mut new_chained_slots, *slot)?;
         }
 
         // Write all the newly changed slots in new_chained_slots to the write_batch
@@ -3529,7 +3523,7 @@ impl Blockstore {
     ///   which connectivity have been updated.
     /// `slot`: the slot which we want to handle its chaining effect.
     fn handle_chaining_for_slot(
-        db: &Database,
+        &self,
         write_batch: &mut WriteBatch,
         working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
         new_chained_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
@@ -3557,7 +3551,7 @@ impl Blockstore {
                 // previously unknown.
                 if meta_backup.is_none() || was_orphan_slot {
                     let prev_slot_meta =
-                        find_slot_meta_else_create(db, working_set, new_chained_slots, prev_slot)?;
+                        self.find_slot_meta_else_create(working_set, new_chained_slots, prev_slot)?;
 
                     // This is a newly inserted slot/orphan so run the chaining logic to link it to a
                     // newly discovered parent
@@ -3590,8 +3584,7 @@ impl Blockstore {
 
         if should_propagate_is_connected {
             meta.borrow_mut().set_connected();
-            traverse_children_mut(
-                db,
+            self.traverse_children_mut(
                 meta,
                 working_set,
                 new_chained_slots,
@@ -3616,7 +3609,7 @@ impl Blockstore {
     ///   slots and determine whether to further traverse the children slots of
     ///   a given slot.
     fn traverse_children_mut<F>(
-        db: &Database,
+        &self,
         slot_meta: &Rc<RefCell<SlotMeta>>,
         working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
         passed_visisted_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
@@ -3630,7 +3623,7 @@ impl Blockstore {
         while !next_slots.is_empty() {
             let slot = next_slots.pop_front().unwrap();
             let meta_ref =
-                find_slot_meta_else_create(db, working_set, passed_visisted_slots, slot)?;
+                self.find_slot_meta_else_create(working_set, passed_visisted_slots, slot)?;
             let mut meta = meta_ref.borrow_mut();
             if slot_function(&mut meta) {
                 meta.next_slots
@@ -3660,17 +3653,19 @@ impl Blockstore {
     /// This function returns the matched `SlotMetaWorkingSetEntry`.  If such entry
     /// does not exist in the database, a new entry will be created.
     fn get_slot_meta_entry<'a>(
-        db: &Database,
+        &self,
         slot_meta_working_set: &'a mut HashMap<u64, SlotMetaWorkingSetEntry>,
         slot: Slot,
         parent_slot: Slot,
     ) -> &'a mut SlotMetaWorkingSetEntry {
-        let meta_cf = db.column::<cf::SlotMeta>();
-
         // Check if we've already inserted the slot metadata for this shred's slot
         slot_meta_working_set.entry(slot).or_insert_with(|| {
             // Store a 2-tuple of the metadata (working copy, backup copy)
-            if let Some(mut meta) = meta_cf.get(slot).expect("Expect database get to succeed") {
+            if let Some(mut meta) = self
+                .meta_cf
+                .get(slot)
+                .expect("Expect database get to succeed")
+            {
                 let backup = Some(meta.clone());
                 // If parent_slot == None, then this is one of the orphans inserted
                 // during the chaining process, see the function find_slot_meta_in_cached_state()
@@ -3701,7 +3696,7 @@ impl Blockstore {
     ///
     /// Also see [`find_slot_meta_in_cached_state`] and [`find_slot_meta_in_db_else_create`].
     fn find_slot_meta_else_create<'a>(
-        db: &Database,
+        &self,
         working_set: &'a HashMap<u64, SlotMetaWorkingSetEntry>,
         chained_slots: &'a mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
         slot_index: u64,
@@ -3710,7 +3705,7 @@ impl Blockstore {
         if let Some(slot) = result {
             Ok(slot)
         } else {
-            find_slot_meta_in_db_else_create(db, slot_index, chained_slots)
+            self.find_slot_meta_in_db_else_create(slot_index, chained_slots)
         }
     }
 
@@ -3720,11 +3715,11 @@ impl Blockstore {
     /// If the specified `db` does not contain a matched entry, then it will create
     /// a dummy orphan slot in the database.
     fn find_slot_meta_in_db_else_create(
-        db: &Database,
+        &self,
         slot: Slot,
         insert_map: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
     ) -> Result<Rc<RefCell<SlotMeta>>> {
-        if let Some(slot_meta) = db.column::<cf::SlotMeta>().get(slot)? {
+        if let Some(slot_meta) = self.meta_cf.get(slot)? {
             insert_map.insert(slot, Rc::new(RefCell::new(slot_meta)));
         } else {
             // If this slot doesn't exist, make a orphan slot. This way we
@@ -3736,15 +3731,15 @@ impl Blockstore {
     }
 
     fn get_index_meta_entry<'a>(
-        db: &Database,
+        &self,
         slot: Slot,
         index_working_set: &'a mut HashMap<u64, IndexMetaWorkingSetEntry>,
         index_meta_time_us: &mut u64,
     ) -> &'a mut IndexMetaWorkingSetEntry {
-        let index_cf = db.column::<cf::Index>();
         let mut total_start = Measure::start("Total elapsed");
         let res = index_working_set.entry(slot).or_insert_with(|| {
-            let newly_inserted_meta = index_cf
+            let newly_inserted_meta = self
+                .index_cf
                 .get(slot)
                 .unwrap()
                 .unwrap_or_else(|| Index::new(slot));
