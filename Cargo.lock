@@ -7078,6 +7078,7 @@ dependencies = [
  "solana-sdk",
  "solana-streamer",
  "solana-tpu-client",
+ "solana-validator",
  "tokio",
 ]
 
@@ -7313,7 +7314,6 @@ dependencies = [
  "solana-send-transaction-service",
  "solana-storage-bigtable",
  "solana-streamer",
- "solana-test-validator",
  "solana-tpu-client",
  "solana-version",
  "solana-vote-program",
