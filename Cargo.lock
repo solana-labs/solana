@@ -7082,6 +7082,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-test-validator-cli"
+version = "1.17.0"
+dependencies = [
+ "solana-test-validator",
+ "solana-validator",
+]
+
+[[package]]
 name = "solana-thin-client"
 version = "1.17.0"
 dependencies = [
