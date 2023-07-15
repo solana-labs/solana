@@ -93,6 +93,7 @@ members = [
     "storage-proto",
     "streamer",
     "test-validator",
+    "test-validator-cli",
     "thin-client",
     "tokens",
     "tpu-client",
