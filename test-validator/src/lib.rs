@@ -1,4 +1,6 @@
+#![cfg(feature = "dev-context-only-utils")]
 #![allow(clippy::integer_arithmetic)]
+
 use {
     base64::{prelude::BASE64_STANDARD, Engine},
     crossbeam_channel::Receiver,
