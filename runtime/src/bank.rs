@@ -968,6 +968,7 @@ impl Bank {
         Self::default_with_accounts(Accounts::default_for_tests())
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
         Self::new_with_paths_for_benches(genesis_config, Vec::new())
     }
