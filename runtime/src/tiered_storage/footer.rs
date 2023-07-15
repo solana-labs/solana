@@ -1,7 +1,7 @@
 use {
     crate::tiered_storage::{
-        error::TieredStorageError, file::TieredStorageFile, mmap_utils::get_type,
-        TieredStorageResult as TsResult,
+        error::TieredStorageError, file::TieredStorageFile, index::AccountIndexFormat,
+        mmap_utils::get_type, TieredStorageResult as TsResult,
     },
     memmap2::Mmap,
     solana_sdk::{hash::Hash, pubkey::Pubkey},
@@ -83,28 +83,6 @@ pub enum AccountBlockFormat {
 pub enum OwnersBlockFormat {
     #[default]
     LocalIndex = 0,
-}
-
-#[repr(u16)]
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Default,
-    Eq,
-    Hash,
-    PartialEq,
-    num_enum::IntoPrimitive,
-    num_enum::TryFromPrimitive,
-)]
-pub enum AccountIndexFormat {
-    // This format does not support any fast lookup.
-    // Any query from account hash to account meta requires linear search.
-    #[default]
-    Linear = 0,
-    // Similar to index, but this format also stores the offset of each account
-    // meta in the index block.
-    LinearIndex = 1,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -262,7 +240,7 @@ mod tests {
         let expected_footer = TieredStorageFooter {
             account_meta_format: AccountMetaFormat::Hot,
             owners_block_format: OwnersBlockFormat::LocalIndex,
-            account_index_format: AccountIndexFormat::Linear,
+            account_index_format: AccountIndexFormat::AddressAndOffset,
             account_block_format: AccountBlockFormat::AlignedRaw,
             account_entry_count: 300,
             account_meta_entry_size: 24,
