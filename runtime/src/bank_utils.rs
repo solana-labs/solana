@@ -1,12 +1,3 @@
-use {
-    crate::{
-        transaction_results::TransactionResults,
-        vote_parser,
-        vote_sender_types::ReplayVoteSender,
-    },
-    solana_sdk::{transaction::SanitizedTransaction},
-};
-
 #[cfg(feature = "dev-context-only-utils")]
 use {
     crate::{
@@ -14,6 +5,12 @@ use {
         genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
     },
     solana_sdk::{pubkey::Pubkey, signature::Signer},
+};
+use {
+    crate::{
+        transaction_results::TransactionResults, vote_parser, vote_sender_types::ReplayVoteSender,
+    },
+    solana_sdk::transaction::SanitizedTransaction,
 };
 
 #[cfg(feature = "dev-context-only-utils")]

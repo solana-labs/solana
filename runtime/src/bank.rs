@@ -33,6 +33,8 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
+#[cfg(feature = "dev-context-only-utils")]
+use crate::accounts_db::{ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING};
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
@@ -193,15 +195,6 @@ use {
         thread::Builder,
         time::{Duration, Instant},
     },
-};
-
-#[cfg(feature = "dev-context-only-utils")]
-use {
-    crate::{
-        accounts_db::{
-            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
-        }
-    }
 };
 
 /// params to `verify_accounts_hash`
