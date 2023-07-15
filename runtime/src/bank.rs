@@ -964,6 +964,7 @@ struct StakeRewardCalculation {
 }
 
 impl Bank {
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts(Accounts::default_for_tests())
     }
@@ -973,10 +974,12 @@ impl Bank {
         Self::new_with_paths_for_benches(genesis_config, Vec::new())
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
         Self::new_for_tests_with_config(genesis_config, BankTestConfig::default())
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn new_for_tests_with_config(
         genesis_config: &GenesisConfig,
         test_config: BankTestConfig,
@@ -988,6 +991,7 @@ impl Bank {
         )
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn new_with_runtime_config_for_tests(
         genesis_config: &GenesisConfig,
         runtime_config: Arc<RuntimeConfig>,
@@ -1001,6 +1005,7 @@ impl Bank {
         )
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn new_no_wallclock_throttle_for_tests(genesis_config: &GenesisConfig) -> Self {
         let mut bank = Self::new_for_tests(genesis_config);
 
@@ -1008,6 +1013,7 @@ impl Bank {
         bank
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     pub(crate) fn new_with_config_for_tests(
         genesis_config: &GenesisConfig,
         account_indexes: AccountSecondaryIndexes,
@@ -1094,6 +1100,7 @@ impl Bank {
         bank
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn new_with_paths_for_tests(
         genesis_config: &GenesisConfig,
         runtime_config: Arc<RuntimeConfig>,
@@ -1116,6 +1123,7 @@ impl Bank {
         )
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn new_with_paths_for_benches(genesis_config: &GenesisConfig, paths: Vec<PathBuf>) -> Self {
         Self::new_with_paths(
             genesis_config,
