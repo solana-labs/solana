@@ -203,7 +203,7 @@ use {
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         }
     }
-}
+};
 
 /// params to `verify_accounts_hash`
 struct VerifyAccountsHashConfig {
