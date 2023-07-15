@@ -99,7 +99,6 @@ solana_rbpf = { workspace = true }
 
 [dev-dependencies]
 solana-ledger = { workspace = true }
-solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 
 [[bench]]
 name = "bpf_loader"
