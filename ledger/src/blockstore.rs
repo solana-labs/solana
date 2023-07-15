@@ -270,21 +270,13 @@ impl Blockstore {
         info!("Opening database at {:?}", blockstore_path);
         let db = Database::open(&blockstore_path, options)?;
 
-        // Create the metadata column family
         let meta_cf = db.column();
-
-        // Create the dead slots column family
         let dead_slots_cf = db.column();
         let duplicate_slots_cf = db.column();
         let roots_cf = db.column();
         let erasure_meta_cf = db.column();
-
-        // Create the orphans column family. An "orphan" is defined as
-        // the head of a detached chain of slots, i.e. a slot with no
-        // known parent
         let orphans_cf = db.column();
         let index_cf = db.column();
-
         let data_shred_cf = db.column();
         let code_shred_cf = db.column();
         let transaction_status_cf = db.column();
