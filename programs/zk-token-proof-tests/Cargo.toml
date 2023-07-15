@@ -11,6 +11,6 @@ edition = { workspace = true }
 bytemuck = { workspace = true, features = ["derive"] }
 curve25519-dalek = { workspace = true }
 solana-program-runtime = { workspace = true }
-solana-program-test = { workspace = true }
+solana-program-test = { workspace = true, features = ["dev-context-only-utils"] }
 solana-sdk = { workspace = true }
 solana-zk-token-sdk = { workspace = true }
