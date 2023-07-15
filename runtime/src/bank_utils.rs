@@ -9,6 +9,7 @@ use {
     solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::SanitizedTransaction},
 };
 
+#[cfg(feature = "dev-context-only-utils")]
 pub fn setup_bank_and_vote_pubkeys_for_tests(
     num_vote_accounts: usize,
     stake: u64,
