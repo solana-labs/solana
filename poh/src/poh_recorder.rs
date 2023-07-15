@@ -1030,7 +1030,7 @@ impl PohRecorder {
             .and_then(|bank_start| bank_start.get_working_bank_if_not_expired())
     }
 
-    // Used in tests
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn schedule_dummy_max_height_reached_failure(&mut self) {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
