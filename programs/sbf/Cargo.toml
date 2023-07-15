@@ -34,7 +34,7 @@ solana-logger = { path = "../../logger", version = "=1.17.0" }
 solana-measure = { path = "../../measure", version = "=1.17.0" }
 solana-program = { path = "../../sdk/program", version = "=1.17.0" }
 solana-program-runtime = { path = "../../program-runtime", version = "=1.17.0" }
-solana-program-test = { path = "../../program-test", version = "=1.17.0" }
+solana-program-test = { path = "../../program-test", version = "=1.17.0", features = ["dev-context-only-utils"] }
 solana-runtime = { path = "../../runtime", version = "=1.17.0" }
 solana-sbf-rust-128bit-dep = { path = "rust/128bit_dep", version = "=1.17.0" }
 solana-sbf-rust-invoke = { path = "rust/invoke", version = "=1.17.0" }
