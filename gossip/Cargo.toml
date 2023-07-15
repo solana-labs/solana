@@ -55,6 +55,7 @@ num_cpus = { workspace = true }
 regex = { workspace = true }
 serial_test = { workspace = true }
 solana-perf = { workspace = true, features = ["dev-context-only-utils"] }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 
 [build-dependencies]
 rustc_version = { workspace = true }
