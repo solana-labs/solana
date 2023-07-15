@@ -1,3 +1,5 @@
+#![cfg(feature = "dev-context-only-utils")]
+
 use {
     rand::{CryptoRng, Rng, RngCore},
     solana_sdk::{
