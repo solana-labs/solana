@@ -35,5 +35,5 @@ dev-context-only-utils = [
 ]
 
 [dev-dependencies]
-solana-stake-program = { workspace = true }
 solana-program-test = { path = ".", features = ["dev-context-only-utils"] }
+solana-stake-program = { workspace = true }

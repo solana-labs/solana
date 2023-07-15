@@ -6192,35 +6192,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-test-validator"
-version = "1.17.0"
-dependencies = [
- "base64 0.21.2",
- "bincode",
- "crossbeam-channel",
- "log",
- "serde_derive",
- "serde_json",
- "solana-cli-output",
- "solana-client",
- "solana-core",
- "solana-geyser-plugin-manager",
- "solana-gossip",
- "solana-ledger",
- "solana-logger",
- "solana-net-utils",
- "solana-program-runtime",
- "solana-program-test",
- "solana-rpc",
- "solana-rpc-client",
- "solana-runtime",
- "solana-sdk",
- "solana-streamer",
- "solana-tpu-client",
- "tokio",
-]
-
-[[package]]
 name = "solana-thin-client"
 version = "1.17.0"
 dependencies = [
@@ -6380,7 +6351,6 @@ dependencies = [
  "solana-send-transaction-service",
  "solana-storage-bigtable",
  "solana-streamer",
- "solana-test-validator",
  "solana-tpu-client",
  "solana-version",
  "solana-vote-program",

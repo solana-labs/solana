@@ -58,11 +58,11 @@ solana-storage-bigtable = { workspace = true }
 solana-streamer = { workspace = true }
 solana-test-validator = { workspace = true, features = ["dev-context-only-utils"] }
 solana-tpu-client = { workspace = true }
+solana-validator = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 symlink = { workspace = true }
 thiserror = { workspace = true }
-solana-validator = { workspace = true }
 
 [features]
 dev-context-only-utils = []
