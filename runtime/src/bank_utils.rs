@@ -4,7 +4,7 @@ use {
         vote_parser,
         vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::SanitizedTransaction},
+    solana_sdk::{transaction::SanitizedTransaction},
 };
 
 #[cfg(feature = "dev-context-only-utils")]
