@@ -26,7 +26,7 @@ bincode = { workspace = true }
 matches = { workspace = true }
 rand = { workspace = true }
 solana-logger = { workspace = true }
-solana-perf = { workspace = true }
+solana-perf = { workspace = true, features = ["dev-context-only-utils"] }
 
 [lib]
 crate-type = ["lib"]
