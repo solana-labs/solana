@@ -267,7 +267,6 @@ pub struct BankRc {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
-use solana_sdk::fee::FeeBudgetLimits;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
@@ -4262,10 +4261,9 @@ impl Bank {
         message: &SanitizedMessage,
         lamports_per_signature: u64,
     ) -> u64 {
-        Self::calculate_fee(
+        self.fee_structure.calculate_fee(
             message,
             lamports_per_signature,
-            &self.fee_structure,
             &ComputeBudget::fee_budget_limits(
                 message.program_instructions_iter(),
                 &self.feature_set,
@@ -5522,67 +5520,6 @@ impl Bank {
     /// NOTE: This fn is *ONLY FOR TESTS*
     pub fn update_accounts_data_size_delta_off_chain_for_tests(&self, amount: i64) {
         self.update_accounts_data_size_delta_off_chain(amount)
-    }
-
-    /// Calculate fee for `SanitizedMessage`
-    pub fn calculate_fee(
-        message: &SanitizedMessage,
-        lamports_per_signature: u64,
-        fee_structure: &FeeStructure,
-        budget_limits: &FeeBudgetLimits,
-        remove_congestion_multiplier: bool,
-        include_loaded_account_data_size_in_fee: bool,
-    ) -> u64 {
-        // Fee based on compute units and signatures
-        let congestion_multiplier = if lamports_per_signature == 0 {
-            0.0 // test only
-        } else if remove_congestion_multiplier {
-            1.0 // multiplier that has no effect
-        } else {
-            const BASE_CONGESTION: f64 = 5_000.0;
-            let current_congestion = BASE_CONGESTION.max(lamports_per_signature as f64);
-            BASE_CONGESTION / current_congestion
-        };
-
-        let signature_fee = message
-            .num_signatures()
-            .saturating_mul(fee_structure.lamports_per_signature);
-        let write_lock_fee = message
-            .num_write_locks()
-            .saturating_mul(fee_structure.lamports_per_write_lock);
-
-        // `compute_fee` covers costs for both requested_compute_units and
-        // requested_loaded_account_data_size
-        let loaded_accounts_data_size_cost = if include_loaded_account_data_size_in_fee {
-            FeeStructure::calculate_memory_usage_cost(
-                budget_limits.loaded_accounts_data_size_limit,
-                budget_limits.heap_cost,
-            )
-        } else {
-            0_u64
-        };
-        let total_compute_units =
-            loaded_accounts_data_size_cost.saturating_add(budget_limits.compute_unit_limit);
-        let compute_fee = fee_structure
-            .compute_fee_bins
-            .iter()
-            .find(|bin| total_compute_units <= bin.limit)
-            .map(|bin| bin.fee)
-            .unwrap_or_else(|| {
-                fee_structure
-                    .compute_fee_bins
-                    .last()
-                    .map(|bin| bin.fee)
-                    .unwrap_or_default()
-            });
-
-        ((budget_limits
-            .prioritization_fee
-            .saturating_add(signature_fee)
-            .saturating_add(write_lock_fee)
-            .saturating_add(compute_fee) as f64)
-            * congestion_multiplier)
-            .round() as u64
     }
 
     fn filter_program_errors_and_collect_fee(

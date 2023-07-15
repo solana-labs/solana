@@ -13,7 +13,6 @@ use {
         },
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
-        bank::Bank,
         blockhash_queue::BlockhashQueue,
         nonce_info::{NonceFull, NonceInfo},
         rent_collector::RentCollector,
@@ -722,10 +721,9 @@ impl Accounts {
                             hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
                         });
                     let fee = if let Some(lamports_per_signature) = lamports_per_signature {
-                        Bank::calculate_fee(
+                        fee_structure.calculate_fee(
                             tx.message(),
                             lamports_per_signature,
-                            fee_structure,
                             &ComputeBudget::fee_budget_limits(tx.message().program_instructions_iter(), feature_set, Some(self.accounts_db.expected_cluster_type())),
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                             feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
@@ -1761,10 +1759,9 @@ mod tests {
         feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
 
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
-        let fee = Bank::calculate_fee(
+        let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &FeeStructure::default(),
             &ComputeBudget::fee_budget_limits(
                 message.program_instructions_iter(),
                 &feature_set,
@@ -4329,10 +4326,9 @@ mod tests {
         feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
 
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
-        let fee = Bank::calculate_fee(
+        let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &FeeStructure::default(),
             &ComputeBudget::fee_budget_limits(
                 message.program_instructions_iter(),
                 &feature_set,

@@ -10131,10 +10131,9 @@ fn calculate_test_fee(
 
     let budget_limits =
         ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set, None);
-    Bank::calculate_fee(
+    fee_structure.calculate_fee(
         message,
         lamports_per_signature,
-        fee_structure,
         &budget_limits,
         remove_congestion_multiplier,
         false,
