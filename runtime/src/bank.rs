@@ -47,7 +47,6 @@ use {
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig,
             CalcAccountsHashDataSource, IncludeSlotInHash, VerifyAccountsHashAndLamportsConfig,
-            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_hash::{AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash},
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
