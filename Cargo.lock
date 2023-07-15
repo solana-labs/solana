@@ -6519,6 +6519,7 @@ dependencies = [
  "solana-bpf-loader-program",
  "solana-logger",
  "solana-program-runtime",
+ "solana-program-test",
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
