@@ -1,4 +1,5 @@
 //! The solana-program-test provides a BanksClient-based test framework SBF programs
+#![cfg(feature = "dev-context-only-utils")]
 #![allow(clippy::integer_arithmetic)]
 
 // Export tokio for test clients
