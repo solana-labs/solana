@@ -62,7 +62,6 @@ solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 symlink = { workspace = true }
 thiserror = { workspace = true }
-solana-test-validator = { workspace = true }
 solana-validator = { workspace = true }
 
 [package.metadata.docs.rs]
