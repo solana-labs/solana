@@ -44,13 +44,6 @@ use {
     thiserror::Error,
 };
 
-#[cfg(feature = "dev-context-only-utils")]
-use {
-    solana_ledger::{
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-    }
-};
-
 pub const GRACE_TICKS_FACTOR: u64 = 2;
 pub const MAX_GRACE_SLOTS: u64 = 2;
 
@@ -1035,13 +1028,6 @@ impl PohRecorder {
             .as_ref()
             .and_then(|bank_start| bank_start.get_working_bank_if_not_expired())
     }
-
-    #[cfg(feature = "dev-context-only-utils")]
-    pub fn schedule_dummy_max_height_reached_failure(&mut self) {
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        self.reset(bank, None);
-    }
 }
 
 pub fn create_test_recorder(
@@ -1096,6 +1082,9 @@ mod tests {
         bincode::serialize,
         crossbeam_channel::bounded,
         solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta, get_tmp_ledger_path},
+        solana_ledger::{
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        },
         solana_perf::test_tx::test_tx,
         solana_sdk::{clock::DEFAULT_TICKS_PER_SLOT, hash::hash},
     };
