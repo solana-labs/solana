@@ -6373,6 +6373,7 @@ dependencies = [
  "serde",
  "solana-logger",
  "solana-metrics",
+ "solana-perf",
  "solana-rayon-threadlimit",
  "solana-sdk",
  "solana-vote-program",
