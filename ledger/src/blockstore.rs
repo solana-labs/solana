@@ -1652,10 +1652,9 @@ impl Blockstore {
         buffer: &mut [u8],
     ) -> Result<(u64, usize)> {
         let _lock = self.check_lowest_cleanup_slot(slot)?;
-        let meta_cf = self.db.column::<cf::SlotMeta>();
         let mut buffer_offset = 0;
         let mut last_index = 0;
-        if let Some(meta) = meta_cf.get(slot)? {
+        if let Some(meta) = self.meta_cf.get(slot)? {
             if !meta.is_full() {
                 warn!("The slot is not yet full. Will not return any shreds");
                 return Ok((last_index, buffer_offset));
@@ -1969,8 +1968,7 @@ impl Blockstore {
         slot: Slot,
         require_previous_blockhash: bool,
     ) -> Result<VersionedConfirmedBlock> {
-        let slot_meta_cf = self.db.column::<cf::SlotMeta>();
-        let Some(slot_meta) = slot_meta_cf.get(slot)? else {
+        let Some(slot_meta) = self.meta_cf.get(slot)? else {
             info!("SlotMeta not found for slot {}", slot);
             return Err(BlockstoreError::SlotUnavailable);
         };
@@ -2902,8 +2900,7 @@ impl Blockstore {
         slot: Slot,
         start_index: u64,
     ) -> Result<(CompletedRanges, Option<SlotMeta>)> {
-        let slot_meta_cf = self.db.column::<cf::SlotMeta>();
-        let slot_meta = slot_meta_cf.get(slot)?;
+        let slot_meta = self.meta_cf.get(slot)?;
         if slot_meta.is_none() {
             return Ok((vec![], slot_meta));
         }
@@ -3315,8 +3312,8 @@ impl Blockstore {
     /// Note that the reported size does not include those recently inserted
     /// shreds that are still in memory.
     pub fn total_data_shred_storage_size(&self) -> Result<i64> {
-        let shred_data_cf = self.db.column::<cf::ShredData>();
-        shred_data_cf.get_int_property(RocksProperties::TOTAL_SST_FILES_SIZE)
+        self.data_shred_cf
+            .get_int_property(RocksProperties::TOTAL_SST_FILES_SIZE)
     }
 
     /// Returns the total physical storage size contributed by all coding shreds.
@@ -3324,8 +3321,8 @@ impl Blockstore {
     /// Note that the reported size does not include those recently inserted
     /// shreds that are still in memory.
     pub fn total_coding_shred_storage_size(&self) -> Result<i64> {
-        let shred_code_cf = self.db.column::<cf::ShredCode>();
-        shred_code_cf.get_int_property(RocksProperties::TOTAL_SST_FILES_SIZE)
+        self.code_shred_cf
+            .get_int_property(RocksProperties::TOTAL_SST_FILES_SIZE)
     }
 
     /// Returns whether the blockstore has primary (read and write) access
