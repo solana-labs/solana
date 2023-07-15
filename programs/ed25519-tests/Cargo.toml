@@ -12,7 +12,7 @@ edition = { workspace = true }
 assert_matches = { workspace = true }
 ed25519-dalek = { workspace = true }
 rand = { workspace = true }
-solana-program-test = { workspace = true }
+solana-program-test = { workspace = true, features = ["dev-context-only-utils"] }
 solana-sdk = { workspace = true }
 
 [package.metadata.docs.rs]
