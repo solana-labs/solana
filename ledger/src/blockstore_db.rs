@@ -693,7 +693,7 @@ impl Column for columns::TransactionStatus {
             Self::as_index(0)
         } else {
             let index = BigEndian::read_u64(&key[0..8]);
-            let signature = Signature::new(&key[8..72]);
+            let signature = Signature::try_from(&key[8..72]).unwrap();
             let slot = BigEndian::read_u64(&key[72..80]);
             (index, signature, slot)
         }
@@ -734,7 +734,7 @@ impl Column for columns::AddressSignatures {
         let index = BigEndian::read_u64(&key[0..8]);
         let pubkey = Pubkey::try_from(&key[8..40]).unwrap();
         let slot = BigEndian::read_u64(&key[40..48]);
-        let signature = Signature::new(&key[48..112]);
+        let signature = Signature::try_from(&key[48..112]).unwrap();
         (index, pubkey, slot, signature)
     }
 
@@ -764,7 +764,7 @@ impl Column for columns::TransactionMemos {
     }
 
     fn index(key: &[u8]) -> Signature {
-        Signature::new(&key[0..64])
+        Signature::try_from(&key[..64]).unwrap()
     }
 
     fn primary_index(_index: Self::Index) -> u64 {

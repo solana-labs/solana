@@ -578,7 +578,10 @@ pub mod layout {
     }
 
     pub(crate) fn get_signature(shred: &[u8]) -> Option<Signature> {
-        Some(Signature::new(shred.get(..SIZE_OF_SIGNATURE)?))
+        shred
+            .get(..SIZE_OF_SIGNATURE)
+            .map(Signature::try_from)?
+            .ok()
     }
 
     pub(crate) const fn get_signature_range() -> Range<usize> {

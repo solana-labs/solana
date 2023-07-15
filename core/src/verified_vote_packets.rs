@@ -337,7 +337,7 @@ mod tests {
             vote_account_key,
             vote: VoteTransaction::from(vote.clone()),
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
         verified_vote_packets
@@ -357,7 +357,7 @@ mod tests {
             vote_account_key,
             vote: VoteTransaction::from(vote),
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
         verified_vote_packets
@@ -379,7 +379,7 @@ mod tests {
             vote_account_key,
             vote: VoteTransaction::from(vote),
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
         verified_vote_packets
@@ -402,7 +402,7 @@ mod tests {
             vote_account_key,
             vote: VoteTransaction::from(vote),
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[2u8; 64]),
+            signature: Signature::from([2u8; 64]),
         }])
         .unwrap();
         verified_vote_packets
@@ -441,7 +441,7 @@ mod tests {
                 vote_account_key,
                 vote: VoteTransaction::from(vote),
                 packet_batch: PacketBatch::default(),
-                signature: Signature::new(&[1u8; 64]),
+                signature: Signature::from([1u8; 64]),
             }])
             .unwrap();
         }
@@ -627,7 +627,7 @@ mod tests {
                 vote_account_key,
                 vote: VoteTransaction::from(vote),
                 packet_batch: PacketBatch::default(),
-                signature: Signature::new(&[1u8; 64]),
+                signature: Signature::from([1u8; 64]),
             }])
             .unwrap();
         }
@@ -650,7 +650,7 @@ mod tests {
             vote_account_key,
             vote: VoteTransaction::from(third_vote.clone()),
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
 
@@ -670,7 +670,7 @@ mod tests {
                 vote_account_key,
                 vote: VoteTransaction::from(vote),
                 packet_batch: PacketBatch::default(),
-                signature: Signature::new(&[1u8; 64]),
+                signature: Signature::from([1u8; 64]),
             }])
             .unwrap();
         }
@@ -701,7 +701,7 @@ mod tests {
             vote_account_key,
             vote: VoteTransaction::from(vote),
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
         verified_vote_packets
@@ -802,7 +802,7 @@ mod tests {
                 vote_account_key,
                 vote,
                 packet_batch: PacketBatch::default(),
-                signature: Signature::new(&[1u8; 64]),
+                signature: Signature::from([1u8; 64]),
             }])
             .unwrap();
         }
@@ -837,7 +837,7 @@ mod tests {
                 vote_account_key,
                 vote,
                 packet_batch: PacketBatch::default(),
-                signature: Signature::new(&[1u8; 64]),
+                signature: Signature::from([1u8; 64]),
             }])
             .unwrap();
         }
@@ -865,7 +865,7 @@ mod tests {
             vote_account_key,
             vote,
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
 
@@ -894,7 +894,7 @@ mod tests {
             vote_account_key,
             vote,
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
 
@@ -917,7 +917,7 @@ mod tests {
             vote_account_key,
             vote,
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
 
@@ -938,7 +938,7 @@ mod tests {
             vote_account_key,
             vote,
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
 

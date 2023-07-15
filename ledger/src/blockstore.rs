@@ -7339,7 +7339,7 @@ pub mod tests {
         }
         .into();
         assert!(transaction_status_cf
-            .put_protobuf((0, Signature::new(&[2u8; 64]), 9), &status,)
+            .put_protobuf((0, Signature::from([2u8; 64]), 9), &status,)
             .is_ok());
 
         // result found
@@ -7359,7 +7359,7 @@ pub mod tests {
         } = transaction_status_cf
             .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
                 0,
-                Signature::new(&[2u8; 64]),
+                Signature::from([2u8; 64]),
                 9,
             ))
             .unwrap()
@@ -7396,11 +7396,11 @@ pub mod tests {
         assert!(transaction_status_index_cf.get(1).unwrap().is_some());
 
         for _ in 0..5 {
-            let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+            let random_bytes: [u8; 64] = std::array::from_fn(|_| rand::random::<u8>());
             blockstore
                 .write_transaction_status(
                     slot0,
-                    Signature::new(&random_bytes),
+                    Signature::from(random_bytes),
                     vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
                     vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
@@ -7462,11 +7462,11 @@ pub mod tests {
 
         let slot1 = 20;
         for _ in 0..5 {
-            let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+            let random_bytes: [u8; 64] = std::array::from_fn(|_| rand::random::<u8>());
             blockstore
                 .write_transaction_status(
                     slot1,
-                    Signature::new(&random_bytes),
+                    Signature::from(random_bytes),
                     vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
                     vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
@@ -7613,13 +7613,13 @@ pub mod tests {
         }
         .into();
 
-        let signature1 = Signature::new(&[1u8; 64]);
-        let signature2 = Signature::new(&[2u8; 64]);
-        let signature3 = Signature::new(&[3u8; 64]);
-        let signature4 = Signature::new(&[4u8; 64]);
-        let signature5 = Signature::new(&[5u8; 64]);
-        let signature6 = Signature::new(&[6u8; 64]);
-        let signature7 = Signature::new(&[7u8; 64]);
+        let signature1 = Signature::from([1u8; 64]);
+        let signature2 = Signature::from([2u8; 64]);
+        let signature3 = Signature::from([3u8; 64]);
+        let signature4 = Signature::from([4u8; 64]);
+        let signature5 = Signature::from([5u8; 64]);
+        let signature6 = Signature::from([6u8; 64]);
+        let signature7 = Signature::from([7u8; 64]);
 
         // Insert slots with fork
         //   0 (root)
@@ -7807,8 +7807,8 @@ pub mod tests {
         }
         .into();
 
-        let signature1 = Signature::new(&[2u8; 64]);
-        let signature2 = Signature::new(&[3u8; 64]);
+        let signature1 = Signature::from([2u8; 64]);
+        let signature2 = Signature::from([3u8; 64]);
 
         // Insert rooted slots 0..=3 with no fork
         let meta0 = SlotMeta::new(0, Some(0));
@@ -8179,7 +8179,7 @@ pub mod tests {
 
         let slot0 = 10;
         for x in 1..5 {
-            let signature = Signature::new(&[x; 64]);
+            let signature = Signature::from([x; 64]);
             blockstore
                 .write_transaction_status(
                     slot0,
@@ -8192,7 +8192,7 @@ pub mod tests {
         }
         let slot1 = 20;
         for x in 5..9 {
-            let signature = Signature::new(&[x; 64]);
+            let signature = Signature::from([x; 64]);
             blockstore
                 .write_transaction_status(
                     slot1,
@@ -8210,7 +8210,7 @@ pub mod tests {
             .unwrap();
         assert_eq!(all0.len(), 8);
         for x in 1..9 {
-            let expected_signature = Signature::new(&[x; 64]);
+            let expected_signature = Signature::from([x; 64]);
             assert_eq!(all0[x as usize - 1], expected_signature);
         }
         assert_eq!(
@@ -8244,7 +8244,7 @@ pub mod tests {
             .unwrap();
         assert_eq!(all1.len(), 8);
         for x in 1..9 {
-            let expected_signature = Signature::new(&[x; 64]);
+            let expected_signature = Signature::from([x; 64]);
             assert_eq!(all1[x as usize - 1], expected_signature);
         }
 
@@ -8284,8 +8284,8 @@ pub mod tests {
 
         // Test sort, regardless of entry order or signature value
         for slot in (21..25).rev() {
-            let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
-            let signature = Signature::new(&random_bytes);
+            let random_bytes: [u8; 64] = std::array::from_fn(|_| rand::random::<u8>());
+            let signature = Signature::from(random_bytes);
             blockstore
                 .write_transaction_status(
                     slot,
@@ -8314,7 +8314,7 @@ pub mod tests {
 
         let slot1 = 1;
         for x in 1..5 {
-            let signature = Signature::new(&[x; 64]);
+            let signature = Signature::from([x; 64]);
             blockstore
                 .write_transaction_status(
                     slot1,
@@ -8327,7 +8327,7 @@ pub mod tests {
         }
         let slot2 = 2;
         for x in 5..7 {
-            let signature = Signature::new(&[x; 64]);
+            let signature = Signature::from([x; 64]);
             blockstore
                 .write_transaction_status(
                     slot2,
@@ -8339,7 +8339,7 @@ pub mod tests {
                 .unwrap();
         }
         for x in 7..9 {
-            let signature = Signature::new(&[x; 64]);
+            let signature = Signature::from([x; 64]);
             blockstore
                 .write_transaction_status(
                     slot2,
@@ -8352,7 +8352,7 @@ pub mod tests {
         }
         let slot3 = 3;
         for x in 9..13 {
-            let signature = Signature::new(&[x; 64]);
+            let signature = Signature::from([x; 64]);
             blockstore
                 .write_transaction_status(
                     slot3,
@@ -8370,7 +8370,7 @@ pub mod tests {
             .unwrap();
         for (i, (slot, signature)) in slot1_signatures.iter().enumerate() {
             assert_eq!(*slot, slot1);
-            assert_eq!(*signature, Signature::new(&[i as u8 + 1; 64]));
+            assert_eq!(*signature, Signature::from([i as u8 + 1; 64]));
         }
 
         let slot2_signatures = blockstore
@@ -8378,7 +8378,7 @@ pub mod tests {
             .unwrap();
         for (i, (slot, signature)) in slot2_signatures.iter().enumerate() {
             assert_eq!(*slot, slot2);
-            assert_eq!(*signature, Signature::new(&[i as u8 + 5; 64]));
+            assert_eq!(*signature, Signature::from([i as u8 + 5; 64]));
         }
 
         let slot3_signatures = blockstore
@@ -8386,7 +8386,7 @@ pub mod tests {
             .unwrap();
         for (i, (slot, signature)) in slot3_signatures.iter().enumerate() {
             assert_eq!(*slot, slot3);
-            assert_eq!(*signature, Signature::new(&[i as u8 + 9; 64]));
+            assert_eq!(*signature, Signature::from([i as u8 + 9; 64]));
         }
     }
 

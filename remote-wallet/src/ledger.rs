@@ -516,12 +516,8 @@ impl RemoteWallet<hidapi::DeviceInfo> for LedgerWallet {
             }
         }
 
-        if result.len() != 64 {
-            return Err(RemoteWalletError::Protocol(
-                "Signature packet size mismatch",
-            ));
-        }
-        Ok(Signature::new(&result))
+        Signature::try_from(result)
+            .map_err(|_| RemoteWalletError::Protocol("Signature packet size mismatch"))
     }
 
     fn sign_offchain_message(
@@ -552,12 +548,8 @@ impl RemoteWallet<hidapi::DeviceInfo> for LedgerWallet {
         }
 
         let result = self.send_apdu(commands::SIGN_OFFCHAIN_MESSAGE, p1, p2, payload)?;
-        if result.len() != 64 {
-            return Err(RemoteWalletError::Protocol(
-                "Signature packet size mismatch",
-            ));
-        }
-        Ok(Signature::new(&result))
+        Signature::try_from(result)
+            .map_err(|_| RemoteWalletError::Protocol("Signature packet size mismatch"))
     }
 }
 
