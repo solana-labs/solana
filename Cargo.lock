@@ -5755,7 +5755,6 @@ dependencies = [
  "solana-system-program",
  "solana-vote-program",
  "static_assertions",
- "test-case",
 ]
 
 [[package]]
@@ -7368,7 +7367,6 @@ dependencies = [
  "dirs-next",
  "num_cpus",
  "solana-clap-v3-utils",
- "solana-cli-config",
  "solana-remote-wallet",
  "solana-sdk",
  "solana-version",
