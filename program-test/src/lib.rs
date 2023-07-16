@@ -1,4 +1,5 @@
 //! The solana-program-test provides a BanksClient-based test framework SBF programs
+#![cfg(feature = "dev-context-only-utils")]
 #![allow(clippy::integer_arithmetic)]
 
 // Export tokio for test clients
@@ -722,6 +723,7 @@ impl ProgramTest {
         self.deactivate_feature_set.insert(feature_id);
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     fn setup_bank(
         &mut self,
     ) -> (

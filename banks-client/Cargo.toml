@@ -22,7 +22,7 @@ tokio-serde = { workspace = true, features = ["bincode"] }
 
 [dev-dependencies]
 solana-banks-server = { workspace = true }
-solana-runtime = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 
 [lib]
 crate-type = ["lib"]

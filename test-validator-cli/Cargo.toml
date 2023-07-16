@@ -1,8 +1,7 @@
 [package]
-name = "solana-validator"
+name = "solana-test-validator-cli"
 description = "Blockchain, Rebuilt for Scale"
-documentation = "https://docs.rs/solana-validator"
-default-run = "solana-validator"
+readme = "../README.md"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
@@ -57,23 +56,16 @@ solana-sdk = { workspace = true }
 solana-send-transaction-service = { workspace = true }
 solana-storage-bigtable = { workspace = true }
 solana-streamer = { workspace = true }
+solana-test-validator = { workspace = true, features = ["dev-context-only-utils"] }
 solana-tpu-client = { workspace = true }
+solana-validator = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 symlink = { workspace = true }
 thiserror = { workspace = true }
 
-[dev-dependencies]
-solana-account-decoder = { workspace = true }
-solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
-spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
-
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = { workspace = true }
-
-[target."cfg(unix)".dependencies]
-libc = { workspace = true }
-signal-hook = { workspace = true }
+[features]
+dev-context-only-utils = []
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

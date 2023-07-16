@@ -44,7 +44,7 @@ thiserror = { workspace = true }
 [dev-dependencies]
 serial_test = { workspace = true }
 solana-local-cluster = { workspace = true }
-solana-test-validator = { workspace = true }
+solana-test-validator = { workspace = true, features = ["dev-context-only-utils"] }
 tempfile = { workspace = true }
 
 [package.metadata.docs.rs]

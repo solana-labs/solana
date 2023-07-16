@@ -1,14 +1,19 @@
+#[cfg(feature = "dev-context-only-utils")]
 use {
     crate::{
         bank::Bank,
         genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
-        transaction_results::TransactionResults,
-        vote_parser,
-        vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::SanitizedTransaction},
+    solana_sdk::{pubkey::Pubkey, signature::Signer},
+};
+use {
+    crate::{
+        transaction_results::TransactionResults, vote_parser, vote_sender_types::ReplayVoteSender,
+    },
+    solana_sdk::transaction::SanitizedTransaction,
 };
 
+#[cfg(feature = "dev-context-only-utils")]
 pub fn setup_bank_and_vote_pubkeys_for_tests(
     num_vote_accounts: usize,
     stake: u64,

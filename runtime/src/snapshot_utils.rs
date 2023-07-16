@@ -3276,6 +3276,7 @@ pub fn create_tmp_accounts_dir_for_tests() -> (TempDir, PathBuf) {
     (tmp_dir, account_dir)
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 pub fn create_snapshot_dirs_for_tests(
     genesis_config: &GenesisConfig,
     bank_snapshots_dir: impl AsRef<Path>,

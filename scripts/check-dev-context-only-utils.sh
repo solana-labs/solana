@@ -29,6 +29,8 @@ source ci/rust-version.sh nightly
 # reason to bend dev-context-only-utils's original intention and that listed
 # package isn't part of released binaries.
 declare tainted_packages=(
+  solana-banking-bench
+  solana-test-validator-cli
 )
 
 # convert to comma separeted (ref: https://stackoverflow.com/a/53839433)
@@ -38,7 +40,7 @@ allowed="${allowed%,}"
 mode=${1:-full}
 case "$mode" in
   tree | check-bins | check-all-targets | full)
-    ;;
+    shift;;
   *)
     echo "$0: unrecognized mode: $mode";
     exit 1
@@ -76,8 +78,8 @@ EOF
     jq -r "$query")"
   if [[ -n "$abusers" ]]; then
     cat <<EOF 1>&2
-\`dev-context-only-utils\` must not be used as normal dependencies, but is by \
-"([crate]: [dependency])":
+\`dev-context-only-utils\` must not be used as normal dependencies unless \
+tainted, but is by "([crate]: [dependency])":
     $abusers
 EOF
     exit 1
@@ -145,8 +147,8 @@ fi
 # test/benches) code by building in isolation from other crates, which might
 # happen to enable `dev-context-only-utils`
 if [[ $mode = "check-bins" || $mode = "full" ]]; then
-  _ cargo "+${rust_nightly}" hack check --bins
+  _ cargo "+${rust_nightly}" hack check --bins "$@"
 fi
 if [[ $mode = "check-all-targets" || $mode = "full" ]]; then
-  _ cargo "+${rust_nightly}" hack check --all-targets
+  _ cargo "+${rust_nightly}" hack check --all-targets "$@"
 fi

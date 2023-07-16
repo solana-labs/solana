@@ -18,11 +18,7 @@ use {
         entry::{hash_transactions, Entry},
         poh::Poh,
     },
-    solana_ledger::{
-        blockstore::Blockstore,
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        leader_schedule_cache::LeaderScheduleCache,
-    },
+    solana_ledger::{blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
     solana_measure::{measure, measure_us},
     solana_metrics::poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     solana_runtime::bank::Bank,
@@ -1029,13 +1025,6 @@ impl PohRecorder {
             .as_ref()
             .and_then(|bank_start| bank_start.get_working_bank_if_not_expired())
     }
-
-    // Used in tests
-    pub fn schedule_dummy_max_height_reached_failure(&mut self) {
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        self.reset(bank, None);
-    }
 }
 
 pub fn create_test_recorder(
@@ -1089,7 +1078,12 @@ mod tests {
         super::*,
         bincode::serialize,
         crossbeam_channel::bounded,
-        solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta, get_tmp_ledger_path},
+        solana_ledger::{
+            blockstore::Blockstore,
+            blockstore_meta::SlotMeta,
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            get_tmp_ledger_path,
+        },
         solana_perf::test_tx::test_tx,
         solana_sdk::{clock::DEFAULT_TICKS_PER_SLOT, hash::hash},
     };
