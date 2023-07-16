@@ -1,6 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
 mod cluster_tpu_info;
-pub mod entry_notifier_interface;
 pub mod max_slots;
 pub mod optimistically_confirmed_bank_tracker;
 pub mod parsed_token_accounts;

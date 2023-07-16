@@ -13,12 +13,13 @@ use {
         },
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
-        bank::{Bank, NonceFull, NonceInfo, TransactionCheckResult, TransactionExecutionResult},
         blockhash_queue::BlockhashQueue,
+        nonce_info::{NonceFull, NonceInfo},
         rent_collector::RentCollector,
         rent_debits::RentDebits,
         storable_accounts::StorableAccounts,
         transaction_error_metrics::TransactionErrorMetrics,
+        transaction_results::{TransactionCheckResult, TransactionExecutionResult},
     },
     dashmap::DashMap,
     itertools::Itertools,
@@ -26,20 +27,18 @@ use {
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget},
-        loaded_programs::{LoadedProgram, LoadedProgramType},
+        loaded_programs::LoadedProgramsForTxBatch,
     },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
-        bpf_loader_upgradeable,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
             self, add_set_tx_loaded_accounts_data_size_instruction,
-            delay_visibility_of_program_deployment, enable_request_heap_frame_ix,
             include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
-            simplify_writable_program_account_check, use_default_units_in_fee_calculation,
-            FeatureSet,
+            simplify_writable_program_account_check, FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -55,7 +54,6 @@ use {
         pubkey::Pubkey,
         saturating_add_assign,
         slot_hashes::SlotHashes,
-        system_program,
         sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
@@ -63,7 +61,10 @@ use {
     solana_system_program::{get_system_account_kind, SystemAccountKind},
     std::{
         cmp::Reverse,
-        collections::{hash_map, BinaryHeap, HashMap, HashSet},
+        collections::{
+            hash_map::{self, Entry},
+            BinaryHeap, HashMap, HashSet,
+        },
         num::NonZeroUsize,
         ops::RangeBounds,
         path::PathBuf,
@@ -80,6 +81,14 @@ pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
 pub struct AccountLocks {
     write_locks: HashSet<Pubkey>,
     readonly_locks: HashMap<Pubkey, u64>,
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub(crate) enum RewardInterval {
+    /// the slot within the epoch is INSIDE the reward distribution interval
+    InsideInterval,
+    /// the slot within the epoch is OUTSIDE the reward distribution interval
+    OutsideInterval,
 }
 
 impl AccountLocks {
@@ -166,7 +175,7 @@ impl Accounts {
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
     }
 
@@ -183,7 +192,7 @@ impl Accounts {
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
-            &Arc::default(),
+            Arc::default(),
         )
     }
 
@@ -194,7 +203,7 @@ impl Accounts {
         shrink_ratio: AccountShrinkThreshold,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         Self::new_empty(AccountsDb::new_with_config(
             paths,
@@ -218,19 +227,10 @@ impl Accounts {
         }
     }
 
-    fn construct_instructions_account(
-        message: &SanitizedMessage,
-        is_owned_by_sysvar: bool,
-    ) -> AccountSharedData {
-        let data = construct_instructions_data(&message.decompile_instructions());
-        let owner = if is_owned_by_sysvar {
-            sysvar::id()
-        } else {
-            system_program::id()
-        };
+    fn construct_instructions_account(message: &SanitizedMessage) -> AccountSharedData {
         AccountSharedData::from(Account {
-            data,
-            owner,
+            data: construct_instructions_data(&message.decompile_instructions()),
+            owner: sysvar::id(),
             ..Account::default()
         })
     }
@@ -251,7 +251,7 @@ impl Accounts {
                 ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
             let _process_transaction_result = compute_budget.process_instructions(
                 tx.message().program_instructions_iter(),
-                feature_set.is_active(&use_default_units_in_fee_calculation::id()),
+                true, // default_units_per_instruction has enabled in MNB
                 !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
                 true, // don't reject txs that use request heap size ix
                 feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
@@ -293,32 +293,13 @@ impl Accounts {
 
     fn account_shared_data_from_program(
         key: &Pubkey,
-        feature_set: &FeatureSet,
-        program: &LoadedProgram,
-        program_accounts: &HashMap<Pubkey, &Pubkey>,
+        program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     ) -> Result<AccountSharedData> {
-        // Check for tombstone
-        let result = match &program.program {
-            LoadedProgramType::FailedVerification | LoadedProgramType::Closed => {
-                Err(TransactionError::InvalidProgramForExecution)
-            }
-            LoadedProgramType::DelayVisibility => {
-                debug_assert!(feature_set.is_active(&delay_visibility_of_program_deployment::id()));
-                Err(TransactionError::InvalidProgramForExecution)
-            }
-            _ => Ok(()),
-        };
-        if feature_set.is_active(&simplify_writable_program_account_check::id()) {
-            // Currently CPI only fails if an execution is actually attempted. With this check it
-            // would also fail if a transaction just references an invalid program. So the checking
-            // of the result is being feature gated.
-            result?;
-        }
         // It's an executable program account. The program is already loaded in the cache.
         // So the account data is not needed. Return a dummy AccountSharedData with meta
         // information.
         let mut program_account = AccountSharedData::default();
-        let program_owner = program_accounts
+        let (program_owner, _count) = program_accounts
             .get(key)
             .ok_or(TransactionError::AccountNotFound)?;
         program_account.set_owner(**program_owner);
@@ -336,9 +317,12 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
-        program_accounts: &HashMap<Pubkey, &Pubkey>,
-        loaded_programs: &HashMap<Pubkey, Arc<LoadedProgram>>,
+        reward_interval: RewardInterval,
+        program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
+        loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Result<LoadedTransaction> {
+        let in_reward_interval = reward_interval == RewardInterval::InsideInterval;
+
         // NOTE: this check will never fail because `tx` is sanitized
         if tx.signatures().is_empty() && fee != 0 {
             return Err(TransactionError::MissingSignatureForFee);
@@ -375,11 +359,7 @@ impl Accounts {
                 let mut account_found = true;
                 #[allow(clippy::collapsible_else_if)]
                 let account = if solana_sdk::sysvar::instructions::check_id(key) {
-                    Self::construct_instructions_account(
-                        message,
-                        feature_set
-                            .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
-                    )
+                    Self::construct_instructions_account(message)
                 } else {
                     let instruction_account = u8::try_from(i)
                         .map(|i| instruction_accounts.contains(&&i))
@@ -388,9 +368,12 @@ impl Accounts {
                         account_overrides.and_then(|overrides| overrides.get(key))
                     {
                         (account_override.data().len(), account_override.clone(), 0)
-                    } else if let Some(program) = (!instruction_account && !message.is_writable(i))
-                        .then_some(())
-                        .and_then(|_| loaded_programs.get(key))
+                    } else if let Some(program) = (feature_set
+                        .is_active(&simplify_writable_program_account_check::id())
+                        && !instruction_account
+                        && !message.is_writable(i))
+                    .then_some(())
+                    .and_then(|_| loaded_programs.find(key))
                     {
                         // This condition block does special handling for accounts that are passed
                         // as instruction account to any of the instructions in the transaction.
@@ -398,13 +381,8 @@ impl Accounts {
                         // (that are passed to the program as instruction accounts). So such accounts
                         // are needed to be loaded even though corresponding compiled program may
                         // already be present in the cache.
-                        Self::account_shared_data_from_program(
-                            key,
-                            feature_set,
-                            program,
-                            program_accounts,
-                        )
-                        .map(|program_account| (program.account_size, program_account, 0))?
+                        Self::account_shared_data_from_program(key, program_accounts)
+                            .map(|program_account| (program.account_size, program_account, 0))?
                     } else {
                         self.accounts_db
                             .load_with_fixed_root(ancestors, key)
@@ -460,17 +438,46 @@ impl Accounts {
                         validated_fee_payer = true;
                     }
 
-                    if bpf_loader_upgradeable::check_id(account.owner()) {
-                        if !feature_set.is_active(&simplify_writable_program_account_check::id())
-                            && message.is_writable(i)
-                            && !message.is_upgradeable_loader_present()
-                        {
+                    if !feature_set.is_active(&simplify_writable_program_account_check::id()) {
+                        if bpf_loader_upgradeable::check_id(account.owner()) {
+                            if message.is_writable(i) && !message.is_upgradeable_loader_present() {
+                                error_counters.invalid_writable_account += 1;
+                                return Err(TransactionError::InvalidWritableAccount);
+                            }
+
+                            if account.executable() {
+                                // The upgradeable loader requires the derived ProgramData account
+                                if let Ok(UpgradeableLoaderState::Program {
+                                    programdata_address,
+                                }) = account.state()
+                                {
+                                    if self
+                                        .accounts_db
+                                        .load_with_fixed_root(ancestors, &programdata_address)
+                                        .is_none()
+                                    {
+                                        error_counters.account_not_found += 1;
+                                        return Err(TransactionError::ProgramAccountNotFound);
+                                    }
+                                } else {
+                                    error_counters.invalid_program_for_execution += 1;
+                                    return Err(TransactionError::InvalidProgramForExecution);
+                                }
+                            }
+                        } else if account.executable() && message.is_writable(i) {
                             error_counters.invalid_writable_account += 1;
                             return Err(TransactionError::InvalidWritableAccount);
                         }
-                    } else if account.executable() && message.is_writable(i) {
-                        error_counters.invalid_writable_account += 1;
-                        return Err(TransactionError::InvalidWritableAccount);
+                    }
+
+                    if in_reward_interval
+                        && message.is_writable(i)
+                        && solana_stake_program::check_id(account.owner())
+                    {
+                        error_counters.program_execution_temporarily_restricted += 1;
+                        return Err(TransactionError::ProgramExecutionTemporarilyRestricted {
+                            account_index: i as u8,
+                        });
                     }
 
                     tx_rent += rent;
@@ -535,16 +542,23 @@ impl Accounts {
                         builtins_start_index.saturating_add(owner_index)
                     } else {
                         let owner_index = accounts.len();
-                        if let Some((program_account, _)) =
+                        if let Some((owner_account, _)) =
                             self.accounts_db.load_with_fixed_root(ancestors, owner_id)
                         {
+                            if disable_builtin_loader_ownership_chains
+                                && !native_loader::check_id(owner_account.owner())
+                                || !owner_account.executable()
+                            {
+                                error_counters.invalid_program_for_execution += 1;
+                                return Err(TransactionError::InvalidProgramForExecution);
+                            }
                             Self::accumulate_and_check_loaded_account_data_size(
                                 &mut accumulated_accounts_data_size,
-                                program_account.data().len(),
+                                owner_account.data().len(),
                                 requested_loaded_accounts_data_size_limit,
                                 error_counters,
                             )?;
-                            accounts.push((*owner_id, program_account));
+                            accounts.push((*owner_id, owner_account));
                         } else {
                             error_counters.account_not_found += 1;
                             return Err(TransactionError::ProgramAccountNotFound);
@@ -623,9 +637,7 @@ impl Accounts {
             &payer_post_rent_state,
             payer_address,
             payer_account,
-            feature_set
-                .is_active(&feature_set::include_account_index_in_rent_error::ID)
-                .then_some(payer_index),
+            payer_index,
         )
     }
 
@@ -639,8 +651,8 @@ impl Accounts {
         lock_results: &mut [TransactionCheckResult],
         program_owners: &[&'a Pubkey],
         hash_queue: &BlockhashQueue,
-    ) -> HashMap<Pubkey, &'a Pubkey> {
-        let mut result = HashMap::new();
+    ) -> HashMap<Pubkey, (&'a Pubkey, u64)> {
+        let mut result: HashMap<Pubkey, (&'a Pubkey, u64)> = HashMap::new();
         lock_results.iter_mut().zip(txs).for_each(|etx| {
             if let ((Ok(()), nonce), tx) = etx {
                 if nonce
@@ -654,9 +666,12 @@ impl Accounts {
                     tx.message()
                         .account_keys()
                         .iter()
-                        .enumerate()
-                        .for_each(|(i, key)| {
-                            if !tx.message().is_writable(i) && !result.contains_key(key) {
+                        .for_each(|key| match result.entry(*key) {
+                            Entry::Occupied(mut entry) => {
+                                let (_, count) = entry.get_mut();
+                                saturating_add_assign!(*count, 1);
+                            }
+                            Entry::Vacant(entry) => {
                                 if let Ok(index) = self.accounts_db.account_matches_owners(
                                     ancestors,
                                     key,
@@ -664,7 +679,7 @@ impl Accounts {
                                 ) {
                                     program_owners
                                         .get(index)
-                                        .and_then(|owner| result.insert(*key, *owner));
+                                        .map(|owner| entry.insert((*owner, 1)));
                                 }
                             }
                         });
@@ -680,7 +695,7 @@ impl Accounts {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn load_accounts(
+    pub(crate) fn load_accounts(
         &self,
         ancestors: &Ancestors,
         txs: &[SanitizedTransaction],
@@ -691,8 +706,9 @@ impl Accounts {
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
         account_overrides: Option<&AccountOverrides>,
-        program_accounts: &HashMap<Pubkey, &Pubkey>,
-        loaded_programs: &HashMap<Pubkey, Arc<LoadedProgram>>,
+        in_reward_interval: RewardInterval,
+        program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
+        loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Vec<TransactionLoadResult> {
         txs.iter()
             .zip(lock_results)
@@ -705,15 +721,11 @@ impl Accounts {
                             hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
                         });
                     let fee = if let Some(lamports_per_signature) = lamports_per_signature {
-                        Bank::calculate_fee(
+                        fee_structure.calculate_fee(
                             tx.message(),
                             lamports_per_signature,
-                            fee_structure,
-                            feature_set.is_active(&use_default_units_in_fee_calculation::id()),
-                            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+                            &ComputeBudget::fee_budget_limits(tx.message().program_instructions_iter(), feature_set, Some(self.accounts_db.expected_cluster_type())),
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
-                            feature_set.is_active(&enable_request_heap_frame_ix::id()) || self.accounts_db.expected_cluster_type() != ClusterType::MainnetBeta,
-                            feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
                             feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                         )
                     } else {
@@ -728,6 +740,7 @@ impl Accounts {
                         rent_collector,
                         feature_set,
                         account_overrides,
+                        in_reward_interval,
                         program_accounts,
                         loaded_programs,
                     ) {
@@ -1230,14 +1243,14 @@ impl Accounts {
     pub fn lock_accounts_with_results<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        results: impl Iterator<Item = &'a Result<()>>,
+        results: impl Iterator<Item = Result<()>>,
         tx_account_lock_limit: usize,
     ) -> Vec<Result<()>> {
         let tx_account_locks_results: Vec<Result<_>> = txs
             .zip(results)
             .map(|(tx, result)| match result {
                 Ok(()) => tx.get_account_locks(tx_account_lock_limit),
-                Err(err) => Err(err.clone()),
+                Err(err) => Err(err),
             })
             .collect();
         self.lock_accounts_inner(tx_account_locks_results)
@@ -1313,7 +1326,7 @@ impl Accounts {
             durable_nonce,
             lamports_per_signature,
         );
-        self.accounts_db.store_cached(
+        self.accounts_db.store_cached_inline_update_index(
             (slot, &accounts_to_store[..], include_slot_in_hash),
             Some(&transactions),
         );
@@ -1462,18 +1475,16 @@ mod tests {
     use {
         super::*,
         crate::{
-            bank::{DurableNonceFee, TransactionExecutionDetails},
             rent_collector::RentCollector,
+            transaction_results::{DurableNonceFee, TransactionExecutionDetails},
         },
         assert_matches::assert_matches,
         solana_address_lookup_table_program::state::LookupTableMeta,
-        solana_program_runtime::{
-            executor_cache::TransactionExecutorCache,
-            prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
+        solana_program_runtime::prioritization_fee::{
+            PrioritizationFeeDetails, PrioritizationFeeType,
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
-            bpf_loader_upgradeable::UpgradeableLoaderState,
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::EpochSchedule,
             genesis_config::ClusterType,
@@ -1488,9 +1499,7 @@ mod tests {
         },
         std::{
             borrow::Cow,
-            cell::RefCell,
             convert::TryFrom,
-            rc::Rc,
             sync::atomic::{AtomicBool, AtomicU64, Ordering},
             thread, time,
         },
@@ -1522,7 +1531,8 @@ mod tests {
                 executed_units: 0,
                 accounts_data_len_delta: 0,
             },
-            tx_executor_cache: Rc::new(RefCell::new(TransactionExecutorCache::default())),
+            programs_modified_by_tx: Box::<LoadedProgramsForTxBatch>::default(),
+            programs_updated_only_for_global_cache: Box::<LoadedProgramsForTxBatch>::default(),
         }
     }
 
@@ -1559,8 +1569,9 @@ mod tests {
             feature_set,
             fee_structure,
             None,
+            RewardInterval::OutsideInterval,
             &HashMap::new(),
-            &HashMap::new(),
+            &LoadedProgramsForTxBatch::default(),
         )
     }
 
@@ -1744,14 +1755,18 @@ mod tests {
             instructions,
         );
 
-        let fee = Bank::calculate_fee(
-            &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+        let mut feature_set = FeatureSet::all_enabled();
+        feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+
+        let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
+        let fee = FeeStructure::default().calculate_fee(
+            &message,
             lamports_per_signature,
-            &FeeStructure::default(),
-            true,
-            false,
-            true,
-            true,
+            &ComputeBudget::fee_budget_limits(
+                message.program_instructions_iter(),
+                &feature_set,
+                None,
+            ),
             true,
             false,
         );
@@ -2093,13 +2108,13 @@ mod tests {
             programs
                 .get(&account3_pubkey)
                 .expect("failed to find the program account"),
-            &&program1_pubkey
+            &(&program1_pubkey, 2)
         );
         assert_eq!(
             programs
                 .get(&account4_pubkey)
                 .expect("failed to find the program account"),
-            &&program2_pubkey
+            &(&program2_pubkey, 1)
         );
     }
 
@@ -2202,7 +2217,7 @@ mod tests {
             programs
                 .get(&account3_pubkey)
                 .expect("failed to find the program account"),
-            &&program1_pubkey
+            &(&program1_pubkey, 1)
         );
         assert_eq!(lock_results[1].0, Err(TransactionError::BlockhashNotFound));
     }
@@ -2472,8 +2487,12 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[simplify_writable_program_account_check::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2486,8 +2505,12 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // mark both executables as readonly
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[simplify_writable_program_account_check::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2982,23 +3005,19 @@ mod tests {
         let counter_clone = counter.clone();
         let accounts_clone = accounts_arc.clone();
         let exit_clone = exit.clone();
-        thread::spawn(move || {
-            let counter_clone = counter_clone.clone();
-            let exit_clone = exit_clone.clone();
-            loop {
-                let txs = vec![writable_tx.clone()];
-                let results = accounts_clone
-                    .clone()
-                    .lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
-                for result in results.iter() {
-                    if result.is_ok() {
-                        counter_clone.clone().fetch_add(1, Ordering::SeqCst);
-                    }
+        thread::spawn(move || loop {
+            let txs = vec![writable_tx.clone()];
+            let results = accounts_clone
+                .clone()
+                .lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
+            for result in results.iter() {
+                if result.is_ok() {
+                    counter_clone.clone().fetch_add(1, Ordering::SeqCst);
                 }
-                accounts_clone.unlock_accounts(txs.iter(), &results);
-                if exit_clone.clone().load(Ordering::Relaxed) {
-                    break;
-                }
+            }
+            accounts_clone.unlock_accounts(txs.iter(), &results);
+            if exit_clone.clone().load(Ordering::Relaxed) {
+                break;
             }
         });
         let counter_clone = counter;
@@ -3157,7 +3176,7 @@ mod tests {
 
         let results = accounts.lock_accounts_with_results(
             txs.iter(),
-            qos_results.iter(),
+            qos_results.into_iter(),
             MAX_TX_ACCOUNT_LOCKS,
         );
 
@@ -3363,8 +3382,9 @@ mod tests {
             &FeatureSet::all_enabled(),
             &FeeStructure::default(),
             account_overrides,
+            RewardInterval::OutsideInterval,
             &HashMap::new(),
-            &HashMap::new(),
+            &LoadedProgramsForTxBatch::default(),
         )
     }
 
@@ -4302,14 +4322,18 @@ mod tests {
             Hash::default(),
         );
 
-        let fee = Bank::calculate_fee(
-            &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+        let mut feature_set = FeatureSet::all_enabled();
+        feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+
+        let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
+        let fee = FeeStructure::default().calculate_fee(
+            &message,
             lamports_per_signature,
-            &FeeStructure::default(),
-            true,
-            false,
-            true,
-            true,
+            &ComputeBudget::fee_budget_limits(
+                message.program_instructions_iter(),
+                &feature_set,
+                None,
+            ),
             true,
             false,
         );

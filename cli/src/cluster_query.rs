@@ -1007,8 +1007,8 @@ pub fn process_leader_schedule(
 ) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
     let epoch = epoch.unwrap_or(epoch_info.epoch);
-    if epoch > epoch_info.epoch {
-        return Err(format!("Epoch {epoch} is in the future").into());
+    if epoch > (epoch_info.epoch + 1) {
+        return Err(format!("Epoch {epoch} is more than one epoch in the future").into());
     }
 
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
@@ -1109,7 +1109,7 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> Pro
     match config.output_format {
         OutputFormat::Json | OutputFormat::JsonCompact => {}
         _ => {
-            let epoch_info = cli_epoch_info.epoch_info.clone();
+            let epoch_info = &cli_epoch_info.epoch_info;
             let average_slot_time_ms = rpc_client
                 .get_recent_performance_samples(Some(60))
                 .ok()
@@ -1131,7 +1131,7 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> Pro
                     .get_block_time(first_block_in_epoch)
                     .ok()
                     .map(|time| {
-                        time + (((first_block_in_epoch - epoch_expected_start_slot)
+                        time - (((first_block_in_epoch - epoch_expected_start_slot)
                             * average_slot_time_ms)
                             / 1000) as i64
                     });
@@ -1958,14 +1958,14 @@ pub fn process_show_validators(
 
     let mut stake_by_version: BTreeMap<CliVersion, CliValidatorsStakeByVersion> = BTreeMap::new();
     for validator in current_validators.iter() {
-        let mut entry = stake_by_version
+        let entry = stake_by_version
             .entry(validator.version.clone())
             .or_default();
         entry.current_validators += 1;
         entry.current_active_stake += validator.activated_stake;
     }
     for validator in delinquent_validators.iter() {
-        let mut entry = stake_by_version
+        let entry = stake_by_version
             .entry(validator.version.clone())
             .or_default();
         entry.delinquent_validators += 1;

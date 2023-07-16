@@ -8,7 +8,7 @@ use {
     log::*,
     solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
     solana_core::{
-        tower_storage::FileTowerStorage,
+        consensus::tower_storage::FileTowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{
@@ -31,6 +31,7 @@ use {
         clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
+        feature_set,
         genesis_config::{ClusterType, GenesisConfig},
         message::Message,
         poh_config::PohConfig,
@@ -92,6 +93,24 @@ pub struct ClusterConfig {
     pub tpu_connection_pool_size: usize,
 }
 
+impl ClusterConfig {
+    pub fn new_with_equal_stakes(
+        num_nodes: usize,
+        cluster_lamports: u64,
+        lamports_per_node: u64,
+    ) -> Self {
+        Self {
+            node_stakes: vec![lamports_per_node; num_nodes],
+            cluster_lamports,
+            validator_configs: make_identical_validator_configs(
+                &ValidatorConfig::default_for_test(),
+                num_nodes,
+            ),
+            ..Self::default()
+        }
+    }
+}
+
 impl Default for ClusterConfig {
     fn default() -> Self {
         ClusterConfig {
@@ -132,17 +151,14 @@ impl LocalCluster {
         lamports_per_node: u64,
         socket_addr_space: SocketAddrSpace,
     ) -> Self {
-        let stakes: Vec<_> = (0..num_nodes).map(|_| lamports_per_node).collect();
-        let mut config = ClusterConfig {
-            node_stakes: stakes,
-            cluster_lamports,
-            validator_configs: make_identical_validator_configs(
-                &ValidatorConfig::default_for_test(),
+        Self::new(
+            &mut ClusterConfig::new_with_equal_stakes(
                 num_nodes,
+                cluster_lamports,
+                lamports_per_node,
             ),
-            ..ClusterConfig::default()
-        };
-        Self::new(&mut config, socket_addr_space)
+            socket_addr_space,
+        )
     }
 
     fn sync_ledger_path_across_nested_config_fields(
@@ -314,8 +330,14 @@ impl LocalCluster {
             validators,
             genesis_config,
             connection_cache: match config.tpu_use_quic {
-                true => Arc::new(ConnectionCache::new(config.tpu_connection_pool_size)),
-                false => Arc::new(ConnectionCache::with_udp(config.tpu_connection_pool_size)),
+                true => Arc::new(ConnectionCache::new_quic(
+                    "connection_cache_local_cluster_quic",
+                    config.tpu_connection_pool_size,
+                )),
+                false => Arc::new(ConnectionCache::with_udp(
+                    "connection_cache_local_cluster_udp",
+                    config.tpu_connection_pool_size,
+                )),
             },
         };
 
@@ -436,7 +458,9 @@ impl LocalCluster {
         socket_addr_space: SocketAddrSpace,
     ) -> Pubkey {
         let (rpc, tpu) = LegacyContactInfo::try_from(&self.entry_point_info)
-            .map(cluster_tests::get_client_facing_addr)
+            .map(|node| {
+                cluster_tests::get_client_facing_addr(self.connection_cache.protocol(), node)
+            })
             .unwrap();
         let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
 
@@ -531,7 +555,9 @@ impl LocalCluster {
 
     pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
         let (rpc, tpu) = LegacyContactInfo::try_from(&self.entry_point_info)
-            .map(cluster_tests::get_client_facing_addr)
+            .map(|node| {
+                cluster_tests::get_client_facing_addr(self.connection_cache.protocol(), node)
+            })
             .unwrap();
         let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
@@ -652,8 +678,18 @@ impl LocalCluster {
             == 0
         {
             // 1) Create vote account
+            // Unlike the bootstrap validator we have to check if the new vote state is being used
+            // as the cluster is already running, and using the wrong account size will cause the
+            // InitializeAccount tx to fail
+            let use_current_vote_state = client
+                .poll_get_balance_with_commitment(
+                    &feature_set::vote_state_add_vote_latency::id(),
+                    CommitmentConfig::processed(),
+                )
+                .unwrap_or(0)
+                > 0;
 
-            let instructions = vote_instruction::create_account(
+            let instructions = vote_instruction::create_account_with_config(
                 &from_account.pubkey(),
                 &vote_account_pubkey,
                 &VoteInit {
@@ -663,6 +699,11 @@ impl LocalCluster {
                     commission: 0,
                 },
                 amount,
+                vote_instruction::CreateVoteAccountConfig {
+                    space: vote_state::VoteStateVersions::vote_state_size_of(use_current_vote_state)
+                        as u64,
+                    ..vote_instruction::CreateVoteAccountConfig::default()
+                },
             );
             let message = Message::new(&instructions, Some(&from_account.pubkey()));
             let mut transaction = Transaction::new(
@@ -782,7 +823,9 @@ impl Cluster for LocalCluster {
     fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
         self.validators.get(pubkey).map(|f| {
             let (rpc, tpu) = LegacyContactInfo::try_from(&f.info.contact_info)
-                .map(cluster_tests::get_client_facing_addr)
+                .map(|node| {
+                    cluster_tests::get_client_facing_addr(self.connection_cache.protocol(), node)
+                })
                 .unwrap();
             ThinClient::new(rpc, tpu, self.connection_cache.clone())
         })

@@ -44,6 +44,8 @@ echo --- build environment
   cargo clippy --version --verbose
   $cargoNightly clippy --version --verbose
 
+  $cargoNightly hack --version --verbose
+
   # audit is done only with "$cargo stable"
   cargo audit --version
 
@@ -79,16 +81,37 @@ else
   echo "Note: cargo-for-all-lock-files.sh skipped because $CI_BASE_BRANCH != $EDGE_CHANNEL"
 fi
 
- _ ci/order-crates-for-publishing.py
+_ ci/order-crates-for-publishing.py
 
-nightly_clippy_allows=()
+nightly_clippy_allows=(--allow=clippy::redundant_clone)
 
-# run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
- _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace --all-targets --features dummy-for-ci-check -- \
-   --deny=warnings \
-   --deny=clippy::default_trait_access \
-   --deny=clippy::integer_arithmetic \
-   "${nightly_clippy_allows[@]}"
+# Use nightly clippy, as frozen-abi proc-macro generates a lot of code across
+# various crates in this whole monorepo (frozen-abi is enabled only under nightly
+# due to the use of unstable rust feature). Likewise, frozen-abi(-macro) crates'
+# unit tests are only compiled under nightly.
+# Similarly, nightly is desired to run clippy over all of bench files because
+# the bench itself isn't stabilized yet...
+#   ref: https://github.com/rust-lang/rust/issues/66287
+_ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace --all-targets --features dummy-for-ci-check -- \
+  --deny=warnings \
+  --deny=clippy::default_trait_access \
+  --deny=clippy::integer_arithmetic \
+  --deny=clippy::manual_let_else \
+  --deny=clippy::used_underscore_binding \
+  "${nightly_clippy_allows[@]}"
+
+# temporarily run stable clippy as well to scan the codebase for
+# `redundant_clone`s, which is disabled as nightly clippy is buggy:
+#   https://github.com/solana-labs/solana/issues/31834
+#
+# can't use --all-targets:
+#   error[E0554]: `#![feature]` may not be used on the stable release channel
+_ scripts/cargo-for-all-lock-files.sh -- clippy --workspace  --tests --bins --examples --features dummy-for-ci-check -- \
+  --deny=warnings \
+  --deny=clippy::default_trait_access \
+  --deny=clippy::integer_arithmetic \
+  --deny=clippy::manual_let_else \
+  --deny=clippy::used_underscore_binding
 
 if [[ -n $CI ]]; then
   # exclude from printing "Checking xxx ..."
@@ -97,8 +120,10 @@ else
   _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" sort --workspace --check
 fi
 
+_ scripts/check-dev-context-only-utils.sh tree
+
 _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" fmt --all -- --check
 
- _ ci/do-audit.sh
+_ ci/do-audit.sh
 
 echo --- ok

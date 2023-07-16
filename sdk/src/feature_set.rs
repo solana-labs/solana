@@ -368,6 +368,9 @@ pub mod fix_recent_blockhashes {
 pub mod update_rewards_from_cached_accounts {
     solana_sdk::declare_id!("28s7i3htzhahXQKqmS2ExzbEoUypg9krwvtK2M9UWXh9");
 }
+pub mod enable_partitioned_epoch_reward {
+    solana_sdk::declare_id!("HCnE3xQoZtDz9dSVm3jKwJXioTb6zMRbgwCmGg3PHHk8");
+}
 
 pub mod spl_token_v3_4_0 {
     solana_sdk::declare_id!("Ftok4njE8b7tDffYkC5bAbCaQv5sL6jispYrprzatUwN");
@@ -390,8 +393,8 @@ pub mod require_static_program_ids_in_transaction {
 }
 
 pub mod stake_raise_minimum_delegation_to_1_sol {
-    // This is a feature-proposal *feature id*.  The feature keypair address is `3YHAo6wWw5rDbQxb59BmJkQ3XwVhX3m8tdBVbtxnJmma`.
-    solana_sdk::declare_id!("4xmyBuR2VCXzy9H6qYpH9ckfgnTuMDQFPFBfTs4eBCY1");
+    // This is a feature-proposal *feature id*.  The feature keypair address is `GQXzC7YiSNkje6FFUk6sc2p53XRvKoaZ9VMktYzUMnpL`.
+    solana_sdk::declare_id!("9onWzzvCzNC2jfhxxeqRgs5q7nFAAKpCUvkj6T6GJK9i");
 }
 
 pub mod stake_minimum_delegation_for_rewards {
@@ -617,6 +620,9 @@ pub mod delay_visibility_of_program_deployment {
 pub mod apply_cost_tracker_during_replay {
     solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
 }
+pub mod bpf_account_data_direct_mapping {
+    solana_sdk::declare_id!("9gwzizfABsKUereT6phZZxbTzuAnovkgwpVVpdcSxv9h");
+}
 
 pub mod add_set_tx_loaded_accounts_data_size_instruction {
     solana_sdk::declare_id!("G6vbf1UBok8MWb8m25ex86aoQHeKTzDKzuZADHkShqm6");
@@ -660,6 +666,10 @@ pub mod vote_state_add_vote_latency {
 
 pub mod checked_arithmetic_in_fee_validation {
     solana_sdk::declare_id!("5Pecy6ie6XGm22pc9d4P9W5c31BugcFBuy6hsP2zkETv");
+}
+
+pub mod last_restart_slot_sysvar {
+    solana_sdk::declare_id!("HooKD5NC9QNxk25QuzCssB8ecrEzGt6eXEPBUxWp1LaR");
 }
 
 lazy_static! {
@@ -748,6 +758,7 @@ lazy_static! {
         (executables_incur_cpi_data_cost::id(), "Executables incur CPI data costs"),
         (fix_recent_blockhashes::id(), "stop adding hashes for skipped slots to recent blockhashes"),
         (update_rewards_from_cached_accounts::id(), "update rewards from cached accounts"),
+        (enable_partitioned_epoch_reward::id(), "enable partitioned rewards at epoch boundary #32166"),
         (spl_token_v3_4_0::id(), "SPL Token Program version 3.4.0 release #24740"),
         (spl_associated_token_account_v1_1_0::id(), "SPL Associated Token Account Program version 1.1.0 release #24741"),
         (default_units_per_instruction::id(), "Default max tx-wide compute units calculated per instruction"),
@@ -822,6 +833,8 @@ lazy_static! {
         (clean_up_delegation_errors::id(), "Return InsufficientDelegation instead of InsufficientFunds or InsufficientStake where applicable #31206"),
         (vote_state_add_vote_latency::id(), "replace Lockout with LandedVote (including vote latency) in vote state #31264"),
         (checked_arithmetic_in_fee_validation::id(), "checked arithmetic in fee validation #31273"),
+        (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
+        (last_restart_slot_sysvar::id(), "enable new sysvar last_restart_slot"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

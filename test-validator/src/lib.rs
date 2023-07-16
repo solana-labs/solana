@@ -1,12 +1,13 @@
 #![allow(clippy::integer_arithmetic)]
 use {
+    base64::{prelude::BASE64_STANDARD, Engine},
     crossbeam_channel::Receiver,
     log::*,
     solana_cli_output::CliAccount,
     solana_client::rpc_request::MAX_MULTIPLE_ACCOUNTS,
     solana_core::{
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
-        tower_storage::TowerStorage,
+        consensus::tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_geyser_plugin_manager::{
@@ -14,6 +15,7 @@ use {
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
+        contact_info::Protocol,
         gossip_service::discover_cluster,
         socketaddr,
     },
@@ -365,9 +367,8 @@ impl TestValidatorGenesis {
         accounts: &[AccountInfo],
     ) -> Result<&mut Self, String> {
         for account in accounts {
-            let account_path = match solana_program_test::find_file(account.filename) {
-                Some(path) => path,
-                None => return Err(format!("Unable to locate {}", account.filename)),
+            let Some(account_path) = solana_program_test::find_file(account.filename) else {
+                return Err(format!("Unable to locate {}", account.filename));
             };
             let mut file = File::open(&account_path).unwrap();
             let mut account_info_raw = String::new();
@@ -470,7 +471,8 @@ impl TestValidatorGenesis {
             address,
             AccountSharedData::from(Account {
                 lamports,
-                data: base64::decode(data_base64)
+                data: BASE64_STANDARD
+                    .decode(data_base64)
                     .unwrap_or_else(|err| panic!("Failed to base64 decode: {err}")),
                 owner,
                 executable: false,
@@ -881,7 +883,7 @@ impl TestValidator {
         let vote_account_address = validator_vote_account.pubkey();
         let rpc_url = format!("http://{}", node.info.rpc().unwrap());
         let rpc_pubsub_url = format!("ws://{}/", node.info.rpc_pubsub().unwrap());
-        let tpu = node.info.tpu().unwrap();
+        let tpu = node.info.tpu(Protocol::UDP).unwrap();
         let gossip = node.info.gossip().unwrap();
 
         {

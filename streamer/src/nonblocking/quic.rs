@@ -36,10 +36,7 @@ use {
         },
         time::{Duration, Instant},
     },
-    tokio::{
-        task::JoinHandle,
-        time::{sleep, timeout},
-    },
+    tokio::{task::JoinHandle, time::timeout},
 };
 
 const WAIT_FOR_STREAM_TIMEOUT: Duration = Duration::from_millis(100);
@@ -85,6 +82,7 @@ struct PacketAccumulator {
 
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
+    name: &'static str,
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
@@ -94,16 +92,22 @@ pub fn spawn_server(
     staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
     max_unstaked_connections: usize,
-    stats: Arc<StreamStats>,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
-) -> Result<(Endpoint, JoinHandle<()>), QuicServerError> {
-    info!("Start quic server on {:?}", sock);
+) -> Result<(Endpoint, Arc<StreamStats>, JoinHandle<()>), QuicServerError> {
+    info!("Start {name} quic server on {sock:?}");
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
-    let endpoint = Endpoint::new(EndpointConfig::default(), Some(config), sock, TokioRuntime)
-        .map_err(QuicServerError::EndpointFailed)?;
+    let endpoint = Endpoint::new(
+        EndpointConfig::default(),
+        Some(config),
+        sock,
+        Arc::new(TokioRuntime),
+    )
+    .map_err(QuicServerError::EndpointFailed)?;
+    let stats = Arc::<StreamStats>::default();
     let handle = tokio::spawn(run_server(
+        name,
         endpoint.clone(),
         packet_sender,
         exit,
@@ -111,15 +115,16 @@ pub fn spawn_server(
         staked_nodes,
         max_staked_connections,
         max_unstaked_connections,
-        stats,
+        stats.clone(),
         wait_for_chunk_timeout,
         coalesce,
     ));
-    Ok((endpoint, handle))
+    Ok((endpoint, stats, handle))
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn run_server(
+async fn run_server(
+    name: &'static str,
     incoming: Endpoint,
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
@@ -132,7 +137,6 @@ pub async fn run_server(
     coalesce: Duration,
 ) {
     const WAIT_FOR_CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);
-    const WAIT_BETWEEN_NEW_CONNECTIONS: Duration = Duration::from_millis(1);
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
     let unstaked_connection_table: Arc<Mutex<ConnectionTable>> = Arc::new(Mutex::new(
@@ -152,7 +156,7 @@ pub async fn run_server(
         let timeout_connection = timeout(WAIT_FOR_CONNECTION_TIMEOUT, incoming.accept()).await;
 
         if last_datapoint.elapsed().as_secs() >= 5 {
-            stats.report();
+            stats.report(name);
             last_datapoint = Instant::now();
         }
 
@@ -170,7 +174,6 @@ pub async fn run_server(
                 stats.clone(),
                 wait_for_chunk_timeout,
             ));
-            sleep(WAIT_BETWEEN_NEW_CONNECTIONS).await;
         } else {
             debug!("accept(): Timed out waiting for connection");
         }
@@ -192,18 +195,22 @@ fn prune_unstaked_connection_table(
     }
 }
 
-fn get_connection_stake(
-    connection: &Connection,
-    staked_nodes: &RwLock<StakedNodes>,
-) -> Option<(Pubkey, u64, u64, u64, u64)> {
+pub fn get_remote_pubkey(connection: &Connection) -> Option<Pubkey> {
     // Use the client cert only if it is self signed and the chain length is 1.
-    let pubkey = connection
+    connection
         .peer_identity()?
         .downcast::<Vec<rustls::Certificate>>()
         .ok()
         .filter(|certs| certs.len() == 1)?
         .first()
-        .and_then(get_pubkey_from_tls_certificate)?;
+        .and_then(get_pubkey_from_tls_certificate)
+}
+
+fn get_connection_stake(
+    connection: &Connection,
+    staked_nodes: &RwLock<StakedNodes>,
+) -> Option<(Pubkey, u64, u64, u64, u64)> {
+    let pubkey = get_remote_pubkey(connection)?;
     debug!("Peer public key is {pubkey:?}");
     let staked_nodes = staked_nodes.read().unwrap();
     Some((
@@ -794,9 +801,8 @@ async fn handle_chunk(
                     stats.total_invalid_chunks.fetch_add(1, Ordering::Relaxed);
                     return true;
                 }
-                let end_of_chunk = match chunk.offset.checked_add(chunk_len) {
-                    Some(end) => end,
-                    None => return true,
+                let Some(end_of_chunk) = chunk.offset.checked_add(chunk_len) else {
+                    return true;
                 };
                 if end_of_chunk > PACKET_DATA_SIZE as u64 {
                     stats
@@ -817,10 +823,9 @@ async fn handle_chunk(
 
                 if let Some(accum) = packet_accum.as_mut() {
                     let offset = chunk.offset;
-                    let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len())
-                    {
-                        Some(end) => end,
-                        None => return true,
+                    let Some(end_of_chunk) = (chunk.offset as usize).checked_add(chunk.bytes.len())
+                    else {
+                        return true;
                     };
                     accum.chunks.push(PacketChunk {
                         bytes: chunk.bytes,
@@ -1132,7 +1137,7 @@ pub mod test {
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_single_cert(vec![cert], key)
+            .with_client_auth_cert(vec![cert], key)
             .expect("Failed to use client certificate");
 
         crypto.enable_early_data = true;
@@ -1166,8 +1171,8 @@ pub mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(option_staked_nodes.unwrap_or_default()));
-        let stats = Arc::new(StreamStats::default());
-        let (_, t) = spawn_server(
+        let (_, stats, t) = spawn_server(
+            "quic_streamer_test",
             s,
             &keypair,
             ip,
@@ -1177,7 +1182,6 @@ pub mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats.clone(),
             Duration::from_secs(2),
             DEFAULT_TPU_COALESCE,
         )
@@ -1190,9 +1194,13 @@ pub mod test {
         client_keypair: Option<&Keypair>,
     ) -> Connection {
         let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let mut endpoint =
-            quinn::Endpoint::new(EndpointConfig::default(), None, client_socket, TokioRuntime)
-                .unwrap();
+        let mut endpoint = quinn::Endpoint::new(
+            EndpointConfig::default(),
+            None,
+            client_socket,
+            Arc::new(TokioRuntime),
+        )
+        .unwrap();
         let default_keypair = Keypair::new();
         endpoint.set_default_client_config(get_client_config(
             client_keypair.unwrap_or(&default_keypair),
@@ -1232,19 +1240,28 @@ pub mod test {
         let conn1 = make_client_endpoint(&server_address, None).await;
         let conn2 = make_client_endpoint(&server_address, None).await;
         let mut s1 = conn1.open_uni().await.unwrap();
-        let mut s2 = conn2.open_uni().await.unwrap();
-        s1.write_all(&[0u8]).await.unwrap();
-        s1.finish().await.unwrap();
-        // Send enough data to create more than 1 chunks.
-        // The first will try to open the connection (which should fail).
-        // The following chunks will enable the detection of connection failure.
-        let data = vec![1u8; PACKET_DATA_SIZE * 2];
-        s2.write_all(&data)
-            .await
-            .expect_err("shouldn't be able to open 2 connections");
-        s2.finish()
-            .await
-            .expect_err("shouldn't be able to open 2 connections");
+        let s2 = conn2.open_uni().await;
+        if s2.is_err() {
+            // It has been noticed if there is already connection open against the server, this open_uni can fail
+            // with ApplicationClosed(ApplicationClose) error due to CONNECTION_CLOSE_CODE_TOO_MANY before writing to
+            // the stream -- expect it.
+            let s2 = s2.err().unwrap();
+            assert!(matches!(s2, quinn::ConnectionError::ApplicationClosed(_)));
+        } else {
+            let mut s2 = s2.unwrap();
+            s1.write_all(&[0u8]).await.unwrap();
+            s1.finish().await.unwrap();
+            // Send enough data to create more than 1 chunks.
+            // The first will try to open the connection (which should fail).
+            // The following chunks will enable the detection of connection failure.
+            let data = vec![1u8; PACKET_DATA_SIZE * 2];
+            s2.write_all(&data)
+                .await
+                .expect_err("shouldn't be able to open 2 connections");
+            s2.finish()
+                .await
+                .expect_err("shouldn't be able to open 2 connections");
+        }
     }
 
     pub async fn check_multiple_streams(
@@ -1451,9 +1468,13 @@ pub mod test {
         let (t, exit, _receiver, server_address, stats) = setup_quic_server(None, 2);
 
         let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let mut endpoint =
-            quinn::Endpoint::new(EndpointConfig::default(), None, client_socket, TokioRuntime)
-                .unwrap();
+        let mut endpoint = quinn::Endpoint::new(
+            EndpointConfig::default(),
+            None,
+            client_socket,
+            Arc::new(TokioRuntime),
+        )
+        .unwrap();
         let default_keypair = Keypair::new();
         endpoint.set_default_client_config(get_client_config(&default_keypair));
         let conn1 = endpoint
@@ -1588,8 +1609,8 @@ pub mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let stats = Arc::new(StreamStats::default());
-        let (_, t) = spawn_server(
+        let (_, _, t) = spawn_server(
+            "quic_streamer_test",
             s,
             &keypair,
             ip,
@@ -1599,7 +1620,6 @@ pub mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
-            stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )
@@ -1620,8 +1640,8 @@ pub mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let stats = Arc::new(StreamStats::default());
-        let (_, t) = spawn_server(
+        let (_, stats, t) = spawn_server(
+            "quic_streamer_test",
             s,
             &keypair,
             ip,
@@ -1631,7 +1651,6 @@ pub mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats.clone(),
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )

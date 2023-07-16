@@ -8,6 +8,7 @@ use {
     solana_genesis_utils::download_then_check_genesis_hash,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
+        contact_info::Protocol,
         crds_value,
         gossip_service::GossipService,
         legacy_contact_info::LegacyContactInfo as ContactInfo,
@@ -83,24 +84,21 @@ fn verify_reachable_ports(
     if verify_address(&node.info.serve_repair().ok()) {
         udp_sockets.push(&node.sockets.serve_repair);
     }
-    if verify_address(&node.info.tpu().ok()) {
+    if verify_address(&node.info.tpu(Protocol::UDP).ok()) {
         udp_sockets.extend(node.sockets.tpu.iter());
         udp_sockets.push(&node.sockets.tpu_quic);
     }
-    if verify_address(&node.info.tpu_forwards().ok()) {
+    if verify_address(&node.info.tpu_forwards(Protocol::UDP).ok()) {
         udp_sockets.extend(node.sockets.tpu_forwards.iter());
         udp_sockets.push(&node.sockets.tpu_forwards_quic);
     }
     if verify_address(&node.info.tpu_vote().ok()) {
         udp_sockets.extend(node.sockets.tpu_vote.iter());
     }
-    if verify_address(&node.info.tvu().ok()) {
+    if verify_address(&node.info.tvu(Protocol::UDP).ok()) {
         udp_sockets.extend(node.sockets.tvu.iter());
         udp_sockets.extend(node.sockets.broadcast.iter());
         udp_sockets.extend(node.sockets.retransmit_sockets.iter());
-    }
-    if verify_address(&node.info.tvu_forwards().ok()) {
-        udp_sockets.extend(node.sockets.tvu_forwards.iter());
     }
 
     let mut tcp_listeners = vec![];
@@ -170,7 +168,7 @@ fn start_gossip_node(
         gossip_validators,
         should_check_duplicate_instance,
         None,
-        &gossip_exit_flag,
+        gossip_exit_flag.clone(),
     );
     (cluster_info, gossip_exit_flag, gossip_service)
 }
@@ -220,7 +218,7 @@ fn get_rpc_peers(
 
     if bootstrap_config.only_known_rpc {
         rpc_peers.retain(|rpc_peer| {
-            is_known_validator(&rpc_peer.id, &validator_config.known_validators)
+            is_known_validator(rpc_peer.pubkey(), &validator_config.known_validators)
         });
     }
 
@@ -229,12 +227,14 @@ fn get_rpc_peers(
     // Filter out blacklisted nodes
     let rpc_peers: Vec<_> = rpc_peers
         .into_iter()
-        .filter(|rpc_peer| !blacklisted_rpc_nodes.contains(&rpc_peer.id))
+        .filter(|rpc_peer| !blacklisted_rpc_nodes.contains(rpc_peer.pubkey()))
         .collect();
     let rpc_peers_blacklisted = rpc_peers_total - rpc_peers.len();
     let rpc_known_peers = rpc_peers
         .iter()
-        .filter(|rpc_peer| is_known_validator(&rpc_peer.id, &validator_config.known_validators))
+        .filter(|rpc_peer| {
+            is_known_validator(rpc_peer.pubkey(), &validator_config.known_validators)
+        })
         .count();
 
     info!("Total {rpc_peers_total} RPC nodes found. {rpc_known_peers} known, {rpc_peers_blacklisted} blacklisted");
@@ -507,7 +507,7 @@ fn get_vetted_rpc_nodes(
 
                     info!(
                         "Using RPC service from node {}: {:?}",
-                        rpc_contact_info.id,
+                        rpc_contact_info.pubkey(),
                         rpc_contact_info.rpc()
                     );
 
@@ -535,7 +535,7 @@ fn get_vetted_rpc_nodes(
                                 fail_rpc_node(
                                     "Failed to ping RPC".to_string(),
                                     &validator_config.known_validators,
-                                    &rpc_contact_info.id,
+                                    rpc_contact_info.pubkey(),
                                     &mut newly_blacklisted_rpc_nodes.write().unwrap(),
                                 );
                                 false
@@ -545,7 +545,7 @@ fn get_vetted_rpc_nodes(
                             fail_rpc_node(
                                 format!("Failed to get RPC node version: {err}"),
                                 &validator_config.known_validators,
-                                &rpc_contact_info.id,
+                                rpc_contact_info.pubkey(),
                                 &mut newly_blacklisted_rpc_nodes.write().unwrap(),
                             );
                             false
@@ -676,7 +676,7 @@ pub fn rpc_bootstrap(
                 fail_rpc_node(
                     err,
                     &validator_config.known_validators,
-                    &rpc_contact_info.id,
+                    rpc_contact_info.pubkey(),
                     &mut blacklisted_rpc_nodes,
                 );
             }
@@ -781,7 +781,7 @@ fn get_rpc_nodes(
         } else {
             let rpc_peers = peer_snapshot_hashes
                 .iter()
-                .map(|peer_snapshot_hash| peer_snapshot_hash.rpc_contact_info.id)
+                .map(|peer_snapshot_hash| peer_snapshot_hash.rpc_contact_info.pubkey())
                 .collect::<Vec<_>>();
             let final_snapshot_hash = peer_snapshot_hashes[0].snapshot_hash;
             info!(
@@ -967,7 +967,11 @@ fn build_known_snapshot_hashes<'a>(
     }
 
     'to_next_node: for node in nodes {
-        let Some(SnapshotHash {full: full_snapshot_hash, incr: incremental_snapshot_hash}) = get_snapshot_hashes_for_node(node) else {
+        let Some(SnapshotHash {
+            full: full_snapshot_hash,
+            incr: incremental_snapshot_hash,
+        }) = get_snapshot_hashes_for_node(node)
+        else {
             continue 'to_next_node;
         };
 
@@ -1034,7 +1038,7 @@ fn get_eligible_peer_snapshot_hashes(
     let peer_snapshot_hashes = rpc_peers
         .iter()
         .flat_map(|rpc_peer| {
-            get_snapshot_hashes_for_node(cluster_info, &rpc_peer.id).map(|snapshot_hash| {
+            get_snapshot_hashes_for_node(cluster_info, rpc_peer.pubkey()).map(|snapshot_hash| {
                 PeerSnapshotHash {
                     rpc_contact_info: rpc_peer.clone(),
                     snapshot_hash,
@@ -1262,7 +1266,7 @@ fn download_snapshot(
                 && *download_abort_count < maximum_snapshot_download_abort
             {
                 if let Some(ref known_validators) = validator_config.known_validators {
-                    if known_validators.contains(&rpc_contact_info.id)
+                    if known_validators.contains(rpc_contact_info.pubkey())
                         && known_validators.len() == 1
                         && bootstrap_config.only_known_rpc
                     {

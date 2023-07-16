@@ -292,6 +292,9 @@ A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requireme
 This requirement ensures no signature malleability. Each transaction must have at least one signature for [fee account](terminology#fee-account).
 Thus, the first signature in transaction can be treated as [transaction id](#transaction-id)
 
+## skip rate
+The percentage of [skipped slots](#skipped-slot) out of the total leader slots in the current epoch. This metric can be misleading as it has high variance after the epoch boundary when the sample size is small, as well as for validators with a low number of leader slots, however can also be useful in identifying node misconfigurations at times.
+
 ## skipped slot
 
 A past [slot](#slot) that did not produce a [block](#block), because the leader was offline or the [fork](#fork) containing the slot was abandoned for a better alternative by cluster consensus. A skipped slot will not appear as an ancestor for blocks at subsequent slots, nor increment the [block height](terminology#block-height), nor expire the oldest `recent_blockhash`.

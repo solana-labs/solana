@@ -138,7 +138,7 @@ all_test_steps() {
   wait_step
 
   # Full test suite
-  .buildkite/scripts/build-stable.sh >> "$output_file"
+  .buildkite/scripts/build-stable.sh sol-private >> "$output_file"
 
   # Docs tests
   if affects \
@@ -250,27 +250,11 @@ EOF
              ^ci/test-coverage.sh \
              ^ci/test-bench.sh \
       ; then
-    command_step bench "ci/test-bench.sh" 40
+    .buildkite/scripts/build-bench.sh sol-private >> "$output_file"
   else
     annotate --style info --context test-bench \
       "Bench skipped as no .rs files were modified"
   fi
-
-  command_step "local-cluster" \
-    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster.sh" \
-    40
-
-  command_step "local-cluster-flakey" \
-    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-flakey.sh" \
-    10
-
-  command_step "local-cluster-slow-1" \
-    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow-1.sh" \
-    40
-
-  command_step "local-cluster-slow-2" \
-    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow-2.sh" \
-    40
 
   # Coverage...
   if affects \
@@ -300,7 +284,7 @@ pull_or_push_steps() {
 
   # Run the full test suite by default, skipping only if modifications are local
   # to some particular areas of the tree
-  if affects_other_than ^.buildkite ^.mergify .md$ ^docs/ ^.gitbook; then
+  if affects_other_than ^.mergify .md$ ^docs/ ^.gitbook; then
     all_test_steps
   fi
 

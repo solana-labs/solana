@@ -461,7 +461,7 @@ fn initial_last_notified_slot(
                 block_commitment_cache
                     .read()
                     .unwrap()
-                    .highest_confirmed_root()
+                    .highest_super_majority_root()
             } else if params.commitment.is_confirmed() {
                 optimistically_confirmed_bank.read().unwrap().bank.slot()
             } else {
@@ -527,7 +527,7 @@ impl Drop for RpcSubscriptions {
 
 impl RpcSubscriptions {
     pub fn new(
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
         max_complete_rewards_slot: Arc<AtomicU64>,
         blockstore: Arc<Blockstore>,
@@ -549,7 +549,7 @@ impl RpcSubscriptions {
     }
 
     pub fn new_for_tests(
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
         max_complete_rewards_slot: Arc<AtomicU64>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -572,7 +572,7 @@ impl RpcSubscriptions {
     }
 
     pub fn new_for_tests_with_blockstore(
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
         max_complete_rewards_slot: Arc<AtomicU64>,
         blockstore: Arc<Blockstore>,
@@ -608,7 +608,7 @@ impl RpcSubscriptions {
     }
 
     pub fn new_with_config(
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
         max_complete_rewards_slot: Arc<AtomicU64>,
         blockstore: Arc<Blockstore>,
@@ -620,7 +620,6 @@ impl RpcSubscriptions {
     ) -> Self {
         let (notification_sender, notification_receiver) = crossbeam_channel::unbounded();
 
-        let exit_clone = exit.clone();
         let subscriptions = SubscriptionsTracker::new(bank_forks.clone());
 
         let (broadcast_sender, _) = broadcast::channel(config.queue_capacity_items);
@@ -636,6 +635,7 @@ impl RpcSubscriptions {
         let t_cleanup = if notification_threads == 0 {
             None
         } else {
+            let exit = exit.clone();
             Some(
                 Builder::new()
                     .name("solRpcNotifier".to_string())
@@ -650,7 +650,7 @@ impl RpcSubscriptions {
                                 rpc_notifier_ready.fetch_or(true, Ordering::Relaxed);
                             }
                             Self::process_notifications(
-                                exit_clone,
+                                exit,
                                 max_complete_transaction_status_slot,
                                 max_complete_rewards_slot,
                                 blockstore,
@@ -680,7 +680,7 @@ impl RpcSubscriptions {
                 Some(notification_sender)
             },
             t_cleanup,
-            exit: exit.clone(),
+            exit,
             control,
         }
     }
@@ -697,7 +697,7 @@ impl RpcSubscriptions {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         Self::new(
-            &Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicBool::new(false)),
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             blockstore,
@@ -960,7 +960,7 @@ impl RpcSubscriptions {
         subscriptions.for_each(|(_id, subscription)| {
             let slot = if let Some(commitment) = subscription.commitment() {
                 if commitment.is_finalized() {
-                    Some(commitment_slots.highest_confirmed_root)
+                    Some(commitment_slots.highest_super_majority_root)
                 } else if commitment.is_confirmed() {
                     Some(commitment_slots.highest_confirmed_slot)
                 } else {
@@ -1333,7 +1333,7 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks.clone(),
@@ -1478,7 +1478,7 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests_with_blockstore(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             blockstore.clone(),
@@ -1567,7 +1567,7 @@ pub(crate) mod tests {
             slot,
             root: slot,
             highest_confirmed_slot: slot,
-            highest_confirmed_root: slot,
+            highest_super_majority_root: slot,
         });
         let should_err = receiver.recv_timeout(Duration::from_millis(300));
         assert!(should_err.is_err());
@@ -1598,7 +1598,7 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests_with_blockstore(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             blockstore.clone(),
@@ -1716,7 +1716,7 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests_with_blockstore(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             blockstore.clone(),
@@ -1769,7 +1769,7 @@ pub(crate) mod tests {
             slot,
             root: slot,
             highest_confirmed_slot: slot,
-            highest_confirmed_root: slot,
+            highest_super_majority_root: slot,
         });
         let actual_resp = receiver.recv();
         let actual_resp = serde_json::from_str::<serde_json::Value>(&actual_resp).unwrap();
@@ -1849,7 +1849,7 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks,
@@ -1999,7 +1999,7 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks.clone(),
@@ -2036,6 +2036,7 @@ pub(crate) mod tests {
             }));
 
         let mut highest_confirmed_slot: Slot = 0;
+        let mut highest_root_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
         // Optimistically notifying slot 3 without notifying slot 1 and 2, bank3 is unfrozen, we expect
         // to see transaction for alice and bob to be notified in order.
@@ -2047,6 +2048,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
 
@@ -2098,6 +2100,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
 
@@ -2172,7 +2175,7 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks.clone(),
@@ -2206,6 +2209,7 @@ pub(crate) mod tests {
             }));
 
         let mut highest_confirmed_slot: Slot = 0;
+        let mut highest_root_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
         // Optimistically notifying slot 3 without notifying slot 1 and 2, bank3 is not in the bankforks, we do not
         // expect to see any RPC notifications.
@@ -2217,6 +2221,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
 
@@ -2285,7 +2290,7 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks.clone(),
@@ -2320,6 +2325,7 @@ pub(crate) mod tests {
             }));
 
         let mut highest_confirmed_slot: Slot = 0;
+        let mut highest_root_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
         // Optimistically notifying slot 3 without notifying slot 1 and 2, bank3 is not in the bankforks, we expect
         // to see transaction for alice and bob to be notified only when bank3 is added to the fork and
@@ -2332,6 +2338,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
 
@@ -2385,6 +2392,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
 
@@ -2475,7 +2483,7 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks,
@@ -2651,7 +2659,7 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks,
@@ -2698,7 +2706,7 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks,
@@ -2759,7 +2767,7 @@ pub(crate) mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks.clone(),
@@ -2810,6 +2818,7 @@ pub(crate) mod tests {
 
         // First, notify the unfrozen bank first to queue pending notification
         let mut highest_confirmed_slot: Slot = 0;
+        let mut highest_root_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::OptimisticallyConfirmed(2),
@@ -2819,6 +2828,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
 
@@ -2832,6 +2842,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
 
@@ -2885,6 +2896,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
         let response = receiver1.recv();
@@ -2958,7 +2970,7 @@ pub(crate) mod tests {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks.clone(),

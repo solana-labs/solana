@@ -6,7 +6,10 @@ use log::*;
 use {
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
+    solana_client::{
+        connection_cache::{ConnectionCache, Protocol},
+        thin_client::ThinClient,
+    },
     solana_core::consensus::VOTE_THRESHOLD_DEPTH,
     solana_entry::entry::{Entry, EntrySlice},
     solana_gossip::{
@@ -51,9 +54,12 @@ use {
 };
 
 pub fn get_client_facing_addr<T: Borrow<LegacyContactInfo>>(
+    protocol: Protocol,
     contact_info: T,
 ) -> (SocketAddr, SocketAddr) {
-    let (rpc, mut tpu) = contact_info.borrow().client_facing_addr();
+    let contact_info = contact_info.borrow();
+    let rpc = contact_info.rpc().unwrap();
+    let mut tpu = contact_info.tpu(protocol).unwrap();
     // QUIC certificate authentication requires the IP Address to match. ContactInfo might have
     // 0.0.0.0 as the IP instead of 127.0.0.1.
     tpu.set_ip(IpAddr::V4(Ipv4Addr::LOCALHOST));
@@ -78,11 +84,11 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
     assert!(cluster_nodes.len() >= nodes);
     let ignore_nodes = Arc::new(ignore_nodes);
     cluster_nodes.par_iter().for_each(|ingress_node| {
-        if ignore_nodes.contains(&ingress_node.id) {
+        if ignore_nodes.contains(ingress_node.pubkey()) {
             return;
         }
         let random_keypair = Keypair::new();
-        let (rpc, tpu) = get_client_facing_addr(ingress_node);
+        let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), ingress_node);
         let client = ThinClient::new(rpc, tpu, connection_cache.clone());
         let bal = client
             .poll_get_balance_with_commitment(
@@ -101,10 +107,10 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
             .retry_transfer_until_confirmed(funding_keypair, &mut transaction, 10, confs)
             .unwrap();
         for validator in &cluster_nodes {
-            if ignore_nodes.contains(&validator.id) {
+            if ignore_nodes.contains(validator.pubkey()) {
                 continue;
             }
-            let (rpc, tpu) = get_client_facing_addr(validator);
+            let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), validator);
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
             client.poll_for_signature_confirmation(&sig, confs).unwrap();
         }
@@ -117,7 +123,7 @@ pub fn verify_balances<S: ::std::hash::BuildHasher>(
     connection_cache: Arc<ConnectionCache>,
 ) {
     let (rpc, tpu) = LegacyContactInfo::try_from(node)
-        .map(get_client_facing_addr)
+        .map(|node| get_client_facing_addr(connection_cache.protocol(), node))
         .unwrap();
     let client = ThinClient::new(rpc, tpu, connection_cache);
     for (pk, b) in expected_balances {
@@ -135,7 +141,7 @@ pub fn send_many_transactions(
     max_tokens_per_transfer: u64,
     num_txs: u64,
 ) -> HashMap<Pubkey, u64> {
-    let (rpc, tpu) = get_client_facing_addr(node);
+    let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), node);
     let client = ThinClient::new(rpc, tpu, connection_cache.clone());
     let mut expected_balances = HashMap::new();
     for _ in 0..num_txs {
@@ -178,8 +184,7 @@ pub fn verify_ledger_ticks(ledger_path: &Path, ticks_per_slot: usize) {
         .into_iter()
         .map(|slot| (slot, 0, last_id))
         .collect();
-    while !pending_slots.is_empty() {
-        let (slot, parent_slot, last_id) = pending_slots.pop().unwrap();
+    while let Some((slot, parent_slot, last_id)) = pending_slots.pop() {
         let next_slots = ledger
             .get_slots_since(&[slot])
             .unwrap()
@@ -233,7 +238,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     .unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let (rpc, tpu) = LegacyContactInfo::try_from(entry_point_info)
-        .map(get_client_facing_addr)
+        .map(|node| get_client_facing_addr(connection_cache.protocol(), node))
         .unwrap();
     let client = ThinClient::new(rpc, tpu, connection_cache.clone());
 
@@ -242,8 +247,8 @@ pub fn kill_entry_and_spend_and_verify_rest(
 
     for ingress_node in &cluster_nodes {
         client
-            .poll_get_balance_with_commitment(&ingress_node.id, CommitmentConfig::processed())
-            .unwrap_or_else(|err| panic!("Node {} has no balance: {}", ingress_node.id, err));
+            .poll_get_balance_with_commitment(ingress_node.pubkey(), CommitmentConfig::processed())
+            .unwrap_or_else(|err| panic!("Node {} has no balance: {}", ingress_node.pubkey(), err));
     }
 
     info!("sleeping for 2 leader fortnights");
@@ -257,12 +262,12 @@ pub fn kill_entry_and_spend_and_verify_rest(
     ));
     info!("done sleeping for 2 fortnights");
     for ingress_node in &cluster_nodes {
-        if &ingress_node.id == entry_point_info.pubkey() {
+        if ingress_node.pubkey() == entry_point_info.pubkey() {
             info!("ingress_node.id == entry_point_info.id, continuing...");
             continue;
         }
 
-        let (rpc, tpu) = get_client_facing_addr(ingress_node);
+        let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), ingress_node);
         let client = ThinClient::new(rpc, tpu, connection_cache.clone());
         let balance = client
             .poll_get_balance_with_commitment(
@@ -346,7 +351,7 @@ pub fn check_for_new_roots(
 
         for (i, ingress_node) in contact_infos.iter().enumerate() {
             let (rpc, tpu) = LegacyContactInfo::try_from(ingress_node)
-                .map(get_client_facing_addr)
+                .map(|node| get_client_facing_addr(connection_cache.protocol(), node))
                 .unwrap();
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
             let root_slot = client
@@ -380,15 +385,15 @@ pub fn check_no_new_roots(
         .iter()
         .enumerate()
         .map(|(i, ingress_node)| {
-            let (rpc, tpu) = get_client_facing_addr(ingress_node);
+            let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), ingress_node);
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
             let initial_root = client
                 .get_slot()
-                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.id));
+                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.pubkey()));
             roots[i] = initial_root;
             client
                 .get_slot_with_commitment(CommitmentConfig::processed())
-                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.id))
+                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.pubkey()))
         })
         .max()
         .unwrap();
@@ -399,11 +404,11 @@ pub fn check_no_new_roots(
     let mut reached_end_slot = false;
     loop {
         for contact_info in contact_infos {
-            let (rpc, tpu) = get_client_facing_addr(contact_info);
+            let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), contact_info);
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
             current_slot = client
                 .get_slot_with_commitment(CommitmentConfig::processed())
-                .unwrap_or_else(|_| panic!("get_slot for {} failed", contact_infos[0].id));
+                .unwrap_or_else(|_| panic!("get_slot for {} failed", contact_infos[0].pubkey()));
             if current_slot > end_slot {
                 reached_end_slot = true;
                 break;
@@ -411,7 +416,10 @@ pub fn check_no_new_roots(
             if last_print.elapsed().as_secs() > 3 {
                 info!(
                     "{} current slot: {} on validator: {}, waiting for any validator with slot: {}",
-                    test_name, current_slot, contact_info.id, end_slot
+                    test_name,
+                    current_slot,
+                    contact_info.pubkey(),
+                    end_slot
                 );
                 last_print = Instant::now();
             }
@@ -422,12 +430,12 @@ pub fn check_no_new_roots(
     }
 
     for (i, ingress_node) in contact_infos.iter().enumerate() {
-        let (rpc, tpu) = get_client_facing_addr(ingress_node);
+        let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), ingress_node);
         let client = ThinClient::new(rpc, tpu, connection_cache.clone());
         assert_eq!(
             client
                 .get_slot()
-                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.id)),
+                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.pubkey())),
             roots[i]
         );
     }
@@ -441,10 +449,10 @@ fn poll_all_nodes_for_signature(
     confs: usize,
 ) -> Result<(), TransportError> {
     for validator in cluster_nodes {
-        if &validator.id == entry_point_info.pubkey() {
+        if validator.pubkey() == entry_point_info.pubkey() {
             continue;
         }
-        let (rpc, tpu) = get_client_facing_addr(validator);
+        let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), validator);
         let client = ThinClient::new(rpc, tpu, connection_cache.clone());
         client.poll_for_signature_confirmation(sig, confs)?;
     }
@@ -488,7 +496,7 @@ pub fn start_gossip_voter(
         // node later.
         node_keypair.insecure_clone(),
         Some(gossip_addr),
-        &exit,
+        exit.clone(),
         None,
         0,
         false,

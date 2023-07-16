@@ -134,7 +134,7 @@ fn make_accounts_txs(
                 hash,
                 compute_unit_price,
             );
-            let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
+            let sig: [u8; 64] = std::array::from_fn(|_| thread_rng().gen::<u8>());
             new.message.account_keys[0] = pubkey::new_rand();
             new.message.account_keys[1] = match contention {
                 WriteLockContention::None => pubkey::new_rand(),
@@ -148,7 +148,7 @@ fn make_accounts_txs(
                 }
                 WriteLockContention::Full => to_pubkey,
             };
-            new.signatures = vec![Signature::new(&sig[0..64])];
+            new.signatures = vec![Signature::from(sig)];
             new
         })
         .collect()
@@ -220,8 +220,8 @@ impl PacketsPerIteration {
     fn refresh_blockhash(&mut self, new_blockhash: Hash) {
         for tx in self.transactions.iter_mut() {
             tx.message.recent_blockhash = new_blockhash;
-            let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
-            tx.signatures[0] = Signature::new(&sig[0..64]);
+            let sig: [u8; 64] = std::array::from_fn(|_| thread_rng().gen::<u8>());
+            tx.signatures[0] = Signature::from(sig);
         }
         self.packet_batches = to_packet_batches(&self.transactions, self.packets_per_batch);
     }
@@ -377,8 +377,8 @@ fn main() {
                     genesis_config.hash(),
                 );
                 // Ignore any pesky duplicate signature errors in the case we are using single-payer
-                let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
-                fund.signatures = vec![Signature::new(&sig[0..64])];
+                let sig: [u8; 64] = std::array::from_fn(|_| thread_rng().gen::<u8>());
+                fund.signatures = vec![Signature::from(sig)];
                 bank.process_transaction(&fund).unwrap();
             });
     });
@@ -437,8 +437,14 @@ fn main() {
         let cluster_info = Arc::new(cluster_info);
         let tpu_disable_quic = matches.is_present("tpu_disable_quic");
         let connection_cache = match tpu_disable_quic {
-            false => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
-            true => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+            false => ConnectionCache::new_quic(
+                "connection_cache_banking_bench_quic",
+                DEFAULT_TPU_CONNECTION_POOL_SIZE,
+            ),
+            true => ConnectionCache::with_udp(
+                "connection_cache_banking_bench_udp",
+                DEFAULT_TPU_CONNECTION_POOL_SIZE,
+            ),
         };
         let banking_stage = BankingStage::new_num_threads(
             &cluster_info,
@@ -538,7 +544,7 @@ fn main() {
                 );
 
                 assert!(poh_recorder.read().unwrap().bank().is_none());
-                poh_recorder.write().unwrap().set_bank(&bank, false);
+                poh_recorder.write().unwrap().set_bank(bank.clone(), false);
                 assert!(poh_recorder.read().unwrap().bank().is_some());
                 debug!(
                     "new_bank_time: {}us insert_time: {}us poh_time: {}us",

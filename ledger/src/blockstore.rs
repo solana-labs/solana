@@ -1636,14 +1636,16 @@ impl Blockstore {
         })
     }
 
-    pub fn get_data_shreds_for_slot(
-        &self,
-        slot: Slot,
-        start_index: u64,
-    ) -> std::result::Result<Vec<Shred>, shred::Error> {
+    pub fn get_data_shreds_for_slot(&self, slot: Slot, start_index: u64) -> Result<Vec<Shred>> {
         self.slot_data_iterator(slot, start_index)
             .expect("blockstore couldn't fetch iterator")
-            .map(|data| Shred::new_from_serialized_shred(data.1.to_vec()))
+            .map(|(_, bytes)| {
+                Shred::new_from_serialized_shred(bytes.to_vec()).map_err(|err| {
+                    BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
+                        format!("Could not reconstruct shred from shred payload: {err:?}"),
+                    )))
+                })
+            })
             .collect()
     }
 
@@ -1805,9 +1807,22 @@ impl Blockstore {
         self.put_meta_bytes(slot, &bincode::serialize(meta)?)
     }
 
-    // Given a start and end entry index, find all the missing
-    // indexes in the ledger in the range [start_index, end_index)
-    // for the slot with the specified slot
+    /// Find missing shred indices for a given `slot` within the range
+    /// [`start_index`, `end_index`]. Missing shreds will only be reported as
+    /// missing if they should be present by the time this function is called,
+    /// as controlled by`first_timestamp` and `defer_threshold_ticks`.
+    ///
+    /// Arguments:
+    ///  - `db_iterator`: Iterator to run search over.
+    ///  - `slot`: The slot to search for missing shreds for.
+    ///  - 'first_timestamp`: Timestamp (ms) for slot's first shred insertion.
+    ///  - `defer_threshold_ticks`: A grace period to allow shreds that are
+    ///    missing to be excluded from the reported missing list. This allows
+    ///    tuning on how aggressively missing shreds should be reported and
+    ///    acted upon.
+    ///  - `start_index`: Begin search (inclusively) at this shred index.
+    ///  - `end_index`: Finish search (exclusively) at this shred index.
+    ///  - `max_missing`: Limit result to this many indices.
     fn find_missing_indexes<C>(
         db_iterator: &mut DBRawIterator,
         slot: Slot,
@@ -1834,14 +1849,10 @@ impl Blockstore {
 
         // The index of the first missing shred in the slot
         let mut prev_index = start_index;
-        'outer: loop {
+        loop {
             if !db_iterator.valid() {
-                for i in prev_index..end_index {
-                    missing_indexes.push(i);
-                    if missing_indexes.len() == max_missing {
-                        break;
-                    }
-                }
+                let num_to_take = max_missing - missing_indexes.len();
+                missing_indexes.extend((prev_index..end_index).take(num_to_take));
                 break;
             }
             let (current_slot, index) = C::index(db_iterator.key().expect("Expect a valid key"));
@@ -1860,20 +1871,16 @@ impl Blockstore {
             let reference_tick = u64::from(shred::layout::get_reference_tick(data).unwrap());
             if ticks_since_first_insert < reference_tick + defer_threshold_ticks {
                 // The higher index holes have not timed out yet
-                break 'outer;
-            }
-            for i in prev_index..upper_index {
-                missing_indexes.push(i);
-                if missing_indexes.len() == max_missing {
-                    break 'outer;
-                }
-            }
-
-            if current_slot > slot {
                 break;
             }
 
-            if current_index >= end_index {
+            let num_to_take = max_missing - missing_indexes.len();
+            missing_indexes.extend((prev_index..upper_index).take(num_to_take));
+
+            if missing_indexes.len() == max_missing
+                || current_slot > slot
+                || current_index >= end_index
+            {
                 break;
             }
 
@@ -1884,6 +1891,9 @@ impl Blockstore {
         missing_indexes
     }
 
+    /// Find missing data shreds for the given `slot`.
+    ///
+    /// For more details on the arguments, see [`find_missing_indexes`].
     pub fn find_missing_data_indexes(
         &self,
         slot: Slot,
@@ -1966,12 +1976,9 @@ impl Blockstore {
         require_previous_blockhash: bool,
     ) -> Result<VersionedConfirmedBlock> {
         let slot_meta_cf = self.db.column::<cf::SlotMeta>();
-        let slot_meta = match slot_meta_cf.get(slot)? {
-            Some(slot_meta) => slot_meta,
-            None => {
-                info!("SlotMeta not found for slot {}", slot);
-                return Err(BlockstoreError::SlotUnavailable);
-            }
+        let Some(slot_meta) = slot_meta_cf.get(slot)? else {
+            info!("SlotMeta not found for slot {}", slot);
+            return Err(BlockstoreError::SlotUnavailable);
         };
         if slot_meta.is_full() {
             let slot_entries = self.get_slot_entries(slot, 0)?;
@@ -1984,12 +1991,7 @@ impl Blockstore {
                     .into_iter()
                     .flat_map(|entry| entry.transactions)
                     .map(|transaction| {
-                        if let Err(err) = transaction.sanitize(
-                            // Don't enable additional sanitization checks until
-                            // all clusters have activated the static program id
-                            // feature gate so that bigtable upload isn't affected
-                            false, // require_static_program_ids
-                        ) {
+                        if let Err(err) = transaction.sanitize() {
                             warn!(
                                 "Blockstore::get_block sanitize failed: {:?}, \
                                 slot: {:?}, \
@@ -2376,9 +2378,7 @@ impl Blockstore {
             .cloned()
             .flat_map(|entry| entry.transactions)
             .map(|transaction| {
-                if let Err(err) = transaction.sanitize(
-                    true, // require_static_program_ids
-                ) {
+                if let Err(err) = transaction.sanitize() {
                     warn!(
                         "Blockstore::find_transaction_in_slot sanitize failed: {:?}, \
                         slot: {:?}, \
@@ -2512,7 +2512,7 @@ impl Blockstore {
     pub fn get_confirmed_signatures_for_address2(
         &self,
         address: Pubkey,
-        highest_slot: Slot, // highest_confirmed_root or highest_confirmed_slot
+        highest_slot: Slot, // highest_super_majority_root or highest_confirmed_slot
         before: Option<Signature>,
         until: Option<Signature>,
         limit: usize,
@@ -3110,6 +3110,15 @@ impl Blockstore {
         self.optimistic_slots_cf.put(slot, &slot_data)
     }
 
+    /// Returns information about a single optimistically confirmed slot
+    pub fn get_optimistic_slot(&self, slot: Slot) -> Result<Option<(Hash, UnixTimestamp)>> {
+        Ok(self
+            .optimistic_slots_cf
+            .get(slot)?
+            .map(|meta| (meta.hash(), meta.timestamp())))
+    }
+
+    /// Returns information about the `num` latest optimistically confirmed slot
     pub fn get_latest_optimistic_slots(
         &self,
         num: usize,
@@ -3151,6 +3160,11 @@ impl Blockstore {
         }
         *last_root = cmp::max(max_new_rooted_slot, *last_root);
         Ok(())
+    }
+
+    /// For tests
+    pub fn set_last_root(&mut self, root: Slot) {
+        *self.last_root.write().unwrap() = root;
     }
 
     pub fn mark_slots_as_if_rooted_normally_at_startup(
@@ -3325,15 +3339,48 @@ impl Blockstore {
         self.db.is_primary_access()
     }
 
-    pub fn scan_and_fix_roots(&self, exit: &AtomicBool) -> Result<()> {
-        let ancestor_iterator = AncestorIterator::new(self.last_root(), self)
-            .take_while(|&slot| slot >= self.lowest_cleanup_slot());
+    /// Scan for any ancestors of the supplied `start_root` that are not
+    /// marked as roots themselves. Mark any found slots as roots since
+    /// the ancestor of a root is also inherently a root. Returns the
+    /// number of slots that were actually updated.
+    ///
+    /// Arguments:
+    ///  - `start_root`: The root to start scan from, or the highest root in
+    ///    the blockstore if this value is `None`. This slot must be a root.
+    ///  - `end_slot``: The slot to stop the scan at; the scan will continue to
+    ///    the earliest slot in the Blockstore if this value is `None`.
+    ///  - `exit`: Exit early if this flag is set to `true`.
+    pub fn scan_and_fix_roots(
+        &self,
+        start_root: Option<Slot>,
+        end_slot: Option<Slot>,
+        exit: &AtomicBool,
+    ) -> Result<usize> {
+        // Hold the lowest_cleanup_slot read lock to prevent any cleaning of
+        // the blockstore from another thread. Doing so will prevent a
+        // possible inconsistency across column families where a slot is:
+        //  - Identified as needing root repair by this thread
+        //  - Cleaned from the blockstore by another thread (LedgerCleanupSerivce)
+        //  - Marked as root via Self::set_root() by this this thread
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
+
+        let start_root = if let Some(slot) = start_root {
+            if !self.is_root(slot) {
+                return Err(BlockstoreError::SlotNotRooted);
+            }
+            slot
+        } else {
+            self.last_root()
+        };
+        let end_slot = end_slot.unwrap_or(*lowest_cleanup_slot);
+        let ancestor_iterator =
+            AncestorIterator::new(start_root, self).take_while(|&slot| slot >= end_slot);
 
         let mut find_missing_roots = Measure::start("find_missing_roots");
         let mut roots_to_fix = vec![];
         for slot in ancestor_iterator.filter(|slot| !self.is_root(*slot)) {
             if exit.load(Ordering::Relaxed) {
-                return Ok(());
+                return Ok(0);
             }
             roots_to_fix.push(slot);
         }
@@ -3341,19 +3388,16 @@ impl Blockstore {
         let mut fix_roots = Measure::start("fix_roots");
         if !roots_to_fix.is_empty() {
             info!("{} slots to be rooted", roots_to_fix.len());
-            for chunk in roots_to_fix.chunks(100) {
+            let chunk_size = 100;
+            for (i, chunk) in roots_to_fix.chunks(chunk_size).enumerate() {
                 if exit.load(Ordering::Relaxed) {
-                    return Ok(());
+                    return Ok(i * chunk_size);
                 }
                 trace!("{:?}", chunk);
                 self.set_roots(chunk.iter())?;
             }
         } else {
-            debug!(
-                "No missing roots found in range {} to {}",
-                self.lowest_cleanup_slot(),
-                self.last_root()
-            );
+            debug!("No missing roots found in range {start_root} to {end_slot}");
         }
         fix_roots.stop();
         datapoint_info!(
@@ -3366,7 +3410,7 @@ impl Blockstore {
             ("num_roots_to_fix", roots_to_fix.len() as i64, i64),
             ("fix_roots_us", fix_roots.as_us() as i64, i64),
         );
-        Ok(())
+        Ok(roots_to_fix.len())
     }
 
     /// Mark a root `slot` as connected, traverse `slot`'s children and update
@@ -4471,6 +4515,7 @@ pub mod tests {
         solana_entry::entry::{next_entry, next_entry_mut},
         solana_runtime::bank::{Bank, RewardType},
         solana_sdk::{
+            clock::{DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
             hash::{self, hash, Hash},
             instruction::CompiledInstruction,
             message::v0::LoadedAddresses,
@@ -5608,6 +5653,102 @@ pub mod tests {
     }
 
     #[test]
+    fn test_scan_and_fix_roots() {
+        fn blockstore_roots(blockstore: &Blockstore) -> Vec<Slot> {
+            blockstore
+                .rooted_slot_iterator(0)
+                .unwrap()
+                .collect::<Vec<_>>()
+        }
+
+        solana_logger::setup();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let entries_per_slot = max_ticks_per_n_shreds(5, None);
+        let start_slot: Slot = 0;
+        let num_slots = 18;
+
+        // Produce the following chains and insert shreds into Blockstore
+        // 0 -> 2 -> 4 -> 6 -> 8 -> 10 -> 12 -> 14 -> 16 -> 18
+        //  \
+        //   -> 1 -> 3 -> 5 -> 7 ->  9 -> 11 -> 13 -> 15 -> 17
+        let shreds: Vec<_> = (start_slot..=num_slots)
+            .flat_map(|slot| {
+                let parent_slot = if slot % 2 == 0 {
+                    slot.saturating_sub(2)
+                } else {
+                    slot.saturating_sub(1)
+                };
+                let (shreds, _) = make_slot_entries(
+                    slot,
+                    parent_slot,
+                    entries_per_slot,
+                    true, // merkle_variant
+                );
+                shreds.into_iter()
+            })
+            .collect();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+
+        // Start slot must be a root
+        let (start, end) = (Some(16), None);
+        assert_matches!(
+            blockstore.scan_and_fix_roots(start, end, &AtomicBool::new(false)),
+            Err(BlockstoreError::SlotNotRooted)
+        );
+
+        // Mark several roots
+        let new_roots = vec![6, 12];
+        blockstore.set_roots(new_roots.iter()).unwrap();
+        assert_eq!(&new_roots, &blockstore_roots(&blockstore));
+
+        // Specify both a start root and end slot
+        let (start, end) = (Some(12), Some(8));
+        let roots = vec![6, 8, 10, 12];
+        blockstore
+            .scan_and_fix_roots(start, end, &AtomicBool::new(false))
+            .unwrap();
+        assert_eq!(&roots, &blockstore_roots(&blockstore));
+
+        // Specify only an end slot
+        let (start, end) = (None, Some(4));
+        let roots = vec![4, 6, 8, 10, 12];
+        blockstore
+            .scan_and_fix_roots(start, end, &AtomicBool::new(false))
+            .unwrap();
+        assert_eq!(&roots, &blockstore_roots(&blockstore));
+
+        // Specify only a start slot
+        let (start, end) = (Some(12), None);
+        let roots = vec![0, 2, 4, 6, 8, 10, 12];
+        blockstore
+            .scan_and_fix_roots(start, end, &AtomicBool::new(false))
+            .unwrap();
+        assert_eq!(&roots, &blockstore_roots(&blockstore));
+
+        // Mark additional root
+        let new_roots = vec![16];
+        let roots = vec![0, 2, 4, 6, 8, 10, 12, 16];
+        blockstore.set_roots(new_roots.iter()).unwrap();
+        assert_eq!(&roots, &blockstore_roots(&blockstore));
+
+        // Leave both start and end unspecified
+        let (start, end) = (None, None);
+        let roots = vec![0, 2, 4, 6, 8, 10, 12, 14, 16];
+        blockstore
+            .scan_and_fix_roots(start, end, &AtomicBool::new(false))
+            .unwrap();
+        assert_eq!(&roots, &blockstore_roots(&blockstore));
+
+        // Subsequent calls should have no effect and return without error
+        blockstore
+            .scan_and_fix_roots(start, end, &AtomicBool::new(false))
+            .unwrap();
+        assert_eq!(&roots, &blockstore_roots(&blockstore));
+    }
+
+    #[test]
     fn test_set_and_chain_connected_on_root_and_next_slots() {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -6163,6 +6304,13 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
+        // Blockstore::find_missing_data_indexes() compares timestamps, so
+        // set a small value for defer_threshold_ticks to avoid flakiness.
+        let defer_threshold_ticks = DEFAULT_TICKS_PER_SLOT / 16;
+        let start_index = 0;
+        let end_index = 50;
+        let max_missing = 9;
+
         // Write entries
         let gap: u64 = 10;
         let shreds: Vec<_> = (0..64)
@@ -6186,10 +6334,10 @@ pub mod tests {
             blockstore.find_missing_data_indexes(
                 slot,
                 timestamp(), // first_timestamp
-                0,           // defer_threshold_ticks
-                0,           // start_index
-                50,          // end_index
-                1,           // max_missing
+                defer_threshold_ticks,
+                start_index,
+                end_index,
+                max_missing,
             ),
             empty
         );
@@ -6197,11 +6345,11 @@ pub mod tests {
         assert_eq!(
             blockstore.find_missing_data_indexes(
                 slot,
-                timestamp() - 400, // first_timestamp
-                0,                 // defer_threshold_ticks
-                0,                 // start_index
-                50,                // end_index
-                9,                 // max_missing
+                timestamp() - DEFAULT_MS_PER_SLOT, // first_timestamp
+                defer_threshold_ticks,
+                start_index,
+                end_index,
+                max_missing,
             ),
             expected
         );
@@ -7191,7 +7339,7 @@ pub mod tests {
         }
         .into();
         assert!(transaction_status_cf
-            .put_protobuf((0, Signature::new(&[2u8; 64]), 9), &status,)
+            .put_protobuf((0, Signature::from([2u8; 64]), 9), &status,)
             .is_ok());
 
         // result found
@@ -7211,7 +7359,7 @@ pub mod tests {
         } = transaction_status_cf
             .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
                 0,
-                Signature::new(&[2u8; 64]),
+                Signature::from([2u8; 64]),
                 9,
             ))
             .unwrap()
@@ -7248,11 +7396,11 @@ pub mod tests {
         assert!(transaction_status_index_cf.get(1).unwrap().is_some());
 
         for _ in 0..5 {
-            let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+            let random_bytes: [u8; 64] = std::array::from_fn(|_| rand::random::<u8>());
             blockstore
                 .write_transaction_status(
                     slot0,
-                    Signature::new(&random_bytes),
+                    Signature::from(random_bytes),
                     vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
                     vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
@@ -7314,11 +7462,11 @@ pub mod tests {
 
         let slot1 = 20;
         for _ in 0..5 {
-            let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+            let random_bytes: [u8; 64] = std::array::from_fn(|_| rand::random::<u8>());
             blockstore
                 .write_transaction_status(
                     slot1,
-                    Signature::new(&random_bytes),
+                    Signature::from(random_bytes),
                     vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
                     vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
@@ -7465,13 +7613,13 @@ pub mod tests {
         }
         .into();
 
-        let signature1 = Signature::new(&[1u8; 64]);
-        let signature2 = Signature::new(&[2u8; 64]);
-        let signature3 = Signature::new(&[3u8; 64]);
-        let signature4 = Signature::new(&[4u8; 64]);
-        let signature5 = Signature::new(&[5u8; 64]);
-        let signature6 = Signature::new(&[6u8; 64]);
-        let signature7 = Signature::new(&[7u8; 64]);
+        let signature1 = Signature::from([1u8; 64]);
+        let signature2 = Signature::from([2u8; 64]);
+        let signature3 = Signature::from([3u8; 64]);
+        let signature4 = Signature::from([4u8; 64]);
+        let signature5 = Signature::from([5u8; 64]);
+        let signature6 = Signature::from([6u8; 64]);
+        let signature7 = Signature::from([7u8; 64]);
 
         // Insert slots with fork
         //   0 (root)
@@ -7659,8 +7807,8 @@ pub mod tests {
         }
         .into();
 
-        let signature1 = Signature::new(&[2u8; 64]);
-        let signature2 = Signature::new(&[3u8; 64]);
+        let signature1 = Signature::from([2u8; 64]);
+        let signature2 = Signature::from([3u8; 64]);
 
         // Insert rooted slots 0..=3 with no fork
         let meta0 = SlotMeta::new(0, Some(0));
@@ -8031,7 +8179,7 @@ pub mod tests {
 
         let slot0 = 10;
         for x in 1..5 {
-            let signature = Signature::new(&[x; 64]);
+            let signature = Signature::from([x; 64]);
             blockstore
                 .write_transaction_status(
                     slot0,
@@ -8044,7 +8192,7 @@ pub mod tests {
         }
         let slot1 = 20;
         for x in 5..9 {
-            let signature = Signature::new(&[x; 64]);
+            let signature = Signature::from([x; 64]);
             blockstore
                 .write_transaction_status(
                     slot1,
@@ -8062,7 +8210,7 @@ pub mod tests {
             .unwrap();
         assert_eq!(all0.len(), 8);
         for x in 1..9 {
-            let expected_signature = Signature::new(&[x; 64]);
+            let expected_signature = Signature::from([x; 64]);
             assert_eq!(all0[x as usize - 1], expected_signature);
         }
         assert_eq!(
@@ -8096,7 +8244,7 @@ pub mod tests {
             .unwrap();
         assert_eq!(all1.len(), 8);
         for x in 1..9 {
-            let expected_signature = Signature::new(&[x; 64]);
+            let expected_signature = Signature::from([x; 64]);
             assert_eq!(all1[x as usize - 1], expected_signature);
         }
 
@@ -8136,8 +8284,8 @@ pub mod tests {
 
         // Test sort, regardless of entry order or signature value
         for slot in (21..25).rev() {
-            let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
-            let signature = Signature::new(&random_bytes);
+            let random_bytes: [u8; 64] = std::array::from_fn(|_| rand::random::<u8>());
+            let signature = Signature::from(random_bytes);
             blockstore
                 .write_transaction_status(
                     slot,
@@ -8166,7 +8314,7 @@ pub mod tests {
 
         let slot1 = 1;
         for x in 1..5 {
-            let signature = Signature::new(&[x; 64]);
+            let signature = Signature::from([x; 64]);
             blockstore
                 .write_transaction_status(
                     slot1,
@@ -8179,7 +8327,7 @@ pub mod tests {
         }
         let slot2 = 2;
         for x in 5..7 {
-            let signature = Signature::new(&[x; 64]);
+            let signature = Signature::from([x; 64]);
             blockstore
                 .write_transaction_status(
                     slot2,
@@ -8191,7 +8339,7 @@ pub mod tests {
                 .unwrap();
         }
         for x in 7..9 {
-            let signature = Signature::new(&[x; 64]);
+            let signature = Signature::from([x; 64]);
             blockstore
                 .write_transaction_status(
                     slot2,
@@ -8204,7 +8352,7 @@ pub mod tests {
         }
         let slot3 = 3;
         for x in 9..13 {
-            let signature = Signature::new(&[x; 64]);
+            let signature = Signature::from([x; 64]);
             blockstore
                 .write_transaction_status(
                     slot3,
@@ -8222,7 +8370,7 @@ pub mod tests {
             .unwrap();
         for (i, (slot, signature)) in slot1_signatures.iter().enumerate() {
             assert_eq!(*slot, slot1);
-            assert_eq!(*signature, Signature::new(&[i as u8 + 1; 64]));
+            assert_eq!(*signature, Signature::from([i as u8 + 1; 64]));
         }
 
         let slot2_signatures = blockstore
@@ -8230,7 +8378,7 @@ pub mod tests {
             .unwrap();
         for (i, (slot, signature)) in slot2_signatures.iter().enumerate() {
             assert_eq!(*slot, slot2);
-            assert_eq!(*signature, Signature::new(&[i as u8 + 5; 64]));
+            assert_eq!(*signature, Signature::from([i as u8 + 5; 64]));
         }
 
         let slot3_signatures = blockstore
@@ -8238,7 +8386,7 @@ pub mod tests {
             .unwrap();
         for (i, (slot, signature)) in slot3_signatures.iter().enumerate() {
             assert_eq!(*slot, slot3);
-            assert_eq!(*signature, Signature::new(&[i as u8 + 9; 64]));
+            assert_eq!(*signature, Signature::from([i as u8 + 9; 64]));
         }
     }
 
@@ -8329,13 +8477,13 @@ pub mod tests {
         blockstore
             .set_roots(vec![1, 2, 4, 5, 6, 7, 8].iter())
             .unwrap();
-        let highest_confirmed_root = 8;
+        let highest_super_majority_root = 8;
 
         // Fetch all rooted signatures for address 0 at once...
         let sig_infos = blockstore
             .get_confirmed_signatures_for_address2(
                 address0,
-                highest_confirmed_root,
+                highest_super_majority_root,
                 None,
                 None,
                 usize::MAX,
@@ -8349,7 +8497,7 @@ pub mod tests {
         let all1 = blockstore
             .get_confirmed_signatures_for_address2(
                 address1,
-                highest_confirmed_root,
+                highest_super_majority_root,
                 None,
                 None,
                 usize::MAX,
@@ -8363,7 +8511,7 @@ pub mod tests {
             let sig_infos = blockstore
                 .get_confirmed_signatures_for_address2(
                     address0,
-                    highest_confirmed_root,
+                    highest_super_majority_root,
                     if i == 0 {
                         None
                     } else {
@@ -8383,7 +8531,7 @@ pub mod tests {
             let results = blockstore
                 .get_confirmed_signatures_for_address2(
                     address0,
-                    highest_confirmed_root,
+                    highest_super_majority_root,
                     if i == 0 {
                         None
                     } else {
@@ -8405,7 +8553,7 @@ pub mod tests {
         let sig_infos = blockstore
             .get_confirmed_signatures_for_address2(
                 address0,
-                highest_confirmed_root,
+                highest_super_majority_root,
                 Some(all0[all0.len() - 1].signature),
                 None,
                 1,
@@ -8417,7 +8565,7 @@ pub mod tests {
         assert!(blockstore
             .get_confirmed_signatures_for_address2(
                 address0,
-                highest_confirmed_root,
+                highest_super_majority_root,
                 None,
                 Some(all0[0].signature),
                 2,
@@ -8432,7 +8580,7 @@ pub mod tests {
             let results = blockstore
                 .get_confirmed_signatures_for_address2(
                     address0,
-                    highest_confirmed_root,
+                    highest_super_majority_root,
                     if i == 0 {
                         None
                     } else {
@@ -8455,7 +8603,7 @@ pub mod tests {
             let results = blockstore
                 .get_confirmed_signatures_for_address2(
                     address1,
-                    highest_confirmed_root,
+                    highest_super_majority_root,
                     if i == 0 {
                         None
                     } else {
@@ -8477,7 +8625,7 @@ pub mod tests {
         let sig_infos = blockstore
             .get_confirmed_signatures_for_address2(
                 address0,
-                highest_confirmed_root,
+                highest_super_majority_root,
                 Some(all1[0].signature),
                 None,
                 usize::MAX,
@@ -8492,7 +8640,7 @@ pub mod tests {
         let results2 = blockstore
             .get_confirmed_signatures_for_address2(
                 address0,
-                highest_confirmed_root,
+                highest_super_majority_root,
                 Some(all1[0].signature),
                 Some(all1[4].signature),
                 usize::MAX,
@@ -8683,7 +8831,7 @@ pub mod tests {
         let sig_infos = blockstore
             .get_confirmed_signatures_for_address2(
                 address0,
-                highest_confirmed_root,
+                highest_super_majority_root,
                 Some(all0[0].signature),
                 None,
                 usize::MAX,

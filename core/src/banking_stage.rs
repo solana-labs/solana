@@ -4,21 +4,18 @@
 
 use {
     self::{
+        committer::Committer,
         consumer::Consumer,
         decision_maker::{BufferedPacketsDecision, DecisionMaker},
         forwarder::Forwarder,
-        packet_receiver::PacketReceiver,
-    },
-    crate::{
-        banking_stage::committer::Committer,
-        banking_trace::BankingPacketReceiver,
         latest_unprocessed_votes::{LatestUnprocessedVotes, VoteSource},
-        leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
+        leader_slot_metrics::LeaderSlotMetricsTracker,
+        packet_receiver::PacketReceiver,
         qos_service::QosService,
-        tracer_packet_stats::TracerPacketStats,
         unprocessed_packet_batches::*,
         unprocessed_transaction_storage::{ThreadType, UnprocessedTransactionStorage},
     },
+    crate::{banking_trace::BankingPacketReceiver, tracer_packet_stats::TracerPacketStats},
     crossbeam_channel::RecvTimeoutError,
     histogram::Histogram,
     solana_client::connection_cache::ConnectionCache,
@@ -43,16 +40,29 @@ use {
     },
 };
 
+// Below modules are pub to allow use by banking_stage bench
 pub mod committer;
 pub mod consumer;
+pub mod leader_slot_metrics;
+pub mod qos_service;
+pub mod unprocessed_packet_batches;
+pub mod unprocessed_transaction_storage;
+
+mod consume_worker;
 mod decision_maker;
+mod forward_packet_batches_by_accounts;
+mod forward_worker;
 mod forwarder;
+mod immutable_deserialized_packet;
+mod latest_unprocessed_votes;
+mod leader_slot_timing_metrics;
+mod multi_iterator_scanner;
+mod packet_deserializer;
 mod packet_receiver;
+mod read_write_account_set;
 #[allow(dead_code)]
 mod scheduler_messages;
-
-#[allow(dead_code)]
-mod thread_aware_account_locks;
+mod transaction_scheduler;
 
 // Fixed thread size seems to be fastest on GCP setup
 pub const NUM_THREADS: u32 = 6;
@@ -72,6 +82,7 @@ pub struct BankingStageStats {
     receive_and_buffer_packets_count: AtomicUsize,
     dropped_packets_count: AtomicUsize,
     pub(crate) dropped_duplicated_packets_count: AtomicUsize,
+    dropped_forward_packets_count: AtomicUsize,
     newly_buffered_packets_count: AtomicUsize,
     current_buffered_packets_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
@@ -108,6 +119,7 @@ impl BankingStageStats {
             + self
                 .dropped_duplicated_packets_count
                 .load(Ordering::Relaxed) as u64
+            + self.dropped_forward_packets_count.load(Ordering::Relaxed) as u64
             + self.newly_buffered_packets_count.load(Ordering::Relaxed) as u64
             + self.current_buffered_packets_count.load(Ordering::Relaxed) as u64
             + self.rebuffered_packets_count.load(Ordering::Relaxed) as u64
@@ -149,6 +161,12 @@ impl BankingStageStats {
                 (
                     "dropped_duplicated_packets_count",
                     self.dropped_duplicated_packets_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "dropped_forward_packets_count",
+                    self.dropped_forward_packets_count
                         .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
@@ -280,6 +298,7 @@ pub struct FilterForwardingResults {
     pub(crate) total_forwardable_packets: usize,
     pub(crate) total_tracer_packets_in_buffer: usize,
     pub(crate) total_forwardable_tracer_packets: usize,
+    pub(crate) total_dropped_packets: usize,
     pub(crate) total_packet_conversion_us: u64,
     pub(crate) total_filter_packets_us: u64,
 }
@@ -390,7 +409,8 @@ impl BankingStage {
                         ),
                     };
 
-                let mut packet_receiver = PacketReceiver::new(id, packet_receiver);
+                let mut packet_receiver =
+                    PacketReceiver::new(id, packet_receiver, bank_forks.clone());
                 let poh_recorder = poh_recorder.clone();
 
                 let committer = Committer::new(
@@ -599,6 +619,7 @@ mod tests {
             pubkey::Pubkey,
             signature::{Keypair, Signer},
             system_transaction,
+            transaction::{SanitizedTransaction, Transaction},
         },
         solana_streamer::socket::SocketAddrSpace,
         solana_vote_program::{
@@ -616,6 +637,12 @@ mod tests {
         let cluster_info =
             ClusterInfo::new(node.info.clone(), keypair, SocketAddrSpace::Unspecified);
         (node, cluster_info)
+    }
+
+    pub(crate) fn sanitize_transactions(txs: Vec<Transaction>) -> Vec<SanitizedTransaction> {
+        txs.into_iter()
+            .map(SanitizedTransaction::from_transaction_for_tests)
+            .collect()
     }
 
     #[test]
@@ -650,7 +677,7 @@ mod tests {
                 None,
                 replay_vote_sender,
                 None,
-                Arc::new(ConnectionCache::default()),
+                Arc::new(ConnectionCache::new("connection_cache_test")),
                 bank_forks,
                 &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
@@ -706,7 +733,7 @@ mod tests {
                 None,
                 replay_vote_sender,
                 None,
-                Arc::new(ConnectionCache::default()),
+                Arc::new(ConnectionCache::new("connection_cache_test")),
                 bank_forks,
                 &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
@@ -787,7 +814,7 @@ mod tests {
                 None,
                 replay_vote_sender,
                 None,
-                Arc::new(ConnectionCache::default()),
+                Arc::new(ConnectionCache::new("connection_cache_test")),
                 bank_forks,
                 &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
@@ -949,7 +976,7 @@ mod tests {
                     None,
                     replay_vote_sender,
                     None,
-                    Arc::new(ConnectionCache::default()),
+                    Arc::new(ConnectionCache::new("connection_cache_test")),
                     bank_forks,
                     &Arc::new(PrioritizationFeeCache::new(0u64)),
                 );
@@ -1020,7 +1047,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.write().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
             let pubkey = solana_sdk::pubkey::new_rand();
             let keypair2 = Keypair::new();
             let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -1143,7 +1170,7 @@ mod tests {
                 None,
                 replay_vote_sender,
                 None,
-                Arc::new(ConnectionCache::default()),
+                Arc::new(ConnectionCache::new("connection_cache_test")),
                 bank_forks,
                 &Arc::new(PrioritizationFeeCache::new(0u64)),
             );

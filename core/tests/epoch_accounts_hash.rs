@@ -1,4 +1,3 @@
-#![allow(clippy::integer_arithmetic)]
 use {
     crate::snapshot_utils::create_tmp_accounts_dir_for_tests,
     log::*,
@@ -12,7 +11,9 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::{AccountShrinkThreshold, CalcAccountsHashDataSource},
+        accounts_db::{
+            AccountShrinkThreshold, CalcAccountsHashDataSource, INCLUDE_SLOT_IN_HASH_TESTS,
+        },
         accounts_hash::CalcAccountsHashConfig,
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankTestConfig},
@@ -88,13 +89,15 @@ impl TestEnvironment {
 
     #[must_use]
     fn _new(snapshot_config: SnapshotConfig) -> TestEnvironment {
+        const MINT_LAMPORTS: u64 = 100_000 * LAMPORTS_PER_SOL;
+        const STAKE_LAMPORTS: u64 = 100 * LAMPORTS_PER_SOL;
         let bank_snapshots_dir = TempDir::new().unwrap();
         let full_snapshot_archives_dir = TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = TempDir::new().unwrap();
         let mut genesis_config_info = genesis_utils::create_genesis_config_with_leader(
-            100_000 * LAMPORTS_PER_SOL, // mint_lamports
-            &Pubkey::new_unique(),      // validator_pubkey
-            100 * LAMPORTS_PER_SOL,     // validator_stake_lamports
+            MINT_LAMPORTS,
+            &Pubkey::new_unique(),
+            STAKE_LAMPORTS,
         );
         genesis_config_info.genesis_config.epoch_schedule =
             EpochSchedule::custom(Self::SLOTS_PER_EPOCH, Self::SLOTS_PER_EPOCH, false);
@@ -123,7 +126,8 @@ impl TestEnvironment {
             SocketAddrSpace::Unspecified,
         ));
 
-        let (pruned_banks_sender, pruned_banks_receiver) = crossbeam_channel::unbounded();
+        let pruned_banks_receiver =
+            AccountsBackgroundService::setup_bank_drop_callback(Arc::clone(&bank_forks));
         let background_services = BackgroundServices::new(
             Arc::clone(&exit),
             Arc::clone(&cluster_info),
@@ -132,12 +136,6 @@ impl TestEnvironment {
             Arc::clone(&bank_forks),
         );
         let bank = bank_forks.read().unwrap().working_bank();
-        bank.set_callback(Some(Box::new(
-            bank.rc
-                .accounts
-                .accounts_db
-                .create_drop_bank_callback(pruned_banks_sender),
-        )));
         assert!(bank
             .feature_set
             .is_active(&feature_set::epoch_accounts_hash::id()));
@@ -159,7 +157,7 @@ impl TestEnvironment {
 
 /// In order to shut down the background services correctly, each service's thread must be joined.
 /// However, since `.join()` takes a `self` and `drop()` takes a `&mut self`, it means a "normal"
-/// implementation of drop will no work.  Instead, we must handle drop ourselves.
+/// implementation of drop will not work.  Instead, we must handle drop ourselves.
 struct BackgroundServices {
     exit: Arc<AtomicBool>,
     accounts_background_service: ManuallyDrop<AccountsBackgroundService>,
@@ -197,8 +195,6 @@ impl BackgroundServices {
             Some(snapshot_package_sender),
             exit.clone(),
             cluster_info,
-            None,
-            false,
             None,
             snapshot_config.clone(),
         );
@@ -271,13 +267,13 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
         .genesis_config
         .epoch_schedule
         .slots_per_epoch;
-    for _ in 0..slots_per_epoch * NUM_EPOCHS_TO_TEST {
+    for _ in 0..slots_per_epoch.checked_mul(NUM_EPOCHS_TO_TEST).unwrap() {
         let bank = {
             let parent = bank_forks.read().unwrap().working_bank();
             let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
                 &parent,
                 &Pubkey::default(),
-                parent.slot() + 1,
+                parent.slot().checked_add(1).unwrap(),
             ));
 
             let transaction = system_transaction::transfer(
@@ -294,7 +290,7 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
         trace!("new bank {}", bank.slot());
 
         // Set roots so that ABS requests are sent (this is what requests EAH calculations)
-        if bank.slot() % SET_ROOT_INTERVAL == 0 {
+        if bank.slot().checked_rem(SET_ROOT_INTERVAL).unwrap() == 0 {
             trace!("rooting bank {}", bank.slot());
             bank_forks.write().unwrap().set_root(
                 bank.slot(),
@@ -322,6 +318,7 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
                         epoch_schedule: bank.epoch_schedule(),
                         rent_collector: bank.rent_collector(),
                         store_detailed_debug_info_on_failure: false,
+                        include_slot_in_hash: INCLUDE_SLOT_IN_HASH_TESTS,
                     },
                 )
                 .unwrap();
@@ -382,7 +379,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
         .genesis_config
         .epoch_schedule
         .slots_per_epoch;
-    for _ in 0..slots_per_epoch * NUM_EPOCHS_TO_TEST {
+    for _ in 0..slots_per_epoch.checked_mul(NUM_EPOCHS_TO_TEST).unwrap() {
         let bank = {
             let parent = bank_forks.read().unwrap().working_bank();
             let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
@@ -459,7 +456,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
                 true,
                 None,
                 None,
-                &Arc::new(AtomicBool::new(false)),
+                Arc::new(AtomicBool::new(false)),
             )
             .unwrap()
             .0;
@@ -498,7 +495,7 @@ fn test_background_services_request_handling_for_epoch_accounts_hash() {
         .genesis_config
         .epoch_schedule
         .slots_per_epoch;
-    for _ in 0..slots_per_epoch * NUM_EPOCHS_TO_TEST {
+    for _ in 0..slots_per_epoch.checked_mul(NUM_EPOCHS_TO_TEST).unwrap() {
         let bank = {
             let parent = bank_forks.read().unwrap().working_bank();
             let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
@@ -591,11 +588,7 @@ fn test_epoch_accounts_hash_and_warping() {
         None,
     );
     // flush the write cache so warping can calculate the accounts hash from storages
-    bank_forks
-        .read()
-        .unwrap()
-        .working_bank()
-        .force_flush_accounts_cache();
+    bank.force_flush_accounts_cache();
     let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
         &bank,
         &Pubkey::default(),
@@ -628,6 +621,8 @@ fn test_epoch_accounts_hash_and_warping() {
     let eah_start_offset = epoch_accounts_hash::calculation_offset_start(&bank);
     let eah_start_slot_in_next_epoch =
         epoch_schedule.get_first_slot_in_epoch(bank.epoch() + 1) + eah_start_offset;
+    // flush the write cache so warping can calculate the accounts hash from storages
+    bank.force_flush_accounts_cache();
     let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
         &bank,
         &Pubkey::default(),
@@ -662,6 +657,7 @@ fn test_epoch_accounts_hash_and_warping() {
 // https://github.com/rust-lang/rust/pull/88582
 // https://github.com/jhpratt/rust/blob/727a4fc7e3f836938dfeb4a2ab237cfca612222d/library/core/src/num/uint_macros.rs#L1811-L1837
 const fn next_multiple_of(lhs: u64, rhs: u64) -> u64 {
+    #![allow(clippy::integer_arithmetic)]
     match lhs % rhs {
         0 => lhs,
         r => lhs + (rhs - r),

@@ -103,7 +103,6 @@ else
     solana-ledger-tool
     solana-log-analyzer
     solana-net-shaper
-    solana-sys-tuner
     solana-validator
     rbpf-cli
   )
@@ -143,8 +142,12 @@ mkdir -p "$installDir/bin"
 
   # Exclude `spl-token` binary for net.sh builds
   if [[ -z "$validatorOnly" ]]; then
+    # the patch-related configs are needed for rust 1.69+ on Windows; see Cargo.toml
     # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-    "$cargo" $maybeRustVersion install --locked spl-token-cli --root "$installDir"
+    "$cargo" $maybeRustVersion \
+      --config 'patch.crates-io.ntapi.git="https://github.com/solana-labs/ntapi"' \
+      --config 'patch.crates-io.ntapi.rev="97ede981a1777883ff86d142b75024b023f04fad"' \
+      install --locked spl-token-cli --root "$installDir"
   fi
 )
 
@@ -163,6 +166,40 @@ if [[ -z "$validatorOnly" ]]; then
   "$cargo" $maybeRustVersion run --bin gen-headers
   mkdir -p "$installDir"/bin/sdk/sbf
   cp -a sdk/sbf/* "$installDir"/bin/sdk/sbf
+fi
+
+# Add Solidity Compiler
+if [[ -z "$validatorOnly" ]]; then
+  base="https://github.com/hyperledger/solang/releases/download"
+  version="v0.3.1"
+  curlopt="-sSfL --retry 5 --retry-delay 2 --retry-connrefused"
+
+  case $(uname -s) in
+  "Linux")
+    if [[ $(uname -m) == "x86_64" ]]; then
+      arch="x86-64"
+    else
+      arch="arm64"
+    fi
+    # shellcheck disable=SC2086
+    curl $curlopt -o "$installDir/bin/solang" $base/$version/solang-linux-$arch
+    chmod 755 "$installDir/bin/solang"
+    ;;
+  "Darwin")
+    if [[ $(uname -m) == "x86_64" ]]; then
+      arch="intel"
+    else
+      arch="arm"
+    fi
+    # shellcheck disable=SC2086
+    curl $curlopt -o "$installDir/bin/solang" $base/$version/solang-mac-$arch
+    chmod 755 "$installDir/bin/solang"
+    ;;
+  *)
+    # shellcheck disable=SC2086
+    curl $curlopt -o "$installDir/bin/solang.exe" $base/$version/solang.exe
+    ;;
+  esac
 fi
 
 (

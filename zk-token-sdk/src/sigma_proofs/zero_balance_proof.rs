@@ -1,9 +1,5 @@
 //! The zero-balance sigma proof system.
 //!
-//! A zero-balance proof is defined with respect to a twisted ElGamal ciphertext. The proof
-//! certifies that a given ciphertext encrypts the message 0 (`Scalar::zero()`). To generate the
-//! proof, a prover must provide the decryption key for the ciphertext.
-//!
 //! The protocol guarantees computationally soundness (by the hardness of discrete log) and perfect
 //! zero-knowledge in the random oracle model.
 
@@ -15,6 +11,8 @@ use {
             pedersen::H,
         },
         errors::ProofVerificationError,
+        sigma_proofs::{canonical_scalar_from_optional_slice, ristretto_point_from_optional_slice},
+        UNIT_LEN,
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -22,7 +20,6 @@ use {
 };
 use {
     crate::{sigma_proofs::errors::ZeroBalanceProofError, transcript::TranscriptProtocol},
-    arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -30,6 +27,9 @@ use {
     },
     merlin::Transcript,
 };
+
+/// Byte length of a zero-balance proof.
+const ZERO_BALANCE_PROOF_LEN: usize = UNIT_LEN * 3;
 
 /// Zero-balance proof.
 ///
@@ -45,7 +45,7 @@ pub struct ZeroBalanceProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
 impl ZeroBalanceProof {
-    /// Zero-balance proof constructor.
+    /// Creates a zero-balance proof.
     ///
     /// The function does *not* hash the public key and ciphertext into the transcript. For
     /// security, the caller (the main protocol) should hash these public components prior to
@@ -64,11 +64,11 @@ impl ZeroBalanceProof {
         ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Self {
-        transcript.zero_balance_proof_domain_sep();
+        transcript.zero_balance_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the input
-        let P = elgamal_keypair.public.get_point();
-        let s = elgamal_keypair.secret.get_scalar();
+        let P = elgamal_keypair.pubkey().get_point();
+        let s = elgamal_keypair.secret().get_scalar();
         let D = ciphertext.handle.get_point();
 
         // generate a random masking factor that also serves as a nonce
@@ -92,7 +92,7 @@ impl ZeroBalanceProof {
         Self { Y_P, Y_D, z }
     }
 
-    /// Zero-balance proof verifier.
+    /// Verifies a zero-balance proof.
     ///
     /// * `elgamal_pubkey` - The ElGamal pubkey associated with the ciphertext to be proved
     /// * `ciphertext` - The main ElGamal ciphertext to be proved
@@ -103,7 +103,7 @@ impl ZeroBalanceProof {
         ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ZeroBalanceProofError> {
-        transcript.zero_balance_proof_domain_sep();
+        transcript.zero_balance_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_pubkey.get_point();
@@ -156,27 +156,20 @@ impl ZeroBalanceProof {
         }
     }
 
-    pub fn to_bytes(&self) -> [u8; 96] {
-        let mut buf = [0_u8; 96];
-        buf[..32].copy_from_slice(self.Y_P.as_bytes());
-        buf[32..64].copy_from_slice(self.Y_D.as_bytes());
-        buf[64..96].copy_from_slice(self.z.as_bytes());
+    pub fn to_bytes(&self) -> [u8; ZERO_BALANCE_PROOF_LEN] {
+        let mut buf = [0_u8; ZERO_BALANCE_PROOF_LEN];
+        let mut chunks = buf.chunks_mut(UNIT_LEN);
+        chunks.next().unwrap().copy_from_slice(self.Y_P.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.Y_D.as_bytes());
+        chunks.next().unwrap().copy_from_slice(self.z.as_bytes());
         buf
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ZeroBalanceProofError> {
-        if bytes.len() != 96 {
-            return Err(ProofVerificationError::Deserialization.into());
-        }
-
-        let bytes = array_ref![bytes, 0, 96];
-        let (Y_P, Y_D, z) = array_refs![bytes, 32, 32, 32];
-
-        let Y_P = CompressedRistretto::from_slice(Y_P);
-        let Y_D = CompressedRistretto::from_slice(Y_D);
-
-        let z = Scalar::from_canonical_bytes(*z).ok_or(ProofVerificationError::Deserialization)?;
-
+        let mut chunks = bytes.chunks(UNIT_LEN);
+        let Y_P = ristretto_point_from_optional_slice(chunks.next())?;
+        let Y_D = ristretto_point_from_optional_slice(chunks.next())?;
+        let z = canonical_scalar_from_optional_slice(chunks.next())?;
         Ok(ZeroBalanceProof { Y_P, Y_D, z })
     }
 }
@@ -186,7 +179,7 @@ mod test {
     use {
         super::*,
         crate::encryption::{
-            elgamal::{DecryptHandle, ElGamalKeypair, ElGamalSecretKey},
+            elgamal::{DecryptHandle, ElGamalKeypair},
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
     };
@@ -199,24 +192,24 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"test");
 
         // general case: encryption of 0
-        let elgamal_ciphertext = source_keypair.public.encrypt(0_u64);
+        let elgamal_ciphertext = source_keypair.pubkey().encrypt(0_u64);
         let proof =
             ZeroBalanceProof::new(&source_keypair, &elgamal_ciphertext, &mut prover_transcript);
         assert!(proof
             .verify(
-                &source_keypair.public,
+                source_keypair.pubkey(),
                 &elgamal_ciphertext,
                 &mut verifier_transcript
             )
             .is_ok());
 
         // general case: encryption of > 0
-        let elgamal_ciphertext = source_keypair.public.encrypt(1_u64);
+        let elgamal_ciphertext = source_keypair.pubkey().encrypt(1_u64);
         let proof =
             ZeroBalanceProof::new(&source_keypair, &elgamal_ciphertext, &mut prover_transcript);
         assert!(proof
             .verify(
-                &source_keypair.public,
+                source_keypair.pubkey(),
                 &elgamal_ciphertext,
                 &mut verifier_transcript
             )
@@ -237,7 +230,7 @@ mod test {
 
         assert!(proof
             .verify(
-                &source_keypair.public,
+                source_keypair.pubkey(),
                 &ciphertext,
                 &mut verifier_transcript
             )
@@ -250,7 +243,7 @@ mod test {
 
         let zeroed_commitment = PedersenCommitment::from_bytes(&[0u8; 32]).unwrap();
         let handle = source_keypair
-            .public
+            .pubkey()
             .decrypt_handle(&PedersenOpening::new_rand());
 
         let ciphertext = ElGamalCiphertext {
@@ -262,7 +255,7 @@ mod test {
 
         assert!(proof
             .verify(
-                &source_keypair.public,
+                source_keypair.pubkey(),
                 &ciphertext,
                 &mut verifier_transcript
             )
@@ -281,7 +274,7 @@ mod test {
 
         assert!(proof
             .verify(
-                &source_keypair.public,
+                source_keypair.pubkey(),
                 &ciphertext,
                 &mut verifier_transcript
             )
@@ -292,17 +285,13 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"test");
 
         let public = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
-        let secret = ElGamalSecretKey::new_rand();
-
-        let elgamal_keypair = ElGamalKeypair { public, secret };
-
-        let ciphertext = elgamal_keypair.public.encrypt(0_u64);
+        let ciphertext = public.encrypt(0_u64);
 
         let proof = ZeroBalanceProof::new(&source_keypair, &ciphertext, &mut prover_transcript);
 
         assert!(proof
             .verify(
-                &source_keypair.public,
+                source_keypair.pubkey(),
                 &ciphertext,
                 &mut verifier_transcript
             )

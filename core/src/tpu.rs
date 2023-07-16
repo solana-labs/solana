@@ -6,7 +6,6 @@ use {
     crate::{
         banking_stage::BankingStage,
         banking_trace::{BankingTracer, TracerThread},
-        broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
         cluster_info_vote_listener::{
             ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender,
             GossipVerifiedVoteHashSender, VerifiedVoteSender, VoteTracker,
@@ -15,11 +14,17 @@ use {
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
         staked_nodes_updater_service::StakedNodesUpdaterService,
+        tpu_entry_notifier::TpuEntryNotifier,
+        validator::GeneratorConfig,
     },
+    bytes::Bytes,
     crossbeam_channel::{unbounded, Receiver},
-    solana_client::connection_cache::ConnectionCache,
+    solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_gossip::cluster_info::ClusterInfo,
-    solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
+    solana_ledger::{
+        blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
+        entry_notifier_service::EntryNotifierSender,
+    },
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
     solana_rpc::{
         optimistically_confirmed_bank_tracker::BankNotificationSender,
@@ -30,19 +35,21 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
-    solana_sdk::{pubkey::Pubkey, signature::Keypair},
+    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
     solana_streamer::{
         nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
-        quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+        quic::{spawn_server, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
         streamer::StakedNodes,
     },
+    solana_turbine::broadcast_stage::{BroadcastStage, BroadcastStageType},
     std::{
         collections::HashMap,
-        net::UdpSocket,
+        net::{SocketAddr, UdpSocket},
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread,
         time::Duration,
     },
+    tokio::sync::mpsc::Sender as AsyncSender,
 };
 
 // allow multiple connections for NAT and any open/close overlap
@@ -66,6 +73,7 @@ pub struct Tpu {
     broadcast_stage: BroadcastStage,
     tpu_quic_t: thread::JoinHandle<()>,
     tpu_forwards_quic_t: thread::JoinHandle<()>,
+    tpu_entry_notifier: Option<TpuEntryNotifier>,
     staked_nodes_updater_service: StakedNodesUpdaterService,
     tracer_thread_hdl: TracerThread,
 }
@@ -76,13 +84,14 @@ impl Tpu {
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         entry_receiver: Receiver<WorkingBankEntry>,
-        retransmit_slots_receiver: RetransmitSlotsReceiver,
+        retransmit_slots_receiver: Receiver<Slot>,
         sockets: TpuSockets,
         subscriptions: &Arc<RpcSubscriptions>,
         transaction_status_sender: Option<TransactionStatusSender>,
+        entry_notification_sender: Option<EntryNotifierSender>,
         blockstore: &Arc<Blockstore>,
         broadcast_type: &BroadcastStageType,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         shred_version: u16,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -94,6 +103,7 @@ impl Tpu {
         tpu_coalesce: Duration,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         connection_cache: &Arc<ConnectionCache>,
+        turbine_quic_endpoint_sender: AsyncSender<(SocketAddr, Bytes)>,
         keypair: &Keypair,
         log_messages_bytes_limit: Option<usize>,
         staked_nodes: &Arc<RwLock<StakedNodes>>,
@@ -102,6 +112,7 @@ impl Tpu {
         tracer_thread_hdl: TracerThread,
         tpu_enable_udp: bool,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        _generator_config: Option<GeneratorConfig>, /* vestigial code for replay invalidator */
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -119,7 +130,7 @@ impl Tpu {
             transactions_sockets,
             tpu_forwards_sockets,
             tpu_vote_sockets,
-            exit,
+            exit.clone(),
             &packet_sender,
             &vote_packet_sender,
             &forwarded_packet_sender,
@@ -139,13 +150,13 @@ impl Tpu {
 
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
 
-        let stats = Arc::new(StreamStats::default());
         let (_, tpu_quic_t) = spawn_server(
+            "quic_streamer_tpu",
             transactions_quic_sockets,
             keypair,
             cluster_info
                 .my_contact_info()
-                .tpu_quic()
+                .tpu(Protocol::QUIC)
                 .expect("Operator must spin up node with valid (QUIC) TPU address")
                 .ip(),
             packet_sender,
@@ -154,18 +165,18 @@ impl Tpu {
             staked_nodes.clone(),
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats.clone(),
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             tpu_coalesce,
         )
         .unwrap();
 
         let (_, tpu_forwards_quic_t) = spawn_server(
+            "quic_streamer_tpu_forwards",
             transactions_forwards_quic_sockets,
             keypair,
             cluster_info
                 .my_contact_info()
-                .tpu_forwards_quic()
+                .tpu_forwards(Protocol::QUIC)
                 .expect("Operator must spin up node with valid (QUIC) TPU-forwards address")
                 .ip(),
             forwarded_packet_sender,
@@ -174,7 +185,6 @@ impl Tpu {
             staked_nodes.clone(),
             MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
             0, // Prevent unstaked nodes from forwarding transactions
-            stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             tpu_coalesce,
         )
@@ -224,15 +234,30 @@ impl Tpu {
             prioritization_fee_cache,
         );
 
+        let (entry_receiver, tpu_entry_notifier) =
+            if let Some(entry_notification_sender) = entry_notification_sender {
+                let (broadcast_entry_sender, broadcast_entry_receiver) = unbounded();
+                let tpu_entry_notifier = TpuEntryNotifier::new(
+                    entry_receiver,
+                    entry_notification_sender,
+                    broadcast_entry_sender,
+                    exit.clone(),
+                );
+                (broadcast_entry_receiver, Some(tpu_entry_notifier))
+            } else {
+                (entry_receiver, None)
+            };
+
         let broadcast_stage = broadcast_type.new_broadcast_stage(
             broadcast_sockets,
             cluster_info.clone(),
             entry_receiver,
             retransmit_slots_receiver,
-            exit.clone(),
+            exit,
             blockstore.clone(),
             bank_forks,
             shred_version,
+            turbine_quic_endpoint_sender,
         );
 
         Self {
@@ -244,6 +269,7 @@ impl Tpu {
             broadcast_stage,
             tpu_quic_t,
             tpu_forwards_quic_t,
+            tpu_entry_notifier,
             staked_nodes_updater_service,
             tracer_thread_hdl,
         }
@@ -263,6 +289,9 @@ impl Tpu {
         let broadcast_result = self.broadcast_stage.join();
         for result in results {
             result?;
+        }
+        if let Some(tpu_entry_notifier) = self.tpu_entry_notifier {
+            tpu_entry_notifier.join()?;
         }
         let _ = broadcast_result?;
         if let Some(tracer_thread_hdl) = self.tracer_thread_hdl {

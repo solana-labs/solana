@@ -51,13 +51,13 @@ impl SnapshotPackagerService {
             .spawn(move || {
                 info!("SnapshotPackagerService has started");
                 renice_this_thread(snapshot_config.packager_thread_niceness_adj).unwrap();
-                let mut snapshot_gossip_manager = enable_gossip_push.then(||
+                let mut snapshot_gossip_manager = enable_gossip_push.then(|| {
                     SnapshotGossipManager::new(
                         cluster_info,
                         max_full_snapshot_hashes,
                         starting_snapshot_hashes,
                     )
-                );
+                });
 
                 loop {
                     if exit.load(Ordering::Relaxed) {
@@ -68,14 +68,18 @@ impl SnapshotPackagerService {
                         snapshot_package,
                         num_outstanding_snapshot_packages,
                         num_re_enqueued_snapshot_packages,
-                    )) = Self::get_next_snapshot_package(&snapshot_package_sender, &snapshot_package_receiver) else {
+                    )) = Self::get_next_snapshot_package(
+                        &snapshot_package_sender,
+                        &snapshot_package_receiver,
+                    )
+                    else {
                         std::thread::sleep(Self::LOOP_LIMITER);
                         continue;
                     };
                     info!("handling snapshot package: {snapshot_package:?}");
                     let enqueued_time = snapshot_package.enqueued.elapsed();
 
-                    let (_, handling_time_us) = measure_us!({
+                    let (purge_bank_snapshots_time_us, handling_time_us) = measure_us!({
                         // Archiving the snapshot package is not allowed to fail.
                         // AccountsBackgroundService calls `clean_accounts()` with a value for
                         // last_full_snapshot_slot that requires this archive call to succeed.
@@ -94,22 +98,37 @@ impl SnapshotPackagerService {
                                 (snapshot_package.slot(), *snapshot_package.hash()),
                             );
                         }
+
+                        // Now that this snapshot package has been archived, it is safe to remove
+                        // all bank snapshots older than this slot.  We want to keep the bank
+                        // snapshot *at this slot* so that it can be used during restarts, when
+                        // booting from local state.
+                        measure_us!(snapshot_utils::purge_bank_snapshots_older_than_slot(
+                            &snapshot_config.bank_snapshots_dir,
+                            snapshot_package.slot(),
+                        ))
+                        .1
                     });
 
                     datapoint_info!(
                         "snapshot_packager_service",
                         (
-                            "num-outstanding-snapshot-packages",
+                            "num_outstanding_snapshot_packages",
                             num_outstanding_snapshot_packages,
                             i64
                         ),
                         (
-                            "num-re-enqueued-snapshot-packages",
+                            "num_re_enqueued_snapshot_packages",
                             num_re_enqueued_snapshot_packages,
                             i64
                         ),
-                        ("enqueued-time-us", enqueued_time.as_micros(), i64),
-                        ("handling-time-us", handling_time_us, i64),
+                        ("enqueued_time_us", enqueued_time.as_micros(), i64),
+                        ("handling_time_us", handling_time_us, i64),
+                        (
+                            "purge_old_snapshots_time_us",
+                            purge_bank_snapshots_time_us,
+                            i64
+                        ),
                     );
                 }
                 info!("SnapshotPackagerService has stopped");
@@ -285,7 +304,7 @@ mod tests {
                     archive_format: ArchiveFormat::Tar,
                 },
                 block_height: slot,
-                snapshot_links: TempDir::new().unwrap(),
+                bank_snapshot_dir: PathBuf::default(),
                 snapshot_storages: Vec::default(),
                 snapshot_version: SnapshotVersion::default(),
                 snapshot_type,

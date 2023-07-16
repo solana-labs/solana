@@ -1,5 +1,15 @@
+pub mod fork_choice;
+pub mod heaviest_subtree_fork_choice;
+pub(crate) mod latest_validator_votes_for_frozen_banks;
+pub mod progress_map;
+mod tower1_14_11;
+mod tower1_7_14;
+pub mod tower_storage;
+pub mod tree_diff;
+pub mod vote_stake_tracker;
+
 use {
-    crate::{
+    self::{
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
         progress_map::{LockoutIntervals, ProgressMap},
@@ -214,7 +224,8 @@ pub struct Tower {
     // blockhash of the voted block itself, depending if the vote slot was refreshed.
     // For instance, a vote for slot 5, may be refreshed/resubmitted for inclusion in
     //  block 10, in  which case `last_vote_tx_blockhash` equals the blockhash of 10, not 5.
-    last_vote_tx_blockhash: Hash,
+    // For non voting validators this is None
+    last_vote_tx_blockhash: Option<Hash>,
     last_timestamp: BlockTimestamp,
     #[serde(skip)]
     // Restored last voted slot which cannot be found in SlotHistory at replayed root
@@ -237,7 +248,7 @@ impl Default for Tower {
             vote_state: VoteState::default(),
             last_vote: VoteTransaction::from(VoteStateUpdate::default()),
             last_timestamp: BlockTimestamp::default(),
-            last_vote_tx_blockhash: Hash::default(),
+            last_vote_tx_blockhash: None,
             stray_restored_slot: Option::default(),
             last_switch_threshold_check: Option::default(),
         };
@@ -450,12 +461,51 @@ impl Tower {
         self.vote_state.tower()
     }
 
-    pub fn last_vote_tx_blockhash(&self) -> Hash {
+    pub fn last_vote_tx_blockhash(&self) -> Option<Hash> {
         self.last_vote_tx_blockhash
     }
 
+    pub fn refresh_last_vote_timestamp(&mut self, heaviest_slot_on_same_fork: Slot) {
+        let timestamp = if let Some(last_vote_timestamp) = self.last_vote.timestamp() {
+            // To avoid a refreshed vote tx getting caught in deduplication filters,
+            // we need to update timestamp. Increment by smallest amount to avoid skewing
+            // the Timestamp Oracle.
+            last_vote_timestamp.saturating_add(1)
+        } else {
+            // If the previous vote did not send a timestamp due to clock error,
+            // use the last good timestamp + 1
+            datapoint_info!(
+                "refresh-timestamp-missing",
+                ("heaviest-slot", heaviest_slot_on_same_fork, i64),
+                ("last-timestamp", self.last_timestamp.timestamp, i64),
+                ("last-slot", self.last_timestamp.slot, i64),
+            );
+            self.last_timestamp.timestamp.saturating_add(1)
+        };
+
+        if let Some(last_voted_slot) = self.last_vote.last_voted_slot() {
+            if heaviest_slot_on_same_fork <= last_voted_slot {
+                warn!(
+                    "Trying to refresh timestamp for vote on {last_voted_slot}
+                     using smaller heaviest bank {heaviest_slot_on_same_fork}"
+                );
+                return;
+            }
+            self.last_timestamp = BlockTimestamp {
+                slot: last_voted_slot,
+                timestamp,
+            };
+            self.last_vote.set_timestamp(Some(timestamp));
+        } else {
+            warn!(
+                "Trying to refresh timestamp for last vote on heaviest bank on same fork
+                   {heaviest_slot_on_same_fork}, but there is no vote to refresh"
+            );
+        }
+    }
+
     pub fn refresh_last_vote_tx_blockhash(&mut self, new_vote_tx_blockhash: Hash) {
-        self.last_vote_tx_blockhash = new_vote_tx_blockhash;
+        self.last_vote_tx_blockhash = Some(new_vote_tx_blockhash);
     }
 
     // Returns true if we have switched the new vote instruction that directly sets vote state
@@ -596,6 +646,13 @@ impl Tower {
                     timestamp,
                 };
                 return Some(timestamp);
+            } else {
+                datapoint_info!(
+                    "backwards-timestamp",
+                    ("slot", current_slot, i64),
+                    ("timestamp", timestamp, i64),
+                    ("last-timestamp", self.last_timestamp.timestamp, i64),
+                )
             }
         }
         None
@@ -689,9 +746,8 @@ impl Tower {
         latest_validator_votes_for_frozen_banks: &LatestValidatorVotesForFrozenBanks,
         heaviest_subtree_fork_choice: &HeaviestSubtreeForkChoice,
     ) -> SwitchForkDecision {
-        let (last_voted_slot, last_voted_hash) = match self.last_voted_slot_hash() {
-            None => return SwitchForkDecision::SameFork,
-            Some(slot_hash) => slot_hash,
+        let Some((last_voted_slot, last_voted_hash)) = self.last_voted_slot_hash() else {
+            return SwitchForkDecision::SameFork;
         };
         let root = self.root();
         let empty_ancestors = HashSet::default();
@@ -1489,8 +1545,11 @@ pub mod test {
     use {
         super::*,
         crate::{
-            fork_choice::ForkChoice, heaviest_subtree_fork_choice::SlotHashKey,
-            replay_stage::HeaviestForkFailures, tower_storage::FileTowerStorage,
+            consensus::{
+                fork_choice::ForkChoice, heaviest_subtree_fork_choice::SlotHashKey,
+                tower_storage::FileTowerStorage,
+            },
+            replay_stage::HeaviestForkFailures,
             vote_simulator::VoteSimulator,
         },
         itertools::Itertools,
@@ -2632,6 +2691,44 @@ pub mod test {
 
         tower.last_timestamp.timestamp += 1_000_000; // Move last_timestamp well into the future
         assert!(tower.maybe_timestamp(3).is_none()); // slot 3 gets no timestamp
+    }
+
+    #[test]
+    fn test_refresh_last_vote_timestamp() {
+        let mut tower = Tower::default();
+
+        // Tower has no vote or timestamp
+        tower.last_vote.set_timestamp(None);
+        tower.refresh_last_vote_timestamp(5);
+        assert_eq!(tower.last_vote.timestamp(), None);
+        assert_eq!(tower.last_timestamp.slot, 0);
+        assert_eq!(tower.last_timestamp.timestamp, 0);
+
+        // Tower has vote no timestamp, but is greater than heaviest_bank
+        tower.last_vote =
+            VoteTransaction::from(VoteStateUpdate::from(vec![(0, 3), (1, 2), (6, 1)]));
+        assert_eq!(tower.last_vote.timestamp(), None);
+        tower.refresh_last_vote_timestamp(5);
+        assert_eq!(tower.last_vote.timestamp(), None);
+        assert_eq!(tower.last_timestamp.slot, 0);
+        assert_eq!(tower.last_timestamp.timestamp, 0);
+
+        // Tower has vote with no timestamp
+        tower.last_vote =
+            VoteTransaction::from(VoteStateUpdate::from(vec![(0, 3), (1, 2), (2, 1)]));
+        assert_eq!(tower.last_vote.timestamp(), None);
+        tower.refresh_last_vote_timestamp(5);
+        assert_eq!(tower.last_vote.timestamp(), Some(1));
+        assert_eq!(tower.last_timestamp.slot, 2);
+        assert_eq!(tower.last_timestamp.timestamp, 1);
+
+        // Vote has timestamp
+        tower.last_vote =
+            VoteTransaction::from(VoteStateUpdate::from(vec![(0, 3), (1, 2), (2, 1)]));
+        tower.refresh_last_vote_timestamp(5);
+        assert_eq!(tower.last_vote.timestamp(), Some(2));
+        assert_eq!(tower.last_timestamp.slot, 2);
+        assert_eq!(tower.last_timestamp.timestamp, 2);
     }
 
     fn run_test_load_tower_snapshot<F, G>(

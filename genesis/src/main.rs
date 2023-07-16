@@ -2,6 +2,7 @@
 #![allow(clippy::integer_arithmetic)]
 
 use {
+    base64::{prelude::BASE64_STANDARD, Engine},
     clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches},
     itertools::Itertools,
     solana_clap_utils::{
@@ -87,12 +88,14 @@ pub fn load_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> 
         let mut account = AccountSharedData::new(account_details.balance, 0, &owner_program_id);
         if account_details.data != "~" {
             account.set_data(
-                base64::decode(account_details.data.as_str()).map_err(|err| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Invalid account data: {}: {:?}", account_details.data, err),
-                    )
-                })?,
+                BASE64_STANDARD
+                    .decode(account_details.data.as_str())
+                    .map_err(|err| {
+                        io::Error::new(
+                            io::ErrorKind::Other,
+                            format!("Invalid account data: {}: {:?}", account_details.data, err),
+                        )
+                    })?,
             );
         }
         account.set_executable(account_details.executable);
@@ -528,9 +531,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let mut bootstrap_validator_pubkeys_iter = bootstrap_validator_pubkeys.iter();
     loop {
-        let identity_pubkey = match bootstrap_validator_pubkeys_iter.next() {
-            None => break,
-            Some(identity_pubkey) => identity_pubkey,
+        let Some(identity_pubkey) = bootstrap_validator_pubkeys_iter.next() else {
+            break;
         };
         let vote_pubkey = bootstrap_validator_pubkeys_iter.next().unwrap();
         let stake_pubkey = bootstrap_validator_pubkeys_iter.next().unwrap();
@@ -784,7 +786,7 @@ mod tests {
 
                 assert_eq!(
                     b64_account.data,
-                    base64::encode(&genesis_config.accounts[&pubkey].data)
+                    BASE64_STANDARD.encode(&genesis_config.accounts[&pubkey].data)
                 );
             }
         }
@@ -868,7 +870,7 @@ mod tests {
 
             assert_eq!(
                 b64_account.data,
-                base64::encode(&genesis_config.accounts[&pubkey].data),
+                BASE64_STANDARD.encode(&genesis_config.accounts[&pubkey].data),
             );
         }
 
@@ -952,7 +954,7 @@ mod tests {
 
             assert_eq!(
                 b64_account.data,
-                base64::encode(&genesis_config.accounts[&pubkey].data),
+                BASE64_STANDARD.encode(&genesis_config.accounts[&pubkey].data),
             );
         }
 
@@ -977,7 +979,7 @@ mod tests {
 
             assert_eq!(
                 genesis_accounts2[&keypair_str].data,
-                base64::encode(&genesis_config.accounts[&pubkey].data),
+                BASE64_STANDARD.encode(&genesis_config.accounts[&pubkey].data),
             );
         });
     }

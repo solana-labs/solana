@@ -389,11 +389,11 @@ pub async fn run_faucet(
     );
 
     loop {
-        let _faucet = faucet.clone();
+        let faucet = faucet.clone();
         match listener.accept().await {
             Ok((stream, _)) => {
                 tokio::spawn(async move {
-                    if let Err(e) = process(stream, _faucet).await {
+                    if let Err(e) = process(stream, faucet).await {
                         info!("failed to process request; error = {:?}", e);
                     }
                 });

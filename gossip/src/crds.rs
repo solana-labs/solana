@@ -518,9 +518,8 @@ impl Crds {
     }
 
     pub fn remove(&mut self, key: &CrdsValueLabel, now: u64) {
-        let (index, _ /*label*/, value) = match self.table.swap_remove_full(key) {
-            Some(entry) => entry,
-            None => return,
+        let Some((index, _ /*label*/, value)) = self.table.swap_remove_full(key) else {
+            return;
         };
         self.purged.push_back((value.value_hash, now));
         self.shards.remove(index, &value);

@@ -5,7 +5,7 @@ use {
         derivation_path::DerivationPath,
         pubkey::Pubkey,
         signature::Signature,
-        signer::{EncodableKey, Signer, SignerError},
+        signer::{EncodableKey, EncodableKeypair, SeedDerivable, Signer, SignerError},
     },
     ed25519_dalek::Signer as DalekSigner,
     ed25519_dalek_bip32::Error as Bip32Error,
@@ -35,7 +35,7 @@ impl Keypair {
 
     /// Constructs a new, random `Keypair` using `OsRng`
     pub fn new() -> Self {
-        let mut rng = OsRng::default();
+        let mut rng = OsRng;
         Self::generate(&mut rng)
     }
 
@@ -91,7 +91,7 @@ impl Signer for Keypair {
     }
 
     fn sign_message(&self, message: &[u8]) -> Signature {
-        Signature::new(&self.0.sign(message).to_bytes())
+        Signature::from(self.0.sign(message).to_bytes())
     }
 
     fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
@@ -120,7 +120,9 @@ impl EncodableKey for Keypair {
     fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
         write_keypair(self, writer)
     }
+}
 
+impl SeedDerivable for Keypair {
     fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
         keypair_from_seed(seed)
     }
@@ -137,6 +139,16 @@ impl EncodableKey for Keypair {
         passphrase: &str,
     ) -> Result<Self, Box<dyn error::Error>> {
         keypair_from_seed_phrase_and_passphrase(seed_phrase, passphrase)
+    }
+}
+
+impl EncodableKeypair for Keypair {
+    type Pubkey = Pubkey;
+
+    /// Returns the associated pubkey. Use this function specifically for settings that involve
+    /// reading or writing pubkeys. For other settings, use `Signer::pubkey()` instead.
+    fn encodable_pubkey(&self) -> Self::Pubkey {
+        self.pubkey()
     }
 }
 

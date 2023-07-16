@@ -22,6 +22,7 @@ dashmap = { workspace = true, features = ["rayon", "raw-api"] }
 dir-diff = { workspace = true }
 flate2 = { workspace = true }
 fnv = { workspace = true }
+fs-err = { workspace = true }
 im = { workspace = true, features = ["rayon", "serde"] }
 index_list = { workspace = true }
 itertools = { workspace = true }
@@ -34,6 +35,7 @@ modular-bitfield = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
 num_cpus = { workspace = true }
+num_enum = { workspace = true }
 once_cell = { workspace = true }
 ouroboros = { workspace = true }
 percentage = { workspace = true }
@@ -42,13 +44,16 @@ rayon = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
+siphasher = { workspace = true }
 solana-address-lookup-table-program = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-bucket-map = { workspace = true }
 solana-compute-budget-program = { workspace = true }
 solana-config-program = { workspace = true }
+solana-cost-model = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
+solana-loader-v4-program = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
 solana-perf = { workspace = true }
@@ -60,6 +65,7 @@ solana-system-program = { workspace = true }
 solana-vote-program = { workspace = true }
 solana-zk-token-proof-program = { workspace = true }
 solana-zk-token-sdk = { workspace = true }
+static_assertions = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
 symlink = { workspace = true }
@@ -79,6 +85,7 @@ libsecp256k1 = { workspace = true }
 memoffset = { workspace = true }
 rand_chacha = { workspace = true }
 solana-logger = { workspace = true }
+solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
 test-case = { workspace = true }
 

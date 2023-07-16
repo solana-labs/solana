@@ -38,27 +38,10 @@ that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
 
 ### Linux
 
-#### Automatic
-
-The solana repo includes a daemon to adjust system settings to optimize performance
-(namely by increasing the OS UDP buffer and file mapping limits).
-
-The daemon (`solana-sys-tuner`) is included in the solana binary release. Restart
-it, _before_ restarting your validator, after each software upgrade to ensure that
-the latest recommended settings are applied.
-
-To run it:
-
-```bash
-sudo $(command -v solana-sys-tuner) --user $(whoami) > sys-tuner.log 2>&1 &
-```
-
-#### Manual
-
 If you would prefer to manage system settings on your own, you may do so with
 the following commands.
 
-##### **Optimize sysctl knobs**
+#### **Optimize sysctl knobs**
 
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/21-solana-validator.conf <<EOF
@@ -80,7 +63,7 @@ EOF"
 sudo sysctl -p /etc/sysctl.d/21-solana-validator.conf
 ```
 
-##### **Increase systemd and session file limits**
+#### **Increase systemd and session file limits**
 
 Add
 
@@ -111,6 +94,16 @@ EOF"
 ```bash
 ### Close all open sessions (log out then, in again) ###
 ```
+
+#### System Clock
+
+Large system clock drift can prevent a node from properly participating in Solana's [gossip protocol](../validator/gossip.md).  Ensure that your system clock is accurate.  To check the current system clock, use:
+
+```bash
+timedatectl
+```
+
+Operators commonly use an ntp server to maintain an accurate system clock.
 
 ## Generate identity
 
@@ -353,7 +346,6 @@ the following:
 [Unit]
 Description=Solana Validator
 After=network.target
-Wants=solana-sys-tuner.service
 StartLimitIntervalSec=0
 
 [Service]
@@ -454,7 +446,7 @@ partition.
 Example configuration:
 
 1. `sudo mkdir /mnt/solana-accounts`
-2. Add a 300GB tmpfs parition by adding a new line containing `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` to `/etc/fstab`
+2. Add a 300GB tmpfs partition by adding a new line containing `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` to `/etc/fstab`
    (assuming your validator is running under the user "sol"). **CAREFUL: If you
    incorrectly edit /etc/fstab your machine may no longer boot**
 3. Create at least 250GB of swap space

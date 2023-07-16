@@ -1,15 +1,12 @@
 use {
     super::{
-        committer::{CommitTransactionDetails, Committer},
-        BankingStageStats,
-    },
-    crate::{
-        banking_stage::committer::PreBalanceInfo,
+        committer::{CommitTransactionDetails, Committer, PreBalanceInfo},
         immutable_deserialized_packet::ImmutableDeserializedPacket,
-        leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
-        leader_slot_banking_stage_timing_metrics::LeaderExecuteAndCommitTimings,
+        leader_slot_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
+        leader_slot_timing_metrics::LeaderExecuteAndCommitTimings,
         qos_service::QosService,
         unprocessed_transaction_storage::{ConsumeScannerPayload, UnprocessedTransactionStorage},
+        BankingStageStats,
     },
     itertools::Itertools,
     solana_ledger::token_balances::collect_token_balances,
@@ -20,15 +17,16 @@ use {
     },
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
-        bank::{Bank, LoadAndExecuteTransactionsOutput, TransactionCheckResult},
+        bank::{Bank, LoadAndExecuteTransactionsOutput},
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
+        transaction_results::TransactionCheckResult,
     },
     solana_sdk::{
-        clock::{FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
-        saturating_add_assign,
+        clock::{Slot, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
+        feature_set, saturating_add_assign,
         timing::timestamp,
-        transaction::{self, SanitizedTransaction, TransactionError},
+        transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
     },
     std::{
         sync::{atomic::Ordering, Arc},
@@ -36,14 +34,15 @@ use {
     },
 };
 
-pub const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 64;
+/// Consumer will create chunks of transactions from buffer with up to this size.
+pub const TARGET_NUM_TRANSACTIONS_PER_BATCH: usize = 64;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
     cost_model_throttled_transactions_count: usize,
     // Amount of time spent running the cost model
     cost_model_us: u64,
-    execute_and_commit_transactions_output: ExecuteAndCommitTransactionsOutput,
+    pub execute_and_commit_transactions_output: ExecuteAndCommitTransactionsOutput,
 }
 
 pub struct ExecuteAndCommitTransactionsOutput {
@@ -57,10 +56,10 @@ pub struct ExecuteAndCommitTransactionsOutput {
     executed_with_successful_result_count: usize,
     // Transactions that either were not executed, or were executed and failed to be committed due
     // to the block ending.
-    retryable_transaction_indexes: Vec<usize>,
+    pub(crate) retryable_transaction_indexes: Vec<usize>,
     // A result that indicates whether transactions were successfully
     // committed into the Poh stream.
-    commit_transactions_result: Result<Vec<CommitTransactionDetails>, PohRecorderError>,
+    pub commit_transactions_result: Result<Vec<CommitTransactionDetails>, PohRecorderError>,
     execute_and_commit_timings: LeaderExecuteAndCommitTimings,
     error_counters: TransactionErrorMetrics,
 }
@@ -249,10 +248,9 @@ impl Consumer {
         slot_metrics_tracker
             .increment_retryable_packets_filtered_count(retryable_packets_filtered_count as u64);
 
-        inc_new_counter_info!(
-            "banking_stage-dropped_tx_before_forwarding",
-            retryable_packets_filtered_count
-        );
+        banking_stage_stats
+            .dropped_forward_packets_count
+            .fetch_add(retryable_packets_filtered_count, Ordering::Relaxed);
 
         process_transactions_summary.retryable_transaction_indexes =
             filtered_retryable_transaction_indexes;
@@ -289,7 +287,7 @@ impl Consumer {
         while chunk_start != transactions.len() {
             let chunk_end = std::cmp::min(
                 transactions.len(),
-                chunk_start + MAX_NUM_TRANSACTIONS_PER_BATCH,
+                chunk_start + TARGET_NUM_TRANSACTIONS_PER_BATCH,
             );
             let process_transaction_batch_output = self.process_and_record_transactions(
                 bank,
@@ -394,19 +392,70 @@ impl Consumer {
         txs: &[SanitizedTransaction],
         chunk_offset: usize,
     ) -> ProcessTransactionBatchOutput {
+        // No filtering before QoS - transactions should have been sanitized immediately prior to this call
+        let pre_results = std::iter::repeat(Ok(()));
+        self.process_and_record_transactions_with_pre_results(bank, txs, chunk_offset, pre_results)
+    }
+
+    pub fn process_and_record_aged_transactions(
+        &self,
+        bank: &Arc<Bank>,
+        txs: &[SanitizedTransaction],
+        max_slot_ages: &[Slot],
+    ) -> ProcessTransactionBatchOutput {
+        // Need to filter out transactions since they were sanitized earlier.
+        // This means that the transaction may cross and epoch boundary (not allowed),
+        //  or account lookup tables may have been closed.
+        let pre_results = txs.iter().zip(max_slot_ages).map(|(tx, max_slot_age)| {
+            if *max_slot_age < bank.slot() {
+                // Attempt re-sanitization after epoch-cross.
+                // Re-sanitized transaction should be equal to the original transaction,
+                // but whether it will pass sanitization needs to be checked.
+                let resanitized_tx =
+                    bank.fully_verify_transaction(tx.to_versioned_transaction())?;
+                if resanitized_tx != *tx {
+                    // Sanitization before/after epoch give different transaction data - do not execute.
+                    return Err(TransactionError::ResanitizationNeeded);
+                }
+            } else {
+                // Any transaction executed between sanitization time and now may have closed the lookup table(s).
+                // Above re-sanitization already loads addresses, so don't need to re-check in that case.
+                let lookup_tables = tx.message().message_address_table_lookups();
+                if !lookup_tables.is_empty() {
+                    bank.load_addresses(lookup_tables)?;
+                }
+            }
+            Ok(())
+        });
+        self.process_and_record_transactions_with_pre_results(bank, txs, 0, pre_results)
+    }
+
+    fn process_and_record_transactions_with_pre_results(
+        &self,
+        bank: &Arc<Bank>,
+        txs: &[SanitizedTransaction],
+        chunk_offset: usize,
+        pre_results: impl Iterator<Item = Result<(), TransactionError>>,
+    ) -> ProcessTransactionBatchOutput {
         let (
-            (transaction_costs, transactions_qos_results, cost_model_throttled_transactions_count),
+            (transaction_qos_cost_results, cost_model_throttled_transactions_count),
             cost_model_us,
-        ) = measure_us!(self
-            .qos_service
-            .select_and_accumulate_transaction_costs(bank, txs));
+        ) = measure_us!(self.qos_service.select_and_accumulate_transaction_costs(
+            bank,
+            txs,
+            pre_results
+        ));
 
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
-        let (batch, lock_us) = measure_us!(
-            bank.prepare_sanitized_batch_with_results(txs, transactions_qos_results.iter())
-        );
+        let (batch, lock_us) = measure_us!(bank.prepare_sanitized_batch_with_results(
+            txs,
+            transaction_qos_cost_results.iter().map(|r| match r {
+                Ok(_cost) => Ok(()),
+                Err(err) => Err(err.clone()),
+            })
+        ));
 
         // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit
         // WouldExceedMaxAccountCostLimit, WouldExceedMaxVoteCostLimit
@@ -424,12 +473,28 @@ impl Consumer {
             ..
         } = execute_and_commit_transactions_output;
 
-        QosService::update_or_remove_transaction_costs(
-            transaction_costs.iter(),
-            transactions_qos_results.iter(),
+        // Costs of all transactions are added to the cost_tracker before processing.
+        // To ensure accurate tracking of compute units, transactions that ultimately
+        // were not included in the block should have their cost removed.
+        QosService::remove_costs(
+            transaction_qos_cost_results.iter(),
             commit_transactions_result.as_ref().ok(),
             bank,
         );
+
+        // once feature `apply_cost_tracker_during_replay` is activated, leader shall no longer
+        // adjust block with executed cost (a behavior more inline with bankless leader), it
+        // should use requested, or default `compute_unit_limit` as transaction's execution cost.
+        if !bank
+            .feature_set
+            .is_active(&feature_set::apply_cost_tracker_during_replay::id())
+        {
+            QosService::update_costs(
+                transaction_qos_cost_results.iter(),
+                commit_transactions_result.as_ref().ok(),
+                bank,
+            );
+        }
 
         retryable_transaction_indexes
             .iter_mut()
@@ -520,13 +585,6 @@ impl Consumer {
         let (freeze_lock, freeze_lock_us) = measure_us!(bank.freeze_lock());
         execute_and_commit_timings.freeze_lock_us = freeze_lock_us;
 
-        if !executed_transactions.is_empty() {
-            inc_new_counter_info!("banking_stage-record_count", 1);
-            inc_new_counter_info!(
-                "banking_stage-record_transactions",
-                executed_transactions_count
-            );
-        }
         let (record_transactions_summary, record_us) = measure_us!(self
             .transaction_recorder
             .record_transactions(bank.slot(), executed_transactions));
@@ -543,12 +601,6 @@ impl Consumer {
         };
 
         if let Err(recorder_err) = record_transactions_result {
-            inc_new_counter_info!("banking_stage-max_height_reached", 1);
-            inc_new_counter_info!(
-                "banking_stage-max_height_reached_num_to_commit",
-                executed_transactions_count
-            );
-
             retryable_transaction_indexes.extend(execution_results.iter().enumerate().filter_map(
                 |(index, execution_result)| execution_result.was_executed().then_some(index),
             ));
@@ -676,13 +728,15 @@ impl Consumer {
 mod tests {
     use {
         super::*,
-        crate::{
-            banking_stage::tests::{create_slow_genesis_config, simulate_poh},
-            unprocessed_packet_batches::{self, UnprocessedPacketBatches},
+        crate::banking_stage::{
+            immutable_deserialized_packet::DeserializedPacketError,
+            tests::{create_slow_genesis_config, sanitize_transactions, simulate_poh},
+            unprocessed_packet_batches::{DeserializedPacket, UnprocessedPacketBatches},
             unprocessed_transaction_storage::ThreadType,
         },
         crossbeam_channel::{unbounded, Receiver},
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
+        solana_cost_model::cost_model::CostModel,
         solana_entry::entry::{next_entry, next_versioned_entry},
         solana_ledger::{
             blockstore::{entries_to_test_shreds, Blockstore},
@@ -691,6 +745,7 @@ mod tests {
             get_tmp_ledger_path_auto_delete,
             leader_schedule_cache::LeaderScheduleCache,
         },
+        solana_perf::packet::Packet,
         solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
         solana_program_runtime::timings::ProgramTiming,
         solana_rpc::transaction_status_service::TransactionStatusService,
@@ -718,12 +773,6 @@ mod tests {
         },
     };
 
-    fn sanitize_transactions(txs: Vec<Transaction>) -> Vec<SanitizedTransaction> {
-        txs.into_iter()
-            .map(SanitizedTransaction::from_transaction_for_tests)
-            .collect()
-    }
-
     fn execute_transactions_with_dummy_poh_service(
         bank: Arc<Bank>,
         transactions: Vec<Transaction>,
@@ -747,7 +796,7 @@ mod tests {
         let recorder = poh_recorder.new_recorder();
         let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
-        poh_recorder.write().unwrap().set_bank(&bank, false);
+        poh_recorder.write().unwrap().set_bank(bank.clone(), false);
 
         let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
@@ -855,6 +904,18 @@ mod tests {
         )
     }
 
+    fn transactions_to_deserialized_packets(
+        transactions: &[Transaction],
+    ) -> Result<Vec<DeserializedPacket>, DeserializedPacketError> {
+        transactions
+            .iter()
+            .map(|transaction| {
+                let packet = Packet::from_data(None, transaction)?;
+                DeserializedPacket::new(packet)
+            })
+            .collect()
+    }
+
     #[test]
     fn test_bank_process_and_record_transactions() {
         solana_logger::setup();
@@ -894,7 +955,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.write().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
             let committer = Committer::new(
                 None,
@@ -1021,7 +1082,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.write().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
             let committer = Committer::new(
                 None,
@@ -1063,13 +1124,27 @@ mod tests {
 
     #[test]
     fn test_bank_process_and_record_transactions_cost_tracker() {
+        for apply_cost_tracker_during_replay_enabled in [true, false] {
+            bank_process_and_record_transactions_cost_tracker(
+                apply_cost_tracker_during_replay_enabled,
+            );
+        }
+    }
+
+    fn bank_process_and_record_transactions_cost_tracker(
+        apply_cost_tracker_during_replay_enabled: bool,
+    ) {
         solana_logger::setup();
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
             ..
         } = create_slow_genesis_config(10_000);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let mut bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
+        if !apply_cost_tracker_during_replay_enabled {
+            bank.deactivate_feature(&feature_set::apply_cost_tracker_during_replay::id());
+        }
+        let bank = Arc::new(bank);
         let pubkey = solana_sdk::pubkey::new_rand();
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -1093,7 +1168,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.write().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
             let committer = Committer::new(
                 None,
@@ -1129,25 +1204,24 @@ mod tests {
             assert_eq!(executed_with_successful_result_count, 1);
             assert!(commit_transactions_result.is_ok());
 
-            let single_transfer_cost = get_block_cost();
-            assert_ne!(single_transfer_cost, 0);
+            let block_cost = get_block_cost();
+            assert_ne!(block_cost, 0);
             assert_eq!(get_tx_count(), 1);
 
-            //
-            // TEST: When a tx in a batch can't be executed (here because of account
-            // locks), then its cost does not affect the cost tracker.
-            //
-
+            // TEST: it's expected that the allocation will execute but the transfer will not
+            // because of a shared write-lock between mint_keypair. Ensure only the first transaction
+            // takes compute units in the block AND the apply_cost_tracker_during_replay_enabled feature
+            // is applied correctly
             let allocate_keypair = Keypair::new();
             let transactions = sanitize_transactions(vec![
-                system_transaction::transfer(&mint_keypair, &pubkey, 2, genesis_config.hash()),
-                // intentionally use a tx that has a different cost
                 system_transaction::allocate(
                     &mint_keypair,
                     &allocate_keypair,
                     genesis_config.hash(),
-                    1,
+                    100,
                 ),
+                // this one won't execute in process_and_record_transactions from shared account lock overlap
+                system_transaction::transfer(&mint_keypair, &pubkey, 2, genesis_config.hash()),
             ]);
 
             let process_transactions_batch_output =
@@ -1161,9 +1235,38 @@ mod tests {
             } = process_transactions_batch_output.execute_and_commit_transactions_output;
             assert_eq!(executed_with_successful_result_count, 1);
             assert!(commit_transactions_result.is_ok());
+
+            // first one should have been committed, second one not committed due to AccountInUse error during
+            // account locking
+            let commit_transactions_result = commit_transactions_result.unwrap();
+            assert_eq!(commit_transactions_result.len(), 2);
+            assert!(matches!(
+                commit_transactions_result.get(0).unwrap(),
+                CommitTransactionDetails::Committed { .. }
+            ));
+            assert!(matches!(
+                commit_transactions_result.get(1).unwrap(),
+                CommitTransactionDetails::NotCommitted
+            ));
             assert_eq!(retryable_transaction_indexes, vec![1]);
 
-            assert_eq!(get_block_cost(), 2 * single_transfer_cost);
+            let expected_block_cost = if !apply_cost_tracker_during_replay_enabled {
+                let actual_bpf_execution_cost = match commit_transactions_result.get(0).unwrap() {
+                    CommitTransactionDetails::Committed { compute_units } => *compute_units,
+                    CommitTransactionDetails::NotCommitted => {
+                        unreachable!()
+                    }
+                };
+
+                let mut cost = CostModel::calculate_cost(&transactions[0], &bank.feature_set);
+                cost.bpf_execution_cost = actual_bpf_execution_cost;
+
+                block_cost + cost.sum()
+            } else {
+                block_cost + CostModel::calculate_cost(&transactions[0], &bank.feature_set).sum()
+            };
+
+            assert_eq!(get_block_cost(), expected_block_cost);
             assert_eq!(get_tx_count(), 2);
 
             poh_recorder
@@ -1212,7 +1315,7 @@ mod tests {
             let recorder = poh_recorder.new_recorder();
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
-            poh_recorder.write().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
@@ -1276,7 +1379,7 @@ mod tests {
                 lamports + 1,
                 genesis_config.hash(),
             );
-            MAX_NUM_TRANSACTIONS_PER_BATCH
+            TARGET_NUM_TRANSACTIONS_PER_BATCH
         ];
 
         // Make one transaction that will succeed.
@@ -1334,7 +1437,7 @@ mod tests {
                 1,
                 genesis_config.hash()
             );
-            MAX_NUM_TRANSACTIONS_PER_BATCH
+            TARGET_NUM_TRANSACTIONS_PER_BATCH
         ];
 
         // Make one more in separate batch that also conflicts, but because it's in a separate batch, it
@@ -1512,7 +1615,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.write().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
 
             let shreds = entries_to_test_shreds(
                 &entries,
@@ -1533,7 +1636,7 @@ mod tests {
                 None,
                 blockstore.clone(),
                 false,
-                &Arc::new(AtomicBool::new(false)),
+                Arc::new(AtomicBool::new(false)),
             );
 
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
@@ -1619,7 +1722,6 @@ mod tests {
             MessageHash::Compute,
             Some(false),
             bank.as_ref(),
-            true, // require_static_program_ids
         )
         .unwrap();
 
@@ -1650,7 +1752,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.write().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
 
             let shreds = entries_to_test_shreds(
                 &entries,
@@ -1671,7 +1773,7 @@ mod tests {
                 None,
                 blockstore.clone(),
                 false,
-                &Arc::new(AtomicBool::new(false)),
+                Arc::new(AtomicBool::new(false)),
             );
 
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
@@ -1725,9 +1827,7 @@ mod tests {
                 setup_conflicting_transactions(ledger_path.path());
             let recorder = poh_recorder.read().unwrap().new_recorder();
             let num_conflicting_transactions = transactions.len();
-            let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
-                    .unwrap();
+            let deserialized_packets = transactions_to_deserialized_packets(&transactions).unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
@@ -1751,7 +1851,7 @@ mod tests {
             assert_eq!(buffered_packet_batches.len(), num_conflicting_transactions);
             // When the working bank in poh_recorder is Some, all packets should be processed.
             // Multi-Iterator will process them 1-by-1 if all txs are conflicting.
-            poh_recorder.write().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(bank, false);
             let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
             let banking_stage_stats = BankingStageStats::default();
             consumer.consume_buffered_packets(
@@ -1805,9 +1905,7 @@ mod tests {
                 .push(duplicate_account_key); // corrupt transaction
             let recorder = poh_recorder.read().unwrap().new_recorder();
             let num_conflicting_transactions = transactions.len();
-            let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
-                    .unwrap();
+            let deserialized_packets = transactions_to_deserialized_packets(&transactions).unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
@@ -1831,7 +1929,7 @@ mod tests {
             assert_eq!(buffered_packet_batches.len(), num_conflicting_transactions);
             // When the working bank in poh_recorder is Some, all packets should be processed.
             // Multi-Iterator will process them 1-by-1 if all txs are conflicting.
-            poh_recorder.write().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(bank, false);
             let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
             consumer.consume_buffered_packets(
                 &bank_start,
@@ -1858,9 +1956,7 @@ mod tests {
                 setup_conflicting_transactions(ledger_path.path());
             let recorder = poh_recorder.read().unwrap().new_recorder();
             let num_conflicting_transactions = transactions.len();
-            let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
-                    .unwrap();
+            let deserialized_packets = transactions_to_deserialized_packets(&transactions).unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let retryable_packet = deserialized_packets[0].clone();
             let mut buffered_packet_batches =
@@ -1886,7 +1982,7 @@ mod tests {
             // When the working bank in poh_recorder is Some, all packets should be processed
             // except except for retryable errors. Manually take the lock of a transaction to
             // simulate another thread processing a transaction with that lock.
-            poh_recorder.write().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(bank.clone(), false);
             let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
 
             let lock_account = transactions[0].message.account_keys[1];

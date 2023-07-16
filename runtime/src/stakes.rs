@@ -216,9 +216,8 @@ impl Stakes<StakeAccount> {
         F: Fn(&Pubkey) -> Option<AccountSharedData>,
     {
         let stake_delegations = stakes.stake_delegations.iter().map(|(pubkey, delegation)| {
-            let stake_account = match get_account(pubkey) {
-                None => return Err(Error::StakeAccountNotFound(*pubkey)),
-                Some(account) => account,
+            let Some(stake_account) = get_account(pubkey) else {
+                return Err(Error::StakeAccountNotFound(*pubkey));
             };
             let stake_account = StakeAccount::try_from(stake_account)?;
             // Sanity check that the delegation is consistent with what is
@@ -231,9 +230,8 @@ impl Stakes<StakeAccount> {
         });
         // Assert that cached vote accounts are consistent with accounts-db.
         for (pubkey, vote_account) in stakes.vote_accounts.iter() {
-            let account = match get_account(pubkey) {
-                None => return Err(Error::VoteAccountNotFound(*pubkey)),
-                Some(account) => account,
+            let Some(account) = get_account(pubkey) else {
+                return Err(Error::VoteAccountNotFound(*pubkey));
             };
             let vote_account = vote_account.account();
             if vote_account != &account {
@@ -250,9 +248,8 @@ impl Stakes<StakeAccount> {
             .filter(|voter_pubkey| stakes.vote_accounts.get(voter_pubkey).is_none())
             .collect();
         for pubkey in voter_pubkeys {
-            let account = match get_account(&pubkey) {
-                None => continue,
-                Some(account) => account,
+            let Some(account) = get_account(&pubkey) else {
+                continue;
             };
             if VoteStateVersions::is_correct_size_and_initialized(account.data())
                 && VoteAccount::try_from(account.clone()).is_ok()

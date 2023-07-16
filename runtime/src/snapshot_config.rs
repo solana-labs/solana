@@ -56,7 +56,7 @@ impl Default for SnapshotConfig {
             full_snapshot_archives_dir: PathBuf::default(),
             incremental_snapshot_archives_dir: PathBuf::default(),
             bank_snapshots_dir: PathBuf::default(),
-            archive_format: ArchiveFormat::TarBzip2,
+            archive_format: ArchiveFormat::TarZstd,
             snapshot_version: SnapshotVersion::default(),
             maximum_full_snapshot_archives_to_retain:
                 snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,

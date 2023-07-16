@@ -546,7 +546,7 @@ impl ClusterInfoStats {
     fn aggregate_by_feature_set(&self) -> HashMap<u32, FeatureSetStatsEntry> {
         let mut feature_set_map = HashMap::<u32, FeatureSetStatsEntry>::new();
         for ((feature_set, software_version), stats_entry) in &self.stats_map {
-            let mut map_entry = feature_set_map.entry(*feature_set).or_default();
+            let map_entry = feature_set_map.entry(*feature_set).or_default();
             map_entry.rpc_nodes_percent += stats_entry.rpc_percent;
             map_entry.stake_percent += stats_entry.stake_percent;
             map_entry.software_versions.push(software_version.clone());
@@ -562,7 +562,7 @@ impl ClusterInfoStats {
     fn aggregate_by_software_version(&self) -> HashMap<CliVersion, ClusterInfoStatsEntry> {
         let mut software_version_map = HashMap::<CliVersion, ClusterInfoStatsEntry>::new();
         for ((_feature_set, software_version), stats_entry) in &self.stats_map {
-            let mut map_entry = software_version_map
+            let map_entry = software_version_map
                 .entry(software_version.clone())
                 .or_default();
             map_entry.rpc_percent += stats_entry.rpc_percent;

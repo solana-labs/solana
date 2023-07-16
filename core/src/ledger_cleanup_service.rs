@@ -49,9 +49,8 @@ impl LedgerCleanupService {
         new_root_receiver: Receiver<Slot>,
         blockstore: Arc<Blockstore>,
         max_ledger_shreds: u64,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
-        let exit = exit.clone();
         let mut last_purge_slot = 0;
 
         info!(

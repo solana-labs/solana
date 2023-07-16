@@ -1,19 +1,24 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
 use {
-    crate::{cluster_nodes::check_feature_activation, serve_repair::ServeRepair},
-    crossbeam_channel::{unbounded, Sender},
+    crate::repair::serve_repair::ServeRepair,
+    bytes::Bytes,
+    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
+    itertools::Itertools,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::shred::{should_discard_shred, ShredFetchStats},
-    solana_perf::packet::{PacketBatch, PacketBatchRecycler, PacketFlags},
+    solana_perf::packet::{PacketBatch, PacketBatchRecycler, PacketFlags, PACKETS_PER_BATCH},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         feature_set,
+        packet::PACKET_DATA_SIZE,
+        pubkey::Pubkey,
     },
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
+    solana_turbine::cluster_nodes::check_feature_activation,
     std::{
-        net::UdpSocket,
+        net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -22,6 +27,8 @@ use {
         time::{Duration, Instant},
     },
 };
+
+const PACKET_COALESCE_DURATION: Duration = Duration::from_millis(1);
 
 pub(crate) struct ShredFetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -114,7 +121,7 @@ impl ShredFetchStage {
     #[allow(clippy::too_many_arguments)]
     fn packet_modifier(
         sockets: Vec<Arc<UdpSocket>>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         sender: Sender<PacketBatch>,
         recycler: PacketBatchRecycler,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -134,9 +141,9 @@ impl ShredFetchStage {
                     packet_sender.clone(),
                     recycler.clone(),
                     Arc::new(StreamerReceiveStats::new("packet_modifier")),
-                    Duration::from_millis(1), // coalesce
-                    true,
-                    None,
+                    PACKET_COALESCE_DURATION,
+                    true, // use_pinned_memory
+                    None, // in_vote_only_mode
                 )
             })
             .collect();
@@ -161,22 +168,23 @@ impl ShredFetchStage {
         (streamers, modifier_hdl)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         sockets: Vec<Arc<UdpSocket>>,
-        forward_sockets: Vec<Arc<UdpSocket>>,
+        quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
         repair_socket: Arc<UdpSocket>,
         sender: Sender<PacketBatch>,
         shred_version: u16,
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<ClusterInfo>,
         turbine_disabled: Arc<AtomicBool>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         let recycler = PacketBatchRecycler::warmed(100, 1024);
 
         let (mut tvu_threads, tvu_filter) = Self::packet_modifier(
             sockets,
-            exit,
+            exit.clone(),
             sender.clone(),
             recycler.clone(),
             bank_forks.clone(),
@@ -187,38 +195,47 @@ impl ShredFetchStage {
             turbine_disabled.clone(),
         );
 
-        let (tvu_forwards_threads, fwd_thread_hdl) = Self::packet_modifier(
-            forward_sockets,
-            exit,
+        let (repair_receiver, repair_handler) = Self::packet_modifier(
+            vec![repair_socket.clone()],
+            exit.clone(),
             sender.clone(),
             recycler.clone(),
             bank_forks.clone(),
             shred_version,
-            "shred_fetch_tvu_forwards",
-            PacketFlags::FORWARDED,
-            None, // repair_context
-            turbine_disabled.clone(),
-        );
-
-        let (repair_receiver, repair_handler) = Self::packet_modifier(
-            vec![repair_socket.clone()],
-            exit,
-            sender,
-            recycler,
-            bank_forks,
-            shred_version,
             "shred_fetch_repair",
             PacketFlags::REPAIR,
             Some((repair_socket, cluster_info)),
-            turbine_disabled,
+            turbine_disabled.clone(),
         );
 
-        tvu_threads.extend(tvu_forwards_threads.into_iter());
         tvu_threads.extend(repair_receiver.into_iter());
         tvu_threads.push(tvu_filter);
-        tvu_threads.push(fwd_thread_hdl);
         tvu_threads.push(repair_handler);
 
+        let (packet_sender, packet_receiver) = unbounded();
+        tvu_threads.extend([
+            Builder::new()
+                .name("solTvuRecvQuic".to_string())
+                .spawn(|| {
+                    receive_quic_datagrams(quic_endpoint_receiver, packet_sender, recycler, exit)
+                })
+                .unwrap(),
+            Builder::new()
+                .name("solTvuFetchQuic".to_string())
+                .spawn(move || {
+                    Self::modify_packets(
+                        packet_receiver,
+                        sender,
+                        &bank_forks,
+                        shred_version,
+                        "shred_fetch_quic",
+                        PacketFlags::empty(),
+                        None, // repair_context
+                        turbine_disabled,
+                    )
+                })
+                .unwrap(),
+        ]);
         Self {
             thread_hdls: tvu_threads,
         }
@@ -229,6 +246,48 @@ impl ShredFetchStage {
             thread_hdl.join()?;
         }
         Ok(())
+    }
+}
+
+fn receive_quic_datagrams(
+    quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
+    sender: Sender<PacketBatch>,
+    recycler: PacketBatchRecycler,
+    exit: Arc<AtomicBool>,
+) {
+    const RECV_TIMEOUT: Duration = Duration::from_secs(1);
+    while !exit.load(Ordering::Relaxed) {
+        let entry = match quic_endpoint_receiver.recv_timeout(RECV_TIMEOUT) {
+            Ok(entry) => entry,
+            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Disconnected) => return,
+        };
+        let mut packet_batch =
+            PacketBatch::new_with_recycler(&recycler, PACKETS_PER_BATCH, "receive_quic_datagrams");
+        unsafe {
+            packet_batch.set_len(PACKETS_PER_BATCH);
+        };
+        let deadline = Instant::now() + PACKET_COALESCE_DURATION;
+        let entries = std::iter::once(entry).chain(
+            std::iter::repeat_with(|| quic_endpoint_receiver.recv_deadline(deadline).ok())
+                .while_some(),
+        );
+        let size = entries
+            .filter(|(_, _, bytes)| bytes.len() <= PACKET_DATA_SIZE)
+            .zip(packet_batch.iter_mut())
+            .map(|((_pubkey, addr, bytes), packet)| {
+                packet.buffer_mut()[..bytes.len()].copy_from_slice(&bytes);
+                let meta = packet.meta_mut();
+                meta.size = bytes.len();
+                meta.set_socket_addr(&addr);
+            })
+            .count();
+        if size > 0 {
+            packet_batch.truncate(size);
+            if sender.send(packet_batch).is_err() {
+                return;
+            }
+        }
     }
 }
 

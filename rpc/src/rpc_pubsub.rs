@@ -607,6 +607,7 @@ mod tests {
             optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank, rpc_pubsub_service,
             rpc_subscriptions::RpcSubscriptions,
         },
+        base64::{prelude::BASE64_STANDARD, Engine},
         jsonrpc_core::{IoHandler, Response},
         serial_test::serial,
         solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding},
@@ -687,7 +688,7 @@ mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicBool::new(false)),
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks.clone(),
@@ -877,7 +878,7 @@ mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicBool::new(false)),
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks.clone(),
@@ -941,7 +942,7 @@ mod tests {
                    "value": {
                        "owner": stake_program_id.to_string(),
                        "lamports": balance,
-                       "data": [base64::encode(expected_data), encoding],
+                       "data": [BASE64_STANDARD.encode(expected_data), encoding],
                        "executable": false,
                        "rentEpoch": u64::MAX,
                        "space": expected_data.len(),
@@ -1005,7 +1006,7 @@ mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicBool::new(false)),
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks.clone(),
@@ -1144,7 +1145,7 @@ mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks.clone(),
@@ -1200,7 +1201,7 @@ mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks.clone(),
@@ -1238,7 +1239,7 @@ mod tests {
             slot: 2,
             root: 1,
             highest_confirmed_slot: 1,
-            highest_confirmed_root: 1,
+            highest_super_majority_root: 1,
         };
         subscriptions.notify_subscribers(commitment_slots);
         let expected = json!({
@@ -1355,7 +1356,7 @@ mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks,

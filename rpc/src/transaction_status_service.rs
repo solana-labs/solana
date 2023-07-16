@@ -6,7 +6,7 @@ use {
         blockstore::Blockstore,
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
-    solana_runtime::bank::{DurableNonceFee, TransactionExecutionDetails},
+    solana_runtime::transaction_results::{DurableNonceFee, TransactionExecutionDetails},
     solana_transaction_status::{
         extract_and_fmt_memos, InnerInstruction, InnerInstructions, Reward, TransactionStatusMeta,
     },
@@ -32,9 +32,8 @@ impl TransactionStatusService {
         transaction_notifier: Option<TransactionNotifierLock>,
         blockstore: Arc<Blockstore>,
         enable_extended_tx_metadata_storage: bool,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
-        let exit = exit.clone();
         let thread_hdl = Builder::new()
             .name("solTxStatusWrtr".to_string())
             .spawn(move || loop {
@@ -228,7 +227,8 @@ pub(crate) mod tests {
         solana_account_decoder::parse_token::token_amount_to_ui_amount,
         solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path},
         solana_runtime::{
-            bank::{Bank, NonceFull, NoncePartial, TransactionBalancesSet},
+            bank::{Bank, TransactionBalancesSet},
+            nonce_info::{NonceFull, NoncePartial},
             rent_debits::RentDebits,
         },
         solana_sdk::{
@@ -350,7 +350,6 @@ pub(crate) mod tests {
             MessageHash::Compute,
             None,
             SimpleAddressLoader::Disabled,
-            true, // require_static_program_ids
         )
         .unwrap();
 
@@ -442,7 +441,7 @@ pub(crate) mod tests {
             Some(test_notifier.clone()),
             blockstore,
             false,
-            &exit,
+            exit.clone(),
         );
 
         transaction_status_sender

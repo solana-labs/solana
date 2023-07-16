@@ -66,6 +66,7 @@ pub struct BankForks {
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
+    highest_slot_at_startup: Slot,
 }
 
 impl Index<u64> for BankForks {
@@ -182,10 +183,14 @@ impl BankForks {
             accounts_hash_interval_slots: std::u64::MAX,
             last_accounts_hash_slot: root,
             in_vote_only_mode: Arc::new(AtomicBool::new(false)),
+            highest_slot_at_startup: 0,
         }
     }
 
-    pub fn insert(&mut self, bank: Bank) -> Arc<Bank> {
+    pub fn insert(&mut self, mut bank: Bank) -> Arc<Bank> {
+        bank.check_program_modification_slot =
+            self.root.load(Ordering::Relaxed) < self.highest_slot_at_startup;
+
         let bank = Arc::new(bank);
         let prev = self.banks.insert(bank.slot(), bank.clone());
         assert!(prev.is_none());
@@ -195,6 +200,11 @@ impl BankForks {
             self.descendants.entry(parent).or_default().insert(slot);
         }
         bank
+    }
+
+    pub fn insert_from_ledger(&mut self, bank: Bank) -> Arc<Bank> {
+        self.highest_slot_at_startup = std::cmp::max(self.highest_slot_at_startup, bank.slot());
+        self.insert(bank)
     }
 
     pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
@@ -231,7 +241,7 @@ impl BankForks {
         &mut self,
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
-        highest_confirmed_root: Option<Slot>,
+        highest_super_majority_root: Option<Slot>,
     ) -> (Vec<Arc<Bank>>, SetRootMetrics) {
         let old_epoch = self.root_bank().epoch();
         // To support `RootBankCache` (via `ReadOnlyAtomicSlot`) accessing `root` *without* locking
@@ -370,7 +380,7 @@ impl BankForks {
         let accounts_data_len = root_bank.load_accounts_data_size() as i64;
         let mut prune_time = Measure::start("set_root::prune");
         let (removed_banks, prune_slots_ms, prune_remove_ms) =
-            self.prune_non_rooted(root, highest_confirmed_root);
+            self.prune_non_rooted(root, highest_super_majority_root);
         prune_time.stop();
         let dropped_banks_len = removed_banks.len();
 
@@ -401,7 +411,7 @@ impl BankForks {
         &mut self,
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
-        highest_confirmed_root: Option<Slot>,
+        highest_super_majority_root: Option<Slot>,
     ) -> Vec<Arc<Bank>> {
         let program_cache_prune_start = Instant::now();
         let root_bank = self
@@ -417,7 +427,7 @@ impl BankForks {
         let (removed_banks, set_root_metrics) = self.do_set_root_return_metrics(
             root,
             accounts_background_request_sender,
-            highest_confirmed_root,
+            highest_super_majority_root,
         );
         datapoint_info!(
             "bank-forks_set_root",
@@ -571,14 +581,14 @@ impl BankForks {
     fn prune_non_rooted(
         &mut self,
         root: Slot,
-        highest_confirmed_root: Option<Slot>,
+        highest_super_majority_root: Option<Slot>,
     ) -> (Vec<Arc<Bank>>, u64, u64) {
         // Clippy doesn't like separating the two collects below,
         // but we want to collect timing separately, and the 2nd requires
         // a unique borrow to self which is already borrowed by self.banks
         #![allow(clippy::needless_collect)]
         let mut prune_slots_time = Measure::start("prune_slots");
-        let highest_confirmed_root = highest_confirmed_root.unwrap_or(root);
+        let highest_super_majority_root = highest_super_majority_root.unwrap_or(root);
         let prune_slots: Vec<_> = self
             .banks
             .keys()
@@ -587,7 +597,7 @@ impl BankForks {
                 let keep = *slot == root
                     || self.descendants[&root].contains(slot)
                     || (*slot < root
-                        && *slot >= highest_confirmed_root
+                        && *slot >= highest_super_majority_root
                         && self.descendants[slot].contains(&root));
                 !keep
             })
@@ -928,7 +938,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bank_forks_with_highest_confirmed_root() {
+    fn test_bank_forks_with_highest_super_majority_root() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let mut banks = vec![Arc::new(Bank::new_for_tests(&genesis_config))];
         assert_eq!(banks[0].slot(), 0);

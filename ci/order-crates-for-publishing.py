@@ -21,6 +21,56 @@ def load_metadata():
     return json.loads(subprocess.Popen(
         cmd, shell=True, stdout=subprocess.PIPE).communicate()[0])
 
+# Consider a situation where a crate now wants to use already existing
+# developing-oriented library code for their integration tests and benchmarks,
+# like creating malformed data or omitting signature verifications. Ideally,
+# the code should have been guarded under the special feature
+# `dev-context-only-utils` to avoid accidental misuse for production code path.
+#
+# In this case, the feature needs to be defined then activated for the crate
+# itself. To that end, the crate actually needs to depend on itself as a
+# dev-dependency with `dev-context-only-utils` activated, so that the feature
+# is conditionally activated only for integration tests and benchmarks. In this
+# way, other crates won't see the feature activated even if they normal-depend
+# on the crate.
+#
+# This self-referencing dev-dependency can be thought of a variant of
+# dev-dependency cycles and it's well supported by cargo. The only exception is
+# when publishing. In general, cyclic dev-dependency doesn't work nicely with
+# publishing: https://github.com/rust-lang/cargo/issues/4242 .
+#
+# However, there's a work around supported by cargo. Namely, it will ignore and
+# strip these cyclic dev-dependencies when publishing, if explicit version
+# isn't specified: https://github.com/rust-lang/cargo/pull/7333 (Released in
+# rust 1.40.0: https://releases.rs/docs/1.40.0/#cargo )
+#
+# This script follows the same safe discarding logic to exclude these
+# special-cased dev dependencies from its `dependency_graph` and further
+# processing.
+def is_self_dev_dep_with_dev_context_only_utils(package, dependency, wrong_self_dev_dependencies):
+    no_explicit_version = '*'
+
+    is_special_cased = False
+    if (dependency['kind'] == 'dev' and
+        dependency['name'] == package['name'] and
+        'dev-context-only-utils' in dependency['features'] and
+        'path' in dependency):
+        is_special_cased = True
+        if dependency['req'] != no_explicit_version:
+            # it's likely `{ workspace = true, ... }` is used, which implicitly pulls the
+            # version in...
+            wrong_self_dev_dependencies.append(dependency)
+
+    return is_special_cased
+
+def should_add(package, dependency, wrong_self_dev_dependencies):
+    related_to_solana = dependency['name'].startswith('solana')
+    self_dev_dep_with_dev_context_only_utils = is_self_dev_dep_with_dev_context_only_utils(
+        package, dependency, wrong_self_dev_dependencies
+    )
+
+    return related_to_solana and not self_dev_dep_with_dev_context_only_utils
+
 def get_packages():
     metadata = load_metadata()
 
@@ -28,9 +78,13 @@ def get_packages():
 
     # Build dictionary of packages and their immediate solana-only dependencies
     dependency_graph = dict()
+    wrong_self_dev_dependencies = list()
+
     for pkg in metadata['packages']:
         manifest_path[pkg['name']] = pkg['manifest_path'];
-        dependency_graph[pkg['name']] = [x['name'] for x in pkg['dependencies'] if x['name'].startswith('solana')];
+        dependency_graph[pkg['name']] = [
+            x['name'] for x in pkg['dependencies'] if should_add(pkg, x, wrong_self_dev_dependencies)
+        ];
 
     # Check for direct circular dependencies
     circular_dependencies = set()
@@ -41,8 +95,13 @@ def get_packages():
 
     for dependency in circular_dependencies:
         sys.stderr.write('Error: Circular dependency: {}\n'.format(dependency))
+    for dependency in wrong_self_dev_dependencies:
+        sys.stderr.write('Error: wrong dev-context-only-utils circular dependency. try: ' +
+            '{} = {{ path = ".", features = {} }}\n'
+            .format(dependency['name'], json.dumps(dependency['features']))
+        )
 
-    if len(circular_dependencies) != 0:
+    if len(circular_dependencies) != 0 or len(wrong_self_dev_dependencies) != 0:
         sys.exit(1)
 
     # Order dependencies

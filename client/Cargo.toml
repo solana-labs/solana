@@ -23,7 +23,6 @@ rayon = { workspace = true }
 solana-connection-cache = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
-solana-net-utils = { workspace = true }
 solana-pubsub-client = { workspace = true }
 solana-quic-client = { workspace = true }
 solana-rpc-client = { workspace = true, features = ["default"] }

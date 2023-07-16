@@ -4,31 +4,28 @@
 use {
     crate::{
         banking_trace::BankingTracer,
-        broadcast_stage::RetransmitSlotsSender,
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
             GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver,
             VerifiedVoteReceiver, VoteTracker,
         },
-        cluster_slots::ClusterSlots,
-        cluster_slots_service::ClusterSlotsService,
+        cluster_slots_service::{cluster_slots::ClusterSlots, ClusterSlotsService},
         completed_data_sets_service::CompletedDataSetsSender,
+        consensus::tower_storage::TowerStorage,
         cost_update_service::CostUpdateService,
         drop_bank_service::DropBankService,
         ledger_cleanup_service::LedgerCleanupService,
-        repair_service::RepairInfo,
+        repair::repair_service::RepairInfo,
         replay_stage::{ReplayStage, ReplayStageConfig},
-        retransmit_stage::RetransmitStage,
         rewards_recorder_service::RewardsRecorderSender,
         shred_fetch_stage::ShredFetchStage,
-        sigverify_shreds,
-        tower_storage::TowerStorage,
         validator::ProcessBlockStore,
         voting_service::VotingService,
         warm_quic_cache_service::WarmQuicCacheService,
         window_service::WindowService,
     },
-    crossbeam_channel::{unbounded, Receiver},
+    bytes::Bytes,
+    crossbeam_channel::{unbounded, Receiver, Sender},
     solana_client::connection_cache::ConnectionCache,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::{
@@ -37,11 +34,11 @@ use {
     },
     solana_ledger::{
         blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
-        leader_schedule_cache::LeaderScheduleCache,
+        entry_notifier_service::EntryNotifierSender, leader_schedule_cache::LeaderScheduleCache,
     },
     solana_poh::poh_recorder::PohRecorder,
     solana_rpc::{
-        max_slots::MaxSlots, optimistically_confirmed_bank_tracker::BankNotificationSender,
+        max_slots::MaxSlots, optimistically_confirmed_bank_tracker::BankNotificationSenderConfig,
         rpc_subscriptions::RpcSubscriptions,
     },
     solana_runtime::{
@@ -50,12 +47,14 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
+    solana_turbine::retransmit_stage::RetransmitStage,
     std::{
         collections::HashSet,
-        net::UdpSocket,
+        net::{SocketAddr, UdpSocket},
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread::{self, JoinHandle},
     },
+    tokio::sync::mpsc::Sender as AsyncSender,
 };
 
 pub struct Tvu {
@@ -77,7 +76,6 @@ pub struct TvuSockets {
     pub fetch: Vec<UdpSocket>,
     pub repair: UdpSocket,
     pub retransmit: Vec<UdpSocket>,
-    pub forwards: Vec<UdpSocket>,
     pub ancestor_hashes_requests: UdpSocket,
 }
 
@@ -114,19 +112,20 @@ impl Tvu {
         maybe_process_block_store: Option<ProcessBlockStore>,
         tower_storage: Arc<dyn TowerStorage>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         turbine_disabled: Arc<AtomicBool>,
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         cache_block_meta_sender: Option<CacheBlockMetaSender>,
+        entry_notification_sender: Option<EntryNotifierSender>,
         vote_tracker: Arc<VoteTracker>,
-        retransmit_slots_sender: RetransmitSlotsSender,
+        retransmit_slots_sender: Sender<Slot>,
         gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
         verified_vote_receiver: VerifiedVoteReceiver,
         replay_vote_sender: ReplayVoteSender,
         completed_data_sets_sender: CompletedDataSetsSender,
-        bank_notification_sender: Option<BankNotificationSender>,
+        bank_notification_sender: Option<BankNotificationSenderConfig>,
         gossip_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
@@ -137,12 +136,13 @@ impl Tvu {
         connection_cache: &Arc<ConnectionCache>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         banking_tracer: Arc<BankingTracer>,
+        turbine_quic_endpoint_sender: AsyncSender<(SocketAddr, Bytes)>,
+        turbine_quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
             fetch: fetch_sockets,
             retransmit: retransmit_sockets,
-            forwards: tvu_forward_sockets,
             ancestor_hashes_requests: ancestor_hashes_socket,
         } = sockets;
 
@@ -151,23 +151,21 @@ impl Tvu {
         let repair_socket = Arc::new(repair_socket);
         let ancestor_hashes_socket = Arc::new(ancestor_hashes_socket);
         let fetch_sockets: Vec<Arc<UdpSocket>> = fetch_sockets.into_iter().map(Arc::new).collect();
-        let forward_sockets: Vec<Arc<UdpSocket>> =
-            tvu_forward_sockets.into_iter().map(Arc::new).collect();
         let fetch_stage = ShredFetchStage::new(
             fetch_sockets,
-            forward_sockets,
+            turbine_quic_endpoint_receiver,
             repair_socket.clone(),
             fetch_sender,
             tvu_config.shred_version,
             bank_forks.clone(),
             cluster_info.clone(),
             turbine_disabled,
-            exit,
+            exit.clone(),
         );
 
         let (verified_sender, verified_receiver) = unbounded();
         let (retransmit_sender, retransmit_receiver) = unbounded();
-        let shred_sigverify = sigverify_shreds::spawn_shred_sigverify(
+        let shred_sigverify = solana_turbine::sigverify_shreds::spawn_shred_sigverify(
             cluster_info.clone(),
             bank_forks.clone(),
             leader_schedule_cache.clone(),
@@ -181,23 +179,25 @@ impl Tvu {
             leader_schedule_cache.clone(),
             cluster_info.clone(),
             Arc::new(retransmit_sockets),
+            turbine_quic_endpoint_sender,
             retransmit_receiver,
             max_slots.clone(),
             Some(rpc_subscriptions.clone()),
         );
 
         let cluster_slots = Arc::new(ClusterSlots::default());
-        let (duplicate_slots_reset_sender, duplicate_slots_reset_receiver) = unbounded();
+        let (ancestor_duplicate_slots_sender, ancestor_duplicate_slots_receiver) = unbounded();
         let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
         let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
             unbounded();
         let (dumped_slots_sender, dumped_slots_receiver) = unbounded();
+        let (popular_pruned_forks_sender, popular_pruned_forks_receiver) = unbounded();
         let window_service = {
             let epoch_schedule = *bank_forks.read().unwrap().working_bank().epoch_schedule();
             let repair_info = RepairInfo {
                 bank_forks: bank_forks.clone(),
                 epoch_schedule,
-                duplicate_slots_reset_sender,
+                ancestor_duplicate_slots_sender,
                 repair_validators: tvu_config.repair_validators,
                 repair_whitelist: tvu_config.repair_whitelist,
                 cluster_info: cluster_info.clone(),
@@ -217,6 +217,7 @@ impl Tvu {
                 duplicate_slots_sender,
                 ancestor_hashes_replay_update_receiver,
                 dumped_slots_receiver,
+                popular_pruned_forks_sender,
             )
         };
 
@@ -243,6 +244,7 @@ impl Tvu {
             transaction_status_sender,
             rewards_recorder_sender,
             cache_block_meta_sender,
+            entry_notification_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
             ancestor_hashes_replay_update_sender,
@@ -257,7 +259,6 @@ impl Tvu {
             cluster_info.clone(),
             poh_recorder.clone(),
             tower_storage,
-            bank_forks.clone(),
         );
 
         let warm_quic_cache_service = if connection_cache.use_quic() {
@@ -289,7 +290,7 @@ impl Tvu {
             vote_tracker,
             cluster_slots,
             retransmit_slots_sender,
-            duplicate_slots_reset_receiver,
+            ancestor_duplicate_slots_receiver,
             replay_vote_sender,
             gossip_confirmed_slots_receiver,
             gossip_verified_vote_hash_receiver,
@@ -302,6 +303,7 @@ impl Tvu {
             prioritization_fee_cache.clone(),
             dumped_slots_sender,
             banking_tracer,
+            popular_pruned_forks_receiver,
         )?;
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -309,12 +311,12 @@ impl Tvu {
                 ledger_cleanup_slot_receiver,
                 blockstore.clone(),
                 max_ledger_shreds,
-                exit,
+                exit.clone(),
             )
         });
 
         let duplicate_shred_listener = DuplicateShredListener::new(
-            exit.clone(),
+            exit,
             cluster_info.clone(),
             DuplicateShredHandler::new(
                 blockstore,
@@ -364,6 +366,7 @@ impl Tvu {
 pub mod tests {
     use {
         super::*,
+        crate::consensus::tower_storage::FileTowerStorage,
         serial_test::serial,
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
@@ -394,12 +397,13 @@ pub mod tests {
 
         let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
 
+        let keypair = Arc::new(Keypair::new());
+        let (turbine_quic_endpoint_sender, _turbine_quic_endpoint_receiver) =
+            tokio::sync::mpsc::channel(/*capacity:*/ 128);
+        let (_turbine_quic_endpoint_sender, turbine_quic_endpoint_receiver) = unbounded();
         //start cluster_info1
-        let cluster_info1 = ClusterInfo::new(
-            target1.info.clone(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let cluster_info1 =
+            ClusterInfo::new(target1.info.clone(), keypair, SocketAddrSpace::Unspecified);
         cluster_info1.insert_info(leader.info);
         let cref1 = Arc::new(cluster_info1);
 
@@ -426,7 +430,7 @@ pub mod tests {
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
@@ -437,14 +441,13 @@ pub mod tests {
                     repair: target1.sockets.repair,
                     retransmit: target1.sockets.retransmit_sockets,
                     fetch: target1.sockets.tvu,
-                    forwards: target1.sockets.tvu_forwards,
                     ancestor_hashes_requests: target1.sockets.ancestor_hashes_requests,
                 }
             },
             blockstore,
             ledger_signal_receiver,
             &Arc::new(RpcSubscriptions::new_for_tests(
-                &exit,
+                exit.clone(),
                 max_complete_transaction_status_slot,
                 max_complete_rewards_slot,
                 bank_forks.clone(),
@@ -453,11 +456,12 @@ pub mod tests {
             )),
             &poh_recorder,
             None,
-            Arc::new(crate::tower_storage::FileTowerStorage::default()),
+            Arc::new(FileTowerStorage::default()),
             &leader_schedule_cache,
-            &exit,
+            exit.clone(),
             block_commitment_cache,
             Arc::<AtomicBool>::default(),
+            None,
             None,
             None,
             None,
@@ -475,9 +479,11 @@ pub mod tests {
             None,
             AbsRequestSender::default(),
             None,
-            &Arc::new(ConnectionCache::default()),
-            &_ignored_prioritization_fee_cache,
+            &Arc::new(ConnectionCache::new("connection_cache_test")),
+            &ignored_prioritization_fee_cache,
             BankingTracer::new_disabled(),
+            turbine_quic_endpoint_sender,
+            turbine_quic_endpoint_receiver,
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);

@@ -12,13 +12,15 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{Bank, BankFieldsToDeserialize, BankRc},
         blockhash_queue::BlockhashQueue,
-        builtins::Builtins,
+        builtins::BuiltinPrototype,
         epoch_accounts_hash::EpochAccountsHash,
         epoch_stakes::EpochStakes,
         rent_collector::RentCollector,
         runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
-        snapshot_utils::{self, StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION},
+        snapshot_utils::{
+            self, SnapshotError, StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
+        },
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
@@ -353,14 +355,14 @@ pub(crate) fn bank_from_streams<R>(
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
-    additional_builtins: Option<&Builtins>,
+    additional_builtins: Option<&[BuiltinPrototype]>,
     account_secondary_indexes: AccountSecondaryIndexes,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -400,7 +402,7 @@ where
             &SerializableBankAndStorage::<newer::Context> {
                 bank,
                 snapshot_storages,
-                phantom: std::marker::PhantomData::default(),
+                phantom: std::marker::PhantomData,
             },
         ),
     }
@@ -422,7 +424,7 @@ where
             &SerializableBankAndStorageNoExtra::<newer::Context> {
                 bank,
                 snapshot_storages,
-                phantom: std::marker::PhantomData::default(),
+                phantom: std::marker::PhantomData,
             },
         ),
     }
@@ -455,13 +457,14 @@ where
 /// write serialized bank to post file
 /// return true if pre file found
 pub fn reserialize_bank_with_new_accounts_hash(
-    bank_snapshots_dir: impl AsRef<Path>,
+    bank_snapshot_dir: impl AsRef<Path>,
     slot: Slot,
     accounts_hash: &AccountsHash,
     incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> bool {
-    let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
-    let bank_post = bank_post.join(snapshot_utils::get_snapshot_file_name(slot));
+    let bank_post = bank_snapshot_dir
+        .as_ref()
+        .join(snapshot_utils::get_snapshot_file_name(slot));
     let bank_pre = bank_post.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
     let mut found = false;
@@ -562,14 +565,14 @@ fn reconstruct_bank_from_fields<E>(
     account_paths: &[PathBuf],
     storage_and_next_append_vec_id: StorageAndNextAppendVecId,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
-    additional_builtins: Option<&Builtins>,
+    additional_builtins: Option<&[BuiltinPrototype]>,
     account_secondary_indexes: AccountSecondaryIndexes,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -625,7 +628,7 @@ pub(crate) fn reconstruct_single_storage(
     append_vec_path: &Path,
     current_len: usize,
     append_vec_id: AppendVecId,
-) -> io::Result<Arc<AccountStorageEntry>> {
+) -> Result<Arc<AccountStorageEntry>, SnapshotError> {
     let (accounts_file, num_accounts) = AccountsFile::new_from_file(append_vec_path, current_len)?;
     Ok(Arc::new(AccountStorageEntry::new_existing(
         *slot,
@@ -681,7 +684,7 @@ pub(crate) fn remap_and_reconstruct_single_storage(
     append_vec_path: &Path,
     next_append_vec_id: &AtomicAppendVecId,
     num_collisions: &AtomicUsize,
-) -> io::Result<Arc<AccountStorageEntry>> {
+) -> Result<Arc<AccountStorageEntry>, SnapshotError> {
     let (remapped_append_vec_id, remapped_append_vec_path) = remap_append_vec_file(
         slot,
         old_append_vec_id,
@@ -716,7 +719,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
     epoch_accounts_hash: Option<Hash>,
     capitalizations: (u64, Option<u64>),
     incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
@@ -744,15 +747,43 @@ where
     {
         let AccountsDbFields(_, _, slot, bank_hash_info, _, _) =
             &snapshot_accounts_db_fields.full_snapshot_accounts_db_fields;
-        let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
-            *slot,
-            bank_hash_info.accounts_hash.clone(),
-            capitalizations.0,
-        );
-        assert!(
-            old_accounts_hash.is_none(),
-            "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
-        );
+
+        if let Some(incremental_snapshot_persistence) = incremental_snapshot_persistence {
+            // If we've booted from local state that was originally intended to be an incremental
+            // snapshot, then we will use the incremental snapshot persistence field to set the
+            // initial accounts hashes in accounts db.
+            let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
+                incremental_snapshot_persistence.full_slot,
+                incremental_snapshot_persistence.full_hash.clone(),
+                incremental_snapshot_persistence.full_capitalization,
+            );
+            assert!(
+                old_accounts_hash.is_none(),
+                "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
+            );
+            let old_incremental_accounts_hash = accounts_db
+                .set_incremental_accounts_hash_from_snapshot(
+                    *slot,
+                    incremental_snapshot_persistence.incremental_hash.clone(),
+                    incremental_snapshot_persistence.incremental_capitalization,
+                );
+            assert!(
+                old_incremental_accounts_hash.is_none(),
+                "There should not already be an IncrementalAccountsHash at slot {slot}: {old_incremental_accounts_hash:?}",
+            );
+        } else {
+            // Otherwise, we've booted from a snapshot archive, or from local state that was *not*
+            // intended to be an incremental snapshot.
+            let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
+                *slot,
+                bank_hash_info.accounts_hash.clone(),
+                capitalizations.0,
+            );
+            assert!(
+                old_accounts_hash.is_none(),
+                "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
+            );
+        }
     }
 
     // Store the accounts hash & capitalization, from the incremental snapshot, in the new AccountsDb
@@ -817,8 +848,8 @@ where
         snapshot_version,
         snapshot_slot,
         snapshot_bank_hash_info,
-        snapshot_historical_roots,
-        snapshot_historical_roots_with_hash,
+        _snapshot_historical_roots,
+        _snapshot_historical_roots_with_hash,
     ) = snapshot_accounts_db_fields.collapse_into()?;
 
     // Ensure all account paths exist
@@ -826,12 +857,6 @@ where
         std::fs::create_dir_all(path)
             .unwrap_or_else(|err| panic!("Failed to create directory {}: {}", path.display(), err));
     }
-
-    reconstruct_historical_roots(
-        &accounts_db,
-        snapshot_historical_roots,
-        snapshot_historical_roots_with_hash,
-    );
 
     let StorageAndNextAppendVecId {
         storage,
@@ -912,26 +937,4 @@ where
         Arc::try_unwrap(accounts_db).unwrap(),
         ReconstructedAccountsDbInfo { accounts_data_len },
     ))
-}
-
-/// populate 'historical_roots' from 'snapshot_historical_roots' and 'snapshot_historical_roots_with_hash'
-fn reconstruct_historical_roots(
-    accounts_db: &AccountsDb,
-    mut snapshot_historical_roots: Vec<Slot>,
-    snapshot_historical_roots_with_hash: Vec<(Slot, Hash)>,
-) {
-    // inflate 'historical_roots'
-    // inserting into 'historical_roots' needs to be in order
-    // combine the slots into 1 vec, then sort
-    // dups are ok
-    snapshot_historical_roots.extend(
-        snapshot_historical_roots_with_hash
-            .into_iter()
-            .map(|(root, _)| root),
-    );
-    snapshot_historical_roots.sort_unstable();
-    let mut roots_tracker = accounts_db.accounts_index.roots_tracker.write().unwrap();
-    snapshot_historical_roots.into_iter().for_each(|root| {
-        roots_tracker.historical_roots.insert(root);
-    });
 }

@@ -1,5 +1,5 @@
 use {
-    crate::leader_slot_banking_stage_timing_metrics::LeaderExecuteAndCommitTimings,
+    super::leader_slot_timing_metrics::LeaderExecuteAndCommitTimings,
     itertools::Itertools,
     solana_ledger::{
         blockstore_processor::TransactionStatusSender, token_balances::collect_token_balances,
@@ -7,13 +7,11 @@ use {
     solana_measure::measure_us,
     solana_runtime::{
         accounts::TransactionLoadResult,
-        bank::{
-            Bank, CommitTransactionCounts, TransactionBalancesSet, TransactionExecutionResult,
-            TransactionResults,
-        },
+        bank::{Bank, CommitTransactionCounts, TransactionBalancesSet},
         bank_utils,
         prioritization_fee_cache::PrioritizationFeeCache,
         transaction_batch::TransactionBatch,
+        transaction_results::{TransactionExecutionResult, TransactionResults},
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{pubkey::Pubkey, saturating_add_assign},
@@ -74,11 +72,6 @@ impl Committer {
         executed_non_vote_transactions_count: usize,
         executed_with_successful_result_count: usize,
     ) -> (u64, Vec<CommitTransactionDetails>) {
-        inc_new_counter_info!(
-            "banking_stage-record_transactions_num_to_commit",
-            executed_transactions_count
-        );
-
         let (last_blockhash, lamports_per_signature) =
             bank.last_blockhash_and_lamports_per_signature();
 

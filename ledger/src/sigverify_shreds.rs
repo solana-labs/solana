@@ -34,27 +34,22 @@ pub fn verify_shred_cpu(
     if packet.meta().discard() {
         return false;
     }
-    let shred = match shred::layout::get_shred(packet) {
-        None => return false,
-        Some(shred) => shred,
+    let Some(shred) = shred::layout::get_shred(packet) else {
+        return false;
     };
-    let slot = match shred::layout::get_slot(shred) {
-        None => return false,
-        Some(slot) => slot,
+    let Some(slot) = shred::layout::get_slot(shred) else {
+        return false;
     };
     trace!("slot {}", slot);
-    let pubkey = match slot_leaders.get(&slot) {
-        None => return false,
-        Some(pubkey) => pubkey,
+    let Some(pubkey) = slot_leaders.get(&slot) else {
+        return false;
     };
-    let signature = match shred::layout::get_signature(shred) {
-        None => return false,
-        Some(signature) => signature,
+    let Some(signature) = shred::layout::get_signature(shred) else {
+        return false;
     };
     trace!("signature {}", signature);
-    let data = match shred::layout::get_signed_data(shred) {
-        None => return false,
-        Some(data) => data,
+    let Some(data) = shred::layout::get_signed_data(shred) else {
+        return false;
     };
     signature.verify(pubkey, data.as_ref())
 }
@@ -255,9 +250,8 @@ pub fn verify_shreds_gpu(
     slot_leaders: &HashMap<Slot, /*pubkey:*/ [u8; 32]>,
     recycler_cache: &RecyclerCache,
 ) -> Vec<Vec<u8>> {
-    let api = match perf_libs::api() {
-        None => return verify_shreds_cpu(thread_pool, batches, slot_leaders),
-        Some(api) => api,
+    let Some(api) = perf_libs::api() else {
+        return verify_shreds_cpu(thread_pool, batches, slot_leaders);
     };
     let (pubkeys, pubkey_offsets) =
         slot_key_data_for_gpu(thread_pool, batches, slot_leaders, recycler_cache);
@@ -378,9 +372,8 @@ pub fn sign_shreds_gpu(
     if packet_count < SIGN_SHRED_GPU_MIN || pinned_keypair.is_none() {
         return sign_shreds_cpu(thread_pool, keypair, batches);
     }
-    let api = match perf_libs::api() {
-        None => return sign_shreds_cpu(thread_pool, keypair, batches),
-        Some(api) => api,
+    let Some(api) = perf_libs::api() else {
+        return sign_shreds_cpu(thread_pool, keypair, batches);
     };
     let pinned_keypair = pinned_keypair.as_ref().unwrap();
 

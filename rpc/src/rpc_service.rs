@@ -349,6 +349,7 @@ impl JsonRpcService {
         genesis_hash: Hash,
         ledger_path: &Path,
         validator_exit: Arc<RwLock<Exit>>,
+        exit: Arc<AtomicBool>,
         known_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
         startup_verification_complete: Arc<AtomicBool>,
@@ -380,7 +381,7 @@ impl JsonRpcService {
 
         let tpu_address = cluster_info
             .my_contact_info()
-            .tpu()
+            .tpu(connection_cache.protocol())
             .map_err(|err| format!("{err}"))?;
 
         // sadly, some parts of our current rpc implemention block the jsonrpc's
@@ -476,7 +477,6 @@ impl JsonRpcService {
             prioritization_fee_cache,
         );
 
-        let exit = Arc::new(AtomicBool::new(false));
         let leader_info =
             poh_recorder.map(|recorder| ClusterTpuInfo::new(cluster_info.clone(), recorder));
         let _send_transaction_service = Arc::new(SendTransactionService::new_with_config(
@@ -486,7 +486,7 @@ impl JsonRpcService {
             receiver,
             &connection_cache,
             send_transaction_service_config,
-            exit.clone(),
+            exit,
         ));
 
         #[cfg(test)]
@@ -560,7 +560,6 @@ impl JsonRpcService {
             .unwrap()
             .register_exit(Box::new(move || {
                 close_handle_.close();
-                exit.store(true, Ordering::Relaxed);
             }));
         Ok(Self {
             thread_hdl,
@@ -576,7 +575,8 @@ impl JsonRpcService {
         }
     }
 
-    pub fn join(self) -> thread::Result<()> {
+    pub fn join(mut self) -> thread::Result<()> {
+        self.exit();
         self.thread_hdl.join()
     }
 }
@@ -615,7 +615,7 @@ mod tests {
             ..
         } = create_genesis_config(10_000);
         let exit = Arc::new(AtomicBool::new(false));
-        let validator_exit = create_validator_exit(&exit);
+        let validator_exit = create_validator_exit(exit.clone());
         let bank = Bank::new_for_tests(&genesis_config);
         let cluster_info = Arc::new(new_test_cluster_info());
         let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
@@ -629,7 +629,7 @@ mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let connection_cache = Arc::new(ConnectionCache::default());
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let mut rpc_service = JsonRpcService::new(
             rpc_addr,
             JsonRpcConfig::default(),
@@ -642,6 +642,7 @@ mod tests {
             Hash::default(),
             &PathBuf::from("farf"),
             validator_exit,
+            exit,
             None,
             Arc::new(AtomicBool::new(false)),
             Arc::new(AtomicBool::new(true)),

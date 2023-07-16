@@ -240,6 +240,12 @@ pub enum PubsubClientError {
 
     #[error("request error: {0}")]
     RequestError(String),
+
+    #[error("could not find subscription id: {0}")]
+    UnexpectedSubscriptionResponse(String),
+
+    #[error("could not find node version: {0}")]
+    UnexpectedGetVersionResponse(String),
 }
 
 type UnsubscribeFn = Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>;

@@ -29,14 +29,26 @@ use {
     std::sync::Arc,
 };
 
-fn next_epoch(bank: &Arc<Bank>) -> Arc<Bank> {
+/// get bank at next epoch + `n` slots
+fn next_epoch_and_n_slots(bank: &Arc<Bank>, mut n: usize) -> Arc<Bank> {
     bank.squash();
-
-    Arc::new(Bank::new_from_parent(
+    let mut bank = Arc::new(Bank::new_from_parent(
         bank,
         &Pubkey::default(),
         bank.get_slots_in_epoch(bank.epoch()) + bank.slot(),
-    ))
+    ));
+
+    while n > 0 {
+        bank.squash();
+        bank = Arc::new(Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            1 + bank.slot(),
+        ));
+        n -= 1;
+    }
+
+    bank
 }
 
 fn fill_epoch_with_votes(
@@ -304,7 +316,7 @@ fn test_stake_account_lifetime() {
 
     // Create Vote Account
     let message = Message::new(
-        &vote_instruction::create_account(
+        &vote_instruction::create_account_with_config(
             &mint_pubkey,
             &vote_pubkey,
             &VoteInit {
@@ -314,6 +326,10 @@ fn test_stake_account_lifetime() {
                 commission: 50,
             },
             vote_balance,
+            vote_instruction::CreateVoteAccountConfig {
+                space: VoteStateVersions::vote_state_size_of(true) as u64,
+                ..vote_instruction::CreateVoteAccountConfig::default()
+            },
         ),
         Some(&mint_pubkey),
     );
@@ -381,7 +397,7 @@ fn test_stake_account_lifetime() {
             break;
         }
         // Cycle thru banks until we're fully warmed up
-        bank = next_epoch(&bank);
+        bank = next_epoch_and_n_slots(&bank, 0);
     }
 
     // Reward redemption
@@ -404,8 +420,8 @@ fn test_stake_account_lifetime() {
     let pre_staked = get_staked(&bank, &stake_pubkey);
     let pre_balance = bank.get_balance(&stake_pubkey);
 
-    // next epoch bank should pay rewards
-    bank = next_epoch(&bank);
+    // next epoch bank plus one additional slot should pay rewards
+    bank = next_epoch_and_n_slots(&bank, 1);
 
     // Test that balance increased, and that the balance got staked
     let staked = get_staked(&bank, &stake_pubkey);
@@ -473,7 +489,8 @@ fn test_stake_account_lifetime() {
         .send_and_confirm_message(&[&mint_keypair, &stake_keypair], message)
         .is_err());
 
-    let mut bank = next_epoch(&bank);
+    let mut bank = next_epoch_and_n_slots(&bank, 1);
+
     let bank_client = BankClient::new_shared(&bank);
 
     // assert we're still cooling down
@@ -518,7 +535,7 @@ fn test_stake_account_lifetime() {
         if get_staked(&bank, &split_stake_pubkey) == 0 {
             break;
         }
-        bank = next_epoch(&bank);
+        bank = next_epoch_and_n_slots(&bank, 1);
     }
     let bank_client = BankClient::new_shared(&bank);
 
@@ -569,7 +586,7 @@ fn test_create_stake_account_from_seed() {
 
     // Create Vote Account
     let message = Message::new(
-        &vote_instruction::create_account(
+        &vote_instruction::create_account_with_config(
             &mint_pubkey,
             &vote_pubkey,
             &VoteInit {
@@ -579,6 +596,10 @@ fn test_create_stake_account_from_seed() {
                 commission: 50,
             },
             10,
+            vote_instruction::CreateVoteAccountConfig {
+                space: VoteStateVersions::vote_state_size_of(true) as u64,
+                ..vote_instruction::CreateVoteAccountConfig::default()
+            },
         ),
         Some(&mint_pubkey),
     );

@@ -46,7 +46,7 @@ pub(crate) mod tests {
         process_instructions(
             bank,
             &[from_account, vote_account, validator_identity_account],
-            &vote_instruction::create_account(
+            &vote_instruction::create_account_with_config(
                 &from_account.pubkey(),
                 &vote_pubkey,
                 &VoteInit {
@@ -56,6 +56,10 @@ pub(crate) mod tests {
                     commission: 0,
                 },
                 amount,
+                vote_instruction::CreateVoteAccountConfig {
+                    space: VoteStateVersions::vote_state_size_of(true) as u64,
+                    ..vote_instruction::CreateVoteAccountConfig::default()
+                },
             ),
         );
 

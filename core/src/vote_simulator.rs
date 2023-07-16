@@ -1,15 +1,17 @@
 use {
     crate::{
         cluster_info_vote_listener::VoteTracker,
-        cluster_slot_state_verifier::{
+        cluster_slots_service::cluster_slots::ClusterSlots,
+        consensus::{
+            fork_choice::SelectVoteAndResetForkResult,
+            heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+            latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
+            progress_map::{ForkProgress, ProgressMap},
+            Tower,
+        },
+        repair::cluster_slot_state_verifier::{
             DuplicateSlotsTracker, EpochSlotsFrozenSlots, GossipDuplicateConfirmedSlots,
         },
-        cluster_slots::ClusterSlots,
-        consensus::Tower,
-        fork_choice::SelectVoteAndResetForkResult,
-        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-        latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-        progress_map::{ForkProgress, ProgressMap},
         replay_stage::{HeaviestForkFailures, ReplayStage},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
     },

@@ -21,13 +21,20 @@ const MAX_CONNECTIONS: usize = 1024;
 /// Default connection pool size per remote address
 pub const DEFAULT_CONNECTION_POOL_SIZE: usize = 4;
 
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub enum Protocol {
+    UDP,
+    QUIC,
+}
+
 pub trait ConnectionManager {
     type ConnectionPool: ConnectionPool;
-    type NewConnectionConfig: NewConnectionConfig;
+    type NewConnectionConfig;
+
+    const PROTOCOL: Protocol;
 
     fn new_connection_pool(&self) -> Self::ConnectionPool;
     fn new_connection_config(&self) -> Self::NewConnectionConfig;
-    fn get_port_offset(&self) -> u16;
 }
 
 pub struct ConnectionCache<
@@ -35,6 +42,7 @@ pub struct ConnectionCache<
     S, // ConnectionManager
     T, // NewConnectionConfig
 > {
+    name: &'static str,
     map: RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ R>>,
     connection_manager: S,
     stats: Arc<ConnectionCacheStats>,
@@ -47,11 +55,15 @@ impl<P, M, C> ConnectionCache<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: NewConnectionConfig,
 {
-    pub fn new(connection_manager: M, connection_pool_size: usize) -> Result<Self, ClientError> {
+    pub fn new(
+        name: &'static str,
+        connection_manager: M,
+        connection_pool_size: usize,
+    ) -> Result<Self, ClientError> {
         let config = connection_manager.new_connection_config();
         Ok(Self::new_with_config(
+            name,
             connection_pool_size,
             config,
             connection_manager,
@@ -59,11 +71,13 @@ where
     }
 
     pub fn new_with_config(
+        name: &'static str,
         connection_pool_size: usize,
         connection_config: C,
         connection_manager: M,
     ) -> Self {
         Self {
+            name,
             map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
             stats: Arc::new(ConnectionCacheStats::default()),
             connection_manager,
@@ -150,14 +164,6 @@ where
         let map = self.map.read().unwrap();
         get_connection_map_lock_measure.stop();
 
-        let port_offset = self.connection_manager.get_port_offset();
-
-        let port = addr
-            .port()
-            .checked_add(port_offset)
-            .unwrap_or_else(|| addr.port());
-        let addr = SocketAddr::new(addr.ip(), port);
-
         let mut lock_timing_ms = get_connection_map_lock_measure.as_ms();
 
         let report_stats = self
@@ -171,12 +177,12 @@ where
             connection_cache_stats,
             num_evictions,
             eviction_timing_ms,
-        } = match map.get(&addr) {
+        } = match map.get(addr) {
             Some(pool) => {
                 if pool.need_new_connection(self.connection_pool_size) {
                     // create more connection and put it in the pool
                     drop(map);
-                    self.create_connection(&mut lock_timing_ms, &addr)
+                    self.create_connection(&mut lock_timing_ms, addr)
                 } else {
                     let connection = pool.borrow_connection();
                     CreateConnectionResult {
@@ -191,7 +197,7 @@ where
             None => {
                 // Upgrade to write access by dropping read lock and acquire write lock
                 drop(map);
-                self.create_connection(&mut lock_timing_ms, &addr)
+                self.create_connection(&mut lock_timing_ms, addr)
             }
         };
         get_connection_map_measure.stop();
@@ -228,7 +234,7 @@ where
         } = self.get_or_add_connection(addr);
 
         if report_stats {
-            connection_cache_stats.report();
+            connection_cache_stats.report(self.name);
         }
 
         if cache_hit {
@@ -293,12 +299,8 @@ pub enum ClientError {
     IoError(#[from] std::io::Error),
 }
 
-pub trait NewConnectionConfig: Sized {
-    fn new() -> Result<Self, ClientError>;
-}
-
 pub trait ConnectionPool {
-    type NewConnectionConfig: NewConnectionConfig;
+    type NewConnectionConfig;
     type BaseClientConnection: BaseClientConnection;
 
     /// Add a connection to the pool
@@ -384,8 +386,6 @@ mod tests {
         },
     };
 
-    const MOCK_PORT_OFFSET: u16 = 42;
-
     struct MockUdpPool {
         connections: Vec<Arc<MockUdp>>,
     }
@@ -436,7 +436,7 @@ mod tests {
         }
     }
 
-    impl NewConnectionConfig for MockUdpConfig {
+    impl MockUdpConfig {
         fn new() -> Result<Self, ClientError> {
             Ok(Self {
                 udp_socket: Arc::new(
@@ -487,6 +487,8 @@ mod tests {
         type ConnectionPool = MockUdpPool;
         type NewConnectionConfig = MockUdpConfig;
 
+        const PROTOCOL: Protocol = Protocol::QUIC;
+
         fn new_connection_pool(&self) -> Self::ConnectionPool {
             MockUdpPool {
                 connections: Vec::default(),
@@ -495,10 +497,6 @@ mod tests {
 
         fn new_connection_config(&self) -> Self::NewConnectionConfig {
             MockUdpConfig::new().unwrap()
-        }
-
-        fn get_port_offset(&self) -> u16 {
-            MOCK_PORT_OFFSET
         }
     }
 
@@ -560,9 +558,12 @@ mod tests {
         // be lazy and not connect until first use or handle connection errors somehow
         // (without crashing, as would be required in a real practical validator)
         let connection_manager = MockConnectionManager::default();
-        let connection_cache =
-            ConnectionCache::new(connection_manager, DEFAULT_CONNECTION_POOL_SIZE).unwrap();
-        let port_offset = MOCK_PORT_OFFSET;
+        let connection_cache = ConnectionCache::new(
+            "connection_cache_test",
+            connection_manager,
+            DEFAULT_CONNECTION_POOL_SIZE,
+        )
+        .unwrap();
         let addrs = (0..MAX_CONNECTIONS)
             .map(|_| {
                 let addr = get_addr(&mut rng);
@@ -573,13 +574,7 @@ mod tests {
         {
             let map = connection_cache.map.read().unwrap();
             assert!(map.len() == MAX_CONNECTIONS);
-            addrs.iter().for_each(|a| {
-                let port = a
-                    .port()
-                    .checked_add(port_offset)
-                    .unwrap_or_else(|| a.port());
-                let addr = &SocketAddr::new(a.ip(), port);
-
+            addrs.iter().for_each(|addr| {
                 let conn = &map.get(addr).expect("Address not found").get(0).unwrap();
                 let conn = conn.new_blocking_connection(*addr, connection_cache.stats.clone());
                 assert_eq!(
@@ -596,10 +591,7 @@ mod tests {
         let addr = &get_addr(&mut rng);
         connection_cache.get_connection(addr);
 
-        let port = addr
-            .port()
-            .checked_add(port_offset)
-            .unwrap_or_else(|| addr.port());
+        let port = addr.port();
         let addr_with_quic_port = SocketAddr::new(addr.ip(), port);
         let map = connection_cache.map.read().unwrap();
         assert!(map.len() == MAX_CONNECTIONS);
@@ -611,11 +603,11 @@ mod tests {
     // an invalid port.
     #[test]
     fn test_overflow_address() {
-        let port = u16::MAX - MOCK_PORT_OFFSET + 1;
-        assert!(port.checked_add(MOCK_PORT_OFFSET).is_none());
+        let port = u16::MAX;
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
         let connection_manager = MockConnectionManager::default();
-        let connection_cache = ConnectionCache::new(connection_manager, 1).unwrap();
+        let connection_cache =
+            ConnectionCache::new("connection_cache_test", connection_manager, 1).unwrap();
 
         let conn = connection_cache.get_connection(&addr);
         // We (intentionally) don't have an interface that allows us to distinguish between

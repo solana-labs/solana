@@ -9,6 +9,7 @@ use {
         },
         QuietDisplay, VerboseDisplay,
     },
+    base64::{prelude::BASE64_STANDARD, Engine},
     chrono::{Local, TimeZone},
     clap::ArgMatches,
     console::{style, Emoji},
@@ -58,7 +59,7 @@ static CHECK_MARK: Emoji = Emoji("✅ ", "");
 static CROSS_MARK: Emoji = Emoji("❌ ", "");
 static WARNING: Emoji = Emoji("⚠️", "!");
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OutputFormat {
     Display,
     Json,
@@ -225,12 +226,8 @@ impl fmt::Display for CliBlockProduction {
             f,
             "{}",
             style(format!(
-                "  {:<44}  {:>15}  {:>15}  {:>15}  {:>23}",
-                "Identity",
-                "Leader Slots",
-                "Blocks Produced",
-                "Skipped Slots",
-                "Skipped Slot Percentage",
+                "  {:<44}  {:>15}  {:>15}  {:>15}  {:>15}",
+                "Identity", "Leader Slots", "Blocks Produced", "Skipped Slots", "Skip Rate",
             ))
             .bold()
         )?;
@@ -1058,7 +1055,7 @@ fn show_votes_and_credits(
     }
 
     // Existence of this should guarantee the occurrence of vote truncation
-    let newest_history_entry = epoch_voting_history.iter().rev().next();
+    let newest_history_entry = epoch_voting_history.iter().next_back();
 
     writeln!(
         f,
@@ -2400,7 +2397,7 @@ pub fn return_signers_data(tx: &Transaction, config: &ReturnSignersConfig) -> Cl
         });
     let message = if config.dump_transaction_message {
         let message_data = tx.message_data();
-        Some(base64::encode(message_data))
+        Some(BASE64_STANDARD.encode(message_data))
     } else {
         None
     };
@@ -3055,7 +3052,7 @@ mod tests {
             }
 
             fn try_sign_message(&self, _message: &[u8]) -> Result<Signature, SignerError> {
-                Ok(Signature::new(&[1u8; 64]))
+                Ok(Signature::from([1u8; 64]))
             }
 
             fn is_interactive(&self) -> bool {

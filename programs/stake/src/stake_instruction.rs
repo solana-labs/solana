@@ -51,362 +51,358 @@ fn get_optional_pubkey<'a>(
     )
 }
 
-declare_process_instruction!(process_instruction, 750, |invoke_context| {
-    let transaction_context = &invoke_context.transaction_context;
-    let instruction_context = transaction_context.get_current_instruction_context()?;
-    let data = instruction_context.get_instruction_data();
+pub const DEFAULT_COMPUTE_UNITS: u64 = 750;
 
-    trace!("process_instruction: {:?}", data);
+declare_process_instruction!(
+    process_instruction,
+    DEFAULT_COMPUTE_UNITS,
+    |invoke_context| {
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context.get_current_instruction_context()?;
+        let data = instruction_context.get_instruction_data();
 
-    let get_stake_account = || {
-        let me = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        if *me.get_owner() != id() {
-            return Err(InstructionError::InvalidAccountOwner);
-        }
-        Ok(me)
-    };
+        trace!("process_instruction: {:?}", data);
 
-    let signers = instruction_context.get_signers(transaction_context)?;
-    match limited_deserialize(data) {
-        Ok(StakeInstruction::Initialize(authorized, lockup)) => {
-            let mut me = get_stake_account()?;
-            let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-            initialize(
-                &mut me,
-                &authorized,
-                &lockup,
-                &rent,
-                &invoke_context.feature_set,
-            )
-        }
-        Ok(StakeInstruction::Authorize(authorized_pubkey, stake_authorize)) => {
-            let mut me = get_stake_account()?;
-            let require_custodian_for_locked_stake_authorize = invoke_context
-                .feature_set
-                .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
-
-            if require_custodian_for_locked_stake_authorize {
-                let clock =
-                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-                instruction_context.check_number_of_instruction_accounts(3)?;
-                let custodian_pubkey =
-                    get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
-
-                authorize(
-                    &mut me,
-                    &signers,
-                    &authorized_pubkey,
-                    stake_authorize,
-                    require_custodian_for_locked_stake_authorize,
-                    &clock,
-                    custodian_pubkey,
-                )
-            } else {
-                authorize(
-                    &mut me,
-                    &signers,
-                    &authorized_pubkey,
-                    stake_authorize,
-                    require_custodian_for_locked_stake_authorize,
-                    &Clock::default(),
-                    None,
-                )
+        let get_stake_account = || {
+            let me = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+            if *me.get_owner() != id() {
+                return Err(InstructionError::InvalidAccountOwner);
             }
-        }
-        Ok(StakeInstruction::AuthorizeWithSeed(args)) => {
-            let mut me = get_stake_account()?;
-            instruction_context.check_number_of_instruction_accounts(2)?;
-            let require_custodian_for_locked_stake_authorize = invoke_context
-                .feature_set
-                .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
-            if require_custodian_for_locked_stake_authorize {
-                let clock =
-                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-                let custodian_pubkey =
-                    get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
+            Ok(me)
+        };
 
-                authorize_with_seed(
-                    transaction_context,
-                    instruction_context,
-                    &mut me,
-                    1,
-                    &args.authority_seed,
-                    &args.authority_owner,
-                    &args.new_authorized_pubkey,
-                    args.stake_authorize,
-                    require_custodian_for_locked_stake_authorize,
-                    &clock,
-                    custodian_pubkey,
-                )
-            } else {
-                authorize_with_seed(
-                    transaction_context,
-                    instruction_context,
-                    &mut me,
-                    1,
-                    &args.authority_seed,
-                    &args.authority_owner,
-                    &args.new_authorized_pubkey,
-                    args.stake_authorize,
-                    require_custodian_for_locked_stake_authorize,
-                    &Clock::default(),
-                    None,
-                )
-            }
-        }
-        Ok(StakeInstruction::DelegateStake) => {
-            let me = get_stake_account()?;
-            instruction_context.check_number_of_instruction_accounts(2)?;
-            let clock =
-                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-            let stake_history = get_sysvar_with_account_check::stake_history(
-                invoke_context,
-                instruction_context,
-                3,
-            )?;
-            instruction_context.check_number_of_instruction_accounts(5)?;
-            drop(me);
-            let config_account =
-                instruction_context.try_borrow_instruction_account(transaction_context, 4)?;
-            if !config::check_id(config_account.get_key()) {
-                return Err(InstructionError::InvalidArgument);
-            }
-            let config = config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
-            drop(config_account);
-            delegate(
-                invoke_context,
-                transaction_context,
-                instruction_context,
-                0,
-                1,
-                &clock,
-                &stake_history,
-                &config,
-                &signers,
-                &invoke_context.feature_set,
-            )
-        }
-        Ok(StakeInstruction::Split(lamports)) => {
-            let me = get_stake_account()?;
-            instruction_context.check_number_of_instruction_accounts(2)?;
-            drop(me);
-            split(
-                invoke_context,
-                transaction_context,
-                instruction_context,
-                0,
-                lamports,
-                1,
-                &signers,
-            )
-        }
-        Ok(StakeInstruction::Merge) => {
-            let me = get_stake_account()?;
-            instruction_context.check_number_of_instruction_accounts(2)?;
-            let clock =
-                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-            let stake_history = get_sysvar_with_account_check::stake_history(
-                invoke_context,
-                instruction_context,
-                3,
-            )?;
-            drop(me);
-            merge(
-                invoke_context,
-                transaction_context,
-                instruction_context,
-                0,
-                1,
-                &clock,
-                &stake_history,
-                &signers,
-            )
-        }
-        Ok(StakeInstruction::Withdraw(lamports)) => {
-            let me = get_stake_account()?;
-            instruction_context.check_number_of_instruction_accounts(2)?;
-            let clock =
-                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-            let stake_history = get_sysvar_with_account_check::stake_history(
-                invoke_context,
-                instruction_context,
-                3,
-            )?;
-            instruction_context.check_number_of_instruction_accounts(5)?;
-            drop(me);
-            withdraw(
-                transaction_context,
-                instruction_context,
-                0,
-                lamports,
-                1,
-                &clock,
-                &stake_history,
-                4,
-                if instruction_context.get_number_of_instruction_accounts() >= 6 {
-                    Some(5)
-                } else {
-                    None
-                },
-                &invoke_context.feature_set,
-            )
-        }
-        Ok(StakeInstruction::Deactivate) => {
-            let mut me = get_stake_account()?;
-            let clock =
-                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-            deactivate(&mut me, &clock, &signers)
-        }
-        Ok(StakeInstruction::SetLockup(lockup)) => {
-            let mut me = get_stake_account()?;
-            let clock = invoke_context.get_sysvar_cache().get_clock()?;
-            set_lockup(&mut me, &lockup, &signers, &clock)
-        }
-        Ok(StakeInstruction::InitializeChecked) => {
-            let mut me = get_stake_account()?;
-            if invoke_context
-                .feature_set
-                .is_active(&feature_set::vote_stake_checked_instructions::id())
-            {
-                instruction_context.check_number_of_instruction_accounts(4)?;
-                let staker_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_of_instruction_account_in_transaction(2)?,
-                )?;
-                let withdrawer_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_of_instruction_account_in_transaction(3)?,
-                )?;
-                if !instruction_context.is_instruction_account_signer(3)? {
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
-
-                let authorized = Authorized {
-                    staker: *staker_pubkey,
-                    withdrawer: *withdrawer_pubkey,
-                };
-
+        let signers = instruction_context.get_signers(transaction_context)?;
+        match limited_deserialize(data) {
+            Ok(StakeInstruction::Initialize(authorized, lockup)) => {
+                let mut me = get_stake_account()?;
                 let rent =
                     get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-                initialize(
-                    &mut me,
-                    &authorized,
-                    &Lockup::default(),
-                    &rent,
-                    &invoke_context.feature_set,
-                )
-            } else {
-                Err(InstructionError::InvalidInstructionData)
+                initialize(&mut me, &authorized, &lockup, &rent)
             }
-        }
-        Ok(StakeInstruction::AuthorizeChecked(stake_authorize)) => {
-            let mut me = get_stake_account()?;
-            if invoke_context
-                .feature_set
-                .is_active(&feature_set::vote_stake_checked_instructions::id())
-            {
-                let clock =
-                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-                instruction_context.check_number_of_instruction_accounts(4)?;
-                let authorized_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_of_instruction_account_in_transaction(3)?,
-                )?;
-                if !instruction_context.is_instruction_account_signer(3)? {
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
-                let custodian_pubkey =
-                    get_optional_pubkey(transaction_context, instruction_context, 4, false)?;
+            Ok(StakeInstruction::Authorize(authorized_pubkey, stake_authorize)) => {
+                let mut me = get_stake_account()?;
+                let require_custodian_for_locked_stake_authorize = invoke_context
+                    .feature_set
+                    .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
 
-                authorize(
-                    &mut me,
-                    &signers,
-                    authorized_pubkey,
-                    stake_authorize,
-                    true,
-                    &clock,
-                    custodian_pubkey,
-                )
-            } else {
-                Err(InstructionError::InvalidInstructionData)
+                if require_custodian_for_locked_stake_authorize {
+                    let clock = get_sysvar_with_account_check::clock(
+                        invoke_context,
+                        instruction_context,
+                        1,
+                    )?;
+                    instruction_context.check_number_of_instruction_accounts(3)?;
+                    let custodian_pubkey =
+                        get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
+
+                    authorize(
+                        &mut me,
+                        &signers,
+                        &authorized_pubkey,
+                        stake_authorize,
+                        require_custodian_for_locked_stake_authorize,
+                        &clock,
+                        custodian_pubkey,
+                    )
+                } else {
+                    authorize(
+                        &mut me,
+                        &signers,
+                        &authorized_pubkey,
+                        stake_authorize,
+                        require_custodian_for_locked_stake_authorize,
+                        &Clock::default(),
+                        None,
+                    )
+                }
             }
-        }
-        Ok(StakeInstruction::AuthorizeCheckedWithSeed(args)) => {
-            let mut me = get_stake_account()?;
-            if invoke_context
-                .feature_set
-                .is_active(&feature_set::vote_stake_checked_instructions::id())
-            {
+            Ok(StakeInstruction::AuthorizeWithSeed(args)) => {
+                let mut me = get_stake_account()?;
+                instruction_context.check_number_of_instruction_accounts(2)?;
+                let require_custodian_for_locked_stake_authorize = invoke_context
+                    .feature_set
+                    .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
+                if require_custodian_for_locked_stake_authorize {
+                    let clock = get_sysvar_with_account_check::clock(
+                        invoke_context,
+                        instruction_context,
+                        2,
+                    )?;
+                    let custodian_pubkey =
+                        get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
+
+                    authorize_with_seed(
+                        transaction_context,
+                        instruction_context,
+                        &mut me,
+                        1,
+                        &args.authority_seed,
+                        &args.authority_owner,
+                        &args.new_authorized_pubkey,
+                        args.stake_authorize,
+                        require_custodian_for_locked_stake_authorize,
+                        &clock,
+                        custodian_pubkey,
+                    )
+                } else {
+                    authorize_with_seed(
+                        transaction_context,
+                        instruction_context,
+                        &mut me,
+                        1,
+                        &args.authority_seed,
+                        &args.authority_owner,
+                        &args.new_authorized_pubkey,
+                        args.stake_authorize,
+                        require_custodian_for_locked_stake_authorize,
+                        &Clock::default(),
+                        None,
+                    )
+                }
+            }
+            Ok(StakeInstruction::DelegateStake) => {
+                let me = get_stake_account()?;
                 instruction_context.check_number_of_instruction_accounts(2)?;
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-                instruction_context.check_number_of_instruction_accounts(4)?;
-                let authorized_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_of_instruction_account_in_transaction(3)?,
+                let stake_history = get_sysvar_with_account_check::stake_history(
+                    invoke_context,
+                    instruction_context,
+                    3,
                 )?;
-                if !instruction_context.is_instruction_account_signer(3)? {
-                    return Err(InstructionError::MissingRequiredSignature);
+                instruction_context.check_number_of_instruction_accounts(5)?;
+                drop(me);
+                let config_account =
+                    instruction_context.try_borrow_instruction_account(transaction_context, 4)?;
+                if !config::check_id(config_account.get_key()) {
+                    return Err(InstructionError::InvalidArgument);
                 }
-                let custodian_pubkey =
-                    get_optional_pubkey(transaction_context, instruction_context, 4, false)?;
-
-                authorize_with_seed(
+                let config =
+                    config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
+                drop(config_account);
+                delegate(
+                    invoke_context,
                     transaction_context,
                     instruction_context,
-                    &mut me,
+                    0,
                     1,
-                    &args.authority_seed,
-                    &args.authority_owner,
-                    authorized_pubkey,
-                    args.stake_authorize,
-                    true,
                     &clock,
-                    custodian_pubkey,
+                    &stake_history,
+                    &config,
+                    &signers,
+                    &invoke_context.feature_set,
                 )
-            } else {
-                Err(InstructionError::InvalidInstructionData)
             }
-        }
-        Ok(StakeInstruction::SetLockupChecked(lockup_checked)) => {
-            let mut me = get_stake_account()?;
-            if invoke_context
-                .feature_set
-                .is_active(&feature_set::vote_stake_checked_instructions::id())
-            {
-                let custodian_pubkey =
-                    get_optional_pubkey(transaction_context, instruction_context, 2, true)?;
-
-                let lockup = LockupArgs {
-                    unix_timestamp: lockup_checked.unix_timestamp,
-                    epoch: lockup_checked.epoch,
-                    custodian: custodian_pubkey.cloned(),
-                };
+            Ok(StakeInstruction::Split(lamports)) => {
+                let me = get_stake_account()?;
+                instruction_context.check_number_of_instruction_accounts(2)?;
+                drop(me);
+                split(
+                    invoke_context,
+                    transaction_context,
+                    instruction_context,
+                    0,
+                    lamports,
+                    1,
+                    &signers,
+                )
+            }
+            Ok(StakeInstruction::Merge) => {
+                let me = get_stake_account()?;
+                instruction_context.check_number_of_instruction_accounts(2)?;
+                let clock =
+                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
+                let stake_history = get_sysvar_with_account_check::stake_history(
+                    invoke_context,
+                    instruction_context,
+                    3,
+                )?;
+                drop(me);
+                merge(
+                    invoke_context,
+                    transaction_context,
+                    instruction_context,
+                    0,
+                    1,
+                    &clock,
+                    &stake_history,
+                    &signers,
+                )
+            }
+            Ok(StakeInstruction::Withdraw(lamports)) => {
+                let me = get_stake_account()?;
+                instruction_context.check_number_of_instruction_accounts(2)?;
+                let clock =
+                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
+                let stake_history = get_sysvar_with_account_check::stake_history(
+                    invoke_context,
+                    instruction_context,
+                    3,
+                )?;
+                instruction_context.check_number_of_instruction_accounts(5)?;
+                drop(me);
+                withdraw(
+                    transaction_context,
+                    instruction_context,
+                    0,
+                    lamports,
+                    1,
+                    &clock,
+                    &stake_history,
+                    4,
+                    if instruction_context.get_number_of_instruction_accounts() >= 6 {
+                        Some(5)
+                    } else {
+                        None
+                    },
+                )
+            }
+            Ok(StakeInstruction::Deactivate) => {
+                let mut me = get_stake_account()?;
+                let clock =
+                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
+                deactivate(&mut me, &clock, &signers)
+            }
+            Ok(StakeInstruction::SetLockup(lockup)) => {
+                let mut me = get_stake_account()?;
                 let clock = invoke_context.get_sysvar_cache().get_clock()?;
                 set_lockup(&mut me, &lockup, &signers, &clock)
-            } else {
-                Err(InstructionError::InvalidInstructionData)
             }
-        }
-        Ok(StakeInstruction::GetMinimumDelegation) => {
-            let feature_set = invoke_context.feature_set.as_ref();
-            if !feature_set.is_active(
-                &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
-            ) {
-                // Retain previous behavior of always checking that the first account
-                // is a stake account until the feature is activated
-                let _ = get_stake_account()?;
-                return Err(InstructionError::InvalidInstructionData);
-            }
+            Ok(StakeInstruction::InitializeChecked) => {
+                let mut me = get_stake_account()?;
+                if invoke_context
+                    .feature_set
+                    .is_active(&feature_set::vote_stake_checked_instructions::id())
+                {
+                    instruction_context.check_number_of_instruction_accounts(4)?;
+                    let staker_pubkey = transaction_context.get_key_of_account_at_index(
+                        instruction_context.get_index_of_instruction_account_in_transaction(2)?,
+                    )?;
+                    let withdrawer_pubkey = transaction_context.get_key_of_account_at_index(
+                        instruction_context.get_index_of_instruction_account_in_transaction(3)?,
+                    )?;
+                    if !instruction_context.is_instruction_account_signer(3)? {
+                        return Err(InstructionError::MissingRequiredSignature);
+                    }
 
-            let minimum_delegation = crate::get_minimum_delegation(feature_set);
-            let minimum_delegation = Vec::from(minimum_delegation.to_le_bytes());
-            invoke_context
-                .transaction_context
-                .set_return_data(id(), minimum_delegation)
-        }
-        Ok(StakeInstruction::DeactivateDelinquent) => {
-            let mut me = get_stake_account()?;
-            if invoke_context
-                .feature_set
-                .is_active(&feature_set::stake_deactivate_delinquent_instruction::id())
-            {
+                    let authorized = Authorized {
+                        staker: *staker_pubkey,
+                        withdrawer: *withdrawer_pubkey,
+                    };
+
+                    let rent = get_sysvar_with_account_check::rent(
+                        invoke_context,
+                        instruction_context,
+                        1,
+                    )?;
+                    initialize(&mut me, &authorized, &Lockup::default(), &rent)
+                } else {
+                    Err(InstructionError::InvalidInstructionData)
+                }
+            }
+            Ok(StakeInstruction::AuthorizeChecked(stake_authorize)) => {
+                let mut me = get_stake_account()?;
+                if invoke_context
+                    .feature_set
+                    .is_active(&feature_set::vote_stake_checked_instructions::id())
+                {
+                    let clock = get_sysvar_with_account_check::clock(
+                        invoke_context,
+                        instruction_context,
+                        1,
+                    )?;
+                    instruction_context.check_number_of_instruction_accounts(4)?;
+                    let authorized_pubkey = transaction_context.get_key_of_account_at_index(
+                        instruction_context.get_index_of_instruction_account_in_transaction(3)?,
+                    )?;
+                    if !instruction_context.is_instruction_account_signer(3)? {
+                        return Err(InstructionError::MissingRequiredSignature);
+                    }
+                    let custodian_pubkey =
+                        get_optional_pubkey(transaction_context, instruction_context, 4, false)?;
+
+                    authorize(
+                        &mut me,
+                        &signers,
+                        authorized_pubkey,
+                        stake_authorize,
+                        true,
+                        &clock,
+                        custodian_pubkey,
+                    )
+                } else {
+                    Err(InstructionError::InvalidInstructionData)
+                }
+            }
+            Ok(StakeInstruction::AuthorizeCheckedWithSeed(args)) => {
+                let mut me = get_stake_account()?;
+                if invoke_context
+                    .feature_set
+                    .is_active(&feature_set::vote_stake_checked_instructions::id())
+                {
+                    instruction_context.check_number_of_instruction_accounts(2)?;
+                    let clock = get_sysvar_with_account_check::clock(
+                        invoke_context,
+                        instruction_context,
+                        2,
+                    )?;
+                    instruction_context.check_number_of_instruction_accounts(4)?;
+                    let authorized_pubkey = transaction_context.get_key_of_account_at_index(
+                        instruction_context.get_index_of_instruction_account_in_transaction(3)?,
+                    )?;
+                    if !instruction_context.is_instruction_account_signer(3)? {
+                        return Err(InstructionError::MissingRequiredSignature);
+                    }
+                    let custodian_pubkey =
+                        get_optional_pubkey(transaction_context, instruction_context, 4, false)?;
+
+                    authorize_with_seed(
+                        transaction_context,
+                        instruction_context,
+                        &mut me,
+                        1,
+                        &args.authority_seed,
+                        &args.authority_owner,
+                        authorized_pubkey,
+                        args.stake_authorize,
+                        true,
+                        &clock,
+                        custodian_pubkey,
+                    )
+                } else {
+                    Err(InstructionError::InvalidInstructionData)
+                }
+            }
+            Ok(StakeInstruction::SetLockupChecked(lockup_checked)) => {
+                let mut me = get_stake_account()?;
+                if invoke_context
+                    .feature_set
+                    .is_active(&feature_set::vote_stake_checked_instructions::id())
+                {
+                    let custodian_pubkey =
+                        get_optional_pubkey(transaction_context, instruction_context, 2, true)?;
+
+                    let lockup = LockupArgs {
+                        unix_timestamp: lockup_checked.unix_timestamp,
+                        epoch: lockup_checked.epoch,
+                        custodian: custodian_pubkey.cloned(),
+                    };
+                    let clock = invoke_context.get_sysvar_cache().get_clock()?;
+                    set_lockup(&mut me, &lockup, &signers, &clock)
+                } else {
+                    Err(InstructionError::InvalidInstructionData)
+                }
+            }
+            Ok(StakeInstruction::GetMinimumDelegation) => {
+                let feature_set = invoke_context.feature_set.as_ref();
+                let minimum_delegation = crate::get_minimum_delegation(feature_set);
+                let minimum_delegation = Vec::from(minimum_delegation.to_le_bytes());
+                invoke_context
+                    .transaction_context
+                    .set_return_data(id(), minimum_delegation)
+            }
+            Ok(StakeInstruction::DeactivateDelinquent) => {
+                let mut me = get_stake_account()?;
                 instruction_context.check_number_of_instruction_accounts(3)?;
 
                 let clock = invoke_context.get_sysvar_cache().get_clock()?;
@@ -418,64 +414,41 @@ declare_process_instruction!(process_instruction, 750, |invoke_context| {
                     2,
                     clock.epoch,
                 )
-            } else {
-                Err(InstructionError::InvalidInstructionData)
             }
-        }
-        Ok(StakeInstruction::Redelegate) => {
-            let mut me = get_stake_account()?;
-            if invoke_context
-                .feature_set
-                .is_active(&feature_set::stake_redelegate_instruction::id())
-            {
-                instruction_context.check_number_of_instruction_accounts(3)?;
-                let config_account =
-                    instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
-                if !config::check_id(config_account.get_key()) {
-                    return Err(InstructionError::InvalidArgument);
-                }
-                let config =
-                    config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
-                drop(config_account);
+            Ok(StakeInstruction::Redelegate) => {
+                let mut me = get_stake_account()?;
+                if invoke_context
+                    .feature_set
+                    .is_active(&feature_set::stake_redelegate_instruction::id())
+                {
+                    instruction_context.check_number_of_instruction_accounts(3)?;
+                    let config_account = instruction_context
+                        .try_borrow_instruction_account(transaction_context, 3)?;
+                    if !config::check_id(config_account.get_key()) {
+                        return Err(InstructionError::InvalidArgument);
+                    }
+                    let config =
+                        config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
+                    drop(config_account);
 
-                redelegate(
-                    invoke_context,
-                    transaction_context,
-                    instruction_context,
-                    &mut me,
-                    1,
-                    2,
-                    &config,
-                    &signers,
-                )
-            } else {
-                Err(InstructionError::InvalidInstructionData)
+                    redelegate(
+                        invoke_context,
+                        transaction_context,
+                        instruction_context,
+                        &mut me,
+                        1,
+                        2,
+                        &config,
+                        &signers,
+                    )
+                } else {
+                    Err(InstructionError::InvalidInstructionData)
+                }
             }
-        }
-        // In order to prevent consensus issues, any new StakeInstruction variant added before the
-        // `add_get_minimum_delegation_instruction_to_stake_program` is activated needs to check
-        // the validity of the stake account by calling the `get_stake_account()` method outside
-        // its own feature gate, as per the following pattern:
-        //  ```
-        //  Ok(StakeInstruction::Variant) -> {
-        //      let mut me = get_stake_account()?;
-        //      if invoke_context
-        //         .feature_set
-        //         .is_active(&feature_set::stake_variant_feature::id()) { .. }
-        //  }
-        // ```
-        // TODO: Remove this comment when `add_get_minimum_delegation_instruction_to_stake_program`
-        // is cleaned up
-        Err(err) => {
-            if !invoke_context.feature_set.is_active(
-                &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
-            ) {
-                let _ = get_stake_account()?;
-            }
-            Err(err)
+            Err(err) => Err(err),
         }
     }
-});
+);
 
 #[cfg(test)]
 mod tests {
@@ -516,12 +489,7 @@ mod tests {
             sysvar::{clock, rent, rewards, stake_history},
         },
         solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
-        std::{
-            borrow::{Borrow, BorrowMut},
-            collections::HashSet,
-            str::FromStr,
-            sync::Arc,
-        },
+        std::{collections::HashSet, str::FromStr, sync::Arc},
         test_case::test_case,
     };
 
@@ -536,16 +504,6 @@ mod tests {
         Arc::get_mut(&mut feature_set)
             .unwrap()
             .deactivate(&feature_set::stake_raise_minimum_delegation_to_1_sol::id());
-        feature_set
-    }
-
-    /// The "old old" behavior is both before the stake minimum delegation was raised *and* before
-    /// undelegated stake accounts could have zero lamports beyond rent
-    fn feature_set_old_old_behavior() -> Arc<FeatureSet> {
-        let mut feature_set = feature_set_old_behavior();
-        Arc::get_mut(&mut feature_set)
-            .unwrap()
-            .deactivate(&feature_set::stake_allow_zero_undelegated_amount::id());
         feature_set
     }
 
@@ -4484,17 +4442,9 @@ mod tests {
     /// 3. Deactives the delegation
     /// 4. Withdraws from the account such that the ending balance is *below* rent + minimum delegation
     /// 5. Re-delegates, now with less than the minimum delegation, but it still succeeds
-    //
-    // The "old old" behavior relies on `validate_delegated_amount()` *not* checking if the
-    // stake amount meets the minimum delegation.  Once the
-    // `stake_allow_zero_undelegated_amount` feature is activated, `the expected_result`
-    // parameter can be removed and consolidated.
-    #[test_case(feature_set_old_old_behavior(), Ok(()); "old_old_behavior")]
-    #[test_case(feature_set_new_behavior(), Err(StakeError::InsufficientDelegation.into()); "new_behavior")]
-    fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation(
-        feature_set: Arc<FeatureSet>,
-        expected_result: Result<(), InstructionError>,
-    ) {
+    #[test]
+    fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation() {
+        let feature_set = feature_set_new_behavior();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -4655,7 +4605,7 @@ mod tests {
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts,
             instruction_accounts,
-            expected_result,
+            Err(StakeError::InsufficientDelegation.into()),
         );
     }
 
@@ -6359,23 +6309,7 @@ mod tests {
     //
     // The GetMinimumDelegation instruction does not take any accounts; so when it was added,
     // `process_instruction()` needed to be updated to *not* need a stake account passed in, which
-    // changes the error *ordering* conditions.  These changes shall only occur when the
-    // `add_get_minimum_delegation_instruction_to_stake_program` feature is enabled, and this test
-    // ensures it.
-    //
-    // For the following combinations of the feature enabled/disabled, if the instruction is
-    // valid/invalid, and if a stake account is passed in or not, assert the result:
-    //
-    //  feature | instruction | account || result
-    // ---------+-------------+---------++--------
-    //  enabled | good        | some    || Ok
-    //  enabled | bad         | some    || Err InvalidInstructionData
-    //  enabled | good        | none    || Err NotEnoughAccountKeys
-    //  enabled | bad         | none    || Err InvalidInstructionData
-    // disabled | good        | some    || Ok
-    // disabled | bad         | some    || Err InvalidInstructionData
-    // disabled | good        | none    || Err NotEnoughAccountKeys
-    // disabled | bad         | none    || Err NotEnoughAccountKeys
+    // changes the error *ordering* conditions.
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
     fn test_stake_process_instruction_error_ordering(feature_set: Arc<FeatureSet>) {
@@ -6416,60 +6350,26 @@ mod tests {
         let bad_instruction_accounts = Vec::default();
         let bad_accounts = (bad_transaction_accounts, bad_instruction_accounts);
 
-        for (
-            is_feature_enabled,
-            instruction,
-            (transaction_accounts, instruction_accounts),
-            expected_result,
-        ) in [
-            (true, &good_instruction, &good_accounts, Ok(())),
+        for (instruction, (transaction_accounts, instruction_accounts), expected_result) in [
+            (&good_instruction, &good_accounts, Ok(())),
             (
-                true,
                 &bad_instruction,
                 &good_accounts,
                 Err(InstructionError::InvalidInstructionData),
             ),
             (
-                true,
                 &good_instruction,
                 &bad_accounts,
                 Err(InstructionError::NotEnoughAccountKeys),
             ),
             (
-                true,
                 &bad_instruction,
                 &bad_accounts,
                 Err(InstructionError::InvalidInstructionData),
-            ),
-            (false, &good_instruction, &good_accounts, Ok(())),
-            (
-                false,
-                &bad_instruction,
-                &good_accounts,
-                Err(InstructionError::InvalidInstructionData),
-            ),
-            (
-                false,
-                &good_instruction,
-                &bad_accounts,
-                Err(InstructionError::NotEnoughAccountKeys),
-            ),
-            (
-                false,
-                &bad_instruction,
-                &bad_accounts,
-                Err(InstructionError::NotEnoughAccountKeys),
             ),
         ] {
-            let mut feature_set = Arc::new(FeatureSet::clone(&feature_set));
-            if !is_feature_enabled {
-                Arc::get_mut(&mut feature_set).unwrap().deactivate(
-                    &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
-                );
-            }
-
             process_instruction(
-                feature_set,
+                feature_set.clone(),
                 &instruction.data,
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
@@ -6581,7 +6481,6 @@ mod tests {
             reference_vote_state.increment_credits(epoch as Epoch, 1);
         }
         reference_vote_account
-            .borrow_mut()
             .serialize_data(&VoteStateVersions::new_current(reference_vote_state))
             .unwrap();
 
@@ -6612,7 +6511,6 @@ mod tests {
             current_epoch - 1
         );
         reference_vote_account
-            .borrow_mut()
             .serialize_data(&VoteStateVersions::new_current(reference_vote_state))
             .unwrap();
 
@@ -6631,7 +6529,6 @@ mod tests {
             reference_vote_state.increment_credits(epoch, 1);
         }
         reference_vote_account
-            .borrow_mut()
             .serialize_data(&VoteStateVersions::new_current(reference_vote_state))
             .unwrap();
 
@@ -6919,9 +6816,7 @@ mod tests {
         );
 
         assert_eq!(output_accounts[0].lamports(), rent_exempt_reserve);
-        if let StakeState::Stake(meta, stake) =
-            output_accounts[0].borrow().deserialize_data().unwrap()
-        {
+        if let StakeState::Stake(meta, stake) = output_accounts[0].deserialize_data().unwrap() {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
             assert_eq!(
                 stake.delegation.stake,
@@ -6936,9 +6831,7 @@ mod tests {
             output_accounts[1].lamports(),
             minimum_delegation + rent_exempt_reserve
         );
-        if let StakeState::Stake(meta, stake) =
-            output_accounts[1].borrow().deserialize_data().unwrap()
-        {
+        if let StakeState::Stake(meta, stake) = output_accounts[1].deserialize_data().unwrap() {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
             assert_eq!(stake.delegation.stake, minimum_delegation);
             assert_eq!(stake.delegation.activation_epoch, current_epoch);
@@ -7081,9 +6974,7 @@ mod tests {
             output_accounts[1].lamports(),
             minimum_delegation + rent_exempt_reserve + 42
         );
-        if let StakeState::Stake(meta, stake) =
-            output_accounts[1].borrow().deserialize_data().unwrap()
-        {
+        if let StakeState::Stake(meta, stake) = output_accounts[1].deserialize_data().unwrap() {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
             assert_eq!(stake.delegation.stake, minimum_delegation + 42);
             assert_eq!(stake.delegation.activation_epoch, current_epoch);
@@ -7097,10 +6988,8 @@ mod tests {
         //
         let mut stake_account_over_allocated =
             prepare_stake_account(0 /*activation_epoch:*/, None);
-        if let StakeState::Stake(mut meta, stake) = stake_account_over_allocated
-            .borrow_mut()
-            .deserialize_data()
-            .unwrap()
+        if let StakeState::Stake(mut meta, stake) =
+            stake_account_over_allocated.deserialize_data().unwrap()
         {
             meta.rent_exempt_reserve += 42;
             stake_account_over_allocated
@@ -7127,9 +7016,7 @@ mod tests {
         );
 
         assert_eq!(output_accounts[0].lamports(), rent_exempt_reserve + 42);
-        if let StakeState::Stake(meta, _stake) =
-            output_accounts[0].borrow().deserialize_data().unwrap()
-        {
+        if let StakeState::Stake(meta, _stake) = output_accounts[0].deserialize_data().unwrap() {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve + 42);
         } else {
             panic!("Invalid output_accounts[0] data");
@@ -7138,9 +7025,7 @@ mod tests {
             output_accounts[1].lamports(),
             minimum_delegation + rent_exempt_reserve,
         );
-        if let StakeState::Stake(meta, stake) =
-            output_accounts[1].borrow().deserialize_data().unwrap()
-        {
+        if let StakeState::Stake(meta, stake) = output_accounts[1].deserialize_data().unwrap() {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
             assert_eq!(stake.delegation.stake, minimum_delegation);
         } else {
@@ -7278,10 +7163,8 @@ mod tests {
 
         let mut deactivating_stake_account =
             prepare_stake_account(0 /*activation_epoch:*/, None);
-        if let StakeState::Stake(meta, mut stake) = deactivating_stake_account
-            .borrow_mut()
-            .deserialize_data()
-            .unwrap()
+        if let StakeState::Stake(meta, mut stake) =
+            deactivating_stake_account.deserialize_data().unwrap()
         {
             stake.deactivate(current_epoch).unwrap();
             assert_eq!(
@@ -7315,10 +7198,8 @@ mod tests {
         //          (less than `minimum_delegation + rent_exempt_reserve`)
         //
         let mut stake_account_too_few_lamports = stake_account.clone();
-        if let StakeState::Stake(meta, mut stake) = stake_account_too_few_lamports
-            .borrow_mut()
-            .deserialize_data()
-            .unwrap()
+        if let StakeState::Stake(meta, mut stake) =
+            stake_account_too_few_lamports.deserialize_data().unwrap()
         {
             stake.delegation.stake -= 1;
             assert_eq!(

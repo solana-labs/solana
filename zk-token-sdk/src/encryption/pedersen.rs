@@ -3,6 +3,7 @@
 #[cfg(not(target_os = "solana"))]
 use rand::rngs::OsRng;
 use {
+    crate::{RISTRETTO_POINT_LEN, SCALAR_LEN},
     core::ops::{Add, Mul, Sub},
     curve25519_dalek::{
         constants::{RISTRETTO_BASEPOINT_COMPRESSED, RISTRETTO_BASEPOINT_POINT},
@@ -16,6 +17,12 @@ use {
     subtle::{Choice, ConstantTimeEq},
     zeroize::Zeroize,
 };
+
+/// Byte length of a Pedersen opening.
+const PEDERSEN_OPENING_LEN: usize = SCALAR_LEN;
+
+/// Byte length of a Pedersen commitment.
+pub(crate) const PEDERSEN_COMMITMENT_LEN: usize = RISTRETTO_POINT_LEN;
 
 lazy_static::lazy_static! {
     /// Pedersen base point for encoding messages to be committed.
@@ -46,9 +53,9 @@ impl Pedersen {
     ///
     /// This function is deterministic.
     #[allow(non_snake_case)]
-    pub fn with<T: Into<Scalar>>(amount: T, open: &PedersenOpening) -> PedersenCommitment {
+    pub fn with<T: Into<Scalar>>(amount: T, opening: &PedersenOpening) -> PedersenCommitment {
         let x: Scalar = amount.into();
-        let r = open.get_scalar();
+        let r = opening.get_scalar();
 
         PedersenCommitment(RistrettoPoint::multiscalar_mul(&[x, *r], &[*G, *H]))
     }
@@ -67,8 +74,12 @@ impl Pedersen {
 /// Instances of Pedersen openings are zeroized on drop.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Zeroize)]
 #[zeroize(drop)]
-pub struct PedersenOpening(pub(crate) Scalar);
+pub struct PedersenOpening(Scalar);
 impl PedersenOpening {
+    pub fn new(scalar: Scalar) -> Self {
+        Self(scalar)
+    }
+
     pub fn get_scalar(&self) -> &Scalar {
         &self.0
     }
@@ -78,11 +89,11 @@ impl PedersenOpening {
         PedersenOpening(Scalar::random(&mut OsRng))
     }
 
-    pub fn as_bytes(&self) -> &[u8; 32] {
+    pub fn as_bytes(&self) -> &[u8; PEDERSEN_OPENING_LEN] {
         self.0.as_bytes()
     }
 
-    pub fn to_bytes(&self) -> [u8; 32] {
+    pub fn to_bytes(&self) -> [u8; PEDERSEN_OPENING_LEN] {
         self.0.to_bytes()
     }
 
@@ -163,18 +174,22 @@ define_mul_variants!(
 
 /// Pedersen commitment type.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PedersenCommitment(pub(crate) RistrettoPoint);
+pub struct PedersenCommitment(RistrettoPoint);
 impl PedersenCommitment {
+    pub fn new(point: RistrettoPoint) -> Self {
+        Self(point)
+    }
+
     pub fn get_point(&self) -> &RistrettoPoint {
         &self.0
     }
 
-    pub fn to_bytes(&self) -> [u8; 32] {
+    pub fn to_bytes(&self) -> [u8; PEDERSEN_COMMITMENT_LEN] {
         self.0.compress().to_bytes()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<PedersenCommitment> {
-        if bytes.len() != 32 {
+        if bytes.len() != PEDERSEN_COMMITMENT_LEN {
             return None;
         }
 
@@ -246,58 +261,58 @@ mod tests {
 
     #[test]
     fn test_pedersen_homomorphic_addition() {
-        let amt_0: u64 = 77;
-        let amt_1: u64 = 57;
+        let amount_0: u64 = 77;
+        let amount_1: u64 = 57;
 
         let rng = &mut OsRng;
-        let open_0 = PedersenOpening(Scalar::random(rng));
-        let open_1 = PedersenOpening(Scalar::random(rng));
+        let opening_0 = PedersenOpening(Scalar::random(rng));
+        let opening_1 = PedersenOpening(Scalar::random(rng));
 
-        let comm_0 = Pedersen::with(amt_0, &open_0);
-        let comm_1 = Pedersen::with(amt_1, &open_1);
-        let comm_addition = Pedersen::with(amt_0 + amt_1, &(open_0 + open_1));
+        let commitment_0 = Pedersen::with(amount_0, &opening_0);
+        let commitment_1 = Pedersen::with(amount_1, &opening_1);
+        let commitment_addition = Pedersen::with(amount_0 + amount_1, &(opening_0 + opening_1));
 
-        assert_eq!(comm_addition, comm_0 + comm_1);
+        assert_eq!(commitment_addition, commitment_0 + commitment_1);
     }
 
     #[test]
     fn test_pedersen_homomorphic_subtraction() {
-        let amt_0: u64 = 77;
-        let amt_1: u64 = 57;
+        let amount_0: u64 = 77;
+        let amount_1: u64 = 57;
 
         let rng = &mut OsRng;
-        let open_0 = PedersenOpening(Scalar::random(rng));
-        let open_1 = PedersenOpening(Scalar::random(rng));
+        let opening_0 = PedersenOpening(Scalar::random(rng));
+        let opening_1 = PedersenOpening(Scalar::random(rng));
 
-        let comm_0 = Pedersen::with(amt_0, &open_0);
-        let comm_1 = Pedersen::with(amt_1, &open_1);
-        let comm_addition = Pedersen::with(amt_0 - amt_1, &(open_0 - open_1));
+        let commitment_0 = Pedersen::with(amount_0, &opening_0);
+        let commitment_1 = Pedersen::with(amount_1, &opening_1);
+        let commitment_addition = Pedersen::with(amount_0 - amount_1, &(opening_0 - opening_1));
 
-        assert_eq!(comm_addition, comm_0 - comm_1);
+        assert_eq!(commitment_addition, commitment_0 - commitment_1);
     }
 
     #[test]
     fn test_pedersen_homomorphic_multiplication() {
-        let amt_0: u64 = 77;
-        let amt_1: u64 = 57;
+        let amount_0: u64 = 77;
+        let amount_1: u64 = 57;
 
-        let (comm, open) = Pedersen::new(amt_0);
-        let scalar = Scalar::from(amt_1);
-        let comm_addition = Pedersen::with(amt_0 * amt_1, &(open * scalar));
+        let (commitment, opening) = Pedersen::new(amount_0);
+        let scalar = Scalar::from(amount_1);
+        let commitment_addition = Pedersen::with(amount_0 * amount_1, &(opening * scalar));
 
-        assert_eq!(comm_addition, comm * scalar);
-        assert_eq!(comm_addition, scalar * comm);
+        assert_eq!(commitment_addition, commitment * scalar);
+        assert_eq!(commitment_addition, scalar * commitment);
     }
 
     #[test]
     fn test_pedersen_commitment_bytes() {
-        let amt: u64 = 77;
-        let (comm, _) = Pedersen::new(amt);
+        let amount: u64 = 77;
+        let (commitment, _) = Pedersen::new(amount);
 
-        let encoded = comm.to_bytes();
+        let encoded = commitment.to_bytes();
         let decoded = PedersenCommitment::from_bytes(&encoded).unwrap();
 
-        assert_eq!(comm, decoded);
+        assert_eq!(commitment, decoded);
 
         // incorrect length encoding
         assert_eq!(PedersenCommitment::from_bytes(&[0; 33]), None);
@@ -305,12 +320,12 @@ mod tests {
 
     #[test]
     fn test_pedersen_opening_bytes() {
-        let open = PedersenOpening(Scalar::random(&mut OsRng));
+        let opening = PedersenOpening(Scalar::random(&mut OsRng));
 
-        let encoded = open.to_bytes();
+        let encoded = opening.to_bytes();
         let decoded = PedersenOpening::from_bytes(&encoded).unwrap();
 
-        assert_eq!(open, decoded);
+        assert_eq!(opening, decoded);
 
         // incorrect length encoding
         assert_eq!(PedersenOpening::from_bytes(&[0; 33]), None);
@@ -318,22 +333,22 @@ mod tests {
 
     #[test]
     fn test_serde_pedersen_commitment() {
-        let amt: u64 = 77;
-        let (comm, _) = Pedersen::new(amt);
+        let amount: u64 = 77;
+        let (commitment, _) = Pedersen::new(amount);
 
-        let encoded = bincode::serialize(&comm).unwrap();
+        let encoded = bincode::serialize(&commitment).unwrap();
         let decoded: PedersenCommitment = bincode::deserialize(&encoded).unwrap();
 
-        assert_eq!(comm, decoded);
+        assert_eq!(commitment, decoded);
     }
 
     #[test]
     fn test_serde_pedersen_opening() {
-        let open = PedersenOpening(Scalar::random(&mut OsRng));
+        let opening = PedersenOpening(Scalar::random(&mut OsRng));
 
-        let encoded = bincode::serialize(&open).unwrap();
+        let encoded = bincode::serialize(&opening).unwrap();
         let decoded: PedersenOpening = bincode::deserialize(&encoded).unwrap();
 
-        assert_eq!(open, decoded);
+        assert_eq!(opening, decoded);
     }
 }

@@ -10,7 +10,7 @@ use {
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
-    solana_bpf_loader_program::syscalls::create_loader,
+    solana_bpf_loader_program::syscalls::create_program_runtime_environment,
     solana_clap_utils::{
         self, hidden_unless_forced, input_parsers::*, input_validators::*, keypair::*,
     },
@@ -24,7 +24,10 @@ use {
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
-    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier, vm::VerifiedExecutable},
+    solana_rbpf::{
+        elf::Executable,
+        verifier::{RequisiteVerifier, TautologyVerifier},
+    },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
@@ -991,7 +994,7 @@ fn process_program_deploy(
         program_len * 2
     };
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
-        UpgradeableLoaderState::size_of_programdata(program_len),
+        UpgradeableLoaderState::size_of_programdata(programdata_len),
     )?;
 
     let result = if do_deploy {
@@ -2019,18 +2022,20 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
         .map_err(|err| format!("Unable to read program file: {err}"))?;
 
     // Verify the program
-    let loader = create_loader(
-        &FeatureSet::default(),
+    let program_runtime_environment = create_program_runtime_environment(
+        &FeatureSet::all_enabled(),
         &ComputeBudget::default(),
-        true,
         true,
         false,
     )
     .unwrap();
-    let executable = Executable::<InvokeContext>::from_elf(&program_data, loader)
-        .map_err(|err| format!("ELF error: {err}"))?;
+    let executable = Executable::<TautologyVerifier, InvokeContext>::from_elf(
+        &program_data,
+        Arc::new(program_runtime_environment),
+    )
+    .map_err(|err| format!("ELF error: {err}"))?;
 
-    let _ = VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
+    let _ = Executable::<RequisiteVerifier, InvokeContext>::verified(executable)
         .map_err(|err| format!("ELF error: {err}"))?;
 
     Ok(program_data)
@@ -2158,9 +2163,9 @@ fn send_deploy_messages(
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
             let connection_cache = if config.use_quic {
-                ConnectionCache::new(1)
+                ConnectionCache::new_quic("connection_cache_cli_program_quic", 1)
             } else {
-                ConnectionCache::with_udp(1)
+                ConnectionCache::with_udp("connection_cache_cli_program_udp", 1)
             };
             let transaction_errors = match connection_cache {
                 ConnectionCache::Udp(cache) => TpuClient::new_with_connection_cache(

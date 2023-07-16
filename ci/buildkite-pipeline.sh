@@ -140,7 +140,9 @@ wait_step() {
 }
 
 all_test_steps() {
-  command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20 check
+  command_step checks1 ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20 check
+  command_step checks2 ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-dev-context-only-utils.sh check-bins" 15 check
+  command_step checks3 ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-dev-context-only-utils.sh check-all-targets" 15 check
   wait_step
 
   # Full test suite
@@ -264,27 +266,11 @@ EOF
              ^ci/test-coverage.sh \
              ^ci/test-bench.sh \
       ; then
-    command_step bench "ci/test-bench.sh" 40
+    .buildkite/scripts/build-bench.sh >> "$output_file"
   else
     annotate --style info --context test-bench \
       "Bench skipped as no .rs files were modified"
   fi
-
-  command_step "local-cluster" \
-    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster.sh" \
-    40
-
-  command_step "local-cluster-flakey" \
-    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-flakey.sh" \
-    10
-
-  command_step "local-cluster-slow-1" \
-    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow-1.sh" \
-    40
-
-  command_step "local-cluster-slow-2" \
-    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow-2.sh" \
-    40
 
   # Coverage...
   if affects \
@@ -307,14 +293,17 @@ pull_or_push_steps() {
   wait_step
 
   # Check for any .sh file changes
-  if affects .sh$; then
+  if affects \
+              .sh$ \
+              ^.buildkite/hooks \
+      ; then
     command_step shellcheck "ci/shellcheck.sh" 5 check
     wait_step
   fi
 
   # Version bump PRs are an edge case that can skip most of the CI steps
   if affects .toml$ && affects .lock$ && ! affects_other_than .toml$ .lock$; then
-    optional_old_version_number=$(git diff "$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD validator/Cargo.toml | \
+    optional_old_version_number=$(git diff origin/"$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD validator/Cargo.toml | \
       grep -e "^-version" | sed  's/-version = "\(.*\)"/\1/')
     echo "optional_old_version_number: ->$optional_old_version_number<-"
     new_version_number=$(grep -e  "^version = " validator/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
@@ -324,7 +313,7 @@ pull_or_push_steps() {
     # lines that don't match. Any diff that produces output here is not a version bump.
     # | cat is a no-op. If this pull request is a version bump then grep will output no lines and have an exit code of 1.
     # Piping the output to cat prevents that non-zero exit code from exiting this script
-    diff_other_than_version_bump=$(git diff "$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD | \
+    diff_other_than_version_bump=$(git diff origin/"$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD | \
       grep -vE "^ |^@@ |^--- |^\+\+\+ |^index |^diff |^-( \")?solana.*$optional_old_version_number|^\+( \")?solana.*$new_version_number|^-version|^\+version"|cat)
     echo "diff_other_than_version_bump: ->$diff_other_than_version_bump<-"
 
@@ -337,7 +326,7 @@ pull_or_push_steps() {
 
   # Run the full test suite by default, skipping only if modifications are local
   # to some particular areas of the tree
-  if affects_other_than ^.buildkite ^.mergify .md$ ^docs/ ^.gitbook; then
+  if affects_other_than ^.mergify .md$ ^docs/ ^.gitbook; then
     all_test_steps
   fi
 

@@ -40,7 +40,7 @@ impl CompiledKeys {
     pub(crate) fn compile(instructions: &[Instruction], payer: Option<Pubkey>) -> Self {
         let mut key_meta_map = BTreeMap::<Pubkey, CompiledKeyMeta>::new();
         for ix in instructions {
-            let mut meta = key_meta_map.entry(ix.program_id).or_default();
+            let meta = key_meta_map.entry(ix.program_id).or_default();
             meta.is_invoked = true;
             for account_meta in &ix.accounts {
                 let meta = key_meta_map.entry(account_meta.pubkey).or_default();
@@ -49,7 +49,7 @@ impl CompiledKeys {
             }
         }
         if let Some(payer) = &payer {
-            let mut meta = key_meta_map.entry(*payer).or_default();
+            let meta = key_meta_map.entry(*payer).or_default();
             meta.is_signer = true;
             meta.is_writable = true;
         }

@@ -17,7 +17,7 @@
 #![cfg(not(target_os = "solana"))]
 
 use {
-    crate::encryption::errors::DiscreteLogError,
+    crate::RISTRETTO_POINT_LEN,
     curve25519_dalek::{
         constants::RISTRETTO_BASEPOINT_POINT as G,
         ristretto::RistrettoPoint,
@@ -27,10 +27,22 @@ use {
     itertools::Itertools,
     serde::{Deserialize, Serialize},
     std::{collections::HashMap, thread},
+    thiserror::Error,
 };
 
 const TWO16: u64 = 65536; // 2^16
 const TWO17: u64 = 131072; // 2^17
+
+/// Maximum number of threads permitted for discrete log computation
+const MAX_THREAD: usize = 65536;
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum DiscreteLogError {
+    #[error("discrete log number of threads not power-of-two")]
+    DiscreteLogThreads,
+    #[error("discrete log batch size too large")]
+    DiscreteLogBatchSize,
+}
 
 /// Type that captures a discrete log challenge.
 ///
@@ -53,7 +65,7 @@ pub struct DiscreteLog {
 }
 
 #[derive(Serialize, Deserialize, Default)]
-pub struct DecodePrecomputation(HashMap<[u8; 32], u16>);
+pub struct DecodePrecomputation(HashMap<[u8; RISTRETTO_POINT_LEN], u16>);
 
 /// Builds a HashMap of 2^16 elements
 #[allow(dead_code)]
@@ -102,7 +114,7 @@ impl DiscreteLog {
     /// Adjusts number of threads in a discrete log instance.
     pub fn num_threads(&mut self, num_threads: usize) -> Result<(), DiscreteLogError> {
         // number of threads must be a positive power-of-two integer
-        if num_threads == 0 || (num_threads & (num_threads - 1)) != 0 || num_threads > 65536 {
+        if num_threads == 0 || (num_threads & (num_threads - 1)) != 0 || num_threads > MAX_THREAD {
             return Err(DiscreteLogError::DiscreteLogThreads);
         }
 

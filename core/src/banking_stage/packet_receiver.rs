@@ -1,17 +1,20 @@
 use {
-    super::BankingStageStats,
-    crate::{
-        banking_trace::BankingPacketReceiver,
+    super::{
         immutable_deserialized_packet::ImmutableDeserializedPacket,
-        leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
+        leader_slot_metrics::LeaderSlotMetricsTracker,
         packet_deserializer::{PacketDeserializer, ReceivePacketResults},
-        tracer_packet_stats::TracerPacketStats,
         unprocessed_transaction_storage::UnprocessedTransactionStorage,
+        BankingStageStats,
     },
+    crate::{banking_trace::BankingPacketReceiver, tracer_packet_stats::TracerPacketStats},
     crossbeam_channel::RecvTimeoutError,
     solana_measure::{measure::Measure, measure_us},
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::{saturating_add_assign, timing::timestamp},
-    std::{sync::atomic::Ordering, time::Duration},
+    std::{
+        sync::{atomic::Ordering, Arc, RwLock},
+        time::Duration,
+    },
 };
 
 pub struct PacketReceiver {
@@ -20,10 +23,14 @@ pub struct PacketReceiver {
 }
 
 impl PacketReceiver {
-    pub fn new(id: u32, banking_packet_receiver: BankingPacketReceiver) -> Self {
+    pub fn new(
+        id: u32,
+        banking_packet_receiver: BankingPacketReceiver,
+        bank_forks: Arc<RwLock<BankForks>>,
+    ) -> Self {
         Self {
             id,
-            packet_deserializer: PacketDeserializer::new(banking_packet_receiver),
+            packet_deserializer: PacketDeserializer::new(banking_packet_receiver, bank_forks),
         }
     }
 

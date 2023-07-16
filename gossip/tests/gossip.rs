@@ -6,9 +6,9 @@ use {
     rayon::iter::*,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
+        contact_info::{LegacyContactInfo as ContactInfo, Protocol},
         crds::Cursor,
         gossip_service::GossipService,
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_perf::packet::Packet,
     solana_runtime::bank_forks::BankForks,
@@ -35,7 +35,7 @@ use {
     },
 };
 
-fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSocket) {
+fn test_node(exit: Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSocket) {
     let keypair = Arc::new(Keypair::new());
     let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
     let cluster_info = Arc::new(ClusterInfo::new(
@@ -62,7 +62,7 @@ fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSoc
 
 fn test_node_with_bank(
     node_keypair: Arc<Keypair>,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
     bank_forks: Arc<RwLock<BankForks>>,
 ) -> (Arc<ClusterInfo>, GossipService, UdpSocket) {
     let mut test_node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
@@ -97,7 +97,7 @@ where
     F: Fn(&Vec<(Arc<ClusterInfo>, GossipService, UdpSocket)>),
 {
     let exit = Arc::new(AtomicBool::new(false));
-    let listen: Vec<_> = (0..num).map(|_| test_node(&exit)).collect();
+    let listen: Vec<_> = (0..num).map(|_| test_node(exit.clone())).collect();
     topo(&listen);
     let mut done = true;
     for i in 0..(num * 32) {
@@ -130,13 +130,13 @@ fn retransmit_to(
     let dests: Vec<_> = if forwarded {
         peers
             .iter()
-            .filter_map(|peer| peer.tvu_forwards().ok())
+            .filter_map(|peer| peer.tvu(Protocol::UDP).ok())
             .filter(|addr| socket_addr_space.check(addr))
             .collect()
     } else {
         peers
             .iter()
-            .filter_map(|peer| peer.tvu().ok())
+            .filter_map(|peer| peer.tvu(Protocol::UDP).ok())
             .filter(|addr| socket_addr_space.check(addr))
             .collect()
     };
@@ -214,12 +214,12 @@ fn gossip_rstar() {
             let xv = &listen[0].0;
             xv.lookup_contact_info(&xv.id(), |ci| ci.clone()).unwrap()
         };
-        trace!("rstar leader {}", xd.id);
+        trace!("rstar leader {}", xd.pubkey());
         for n in 0..(num - 1) {
             let y = (n + 1) % listen.len();
             let yv = &listen[y].0;
             yv.insert_legacy_info(xd.clone());
-            trace!("rstar insert {} into {}", xd.id, yv.id());
+            trace!("rstar insert {} into {}", xd.pubkey(), yv.id());
         }
     });
 }
@@ -229,11 +229,11 @@ pub fn cluster_info_retransmit() {
     solana_logger::setup();
     let exit = Arc::new(AtomicBool::new(false));
     trace!("c1:");
-    let (c1, dr1, tn1) = test_node(&exit);
+    let (c1, dr1, tn1) = test_node(exit.clone());
     trace!("c2:");
-    let (c2, dr2, tn2) = test_node(&exit);
+    let (c2, dr2, tn2) = test_node(exit.clone());
     trace!("c3:");
-    let (c3, dr3, tn3) = test_node(&exit);
+    let (c3, dr3, tn3) = test_node(exit.clone());
     let c1_contact_info = c1.my_contact_info();
 
     c2.insert_info(c1_contact_info.clone());
@@ -315,7 +315,11 @@ pub fn cluster_info_scale() {
     let nodes: Vec<_> = vote_keypairs
         .into_iter()
         .map(|keypairs| {
-            test_node_with_bank(Arc::new(keypairs.node_keypair), &exit, bank_forks.clone())
+            test_node_with_bank(
+                Arc::new(keypairs.node_keypair),
+                exit.clone(),
+                bank_forks.clone(),
+            )
         })
         .collect();
     let ci0 = nodes[0].0.my_contact_info();

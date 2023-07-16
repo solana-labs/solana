@@ -26,9 +26,8 @@ impl CacheBlockMetaService {
     pub fn new(
         cache_block_meta_receiver: CacheBlockMetaReceiver,
         blockstore: Arc<Blockstore>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
-        let exit = exit.clone();
         let thread_hdl = Builder::new()
             .name("solCacheBlkTime".to_string())
             .spawn(move || loop {

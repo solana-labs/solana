@@ -71,14 +71,13 @@ impl Dashboard {
             let progress_bar = new_spinner_progress_bar();
             progress_bar.set_message("Connecting...");
 
-            let (rpc_addr, start_time) = match runtime.block_on(wait_for_validator_startup(
+            let Some((rpc_addr, start_time)) = runtime.block_on(wait_for_validator_startup(
                 &ledger_path,
                 &exit,
                 progress_bar,
                 refresh_interval,
-            )) {
-                None => continue,
-                Some(results) => results,
+            )) else {
+                continue;
             };
 
             let rpc_client = RpcClient::new_socket(rpc_addr);
@@ -195,7 +194,7 @@ impl Dashboard {
 
 async fn wait_for_validator_startup(
     ledger_path: &Path,
-    exit: &Arc<AtomicBool>,
+    exit: &AtomicBool,
     progress_bar: ProgressBar,
     refresh_interval: Duration,
 ) -> Option<(SocketAddr, SystemTime)> {

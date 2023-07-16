@@ -28,6 +28,9 @@ steps:
     command: "ci/publish-crate.sh"
     agents:
       queue: "release-build"
+    retry:
+      manual:
+        permit_on_passed: true
     timeout_in_minutes: 240
     branches: "!master"
   - name: "publish tarball (aarch64-apple-darwin)"

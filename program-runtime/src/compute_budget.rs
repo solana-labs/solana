@@ -4,6 +4,12 @@ use {
         borsh::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
         entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
+        feature_set::{
+            add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
+            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
+        },
+        fee::FeeBudgetLimits,
+        genesis_config::ClusterType,
         instruction::{CompiledInstruction, InstructionError},
         pubkey::Pubkey,
         transaction::TransactionError,
@@ -275,6 +281,39 @@ impl ComputeBudget {
         Ok(prioritization_fee
             .map(|fee_type| PrioritizationFeeDetails::new(fee_type, self.compute_unit_limit))
             .unwrap_or_default())
+    }
+
+    pub fn fee_budget_limits<'a>(
+        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
+        feature_set: &FeatureSet,
+        maybe_cluster_type: Option<ClusterType>,
+    ) -> FeeBudgetLimits {
+        let mut compute_budget = Self::default();
+
+        // A cluster specific feature gate, when not activated it keeps v1.13 behavior in mainnet-beta;
+        // once activated for v1.14+, it allows compute_budget::request_heap_frame and
+        // compute_budget::set_compute_unit_price co-exist in same transaction.
+        let enable_request_heap_frame_ix = feature_set
+            .is_active(&enable_request_heap_frame_ix::id())
+            || maybe_cluster_type
+                .and_then(|cluster_type| (cluster_type != ClusterType::MainnetBeta).then_some(0))
+                .is_some();
+        let prioritization_fee_details = compute_budget
+            .process_instructions(
+                instructions,
+                feature_set.is_active(&use_default_units_in_fee_calculation::id()),
+                !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+                enable_request_heap_frame_ix,
+                feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+            )
+            .unwrap_or_default();
+
+        FeeBudgetLimits {
+            loaded_accounts_data_size_limit: compute_budget.loaded_accounts_data_size_limit,
+            heap_cost: compute_budget.heap_cost,
+            compute_unit_limit: compute_budget.compute_unit_limit,
+            prioritization_fee: prioritization_fee_details.get_fee(),
+        }
     }
 }
 

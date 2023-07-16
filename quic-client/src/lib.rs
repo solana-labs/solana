@@ -18,12 +18,15 @@ use {
     rcgen::RcgenError,
     solana_connection_cache::{
         connection_cache::{
-            BaseClientConnection, ClientError, ConnectionManager, ConnectionPool,
-            ConnectionPoolError, NewConnectionConfig,
+            BaseClientConnection, ClientError, ConnectionCache, ConnectionManager, ConnectionPool,
+            ConnectionPoolError, Protocol,
         },
         connection_cache_stats::ConnectionCacheStats,
     },
-    solana_sdk::{pubkey::Pubkey, quic::QUIC_PORT_OFFSET, signature::Keypair},
+    solana_sdk::{
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+    },
     solana_streamer::{
         nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
         streamer::StakedNodes,
@@ -79,6 +82,7 @@ impl ConnectionPool for QuicPool {
     }
 }
 
+#[derive(Clone)]
 pub struct QuicConfig {
     client_certificate: Arc<QuicClientCertificate>,
     maybe_staked_nodes: Option<Arc<RwLock<StakedNodes>>>,
@@ -89,8 +93,8 @@ pub struct QuicConfig {
     client_endpoint: Option<Endpoint>,
 }
 
-impl NewConnectionConfig for QuicConfig {
-    fn new() -> Result<Self, ClientError> {
+impl QuicConfig {
+    pub fn new() -> Result<Self, ClientError> {
         let (cert, priv_key) =
             new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))?;
         Ok(Self {
@@ -186,44 +190,50 @@ impl BaseClientConnection for Quic {
     }
 }
 
-#[derive(Default)]
 pub struct QuicConnectionManager {
-    connection_config: Option<QuicConfig>,
+    connection_config: QuicConfig,
 }
 
 impl ConnectionManager for QuicConnectionManager {
     type ConnectionPool = QuicPool;
     type NewConnectionConfig = QuicConfig;
 
+    const PROTOCOL: Protocol = Protocol::QUIC;
+
     fn new_connection_pool(&self) -> Self::ConnectionPool {
         QuicPool {
             connections: Vec::default(),
-            endpoint: Arc::new(
-                self.connection_config
-                    .as_ref()
-                    .map_or(QuicLazyInitializedEndpoint::default(), |config| {
-                        config.create_endpoint()
-                    }),
-            ),
+            endpoint: Arc::new(self.connection_config.create_endpoint()),
         }
     }
 
     fn new_connection_config(&self) -> QuicConfig {
-        QuicConfig::new().unwrap()
-    }
-
-    fn get_port_offset(&self) -> u16 {
-        QUIC_PORT_OFFSET
+        self.connection_config.clone()
     }
 }
 
 impl QuicConnectionManager {
-    pub fn new_with_connection_config(config: QuicConfig) -> Self {
-        Self {
-            connection_config: Some(config),
-        }
+    pub fn new_with_connection_config(connection_config: QuicConfig) -> Self {
+        Self { connection_config }
     }
 }
+
+pub type QuicConnectionCache = ConnectionCache<QuicPool, QuicConnectionManager, QuicConfig>;
+
+pub fn new_quic_connection_cache(
+    name: &'static str,
+    keypair: &Keypair,
+    ipaddr: IpAddr,
+    staked_nodes: &Arc<RwLock<StakedNodes>>,
+    connection_pool_size: usize,
+) -> Result<QuicConnectionCache, ClientError> {
+    let mut config = QuicConfig::new()?;
+    config.update_client_certificate(keypair, ipaddr)?;
+    config.set_staked_nodes(staked_nodes, &keypair.pubkey());
+    let connection_manager = QuicConnectionManager::new_with_connection_config(config);
+    ConnectionCache::new(name, connection_manager, connection_pool_size)
+}
+
 #[cfg(test)]
 mod tests {
     use {

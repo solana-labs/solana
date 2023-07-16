@@ -99,7 +99,7 @@ impl SlotsStats {
     ) {
         let mut slot_full_reporting_info = None;
         let mut stats = self.stats.lock().unwrap();
-        let (mut slot_stats, evicted) = Self::get_or_default_with_eviction_check(&mut stats, slot);
+        let (slot_stats, evicted) = Self::get_or_default_with_eviction_check(&mut stats, slot);
         match source {
             ShredSource::Recovered => slot_stats.num_recovered += 1,
             ShredSource::Repaired => slot_stats.num_repaired += 1,

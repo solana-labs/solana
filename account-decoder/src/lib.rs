@@ -18,6 +18,7 @@ pub mod validator_info;
 
 use {
     crate::parse_account_data::{parse_account_data, AccountAdditionalData, ParsedAccount},
+    base64::{prelude::BASE64_STANDARD, Engine},
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
         clock::Epoch,
@@ -95,7 +96,7 @@ impl UiAccount {
                 UiAccountData::Binary(data, encoding)
             }
             UiAccountEncoding::Base64 => UiAccountData::Binary(
-                base64::encode(slice_data(account.data(), data_slice_config)),
+                BASE64_STANDARD.encode(slice_data(account.data(), data_slice_config)),
                 encoding,
             ),
             UiAccountEncoding::Base64Zstd => {
@@ -104,9 +105,11 @@ impl UiAccount {
                     .write_all(slice_data(account.data(), data_slice_config))
                     .and_then(|()| encoder.finish())
                 {
-                    Ok(zstd_data) => UiAccountData::Binary(base64::encode(zstd_data), encoding),
+                    Ok(zstd_data) => {
+                        UiAccountData::Binary(BASE64_STANDARD.encode(zstd_data), encoding)
+                    }
                     Err(_) => UiAccountData::Binary(
-                        base64::encode(slice_data(account.data(), data_slice_config)),
+                        BASE64_STANDARD.encode(slice_data(account.data(), data_slice_config)),
                         UiAccountEncoding::Base64,
                     ),
                 }
@@ -118,7 +121,7 @@ impl UiAccount {
                     UiAccountData::Json(parsed_data)
                 } else {
                     UiAccountData::Binary(
-                        base64::encode(slice_data(account.data(), data_slice_config)),
+                        BASE64_STANDARD.encode(slice_data(account.data(), data_slice_config)),
                         UiAccountEncoding::Base64,
                     )
                 }
@@ -140,14 +143,16 @@ impl UiAccount {
             UiAccountData::LegacyBinary(blob) => bs58::decode(blob).into_vec().ok(),
             UiAccountData::Binary(blob, encoding) => match encoding {
                 UiAccountEncoding::Base58 => bs58::decode(blob).into_vec().ok(),
-                UiAccountEncoding::Base64 => base64::decode(blob).ok(),
-                UiAccountEncoding::Base64Zstd => base64::decode(blob).ok().and_then(|zstd_data| {
-                    let mut data = vec![];
-                    zstd::stream::read::Decoder::new(zstd_data.as_slice())
-                        .and_then(|mut reader| reader.read_to_end(&mut data))
-                        .map(|_| data)
-                        .ok()
-                }),
+                UiAccountEncoding::Base64 => BASE64_STANDARD.decode(blob).ok(),
+                UiAccountEncoding::Base64Zstd => {
+                    BASE64_STANDARD.decode(blob).ok().and_then(|zstd_data| {
+                        let mut data = vec![];
+                        zstd::stream::read::Decoder::new(zstd_data.as_slice())
+                            .and_then(|mut reader| reader.read_to_end(&mut data))
+                            .map(|_| data)
+                            .ok()
+                    })
+                }
                 UiAccountEncoding::Binary | UiAccountEncoding::JsonParsed => None,
             },
         }?;

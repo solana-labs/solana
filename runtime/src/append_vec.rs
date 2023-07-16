@@ -10,14 +10,14 @@ use {
             AccountMeta, StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo,
             StoredAccountMeta, StoredMeta, StoredMetaWriteVersion,
         },
-        accounts_file::ALIGN_BOUNDARY_OFFSET,
+        accounts_file::{AccountsFileError, Result, ALIGN_BOUNDARY_OFFSET},
         storable_accounts::StorableAccounts,
         u64_align,
     },
     log::*,
     memmap2::MmapMut,
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount},
+        account::{AccountSharedData, ReadableAccount},
         clock::Slot,
         hash::Hash,
         pubkey::Pubkey,
@@ -27,7 +27,7 @@ use {
         borrow::Borrow,
         convert::TryFrom,
         fs::{remove_file, OpenOptions},
-        io::{self, Seek, SeekFrom, Write},
+        io::{Seek, SeekFrom, Write},
         mem,
         path::{Path, PathBuf},
         sync::{
@@ -53,13 +53,29 @@ pub fn aligned_stored_size(data_len: usize) -> usize {
 
 pub const MAXIMUM_APPEND_VEC_FILE_SIZE: u64 = 16 * 1024 * 1024 * 1024; // 16 GiB
 
-pub struct AppendVecAccountsIter<'a> {
-    append_vec: &'a AppendVec,
+#[derive(Error, Debug)]
+/// An enum for AppendVec related errors.
+pub enum AppendVecError {
+    #[error("too small file size {0} for AppendVec")]
+    FileSizeTooSmall(usize),
+
+    #[error("too large file size {0} for AppendVec")]
+    FileSizeTooLarge(usize),
+
+    #[error("incorrect layout/length/data in the appendvec at path {}", .0.display())]
+    IncorrectLayout(PathBuf),
+
+    #[error("offset ({0}) is larger than file size ({1})")]
+    OffsetOutOfBounds(usize, usize),
+}
+
+pub struct AppendVecAccountsIter<'append_vec> {
+    append_vec: &'append_vec AppendVec,
     offset: usize,
 }
 
-impl<'a> AppendVecAccountsIter<'a> {
-    pub fn new(append_vec: &'a AppendVec) -> Self {
+impl<'append_vec> AppendVecAccountsIter<'append_vec> {
+    pub fn new(append_vec: &'append_vec AppendVec) -> Self {
         Self {
             append_vec,
             offset: 0,
@@ -67,8 +83,8 @@ impl<'a> AppendVecAccountsIter<'a> {
     }
 }
 
-impl<'a> Iterator for AppendVecAccountsIter<'a> {
-    type Item = StoredAccountMeta<'a>;
+impl<'append_vec> Iterator for AppendVecAccountsIter<'append_vec> {
+    type Item = StoredAccountMeta<'append_vec>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((account, next_offset)) = self.append_vec.get_account(self.offset) {
@@ -91,32 +107,22 @@ pub enum MatchAccountOwnerError {
 /// References to account data stored elsewhere. Getting an `Account` requires cloning
 /// (see `StoredAccountMeta::clone_account()`).
 #[derive(PartialEq, Eq, Debug)]
-pub struct AppendVecStoredAccountMeta<'a> {
-    pub meta: &'a StoredMeta,
+pub struct AppendVecStoredAccountMeta<'append_vec> {
+    pub meta: &'append_vec StoredMeta,
     /// account data
-    pub account_meta: &'a AccountMeta,
-    pub(crate) data: &'a [u8],
+    pub account_meta: &'append_vec AccountMeta,
+    pub(crate) data: &'append_vec [u8],
     pub(crate) offset: usize,
     pub(crate) stored_size: usize,
-    pub(crate) hash: &'a Hash,
+    pub(crate) hash: &'append_vec Hash,
 }
 
-impl<'a> AppendVecStoredAccountMeta<'a> {
-    pub fn clone_account(&self) -> AccountSharedData {
-        AccountSharedData::from(Account {
-            lamports: self.account_meta.lamports,
-            owner: self.account_meta.owner,
-            executable: self.account_meta.executable,
-            rent_epoch: self.account_meta.rent_epoch,
-            data: self.data.to_vec(),
-        })
-    }
-
-    pub fn pubkey(&self) -> &'a Pubkey {
+impl<'append_vec> AppendVecStoredAccountMeta<'append_vec> {
+    pub fn pubkey(&self) -> &'append_vec Pubkey {
         &self.meta.pubkey
     }
 
-    pub fn hash(&self) -> &'a Hash {
+    pub fn hash(&self) -> &'append_vec Hash {
         self.hash
     }
 
@@ -128,7 +134,7 @@ impl<'a> AppendVecStoredAccountMeta<'a> {
         self.offset
     }
 
-    pub fn data(&self) -> &'a [u8] {
+    pub fn data(&self) -> &'append_vec [u8] {
         self.data
     }
 
@@ -144,7 +150,7 @@ impl<'a> AppendVecStoredAccountMeta<'a> {
         self.meta
     }
 
-    pub fn set_meta(&mut self, meta: &'a StoredMeta) {
+    pub fn set_meta(&mut self, meta: &'append_vec StoredMeta) {
         self.meta = meta;
     }
 
@@ -159,7 +165,8 @@ impl<'a> AppendVecStoredAccountMeta<'a> {
 
     fn sanitize_lamports(&self) -> bool {
         // Sanitize 0 lamports to ensure to be same as AccountSharedData::default()
-        self.account_meta.lamports != 0 || self.clone_account() == AccountSharedData::default()
+        self.account_meta.lamports != 0
+            || self.to_account_shared_data() == AccountSharedData::default()
     }
 
     fn ref_executable_byte(&self) -> &u8 {
@@ -172,14 +179,14 @@ impl<'a> AppendVecStoredAccountMeta<'a> {
     }
 }
 
-impl<'a> ReadableAccount for AppendVecStoredAccountMeta<'a> {
+impl<'append_vec> ReadableAccount for AppendVecStoredAccountMeta<'append_vec> {
     fn lamports(&self) -> u64 {
         self.account_meta.lamports
     }
-    fn data(&self) -> &'a [u8] {
+    fn data(&self) -> &'append_vec [u8] {
         self.data()
     }
-    fn owner(&self) -> &'a Pubkey {
+    fn owner(&self) -> &'append_vec Pubkey {
         &self.account_meta.owner
     }
     fn executable(&self) -> bool {
@@ -295,32 +302,30 @@ impl AppendVec {
         self.remove_on_drop = false;
     }
 
-    fn sanitize_len_and_size(current_len: usize, file_size: usize) -> io::Result<()> {
+    fn sanitize_len_and_size(current_len: usize, file_size: usize) -> Result<()> {
         if file_size == 0 {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("too small file size {file_size} for AppendVec"),
+            Err(AccountsFileError::AppendVecError(
+                AppendVecError::FileSizeTooSmall(file_size),
             ))
         } else if usize::try_from(MAXIMUM_APPEND_VEC_FILE_SIZE)
             .map(|max| file_size > max)
             .unwrap_or(true)
         {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("too large file size {file_size} for AppendVec"),
+            Err(AccountsFileError::AppendVecError(
+                AppendVecError::FileSizeTooLarge(file_size),
             ))
         } else if current_len > file_size {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("current_len is larger than file size ({file_size})"),
+            Err(AccountsFileError::AppendVecError(
+                AppendVecError::OffsetOutOfBounds(current_len, file_size),
             ))
         } else {
             Ok(())
         }
     }
 
-    pub fn flush(&self) -> io::Result<()> {
-        self.map.flush()
+    pub fn flush(&self) -> Result<()> {
+        self.map.flush()?;
+        Ok(())
     }
 
     pub fn reset(&self) {
@@ -351,28 +356,23 @@ impl AppendVec {
         format!("{slot}.{id}")
     }
 
-    pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> io::Result<(Self, usize)> {
+    pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> Result<(Self, usize)> {
         let new = Self::new_from_file_unchecked(&path, current_len)?;
 
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();
         if !sanitized {
             // This info show the failing accountvec file path.  It helps debugging
             // the appendvec data corrupution issues related to recycling.
-            let err_msg = format!(
-                "incorrect layout/length/data in the appendvec at path {}",
-                path.as_ref().display()
-            );
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, err_msg));
+            return Err(AccountsFileError::AppendVecError(
+                AppendVecError::IncorrectLayout(path.as_ref().to_path_buf()),
+            ));
         }
 
         Ok((new, num_accounts))
     }
 
     /// Creates an appendvec from file without performing sanitize checks or counting the number of accounts
-    pub fn new_from_file_unchecked<P: AsRef<Path>>(
-        path: P,
-        current_len: usize,
-    ) -> io::Result<Self> {
+    pub fn new_from_file_unchecked<P: AsRef<Path>>(path: P, current_len: usize) -> Result<Self> {
         let file_size = std::fs::metadata(&path)?.len();
         Self::sanitize_len_and_size(current_len, file_size as usize)?;
 
@@ -484,7 +484,7 @@ impl AppendVec {
     /// Return a reference to the type at `offset` if its data doesn't overrun the internal buffer.
     /// Otherwise return None. Also return the offset of the first byte after the requested data
     /// that falls on a 64-byte boundary.
-    fn get_type<'a, T>(&self, offset: usize) -> Option<(&'a T, usize)> {
+    fn get_type<T>(&self, offset: usize) -> Option<(&T, usize)> {
         let (data, next) = self.get_slice(offset, mem::size_of::<T>())?;
         let ptr: *const T = data.as_ptr() as *const T;
         //UNSAFE: The cast is safe because the slice is aligned and fits into the memory
@@ -495,10 +495,10 @@ impl AppendVec {
     /// Return stored account metadata for the account at `offset` if its data doesn't overrun
     /// the internal buffer. Otherwise return None. Also return the offset of the first byte
     /// after the requested data that falls on a 64-byte boundary.
-    pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccountMeta<'a>, usize)> {
-        let (meta, next): (&'a StoredMeta, _) = self.get_type(offset)?;
-        let (account_meta, next): (&'a AccountMeta, _) = self.get_type(next)?;
-        let (hash, next): (&'a Hash, _) = self.get_type(next)?;
+    pub fn get_account(&self, offset: usize) -> Option<(StoredAccountMeta, usize)> {
+        let (meta, next): (&StoredMeta, _) = self.get_type(offset)?;
+        let (account_meta, next): (&AccountMeta, _) = self.get_type(next)?;
+        let (hash, next): (&Hash, _) = self.get_type(next)?;
         let (data, next) = self.get_slice(next, meta.data_len as usize)?;
         let stored_size = next - offset;
         Some((
@@ -514,7 +514,7 @@ impl AppendVec {
         ))
     }
 
-    fn get_account_meta<'a>(&self, offset: usize) -> Option<&'a AccountMeta> {
+    fn get_account_meta(&self, offset: usize) -> Option<&AccountMeta> {
         // Skip over StoredMeta data in the account
         let offset = offset.checked_add(mem::size_of::<StoredMeta>())?;
         // u64_align! does an unchecked add for alignment. Check that it won't cause an overflow.
@@ -531,7 +531,7 @@ impl AppendVec {
         &self,
         offset: usize,
         owners: &[&Pubkey],
-    ) -> Result<usize, MatchAccountOwnerError> {
+    ) -> std::result::Result<usize, MatchAccountOwnerError> {
         let account_meta = self
             .get_account_meta(offset)
             .ok_or(MatchAccountOwnerError::UnableToLoad)?;
@@ -552,7 +552,7 @@ impl AppendVec {
     ) -> Option<(StoredMeta, solana_sdk::account::AccountSharedData)> {
         let (stored_account, _) = self.get_account(offset)?;
         let meta = stored_account.meta().clone();
-        Some((meta, stored_account.clone_account()))
+        Some((meta, stored_account.to_account_shared_data()))
     }
 
     pub fn get_path(&self) -> PathBuf {
@@ -693,7 +693,7 @@ pub mod tests {
         }
     }
 
-    impl<'a> StoredAccountMeta<'a> {
+    impl StoredAccountMeta<'_> {
         pub(crate) fn ref_executable_byte(&self) -> &u8 {
             match self {
                 Self::AppendVec(av) => av.ref_executable_byte(),
@@ -701,7 +701,7 @@ pub mod tests {
         }
     }
 
-    impl<'a> AppendVecStoredAccountMeta<'a> {
+    impl AppendVecStoredAccountMeta<'_> {
         #[allow(clippy::cast_ref_to_mut)]
         fn set_data_len_unsafe(&self, new_data_len: u64) {
             // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
@@ -918,7 +918,7 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "too small file size 0 for AppendVec")]
+    #[should_panic(expected = "AppendVecError(FileSizeTooSmall(0))")]
     fn test_append_vec_new_bad_size() {
         let path = get_append_vec_path("test_append_vec_new_bad_size");
         let _av = AppendVec::new(&path.path, true, 0);
@@ -937,7 +937,7 @@ pub mod tests {
             .expect("create a test file for mmap");
 
         let result = AppendVec::new_from_file(path, 0);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"too small file size 0 for AppendVec");
+        assert_matches!(result, Err(ref message) if message.to_string().contains("too small file size 0 for AppendVec"));
     }
 
     #[test]
@@ -945,7 +945,7 @@ pub mod tests {
         const LEN: usize = 0;
         const SIZE: usize = 0;
         let result = AppendVec::sanitize_len_and_size(LEN, SIZE);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"too small file size 0 for AppendVec");
+        assert_matches!(result, Err(ref message) if message.to_string().contains("too small file size 0 for AppendVec"));
     }
 
     #[test]
@@ -961,7 +961,7 @@ pub mod tests {
         const LEN: usize = 0;
         const SIZE: usize = 16 * 1024 * 1024 * 1024 + 1;
         let result = AppendVec::sanitize_len_and_size(LEN, SIZE);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"too large file size 17179869185 for AppendVec");
+        assert_matches!(result, Err(ref message) if message.to_string().contains("too large file size 17179869185 for AppendVec"));
     }
 
     #[test]
@@ -977,7 +977,7 @@ pub mod tests {
         const LEN: usize = 1024 * 1024 + 1;
         const SIZE: usize = 1024 * 1024;
         let result = AppendVec::sanitize_len_and_size(LEN, SIZE);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"current_len is larger than file size (1048576)");
+        assert_matches!(result, Err(ref message) if message.to_string().contains("is larger than file size (1048576)"));
     }
 
     #[test]
@@ -1087,7 +1087,7 @@ pub mod tests {
         assert_eq!(accounts.len(), size);
         for (sample, v) in accounts.iter_mut().enumerate() {
             let account = create_test_account(sample);
-            let recovered = v.clone_account();
+            let recovered = v.to_account_shared_data();
             assert_eq!(recovered, account.1)
         }
         trace!(
@@ -1165,7 +1165,7 @@ pub mod tests {
         }
 
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
+        assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
     }
 
     #[test]
@@ -1193,7 +1193,7 @@ pub mod tests {
         let accounts_len = av.len();
         drop(av);
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
+        assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
     }
 
     #[test]
@@ -1219,7 +1219,7 @@ pub mod tests {
         let accounts_len = av.len();
         drop(av);
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
+        assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
     }
 
     #[test]
@@ -1281,7 +1281,7 @@ pub mod tests {
         let accounts_len = av.len();
         drop(av);
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
+        assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
     }
 
     #[test]
