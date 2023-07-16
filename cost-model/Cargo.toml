@@ -33,7 +33,6 @@ name = "solana_cost_model"
 [dev-dependencies]
 solana-logger = { workspace = true }
 static_assertions = { workspace = true }
-test-case = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
