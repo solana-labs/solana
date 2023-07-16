@@ -1368,6 +1368,7 @@ fn update_caller_account(
     *caller_account.lamports = callee_account.get_lamports();
     *caller_account.owner = *callee_account.get_owner();
 
+    let mut zero_all_mapped_spare_capacity = false;
     if direct_mapping {
         if let Some(region) = account_data_region(
             memory_mapping,
@@ -1381,7 +1382,8 @@ fn update_caller_account(
             // invalid address.
             let min_capacity = caller_account.original_data_len;
             if callee_account.capacity() < min_capacity {
-                callee_account.reserve(min_capacity.saturating_sub(callee_account.capacity()))?
+                callee_account.reserve(min_capacity.saturating_sub(callee_account.capacity()))?;
+                zero_all_mapped_spare_capacity = true;
             }
 
             // If an account's data pointer has changed - because of CoW, reserve() as called above
@@ -1391,6 +1393,7 @@ fn update_caller_account(
             let callee_ptr = callee_account.get_data().as_ptr() as u64;
             if region.host_addr.get() != callee_ptr {
                 region.host_addr.set(callee_ptr);
+                zero_all_mapped_spare_capacity = true;
             }
         }
     }
@@ -1424,11 +1427,24 @@ fn update_caller_account(
                 // and the realloc region.
                 //
                 // Here we zero the account data region.
-                if post_len < caller_account.original_data_len {
-                    // zero the spare capacity in the account data. We only need
-                    // to zero up to the original data length, everything else
-                    // is not accessible from the vm anyway.
-                    let spare_len = caller_account.original_data_len.saturating_sub(post_len);
+                let spare_len = if zero_all_mapped_spare_capacity {
+                    // In the unlikely case where the account data vector has
+                    // changed - which can happen during CoW - we zero the whole
+                    // extra capacity up to the original data length.
+                    //
+                    // The extra capacity up to original data length is
+                    // accessible from the vm and since it's uninitialized
+                    // memory, it could be a source of non determinism.
+                    caller_account.original_data_len
+                } else {
+                    // If the allocation has not changed, we only zero the
+                    // difference between the previous and current lengths. The
+                    // rest of the memory contains whatever it contained before,
+                    // which is deterministic.
+                    prev_len
+                }
+                .saturating_sub(post_len);
+                if spare_len > 0 {
                     let dst = callee_account
                         .spare_data_capacity_mut()?
                         .get_mut(..spare_len)
@@ -1437,6 +1453,7 @@ fn update_caller_account(
                     // Safety: we check bounds above
                     unsafe { ptr::write_bytes(dst, 0, spare_len) };
                 }
+
                 // Here we zero the realloc region.
                 //
                 // This is done for compatibility but really only necessary for
