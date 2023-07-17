@@ -4535,7 +4535,12 @@ fn test_vote_refresh_outside_slothash() {
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
         node_stakes,
         validator_configs,
-        validator_keys: Some(validator_keys.iter().map(|s| (s.clone(), true)).collect::<Vec<_>>()),
+        validator_keys: Some(
+            validator_keys
+                .iter()
+                .map(|s| (s.clone(), true))
+                .collect::<Vec<_>>(),
+        ),
         node_vote_keys: Some(node_vote_keys),
         slots_per_epoch,
         stakers_slot_offset: slots_per_epoch,
