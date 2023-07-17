@@ -69,9 +69,9 @@ pub fn trailing_n_crds_signature_bits_are_zero(signature_bytes: &[u8], n: u8) ->
     let num_bytes: usize = (n as usize + 7) / 8; // Number of bytes required to represent n bits
 
     let mut signature_ending: u64 = 0;
-    for i in 0..num_bytes {
+    for (i, signature_byte) in signature_bytes.iter().enumerate().take(num_bytes) {
         let shift = i * 8;
-        signature_ending |= (signature_bytes[i] as u64) << shift;
+        signature_ending |= (*signature_bytes as u64) << shift;
     }
 
     // check if last n bits of signature (aka signature_ending) are all 0.
