@@ -328,6 +328,7 @@ mod tests {
             pubkey::Pubkey,
             signature::Keypair,
             signer::Signer,
+            system_instruction::{self},
             transaction::{SanitizedTransaction, Transaction},
         },
     };
@@ -873,5 +874,42 @@ mod tests {
                 support_set_loaded_accounts_data_size_limit_ix
             );
         }
+    }
+
+    #[test]
+    fn test_process_mixed_instructions_without_compute_budget() {
+        let payer_keypair = Keypair::new();
+
+        let transaction =
+            SanitizedTransaction::from_transaction_for_tests(Transaction::new_signed_with_payer(
+                &[
+                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                    system_instruction::transfer(&payer_keypair.pubkey(), &Pubkey::new_unique(), 2),
+                ],
+                Some(&payer_keypair.pubkey()),
+                &[&payer_keypair],
+                Hash::default(),
+            ));
+
+        let mut compute_budget = ComputeBudget::default();
+        let result = compute_budget.process_instructions(
+            transaction.message().program_instructions_iter(),
+            true,
+            false, //not support request_units_deprecated
+            true,  //enable_request_heap_frame_ix,
+            true,  //support_set_loaded_accounts_data_size_limit_ix,
+        );
+
+        // assert process_instructions will be successful with default,
+        assert_eq!(Ok(PrioritizationFeeDetails::default()), result);
+        // assert the default compute_unit_limit is 2 times default: one for bpf ix, one for
+        // builtin ix.
+        assert_eq!(
+            compute_budget,
+            ComputeBudget {
+                compute_unit_limit: 2 * DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+                ..ComputeBudget::default()
+            }
+        );
     }
 }
