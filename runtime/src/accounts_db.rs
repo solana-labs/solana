@@ -476,7 +476,6 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
-    assert_stakes_cache_consistency: true,
     create_ancient_storage: CreateAncientStorage::Pack,
     test_partitioned_epoch_rewards: TestPartitionedEpochRewards::CompareResults,
 };
@@ -488,7 +487,6 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
-    assert_stakes_cache_consistency: false,
     create_ancient_storage: CreateAncientStorage::Pack,
     test_partitioned_epoch_rewards: TestPartitionedEpochRewards::None,
 };
@@ -550,8 +548,6 @@ pub struct AccountsDbConfig {
     pub ancient_append_vec_offset: Option<i64>,
     pub skip_initial_hash_calc: bool,
     pub exhaustively_verify_refcounts: bool,
-    /// when stakes cache consistency check occurs, assert that cached accounts match accounts db
-    pub assert_stakes_cache_consistency: bool,
     /// how to create ancient storages
     pub create_ancient_storage: CreateAncientStorage,
     pub test_partitioned_epoch_rewards: TestPartitionedEpochRewards,
@@ -1377,9 +1373,6 @@ pub struct AccountsDb {
     pub skip_initial_hash_calc: bool,
 
     pub(crate) storage: AccountStorage,
-
-    /// from AccountsDbConfig
-    pub(crate) assert_stakes_cache_consistency: bool,
 
     #[allow(dead_code)]
     /// from AccountsDbConfig
@@ -2390,7 +2383,6 @@ impl AccountsDb {
         const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
 
         AccountsDb {
-            assert_stakes_cache_consistency: false,
             bank_progress: BankCreationFreezingProgress::default(),
             create_ancient_storage: CreateAncientStorage::Pack,
             verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
@@ -2515,11 +2507,6 @@ impl AccountsDb {
             .map(|config| config.exhaustively_verify_refcounts)
             .unwrap_or_default();
 
-        let assert_stakes_cache_consistency = accounts_db_config
-            .as_ref()
-            .map(|config| config.assert_stakes_cache_consistency)
-            .unwrap_or_default();
-
         let create_ancient_storage = accounts_db_config
             .as_ref()
             .map(|config| config.create_ancient_storage)
@@ -2549,7 +2536,6 @@ impl AccountsDb {
             accounts_update_notifier,
             filler_accounts_config,
             filler_account_suffix,
-            assert_stakes_cache_consistency,
             create_ancient_storage,
             write_cache_limit_bytes: accounts_db_config
                 .as_ref()
