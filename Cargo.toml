@@ -270,7 +270,6 @@ rayon = "1.7.0"
 rcgen = "0.10.0"
 reed-solomon-erasure = "6.0.0"
 regex = "1.9.1"
-ringbuf = "0.3.3"
 rolling-file = "0.2.0"
 reqwest = { version = "0.11.17", default-features = false }
 rpassword = "7.2"

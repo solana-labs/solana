@@ -23,6 +23,7 @@
 //!
 //! A value is updated to a new version if the labels match, and the value
 //! wallclock is later, or the value hash is greater.
+#![allow(clippy::integer_arithmetic)]
 
 use {
     crate::{
@@ -40,12 +41,10 @@ use {
     lru::LruCache,
     matches::debug_assert_matches,
     rayon::{prelude::*, ThreadPool},
-    ringbuf::{HeapRb, Rb},
     solana_sdk::{
         clock::Slot,
         hash::{hash, Hash},
         pubkey::Pubkey,
-        signature::Signature,
     },
     std::{
         cmp::Ordering,
@@ -64,9 +63,23 @@ const VOTE_SLOTS_METRICS_CAP: usize = 100;
 //      mainnet: ~280k
 // target: 1-2 signatures reported per minute
 // log2(250k) = ~17.9.
-const TRAILING_ZEROS: u8 = 18;
-// size of ring buffer to store signatures for metrics
-const SIGNATURE_SLOTS_METRICS_CAP: usize = 64;
+const SIGNATURE_SAMPLE_TRAILING_ZEROS: u8 = 8;
+
+pub fn trailing_n_crds_signature_bytes_are_zero(
+    signature_bytes: &[u8],
+    n: u8,
+) -> bool {
+    let num_bytes: usize = (n as usize + 7) / 8; // Number of bytes required to represent n bits
+
+    let mut signature_ending: u64 = 0;
+    for i in 0..num_bytes {
+        let shift = (num_bytes - i - 1) * 8;
+        signature_ending |= (signature_bytes[i] as u64) << shift;
+    }
+
+    // check if last n bits of signature (aka signature_ending) are all 0.
+    (signature_ending & ((1 << n) - 1)) == 0
+}
 
 pub struct Crds {
     /// Stores the map of labels and values
@@ -112,7 +125,6 @@ pub(crate) struct CrdsDataStats {
     pub(crate) counts: CrdsCountsArray,
     pub(crate) fails: CrdsCountsArray,
     pub(crate) votes: LruCache<Slot, /*count:*/ usize>,
-    pub(crate) crds_signatures: HeapRb<(Pubkey, Signature)>, // crds origin and signature
 }
 
 #[derive(Default)]
@@ -668,7 +680,6 @@ impl Default for CrdsDataStats {
             counts: CrdsCountsArray::default(),
             fails: CrdsCountsArray::default(),
             votes: LruCache::new(VOTE_SLOTS_METRICS_CAP),
-            crds_signatures: HeapRb::<(Pubkey, Signature)>::new(SIGNATURE_SLOTS_METRICS_CAP),
         }
     }
 }
@@ -684,9 +695,12 @@ impl CrdsDataStats {
         }
 
         // check trailing zero bits on signature for metrics
-        if entry.value.signature.last_n_bits_are_zero(TRAILING_ZEROS) {
-            self.crds_signatures
-                .push_overwrite((entry.value.pubkey(), entry.value.signature));
+        if trailing_n_crds_signature_bytes_are_zero(entry.value.signature.as_ref(), SIGNATURE_SAMPLE_TRAILING_ZEROS) {
+            datapoint_info!(
+                "cluster_info_crds_message_signatures",
+                ("crds_origin", entry.value.pubkey().to_string(), String),
+                ("crds_signature", entry.value.signature.to_string(), String)
+            ); 
         }
     }
 

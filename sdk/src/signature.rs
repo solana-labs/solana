@@ -1,6 +1,5 @@
 //! Functionality for public and private keys.
 #![cfg(feature = "full")]
-#![allow(clippy::integer_arithmetic)]
 
 // legacy module paths
 pub use crate::signer::{keypair::*, null_signer::*, presigner::*, *};
@@ -54,21 +53,6 @@ impl Signature {
 
     pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
         self.verify_verbose(pubkey_bytes, message_bytes).is_ok()
-    }
-
-    pub fn last_n_bits_are_zero(&self, n: u8) -> bool {
-        let signature_bytes: &[u8] = self.0.as_slice();
-        let num_bytes = (n as usize + 7) / 8; // Number of bytes required to represent n bits
-        let last_signature_byte_index = signature_bytes.len() - 1;
-
-        let mut signature_ending: u64 = 0;
-        for i in 0..num_bytes {
-            let shift = (num_bytes - i - 1) * 8;
-            signature_ending |= (signature_bytes[last_signature_byte_index - i] as u64) << shift;
-        }
-
-        // check if last n bits of signature (aka signature_ending) are all 0.
-        (signature_ending & ((1 << n) - 1)) == 0
     }
 }
 

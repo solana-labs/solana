@@ -1,9 +1,8 @@
 use {
     crate::crds_gossip::CrdsGossip,
     itertools::Itertools,
-    ringbuf::{HeapRb, Rb},
     solana_measure::measure::Measure,
-    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         cmp::Reverse,
         collections::HashMap,
@@ -684,11 +683,6 @@ pub(crate) fn submit_gossip_stats(
         ("all-pull", crds_stats.pull.fails.iter().sum::<usize>(), i64),
     );
 
-    submit_crds_signature_stats(
-        "cluster_info_crds_stats_message_signatures_received",
-        &mut crds_stats.push.crds_signatures,
-    );
-
     if !log::log_enabled!(log::Level::Trace) {
         return;
     }
@@ -716,19 +710,5 @@ where
     }
     for (slot, num_votes) in votes.into_iter().take(NUM_SLOTS) {
         datapoint_trace!(name, ("slot", slot, i64), ("num_votes", num_votes, i64));
-    }
-}
-
-fn submit_crds_signature_stats(
-    name: &'static str,
-    crds_signatures: &mut HeapRb<(Pubkey, Signature)>,
-) {
-    // submit all message signatures to metrics.
-    while let Some((origin, signature)) = crds_signatures.pop() {
-        datapoint_info!(
-            name,
-            ("crds_origin", origin.to_string(), String),
-            ("crds_signature", signature.to_string(), String)
-        );
     }
 }
