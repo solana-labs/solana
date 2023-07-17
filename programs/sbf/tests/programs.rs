@@ -4351,6 +4351,9 @@ fn test_cpi_invalid_account_info_pointers() {
     let bank = Arc::new(bank);
     let mut bank_client = BankClient::new_shared(bank);
 
+    let c_invoke_program_id =
+        load_program(&bank_client, &bpf_loader::id(), &mint_keypair, "invoke");
+
     let (bank, invoke_program_id) = load_program_and_advance_slot(
         &mut bank_client,
         &bpf_loader::id(),
@@ -4364,29 +4367,32 @@ fn test_cpi_invalid_account_info_pointers() {
         AccountMeta::new(mint_pubkey, true),
         AccountMeta::new(account_keypair.pubkey(), false),
         AccountMeta::new_readonly(invoke_program_id, false),
+        AccountMeta::new_readonly(c_invoke_program_id, false),
     ];
 
-    for ix in [
-        TEST_CPI_INVALID_KEY_POINTER,
-        TEST_CPI_INVALID_LAMPORTS_POINTER,
-        TEST_CPI_INVALID_OWNER_POINTER,
-        TEST_CPI_INVALID_DATA_POINTER,
-    ] {
-        let account = AccountSharedData::new(42, 5, &invoke_program_id);
-        bank.store_account(&account_keypair.pubkey(), &account);
-        let instruction = Instruction::new_with_bytes(
-            invoke_program_id,
-            &[ix, 42, 42, 42],
-            account_metas.clone(),
-        );
+    for invoke_program_id in [invoke_program_id, c_invoke_program_id] {
+        for ix in [
+            TEST_CPI_INVALID_KEY_POINTER,
+            TEST_CPI_INVALID_LAMPORTS_POINTER,
+            TEST_CPI_INVALID_OWNER_POINTER,
+            TEST_CPI_INVALID_DATA_POINTER,
+        ] {
+            let account = AccountSharedData::new(42, 5, &invoke_program_id);
+            bank.store_account(&account_keypair.pubkey(), &account);
+            let instruction = Instruction::new_with_bytes(
+                invoke_program_id,
+                &[ix, 42, 42, 42],
+                account_metas.clone(),
+            );
 
-        let message = Message::new(&[instruction], Some(&mint_pubkey));
-        let tx = Transaction::new(&[&mint_keypair], message.clone(), bank.last_blockhash());
-        let (result, _, logs) = process_transaction_and_record_inner(&bank, tx);
-        assert!(result.is_err(), "{result:?}");
-        assert!(
-            logs.iter().any(|log| log.contains("Invalid pointer")),
-            "{logs:?}"
-        );
+            let message = Message::new(&[instruction], Some(&mint_pubkey));
+            let tx = Transaction::new(&[&mint_keypair], message.clone(), bank.last_blockhash());
+            let (result, _, logs) = process_transaction_and_record_inner(&bank, tx);
+            assert!(result.is_err(), "{result:?}");
+            assert!(
+                logs.iter().any(|log| log.contains("Invalid pointer")),
+                "{logs:?}"
+            );
+        }
     }
 }
