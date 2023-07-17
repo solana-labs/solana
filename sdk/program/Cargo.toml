@@ -14,6 +14,7 @@ rust-version = "1.68.0" # solana platform-tools rust version
 [dependencies]
 bincode = { workspace = true }
 blake3 = { workspace = true, features = ["digest", "traits-preview"] }
+borsh0-9 = { package = "borsh", version = "0.9.3" }
 borsh = { workspace = true }
 bs58 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
