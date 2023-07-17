@@ -4505,14 +4505,6 @@ fn test_vote_refresh_outside_slothash() {
         35 * DEFAULT_NODE_STAKE,
         28 * DEFAULT_NODE_STAKE,
     ];
-    let validator_keys = vec![
-        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
-        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
-        "4mx9yoFBeYasDKBGDWCTWGJdWuJCKbgqmuP8bN9umybCh5Jzngw7KQxe99Rf5uzfyzgba1i65rJW4Wqk7Ab5S8ye",
-    ]
-    .iter()
-    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
-    .collect::<Vec<_>>();
     let node_vote_keys = vec![
         "3NDQ3ud86RTVg8hTy2dDWnS4P8NfjhZ2gDgQAJbr3heaKaUVS1FW3sTLKA1GmDrY9aySzsa4QxpDkbLv47yHxzr3",
         "46ZHpHE6PEvXYPu3hf9iQqjBk2ZNDaJ9ejqKWHEjxaQjpAGasKaWKbKHbP3646oZhfgDRzx95DH9PCBKKsoCVngk",
@@ -4521,23 +4513,29 @@ fn test_vote_refresh_outside_slothash() {
     .iter()
     .map(|s| Arc::new(Keypair::from_base58_string(s)))
     .collect::<Vec<_>>();
+    let (leader_schedule, validator_keys) =
+        create_custom_leader_schedule_with_random_keys(&[4, 8, 0]);
+    let mut default_config = ValidatorConfig::default_for_test();
+    default_config.fixed_leader_schedule = Some(FixedSchedule {
+        leader_schedule: Arc::new(leader_schedule),
+    });
     let vs = validator_keys
         .iter()
-        .map(|(kp, _)| kp.pubkey())
+        .map(|kp| kp.pubkey())
         .collect::<Vec<_>>();
     let (a_pubkey, b_pubkey, c_pubkey) = (vs[0], vs[1], vs[2]);
 
     // We want B to not vote (we are trying to simulate its votes not landing until it gets to the
     // minority fork)
     let mut validator_configs =
-        make_identical_validator_configs(&ValidatorConfig::default_for_test(), node_stakes.len());
+        make_identical_validator_configs(&default_config, node_stakes.len());
     validator_configs[1].voting_disabled = true;
 
     let mut config = ClusterConfig {
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
         node_stakes,
         validator_configs,
-        validator_keys: Some(validator_keys),
+        validator_keys: Some(validator_keys.iter().map(|s| (s.clone(), true)).collect::<Vec<_>>()),
         node_vote_keys: Some(node_vote_keys),
         slots_per_epoch,
         stakers_slot_offset: slots_per_epoch,
@@ -4623,19 +4621,17 @@ fn test_vote_refresh_outside_slothash() {
 
     // Allow B to fork now.
     info!("Allowing B to fork");
+    let now = Instant::now();
     loop {
         sleep(Duration::from_millis(200));
-        let blockstore = open_blockstore(&b_ledger_path);
         let (last_vote, _) = last_vote_in_tower(&b_ledger_path, &b_pubkey).unwrap();
-        let mut iterator = AncestorIterator::new(last_vote, &blockstore);
-        let first_ancestor = iterator.next().unwrap();
-        let second_ancestor = iterator.next().unwrap();
-        if second_ancestor > common_ancestor_slot
-            && first_ancestor % 4 == 3
-            && first_ancestor == second_ancestor + 1
-        {
+        if last_vote > common_ancestor_slot + 3 {
             break;
         }
+        assert!(
+            now.elapsed() < Duration::from_secs(10),
+            "validator not creating blocks fast enough"
+        );
     }
     let last_vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
     let blockstore = open_blockstore(&b_ledger_path);
