@@ -4566,7 +4566,10 @@ fn test_vote_refresh_outside_slothash() {
             info!("common_ancestor_slot: {}", common_ancestor_slot);
             break;
         }
-        assert!(now.elapsed() < Duration::from_secs(10), "validator not creating blocks fast enough");
+        assert!(
+            now.elapsed() < Duration::from_secs(10),
+            "validator not creating blocks fast enough"
+        );
         sleep(Duration::from_millis(100));
     }
 
@@ -4603,7 +4606,10 @@ fn test_vote_refresh_outside_slothash() {
             );
             break;
         }
-        assert!(now.elapsed() < Duration::from_secs(10), "validator not creating blocks fast enough");
+        assert!(
+            now.elapsed() < Duration::from_secs(10),
+            "validator not creating blocks fast enough"
+        );
         sleep(Duration::from_millis(100));
     }
 
@@ -4656,7 +4662,10 @@ fn test_vote_refresh_outside_slothash() {
     cluster.restart_node(&b_pubkey, b_info, SocketAddrSpace::Unspecified);
 
     let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
-    assert!(vote_on_b == last_vote_on_b, "B should not have new votes immediately");
+    assert!(
+        vote_on_b == last_vote_on_b,
+        "B should not have new votes immediately"
+    );
 
     let blockstore = open_blockstore(&a_ledger_path);
     info!(
@@ -4671,11 +4680,16 @@ fn test_vote_refresh_outside_slothash() {
         if vote_on_b > last_vote_on_b {
             info!(
                 "B has voted again: {} last vote {} elapsed time {:?}",
-                vote_on_b, last_vote_on_b, now.elapsed(),
+                vote_on_b,
+                last_vote_on_b,
+                now.elapsed(),
             );
             break;
         }
-        assert!(now.elapsed() < Duration::from_secs(60), "B hasn't voted after a long time");
+        assert!(
+            now.elapsed() < Duration::from_secs(60),
+            "B hasn't voted after a long time"
+        );
     }
     let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
     // check that B has voted past last voted slot.
