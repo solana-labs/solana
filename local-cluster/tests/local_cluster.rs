@@ -4480,15 +4480,15 @@ fn test_slot_hash_expiry() {
     );
 }
 
-// This tests vote refreshes on votes that are too old to be in slot hash history. Suchvotes will never land, so we should instead send a new vote for the tip of the heaviest fork descending from the old vote.
-// outside slothash of the newest bank already so it will never land, we should send vote at the
-// tip of the current fork.
+// This tests vote refreshes on votes that are too old to be in slot hash history. Such votes
+// will never land, so we should instead send a new vote for the tip of the heaviest fork
+// descending from the old vote. We should send vote at the tip of the current fork.
 // It creates validators A, B, and C, (C is only needed for stake distribution), then do this:
 // 1. kill B and C, let A run for a while to create its own fork A
 // 2. kill A, copy ledger of A to B so B has everything until the common ancestor, restart B and
 //    let it run long enough to create a new fork B
 // 3. bring back A and B only, A now has 37% of the stake so its fork is heavier, B has only 35%
-//    so it wants to switch to fork B, but can't do it because of A's stake under switch proof
+//    so it wants to switch to fork A, but can't do it because of A's stake under switch proof
 //    threshold of 38%. Also, B has voted on fork B, and last_voted < last_landed_vote (we do this
 //    by stopping B after its 4-block leader slot), and last vote is old enough so it's outside
 //    slothash
@@ -4558,12 +4558,15 @@ fn test_vote_refresh_outside_slothash() {
 
     // Let A run for a while until we get to the common ancestor
     info!("Letting A run until common_ancestor_slot");
+    let now = Instant::now();
     loop {
-        if let Some((last_vote, _)) = last_vote_in_tower(&a_ledger_path, &a_pubkey) {
-            if last_vote >= common_ancestor_slot {
-                break;
-            }
+        let last_vote = wait_for_last_vote_in_tower_to_land_in_ledger(&a_ledger_path, &a_pubkey);
+        if last_vote >= common_ancestor_slot {
+            common_ancestor_slot = last_vote;
+            info!("common_ancestor_slot: {}", common_ancestor_slot);
+            break;
         }
+        assert!(now.elapsed() < Duration::from_secs(10), "validator not creating blocks fast enough");
         sleep(Duration::from_millis(100));
     }
 
@@ -4580,24 +4583,6 @@ fn test_vote_refresh_outside_slothash() {
         info!("Removing A's tower in B's ledger dir");
         remove_tower(&b_ledger_path, &a_pubkey);
 
-        // load A's tower and save it as B's tower
-        info!("Loading A's tower");
-        if let Some(mut a_tower) = restore_tower(&a_ledger_path, &a_pubkey) {
-            a_tower.node_pubkey = b_pubkey;
-            // Update common_ancestor_slot because A is still running
-            if let Some(s) = a_tower.last_voted_slot() {
-                common_ancestor_slot = s;
-                info!("New common_ancestor_slot {}", common_ancestor_slot);
-            } else {
-                panic!("A's tower has no votes");
-            }
-            info!("Save as B's tower");
-            save_tower(&b_ledger_path, &a_tower, &b_info.info.keypair);
-            info!("B's new tower: {:?}", a_tower.tower_slots());
-        } else {
-            panic!("A's tower is missing");
-        }
-
         // Get rid of any slots past common_ancestor_slot
         info!("Removing extra slots from B's blockstore");
         let blockstore = open_blockstore(&b_ledger_path);
@@ -4607,9 +4592,10 @@ fn test_vote_refresh_outside_slothash() {
     info!("Run A on majority fork until it creates its own fork");
     let mut last_vote_on_a;
     // Keep A running for a while longer so A has its own fork.
+    let now = Instant::now();
     loop {
         last_vote_on_a = wait_for_last_vote_in_tower_to_land_in_ledger(&a_ledger_path, &a_pubkey);
-        if last_vote_on_a > common_ancestor_slot {
+        if last_vote_on_a > common_ancestor_slot + 3 {
             let blockstore = open_blockstore(&a_ledger_path);
             info!(
                 "A majority fork: {:?}",
@@ -4617,6 +4603,7 @@ fn test_vote_refresh_outside_slothash() {
             );
             break;
         }
+        assert!(now.elapsed() < Duration::from_secs(10), "validator not creating blocks fast enough");
         sleep(Duration::from_millis(100));
     }
 
@@ -4644,6 +4631,13 @@ fn test_vote_refresh_outside_slothash() {
             break;
         }
     }
+    let last_vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
+    let blockstore = open_blockstore(&b_ledger_path);
+    info!(
+        "B last vote: {} minority fork: {:?}",
+        last_vote_on_b,
+        AncestorIterator::new(last_vote_on_b, &blockstore).collect::<Vec<Slot>>()
+    );
 
     info!("Kill B");
     b_info = cluster.exit_node(&b_pubkey);
@@ -4656,34 +4650,32 @@ fn test_vote_refresh_outside_slothash() {
         copy_blocks(last_vote_on_a, &a_blockstore, &b_blockstore);
     }
 
-    // Now restart A and B and see if B is able to eventually switch onto the majority fork
+    // Now restart A and B and see if B is able to eventually send a new vote on tip of its fork.
     info!("Restarting A & B");
     cluster.restart_node(&a_pubkey, a_info, SocketAddrSpace::Unspecified);
     cluster.restart_node(&b_pubkey, b_info, SocketAddrSpace::Unspecified);
+
+    let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
+    assert!(vote_on_b == last_vote_on_b, "B should not have new votes immediately");
 
     let blockstore = open_blockstore(&a_ledger_path);
     info!(
         "A majority fork: {:?}",
         AncestorIterator::new(last_vote_on_a, &blockstore).collect::<Vec<Slot>>()
     );
-    let last_vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
-    let blockstore = open_blockstore(&b_ledger_path);
-    info!(
-        "B last vote: {} minority fork: {:?}",
-        last_vote_on_b,
-        AncestorIterator::new(last_vote_on_b, &blockstore).collect::<Vec<Slot>>()
-    );
 
-    for i in 0..100 {
+    let now = Instant::now();
+    loop {
         sleep(Duration::from_millis(500));
         let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
         if vote_on_b > last_vote_on_b {
             info!(
-                "B has voted again: {} last vote {} loop {}",
-                vote_on_b, last_vote_on_b, i,
+                "B has voted again: {} last vote {} elapsed time {:?}",
+                vote_on_b, last_vote_on_b, now.elapsed(),
             );
             break;
         }
+        assert!(now.elapsed() < Duration::from_secs(60), "B hasn't voted after a long time");
     }
     let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
     // check that B has voted past last voted slot.
