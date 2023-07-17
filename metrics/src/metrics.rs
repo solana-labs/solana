@@ -70,7 +70,7 @@ impl InfluxDbMetricsWriter {
         );
 
         let write_url = format!(
-            "{}/write?db={}&u={}&p={}&precision=n",
+            "{}/write?db={}&u={}&p={}&precision=ns",
             &config.host, &config.db, &config.username, &config.password
         );
 
