@@ -12431,6 +12431,24 @@ fn test_rewards_point_calculation_empty() {
 }
 
 #[test]
+fn test_force_reward_interval_end() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+
+    let expected_num = 100;
+
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    bank.set_epoch_reward_status_active(vec![stake_rewards]);
+    assert!(bank.get_reward_interval() == RewardInterval::InsideInterval);
+
+    bank.force_reward_interval_end_for_tests();
+    assert!(bank.get_reward_interval() == RewardInterval::OutsideInterval);
+}
+
+#[test]
 fn test_is_partitioned_reward_feature_enable() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
 
