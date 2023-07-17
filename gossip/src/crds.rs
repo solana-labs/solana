@@ -63,17 +63,14 @@ const VOTE_SLOTS_METRICS_CAP: usize = 100;
 //      mainnet: ~280k
 // target: 1-2 signatures reported per minute
 // log2(250k) = ~17.9.
-const SIGNATURE_SAMPLE_TRAILING_ZEROS: u8 = 8;
+const SIGNATURE_SAMPLE_TRAILING_ZEROS: u8 = 18;
 
-pub fn trailing_n_crds_signature_bytes_are_zero(
-    signature_bytes: &[u8],
-    n: u8,
-) -> bool {
+pub fn trailing_n_crds_signature_bits_are_zero(signature_bytes: &[u8], n: u8) -> bool {
     let num_bytes: usize = (n as usize + 7) / 8; // Number of bytes required to represent n bits
 
     let mut signature_ending: u64 = 0;
     for i in 0..num_bytes {
-        let shift = (num_bytes - i - 1) * 8;
+        let shift = i * 8;
         signature_ending |= (signature_bytes[i] as u64) << shift;
     }
 
@@ -695,12 +692,15 @@ impl CrdsDataStats {
         }
 
         // check trailing zero bits on signature for metrics
-        if trailing_n_crds_signature_bytes_are_zero(entry.value.signature.as_ref(), SIGNATURE_SAMPLE_TRAILING_ZEROS) {
+        if trailing_n_crds_signature_bits_are_zero(
+            entry.value.signature.as_ref(),
+            SIGNATURE_SAMPLE_TRAILING_ZEROS,
+        ) {
             datapoint_info!(
                 "cluster_info_crds_message_signatures",
                 ("crds_origin", entry.value.pubkey().to_string(), String),
                 ("crds_signature", entry.value.signature.to_string(), String)
-            ); 
+            );
         }
     }
 
