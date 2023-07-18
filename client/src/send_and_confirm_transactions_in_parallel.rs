@@ -36,8 +36,9 @@ const TPU_RESEND_REFRESH_RATE: Duration = Duration::from_secs(2);
 #[derive(Clone, Debug)]
 struct TransactionData {
     last_valid_blockheight: u64,
-    transaction: Transaction,
+    message: Message,
     index: usize,
+    serialized_transaction: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -169,8 +170,11 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
             .try_sign(signers, blockhashdata.blockhash)
             .expect("Transaction should be signable");
         let signature = transaction.signatures[0];
+        let serialized_transaction = serialize(&transaction).expect("Transaction should serailize");
         let send_over_rpc = if let Some(tpu_client) = tpu_client {
-            !tpu_client.send_transaction(&transaction).await
+            !tpu_client
+                .send_wire_transaction(serialized_transaction.clone())
+                .await
         } else {
             true
         };
@@ -196,8 +200,9 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
             signature,
             TransactionData {
                 index: *index,
-                transaction,
+                serialized_transaction,
                 last_valid_blockheight: blockhashdata.last_valid_blockheight,
+                message: message.clone(),
             },
         );
 
@@ -270,10 +275,7 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
                 let txs_to_resend_over_tpu = transaction_map
                     .iter()
                     .filter(|x| blockheight < x.last_valid_blockheight)
-                    .map(|x| {
-                        serialize(&x.transaction)
-                            .expect("Should serialize as it has been serialized before")
-                    })
+                    .map(|x| x.serialized_transaction.clone())
                     .collect();
                 let _ = tpu_client
                     .try_send_wire_transaction_batch(txs_to_resend_over_tpu)
@@ -402,7 +404,7 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
             // remove all the confirmed transactions
             transaction_map
                 .iter()
-                .map(|x| (x.index, x.transaction.message.clone()))
+                .map(|x| (x.index, x.message.clone()))
                 .collect()
         };
 
