@@ -397,12 +397,6 @@ impl WindowService {
             .unwrap()
     }
 
-    fn handle_duplicate_on_insert(check_duplicate_sender: Sender<Shred>) -> impl Fn(Shred) {
-        move |shred| {
-            let _ = check_duplicate_sender.send(shred);
-        }
-    }
-
     fn start_window_insert_thread(
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
@@ -422,10 +416,12 @@ impl WindowService {
             .build()
             .unwrap();
         let reed_solomon_cache = ReedSolomonCache::default();
-        let handle_duplicate = Self::handle_duplicate_on_insert(check_duplicate_sender);
         Builder::new()
             .name("solWinInsert".to_string())
             .spawn(move || {
+                let handle_duplicate = |shred| {
+                    let _ = check_duplicate_sender.send(shred);
+                };
                 let mut metrics = BlockstoreInsertionMetrics::default();
                 let mut ws_metrics = WindowServiceMetrics::default();
                 let mut last_print = Instant::now();
@@ -435,7 +431,7 @@ impl WindowService {
                         &verified_receiver,
                         &blockstore,
                         &leader_schedule_cache,
-                        &handle_duplicate,
+                        handle_duplicate,
                         &mut metrics,
                         &mut ws_metrics,
                         &completed_data_sets_sender,
@@ -610,7 +606,9 @@ mod test {
             duplicate_slot_sender,
         );
 
-        let handle_duplicate = WindowService::handle_duplicate_on_insert(duplicate_shred_sender);
+        let handle_duplicate = |shred| {
+            let _ = duplicate_shred_sender.send(shred);
+        };
         let num_trials = 100;
         for slot in 0..num_trials {
             let (shreds, _) = make_many_slot_entries(slot, 1, 10);
