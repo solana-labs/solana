@@ -675,7 +675,6 @@ pub(crate) fn submit_gossip_stats(
         ("all-push", crds_stats.push.fails.iter().sum::<usize>(), i64),
         ("all-pull", crds_stats.pull.fails.iter().sum::<usize>(), i64),
     );
-
     if !log::log_enabled!(log::Level::Trace) {
         return;
     }

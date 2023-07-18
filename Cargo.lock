@@ -5979,6 +5979,7 @@ name = "solana-gossip"
 version = "1.17.0"
 dependencies = [
  "bincode",
+ "bs58",
  "bv",
  "clap 2.33.3",
  "crossbeam-channel",

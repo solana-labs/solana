@@ -23,7 +23,6 @@
 //!
 //! A value is updated to a new version if the labels match, and the value
 //! wallclock is later, or the value hash is greater.
-#![allow(clippy::integer_arithmetic)]
 
 use {
     crate::{
@@ -45,6 +44,7 @@ use {
         clock::Slot,
         hash::{hash, Hash},
         pubkey::Pubkey,
+        signature::Signature,
     },
     std::{
         cmp::Ordering,
@@ -57,25 +57,30 @@ use {
 const CRDS_SHARDS_BITS: u32 = 12;
 // Number of vote slots to track in an lru-cache for metrics.
 const VOTE_SLOTS_METRICS_CAP: usize = 100;
-// Number of ending zero bits for crds signature to get reported to influx
+// Number of trailing zero bits for crds signature to get reported to influx
 // mean new push messages received per minute per node
 //      testnet: ~500k,
 //      mainnet: ~280k
 // target: 1-2 signatures reported per minute
 // log2(250k) = ~17.9.
-const SIGNATURE_SAMPLE_TRAILING_ZEROS: u8 = 18;
+const SIGNATURE_SAMPLE_TRAILING_ZEROS: u32 = 8;
 
-pub fn trailing_n_crds_signature_bits_are_zero(signature_bytes: &[u8], n: u8) -> bool {
-    let num_bytes: usize = (n as usize + 7) / 8; // Number of bytes required to represent n bits
+fn should_report_message_signature(signature_bytes: Signature) -> bool {
+    // let num_bytes: usize = (SIGNATURE_SAMPLE_TRAILING_ZEROS as usize + 7) / 8; // Number of bytes required to represent n bits
 
-    let mut signature_ending: u64 = 0;
-    for (i, signature_byte) in signature_bytes.iter().enumerate().take(num_bytes) {
-        let shift = i * 8;
-        signature_ending |= (*signature_byte as u64) << shift;
-    }
+    // let mut signature_ending: u64 = 0;
+    // for (i, signature_byte) in signature_bytes.as_ref().iter().enumerate().take(num_bytes) {
+    //     let shift = i * 8;
+    //     signature_ending |= (*signature_byte as u64) << shift;
+    // }
 
-    // check if last n bits of signature (aka signature_ending) are all 0.
-    (signature_ending & ((1 << n) - 1)) == 0
+    // // check if last n bits of signature (aka signature_ending) are all 0.
+    // (signature_ending & ((1 << SIGNATURE_SAMPLE_TRAILING_ZEROS) - 1)) == 0
+    let (trailing_signature_bytes, _) = signature_bytes
+        .as_ref()
+        .split_at(std::mem::size_of::<u64>());
+    u64::from_le_bytes(trailing_signature_bytes.try_into().unwrap()).trailing_zeros()
+        == SIGNATURE_SAMPLE_TRAILING_ZEROS
 }
 
 pub struct Crds {
@@ -692,15 +697,21 @@ impl CrdsDataStats {
         }
 
         // check trailing zero bits on signature for metrics
-        if trailing_n_crds_signature_bits_are_zero(
-            entry.value.signature.as_ref(),
-            SIGNATURE_SAMPLE_TRAILING_ZEROS,
-        ) {
+        if should_report_message_signature(entry.value.signature) {
+            // let sig_string = bs58::encode(entry.value.signature.as_ref()[..16]).into_string();
             datapoint_info!(
                 "cluster_info_crds_message_signatures",
-                ("crds_origin", entry.value.pubkey().to_string(), String),
-                ("crds_signature", entry.value.signature.to_string(), String)
+                ("crds_origin", bs58::encode(&entry.value.pubkey().as_ref()[..8]).into_string(), String),
+                ("crds_signature", bs58::encode(&entry.value.signature.as_ref()[..8]).into_string(), String)
             );
+
+            info!("crds_origin full string: {:?}", entry.value.pubkey().to_string());
+            info!("crds_signature full string: {:?}", entry.value.signature.to_string());
+            // datapoint_info!(
+            //     "cluster_info_crds_message_signatures",
+            //     ("crds_origin", entry.value.pubkey().to_string(), String),
+            //     ("crds_signature", entry.value.signature.to_string(), String)
+            // );
         }
     }
 
