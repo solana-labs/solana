@@ -45,12 +45,12 @@ Configuration object containing the following fields:
 </Field>
 
 <Field name="before" type="string" optional={true}>
-  start searching backwards from this transaction signature. If not provided the
+  start searching backwards from this transaction signature (exclusive). If not provided the
   search starts from the top of the highest max confirmed block.
 </Field>
 
 <Field name="until" type="string" optional={true}>
-  search until this transaction signature, if found before limit reached
+  search until this transaction signature (exclusive), if found before limit reached
 </Field>
 
 </Parameter>
