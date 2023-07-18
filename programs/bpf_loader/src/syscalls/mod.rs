@@ -3925,9 +3925,9 @@ mod tests {
                 exponent: VADDR_DATA as *const u8,
                 exponent_len: MAX_LEN,
                 modulus: VADDR_DATA as *const u8,
-                modulus_len: MAX_LEN
+                modulus_len: MAX_LEN,
             };
-    
+
             let mut memory_mapping = MemoryMapping::new(
                 vec![
                     MemoryRegion::new_readonly(bytes_of(&params_max_len), VADDR_PARAMS),
@@ -3937,10 +3937,13 @@ mod tests {
                 &config,
             )
             .unwrap();
-    
+
             let budget = invoke_context.get_compute_budget();
-            invoke_context.mock_set_remaining(budget.syscall_base_cost + (MAX_LEN * MAX_LEN) / budget.big_modular_exponentiation_cost);
-    
+            invoke_context.mock_set_remaining(
+                budget.syscall_base_cost
+                    + (MAX_LEN * MAX_LEN) / budget.big_modular_exponentiation_cost,
+            );
+
             let mut result = ProgramResult::Ok(0);
             SyscallBigModExp::call(
                 &mut invoke_context,
@@ -3952,7 +3955,7 @@ mod tests {
                 &mut memory_mapping,
                 &mut result,
             );
-    
+
             assert_eq!(result.unwrap(), 0);
         }
 
@@ -3964,9 +3967,9 @@ mod tests {
                 exponent: VADDR_DATA as *const u8,
                 exponent_len: INV_LEN,
                 modulus: VADDR_DATA as *const u8,
-                modulus_len: INV_LEN
+                modulus_len: INV_LEN,
             };
-    
+
             let mut memory_mapping = MemoryMapping::new(
                 vec![
                     MemoryRegion::new_readonly(bytes_of(&params_inv_len), VADDR_PARAMS),
@@ -3976,11 +3979,13 @@ mod tests {
                 &config,
             )
             .unwrap();
-    
-    
+
             let budget = invoke_context.get_compute_budget();
-            invoke_context.mock_set_remaining(budget.syscall_base_cost + (INV_LEN * INV_LEN) / budget.big_modular_exponentiation_cost);
-    
+            invoke_context.mock_set_remaining(
+                budget.syscall_base_cost
+                    + (INV_LEN * INV_LEN) / budget.big_modular_exponentiation_cost,
+            );
+
             let mut result = ProgramResult::Ok(0);
             SyscallBigModExp::call(
                 &mut invoke_context,
@@ -3992,7 +3997,7 @@ mod tests {
                 &mut memory_mapping,
                 &mut result,
             );
-    
+
             assert!(matches!(
                 result,
                 ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::InvalidLength,
