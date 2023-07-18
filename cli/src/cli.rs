@@ -1898,7 +1898,7 @@ mod tests {
         );
 
         // Test Confirm Subcommand
-        let signature = Signature::new(&[1; 64]);
+        let signature = Signature::from([1; 64]);
         let signature_string = format!("{signature:?}");
         let test_confirm =
             test_commands
@@ -2053,7 +2053,11 @@ mod tests {
         };
         assert_eq!(process_command(&config).unwrap(), "0.00000005 SOL");
 
-        let good_signature = Signature::new(&bs58::decode(SIGNATURE).into_vec().unwrap());
+        let good_signature = bs58::decode(SIGNATURE)
+            .into_vec()
+            .map(Signature::try_from)
+            .unwrap()
+            .unwrap();
         config.command = CliCommand::Confirm(good_signature);
         assert_eq!(
             process_command(&config).unwrap(),
@@ -2283,13 +2287,21 @@ mod tests {
 
         // sig_not_found case
         config.rpc_client = Some(Arc::new(RpcClient::new_mock("sig_not_found".to_string())));
-        let missing_signature = Signature::new(&bs58::decode("5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW").into_vec().unwrap());
+        let missing_signature = bs58::decode("5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW")
+            .into_vec()
+            .map(Signature::try_from)
+            .unwrap()
+            .unwrap();
         config.command = CliCommand::Confirm(missing_signature);
         assert_eq!(process_command(&config).unwrap(), "Not found");
 
         // Tx error case
         config.rpc_client = Some(Arc::new(RpcClient::new_mock("account_in_use".to_string())));
-        let any_signature = Signature::new(&bs58::decode(SIGNATURE).into_vec().unwrap());
+        let any_signature = bs58::decode(SIGNATURE)
+            .into_vec()
+            .map(Signature::try_from)
+            .unwrap()
+            .unwrap();
         config.command = CliCommand::Confirm(any_signature);
         assert_eq!(
             process_command(&config).unwrap(),

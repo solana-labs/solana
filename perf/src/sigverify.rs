@@ -135,9 +135,8 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) -> bool {
             Some(sig_end) => sig_end,
             None => return false,
         };
-        let signature = match packet.data(sig_start..sig_end) {
-            Some(signature) => Signature::new(signature),
-            None => return false,
+        let Some(Ok(signature)) = packet.data(sig_start..sig_end).map(Signature::try_from) else {
+            return false;
         };
         let pubkey = match packet.data(pubkey_start..pubkey_end) {
             Some(pubkey) => pubkey,

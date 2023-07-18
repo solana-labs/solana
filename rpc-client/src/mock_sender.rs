@@ -241,7 +241,7 @@ impl RpcSender for MockSender {
             "getTransactionCount" => json![1234],
             "getSlot" => json![0],
             "getMaxShredInsertSlot" => json![0],
-            "requestAirdrop" => Value::String(Signature::new(&[8; 64]).to_string()),
+            "requestAirdrop" => Value::String(Signature::from([8; 64]).to_string()),
             "getSnapshotSlot" => Value::Number(Number::from(0)),
             "getHighestSnapshotSlot" => json!(RpcSnapshotSlotInfo {
                 full: 100,
@@ -333,7 +333,7 @@ impl RpcSender for MockSender {
             }
             "sendTransaction" => {
                 let signature = if self.url == "malicious" {
-                    Signature::new(&[8; 64]).to_string()
+                    Signature::from([8; 64]).to_string()
                 } else {
                     let tx_str = params.as_array().unwrap()[0].as_str().unwrap().to_string();
                     let data = BASE64_STANDARD.decode(tx_str).unwrap();
