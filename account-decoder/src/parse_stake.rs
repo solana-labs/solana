@@ -19,7 +19,7 @@ pub fn parse_stake(data: &[u8]) -> Result<StakeAccountType, ParseAccountError> {
             meta: meta.into(),
             stake: None,
         }),
-        StakeState::Stake(meta, stake) => StakeAccountType::Delegated(UiStakeAccount {
+        StakeState::Stake(meta, stake, _) => StakeAccountType::Delegated(UiStakeAccount {
             meta: meta.into(),
             stake: Some(stake.into()),
         }),
@@ -136,7 +136,7 @@ impl From<Delegation> for UiDelegation {
 
 #[cfg(test)]
 mod test {
-    use {super::*, bincode::serialize};
+    use {super::*, bincode::serialize, solana_sdk::stake::stake_flags::StakeFlags};
 
     #[test]
     fn test_parse_stake() {
@@ -194,7 +194,7 @@ mod test {
             credits_observed: 10,
         };
 
-        let stake_state = StakeState::Stake(meta, stake);
+        let stake_state = StakeState::Stake(meta, stake, StakeFlags::empty());
         let stake_data = serialize(&stake_state).unwrap();
         assert_eq!(
             parse_stake(&stake_data).unwrap(),
