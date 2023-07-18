@@ -4,6 +4,7 @@
 
 pub mod config;
 pub mod instruction;
+pub mod stake_flags;
 pub mod state;
 pub mod tools;
 
