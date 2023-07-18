@@ -1718,6 +1718,10 @@ declare_syscall!(
         .get(0)
         .ok_or(SyscallError::InvalidLength)?;
 
+        if params.base_len > 512 || params.exponent_len > 512 || params.modulus_len > 512 {
+            return Err(Box::new(SyscallError::InvalidLength));
+        }
+
         let input_len: u64 = std::cmp::max(params.base_len, params.exponent_len);
         let input_len: u64 = std::cmp::max(input_len, params.modulus_len);
 
@@ -3897,6 +3901,110 @@ mod tests {
             ),
             Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping,
         ));
+    }
+
+    #[test]
+    fn test_syscall_big_mod_exp() {
+        let config = Config::default();
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
+
+        const VADDR_PARAMS: u64 = 0x100000000;
+        const MAX_LEN: u64 = 512;
+        const INV_LEN: u64 = MAX_LEN + 1;
+        let data: [u8; INV_LEN as usize] = [0; INV_LEN as usize];
+        const VADDR_DATA: u64 = 0x200000000;
+
+        let mut data_out: [u8; INV_LEN as usize] = [0; INV_LEN as usize];
+        const VADDR_OUT: u64 = 0x300000000;
+
+        // Test that SyscallBigModExp succeeds with the maximum param size
+        {
+            let params_max_len = BigModExpParams {
+                base: VADDR_DATA as *const u8,
+                base_len: MAX_LEN,
+                exponent: VADDR_DATA as *const u8,
+                exponent_len: MAX_LEN,
+                modulus: VADDR_DATA as *const u8,
+                modulus_len: MAX_LEN,
+            };
+
+            let mut memory_mapping = MemoryMapping::new(
+                vec![
+                    MemoryRegion::new_readonly(bytes_of(&params_max_len), VADDR_PARAMS),
+                    MemoryRegion::new_readonly(&data, VADDR_DATA),
+                    MemoryRegion::new_writable(&mut data_out, VADDR_OUT),
+                ],
+                &config,
+                &SBPFVersion::V2,
+            )
+            .unwrap();
+
+            let budget = invoke_context.get_compute_budget();
+            invoke_context.mock_set_remaining(
+                budget.syscall_base_cost
+                    + (MAX_LEN * MAX_LEN) / budget.big_modular_exponentiation_cost,
+            );
+
+            let mut result = ProgramResult::Ok(0);
+            SyscallBigModExp::call(
+                &mut invoke_context,
+                VADDR_PARAMS,
+                VADDR_OUT,
+                0,
+                0,
+                0,
+                &mut memory_mapping,
+                &mut result,
+            );
+
+            assert_eq!(result.unwrap(), 0);
+        }
+
+        // Test that SyscallBigModExp fails when the maximum param size is exceeded
+        {
+            let params_inv_len = BigModExpParams {
+                base: VADDR_DATA as *const u8,
+                base_len: INV_LEN,
+                exponent: VADDR_DATA as *const u8,
+                exponent_len: INV_LEN,
+                modulus: VADDR_DATA as *const u8,
+                modulus_len: INV_LEN,
+            };
+
+            let mut memory_mapping = MemoryMapping::new(
+                vec![
+                    MemoryRegion::new_readonly(bytes_of(&params_inv_len), VADDR_PARAMS),
+                    MemoryRegion::new_readonly(&data, VADDR_DATA),
+                    MemoryRegion::new_writable(&mut data_out, VADDR_OUT),
+                ],
+                &config,
+                &SBPFVersion::V2,
+            )
+            .unwrap();
+
+            let budget = invoke_context.get_compute_budget();
+            invoke_context.mock_set_remaining(
+                budget.syscall_base_cost
+                    + (INV_LEN * INV_LEN) / budget.big_modular_exponentiation_cost,
+            );
+
+            let mut result = ProgramResult::Ok(0);
+            SyscallBigModExp::call(
+                &mut invoke_context,
+                VADDR_PARAMS,
+                VADDR_OUT,
+                0,
+                0,
+                0,
+                &mut memory_mapping,
+                &mut result,
+            );
+
+            assert!(matches!(
+                result,
+                ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::InvalidLength,
+            ));
+        }
     }
 
     #[test]
