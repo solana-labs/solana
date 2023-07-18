@@ -66,6 +66,10 @@ pub enum StakeError {
 
     #[error("stake redelegation to the same vote account is not permitted")]
     RedelegateToSameVoteAccount,
+
+    #[allow(dead_code)]
+    #[error("redelegated stake must be fully activated before deactivation")]
+    RedelegatedStakeMustFullyActivateBeforeDeactivationIsPermitted,
 }
 
 impl<E> DecodeError<E> for StakeError {
