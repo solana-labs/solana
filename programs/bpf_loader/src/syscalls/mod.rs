@@ -3935,6 +3935,7 @@ mod tests {
                     MemoryRegion::new_writable(&mut data_out, VADDR_OUT),
                 ],
                 &config,
+                &SBPFVersion::V2,
             )
             .unwrap();
 
@@ -3977,6 +3978,7 @@ mod tests {
                     MemoryRegion::new_writable(&mut data_out, VADDR_OUT),
                 ],
                 &config,
+                &SBPFVersion::V2,
             )
             .unwrap();
 
