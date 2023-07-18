@@ -63,7 +63,7 @@ const VOTE_SLOTS_METRICS_CAP: usize = 100;
 //      mainnet: ~280k
 // target: 1-2 signatures reported per minute
 // log2(250k) = ~17.9.
-const SIGNATURE_SAMPLE_TRAILING_ZEROS: u32 = 8;
+const SIGNATURE_SAMPLE_TRAILING_ZEROS: u32 = 18;
 
 /// check if last SIGNATURE_SAMPLE_TRAILING_ZEROS bits of signature are 0
 fn should_report_message_signature(signature_bytes: Signature) -> bool {
