@@ -649,10 +649,10 @@ pub trait ProtobufColumn: Column {
 /// `LedgerCleanupService`, which will periodically deprecate and purge
 /// oldest entries that are older than the latest root in order to maintain the
 /// configured --limit-ledger-size under the validator argument.
-pub trait SlotColumn<Index = u64> {}
+pub trait SlotColumn<Index = Slot> {}
 
 impl<T: SlotColumn> Column for T {
-    type Index = u64;
+    type Index = Slot;
 
     /// Converts a u64 Index to its RocksDB key.
     fn key(slot: u64) -> Vec<u8> {
@@ -874,13 +874,13 @@ impl Column for columns::ProgramCosts {
 }
 
 impl Column for columns::ShredCode {
-    type Index = (u64, u64);
+    type Index = (Slot, u64);
 
-    fn key(index: (u64, u64)) -> Vec<u8> {
+    fn key(index: (Slot, u64)) -> Vec<u8> {
         columns::ShredData::key(index)
     }
 
-    fn index(key: &[u8]) -> (u64, u64) {
+    fn index(key: &[u8]) -> (Slot, u64) {
         columns::ShredData::index(key)
     }
 
@@ -897,16 +897,16 @@ impl ColumnName for columns::ShredCode {
 }
 
 impl Column for columns::ShredData {
-    type Index = (u64, u64);
+    type Index = (Slot, u64);
 
-    fn key((slot, index): (u64, u64)) -> Vec<u8> {
+    fn key((slot, index): (Slot, u64)) -> Vec<u8> {
         let mut key = vec![0; 16];
         BigEndian::write_u64(&mut key[..8], slot);
         BigEndian::write_u64(&mut key[8..16], index);
         key
     }
 
-    fn index(key: &[u8]) -> (u64, u64) {
+    fn index(key: &[u8]) -> (Slot, u64) {
         let slot = BigEndian::read_u64(&key[..8]);
         let index = BigEndian::read_u64(&key[8..16]);
         (slot, index)
@@ -981,16 +981,16 @@ impl TypedColumn for columns::SlotMeta {
 }
 
 impl Column for columns::ErasureMeta {
-    type Index = (u64, u64);
+    type Index = (Slot, u64);
 
-    fn index(key: &[u8]) -> (u64, u64) {
+    fn index(key: &[u8]) -> (Slot, u64) {
         let slot = BigEndian::read_u64(&key[..8]);
         let set_index = BigEndian::read_u64(&key[8..]);
 
         (slot, set_index)
     }
 
-    fn key((slot, set_index): (u64, u64)) -> Vec<u8> {
+    fn key((slot, set_index): (Slot, u64)) -> Vec<u8> {
         let mut key = vec![0; 16];
         BigEndian::write_u64(&mut key[..8], slot);
         BigEndian::write_u64(&mut key[8..], set_index);
