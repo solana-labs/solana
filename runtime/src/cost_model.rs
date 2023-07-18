@@ -175,30 +175,30 @@ impl CostModel {
             }
         }
 
+        // calculate bpf cost based on compute budget instructions
+        let mut budget = ComputeBudget::default();
+
+        // Starting from v1.15, cost model uses compute_budget.set_compute_unit_limit to
+        // measure bpf_costs (code below), vs earlier versions that use estimated
+        // bpf instruction costs. The calculated transaction costs are used by leaders
+        // during block packing, different costs for same transaction due to different versions
+        // will not impact consensus. So for v1.15+, should call compute budget with
+        // the feature gate `enable_request_heap_frame_ix` enabled.
+        let enable_request_heap_frame_ix = true;
+        let result = budget.process_instructions(
+            transaction.message().program_instructions_iter(),
+            feature_set.is_active(&use_default_units_in_fee_calculation::id()),
+            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+            enable_request_heap_frame_ix,
+            feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+        );
+
         // if tx contained user-space instructions and a more accurate estimate available correct it,
         // where "user-space instructions" must be specifically checked by
         // 'compute_unit_limit_is_set' flag, because compute_budget does not distinguish
         // builtin and bpf instructions when calculating default compute-unit-limit. (see
         // compute_budget.rs test `test_process_mixed_instructions_without_compute_budget`)
-        if bpf_costs > 0 && compute_unit_limit_is_set {
-            // calculate bpf cost based on compute budget instructions
-            let mut budget = ComputeBudget::default();
-
-            // Starting from v1.15, cost model uses compute_budget.set_compute_unit_limit to
-            // measure bpf_costs (code below), vs earlier versions that use estimated
-            // bpf instruction costs. The calculated transaction costs are used by leaders
-            // during block packing, different costs for same transaction due to different versions
-            // will not impact consensus. So for v1.15+, should call compute budget with
-            // the feature gate `enable_request_heap_frame_ix` enabled.
-            let enable_request_heap_frame_ix = true;
-            let _result = budget.process_instructions(
-                transaction.message().program_instructions_iter(),
-                feature_set.is_active(&use_default_units_in_fee_calculation::id()),
-                !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-                enable_request_heap_frame_ix,
-                feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-            );
-
+        if bpf_costs > 0 && result.is_ok() && compute_unit_limit_is_set {
             bpf_costs = budget.compute_unit_limit
         }
 
