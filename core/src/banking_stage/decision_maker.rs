@@ -200,7 +200,7 @@ mod tests {
 
         // Known leader, not me - Forward
         {
-            poh_recorder.write().unwrap().reset(bank.clone(), None);
+            poh_recorder.write().unwrap().reset(bank, None);
             let decision = decision_maker.make_consume_or_forward_decision();
             assert!(matches!(decision, BufferedPacketsDecision::Forward));
         }
