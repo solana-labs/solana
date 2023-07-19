@@ -683,13 +683,13 @@ impl CrdsDataStats {
                 "cluster_info_crds_message_signatures",
                 (
                     "crds_origin",
-                    entry.value.pubkey().to_string().get(..8).unwrap(),
-                    String
+                    entry.value.pubkey().to_string().get(..8),
+                    Option<String>
                 ),
                 (
                     "crds_signature",
-                    entry.value.signature.to_string().get(..8).unwrap(),
-                    String
+                    entry.value.signature.to_string().get(..8),
+                    Option<String>
                 )
             );
         }
