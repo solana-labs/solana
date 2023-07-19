@@ -9,12 +9,23 @@ pub mod index;
 pub mod meta;
 pub mod mmap_utils;
 pub mod readable;
+pub mod writer;
 
 use {
+    crate::{
+        account_storage::meta::{StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo},
+        storable_accounts::StorableAccounts,
+    },
     error::TieredStorageError,
     footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
     index::AccountIndexFormat,
-    std::path::{Path, PathBuf},
+    solana_sdk::{account::ReadableAccount, hash::Hash},
+    std::{
+        borrow::Borrow,
+        fs::OpenOptions,
+        path::{Path, PathBuf},
+    },
+    writer::TieredStorageWriter,
 };
 
 pub type TieredStorageResult<T> = Result<T, TieredStorageError>;
@@ -53,17 +64,73 @@ impl TieredStorage {
     pub fn path(&self) -> &Path {
         self.path.as_path()
     }
+
+    /// Writes the specified accounts into this TieredStorage.
+    pub fn append_accounts<
+        'a,
+        'b,
+        T: ReadableAccount + Sync,
+        U: StorableAccounts<'a, T>,
+        V: Borrow<Hash>,
+    >(
+        &self,
+        accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
+        skip: usize,
+    ) -> Option<Vec<StoredAccountInfo>> {
+        let result;
+
+        {
+            let writer = TieredStorageWriter::new(&self.path, self.format.as_ref().unwrap());
+            result = writer.append_accounts(accounts, skip);
+        }
+
+        result
+    }
+
+    /// Returns the size of the underlying accounts file.
+    pub fn file_size(&self) -> TieredStorageResult<u64> {
+        let file = OpenOptions::new().read(true).create(false).open(&self.path);
+
+        Ok(file
+            .and_then(|f| f.metadata().map(|m| m.len()))
+            .unwrap_or(0))
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use {super::*, hot::HOT_FORMAT};
+    use {
+        super::*,
+        crate::account_storage::meta::StoredMetaWriteVersion,
+        footer::{TieredStorageFooter, TieredStorageMagicNumber},
+        hot::HOT_FORMAT,
+        solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
+        tempfile::NamedTempFile,
+    };
 
     #[test]
-    fn test_new_writable() {
-        let path = PathBuf::default();
-        let ts = TieredStorage::new_writable(&path, HOT_FORMAT.clone());
+    fn test_new_footer_only() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let ts = TieredStorage::new_writable(temp_file.path(), HOT_FORMAT.clone());
+        assert_eq!(ts.path(), temp_file.path());
+        assert_eq!(ts.file_size().unwrap(), 0);
 
-        assert_eq!(ts.path(), path);
+        let slot_ignored = Slot::MAX;
+        let account_refs = Vec::<(&Pubkey, &AccountSharedData)>::new();
+        let slice = &account_refs[..];
+        let account_data = (slot_ignored, slice);
+        let storable_accounts =
+            StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
+                &account_data,
+                Vec::<&Hash>::new(),
+                Vec::<StoredMetaWriteVersion>::new(),
+            );
+
+        let _unused = ts.append_accounts(&storable_accounts, 0);
+        assert_eq!(
+            ts.file_size().unwrap() as usize,
+            std::mem::size_of::<TieredStorageFooter>()
+                + std::mem::size_of::<TieredStorageMagicNumber>()
+        );
     }
 }
