@@ -129,12 +129,12 @@ where
     if shred.payload() == &other_payload {
         return Err(Error::InvalidDuplicateShreds);
     }
-    let other_shred = Shred::new_from_serialized_shred(other_payload.clone())?;
+    let other_shred = Shred::new_from_serialized_shred(other_payload)?;
     check_shreds(leader_schedule, &shred, &other_shred)?;
     let (slot, shred_index, shred_type) = (shred.slot(), shred.index(), shred.shred_type());
     let proof = DuplicateSlotProof {
         shred1: shred.into_payload(),
-        shred2: other_payload,
+        shred2: other_shred.into_payload(),
     };
     let data = bincode::serialize(&proof)?;
     let chunk_size = if DUPLICATE_SHRED_HEADER_SIZE < max_size {
