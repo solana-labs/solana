@@ -254,6 +254,12 @@ impl<T> IndexList<T> {
         elem_opt
     }
 
+    pub(crate) fn move_to_last(&mut self, index: Index) {
+        // unlink where it is
+        self.linkout_used(index);
+        self.linkin_last(index);
+    }
+
     #[inline]
     fn get_mut_indexnode(&mut self, at: usize) -> &mut IndexNode {
         &mut self.nodes[at]
@@ -464,73 +470,93 @@ mod tests {
         let mut list = IndexList::default();
         let values_raw = vec![3u64, 4, 5];
         for len in 1..=values_raw.len() {
-            let mut values = values_raw.clone();
-            values.truncate(len);
-            let i_values = values
-                .iter()
-                .enumerate()
-                .map(|(i, _)| i)
-                .collect::<Vec<_>>();
-
-            // insert in order
-            assert!(list.get_first().is_none());
-            let mut indexes = values
-                .iter()
-                .map(|value| list.insert_last(*value))
-                .collect::<Vec<_>>();
-
-            use itertools::Itertools;
-            solana_logger::setup();
-            for perm in i_values.iter().permutations(i_values.len()) {
-                /* perm for len == 3 is:
-                [0, 1, 2]
-                [0, 2, 1]
-                [1, 0, 2]
-                [1, 2, 0]
-                [2, 0, 1]
-                [2, 1, 0]
-                */
-                // verify list is as expected
-                values
+            let move_to_last = (0..=len).map(|i| {
+                (i<len).then_some(i);
+            }).collect::<Vec<_>>();
+            for move_to_last in move_to_last {
+                let mut values = values_raw.clone();
+                values.truncate(len);
+                let i_values = values
                     .iter()
-                    .zip(indexes.iter())
                     .enumerate()
-                    .for_each(|(i, (value, index))| {
-                        if i == 0 {
-                            assert_eq!(list.get_first(), values.first());
-                        }
-                        assert_eq!(list.get(*index).unwrap(), value);
-                    });
-                // remove in permutation order, verify it is gone, verify remaining expected are still there
-                perm.iter().enumerate().for_each(|(perm_i, i)| {
-                    list.remove(indexes[**i]);
-                    assert!(list.get(indexes[**i]).is_none());
-                    // make sure remaining elements are present
-                    ((perm_i + 1)..perm.len()).for_each(|i| {
-                        assert_eq!(list.get(indexes[*perm[i]]).unwrap(), &values[*perm[i]]);
-                    });
-                });
+                    .map(|(i, _)| i)
+                    .collect::<Vec<_>>();
+
+                // insert in order
                 assert!(list.get_first().is_none());
-                // insert in order to prepare for next iteration
-                indexes = values
+                let mut indexes = values
                     .iter()
                     .map(|value| list.insert_last(*value))
                     .collect::<Vec<_>>();
-                // verify list is as expected
-                values
-                    .iter()
-                    .zip(indexes.iter())
-                    .enumerate()
-                    .for_each(|(i, (value, index))| {
-                        if i == 0 {
-                            assert_eq!(list.get_first(), values.first());
-                        }
-                        assert_eq!(list.get(*index).unwrap(), value);
+
+                use itertools::Itertools;
+                solana_logger::setup();
+                for mut perm in i_values.iter().permutations(i_values.len()) {
+                    /* perm for len == 3 is:
+                    [0, 1, 2]
+                    [0, 2, 1]
+                    [1, 0, 2]
+                    [1, 2, 0]
+                    [2, 0, 1]
+                    [2, 1, 0]
+                    */
+                    // verify list is as expected
+                    values
+                        .iter()
+                        .zip(indexes.iter())
+                        .enumerate()
+                        .for_each(|(i, (value, index))| {
+                            if i == 0 {
+                                assert_eq!(list.get_first(), values.first());
+                            }
+                            assert_eq!(list.get(*index).unwrap(), value);
+                        });
+                    if let Some(move_to_last) = move_to_last {
+                        list.move_to_last(move_to_last);
+                        perm.push(perm.remove(move_to_last));
+                    }
+                    // verify list is as expected
+                    values
+                        .iter()
+                        .zip(indexes.iter())
+                        .enumerate()
+                        .for_each(|(i, (value, index))| {
+                            if i == 0 {
+                                assert_eq!(list.get_first(), values.first());
+                            }
+                            assert_eq!(list.get(*index).unwrap(), value);
+                        });
+                    // remove in permutation order, verify it is gone, verify remaining expected are still there
+                    perm.iter().enumerate().for_each(|(perm_i, i)| {
+                        list.remove(indexes[**i]);
+                        assert!(list.get(indexes[**i]).is_none());
+                        // make sure remaining elements are present
+                        ((perm_i + 1)..perm.len()).for_each(|i| {
+                            assert_eq!(list.get(indexes[*perm[i]]).unwrap(), &values[*perm[i]]);
+                        });
                     });
+                    assert!(list.get_first().is_none());
+                    // insert in order to prepare for next iteration
+                    indexes = values
+                        .iter()
+                        .map(|value| list.insert_last(*value))
+                        .collect::<Vec<_>>();
+                    // verify list is as expected
+                    values
+                        .iter()
+                        .zip(indexes.iter())
+                        .enumerate()
+                        .for_each(|(i, (value, index))| {
+                            if i == 0 {
+                                assert_eq!(list.get_first(), values.first());
+                            }
+                            assert_eq!(list.get(*index).unwrap(), value);
+                        });
+                }
+                indexes.iter().for_each(|index| {
+                    list.remove(*index);
+                })
             }
-            indexes.iter().for_each(|index| {
-                list.remove(*index);
-            })
         }
     }
 }
