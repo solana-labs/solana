@@ -17,7 +17,7 @@
 //! [sdoc]: https://docs.solana.com/developing/runtime-facilities/sysvars#recentblockhashes
 
 #![allow(deprecated)]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     crate::{
         declare_deprecated_sysvar_id, fee_calculator::FeeCalculator, hash::Hash, sysvar::Sysvar,

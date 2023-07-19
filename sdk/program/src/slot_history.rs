@@ -6,7 +6,7 @@
 //!
 //! [`sysvar::slot_history`]: crate::sysvar::slot_history
 
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 pub use crate::clock::Slot;
 use bv::{BitVec, BitsMut};
 

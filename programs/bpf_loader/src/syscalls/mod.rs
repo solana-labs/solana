@@ -1775,7 +1775,7 @@ declare_syscall!(
 );
 
 #[cfg(test)]
-#[allow(clippy::integer_arithmetic)]
+#[allow(clippy::arithmetic_side_effects)]
 #[allow(clippy::indexing_slicing)]
 mod tests {
     #[allow(deprecated)]

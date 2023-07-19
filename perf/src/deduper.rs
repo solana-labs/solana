@@ -64,7 +64,7 @@ impl<const K: usize, T: ?Sized + Hash> Deduper<K, T> {
 
     // Returns true if the data is duplicate.
     #[must_use]
-    #[allow(clippy::integer_arithmetic)]
+    #[allow(clippy::arithmetic_side_effects)]
     pub fn dedup(&self, data: &T) -> bool {
         let mut out = true;
         let hashers = self.state.iter().map(RandomState::build_hasher);
@@ -114,7 +114,7 @@ pub fn dedup_packets_and_count_discards<const K: usize>(
 }
 
 #[cfg(test)]
-#[allow(clippy::integer_arithmetic)]
+#[allow(clippy::arithmetic_side_effects)]
 mod tests {
     use {
         super::*,

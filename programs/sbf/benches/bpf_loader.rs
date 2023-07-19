@@ -1,7 +1,7 @@
 #![feature(test)]
 #![cfg(feature = "sbf_c")]
 #![allow(clippy::uninlined_format_args)]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {
     solana_rbpf::memory_region::MemoryState,

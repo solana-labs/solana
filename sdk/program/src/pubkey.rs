@@ -1,6 +1,6 @@
 //! Solana account addresses.
 
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     crate::{decode_error::DecodeError, hash::hashv, wasm_bindgen},
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
