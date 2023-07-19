@@ -99,7 +99,10 @@ impl Serializer {
             self.write_all(account.get_data());
             vm_data_addr
         } else {
-            self.push_account_region(account)?
+            self.push_region(true);
+            let vaddr = self.vaddr;
+            self.push_account_region(account)?;
+            vaddr
         };
 
         if self.aligned {
@@ -128,11 +131,8 @@ impl Serializer {
     fn push_account_region(
         &mut self,
         account: &mut BorrowedAccount<'_>,
-    ) -> Result<u64, InstructionError> {
-        self.push_region(true);
-        let vaddr = self.vaddr;
-        let account_len = account.get_data().len();
-        if account_len > 0 {
+    ) -> Result<(), InstructionError> {
+        if !account.get_data().is_empty() {
             let region = if account.can_data_be_changed().is_ok() {
                 if account.is_shared() {
                     // If the account is still shared it means it wasn't written to yet during this
@@ -157,7 +157,8 @@ impl Serializer {
             self.vaddr += region.len;
             self.regions.push(region);
         }
-        Ok(vaddr)
+
+        Ok(())
     }
 
     fn push_region(&mut self, writable: bool) {
