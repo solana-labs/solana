@@ -3228,14 +3228,13 @@ impl Blockstore {
     // Returns the existing shred if `new_shred` is not equal to the existing shred at the
     // given slot and index as this implies the leader generated two different shreds with
     // the same slot and index
-    pub fn is_shred_duplicate(&self, shred: ShredId, payload: Vec<u8>) -> Option<Vec<u8>> {
-        let (slot, index, shred_type) = shred.unpack();
+    pub fn is_shred_duplicate(&self, new_shred: &Shred) -> Option<Vec<u8>> {
+        let (slot, index, shred_type) = new_shred.id().unpack();
         let existing_shred = match shred_type {
             ShredType::Data => self.get_data_shred(slot, index as u64),
             ShredType::Code => self.get_coding_shred(slot, index as u64),
         }
         .expect("fetch from DuplicateSlots column family failed")?;
-        let new_shred = Shred::new_from_serialized_shred(payload).unwrap();
         (existing_shred != *new_shred.payload()).then_some(existing_shred)
     }
 
@@ -9377,17 +9376,11 @@ pub mod tests {
 
         // Check if shreds are duplicated
         assert_eq!(
-            blockstore.is_shred_duplicate(
-                ShredId::new(slot, /*index:*/ 0, duplicate_shred.shred_type()),
-                duplicate_shred.payload().clone(),
-            ),
+            blockstore.is_shred_duplicate(&duplicate_shred),
             Some(shred.payload().clone())
         );
         assert!(blockstore
-            .is_shred_duplicate(
-                ShredId::new(slot, /*index:*/ 0, non_duplicate_shred.shred_type()),
-                non_duplicate_shred.into_payload(),
-            )
+            .is_shred_duplicate(&non_duplicate_shred)
             .is_none());
 
         // Store a duplicate shred
@@ -9890,14 +9883,7 @@ pub mod tests {
             shred
         };
         assert!(blockstore
-            .is_shred_duplicate(
-                ShredId::new(
-                    slot,
-                    even_smaller_last_shred_duplicate.index(),
-                    ShredType::Data
-                ),
-                even_smaller_last_shred_duplicate.payload().clone(),
-            )
+            .is_shred_duplicate(&even_smaller_last_shred_duplicate)
             .is_some());
         blockstore
             .insert_shreds(vec![even_smaller_last_shred_duplicate], None, false)
