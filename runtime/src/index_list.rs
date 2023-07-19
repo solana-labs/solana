@@ -407,6 +407,36 @@ mod tests {
     }
 
     #[test]
+    fn test_move_to_last() {
+        let mut list = IndexList::default();
+        let a = 3;
+        let b = 4;
+        let index_a = list.insert_last(a);
+        assert_eq!(list.get(index_a).unwrap(), &a);
+        assert_eq!(list.get_first().unwrap(), &a);
+        let index_b = list.insert_last(b);
+        assert_eq!(list.get(index_a).unwrap(), &a);
+        assert_eq!(list.get_first().unwrap(), &a);
+        assert_eq!(list.get(index_b).unwrap(), &b);
+        list.move_to_last(index_b);
+        assert_eq!(list.get(index_a).unwrap(), &a);
+        assert_eq!(list.get_first().unwrap(), &a);
+        assert_eq!(list.get(index_b).unwrap(), &b);
+        list.move_to_last(index_a);
+        assert_eq!(list.get(index_a).unwrap(), &a);
+        assert_eq!(list.get_first().unwrap(), &b);
+        assert_eq!(list.get(index_b).unwrap(), &b);
+        list.move_to_last(index_b);
+        assert_eq!(list.get(index_a).unwrap(), &a);
+        assert_eq!(list.get_first().unwrap(), &a);
+        assert_eq!(list.get(index_b).unwrap(), &b);
+        list.move_to_last(index_b);
+        assert_eq!(list.get(index_a).unwrap(), &a);
+        assert_eq!(list.get_first().unwrap(), &a);
+        assert_eq!(list.get(index_b).unwrap(), &b);
+    }
+
+    #[test]
     fn test_insert_last() {
         let mut list = IndexList::default();
         let a = 3;
@@ -459,7 +489,7 @@ mod tests {
     }
 
     #[test]
-    fn test_remove() {
+    fn test_remov5e() {
         // remove in all possible orders, with total len of 1, 2, 3
         // then, re-insert and remove differently
         // this tests removing and re-inserting when:
@@ -470,9 +500,9 @@ mod tests {
         let mut list = IndexList::default();
         let values_raw = vec![3u64, 4, 5];
         for len in 1..=values_raw.len() {
-            let move_to_last = (0..=len).map(|i| {
-                (i<len).then_some(i);
-            }).collect::<Vec<_>>();
+            let move_to_last = (0..=len)
+                .map(|i| (i < len).then_some(i))
+                .collect::<Vec<_>>();
             for move_to_last in move_to_last {
                 let mut values = values_raw.clone();
                 values.truncate(len);
@@ -506,14 +536,21 @@ mod tests {
                         .zip(indexes.iter())
                         .enumerate()
                         .for_each(|(i, (value, index))| {
+                            log::error!("i: {i}, first: {:?}, values: {values:?}, move_to_last: {move_to_last:?}, len: {len}", values.first());
                             if i == 0 {
                                 assert_eq!(list.get_first(), values.first());
                             }
                             assert_eq!(list.get(*index).unwrap(), value);
                         });
-                    if let Some(move_to_last) = move_to_last {
-                        list.move_to_last(move_to_last);
-                        perm.push(perm.remove(move_to_last));
+                    if let Some(move_to_last) = move_to_last.as_ref() {
+                        let move_to_last = *move_to_last;
+                        list.move_to_last(indexes[move_to_last]);
+                        let remove = perm.remove(move_to_last);
+                        perm.push(remove);
+                        let remove = values.remove(move_to_last);
+                        values.push(remove);
+                        let remove = indexes.remove(move_to_last);
+                        indexes.push(remove);
                     }
                     // verify list is as expected
                     values
@@ -521,8 +558,9 @@ mod tests {
                         .zip(indexes.iter())
                         .enumerate()
                         .for_each(|(i, (value, index))| {
+                            log::error!("i2: {i}, first: {:?}, values: {values:?}, move_to_last: {move_to_last:?}, len: {len}", values.first());
                             if i == 0 {
-                                assert_eq!(list.get_first(), values.first());
+                                assert_eq!(list.get_first(), values.first(), "move_to_last: {move_to_last:?}, len: {len}");
                             }
                             assert_eq!(list.get(*index).unwrap(), value);
                         });
@@ -542,16 +580,14 @@ mod tests {
                         .map(|value| list.insert_last(*value))
                         .collect::<Vec<_>>();
                     // verify list is as expected
-                    values
-                        .iter()
-                        .zip(indexes.iter())
-                        .enumerate()
-                        .for_each(|(i, (value, index))| {
+                    values.iter().zip(indexes.iter()).enumerate().for_each(
+                        |(i, (value, index))| {
                             if i == 0 {
                                 assert_eq!(list.get_first(), values.first());
                             }
                             assert_eq!(list.get(*index).unwrap(), value);
-                        });
+                        },
+                    );
                 }
                 indexes.iter().for_each(|index| {
                     list.remove(*index);
