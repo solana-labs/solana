@@ -3142,7 +3142,7 @@ pub fn package_and_archive_full_snapshot(
         archive_format,
         snapshot_version,
         None,
-    )?;
+    );
 
     let accounts_hash = bank
         .get_accounts_hash()
@@ -3194,7 +3194,7 @@ pub fn package_and_archive_incremental_snapshot(
         archive_format,
         snapshot_version,
         None,
-    )?;
+    );
 
     let (accounts_hash_enum, accounts_hash_for_reserialize, bank_incremental_snapshot_persistence) =
         if bank
