@@ -392,8 +392,7 @@ impl SnapshotRequestHandler {
                     &snapshot_storages,
                     self.snapshot_config.snapshot_version,
                     status_cache_slot_deltas,
-                )
-                .expect("snapshot bank");
+                )?;
                 AccountsPackage::new_for_snapshot(
                     accounts_package_type,
                     &snapshot_root_bank,
@@ -404,8 +403,7 @@ impl SnapshotRequestHandler {
                     self.snapshot_config.archive_format,
                     self.snapshot_config.snapshot_version,
                     accounts_hash_for_testing,
-                )
-                .expect("new accounts package for snapshot")
+                )?
             }
             SnapshotRequestType::EpochAccountsHash => {
                 // skip the bank snapshot, just make an accounts package to send to AHV
@@ -643,12 +641,16 @@ impl AccountsBackgroundService {
                     if let Some(snapshot_handle_result) = snapshot_handle_result {
                         // Safe, see proof above
 
-                        if let Ok(snapshot_block_height) = snapshot_handle_result {
-                            assert!(last_cleaned_block_height <= snapshot_block_height);
-                            last_cleaned_block_height = snapshot_block_height;
-                        } else {
-                            exit.store(true, Ordering::Relaxed);
-                            return;
+                        match snapshot_handle_result {
+                            Ok(snapshot_block_height) => {
+                                assert!(last_cleaned_block_height <= snapshot_block_height);
+                                last_cleaned_block_height = snapshot_block_height;
+                            }
+                            Err(err) => {
+                                error!("Stopping AccountsBackgroundService! Fatal error while handling snapshot requests: {err}");
+                                exit.store(true, Ordering::Relaxed);
+                                break;
+                            }
                         }
                     } else {
                         if bank.block_height() - last_cleaned_block_height
