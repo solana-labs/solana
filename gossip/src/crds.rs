@@ -680,14 +680,14 @@ impl CrdsDataStats {
 
         if should_report_message_signature(&entry.value.signature) {
             datapoint_info!(
-                "cluster_info_crds_message_signatures",
+                "gossip_crds_sample",
                 (
-                    "crds_origin",
+                    "origin",
                     entry.value.pubkey().to_string().get(..8),
                     Option<String>
                 ),
                 (
-                    "crds_signature",
+                    "signature",
                     entry.value.signature.to_string().get(..8),
                     Option<String>
                 )
