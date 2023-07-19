@@ -89,6 +89,7 @@ use {
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
+    itertools::izip,
     log::*,
     percentage::Percentage,
     rayon::{
@@ -7756,21 +7757,21 @@ impl Bank {
         execution_results: &[TransactionExecutionResult],
         loaded_txs: &[TransactionLoadResult],
     ) {
-        for (i, ((load_result, _load_nonce), tx)) in loaded_txs.iter().zip(txs).enumerate() {
-            if let (Ok(loaded_transaction), true) = (
-                load_result,
-                execution_results[i].was_executed_successfully(),
-            ) {
+        debug_assert_eq!(txs.len(), execution_results.len());
+        debug_assert_eq!(txs.len(), loaded_txs.len());
+        izip!(txs, execution_results, loaded_txs)
+            .filter(|(_, execution_result, _)| execution_result.was_executed_successfully())
+            .flat_map(|(tx, _, (load_result, _))| {
+                load_result.iter().flat_map(|loaded_transaction| {
+                    let num_account_keys = tx.message().account_keys().len();
+                    loaded_transaction.accounts.iter().take(num_account_keys)
+                })
+            })
+            .for_each(|(pubkey, account)| {
                 // note that this could get timed to: self.rc.accounts.accounts_db.stats.stakes_cache_check_and_store_us,
                 //  but this code path is captured separately in ExecuteTimingType::UpdateStakesCacheUs
-                let message = tx.message();
-                for (_i, (pubkey, account)) in
-                    (0..message.account_keys().len()).zip(loaded_transaction.accounts.iter())
-                {
-                    self.stakes_cache.check_and_store(pubkey, account);
-                }
-            }
-        }
+                self.stakes_cache.check_and_store(pubkey, account);
+            });
     }
 
     pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
