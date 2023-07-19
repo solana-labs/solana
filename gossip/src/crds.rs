@@ -57,22 +57,13 @@ use {
 const CRDS_SHARDS_BITS: u32 = 12;
 // Number of vote slots to track in an lru-cache for metrics.
 const VOTE_SLOTS_METRICS_CAP: usize = 100;
-// Required number of trailing zero bits for crds signature to get reported to influx
+// Required number of leading zero bits for crds signature to get reported to influx
 // mean new push messages received per minute per node
 //      testnet: ~500k,
 //      mainnet: ~280k
-// target: 1-2 signatures reported per minute
-// log2(250k) = ~17.9.
-const SIGNATURE_SAMPLE_TRAILING_ZEROS: u32 = 18;
-
-/// check if last SIGNATURE_SAMPLE_TRAILING_ZEROS bits of signature are 0
-fn should_report_message_signature(signature_bytes: Signature) -> bool {
-    let (trailing_signature_bytes, _) = signature_bytes
-        .as_ref()
-        .split_at(std::mem::size_of::<u64>());
-    u64::from_le_bytes(trailing_signature_bytes.try_into().unwrap()).trailing_zeros()
-        >= SIGNATURE_SAMPLE_TRAILING_ZEROS
-}
+// target: 1 signature reported per minute
+// log2(500k) = ~18.9.
+const SIGNATURE_SAMPLE_LEADING_ZEROS: u32 = 19;
 
 pub struct Crds {
     /// Stores the map of labels and values
@@ -687,13 +678,17 @@ impl CrdsDataStats {
             }
         }
 
-        if should_report_message_signature(entry.value.signature) {
+        if should_report_message_signature(&entry.value.signature) {
             datapoint_info!(
                 "cluster_info_crds_message_signatures",
-                ("crds_origin", entry.value.pubkey().to_string(), String),
+                (
+                    "crds_origin",
+                    entry.value.pubkey().to_string().get(..8).unwrap(),
+                    String
+                ),
                 (
                     "crds_signature",
-                    bs58::encode(&entry.value.signature.as_ref()[..8]).into_string(),
+                    entry.value.signature.to_string().get(..8).unwrap(),
                     String
                 )
             );
@@ -741,6 +736,15 @@ impl CrdsStats {
             GossipRoute::PullResponse => self.pull.record_fail(entry),
         }
     }
+}
+
+/// check if first SIGNATURE_SAMPLE_LEADING_ZEROS bits of signature are 0
+#[inline]
+fn should_report_message_signature(signature: &Signature) -> bool {
+    let Some(Ok(bytes)) = signature.as_ref().get(..8).map(<[u8; 8]>::try_from) else {
+        return false;
+    };
+    u64::from_le_bytes(bytes).trailing_zeros() >= SIGNATURE_SAMPLE_LEADING_ZEROS
 }
 
 #[cfg(test)]
