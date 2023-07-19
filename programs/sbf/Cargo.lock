@@ -5216,7 +5216,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde_derive",
- "socket2 0.4.9",
+ "socket2 0.5.3",
  "solana-logger",
  "solana-sdk",
  "solana-version",
