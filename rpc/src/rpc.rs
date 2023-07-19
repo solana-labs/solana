@@ -1760,12 +1760,17 @@ impl JsonRpcRequestProcessor {
         let stake_history =
             solana_sdk::account::from_account::<StakeHistory, _>(&stake_history_account)
                 .ok_or_else(Error::internal_error)?;
+        let new_rate_activation_epoch = bank.new_warmup_cooldown_rate_epoch();
 
         let StakeActivationStatus {
             effective,
             activating,
             deactivating,
-        } = delegation.stake_activating_and_deactivating(epoch, Some(&stake_history));
+        } = delegation.stake_activating_and_deactivating(
+            epoch,
+            Some(&stake_history),
+            new_rate_activation_epoch,
+        );
         let stake_activation_state = if deactivating > 0 {
             StakeActivationState::Deactivating
         } else if activating > 0 {

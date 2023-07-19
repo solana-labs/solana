@@ -90,8 +90,8 @@ fn deprecated_id_to_tokens(
 
         #[cfg(test)]
         #[test]
-            fn test_id() {
-            #[allow(deprecated)]
+        #[allow(deprecated)]
+        fn test_id() {
             assert!(check_id(&id()));
         }
     });

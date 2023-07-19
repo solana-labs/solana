@@ -1535,10 +1535,13 @@ fn test_fake_shreds_broadcast_leader() {
 fn test_wait_for_max_stake() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let validator_config = ValidatorConfig::default_for_test();
+    let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH;
     let mut config = ClusterConfig {
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         node_stakes: vec![DEFAULT_NODE_STAKE; 4],
         validator_configs: make_identical_validator_configs(&validator_config, 4),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);

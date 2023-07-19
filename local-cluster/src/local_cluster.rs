@@ -38,13 +38,13 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         stake::{
-            config as stake_config, instruction as stake_instruction,
+            instruction as stake_instruction,
             state::{Authorized, Lockup},
         },
         system_transaction,
         transaction::Transaction,
     },
-    solana_stake_program::{config::create_account as create_stake_config_account, stake_state},
+    solana_stake_program::stake_state,
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::tpu_client::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
@@ -266,18 +266,6 @@ impl LocalCluster {
         genesis_config
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);
-
-        // Replace staking config
-        genesis_config.add_account(
-            stake_config::id(),
-            create_stake_config_account(
-                1,
-                &stake_config::Config {
-                    warmup_cooldown_rate: std::f64::MAX,
-                    slash_penalty: std::u8::MAX,
-                },
-            ),
-        );
 
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let leader_contact_info = leader_node.info.clone();
