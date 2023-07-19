@@ -11,7 +11,6 @@ edition = { workspace = true }
 
 [dependencies]
 bincode = { workspace = true }
-bs58 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
 clap = { workspace = true }
 crossbeam-channel = { workspace = true }
