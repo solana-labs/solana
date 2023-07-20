@@ -100,10 +100,10 @@ solana program deploy <PROGRAM_FILEPATH>
 
 By default, programs are deployed to accounts that are twice the size of the
 original deployment. Doing so leaves room for program growth in future
-redeployments. But, if the initially deployed program is very small (like a
-simple helloworld program) and then later grows substantially, the redeployment
-may fail. To avoid this, specify a `max_len` that is at least the size (in
-bytes) that the program is expected to become (plus some wiggle room).
+redeployments. But, if the initially deployed program is very small  and then
+later grows substantially, the redeployment may fail. To avoid this, specify
+a `max_len` that is at least the size (in bytes) that the program is expected
+to become (plus some wiggle room).
 
 ```bash
 solana program deploy --max-len 200000 <PROGRAM_FILEPATH>
