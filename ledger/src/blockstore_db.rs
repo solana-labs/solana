@@ -34,7 +34,7 @@ use {
     },
     solana_storage_proto::convert::generated,
     std::{
-        collections::{HashMap, HashSet},
+        collections::HashMap,
         ffi::{CStr, CString},
         fs,
         marker::PhantomData,
@@ -53,8 +53,8 @@ const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 const FIFO_WRITE_BUFFER_SIZE: u64 = 2 * MAX_WRITE_BUFFER_SIZE;
 
 // SST files older than this value will be picked up for compaction. This value
-// chosen to be one day to strike a balance between storage getting reclaimed
-// in a timely manner and the additional I/O overhead that compaction incurs.
+// was chosen to be one day to strike a balance between storage getting
+// reclaimed in a timely manner and the additional I/O that compaction incurs.
 // For more details on this property, see
 // https://github.com/facebook/rocksdb/blob/749b179c041347d150fa6721992ae8398b7d2b39/
 //   include/rocksdb/advanced_options.h#L908C30-L908C30
@@ -481,7 +481,10 @@ impl Rocks {
     fn configure_compaction(&self) {
         // If compactions are disabled altogether, no need to tune values
         if should_disable_auto_compactions(&self.access_type) {
-            info!("rocksdb's automatic compactions will be disabled ...");
+            info!(
+                "Rocks's automatic compactions are disabled due to {:?} access",
+                self.access_type
+            );
             return;
         }
 
@@ -513,7 +516,7 @@ impl Rocks {
                         &cf_handle,
                         &[(
                             "periodic_compaction_seconds",
-                            &format!("{}", PERIODIC_COMPACTION_SECONDS),
+                            &PERIODIC_COMPACTION_SECONDS.to_string(),
                         )],
                     )
                     .unwrap();
@@ -1917,12 +1920,10 @@ fn should_enable_cf_compaction(cf_name: &str) -> bool {
     // configured to run as part of rocksdb's automatic compactions. Storage
     // space is reclaimed on this class of columns once compaction has
     // completed on a given range or file.
-    let compaction_cfs = HashSet::from([
-        columns::TransactionStatus::NAME,
-        columns::AddressSignatures::NAME,
-    ]);
-
-    compaction_cfs.get(cf_name).is_some()
+    matches!(
+        cf_name,
+        columns::TransactionStatus::NAME | columns::AddressSignatures::NAME
+    )
 }
 
 // Returns true if the column family enables compression.
