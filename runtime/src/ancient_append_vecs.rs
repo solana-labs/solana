@@ -333,7 +333,7 @@ impl AccountsDb {
                 .accounts_to_combine
                 .into_par_iter()
                 .for_each(|combine| {
-                    self.accounts_index.scan(
+                    self.accounts_index.scan::<_, _, true>(
                         combine.unrefed_pubkeys.into_iter(),
                         |_pubkey, _slots_refs, entry| {
                             if let Some(entry) = entry {
@@ -342,7 +342,6 @@ impl AccountsDb {
                             AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
                         },
                         None,
-                        true,
                     );
                 });
         });
@@ -621,7 +620,7 @@ impl AccountsDb {
         let pks = Self::get_many_refs_pubkeys(shrink_collect);
         let mut index = 0;
         let mut saved = 0;
-        self.accounts_index.scan(
+        self.accounts_index.scan::<_, _, false>(
             pks.iter(),
             |_pubkey, slots_refs, _entry| {
                 index += 1;
@@ -647,7 +646,6 @@ impl AccountsDb {
                 AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
             },
             None,
-            false,
         );
         self.shrink_ancient_stats
             .second_pass_one_ref
@@ -3144,14 +3142,13 @@ pub mod tests {
                 target_slots_sorted: Vec::default(),
             };
             db.addref_accounts_failed_to_shrink_ancient(accounts_to_combine);
-            db.accounts_index.scan(
+            db.accounts_index.scan::<_, _, false>(
                 unrefed_pubkeys.iter(),
                 |k, slot_refs, _entry| {
                     assert_eq!(expected_ref_counts.remove(k).unwrap(), slot_refs.unwrap().1);
                     AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
                 },
                 None,
-                false,
             );
             // should have removed all of them
             assert!(expected_ref_counts.is_empty());
