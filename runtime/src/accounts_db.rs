@@ -3186,7 +3186,7 @@ impl AccountsDb {
                         let mut not_found_on_fork = 0;
                         let mut missing = 0;
                         let mut useful = 0;
-                        self.accounts_index.scan(
+                        self.accounts_index.scan::<_, _, false>(
                             pubkeys.iter(),
                             |pubkey, slots_refs, _entry| {
                                 let mut useless = true;
@@ -3254,7 +3254,6 @@ impl AccountsDb {
                                 }
                             },
                             None,
-                            false,
                         );
                         found_not_zero_accum.fetch_add(found_not_zero, Ordering::Relaxed);
                         not_found_on_fork_accum.fetch_add(not_found_on_fork, Ordering::Relaxed);
@@ -3743,7 +3742,7 @@ impl AccountsDb {
         let mut index = 0;
         let mut all_are_zero_lamports = true;
         let mut index_entries_being_shrunk = Vec::with_capacity(accounts.len());
-        self.accounts_index.scan(
+        self.accounts_index.scan::<_, _, true>(
             accounts.iter().map(|account| account.pubkey()),
             |pubkey, slots_refs, entry| {
                 let mut result = AccountsIndexScanResult::OnlyKeepInMemoryIfDirty;
@@ -3774,7 +3773,6 @@ impl AccountsDb {
                 result
             },
             None,
-            true,
         );
         assert_eq!(index, std::cmp::min(accounts.len(), count));
         stats.alive_accounts.fetch_add(alive, Ordering::Relaxed);
@@ -8143,7 +8141,7 @@ impl AccountsDb {
         self.thread_pool_clean.install(|| {
             (0..batches).into_par_iter().for_each(|batch| {
                 let skip = batch * UNREF_ACCOUNTS_BATCH_SIZE;
-                self.accounts_index.scan(
+                self.accounts_index.scan::<_, _, false>(
                     pubkeys
                         .clone()
                         .skip(skip)
@@ -8159,7 +8157,6 @@ impl AccountsDb {
                         AccountsIndexScanResult::Unref
                     },
                     Some(AccountsIndexScanResult::Unref),
-                    false,
                 )
             });
         });

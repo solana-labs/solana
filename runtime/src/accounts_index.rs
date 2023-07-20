@@ -1349,12 +1349,11 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     ///   apply 'avoid_callback_result' if specified.
     ///   otherwise, call `callback`
     /// if 'provide_entry_in_callback' is true, populate callback with the Arc of the entry itself.
-    pub(crate) fn scan<'a, F, I>(
+    pub(crate) fn scan<'a, F, I, const PROVIDE_ENTRY_IN_CALLBACK: bool>(
         &self,
         pubkeys: I,
         mut callback: F,
         avoid_callback_result: Option<AccountsIndexScanResult>,
-        provide_entry_in_callback: bool,
     ) where
         // params:
         //  pubkey looked up
@@ -1392,7 +1391,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                             callback(
                                 pubkey,
                                 Some((slot_list, locked_entry.ref_count())),
-                                provide_entry_in_callback.then_some(locked_entry),
+                                PROVIDE_ENTRY_IN_CALLBACK.then_some(locked_entry),
                             )
                         };
                         cache = match result {
