@@ -1349,11 +1349,18 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     ///   apply 'avoid_callback_result' if specified.
     ///   otherwise, call `callback`
     /// if 'provide_entry_in_callback' is true, populate callback with the Arc of the entry itself.
-    pub(crate) fn scan<'a, F, I, const PROVIDE_ENTRY_IN_CALLBACK: bool>(
+    pub(crate) fn scan<
+        'a,
+        F,
+        I,
+        const PROVIDE_ENTRY_IN_CALLBACK: bool,
+        const AVOID_CALLBACK_RESULT: i32,
+        // Option<AccountsIndexScanResult>,
+    >(
         &self,
         pubkeys: I,
         mut callback: F,
-        avoid_callback_result: Option<AccountsIndexScanResult>,
+        //avoid_callback_result: Option<AccountsIndexScanResult>,
     ) where
         // params:
         //  pubkey looked up
@@ -1371,6 +1378,18 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         ) -> AccountsIndexScanResult,
         I: Iterator<Item = &'a Pubkey>,
     {
+        const fn look_up(arg: i32) -> Option<AccountsIndexScanResult> {
+            if arg == 0 {
+                None
+            } else if arg == 1 {
+                Some(AccountsIndexScanResult::OnlyKeepInMemoryIfDirty)
+            } else if arg == 2 {
+                Some(AccountsIndexScanResult::KeepInMemory)
+            } else {
+                Some(AccountsIndexScanResult::Unref)
+            }
+        }
+
         let mut lock = None;
         let mut last_bin = self.bins(); // too big, won't match
         pubkeys.into_iter().for_each(|pubkey| {
@@ -1384,7 +1403,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                 let mut cache = false;
                 match entry {
                     Some(locked_entry) => {
-                        let result = if let Some(result) = avoid_callback_result.as_ref() {
+                        let result = if let Some(result) = look_up(AVOID_CALLBACK_RESULT).as_ref() {
                             *result
                         } else {
                             let slot_list = &locked_entry.slot_list.read().unwrap();
@@ -1406,7 +1425,8 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                         };
                     }
                     None => {
-                        avoid_callback_result.unwrap_or_else(|| callback(pubkey, None, None));
+                        look_up(AVOID_CALLBACK_RESULT)
+                            .unwrap_or_else(|| callback(pubkey, None, None));
                     }
                 }
                 (cache, ())

@@ -333,7 +333,7 @@ impl AccountsDb {
                 .accounts_to_combine
                 .into_par_iter()
                 .for_each(|combine| {
-                    self.accounts_index.scan::<_, _, true>(
+                    self.accounts_index.scan::<_, _, true, 0>(
                         combine.unrefed_pubkeys.into_iter(),
                         |_pubkey, _slots_refs, entry| {
                             if let Some(entry) = entry {
@@ -341,7 +341,6 @@ impl AccountsDb {
                             }
                             AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
                         },
-                        None,
                     );
                 });
         });
@@ -620,9 +619,8 @@ impl AccountsDb {
         let pks = Self::get_many_refs_pubkeys(shrink_collect);
         let mut index = 0;
         let mut saved = 0;
-        self.accounts_index.scan::<_, _, false>(
-            pks.iter(),
-            |_pubkey, slots_refs, _entry| {
+        self.accounts_index
+            .scan::<_, _, false, 0>(pks.iter(), |_pubkey, slots_refs, _entry| {
                 index += 1;
                 if let Some((_slot_list, ref_count)) = slots_refs {
                     if ref_count == 1 {
@@ -644,9 +642,7 @@ impl AccountsDb {
                     }
                 }
                 AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
-            },
-            None,
-        );
+            });
         self.shrink_ancient_stats
             .second_pass_one_ref
             .fetch_add(saved, Ordering::Relaxed);
@@ -3142,13 +3138,12 @@ pub mod tests {
                 target_slots_sorted: Vec::default(),
             };
             db.addref_accounts_failed_to_shrink_ancient(accounts_to_combine);
-            db.accounts_index.scan::<_, _, false>(
+            db.accounts_index.scan::<_, _, false, 0>(
                 unrefed_pubkeys.iter(),
                 |k, slot_refs, _entry| {
                     assert_eq!(expected_ref_counts.remove(k).unwrap(), slot_refs.unwrap().1);
                     AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
                 },
-                None,
             );
             // should have removed all of them
             assert!(expected_ref_counts.is_empty());
