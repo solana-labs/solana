@@ -1304,7 +1304,7 @@ pub fn add_bank_snapshot(
 ) -> Result<BankSnapshotInfo> {
     // this lambda function is to facilitate converting between
     // the AddBankSnapshotError and SnapshotError types
-    let _add_bank_snapshot = || {
+    let do_add_bank_snapshot = || {
         let mut add_snapshot_time = Measure::start("add-snapshot-ms");
         let slot = bank.slot();
         let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
@@ -1397,7 +1397,7 @@ pub fn add_bank_snapshot(
         })
     };
 
-    _add_bank_snapshot().map_err(|err| SnapshotError::AddBankSnapshot(err, bank.slot()))
+    do_add_bank_snapshot().map_err(|err| SnapshotError::AddBankSnapshot(err, bank.slot()))
 }
 
 /// serializing needs Vec<Vec<Arc<AccountStorageEntry>>>, but data structure at runtime is Vec<Arc<AccountStorageEntry>>
