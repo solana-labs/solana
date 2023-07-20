@@ -28,7 +28,6 @@ use {
             },
             AccountStorage, AccountStorageStatus, ShrinkInProgress,
         },
-        accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_file::{AccountsFile, AccountsFileError},
         accounts_hash::{
@@ -36,6 +35,7 @@ use {
             CalcAccountsHashConfig, CalculateHashIntermediate, HashStats, IncrementalAccountsHash,
             ZeroLamportAccounts,
         },
+        accounts_hash::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
         accounts_index::{
             AccountIndexGetResult, AccountMapEntry, AccountSecondaryIndexes, AccountsIndex,
             AccountsIndexConfig, AccountsIndexRootsStats, AccountsIndexScanResult, DiskIndexValue,
@@ -62,7 +62,6 @@ use {
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
-        serde_snapshot::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
         snapshot_utils::create_accounts_run_and_snapshot_dirs,
         sorted_storages::SortedStorages,
         storable_accounts::StorableAccounts,
@@ -1021,7 +1020,7 @@ pub struct AccountStorageEntry {
     pub(crate) slot: AtomicU64,
 
     /// storage holding the accounts
-    pub(crate) accounts: AccountsFile,
+    pub accounts: AccountsFile,
 
     /// Keeps track of the number of accounts stored in a specific AppendVec.
     ///  This is periodically checked to reuse the stores that do not have
@@ -1057,7 +1056,7 @@ impl AccountStorageEntry {
         }
     }
 
-    pub(crate) fn new_existing(
+    pub fn new_existing(
         slot: Slot,
         id: AppendVecId,
         accounts: AccountsFile,
@@ -5684,13 +5683,9 @@ impl AccountsDb {
         self.storage.insert(slot, store)
     }
 
-    pub fn create_drop_bank_callback(
-        &self,
-        pruned_banks_sender: DroppedSlotsSender,
-    ) -> SendDroppedBankCallback {
+    pub fn bank_drop_callback_enabled(&self) {
         self.is_bank_drop_callback_enabled
             .store(true, Ordering::Release);
-        SendDroppedBankCallback::new(pruned_banks_sender)
     }
 
     /// This should only be called after the `Bank::drop()` runs in bank.rs, See BANK_DROP_SAFETY

@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+use solana_accounts_db::accounts_db::create_accounts_run_and_snapshot_dirs;
 use {
     log::*,
     solana_core::{

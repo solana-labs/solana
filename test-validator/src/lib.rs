@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+use solana_accounts_db::accounts_db::create_accounts_run_and_snapshot_dirs;
 use {
     base64::{prelude::BASE64_STANDARD, Engine},
     crossbeam_channel::Receiver,
@@ -31,7 +32,7 @@ use {
         accounts_db::AccountsDbConfig, accounts_index::AccountsIndexConfig, bank_forks::BankForks,
         genesis_utils::create_genesis_config_with_leader_ex,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE, runtime_config::RuntimeConfig,
-        snapshot_config::SnapshotConfig, snapshot_utils::create_accounts_run_and_snapshot_dirs,
+        snapshot_config::SnapshotConfig,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},

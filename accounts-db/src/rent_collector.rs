@@ -49,7 +49,7 @@ enum RentResult {
 }
 
 impl RentCollector {
-    pub(crate) fn new(
+    pub fn new(
         epoch: Epoch,
         epoch_schedule: EpochSchedule,
         slots_per_year: f64,
@@ -63,7 +63,7 @@ impl RentCollector {
         }
     }
 
-    pub(crate) fn clone_with_epoch(&self, epoch: Epoch) -> Self {
+    pub fn clone_with_epoch(&self, epoch: Epoch) -> Self {
         Self {
             epoch,
             ..self.clone()
@@ -71,18 +71,14 @@ impl RentCollector {
     }
 
     /// true if it is easy to determine this account should consider having rent collected from it
-    pub(crate) fn should_collect_rent(
-        &self,
-        address: &Pubkey,
-        account: &impl ReadableAccount,
-    ) -> bool {
+    pub fn should_collect_rent(&self, address: &Pubkey, account: &impl ReadableAccount) -> bool {
         !(account.executable() // executable accounts must be rent-exempt balance
             || *address == incinerator::id())
     }
 
     /// given an account that 'should_collect_rent'
     /// returns (amount rent due, is_exempt_from_rent)
-    pub(crate) fn get_rent_due(&self, account: &impl ReadableAccount) -> RentDue {
+    pub fn get_rent_due(&self, account: &impl ReadableAccount) -> RentDue {
         if self
             .rent
             .is_exempt(account.lamports(), account.data().len())
@@ -111,7 +107,7 @@ impl RentCollector {
     // This is NOT thread safe at some level. If we try to collect from the same account in
     // parallel, we may collect twice.
     #[must_use = "add to Bank::collected_rent"]
-    pub(crate) fn collect_from_existing_account(
+    pub fn collect_from_existing_account(
         &self,
         address: &Pubkey,
         account: &mut AccountSharedData,
@@ -188,11 +184,11 @@ impl RentCollector {
 
 /// Information computed during rent collection
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
-pub(crate) struct CollectedInfo {
+pub struct CollectedInfo {
     /// Amount of rent collected from account
-    pub(crate) rent_amount: u64,
+    pub rent_amount: u64,
     /// Size of data reclaimed from account (happens when account's lamports go to zero)
-    pub(crate) account_data_len_reclaimed: u64,
+    pub account_data_len_reclaimed: u64,
 }
 
 impl std::ops::Add for CollectedInfo {

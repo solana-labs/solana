@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+use solana_accounts_db::inline_spl_token;
 use {
     clap::{crate_description, crate_name, value_t, values_t_or_exit, App, Arg},
     log::*,
@@ -11,7 +12,6 @@ use {
     solana_client::transaction_executor::TransactionExecutor,
     solana_gossip::gossip_service::discover,
     solana_rpc_client::rpc_client::RpcClient,
-    solana_runtime::inline_spl_token,
     solana_sdk::{
         commitment_config::CommitmentConfig,
         hash::Hash,
@@ -701,6 +701,7 @@ fn main() {
 
 #[cfg(test)]
 pub mod test {
+    use solana_accounts_db::inline_spl_token;
     use {
         super::*,
         solana_core::validator::ValidatorConfig,

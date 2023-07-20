@@ -12,10 +12,10 @@ pub mod meta;
 #[derive(Clone, Debug)]
 pub struct AccountStorageReference {
     /// the single storage for a given slot
-    pub(crate) storage: Arc<AccountStorageEntry>,
+    pub storage: Arc<AccountStorageEntry>,
     /// id can be read from 'storage', but it is an atomic read.
     /// id will never change while a storage is held, so we store it separately here for faster runtime lookup in 'get_account_storage_entry'
-    pub(crate) id: AppendVecId,
+    pub id: AppendVecId,
 }
 
 pub type AccountStorageMap = DashMap<Slot, AccountStorageReference>;

@@ -1,5 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 
+use solana_runtime::accounts_background_service::SendDroppedBankCallback;
 use {
     crate::snapshot_utils::create_tmp_accounts_dir_for_tests,
     crossbeam_channel::unbounded,
@@ -958,14 +959,15 @@ fn test_snapshots_with_background_services(
     let (snapshot_package_sender, snapshot_package_receiver) = unbounded();
 
     let bank_forks = Arc::new(RwLock::new(snapshot_test_config.bank_forks));
-    let callback = bank_forks
+    bank_forks
         .read()
         .unwrap()
         .root_bank()
         .rc
         .accounts
         .accounts_db
-        .create_drop_bank_callback(pruned_banks_sender);
+        .bank_drop_callback_enabled();
+    let callback = SendDroppedBankCallback::new(pruned_banks_sender);
     for bank in bank_forks.read().unwrap().banks().values() {
         bank.set_callback(Some(Box::new(callback.clone())));
     }

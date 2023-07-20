@@ -3,7 +3,7 @@ use solana_sdk::pubkey::{Pubkey, PUBKEY_BYTES};
 
 solana_sdk::declare_id!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
-pub(crate) mod program_v3_4_0 {
+pub mod program_v3_4_0 {
     solana_sdk::declare_id!("NToK4t5AQzxPNpUA84DkxgfXaVDbDQQjpHKCqsbY46B");
 }
 
@@ -23,7 +23,7 @@ pub const SPL_TOKEN_ACCOUNT_MINT_OFFSET: usize = 0;
 pub const SPL_TOKEN_ACCOUNT_OWNER_OFFSET: usize = 32;
 const SPL_TOKEN_ACCOUNT_LENGTH: usize = 165;
 
-pub(crate) trait GenericTokenAccount {
+pub trait GenericTokenAccount {
     fn valid_account_data(account_data: &[u8]) -> bool;
 
     // Call after account length has already been verified

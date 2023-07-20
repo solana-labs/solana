@@ -5,8 +5,6 @@
 mod stats;
 use {
     crate::{
-        accounts_db::CalcAccountsHashDataSource,
-        accounts_hash::CalcAccountsHashConfig,
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
         snapshot_bank_utils,
@@ -18,6 +16,9 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::iter::{IntoParallelIterator, ParallelIterator},
+    solana_accounts_db::{
+        accounts_db::CalcAccountsHashDataSource, accounts_hash::CalcAccountsHashConfig,
+    },
     solana_measure::measure::Measure,
     solana_sdk::clock::{BankId, Slot},
     stats::StatsManager,
@@ -704,13 +705,15 @@ impl AccountsBackgroundService {
         let (pruned_banks_sender, pruned_banks_receiver) = crossbeam_channel::unbounded();
         {
             let root_bank = bank_forks.read().unwrap().root_bank();
-            root_bank.set_callback(Some(Box::new(
-                root_bank
-                    .rc
-                    .accounts
-                    .accounts_db
-                    .create_drop_bank_callback(pruned_banks_sender),
-            )));
+
+            root_bank
+                .rc
+                .accounts
+                .accounts_db
+                .bank_drop_callback_enabled();
+            root_bank.set_callback(Some(Box::new(SendDroppedBankCallback::new(
+                pruned_banks_sender,
+            ))));
         }
         pruned_banks_receiver
     }
@@ -795,6 +798,7 @@ mod test {
             genesis_utils::create_genesis_config,
         },
         crossbeam_channel::unbounded,
+        solana_accounts_db::epoch_accounts_hash::EpochAccountsHash,
         solana_sdk::{
             account::AccountSharedData, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey,
         },

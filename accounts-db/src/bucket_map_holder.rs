@@ -133,7 +133,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> BucketMapHolder<T, U>
     }
 
     /// return when the bg threads have reached an 'idle' state
-    pub(crate) fn wait_for_idle(&self) {
+    pub fn wait_for_idle(&self) {
         assert!(self.get_startup());
         if self.disk.is_none() {
             return;

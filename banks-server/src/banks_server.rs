@@ -1,3 +1,4 @@
+use solana_accounts_db::transaction_results::TransactionExecutionResult;
 use {
     bincode::{deserialize, serialize},
     crossbeam_channel::{unbounded, Receiver, Sender},
@@ -12,7 +13,6 @@ use {
         bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
-        transaction_results::TransactionExecutionResult,
     },
     solana_sdk::{
         account::Account,

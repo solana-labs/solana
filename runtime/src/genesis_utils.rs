@@ -1,5 +1,5 @@
+use solana_accounts_db::inline_spl_token;
 use {
-    crate::inline_spl_token,
     solana_sdk::{
         account::{Account, AccountSharedData},
         feature::{self, Feature},

@@ -1,3 +1,4 @@
+use solana_accounts_db::accounts_db::create_accounts_run_and_snapshot_dirs;
 use {
     crate::{
         cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo},
@@ -23,7 +24,6 @@ use {
             ValidatorVoteKeypairs,
         },
         snapshot_config::SnapshotConfig,
-        snapshot_utils::create_accounts_run_and_snapshot_dirs,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},

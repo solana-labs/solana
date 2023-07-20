@@ -1,11 +1,21 @@
 use {
-    crate::bank::RewardInfo,
     solana_sdk::{pubkey::Pubkey, reward_type::RewardType},
     std::collections::HashMap,
 };
 
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample, Clone, Copy)]
+pub struct RewardInfo {
+    pub reward_type: RewardType,
+    /// Reward amount
+    pub lamports: i64,
+    /// Account balance in lamports after `lamports` was applied
+    pub post_balance: u64,
+    /// Vote account commission when the reward was credited, only present for voting and staking rewards
+    pub commission: Option<u8>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct RentDebit {
+pub struct RentDebit {
     rent_collected: u64,
     post_balance: u64,
 }
@@ -27,7 +37,7 @@ impl RentDebit {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RentDebits(HashMap<Pubkey, RentDebit>);
 impl RentDebits {
-    pub(crate) fn get_account_rent_debit(&self, address: &Pubkey) -> u64 {
+    pub fn get_account_rent_debit(&self, address: &Pubkey) -> u64 {
         self.0
             .get(address)
             .map(|r| r.rent_collected)
@@ -35,7 +45,7 @@ impl RentDebits {
     }
 
     #[cfg(test)]
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.0.len()
     }
 

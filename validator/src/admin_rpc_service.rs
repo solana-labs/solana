@@ -861,6 +861,7 @@ pub fn load_staked_nodes_overrides(
 
 #[cfg(test)]
 mod tests {
+    use solana_accounts_db::inline_spl_token;
     use {
         super::*,
         rand::{distributions::Uniform, thread_rng, Rng},
@@ -873,7 +874,6 @@ mod tests {
             accounts_index::AccountSecondaryIndexes,
             bank::{Bank, BankTestConfig},
             bank_forks::BankForks,
-            inline_spl_token,
             secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
         },
         solana_sdk::{

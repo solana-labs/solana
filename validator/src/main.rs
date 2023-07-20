@@ -1,6 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
+use solana_accounts_db::partitioned_rewards::TestPartitionedEpochRewards;
 use {
     clap::{crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, ArgMatches},
     console::style,
@@ -44,7 +45,6 @@ use {
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
             AccountsIndexConfig, IndexLimitMb,
         },
-        partitioned_rewards::TestPartitionedEpochRewards,
         runtime_config::RuntimeConfig,
         snapshot_bank_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         snapshot_config::{SnapshotConfig, SnapshotUsage},

@@ -1,3 +1,7 @@
+use solana_accounts_db::rent_debits::RentDebits;
+use solana_accounts_db::transaction_results::{
+    TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
+};
 use {
     crate::{
         block_error::BlockError,
@@ -35,12 +39,8 @@ use {
         commitment::VOTE_THRESHOLD_SIZE,
         epoch_accounts_hash::EpochAccountsHash,
         prioritization_fee_cache::PrioritizationFeeCache,
-        rent_debits::RentDebits,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
-        transaction_results::{
-            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
-        },
         vote_account::VoteAccountsHashMap,
         vote_sender_types::ReplayVoteSender,
     },

@@ -975,6 +975,7 @@ impl RepairWeight {
 
 #[cfg(test)]
 mod test {
+    use solana_accounts_db::contains::Contains;
     use {
         super::*,
         itertools::Itertools,
@@ -982,7 +983,7 @@ mod test {
             blockstore::{make_chaining_slot_entries, Blockstore},
             get_tmp_ledger_path,
         },
-        solana_runtime::{bank::Bank, bank_utils, contains::Contains},
+        solana_runtime::{bank::Bank, bank_utils},
         solana_sdk::hash::Hash,
         trees::tr,
     };

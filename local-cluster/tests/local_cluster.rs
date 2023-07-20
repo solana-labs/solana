@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+use solana_accounts_db::accounts_db::create_accounts_run_and_snapshot_dirs;
 use {
     assert_matches::assert_matches,
     common::*,
@@ -48,7 +49,7 @@ use {
         snapshot_bank_utils,
         snapshot_config::SnapshotConfig,
         snapshot_package::SnapshotType,
-        snapshot_utils::{self, create_accounts_run_and_snapshot_dirs},
+        snapshot_utils::{self},
         vote_parser,
     },
     solana_sdk::{

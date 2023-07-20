@@ -1,8 +1,8 @@
+use solana_accounts_db::transaction_results::TransactionResults;
 use {
     crate::{
         bank::Bank,
         genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
-        transaction_results::TransactionResults,
         vote_parser,
         vote_sender_types::ReplayVoteSender,
     },

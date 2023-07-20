@@ -2,6 +2,7 @@
 
 #[macro_use]
 extern crate log;
+use solana_accounts_db::rent_collector::RentCollector;
 use {
     clap::{crate_description, crate_name, value_t, App, Arg},
     rayon::prelude::*,
@@ -14,7 +15,6 @@ use {
         },
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
-        rent_collector::RentCollector,
     },
     solana_sdk::{
         genesis_config::ClusterType, pubkey::Pubkey, sysvar::epoch_schedule::EpochSchedule,

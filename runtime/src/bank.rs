@@ -33,6 +33,17 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
+use solana_accounts_db::blockhash_queue::BlockhashQueue;
+use solana_accounts_db::nonce_info::{NonceInfo, NoncePartial};
+use solana_accounts_db::partitioned_rewards::PartitionedEpochRewardsConfig;
+use solana_accounts_db::rent_collector::{CollectedInfo, RentCollector};
+use solana_accounts_db::rent_debits::{RentDebits, RewardInfo};
+use solana_accounts_db::storable_accounts::StorableAccounts;
+use solana_accounts_db::transaction_error_metrics::TransactionErrorMetrics;
+use solana_accounts_db::transaction_results::{
+    inner_instructions_list_from_instruction_trace, DurableNonceFee, TransactionCheckResult,
+    TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
+};
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
@@ -55,15 +66,10 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
         bank::metrics::*,
-        blockhash_queue::BlockhashQueue,
         builtins::{BuiltinPrototype, BUILTINS},
         epoch_accounts_hash::EpochAccountsHash,
         epoch_rewards_hasher::hash_rewards_into_partitions,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
-        nonce_info::{NonceInfo, NoncePartial},
-        partitioned_rewards::PartitionedEpochRewardsConfig,
-        rent_collector::{CollectedInfo, RentCollector},
-        rent_debits::RentDebits,
         runtime_config::RuntimeConfig,
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_hash::SnapshotHash,
@@ -77,14 +83,7 @@ use {
         },
         stakes::{InvalidCacheEntryReason, Stakes, StakesCache, StakesEnum},
         status_cache::{SlotDelta, StatusCache},
-        storable_accounts::StorableAccounts,
         transaction_batch::TransactionBatch,
-        transaction_error_metrics::TransactionErrorMetrics,
-        transaction_results::{
-            inner_instructions_list_from_instruction_trace, DurableNonceFee,
-            TransactionCheckResult, TransactionExecutionDetails, TransactionExecutionResult,
-            TransactionResults,
-        },
         vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
     },
     byteorder::{ByteOrder, LittleEndian},
@@ -615,17 +614,6 @@ fn null_tracer() -> Option<impl RewardCalcTracer> {
 pub trait DropCallback: fmt::Debug {
     fn callback(&self, b: &Bank);
     fn clone_box(&self) -> Box<dyn DropCallback + Send + Sync>;
-}
-
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample, Clone, Copy)]
-pub struct RewardInfo {
-    pub reward_type: RewardType,
-    /// Reward amount
-    pub lamports: i64,
-    /// Account balance in lamports after `lamports` was applied
-    pub post_balance: u64,
-    /// Vote account commission when the reward was credited, only present for voting and staking rewards
-    pub commission: Option<u8>,
 }
 
 #[derive(Debug, Default)]

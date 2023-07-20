@@ -3,6 +3,7 @@
 
 extern crate test;
 
+use solana_accounts_db::rent_collector::RentCollector;
 use {
     dashmap::DashMap,
     rand::Rng,
@@ -16,7 +17,6 @@ use {
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
         bank::*,
-        rent_collector::RentCollector,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},

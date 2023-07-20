@@ -1,3 +1,4 @@
+use solana_accounts_db::transaction_results::{TransactionExecutionResult, TransactionResults};
 use {
     super::leader_slot_timing_metrics::LeaderExecuteAndCommitTimings,
     itertools::Itertools,
@@ -11,7 +12,6 @@ use {
         bank_utils,
         prioritization_fee_cache::PrioritizationFeeCache,
         transaction_batch::TransactionBatch,
-        transaction_results::{TransactionExecutionResult, TransactionResults},
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{pubkey::Pubkey, saturating_add_assign},

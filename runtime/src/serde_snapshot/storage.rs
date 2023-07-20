@@ -1,3 +1,4 @@
+use solana_accounts_db::accounts_db::AccountStorageEntry;
 use {
     crate::accounts_db::AccountStorageEntry,
     serde::{Deserialize, Serialize},
