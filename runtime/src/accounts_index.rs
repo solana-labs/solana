@@ -1355,12 +1355,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         I,
         const PROVIDE_ENTRY_IN_CALLBACK: bool,
         const AVOID_CALLBACK_RESULT: i32,
-        // Option<AccountsIndexScanResult>,
     >(
         &self,
         pubkeys: I,
         mut callback: F,
-        //avoid_callback_result: Option<AccountsIndexScanResult>,
     ) where
         // params:
         //  pubkey looked up
@@ -1403,8 +1401,8 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                 let mut cache = false;
                 match entry {
                     Some(locked_entry) => {
-                        let result = if let Some(result) = look_up(AVOID_CALLBACK_RESULT).as_ref() {
-                            *result
+                        let result = if AVOID_CALLBACK_RESULT != 0 {
+                            look_up(AVOID_CALLBACK_RESULT).unwrap()
                         } else {
                             let slot_list = &locked_entry.slot_list.read().unwrap();
                             callback(
@@ -1425,8 +1423,9 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                         };
                     }
                     None => {
-                        look_up(AVOID_CALLBACK_RESULT)
-                            .unwrap_or_else(|| callback(pubkey, None, None));
+                        if AVOID_CALLBACK_RESULT == 0 {
+                            callback(pubkey, None, None);
+                        }
                     }
                 }
                 (cache, ())
