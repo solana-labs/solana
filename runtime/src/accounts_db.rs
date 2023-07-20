@@ -4942,7 +4942,19 @@ impl AccountsDb {
             // If the slot is not in the cache, then all the account information must have
             // been flushed. This is guaranteed because we only remove the rooted slot from
             // the cache *after* we've finished flushing in `flush_slot_cache`.
-            if let Some(storage) = self.storage.get_slot_storage_entry(slot) {
+            // Regarding `shrinking_in_progress_ok`:
+            // This fn could be running in the foreground, so shrinking could be running in the background, independently.
+            // Even if shrinking is running, there will be 0-1 active storages to scan here at any point.
+            // When a concurrent shrink completes, the active storage at this slot will
+            // be replaced with an equivalent storage with only alive accounts in it.
+            // A shrink on this slot could have completed anytime before the call here, a shrink could currently be in progress,
+            // or the shrink could complete immediately or anytime after this call. This has always been true.
+            // So, whether we get a never-shrunk, an about-to-be shrunk, or a will-be-shrunk-in-future storage here to scan,
+            // all are correct and possible in a normally running system.
+            if let Some(storage) = self
+                .storage
+                .get_slot_storage_entry_shrinking_in_progress_ok(slot)
+            {
                 storage
                     .accounts
                     .account_iter()
