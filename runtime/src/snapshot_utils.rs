@@ -456,7 +456,7 @@ pub enum AddBankSnapshotError {
     #[error("failed to write snapshot version file: {0}")]
     WriteSnapshotVersionFile(#[source] std::io::Error),
 
-    #[error("failed to create 'state complete' file: {0}")]
+    #[error("failed to mark snapshot as 'complete': {0}")]
     CreateStateCompleteFile(#[source] std::io::Error),
 }
 
