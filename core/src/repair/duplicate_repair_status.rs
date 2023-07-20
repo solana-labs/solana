@@ -1,24 +1,12 @@
 use {
     solana_ledger::blockstore::Blockstore,
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, timing::timestamp},
-    std::{
-        collections::HashMap,
-        net::SocketAddr,
-        sync::atomic::{AtomicUsize, Ordering},
-    },
+    std::{collections::HashMap, net::SocketAddr},
 };
 
 // Number of validators to sample for the ancestor repair
 // We use static to enable tests from having to spin up 21 validators
-static ANCESTOR_HASH_REPAIR_SAMPLE_SIZE: AtomicUsize = AtomicUsize::new(21);
-
-pub fn get_ancestor_hash_repair_sample_size() -> usize {
-    ANCESTOR_HASH_REPAIR_SAMPLE_SIZE.load(Ordering::Relaxed)
-}
-
-pub fn set_ancestor_hash_repair_sample_size_for_tests_only(sample_size: usize) {
-    ANCESTOR_HASH_REPAIR_SAMPLE_SIZE.store(sample_size, Ordering::Relaxed);
-}
+pub(crate) const ANCESTOR_HASH_REPAIR_SAMPLE_SIZE: usize = 21;
 
 // Even assuming 20% of validators malicious, the chance that >= 11 of the
 // ANCESTOR_HASH_REPAIR_SAMPLE_SIZE = 21 validators is malicious is roughly 1/1000.
@@ -27,9 +15,7 @@ pub fn set_ancestor_hash_repair_sample_size_for_tests_only(sample_size: usize) {
 // On the other hand with a 52-48 split of validators with one version of the block vs
 // another, the chance of >= 11 of the 21 sampled being from the 52% portion is
 // about 57%, so we should be able to find a correct sample in a reasonable amount of time.
-pub fn get_minimum_ancestor_agreement_size() -> usize {
-    (get_ancestor_hash_repair_sample_size() + 1) / 2
-}
+const MINIMUM_ANCESTOR_AGREEMENT_SIZE: usize = (ANCESTOR_HASH_REPAIR_SAMPLE_SIZE + 1) / 2;
 const RETRY_INTERVAL_SECONDS: usize = 5;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -225,7 +211,7 @@ impl AncestorRequestStatus {
         // If we got enough of the sampled validators to respond, we are confident
         // this is the correct set of ancestors
         if validators_with_same_response.len()
-            == get_minimum_ancestor_agreement_size().min(self.sampled_validators.len())
+            == MINIMUM_ANCESTOR_AGREEMENT_SIZE.min((self.sampled_validators.len() + 1) / 2)
         {
             // When we reach MINIMUM_ANCESTOR_AGREEMENT_SIZE of the same responses,
             // check for mismatches.
@@ -237,8 +223,7 @@ impl AncestorRequestStatus {
         // If everyone responded and we still haven't agreed upon a set of
         // ancestors, that means there was a lot of disagreement and we sampled
         // a bad set of validators.
-        if self.num_responses
-            == get_ancestor_hash_repair_sample_size().min(self.sampled_validators.len())
+        if self.num_responses == ANCESTOR_HASH_REPAIR_SAMPLE_SIZE.min(self.sampled_validators.len())
         {
             info!(
                 "{} return invalid sample no agreement",
@@ -555,7 +540,7 @@ pub mod tests {
     ) -> TestSetup {
         assert!(request_slot >= num_ancestors_in_response as u64);
         let sampled_addresses: Vec<SocketAddr> = std::iter::repeat_with(create_rand_socket_addr)
-            .take(get_ancestor_hash_repair_sample_size())
+            .take(ANCESTOR_HASH_REPAIR_SAMPLE_SIZE)
             .collect();
 
         let status = AncestorRequestStatus::new(
@@ -634,7 +619,7 @@ pub mod tests {
         incorrect_ancestors_response.pop().unwrap();
 
         // Add a mixture of correct and incorrect responses from the same `responder_addr`.
-        let num_repeated_responses = get_ancestor_hash_repair_sample_size();
+        let num_repeated_responses = ANCESTOR_HASH_REPAIR_SAMPLE_SIZE;
         let responder_addr = &sampled_addresses[0];
         for i in 0..num_repeated_responses {
             let response = if i % 2 == 0 {
@@ -690,7 +675,7 @@ pub mod tests {
             .collect();
 
         let total_incorrect_responses = events.iter().last().map(|(count, _)| *count).unwrap_or(0);
-        assert!(total_incorrect_responses <= get_ancestor_hash_repair_sample_size());
+        assert!(total_incorrect_responses <= ANCESTOR_HASH_REPAIR_SAMPLE_SIZE);
 
         let mut event_order: Vec<usize> = (0..sampled_addresses.len()).collect();
         event_order.shuffle(&mut thread_rng());
@@ -729,7 +714,7 @@ pub mod tests {
         let desired_incorrect_responses = vec![
             (
                 incorrect_ancestors_response_0,
-                get_minimum_ancestor_agreement_size() - 1,
+                MINIMUM_ANCESTOR_AGREEMENT_SIZE - 1,
             ),
             (incorrect_ancestors_response_1, 2),
         ];
@@ -740,8 +725,8 @@ pub mod tests {
             .map(|(_, count)| count)
             .sum();
         assert!(
-            get_ancestor_hash_repair_sample_size() - total_invalid_responses
-                < get_minimum_ancestor_agreement_size()
+            ANCESTOR_HASH_REPAIR_SAMPLE_SIZE - total_invalid_responses
+                < MINIMUM_ANCESTOR_AGREEMENT_SIZE
         );
 
         assert_eq!(
@@ -762,7 +747,7 @@ pub mod tests {
         let incorrect_ancestors_response = vec![];
         let desired_incorrect_responses = vec![(
             incorrect_ancestors_response,
-            get_minimum_ancestor_agreement_size(),
+            MINIMUM_ANCESTOR_AGREEMENT_SIZE,
         )];
 
         assert_eq!(
@@ -783,7 +768,7 @@ pub mod tests {
         let incorrect_ancestors_response = vec![(request_slot - 1, Hash::new_unique())];
         let desired_incorrect_responses = vec![(
             incorrect_ancestors_response,
-            get_minimum_ancestor_agreement_size(),
+            MINIMUM_ANCESTOR_AGREEMENT_SIZE,
         )];
 
         assert_eq!(
@@ -806,7 +791,7 @@ pub mod tests {
         incorrect_ancestors_response.push((request_slot + 1, Hash::new_unique()));
         let desired_incorrect_responses = vec![(
             incorrect_ancestors_response,
-            get_minimum_ancestor_agreement_size(),
+            MINIMUM_ANCESTOR_AGREEMENT_SIZE,
         )];
 
         assert_eq!(
@@ -828,7 +813,7 @@ pub mod tests {
         incorrect_ancestors_response.swap_remove(0);
         let desired_incorrect_responses = vec![(
             incorrect_ancestors_response,
-            get_minimum_ancestor_agreement_size(),
+            MINIMUM_ANCESTOR_AGREEMENT_SIZE,
         )];
 
         assert_eq!(
@@ -858,7 +843,7 @@ pub mod tests {
         incorrect_ancestors_response[5].1 = Hash::new_unique();
         let desired_incorrect_responses = vec![(
             incorrect_ancestors_response,
-            get_minimum_ancestor_agreement_size(),
+            MINIMUM_ANCESTOR_AGREEMENT_SIZE,
         )];
 
         assert_eq!(
@@ -933,7 +918,7 @@ pub mod tests {
         incorrect_ancestors_response.push((request_slot, Hash::new_unique()));
         let desired_incorrect_responses = vec![(
             incorrect_ancestors_response,
-            get_minimum_ancestor_agreement_size() - 1,
+            MINIMUM_ANCESTOR_AGREEMENT_SIZE - 1,
         )];
 
         // We have no entries in the blockstore, so all the ancestors will be missing
