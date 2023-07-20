@@ -21,6 +21,9 @@ use {
     },
 };
 
+use log::info;
+use std::backtrace::Backtrace;
+
 /// An Account with data that is stored on chain
 #[repr(C)]
 #[frozen_abi(digest = "HawRVHh7t4d3H3bitWHFt25WhhoDmbJMCfWdESQQoYEy")]
@@ -227,6 +230,9 @@ impl ReadableAccount for Account {
 
 impl WritableAccount for Account {
     fn set_lamports(&mut self, lamports: u64) {
+        let bt = Backtrace::capture();
+        info!("set_lamports() {} -> {}  {:?}", self.lamports, lamports, bt);
+
         self.lamports = lamports;
     }
     fn data_as_mut_slice(&mut self) -> &mut [u8] {

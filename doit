@@ -1,0 +1,15 @@
+
+#podman build -t solana-builder2 -f Dockerfile -v `pwd`:/solana:rw  .
+#podman build --no-cache -t solana-builder2 -f Dockerfile -v `pwd`:/solana:rw  .
+#podman run --mount=type=bind,target=/solana,source=`pwd` -t solana-builder2 bash -c 'cd /solana; . ~/.cargo/env && ./cargo nightly -Z unstable-options build'
+
+# podman run --mount=type=bind,target=/solana,source=/home/jsiegel/repos/solana -t solana-builder2 bash -c 'cd /solana; . ~/.cargo/env && ./cargo build'
+
+
+PKG_CONFIG_PATH=/opt/rh/gcc-toolset-12/root/usr/lib64/pkgconfig:/usr/lib64/pkgconfig
+export PKG_CONFIG_PATH
+
+./cargo nightly -Z unstable-options build
+# ./cargo nightly test --package solana-runtime --lib -- system_instruction_processor::tests --nocapture
+
+# /home/jsiegel/repos/solana/target/debug/deps/solana_runtime-13b3b7db3fedc08a 'system_instruction_processor::tests' --nocapture

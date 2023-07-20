@@ -6112,10 +6112,13 @@ impl AccountsDb {
 
         hasher.update(&lamports.to_le_bytes());
 
+        let mut slot_included = false;
+
         match include_slot {
             IncludeSlotInHash::IncludeSlot => {
                 // upon feature activation, stop including slot# in the account hash
                 hasher.update(&slot.to_le_bytes());
+                slot_included = true;
             }
             IncludeSlotInHash::RemoveSlot => {}
             IncludeSlotInHash::IrrelevantAssertOnUse => {
@@ -6136,7 +6139,13 @@ impl AccountsDb {
         hasher.update(owner.as_ref());
         hasher.update(pubkey.as_ref());
 
-        Hash::new_from_array(hasher.finalize().into())
+        let ret = Hash::new_from_array(hasher.finalize().into());
+
+        info!(
+            "hash_account_data_compare: pubkey: ({}) slot: ({}) include_slot: ({})  lamports: ({}) owner: ({}) executable: ({}) rent_epoch: ({}) data_len: ({}) hash: ({}) includedata: ({})",
+             pubkey, slot, slot_included, lamports, owner, executable as u64, rent_epoch, data.len(), ret, hex::encode(data));
+
+        ret
     }
 
     fn bulk_assign_write_version(&self, count: usize) -> StoredMetaWriteVersion {

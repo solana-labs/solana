@@ -1,0 +1,163 @@
+diff --git a/sdk/src/ed25519_instruction.rs b/sdk/src/ed25519_instruction.rs
+index a1b6604286..d7923d89ce 100644
+--- a/sdk/src/ed25519_instruction.rs
++++ b/sdk/src/ed25519_instruction.rs
+@@ -7,6 +7,10 @@ use {
+     std::sync::Arc,
+ };
+
++use std::backtrace::Backtrace;
++use serde::Serialize;
++use serde_with::serde_as;
++
+ pub const PUBKEY_SERIALIZED_SIZE: usize = 32;
+ pub const SIGNATURE_SERIALIZED_SIZE: usize = 64;
+ pub const SIGNATURE_OFFSETS_SERIALIZED_SIZE: usize = 14;
+@@ -79,11 +83,44 @@ pub fn new_ed25519_instruction(keypair: &ed25519_dalek::Keypair, message: &[u8])
+     }
+ }
+
++#[serde_as]
++#[derive(Serialize)]
++struct Ed25519TestCase {
++    #[serde(with = "hex_serde")]
++    backtrace: String,
++    name: String,
++    prog: String,
++    instruction_data: Vec<u8>,
++    instruction_datas: Vec<Vec<u8>>,
++    expected_result: Result<(), PrecompileError>
++}
++
+ pub fn verify(
+     data: &[u8],
+     instruction_datas: &[&[u8]],
+     _feature_set: &Arc<FeatureSet>,
+ ) -> Result<(), PrecompileError> {
++    let result = verify_real(data, instruction_datas, _feature_set);
++
++    let bts = Backtrace::capture().to_string();
++    println!("test_sign {}", serde_json::to_string(&Ed25519TestCase {
++        backtrace: bts,
++        name: std::thread::current().name().unwrap().to_string(),
++        prog: "Ed25519SigVerify111111111111111111111111111".to_string(),
++        instruction_data: Vec::from(data),
++        instruction_datas: instruction_datas.clone().into_iter().map(|&d| { Vec::from(d) }).collect(),
++        expected_result: result.clone()
++    }).unwrap());
++
++    result
++}
++
++pub fn verify_real(
++    data: &[u8],
++    instruction_datas: &[&[u8]],
++    _feature_set: &Arc<FeatureSet>,
++) -> Result<(), PrecompileError> {
++
+     if data.len() < SIGNATURE_OFFSETS_START {
+         return Err(PrecompileError::InvalidInstructionDataSize);
+     }
+diff --git a/sdk/src/feature_set.rs b/sdk/src/feature_set.rs
+index e2a9835ab9..4876eeabdf 100644
+--- a/sdk/src/feature_set.rs
++++ b/sdk/src/feature_set.rs
+@@ -722,7 +722,7 @@ lazy_static! {
+ }
+
+ /// `FeatureSet` holds the set of currently active/inactive runtime features
+-#[derive(AbiExample, Debug, Clone)]
++#[derive(AbiExample, Debug, Clone, Serialize)]
+ pub struct FeatureSet {
+     pub active: HashMap<Pubkey, Slot>,
+     pub inactive: HashSet<Pubkey>,
+diff --git a/sdk/src/lib.rs b/sdk/src/lib.rs
+index 08da2ce824..8bb5f55b45 100644
+--- a/sdk/src/lib.rs
++++ b/sdk/src/lib.rs
+@@ -1,3 +1,4 @@
++#![feature(backtrace)]
+ #![allow(incomplete_features)]
+ #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
+ #![cfg_attr(RUSTC_NEEDS_PROC_MACRO_HYGIENE, feature(proc_macro_hygiene))]
+diff --git a/sdk/src/precompiles.rs b/sdk/src/precompiles.rs
+index 1f6149772c..4807c3fa68 100644
+--- a/sdk/src/precompiles.rs
++++ b/sdk/src/precompiles.rs
+@@ -15,7 +15,7 @@ use {
+ };
+
+ /// Precompile errors
+-#[derive(Error, Debug, Clone, PartialEq, Eq)]
++#[derive(Error, Debug, Clone, PartialEq, Eq, Serialize)]
+ pub enum PrecompileError {
+     #[error("public key is not valid")]
+     InvalidPublicKey,
+diff --git a/sdk/src/secp256k1_instruction.rs b/sdk/src/secp256k1_instruction.rs
+index 767b91127c..9c037604cc 100644
+--- a/sdk/src/secp256k1_instruction.rs
++++ b/sdk/src/secp256k1_instruction.rs
+@@ -801,6 +801,9 @@ use {
+     std::sync::Arc,
+ };
+
++use std::backtrace::Backtrace;
++use serde_with::serde_as;
++
+ pub const HASHED_PUBKEY_SERIALIZED_SIZE: usize = 20;
+ pub const SIGNATURE_SERIALIZED_SIZE: usize = 64;
+ pub const SIGNATURE_OFFSETS_SERIALIZED_SIZE: usize = 11;
+@@ -917,6 +920,38 @@ pub fn construct_eth_pubkey(
+     addr
+ }
+
++#[serde_as]
++#[derive(Serialize)]
++struct Sec256k1TestCase {
++    #[serde(with = "hex_serde")]
++    backtrace: String,
++    name: String,
++    prog: String,
++    instruction_data: Vec<u8>,
++    instruction_datas: Vec<Vec<u8>>,
++    expected_result: Result<(), PrecompileError>
++}
++
++pub fn verify(
++    data: &[u8],
++    instruction_datas: &[&[u8]],
++    _feature_set: &Arc<FeatureSet>,
++) -> Result<(), PrecompileError> {
++    let result = verify_real(data, instruction_datas, _feature_set);
++
++    let bts = Backtrace::capture().to_string();
++    println!("test_sign {}", serde_json::to_string(&Sec256k1TestCase {
++        backtrace: bts,
++        name: std::thread::current().name().unwrap().to_string(),
++        prog: "KeccakSecp256k11111111111111111111111111111".to_string(),
++        instruction_data: Vec::from(data),
++        instruction_datas: instruction_datas.clone().into_iter().map(|&d| { Vec::from(d) }).collect(),
++        expected_result: result.clone()
++    }).unwrap());
++
++    result
++}
++
+ /// Verifies the signatures specified in the secp256k1 instruction data.
+ ///
+ /// This is same the verification routine executed by the runtime's secp256k1 native program,
+@@ -930,11 +965,13 @@ pub fn construct_eth_pubkey(
+ /// disable a few minor additional checks that were activated on chain
+ /// subsequent to the addition of the secp256k1 native program. For many
+ /// purposes passing `Arc::new<FeatureSet::all_enabled()>` is reasonable.
+-pub fn verify(
++pub fn verify_real(
+     data: &[u8],
+     instruction_datas: &[&[u8]],
+     feature_set: &Arc<FeatureSet>,
+ ) -> Result<(), PrecompileError> {
++    println!("hi_mom: {}", std::thread::current().name().unwrap().to_string());
++
+     if data.is_empty() {
+         return Err(PrecompileError::InvalidInstructionDataSize);
+     }

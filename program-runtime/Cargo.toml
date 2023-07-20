@@ -10,6 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+bs58 = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
 eager = { workspace = true }
@@ -29,6 +30,9 @@ solana-metrics = { workspace = true }
 solana-sdk = { workspace = true }
 solana_rbpf = { workspace = true }
 thiserror = { workspace = true }
+serde_with = "*"
+hex-serde = "0.1.0"
+serde_json = "1.0.91"
 
 [dev-dependencies]
 libsecp256k1 = { workspace = true }

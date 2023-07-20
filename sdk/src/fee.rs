@@ -4,6 +4,8 @@ use crate::native_token::sol_to_lamports;
 #[cfg(not(target_os = "solana"))]
 use solana_program::message::SanitizedMessage;
 
+use log::info;
+
 /// A fee and its associated compute unit limit
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub struct FeeBin {
@@ -127,13 +129,19 @@ impl FeeStructure {
                     .unwrap_or_default()
             });
 
-        ((budget_limits
+        let ret = ((budget_limits
             .prioritization_fee
             .saturating_add(signature_fee)
             .saturating_add(write_lock_fee)
             .saturating_add(compute_fee) as f64)
             * congestion_multiplier)
-            .round() as u64
+            .round() as u64;
+
+        info!("calculate_fee_compare:  fee({}) lamports_per_signature({}) remove_congestion_multiplier({}) include_loaded_account_data_size_in_fee({}) prioritization_fee({}) signature_fee({}) write_lock_fee({}) compute_fee({}) congestion_multiplier({})",
+                ret, lamports_per_signature, remove_congestion_multiplier as u64, include_loaded_account_data_size_in_fee as u64,
+              budget_limits.prioritization_fee, signature_fee,   write_lock_fee,   compute_fee,   congestion_multiplier);
+
+        ret
     }
 }
 

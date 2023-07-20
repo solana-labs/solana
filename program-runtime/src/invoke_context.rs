@@ -30,6 +30,7 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
+        clock::Epoch,
         stable_layout::stable_instruction::StableInstruction,
         transaction_context::{
             IndexOfAccount, InstructionAccount, TransactionAccount, TransactionContext,
@@ -43,6 +44,18 @@ use {
         sync::{atomic::Ordering, Arc},
     },
 };
+
+pub extern crate bs58;
+
+use std::env;
+
+use std::backtrace::Backtrace;
+
+// use itertools::Itertools;
+use serde::Serialize;
+use serde_with::serde_as;
+use serde_with::DisplayFromStr;
+use std::str::FromStr;
 
 pub type ProcessInstructionWithContext = BuiltinFunction<InvokeContext<'static>>;
 
@@ -954,17 +967,87 @@ macro_rules! with_mock_invoke_context {
     };
 }
 
+#[serde_as]
+#[derive(Serialize)]
+struct TestTransactionAccount {
+    #[serde_as(as = "DisplayFromStr")]
+    pubkey: Pubkey,
+    shared_data: TestAccountSharedData,
+}
+
+#[serde_with::serde_as]
+#[derive(Serialize)]
+struct TestAccountSharedData {
+    /// lamports in the account
+    lamports: u64,
+    /// data held in this account
+    #[serde(with = "hex_serde")]
+    data: Vec<u8>,
+    /// the program that owns this account. If executable, the program that loads this account.
+    #[serde_as(as = "DisplayFromStr")]
+    owner: Pubkey,
+    /// this account's data contains a loaded program (and is now read-only)
+    executable: bool,
+    /// the epoch at which this account will next owe rent
+    rent_epoch: Epoch,
+}
+
+#[serde_as]
+#[derive(Serialize)]
+struct TestInstructionAccount {
+    #[serde_as(as = "DisplayFromStr")]
+    pub index_in_transaction: u16,
+    pub index_in_caller: u16,
+    pub index_in_callee: u16,
+    pub is_signer: bool,
+    pub is_writable: bool,
+}
+
+#[serde_as]
+#[derive(Serialize)]
+pub struct TestSysvarCache {
+    clock: String,
+    epoch_schedule: String,
+    epoch_rewards: String,
+    fees: String,
+    rent: String,
+    slot_hashes: String,
+    recent_blockhashes: String,
+    stake_history: String,
+    last_restart_slot: String,
+}
+
+#[serde_as]
+#[derive(Serialize)]
+struct TestCase {
+    name: String,
+    #[serde_as(as = "DisplayFromStr")]
+    program_id: Pubkey,
+    #[serde(with = "hex_serde")]
+    instruction_data: Vec<u8>,
+    feature_set: String,
+    sysvar_cache: TestSysvarCache,
+    backtrace: String,
+    transaction_accounts: Vec<TestTransactionAccount>,
+    resulting_accounts: Vec<TestAccountSharedData>,
+    instruction_accounts: Vec<TestInstructionAccount>,
+    expected_result: Result<(), InstructionError>,
+}
+
 pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut InvokeContext)>(
     loader_id: &Pubkey,
     mut program_indices: Vec<IndexOfAccount>,
     instruction_data: &[u8],
     mut transaction_accounts: Vec<TransactionAccount>,
     instruction_account_metas: Vec<AccountMeta>,
-    expected_result: Result<(), InstructionError>,
+    mut expected_result: Result<(), InstructionError>,
     process_instruction: ProcessInstructionWithContext,
     mut pre_adjustments: F,
     mut post_adjustments: G,
 ) -> Vec<AccountSharedData> {
+    let before : Vec<TestTransactionAccount> = transaction_accounts.clone().into_iter().map(|(pubkey, shared_data)| {
+        TestTransactionAccount { pubkey, shared_data: TestAccountSharedData { lamports: shared_data.lamports(), data: shared_data.data().to_vec(), owner: *shared_data.owner(), executable: shared_data.executable(), rent_epoch: shared_data.rent_epoch() } }
+    }).collect();
     let mut instruction_accounts: Vec<InstructionAccount> =
         Vec::with_capacity(instruction_account_metas.len());
     for (instruction_account_index, account_meta) in instruction_account_metas.iter().enumerate() {
@@ -1000,6 +1083,82 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
     );
     invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
     pre_adjustments(&mut invoke_context);
+
+    let tsvc = TestSysvarCache {
+        clock: bs58::encode(bincode::serialize(&invoke_context.get_sysvar_cache().get_clock()).unwrap()).into_string(),
+        epoch_schedule: bs58::encode(bincode::serialize(&invoke_context.get_sysvar_cache().get_epoch_schedule()).unwrap()).into_string(),
+        epoch_rewards: bs58::encode(bincode::serialize(&invoke_context.get_sysvar_cache().get_epoch_rewards()).unwrap()).into_string(),
+        fees: bs58::encode(bincode::serialize(&invoke_context.get_sysvar_cache().get_fees()).unwrap()).into_string(),
+        rent: bs58::encode(bincode::serialize(&invoke_context.get_sysvar_cache().get_rent()).unwrap()).into_string(),
+        slot_hashes: bs58::encode(bincode::serialize(&invoke_context.get_sysvar_cache().get_slot_hashes()).unwrap()).into_string(),
+        recent_blockhashes: bs58::encode(bincode::serialize(&invoke_context.get_sysvar_cache().get_recent_blockhashes()).unwrap()).into_string(),
+        stake_history: bs58::encode(bincode::serialize(&invoke_context.get_sysvar_cache().get_stake_history()).unwrap()).into_string(),
+        last_restart_slot: bs58::encode(bincode::serialize(&invoke_context.get_sysvar_cache().get_last_restart_slot()).unwrap()).into_string(),
+    };
+
+    let mainnet =
+    match env::var("MAINNET") {
+        Ok(_val) => true,
+        Err(_e) => false,
+    };
+
+    if mainnet {
+        match Arc::get_mut(&mut invoke_context.feature_set) {
+            Some(nfs) => {
+                nfs.deactivate(&Pubkey::from_str("25vqsfjk7Nv1prsQJmA4Xu1bN61s8LXCBGUPp8Rfy1UF").unwrap());
+                nfs.deactivate(&Pubkey::from_str("28s7i3htzhahXQKqmS2ExzbEoUypg9krwvtK2M9UWXh9").unwrap());
+                nfs.deactivate(&Pubkey::from_str("3EPmAX94PvVJCjMeFfRFvj4avqCPL8vv3TGsZQg7ydMx").unwrap());
+                nfs.deactivate(&Pubkey::from_str("3NKRSwpySNwD3TvP5pHnRmkAQRsdkXWRr1WaQh8p4PWX").unwrap());
+                nfs.deactivate(&Pubkey::from_str("437r62HoAdUb63amq3D7ENnBLDhHT2xY8eFkLJYVKK4x").unwrap());
+                nfs.deactivate(&Pubkey::from_str("4Di3y24QFLt5QEUPZtbnjyfQKfm6ZMTfa6Dw1psfoMKU").unwrap());
+                nfs.deactivate(&Pubkey::from_str("4UDcAfQ6EcA6bdcadkeHpkarkhZGJ7Bpq7wTAiRMjkoi").unwrap());
+                nfs.deactivate(&Pubkey::from_str("54KAoNiUERNoWWUhTWWwXgym94gzoXFVnHyQwPA18V9A").unwrap());
+                nfs.deactivate(&Pubkey::from_str("6iyggb5MTcsvdcugX7bEKbHV8c6jdLbpHwkncrgLMhfo").unwrap());
+                nfs.deactivate(&Pubkey::from_str("74CoWuBmt3rUVUrCb2JiSTvh6nXyBWUsK4SaMj3CtE3T").unwrap());
+                nfs.deactivate(&Pubkey::from_str("79HWsX9rpnnJBPcdNURVqygpMAfxdrAirzAGAVmf92im").unwrap());
+                nfs.deactivate(&Pubkey::from_str("7Vced912WrRnfjaiKRiNBcbuFw7RrnLv3E3z95Y4GTNc").unwrap());
+                nfs.deactivate(&Pubkey::from_str("7rcw5UtqgDTBBv2EcynNfYckgdAaH1MAsCjKgXMkN7Ri").unwrap());
+                nfs.deactivate(&Pubkey::from_str("8199Q2gMD2kwgfopK5qqVWuDbegLgpuFUFHCcUJQDN8b").unwrap());
+                nfs.deactivate(&Pubkey::from_str("84zy5N23Q9vTZuLc9h1HWUtyM9yCFV2SCmyP9W9C3yHZ").unwrap());
+                nfs.deactivate(&Pubkey::from_str("86HpNqzutEZwLcPxS6EHDcMNYWk6ikhteg9un7Y2PBKE").unwrap());
+                nfs.deactivate(&Pubkey::from_str("8Zs9W7D9MpSEtUWSQdGniZk2cNmV22y6FLJwCx53asme").unwrap());
+                nfs.deactivate(&Pubkey::from_str("8aXvSuopd1PUj7UhehfXJRg6619RHp8ZvwTyyJHdUYsj").unwrap());
+                nfs.deactivate(&Pubkey::from_str("8sKQrMQoUHtQSUP83SPG4ta2JDjSAiWs7t5aJ9uEd6To").unwrap());
+                nfs.deactivate(&Pubkey::from_str("9F2Dcu8xkBPKxiiy65XKPZYdCG3VZDpjDTuSmeYLozJe").unwrap());
+                nfs.deactivate(&Pubkey::from_str("9LZdXeKGeBV6hRLdxS1rHbHoEUsKqesCC2ZAPTPKJAbK").unwrap());
+                nfs.deactivate(&Pubkey::from_str("9k5ijzTbYPtjzu8wj2ErH9v45xecHzQ1x4PMYMMxFgdM").unwrap());
+                nfs.deactivate(&Pubkey::from_str("9onWzzvCzNC2jfhxxeqRgs5q7nFAAKpCUvkj6T6GJK9i").unwrap());
+                nfs.deactivate(&Pubkey::from_str("BUS12ciZ5gCoFafUHWW8qaFMMtwFQGVxjsDheWLdqBE2").unwrap());
+                nfs.deactivate(&Pubkey::from_str("Bj2jmUsM2iRhfdLLDSTkhM5UQRQvQHm57HSmPibPtEyu").unwrap());
+                nfs.deactivate(&Pubkey::from_str("CpkdQmspsaZZ8FVAouQTtTWZkc8eeQ7V3uj7dWz543rZ").unwrap());
+                nfs.deactivate(&Pubkey::from_str("CveezY6FDLVBToHDcvJRmtMouqzsmj4UXYh5ths5G5Uv").unwrap());
+                nfs.deactivate(&Pubkey::from_str("D31EFnLgdiysi84Woo3of4JMu7VmasUS3Z7j9HYXCeLY").unwrap());
+                nfs.deactivate(&Pubkey::from_str("DT4n6ABDqs6w4bnfwrXT9rsprcPf6cdDga1egctaPkLC").unwrap());
+                nfs.deactivate(&Pubkey::from_str("DTVTkmw3JSofd8CJVJte8PXEbxNQ2yZijvVr3pe2APPj").unwrap());
+                nfs.deactivate(&Pubkey::from_str("ELjxSXwNsyXGfAh8TqX8ih22xeT8huF6UngQirbLKYKH").unwrap());
+                nfs.deactivate(&Pubkey::from_str("FQnc7U4koHqWgRvFaBJjZnV8VPg6L6wWK33yJeDp4yvV").unwrap());
+                nfs.deactivate(&Pubkey::from_str("Ff8b1fBeB86q8cjq47ZhsQLgv5EkHu3G1C99zjUfAzrq").unwrap());
+                nfs.deactivate(&Pubkey::from_str("G74BkWBzmsByZ1kxHy44H3wjwp5hp7JbrGRuDpco22tY").unwrap());
+                nfs.deactivate(&Pubkey::from_str("GDH5TVdbTPUpRnXaRyQqiKUa7uZAbZ28Q2N9bhbKoMLm").unwrap());
+                nfs.deactivate(&Pubkey::from_str("GmC19j9qLn2RFk5NduX6QXaDhVpGncVVBzyM8e9WMz2F").unwrap());
+                nfs.deactivate(&Pubkey::from_str("Gz1aLrbeQ4Q6PTSafCZcGWZXz91yVRi7ASFzFEr1U4sa").unwrap());
+                nfs.deactivate(&Pubkey::from_str("HTW2pSyErTj4BV6KBM9NZ9VBUJVxt7sacNWcf76wtzb3").unwrap());
+                nfs.deactivate(&Pubkey::from_str("Hr1nUA9b7NJ6eChS26o7Vi8gYYDDwWD3YeBfzJkTbU86").unwrap());
+                nfs.deactivate(&Pubkey::from_str("HyNQzc7TMNmRhpVHXqDGjpsHzeQie82mDQXSF9hj7nAH").unwrap());
+                nfs.deactivate(&Pubkey::from_str("JAN1trEUEtZjgXYzNBYHU9DYd7GnThhXfFP7SzPXkPsG").unwrap());
+                nfs.deactivate(&Pubkey::from_str("St8k9dVXP97xT6faW24YmRSYConLbhsMJA4TJTBLmMT").unwrap());
+                nfs.deactivate(&Pubkey::from_str("capRxUrBjNkkCpjrJxPGfPaWijB7q3JoDfsWXAnt46r").unwrap());
+                nfs.deactivate(&Pubkey::from_str("noRuG2kzACwgaY7TVmLRnUNPLKNVQE1fb7X55YWBehp").unwrap());
+                nfs.deactivate(&Pubkey::from_str("qywiJyZmqTKspFg2LeuUHqcA5nNvBgobqb9UprywS9N").unwrap());
+                nfs.deactivate(&Pubkey::from_str("sTKz343FM8mqtyGvYWvbLpTThw3ixRM4Xk8QvZ985mw").unwrap());
+                nfs.deactivate(&Pubkey::from_str("zk1snxsc6Fh3wsGNbbHAJNHiJoYgF29mMnTSusGx5EJ").unwrap());
+            },
+            None => {},
+        }
+    }
+
+    let fs = (&serde_json::to_string(&invoke_context.feature_set.inactive).unwrap()).to_string();
+
     let result = invoke_context.process_instruction(
         instruction_data,
         &instruction_accounts,
@@ -1007,10 +1166,39 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
         &mut 0,
         &mut ExecuteTimings::default(),
     );
-    assert_eq!(result, expected_result);
+    if mainnet  {
+        expected_result = result;
+    } else {
+        assert_eq!(result, expected_result);
+    }
     post_adjustments(&mut invoke_context);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
     transaction_accounts.pop();
+
+    let bts = Backtrace::capture().to_string();
+
+    println!("test_case_json {}", serde_json::to_string(&TestCase {
+        name: std::thread::current().name().unwrap().to_string(),
+        program_id: loader_id.clone(),
+        backtrace: bts,
+        feature_set: fs,
+        sysvar_cache: tsvc,
+        instruction_data: Vec::from(instruction_data),
+        transaction_accounts: before,
+        resulting_accounts: transaction_accounts.clone().into_iter().map(|shared_data| {
+            TestAccountSharedData { lamports: shared_data.lamports(), data: shared_data.data().to_vec(), owner: *shared_data.owner(), executable: shared_data.executable(), rent_epoch: shared_data.rent_epoch() }
+        }).collect(),
+        instruction_accounts: instruction_accounts.clone().into_iter().map(|acc_meta| {
+            TestInstructionAccount {
+                index_in_transaction: acc_meta.index_in_transaction,
+                index_in_caller: acc_meta.index_in_caller,
+                index_in_callee: acc_meta.index_in_callee,
+                is_signer: acc_meta.is_signer,
+                is_writable: acc_meta.is_writable }
+        }).collect(),
+        expected_result: expected_result.clone(),
+    }).unwrap());
+
     transaction_accounts
 }
 

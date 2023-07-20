@@ -72,6 +72,7 @@ serde_bytes = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true, optional = true }
 serde_with = { workspace = true, features = ["macros"] }
+hex-serde = "0.1.0"
 sha2 = { workspace = true }
 sha3 = { workspace = true, optional = true }
 solana-frozen-abi = { workspace = true }

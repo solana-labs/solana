@@ -76,6 +76,7 @@ use {
 };
 
 pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
+use std::backtrace::Backtrace;
 
 #[derive(Debug, Default, AbiExample)]
 pub struct AccountLocks {
@@ -320,6 +321,9 @@ impl Accounts {
         program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Result<LoadedTransaction> {
+        let bt = Backtrace::capture();
+        info!("load_transaction_accounts fee: {} {:?}", fee, bt);
+
         let in_reward_interval = reward_interval == RewardInterval::InsideInterval;
 
         // NOTE: this check will never fail because `tx` is sanitized

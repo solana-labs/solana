@@ -25,4 +25,4 @@ case "$1" in
 esac
 
 set -x
-exec cargo "+${toolchain}" "${@}"
+exec cargo "+${toolchain}" -v "${@}"
