@@ -995,7 +995,9 @@ pub fn max_entries_per_n_shred(
     num_shreds: u64,
     shred_data_size: Option<usize>,
 ) -> u64 {
-    let data_buffer_size = ShredData::capacity(/*merkle_proof_size:*/ None).unwrap();
+    // Default 32:32 erasure batches yields 64 shreds; log2(64) = 6.
+    let merkle_proof_size = Some(6);
+    let data_buffer_size = ShredData::capacity(merkle_proof_size).unwrap();
     let shred_data_size = shred_data_size.unwrap_or(data_buffer_size) as u64;
     let vec_size = bincode::serialized_size(&vec![entry]).unwrap();
     let entry_size = bincode::serialized_size(entry).unwrap();

@@ -6195,7 +6195,8 @@ pub mod tests {
         let gap: u64 = 10;
         assert!(gap > 3);
         // Create enough entries to ensure there are at least two shreds created
-        let num_entries = max_ticks_per_n_shreds(1, None) + 1;
+        let data_buffer_size = ShredData::capacity(/*merkle_proof_size:*/ None).unwrap();
+        let num_entries = max_ticks_per_n_shreds(1, Some(data_buffer_size)) + 1;
         let entries = create_ticks(num_entries, 0, Hash::default());
         let mut shreds =
             entries_to_test_shreds(&entries, slot, 0, true, 0, /*merkle_variant:*/ false);
