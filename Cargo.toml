@@ -281,7 +281,7 @@ semver = "1.0.17"
 serde = "1.0.171"
 serde_bytes = "0.11.11"
 serde_derive = "1.0.103"
-serde_json = "1.0.102"
+serde_json = "1.0.103"
 serde_yaml = "0.9.22"
 serial_test = "0.9.0"
 serde_with = { version = "2.3.3", default-features = false }
