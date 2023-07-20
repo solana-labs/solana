@@ -2515,9 +2515,6 @@ impl ClusterInfo {
             stakes,
             response_sender,
         );
-        self.stats
-            .process_gossip_packets_iterations_since_last_report
-            .add_relaxed(1);
         Ok(())
     }
 
