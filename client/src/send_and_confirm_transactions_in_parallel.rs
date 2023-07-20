@@ -125,16 +125,20 @@ fn create_transaction_confirmation_task(
                     if let Ok(result) = rpc_client.get_signature_statuses(signatures).await {
                         let statuses = result.value;
                         for (signature, status) in signatures.iter().zip(statuses.into_iter()) {
-                            if let Some(status) = status {
-                                if status.satisfies_commitment(rpc_client.commitment()) {
-                                    if let Some((_, data)) = transaction_map.remove(signature) {
-                                        confirmed_transactions.fetch_add(1, Ordering::Relaxed);
-                                        if let Some(error) = status.err {
-                                            errors_map.insert(data.index, error);
-                                        }
+                            status
+                                .filter(|status| status
+                                    .satisfies_commitment(rpc_client.commitment()
+                                )
+                                .and_then(|status| transaction_map
+                                    .remove(signature)
+                                    .map(|(_, data)| (status, data))
+                                )
+                                .and_then(|(status, data)| {
+                                    confirmed_transactions.fetch_add(1, Ordering::Relaxed);
+                                    if let Some(error) = status.err {
+                                        errors_map.insert(data.index, error);
                                     }
-                                }
-                            }
+                                });
                         }
                     }
                 }
