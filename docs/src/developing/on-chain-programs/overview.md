@@ -49,9 +49,7 @@ There are also various community driven efforts to enable writing on-chain progr
 
 ## Example programs
 
-The [Hello world example](examples.md#helloworld) is a good starting place to see how a program is written, built, deployed, and interacted with on-chain.
-
-You can also explore the [Program Examples](./examples.md) for other examples of on-chain programs.
+You can also explore the [Program Examples](./examples.md) for examples of on-chain programs.
 
 ## Limitations
 
