@@ -456,8 +456,8 @@ pub enum AddBankSnapshotError {
     #[error("failed to write snapshot version file: {0}")]
     WriteSnapshotVersionFile(#[source] std::io::Error),
 
-    #[error("failed to create 'status complete' file: {0}")]
-    CreateStatusCompleteFile(#[source] std::io::Error),
+    #[error("failed to create 'state complete' file: {0}")]
+    CreateStateCompleteFile(#[source] std::io::Error),
 }
 
 /// Errors that can happen in `hard_link_storages_to_snapshot()`
@@ -1365,7 +1365,7 @@ pub fn add_bank_snapshot(
         // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
         let state_complete_path = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
         fs_err::File::create(state_complete_path)
-            .map_err(AddBankSnapshotError::CreateStatusCompleteFile)?;
+            .map_err(AddBankSnapshotError::CreateStateCompleteFile)?;
 
         // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
         datapoint_info!(
