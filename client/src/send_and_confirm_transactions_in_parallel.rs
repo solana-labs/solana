@@ -187,7 +187,7 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
                 match e.kind {
                     solana_rpc_client_api::client_error::ErrorKind::Io(_)
                     | solana_rpc_client_api::client_error::ErrorKind::Reqwest(_) => {
-                        // continue on io error, we will retry the transaction
+                        // fall through on io error, we will retry the transaction
                     }
                     solana_rpc_client_api::client_error::ErrorKind::TransactionError(e) => {
                         error_map.insert(*index, e);
