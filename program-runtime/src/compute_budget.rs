@@ -261,20 +261,19 @@ impl ComputeBudget {
             self.heap_size = Some(bytes as usize);
         }
 
-        self.compute_unit_limit = u64::from(
-            if default_units_per_instruction {
-                updated_compute_unit_limit.or_else(|| {
-                    Some(
-                        num_non_compute_budget_instructions
-                            .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT),
-                    )
-                })
-            } else {
-                updated_compute_unit_limit
-            }
-            .unwrap_or(MAX_COMPUTE_UNIT_LIMIT)
-            .min(MAX_COMPUTE_UNIT_LIMIT),
-        );
+        let compute_unit_limit = if default_units_per_instruction {
+            updated_compute_unit_limit.or_else(|| {
+                Some(
+                    num_non_compute_budget_instructions
+                        .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT),
+                )
+            })
+        } else {
+            updated_compute_unit_limit
+        }
+        .unwrap_or(MAX_COMPUTE_UNIT_LIMIT)
+        .min(MAX_COMPUTE_UNIT_LIMIT);
+        self.compute_unit_limit = u64::from(compute_unit_limit);
 
         self.loaded_accounts_data_size_limit = updated_loaded_accounts_data_size_limit
             .unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
