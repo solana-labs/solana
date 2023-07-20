@@ -380,8 +380,8 @@ pub enum SnapshotError {
     #[error("snapshot dir account paths mismatching")]
     AccountPathsMismatch,
 
-    #[error("failed to add bank snapshot: {0}")]
-    AddBankSnapshot(#[from] AddBankSnapshotError),
+    #[error("failed to add bank snapshot for slot {1}: {0}")]
+    AddBankSnapshot(#[source] AddBankSnapshotError, Slot),
 }
 
 #[derive(Error, Debug)]
@@ -438,29 +438,26 @@ pub enum VerifySlotDeltasError {
 /// Errors that can happen in `add_bank_snapshot()`
 #[derive(Error, Debug)]
 pub enum AddBankSnapshotError {
-    #[error("bank snapshot dir already exists for slot {1}: {0}")]
-    SnapshotDirAlreadyExists(PathBuf, Slot),
+    #[error("bank snapshot dir already exists: {0}")]
+    SnapshotDirAlreadyExists(PathBuf),
 
-    #[error("failed to create snapshot dir for slot {1}: {0}")]
-    CreateSnapshotDir(#[source] std::io::Error, Slot),
+    #[error("failed to create snapshot dir: {0}")]
+    CreateSnapshotDir(#[source] std::io::Error),
 
-    #[error("failed to hard link storages for slot {1}: {0}")]
-    HardLinkStorages(#[source] HardLinkStoragesToSnapshotError, Slot),
+    #[error("failed to hard link storages: {0}")]
+    HardLinkStorages(#[source] HardLinkStoragesToSnapshotError),
 
-    #[error("failed to serialize bank to buffer for slot {1}: {0}")]
-    BankToStream(#[source] bincode::Error, Slot),
+    #[error("failed to serialize bank: {0}")]
+    SerializeBank(#[source] Box<SnapshotError>),
 
-    #[error("failed to serialize snapshot data for slot {1}: {0}")]
-    SerializeBank(#[source] Box<SnapshotError>, Slot),
+    #[error("failed to serialize status cache: {0}")]
+    SerializeStatusCache(#[source] Box<SnapshotError>),
 
-    #[error("failed to serialize status cache for slot {1}: {0}")]
-    SerializeStatusCache(#[source] Box<SnapshotError>, Slot),
+    #[error("failed to write snapshot version file: {0}")]
+    WriteSnapshotVersionFile(#[source] std::io::Error),
 
-    #[error("failed to write snapshot version file for slot {1}: {0}")]
-    WriteSnapshotVersionFile(#[source] std::io::Error, Slot),
-
-    #[error("failed to create 'status complete' file for slot {1}: {0}")]
-    CreateStatusCompleteFile(#[source] std::io::Error, Slot),
+    #[error("failed to create 'status complete' file: {0}")]
+    CreateStatusCompleteFile(#[source] std::io::Error),
 }
 
 /// Errors that can happen in `hard_link_storages_to_snapshot()`
@@ -1305,95 +1302,102 @@ pub fn add_bank_snapshot(
     snapshot_version: SnapshotVersion,
     slot_deltas: Vec<BankSlotDelta>,
 ) -> Result<BankSnapshotInfo> {
-    let mut add_snapshot_time = Measure::start("add-snapshot-ms");
-    let slot = bank.slot();
-    let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
-    if bank_snapshot_dir.exists() {
-        return Err(AddBankSnapshotError::SnapshotDirAlreadyExists(bank_snapshot_dir, slot).into());
-    }
-    fs_err::create_dir_all(&bank_snapshot_dir)
-        .map_err(|err| AddBankSnapshotError::CreateSnapshotDir(err, slot))?;
+    // this lambda function is to facilitate converting between
+    // the AddBankSnapshotError and SnapshotError types
+    let _add_bank_snapshot = || {
+        let mut add_snapshot_time = Measure::start("add-snapshot-ms");
+        let slot = bank.slot();
+        let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
+        if bank_snapshot_dir.exists() {
+            return Err(AddBankSnapshotError::SnapshotDirAlreadyExists(
+                bank_snapshot_dir,
+            ));
+        }
+        fs_err::create_dir_all(&bank_snapshot_dir)
+            .map_err(AddBankSnapshotError::CreateSnapshotDir)?;
 
-    // the bank snapshot is stored as bank_snapshots_dir/slot/slot.BANK_SNAPSHOT_PRE_FILENAME_EXTENSION
-    let bank_snapshot_path = bank_snapshot_dir
-        .join(get_snapshot_file_name(slot))
-        .with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+        // the bank snapshot is stored as bank_snapshots_dir/slot/slot.BANK_SNAPSHOT_PRE_FILENAME_EXTENSION
+        let bank_snapshot_path = bank_snapshot_dir
+            .join(get_snapshot_file_name(slot))
+            .with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
-    info!(
-        "Creating bank snapshot for slot {}, path: {}",
-        slot,
-        bank_snapshot_path.display(),
-    );
+        info!(
+            "Creating bank snapshot for slot {}, path: {}",
+            slot,
+            bank_snapshot_path.display(),
+        );
 
-    // We are constructing the snapshot directory to contain the full snapshot state information to allow
-    // constructing a bank from this directory.  It acts like an archive to include the full state.
-    // The set of the account storages files is the necessary part of this snapshot state.  Hard-link them
-    // from the operational accounts/ directory to here.
-    hard_link_storages_to_snapshot(&bank_snapshot_dir, slot, snapshot_storages)
-        .map_err(|err| AddBankSnapshotError::HardLinkStorages(err, slot))?;
+        // We are constructing the snapshot directory to contain the full snapshot state information to allow
+        // constructing a bank from this directory.  It acts like an archive to include the full state.
+        // The set of the account storages files is the necessary part of this snapshot state.  Hard-link them
+        // from the operational accounts/ directory to here.
+        hard_link_storages_to_snapshot(&bank_snapshot_dir, slot, snapshot_storages)
+            .map_err(AddBankSnapshotError::HardLinkStorages)?;
 
-    let bank_snapshot_serializer = move |stream: &mut BufWriter<std::fs::File>| -> Result<()> {
-        let serde_style = match snapshot_version {
-            SnapshotVersion::V1_2_0 => SerdeStyle::Newer,
+        let bank_snapshot_serializer = move |stream: &mut BufWriter<std::fs::File>| -> Result<()> {
+            let serde_style = match snapshot_version {
+                SnapshotVersion::V1_2_0 => SerdeStyle::Newer,
+            };
+            bank_to_stream(
+                serde_style,
+                stream.by_ref(),
+                bank,
+                &get_storages_to_serialize(snapshot_storages),
+            )?;
+            Ok(())
         };
-        bank_to_stream(
-            serde_style,
-            stream.by_ref(),
-            bank,
-            &get_storages_to_serialize(snapshot_storages),
-        )
-        .map_err(|err| AddBankSnapshotError::BankToStream(err, slot))?;
-        Ok(())
+        let (bank_snapshot_consumed_size, bank_serialize) = measure!(
+            serialize_snapshot_data_file(&bank_snapshot_path, bank_snapshot_serializer)
+                .map_err(|err| AddBankSnapshotError::SerializeBank(Box::new(err)))?,
+            "bank serialize"
+        );
+        add_snapshot_time.stop();
+
+        let status_cache_path = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+        let (status_cache_consumed_size, status_cache_serialize) =
+            measure!(serialize_status_cache(&slot_deltas, &status_cache_path)
+                .map_err(|err| AddBankSnapshotError::SerializeStatusCache(Box::new(err)))?);
+
+        let version_path = bank_snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
+        write_snapshot_version_file(version_path, snapshot_version)
+            .map_err(AddBankSnapshotError::WriteSnapshotVersionFile)?;
+
+        // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
+        let state_complete_path = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+        fs_err::File::create(state_complete_path)
+            .map_err(AddBankSnapshotError::CreateStatusCompleteFile)?;
+
+        // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
+        datapoint_info!(
+            "snapshot-bank-file",
+            ("slot", slot, i64),
+            ("bank_size", bank_snapshot_consumed_size, i64),
+            ("status_cache_size", status_cache_consumed_size, i64),
+            ("bank_serialize_ms", bank_serialize.as_ms(), i64),
+            ("add_snapshot_ms", add_snapshot_time.as_ms(), i64),
+            (
+                "status_cache_serialize_ms",
+                status_cache_serialize.as_ms(),
+                i64
+            ),
+        );
+
+        info!(
+            "{} for slot {} at {}",
+            bank_serialize,
+            slot,
+            bank_snapshot_path.display(),
+        );
+
+        Ok(BankSnapshotInfo {
+            slot,
+            snapshot_type: BankSnapshotType::Pre,
+            snapshot_dir: bank_snapshot_dir,
+            snapshot_version,
+        })
     };
-    let (bank_snapshot_consumed_size, bank_serialize) = measure!(
-        serialize_snapshot_data_file(&bank_snapshot_path, bank_snapshot_serializer)
-            .map_err(|err| AddBankSnapshotError::SerializeBank(Box::new(err), slot))?,
-        "bank serialize"
-    );
-    add_snapshot_time.stop();
 
-    let status_cache_path = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-    let (status_cache_consumed_size, status_cache_serialize) =
-        measure!(serialize_status_cache(&slot_deltas, &status_cache_path)
-            .map_err(|err| AddBankSnapshotError::SerializeStatusCache(Box::new(err), slot))?);
-
-    let version_path = bank_snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
-    write_snapshot_version_file(version_path, snapshot_version)
-        .map_err(|err| AddBankSnapshotError::WriteSnapshotVersionFile(err, slot))?;
-
-    // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
-    let state_complete_path = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
-    fs_err::File::create(state_complete_path)
-        .map_err(|err| AddBankSnapshotError::CreateStatusCompleteFile(err, slot))?;
-
-    // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
-    datapoint_info!(
-        "snapshot-bank-file",
-        ("slot", slot, i64),
-        ("bank_size", bank_snapshot_consumed_size, i64),
-        ("status_cache_size", status_cache_consumed_size, i64),
-        ("bank_serialize_ms", bank_serialize.as_ms(), i64),
-        ("add_snapshot_ms", add_snapshot_time.as_ms(), i64),
-        (
-            "status_cache_serialize_ms",
-            status_cache_serialize.as_ms(),
-            i64
-        ),
-    );
-
-    info!(
-        "{} for slot {} at {}",
-        bank_serialize,
-        slot,
-        bank_snapshot_path.display(),
-    );
-
-    Ok(BankSnapshotInfo {
-        slot,
-        snapshot_type: BankSnapshotType::Pre,
-        snapshot_dir: bank_snapshot_dir,
-        snapshot_version,
-    })
+    _add_bank_snapshot().map_err(|err| SnapshotError::AddBankSnapshot(err, bank.slot()))
 }
 
 /// serializing needs Vec<Vec<Arc<AccountStorageEntry>>>, but data structure at runtime is Vec<Arc<AccountStorageEntry>>
