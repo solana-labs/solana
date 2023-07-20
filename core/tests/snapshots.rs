@@ -250,8 +250,7 @@ fn run_bank_forks_snapshot_n<F>(
         snapshot_config.archive_format,
         snapshot_version,
         None,
-    )
-    .unwrap();
+    );
     last_bank.force_flush_accounts_cache();
     let accounts_hash =
         last_bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
@@ -418,8 +417,7 @@ fn test_concurrent_snapshot_packaging(
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
             None,
-        )
-        .unwrap();
+        );
         accounts_package_sender.send(accounts_package).unwrap();
 
         bank_forks.insert(bank);

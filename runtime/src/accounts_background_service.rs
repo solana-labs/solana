@@ -403,7 +403,7 @@ impl SnapshotRequestHandler {
                     self.snapshot_config.archive_format,
                     self.snapshot_config.snapshot_version,
                     accounts_hash_for_testing,
-                )?
+                )
             }
             SnapshotRequestType::EpochAccountsHash => {
                 // skip the bank snapshot, just make an accounts package to send to AHV
