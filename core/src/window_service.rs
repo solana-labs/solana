@@ -487,7 +487,7 @@ mod test {
         solana_gossip::contact_info::ContactInfo,
         solana_ledger::{
             blockstore::{make_many_slot_entries, Blockstore},
-            get_tmp_ledger_path,
+            get_tmp_ledger_path_auto_delete,
             shred::{ProcessShredsStats, Shredder},
         },
         solana_sdk::{
@@ -520,8 +520,8 @@ mod test {
 
     #[test]
     fn test_process_shred() {
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
         let num_entries = 10;
         let original_entries = create_ticks(num_entries, 0, Hash::default());
         let mut shreds = local_entries_to_shred(&original_entries, 0, 0, &Keypair::new());
@@ -531,28 +531,27 @@ mod test {
             .expect("Expect successful processing of shred");
 
         assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), original_entries);
-
-        drop(blockstore);
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_run_check_duplicate() {
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
         let (sender, receiver) = unbounded();
         let (duplicate_slot_sender, duplicate_slot_receiver) = unbounded();
         let (shreds, _) = make_many_slot_entries(5, 5, 10);
         blockstore
             .insert_shreds(shreds.clone(), None, false)
             .unwrap();
+        let duplicate_index = 0;
+        let original_shred = shreds[duplicate_index].clone();
         let duplicate_shred = {
             let (mut shreds, _) = make_many_slot_entries(5, 1, 10);
-            shreds.swap_remove(0)
+            shreds.swap_remove(duplicate_index)
         };
         assert_eq!(duplicate_shred.slot(), shreds[0].slot());
         let duplicate_shred_slot = duplicate_shred.slot();
-        sender.send(duplicate_shred).unwrap();
+        sender.send(duplicate_shred.clone()).unwrap();
         assert!(!blockstore.has_duplicate_shreds_in_slot(duplicate_shred_slot));
         let keypair = Keypair::new();
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
@@ -568,11 +567,85 @@ mod test {
             &duplicate_slot_sender,
         )
         .unwrap();
-        assert!(blockstore.has_duplicate_shreds_in_slot(duplicate_shred_slot));
+
+        // Make sure the correct duplicate proof was stored
+        let duplicate_proof = blockstore.get_duplicate_slot(duplicate_shred_slot).unwrap();
+        assert_eq!(duplicate_proof.shred1, *original_shred.payload());
+        assert_eq!(duplicate_proof.shred2, *duplicate_shred.payload());
+
+        // Make sure a duplicate signal was sent
         assert_eq!(
             duplicate_slot_receiver.try_recv().unwrap(),
             duplicate_shred_slot
         );
+    }
+
+    #[test]
+    fn test_store_duplicate_shreds_same_batch() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
+        let (duplicate_shred_sender, duplicate_shred_receiver) = unbounded();
+        let (duplicate_slot_sender, duplicate_slot_receiver) = unbounded();
+        let exit = Arc::new(AtomicBool::new(false));
+        let keypair = Keypair::new();
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
+        let cluster_info = Arc::new(ClusterInfo::new(
+            contact_info,
+            Arc::new(keypair),
+            SocketAddrSpace::Unspecified,
+        ));
+
+        // Start duplicate thread receiving and inserting duplicates
+        let t_check_duplicate = WindowService::start_check_duplicate_thread(
+            cluster_info,
+            exit.clone(),
+            blockstore.clone(),
+            duplicate_shred_receiver,
+            duplicate_slot_sender,
+        );
+
+        let handle_duplicate = |shred| {
+            let _ = duplicate_shred_sender.send(shred);
+        };
+        let num_trials = 100;
+        for slot in 0..num_trials {
+            let (shreds, _) = make_many_slot_entries(slot, 1, 10);
+            let duplicate_index = 0;
+            let original_shred = shreds[duplicate_index].clone();
+            let duplicate_shred = {
+                let (mut shreds, _) = make_many_slot_entries(slot, 1, 10);
+                shreds.swap_remove(duplicate_index)
+            };
+            assert_eq!(duplicate_shred.slot(), slot);
+            // Simulate storing both duplicate shreds in the same batch
+            blockstore
+                .insert_shreds_handle_duplicate(
+                    vec![original_shred.clone(), duplicate_shred.clone()],
+                    vec![false, false],
+                    None,
+                    false, // is_trusted
+                    None,
+                    &handle_duplicate,
+                    &ReedSolomonCache::default(),
+                    &mut BlockstoreInsertionMetrics::default(),
+                )
+                .unwrap();
+
+            // Make sure a duplicate signal was sent
+            assert_eq!(
+                duplicate_slot_receiver
+                    .recv_timeout(Duration::from_millis(5_000))
+                    .unwrap(),
+                slot
+            );
+
+            // Make sure the correct duplicate proof was stored
+            let duplicate_proof = blockstore.get_duplicate_slot(slot).unwrap();
+            assert_eq!(duplicate_proof.shred1, *original_shred.payload());
+            assert_eq!(duplicate_proof.shred2, *duplicate_shred.payload());
+        }
+        exit.store(true, Ordering::Relaxed);
+        t_check_duplicate.join().unwrap();
     }
 
     #[test]

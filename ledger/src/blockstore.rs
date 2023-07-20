@@ -135,6 +135,11 @@ impl std::fmt::Display for InsertDataShredError {
     }
 }
 
+pub struct InsertResults {
+    completed_data_set_infos: Vec<CompletedDataSetInfo>,
+    duplicate_shreds: Vec<Shred>,
+}
+
 /// A "complete data set" is a range of [`Shred`]s that combined in sequence carry a single
 /// serialized [`Vec<Entry>`].
 ///
@@ -817,20 +822,16 @@ impl Blockstore {
     /// On success, the function returns an Ok result with a vector of
     /// `CompletedDataSetInfo` and a vector of its corresponding index in the
     /// input `shreds` vector.
-    pub fn insert_shreds_handle_duplicate<F>(
+    fn do_insert_shreds(
         &self,
         shreds: Vec<Shred>,
         is_repaired: Vec<bool>,
         leader_schedule: Option<&LeaderScheduleCache>,
         is_trusted: bool,
         retransmit_sender: Option<&Sender<Vec</*shred:*/ Vec<u8>>>>,
-        handle_duplicate: &F,
         reed_solomon_cache: &ReedSolomonCache,
         metrics: &mut BlockstoreInsertionMetrics,
-    ) -> Result<Vec<CompletedDataSetInfo>>
-    where
-        F: Fn(Shred),
-    {
+    ) -> Result<InsertResults> {
         assert_eq!(shreds.len(), is_repaired.len());
         let mut total_start = Measure::start("Total elapsed");
         let mut start = Measure::start("Blockstore lock");
@@ -845,6 +846,7 @@ impl Blockstore {
         let mut erasure_metas = HashMap::new();
         let mut slot_meta_working_set = HashMap::new();
         let mut index_working_set = HashMap::new();
+        let mut duplicate_shreds = vec![];
 
         metrics.num_shreds += shreds.len();
         let mut start = Measure::start("Shred insertion");
@@ -867,7 +869,7 @@ impl Blockstore {
                         &mut just_inserted_shreds,
                         &mut index_meta_time_us,
                         is_trusted,
-                        handle_duplicate,
+                        &mut duplicate_shreds,
                         leader_schedule,
                         shred_source,
                     ) {
@@ -902,7 +904,7 @@ impl Blockstore {
                         &mut write_batch,
                         &mut just_inserted_shreds,
                         &mut index_meta_time_us,
-                        handle_duplicate,
+                        &mut duplicate_shreds,
                         is_trusted,
                         shred_source,
                         metrics,
@@ -951,7 +953,7 @@ impl Blockstore {
                         &mut just_inserted_shreds,
                         &mut index_meta_time_us,
                         is_trusted,
-                        &handle_duplicate,
+                        &mut duplicate_shreds,
                         leader_schedule,
                         ShredSource::Recovered,
                     ) {
@@ -1035,7 +1037,44 @@ impl Blockstore {
         metrics.total_elapsed_us += total_start.as_us();
         metrics.index_meta_time_us += index_meta_time_us;
 
-        Ok(newly_completed_data_sets)
+        Ok(InsertResults {
+            completed_data_set_infos: newly_completed_data_sets,
+            duplicate_shreds,
+        })
+    }
+
+    pub fn insert_shreds_handle_duplicate<F>(
+        &self,
+        shreds: Vec<Shred>,
+        is_repaired: Vec<bool>,
+        leader_schedule: Option<&LeaderScheduleCache>,
+        is_trusted: bool,
+        retransmit_sender: Option<&Sender<Vec</*shred:*/ Vec<u8>>>>,
+        handle_duplicate: &F,
+        reed_solomon_cache: &ReedSolomonCache,
+        metrics: &mut BlockstoreInsertionMetrics,
+    ) -> Result<Vec<CompletedDataSetInfo>>
+    where
+        F: Fn(Shred),
+    {
+        let InsertResults {
+            completed_data_set_infos,
+            duplicate_shreds,
+        } = self.do_insert_shreds(
+            shreds,
+            is_repaired,
+            leader_schedule,
+            is_trusted,
+            retransmit_sender,
+            reed_solomon_cache,
+            metrics,
+        )?;
+
+        for shred in duplicate_shreds {
+            handle_duplicate(shred);
+        }
+
+        Ok(completed_data_set_infos)
     }
 
     pub fn add_new_shred_signal(&self, s: Sender<bool>) {
@@ -1113,20 +1152,20 @@ impl Blockstore {
         is_trusted: bool,
     ) -> Result<Vec<CompletedDataSetInfo>> {
         let shreds_len = shreds.len();
-        self.insert_shreds_handle_duplicate(
+        let insert_results = self.do_insert_shreds(
             shreds,
             vec![false; shreds_len],
             leader_schedule,
             is_trusted,
-            None,    // retransmit-sender
-            &|_| {}, // handle-duplicates
+            None, // retransmit-sender
             &ReedSolomonCache::default(),
             &mut BlockstoreInsertionMetrics::default(),
-        )
+        )?;
+        Ok(insert_results.completed_data_set_infos)
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn check_insert_coding_shred<F>(
+    fn check_insert_coding_shred(
         &self,
         shred: Shred,
         erasure_metas: &mut HashMap<ErasureSetId, ErasureMeta>,
@@ -1134,14 +1173,11 @@ impl Blockstore {
         write_batch: &mut WriteBatch,
         just_received_shreds: &mut HashMap<ShredId, Shred>,
         index_meta_time_us: &mut u64,
-        handle_duplicate: &F,
+        duplicate_shreds: &mut Vec<Shred>,
         is_trusted: bool,
         shred_source: ShredSource,
         metrics: &mut BlockstoreInsertionMetrics,
-    ) -> bool
-    where
-        F: Fn(Shred),
-    {
+    ) -> bool {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
 
@@ -1156,7 +1192,7 @@ impl Blockstore {
         if !is_trusted {
             if index_meta.coding().contains(shred_index) {
                 metrics.num_coding_shreds_exists += 1;
-                handle_duplicate(shred);
+                duplicate_shreds.push(shred);
                 return false;
             }
 
@@ -1300,7 +1336,7 @@ impl Blockstore {
     ///     whether it is okay to insert the input shred.
     /// - `shred_source`: the source of the shred.
     #[allow(clippy::too_many_arguments)]
-    fn check_insert_data_shred<F>(
+    fn check_insert_data_shred(
         &self,
         shred: Shred,
         erasure_metas: &mut HashMap<ErasureSetId, ErasureMeta>,
@@ -1310,13 +1346,10 @@ impl Blockstore {
         just_inserted_shreds: &mut HashMap<ShredId, Shred>,
         index_meta_time_us: &mut u64,
         is_trusted: bool,
-        handle_duplicate: &F,
+        duplicate_shreds: &mut Vec<Shred>,
         leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
-    ) -> std::result::Result<Vec<CompletedDataSetInfo>, InsertDataShredError>
-    where
-        F: Fn(Shred),
-    {
+    ) -> std::result::Result<Vec<CompletedDataSetInfo>, InsertDataShredError> {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
 
@@ -1337,7 +1370,7 @@ impl Blockstore {
 
         if !is_trusted {
             if Self::is_data_shred_present(&shred, slot_meta, index_meta.data()) {
-                handle_duplicate(shred);
+                duplicate_shreds.push(shred);
                 return Err(InsertDataShredError::Exists);
             }
 
@@ -6641,32 +6674,27 @@ pub mod tests {
             &mut write_batch,
             &mut just_received_shreds,
             &mut index_meta_time_us,
-            &|_shred| {
-                panic!("no dupes");
-            },
+            &mut vec![],
             false,
             ShredSource::Turbine,
             &mut BlockstoreInsertionMetrics::default(),
         ));
 
         // insert again fails on dupe
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        let counter = AtomicUsize::new(0);
+        let mut duplicate_shreds = vec![];
         assert!(!blockstore.check_insert_coding_shred(
-            coding_shred,
+            coding_shred.clone(),
             &mut erasure_metas,
             &mut index_working_set,
             &mut write_batch,
             &mut just_received_shreds,
             &mut index_meta_time_us,
-            &|_shred| {
-                counter.fetch_add(1, Ordering::Relaxed);
-            },
+            &mut duplicate_shreds,
             false,
             ShredSource::Turbine,
             &mut BlockstoreInsertionMetrics::default(),
         ));
-        assert_eq!(counter.load(Ordering::Relaxed), 1);
+        assert_eq!(duplicate_shreds, vec![coding_shred]);
     }
 
     #[test]
