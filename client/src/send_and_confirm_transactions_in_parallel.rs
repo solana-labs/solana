@@ -8,7 +8,10 @@ use {
     dashmap::DashMap,
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
     solana_rpc_client::spinner,
-    solana_rpc_client_api::request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    solana_rpc_client_api::{
+        client_error::ErrorKind,
+        request::{RpcError, RpcResponseErrorData, MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS},
+    },
     solana_sdk::{
         hash::Hash,
         message::Message,
@@ -47,23 +50,26 @@ struct BlockHashData {
     pub last_valid_blockheight: u64,
 }
 
+#[derive(Clone, Debug, Copy)]
+pub struct SendAndConfrimConfig {
+    pub with_spinner: bool,
+    pub send_over_tpu: bool,
+    pub resign_txs_count: Option<usize>,
+}
+
 pub fn send_and_confirm_transactions_in_parallel_blocking<T: Signers + ?Sized>(
     rpc_client: Arc<BlockingRpcClient>,
     websocket_url: String,
     messages: &[Message],
     signers: &T,
-    resign_txs_count: Option<usize>,
-    with_spinner: bool,
-    send_over_tpu: bool,
+    config: SendAndConfrimConfig,
 ) -> Result<Vec<Option<TransactionError>>> {
     let fut = send_and_confirm_transactions_in_parallel(
         rpc_client.get_inner_client().clone(),
         websocket_url,
         messages,
         signers,
-        resign_txs_count,
-        with_spinner,
-        send_over_tpu,
+        config,
     );
     tokio::task::block_in_place(|| rpc_client.runtime().block_on(fut))
 }
@@ -126,14 +132,15 @@ fn create_transaction_confirmation_task(
                         let statuses = result.value;
                         for (signature, status) in signatures.iter().zip(statuses.into_iter()) {
                             status
-                                .filter(|status| status
-                                    .satisfies_commitment(rpc_client.commitment()
-                                )
-                                .and_then(|status| transaction_map
-                                    .remove(signature)
-                                    .map(|(_, data)| (status, data))
-                                )
-                                .and_then(|(status, data)| {
+                                .filter(|status| {
+                                    status.satisfies_commitment(rpc_client.commitment())
+                                })
+                                .and_then(|status| {
+                                    transaction_map
+                                        .remove(signature)
+                                        .map(|(_, data)| (status, data))
+                                })
+                                .map(|(status, data)| {
                                     confirmed_transactions.fetch_add(1, Ordering::Relaxed);
                                     if let Some(error) = status.err {
                                         errors_map.insert(data.index, error);
@@ -150,24 +157,29 @@ fn create_transaction_confirmation_task(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(Clone, Debug)]
+struct SendingContext {
+    transaction_map: Arc<DashMap<Signature, TransactionData>>,
+    error_map: Arc<DashMap<usize, TransactionError>>,
+    blockhash_data_rw: Arc<RwLock<BlockHashData>>,
+    confirmed_transactions: Arc<AtomicU32>,
+    total_transactions: usize,
+    current_blockheight: Arc<AtomicU64>,
+}
+
 async fn sign_all_messages_and_send<T: Signers + ?Sized>(
     progress_bar: &Option<indicatif::ProgressBar>,
     rpc_client: Arc<RpcClient>,
     tpu_client: &Option<TpuClient<QuicPool, QuicConnectionManager, QuicConfig>>,
-    transaction_map: Arc<DashMap<Signature, TransactionData>>,
-    error_map: Arc<DashMap<usize, TransactionError>>,
     messages_with_index: Vec<(usize, Message)>,
-    blockhash_data_rw: Arc<RwLock<BlockHashData>>,
     signers: &T,
-    confirmed_transactions: Arc<AtomicU32>,
-    total_transactions: usize,
+    context: &SendingContext,
 ) -> Result<()> {
     let current_transaction_count = messages_with_index.len();
     // send all the transaction meesages
     for (counter, (index, message)) in messages_with_index.iter().enumerate() {
         let mut transaction = Transaction::new_unsigned(message.clone());
-        let blockhashdata = *blockhash_data_rw.read().await;
+        let blockhashdata = *context.blockhash_data_rw.read().await;
 
         // we have already checked if all transactions are signable.
         transaction
@@ -184,23 +196,36 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
         };
         if send_over_rpc {
             if let Err(e) = rpc_client.send_transaction(&transaction).await {
-                match e.kind {
-                    solana_rpc_client_api::client_error::ErrorKind::Io(_)
-                    | solana_rpc_client_api::client_error::ErrorKind::Reqwest(_) => {
+                match &e.kind {
+                    ErrorKind::Io(_) | ErrorKind::Reqwest(_) => {
                         // fall through on io error, we will retry the transaction
                     }
-                    solana_rpc_client_api::client_error::ErrorKind::TransactionError(e) => {
-                        error_map.insert(*index, e);
+                    ErrorKind::TransactionError(transaction_error) => {
+                        context.error_map.insert(*index, transaction_error.clone());
                         continue;
                     }
+                    ErrorKind::RpcError(rpc_error) => {
+                        if let RpcError::RpcResponseError { data, .. } = rpc_error {
+                            if let RpcResponseErrorData::SendTransactionPreflightFailure(
+                                simulation_result,
+                            ) = data
+                            {
+                                if let Some(transaction_error) = &simulation_result.err {
+                                    context.error_map.insert(*index, transaction_error.clone());
+                                    continue;
+                                }
+                            }
+                        }
+                        return Err(TpuSenderError::from(e));
+                    }
                     _ => {
-                        return Err(e.into());
+                        return Err(TpuSenderError::from(e));
                     }
                 }
             }
         }
         // send to confirm the transaction
-        transaction_map.insert(
+        context.transaction_map.insert(
             signature,
             TransactionData {
                 index: *index,
@@ -213,8 +238,10 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
         if let Some(progress_bar) = progress_bar {
             set_message_for_confirmed_transactions(
                 progress_bar,
-                confirmed_transactions.load(std::sync::atomic::Ordering::Relaxed),
-                total_transactions,
+                context
+                    .confirmed_transactions
+                    .load(std::sync::atomic::Ordering::Relaxed),
+                context.total_transactions,
                 None,
                 blockhashdata.last_valid_blockheight,
                 &format!(
@@ -231,11 +258,13 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
 async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction_over_tpu(
     progress_bar: &Option<indicatif::ProgressBar>,
     tpu_client: &Option<TpuClient<QuicPool, QuicConnectionManager, QuicConfig>>,
-    transaction_map: Arc<DashMap<Signature, TransactionData>>,
-    current_blockheight: Arc<AtomicU64>,
-    confirmed_transactions: Arc<AtomicU32>,
-    total_transactions: usize,
+    context: &SendingContext,
 ) {
+    let transaction_map = context.transaction_map.clone();
+    let confirmed_transactions = context.confirmed_transactions.clone();
+    let current_blockheight = context.current_blockheight.clone();
+    let total_transactions = context.total_transactions;
+
     let transactions_to_confirm = transaction_map.len();
     let max_valid_block_height = transaction_map
         .iter()
@@ -322,11 +351,9 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
     websocket_url: String,
     messages: &[Message],
     signers: &T,
-    resign_txs_count: Option<usize>,
-    with_spinner: bool,
-    send_over_tpu: bool,
+    config: SendAndConfrimConfig,
 ) -> Result<Vec<Option<TransactionError>>> {
-    let tpu_client = if send_over_tpu {
+    let tpu_client = if config.send_over_tpu {
         let connection_cache = ConnectionCache::new_quic("connection_cache_cli_program_quic", 1);
         if let ConnectionCache::Quic(cache) = connection_cache {
             Some(
@@ -370,7 +397,7 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
     let block_height = rpc_client.get_block_height().await?;
     let current_blockheight = Arc::new(AtomicU64::new(block_height));
 
-    let progress_bar = with_spinner.then(|| {
+    let progress_bar = config.with_spinner.then(|| {
         let progress_bar = spinner::new_progress_bar();
         progress_bar.set_message("Setting up...");
         progress_bar
@@ -398,7 +425,16 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
     // transaction sender task
     let total_transactions = messages.len();
     let mut initial = true;
-    let signing_count = resign_txs_count.unwrap_or(1);
+    let signing_count = config.resign_txs_count.unwrap_or(1);
+    let context = SendingContext {
+        transaction_map: transaction_map.clone(),
+        blockhash_data_rw: blockhash_data_rw.clone(),
+        confirmed_transactions: confirmed_transactions.clone(),
+        current_blockheight: current_blockheight.clone(),
+        error_map: error_map.clone(),
+        total_transactions,
+    };
+
     for expired_blockhash_retries in (0..signing_count).rev() {
         // only send messages which have not been confirmed
         let messages_with_index: Vec<(usize, Message)> = if initial {
@@ -423,13 +459,9 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
             &progress_bar,
             rpc_client.clone(),
             &tpu_client,
-            transaction_map.clone(),
-            error_map.clone(),
             messages_with_index,
-            blockhash_data_rw.clone(),
             signers,
-            confirmed_transactions.clone(),
-            total_transactions,
+            &context,
         )
         .await?;
 
@@ -437,10 +469,7 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
         confirm_transactions_till_block_height_and_resend_unexpired_transaction_over_tpu(
             &progress_bar,
             &tpu_client,
-            transaction_map.clone(),
-            current_blockheight.clone(),
-            confirmed_transactions.clone(),
-            total_transactions,
+            &context,
         )
         .await;
 
