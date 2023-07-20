@@ -1286,7 +1286,7 @@ pub fn add_bank_snapshot(
         measure!(serialize_status_cache(&slot_deltas, &status_cache_path)?);
 
     let version_path = bank_snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
-    write_snapshot_version_file(version_path, snapshot_version).unwrap();
+    write_snapshot_version_file(version_path, snapshot_version)?;
 
     // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
     let state_complete_path = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
@@ -3142,7 +3142,7 @@ pub fn package_and_archive_full_snapshot(
         archive_format,
         snapshot_version,
         None,
-    )?;
+    );
 
     let accounts_hash = bank
         .get_accounts_hash()
@@ -3194,7 +3194,7 @@ pub fn package_and_archive_incremental_snapshot(
         archive_format,
         snapshot_version,
         None,
-    )?;
+    );
 
     let (accounts_hash_enum, accounts_hash_for_reserialize, bank_incremental_snapshot_persistence) =
         if bank

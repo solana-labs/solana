@@ -9,9 +9,11 @@ use {
     crate::{block_cost_limits::*, transaction_cost::TransactionCost},
     log::*,
     solana_program_runtime::compute_budget::{
-        ComputeBudget, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+        ComputeBudget, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
     },
     solana_sdk::{
+        borsh::try_from_slice_unchecked,
+        compute_budget::{self, ComputeBudgetInstruction},
         feature_set::{
             add_set_tx_loaded_accounts_data_size_instruction,
             include_loaded_accounts_data_size_in_fee_calculation,
@@ -91,16 +93,27 @@ impl CostModel {
         let mut bpf_costs = 0u64;
         let mut loaded_accounts_data_size_cost = 0u64;
         let mut data_bytes_len_total = 0u64;
+        let mut compute_unit_limit_is_set = false;
 
         for (program_id, instruction) in transaction.message().program_instructions_iter() {
             // to keep the same behavior, look for builtin first
             if let Some(builtin_cost) = BUILT_IN_INSTRUCTION_COSTS.get(program_id) {
                 builtin_costs = builtin_costs.saturating_add(*builtin_cost);
             } else {
-                bpf_costs = bpf_costs.saturating_add(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT.into());
+                bpf_costs = bpf_costs
+                    .saturating_add(u64::from(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT))
+                    .min(u64::from(MAX_COMPUTE_UNIT_LIMIT));
             }
             data_bytes_len_total =
                 data_bytes_len_total.saturating_add(instruction.data.len() as u64);
+
+            if compute_budget::check_id(program_id) {
+                if let Ok(ComputeBudgetInstruction::SetComputeUnitLimit(_)) =
+                    try_from_slice_unchecked(&instruction.data)
+                {
+                    compute_unit_limit_is_set = true;
+                }
+            }
         }
 
         // calculate bpf cost based on compute budget instructions
@@ -125,10 +138,15 @@ impl CostModel {
         // by `bank`, therefore it should be considered as no execution cost by cost model.
         match result {
             Ok(_) => {
-                // if tx contained user-space instructions and a more accurate estimate available correct it
-                if bpf_costs > 0 {
+                // if tx contained user-space instructions and a more accurate estimate available correct it,
+                // where "user-space instructions" must be specifically checked by
+                // 'compute_unit_limit_is_set' flag, because compute_budget does not distinguish
+                // builtin and bpf instructions when calculating default compute-unit-limit. (see
+                // compute_budget.rs test `test_process_mixed_instructions_without_compute_budget`)
+                if bpf_costs > 0 && compute_unit_limit_is_set {
                     bpf_costs = compute_budget.compute_unit_limit
                 }
+
                 if feature_set
                     .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id())
                 {
@@ -210,7 +228,7 @@ mod tests {
             compute_budget::{self, ComputeBudgetInstruction},
             fee::ACCOUNT_DATA_COST_PAGE_SIZE,
             hash::Hash,
-            instruction::CompiledInstruction,
+            instruction::{CompiledInstruction, Instruction},
             message::Message,
             signature::{Keypair, Signer},
             system_instruction::{self},
@@ -674,5 +692,32 @@ mod tests {
             compute_budget.heap_cost * 2,
             CostModel::calculate_loaded_accounts_data_size_cost(&compute_budget)
         );
+    }
+
+    #[test]
+    fn test_transaction_cost_with_mix_instruction_without_compute_budget() {
+        let (mint_keypair, start_hash) = test_setup();
+
+        let transaction =
+            SanitizedTransaction::from_transaction_for_tests(Transaction::new_signed_with_payer(
+                &[
+                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                    system_instruction::transfer(&mint_keypair.pubkey(), &Pubkey::new_unique(), 2),
+                ],
+                Some(&mint_keypair.pubkey()),
+                &[&mint_keypair],
+                start_hash,
+            ));
+        // transaction has one builtin instruction, and one bpf instruction, no ComputeBudget::compute_unit_limit
+        let expected_builtin_cost = *BUILT_IN_INSTRUCTION_COSTS
+            .get(&solana_system_program::id())
+            .unwrap();
+        let expected_bpf_cost = DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT;
+
+        let mut tx_cost = TransactionCost::default();
+        CostModel::get_transaction_cost(&mut tx_cost, &transaction, &FeatureSet::all_enabled());
+
+        assert_eq!(expected_builtin_cost, tx_cost.builtins_execution_cost);
+        assert_eq!(expected_bpf_cost as u64, tx_cost.bpf_execution_cost);
     }
 }

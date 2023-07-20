@@ -182,7 +182,7 @@ impl ComputeBudget {
         enable_request_heap_frame_ix: bool,
         support_set_loaded_accounts_data_size_limit_ix: bool,
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
-        let mut num_non_compute_budget_instructions: usize = 0;
+        let mut num_non_compute_budget_instructions: u32 = 0;
         let mut updated_compute_unit_limit = None;
         let mut requested_heap_size = None;
         let mut prioritization_fee = None;
@@ -261,10 +261,10 @@ impl ComputeBudget {
             self.heap_size = Some(bytes as usize);
         }
 
-        self.compute_unit_limit = if default_units_per_instruction {
+        let compute_unit_limit = if default_units_per_instruction {
             updated_compute_unit_limit.or_else(|| {
                 Some(
-                    (num_non_compute_budget_instructions as u32)
+                    num_non_compute_budget_instructions
                         .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT),
                 )
             })
@@ -272,7 +272,8 @@ impl ComputeBudget {
             updated_compute_unit_limit
         }
         .unwrap_or(MAX_COMPUTE_UNIT_LIMIT)
-        .min(MAX_COMPUTE_UNIT_LIMIT) as u64;
+        .min(MAX_COMPUTE_UNIT_LIMIT);
+        self.compute_unit_limit = u64::from(compute_unit_limit);
 
         self.loaded_accounts_data_size_limit = updated_loaded_accounts_data_size_limit
             .unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
@@ -328,6 +329,7 @@ mod tests {
             pubkey::Pubkey,
             signature::Keypair,
             signer::Signer,
+            system_instruction::{self},
             transaction::{SanitizedTransaction, Transaction},
         },
     };
@@ -873,5 +875,42 @@ mod tests {
                 support_set_loaded_accounts_data_size_limit_ix
             );
         }
+    }
+
+    #[test]
+    fn test_process_mixed_instructions_without_compute_budget() {
+        let payer_keypair = Keypair::new();
+
+        let transaction =
+            SanitizedTransaction::from_transaction_for_tests(Transaction::new_signed_with_payer(
+                &[
+                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                    system_instruction::transfer(&payer_keypair.pubkey(), &Pubkey::new_unique(), 2),
+                ],
+                Some(&payer_keypair.pubkey()),
+                &[&payer_keypair],
+                Hash::default(),
+            ));
+
+        let mut compute_budget = ComputeBudget::default();
+        let result = compute_budget.process_instructions(
+            transaction.message().program_instructions_iter(),
+            true,
+            false, //not support request_units_deprecated
+            true,  //enable_request_heap_frame_ix,
+            true,  //support_set_loaded_accounts_data_size_limit_ix,
+        );
+
+        // assert process_instructions will be successful with default,
+        assert_eq!(Ok(PrioritizationFeeDetails::default()), result);
+        // assert the default compute_unit_limit is 2 times default: one for bpf ix, one for
+        // builtin ix.
+        assert_eq!(
+            compute_budget,
+            ComputeBudget {
+                compute_unit_limit: 2 * DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+                ..ComputeBudget::default()
+            }
+        );
     }
 }

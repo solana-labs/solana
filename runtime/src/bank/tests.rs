@@ -10131,10 +10131,9 @@ fn calculate_test_fee(
 
     let budget_limits =
         ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set, None);
-    Bank::calculate_fee(
+    fee_structure.calculate_fee(
         message,
         lamports_per_signature,
-        fee_structure,
         &budget_limits,
         remove_congestion_multiplier,
         false,
@@ -12429,6 +12428,24 @@ fn test_rewards_point_calculation_empty() {
     );
 
     assert!(point_value.is_none());
+}
+
+#[test]
+fn test_force_reward_interval_end() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+
+    let expected_num = 100;
+
+    let stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::new_random())
+        .collect::<Vec<_>>();
+
+    bank.set_epoch_reward_status_active(vec![stake_rewards]);
+    assert!(bank.get_reward_interval() == RewardInterval::InsideInterval);
+
+    bank.force_reward_interval_end_for_tests();
+    assert!(bank.get_reward_interval() == RewardInterval::OutsideInterval);
 }
 
 #[test]

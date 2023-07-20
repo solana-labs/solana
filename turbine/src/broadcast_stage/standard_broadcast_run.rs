@@ -83,8 +83,7 @@ impl StandardBroadcastRun {
                 let shredder =
                     Shredder::new(state.slot, state.parent, reference_tick, self.shred_version)
                         .unwrap();
-                let merkle_variant =
-                    should_use_merkle_variant(state.slot, cluster_type, self.shred_version);
+                let merkle_variant = should_use_merkle_variant(state.slot, cluster_type);
                 let (mut shreds, coding_shreds) = shredder.entries_to_shreds(
                     keypair,
                     &[],  // entries
@@ -146,7 +145,7 @@ impl StandardBroadcastRun {
         };
         let shredder =
             Shredder::new(slot, parent_slot, reference_tick, self.shred_version).unwrap();
-        let merkle_variant = should_use_merkle_variant(slot, cluster_type, self.shred_version);
+        let merkle_variant = should_use_merkle_variant(slot, cluster_type);
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             keypair,
             entries,
@@ -507,10 +506,10 @@ impl BroadcastRun for StandardBroadcastRun {
     }
 }
 
-fn should_use_merkle_variant(slot: Slot, cluster_type: ClusterType, shred_version: u16) -> bool {
+fn should_use_merkle_variant(slot: Slot, cluster_type: ClusterType) -> bool {
     match cluster_type {
-        ClusterType::Testnet => shred_version == 28353,
-        _ => (slot % 19) == 1,
+        ClusterType::Testnet | ClusterType::Devnet | ClusterType::Development => true,
+        ClusterType::MainnetBeta => (slot % 19) == 1,
     }
 }
 
@@ -788,13 +787,13 @@ mod test {
         }
         // At least as many coding shreds as data shreds.
         assert!(shreds.len() >= 29 * 2);
-        assert_eq!(shreds.iter().filter(|shred| shred.is_data()).count(), 29);
+        assert_eq!(shreds.iter().filter(|shred| shred.is_data()).count(), 30);
         process_ticks(75);
         while let Ok((recv_shreds, _)) = brecv.recv_timeout(Duration::from_secs(1)) {
             shreds.extend(recv_shreds.deref().clone());
         }
         assert!(shreds.len() >= 33 * 2);
-        assert_eq!(shreds.iter().filter(|shred| shred.is_data()).count(), 33);
+        assert_eq!(shreds.iter().filter(|shred| shred.is_data()).count(), 34);
     }
 
     #[test]

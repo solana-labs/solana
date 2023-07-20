@@ -3828,10 +3828,9 @@ fn test_program_fees() {
     feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
 
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-    let expected_normal_fee = Bank::calculate_fee(
+    let expected_normal_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,
-        &fee_structure,
         &ComputeBudget::fee_budget_limits(
             sanitized_message.program_instructions_iter(),
             &feature_set,
@@ -3857,10 +3856,9 @@ fn test_program_fees() {
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
     let mut feature_set = FeatureSet::all_enabled();
     feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
-    let expected_prioritized_fee = Bank::calculate_fee(
+    let expected_prioritized_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,
-        &fee_structure,
         &ComputeBudget::fee_budget_limits(
             sanitized_message.program_instructions_iter(),
             &feature_set,
