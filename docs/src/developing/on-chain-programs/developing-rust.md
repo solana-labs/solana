@@ -134,10 +134,6 @@ pub type ProcessInstruction =
     fn(program_id: &Pubkey, accounts: &[AccountInfo], instruction_data: &[u8]) -> ProgramResult;
 ```
 
-Refer to [helloworld's use of the
-entrypoint](https://github.com/solana-labs/example-helloworld/blob/1e049076e10be8712b1a725d2d886ce0cd036b2e/src/program-rust/src/lib.rs#L19)
-as an example of how things fit together.
-
 ### Parameter Deserialization
 
 Each loader provides a helper function that deserializes the program's input

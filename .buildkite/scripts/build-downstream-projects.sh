@@ -9,6 +9,5 @@ source "$here"/common.sh
 agent="${1-solana}"
 
 group "downstream projects" \
-  '{ "name": "example-helloworld", "command": "./ci/downstream-projects/run-example-helloworld.sh", "timeout_in_minutes": 30, "agent": "'"$agent"'" }' \
   '{ "name": "spl", "command": "./ci/downstream-projects/run-spl.sh", "timeout_in_minutes": 30, "agent": "'"$agent"'" }'
 #  '{ "name": "openbook-dex", "command": "./ci/downstream-projects/run-openbook-dex.sh", "timeout_in_minutes": 30, "agent": "'"$agent"'" }' \
