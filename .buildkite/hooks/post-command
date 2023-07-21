@@ -41,36 +41,52 @@ else
         # extract lines which start with '{'
         awk '/{.*/' results.json >sanitized-results.json
 
-        echo "~~~ Uploading test results to Buildkite Analytics"
-        buildkite-test-collector <sanitized-results.json
+        if [[ -n "$BUILDKITE_ANALYTICS_TOKEN" ]]; then
+          echo "~~~ Uploading test results to Buildkite Analytics"
+          buildkite-test-collector <sanitized-results.json
+        else
+          echo "~~~ Ignore uploading to Buildkite Analytics"
+        fi
 
-        echo "~~~ Uploading test results to Datadog"
-        cargo2junit >results.xml <sanitized-results.json || true
-        if [[ -f "results.xml" ]]; then
-          datadog-ci junit upload --service solana results.xml
+        if [[ -n "$DATADOG_API_KEY" ]]; then
+          echo "~~~ Uploading test results to Datadog"
+          cargo2junit >results.xml <sanitized-results.json || true
+          if [[ -f "results.xml" ]]; then
+            datadog-ci junit upload --service solana results.xml
+          fi
+        else
+          echo "~~~ Ignore Uploading to Datadog"
         fi
       fi
 
-      if [[ -f "target/nextest/ci/junit.xml" ]]; then
-        echo "~~~ Uploading test results to Buildkite Analytics"
-        curl \
-          -X POST \
-          -H "Authorization: Token token=\"$BUILDKITE_ANALYTICS_TOKEN\"" \
-          -F "data=@target/nextest/ci/junit.xml" \
-          -F "format=junit" \
-          -F "run_env[CI]=buildkite" \
-          -F "run_env[key]=$BUILDKITE_BUILD_ID" \
-          -F "run_env[url]=$BUILDKITE_BUILD_URL" \
-          -F "run_env[branch]=$BUILDKITE_BRANCH" \
-          -F "run_env[commit_sha]=$BUILDKITE_COMMIT" \
-          -F "run_env[number]=$BUILDKITE_BUILD_NUMBER" \
-          -F "run_env[job_id]=$BUILDKITE_JOB_ID" \
-          -F "run_env[message]=$BUILDKITE_MESSAGE" \
-          https://analytics-api.buildkite.com/v1/uploads
-        echo # add a break line for previous command
+      if [[ -n "$BUILDKITE_ANALYTICS_TOKEN" ]]; then
+        if [[ -f "target/nextest/ci/junit.xml" ]]; then
+          echo "~~~ Uploading test results to Buildkite Analytics"
+          curl \
+            -X POST \
+            -H "Authorization: Token token=\"$BUILDKITE_ANALYTICS_TOKEN\"" \
+            -F "data=@target/nextest/ci/junit.xml" \
+            -F "format=junit" \
+            -F "run_env[CI]=buildkite" \
+            -F "run_env[key]=$BUILDKITE_BUILD_ID" \
+            -F "run_env[url]=$BUILDKITE_BUILD_URL" \
+            -F "run_env[branch]=$BUILDKITE_BRANCH" \
+            -F "run_env[commit_sha]=$BUILDKITE_COMMIT" \
+            -F "run_env[number]=$BUILDKITE_BUILD_NUMBER" \
+            -F "run_env[job_id]=$BUILDKITE_JOB_ID" \
+            -F "run_env[message]=$BUILDKITE_MESSAGE" \
+            https://analytics-api.buildkite.com/v1/uploads
+          echo # add a break line for previous command
+        else
+          echo "~~~ Ignore uploading to Buildkite Analytics"
+        fi
 
-        echo "~~~ Uploading test results to Datadog"
-        datadog-ci junit upload --service solana target/nextest/ci/junit.xml
+        if [[ -n "$DATADOG_API_KEY" ]]; then
+          echo "~~~ Uploading test results to Datadog"
+          datadog-ci junit upload --service solana target/nextest/ci/junit.xml
+        else
+          echo "~~~ Ignore Uploading to Datadog"
+        fi
       fi
     fi
   fi
