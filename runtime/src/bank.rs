@@ -209,6 +209,7 @@ struct VerifyAccountsHashConfig {
 mod address_lookup_table;
 mod builtin_programs;
 mod metrics;
+mod serde_snapshot;
 mod sysvar_cache;
 #[cfg(test)]
 mod tests;
