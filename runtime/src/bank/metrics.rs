@@ -19,9 +19,6 @@ pub(crate) struct RewardsMetrics {
     pub(crate) redeem_rewards_us: u64,
     pub(crate) store_stake_accounts_us: AtomicU64,
     pub(crate) store_vote_accounts_us: AtomicU64,
-    pub(crate) invalid_cached_vote_accounts: usize,
-    pub(crate) invalid_cached_stake_accounts: usize,
-    pub(crate) invalid_cached_stake_accounts_rent_epoch: usize,
     pub(crate) vote_accounts_cache_miss_count: usize,
     pub(crate) hash_partition_rewards_us: u64,
 }
@@ -94,21 +91,6 @@ pub(crate) fn report_new_epoch_metrics(
         (
             "store_vote_accounts_us",
             metrics.store_vote_accounts_us.load(Relaxed),
-            i64
-        ),
-        (
-            "invalid_cached_vote_accounts",
-            metrics.invalid_cached_vote_accounts,
-            i64
-        ),
-        (
-            "invalid_cached_stake_accounts",
-            metrics.invalid_cached_stake_accounts,
-            i64
-        ),
-        (
-            "invalid_cached_stake_accounts_rent_epoch",
-            metrics.invalid_cached_stake_accounts_rent_epoch,
             i64
         ),
         (

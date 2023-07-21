@@ -68,7 +68,7 @@ use {
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_hash::SnapshotHash,
         sorted_storages::SortedStorages,
-        stake_account::{self, StakeAccount},
+        stake_account::StakeAccount,
         stake_history::StakeHistory,
         stake_rewards::StakeReward,
         stake_weighted_timestamp::{
@@ -174,7 +174,7 @@ use {
         self, InflationPointCalculationEvent, PointValue, StakeState,
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
-    solana_vote_program::vote_state::{VoteState, VoteStateVersions},
+    solana_vote_program::vote_state::VoteState,
     std::{
         borrow::Cow,
         cell::RefCell,
@@ -819,8 +819,7 @@ pub struct Bank {
 struct VoteWithStakeDelegations {
     vote_state: Arc<VoteState>,
     vote_account: AccountSharedData,
-    // TODO: use StakeAccount<Delegation> once the old code is deleted.
-    delegations: Vec<(Pubkey, StakeAccount<()>)>,
+    delegations: Vec<(Pubkey, StakeAccount<Delegation>)>,
 }
 
 type VoteWithStakeDelegationsMap = DashMap<Pubkey, VoteWithStakeDelegations>;
@@ -829,11 +828,7 @@ type InvalidCacheKeyMap = DashMap<Pubkey, InvalidCacheEntryReason>;
 
 struct LoadVoteAndStakeAccountsResult {
     vote_with_stake_delegations_map: VoteWithStakeDelegationsMap,
-    invalid_stake_keys: InvalidCacheKeyMap,
     invalid_vote_keys: InvalidCacheKeyMap,
-    invalid_cached_vote_accounts: usize,
-    invalid_cached_stake_accounts: usize,
-    invalid_cached_stake_accounts_rent_epoch: usize,
     vote_accounts_cache_miss_count: usize,
 }
 
@@ -2547,9 +2542,6 @@ impl Bank {
         } = self.calculate_previous_epoch_inflation_rewards(capitalization, prev_epoch);
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
-        let update_rewards_from_cached_accounts = self
-            .feature_set
-            .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
         self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
@@ -2557,7 +2549,6 @@ impl Bank {
             reward_calc_tracer,
             thread_pool,
             metrics,
-            update_rewards_from_cached_accounts,
         );
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
@@ -2619,167 +2610,6 @@ impl Bank {
             ("num_stake_accounts", num_stake_accounts, i64),
             ("num_vote_accounts", num_vote_accounts, i64),
         );
-    }
-
-    /// map stake delegations into resolved (pubkey, account) pairs
-    ///  returns a map (has to be copied) of loaded
-    ///   ( Vec<(staker info)> (voter account) ) keyed by voter pubkey
-    ///
-    /// Filters out invalid pairs
-    fn _load_vote_and_stake_accounts_with_thread_pool(
-        &self,
-        thread_pool: &ThreadPool,
-        reward_calc_tracer: Option<impl RewardCalcTracer>,
-    ) -> LoadVoteAndStakeAccountsResult {
-        let stakes = self.stakes_cache.stakes();
-        let cached_vote_accounts = stakes.vote_accounts();
-        let vote_with_stake_delegations_map = DashMap::with_capacity(cached_vote_accounts.len());
-        let invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason> = DashMap::new();
-        let invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason> = DashMap::new();
-        let invalid_cached_stake_accounts = AtomicUsize::default();
-        let invalid_cached_vote_accounts = AtomicUsize::default();
-        let invalid_cached_stake_accounts_rent_epoch = AtomicUsize::default();
-
-        let stake_delegations = self.filter_stake_delegations(&stakes);
-        thread_pool.install(|| {
-            stake_delegations
-                .into_par_iter()
-                .for_each(|(stake_pubkey, cached_stake_account)| {
-                    let delegation = cached_stake_account.delegation();
-                    let vote_pubkey = &delegation.voter_pubkey;
-                    if invalid_vote_keys.contains_key(vote_pubkey) {
-                        return;
-                    }
-                    let Some(stake_account) = self.get_account_with_fixed_root(stake_pubkey) else {
-                            invalid_stake_keys
-                                .insert(*stake_pubkey, InvalidCacheEntryReason::Missing);
-                            invalid_cached_stake_accounts.fetch_add(1, Relaxed);
-                            return;
-                        };
-                    if cached_stake_account.account() != &stake_account {
-                        if self.rc.accounts.accounts_db.assert_stakes_cache_consistency {
-                            panic!(
-                                "stakes cache accounts mismatch {cached_stake_account:?} {stake_account:?}"
-                            );
-                        }
-                        invalid_cached_stake_accounts.fetch_add(1, Relaxed);
-                        let cached_stake_account = cached_stake_account.account();
-                        if cached_stake_account.lamports() == stake_account.lamports()
-                            && cached_stake_account.data() == stake_account.data()
-                            && cached_stake_account.owner() == stake_account.owner()
-                            && cached_stake_account.executable() == stake_account.executable()
-                        {
-                            invalid_cached_stake_accounts_rent_epoch.fetch_add(1, Relaxed);
-                        } else {
-                            debug!(
-                                "cached stake account mismatch: {}: {:?}, {:?}",
-                                stake_pubkey, stake_account, cached_stake_account
-                            );
-                        }
-                    }
-                    let stake_account = match StakeAccount::<()>::try_from(stake_account) {
-                        Ok(stake_account) => stake_account,
-                        Err(stake_account::Error::InvalidOwner { .. }) => {
-                            invalid_stake_keys
-                                .insert(*stake_pubkey, InvalidCacheEntryReason::WrongOwner);
-                            return;
-                        }
-                        Err(stake_account::Error::InstructionError(_)) => {
-                            invalid_stake_keys
-                                .insert(*stake_pubkey, InvalidCacheEntryReason::BadState);
-                            return;
-                        }
-                        Err(stake_account::Error::InvalidDelegation(_)) => {
-                            // This should not happen.
-                            error!(
-                                "Unexpected code path! StakeAccount<()> \
-                                should not check if stake-state is a \
-                                Delegation."
-                            );
-                            return;
-                        }
-                    };
-                    let stake_delegation = (*stake_pubkey, stake_account);
-                    let mut vote_delegations = if let Some(vote_delegations) =
-                        vote_with_stake_delegations_map.get_mut(vote_pubkey)
-                    {
-                        vote_delegations
-                    } else {
-                        let cached_vote_account = cached_vote_accounts.get(vote_pubkey);
-                        let vote_account = match self.get_account_with_fixed_root(vote_pubkey) {
-                            Some(vote_account) => {
-                                if vote_account.owner() != &solana_vote_program::id() {
-                                    invalid_vote_keys
-                                        .insert(*vote_pubkey, InvalidCacheEntryReason::WrongOwner);
-                                    if cached_vote_account.is_some() {
-                                        invalid_cached_vote_accounts.fetch_add(1, Relaxed);
-                                    }
-                                    return;
-                                }
-                                vote_account
-                            }
-                            None => {
-                                if cached_vote_account.is_some() {
-                                    invalid_cached_vote_accounts.fetch_add(1, Relaxed);
-                                }
-                                invalid_vote_keys
-                                    .insert(*vote_pubkey, InvalidCacheEntryReason::Missing);
-                                return;
-                            }
-                        };
-
-                        let vote_state = if let Ok(vote_state) =
-                            StateMut::<VoteStateVersions>::state(&vote_account)
-                        {
-                            vote_state.convert_to_current()
-                        } else {
-                            invalid_vote_keys
-                                .insert(*vote_pubkey, InvalidCacheEntryReason::BadState);
-                            if cached_vote_account.is_some() {
-                                invalid_cached_vote_accounts.fetch_add(1, Relaxed);
-                            }
-                            return;
-                        };
-                        match cached_vote_account {
-                            Some(cached_vote_account)
-                                if cached_vote_account.account() == &vote_account => {}
-                            _ => {
-                                invalid_cached_vote_accounts.fetch_add(1, Relaxed);
-                            }
-                        };
-                        vote_with_stake_delegations_map
-                            .entry(*vote_pubkey)
-                            .or_insert_with(|| VoteWithStakeDelegations {
-                                vote_state: Arc::new(vote_state),
-                                vote_account,
-                                delegations: vec![],
-                            })
-                    };
-
-                    if let Some(reward_calc_tracer) = reward_calc_tracer.as_ref() {
-                        reward_calc_tracer(&RewardCalculationEvent::Staking(
-                            stake_pubkey,
-                            &InflationPointCalculationEvent::Delegation(
-                                delegation,
-                                solana_vote_program::id(),
-                            ),
-                        ));
-                    }
-
-                    vote_delegations.delegations.push(stake_delegation);
-                });
-        });
-        invalid_cached_stake_accounts.fetch_add(invalid_stake_keys.len(), Relaxed);
-        LoadVoteAndStakeAccountsResult {
-            vote_with_stake_delegations_map,
-            invalid_vote_keys,
-            invalid_stake_keys,
-            invalid_cached_vote_accounts: invalid_cached_vote_accounts.into_inner(),
-            invalid_cached_stake_accounts: invalid_cached_stake_accounts.into_inner(),
-            invalid_cached_stake_accounts_rent_epoch: invalid_cached_stake_accounts_rent_epoch
-                .into_inner(),
-            vote_accounts_cache_miss_count: 0,
-        }
     }
 
     fn filter_stake_delegations<'a>(
@@ -2906,8 +2736,7 @@ impl Bank {
                 let event = RewardCalculationEvent::Staking(stake_pubkey, &delegation);
                 reward_calc_tracer(&event);
             }
-            let stake_account = StakeAccount::from(stake_account.clone());
-            let stake_delegation = (*stake_pubkey, stake_account);
+            let stake_delegation = (*stake_pubkey, stake_account.clone());
             vote_delegations.delegations.push(stake_delegation);
         };
         thread_pool.install(|| {
@@ -2918,10 +2747,6 @@ impl Bank {
         LoadVoteAndStakeAccountsResult {
             vote_with_stake_delegations_map,
             invalid_vote_keys,
-            invalid_stake_keys: DashMap::default(),
-            invalid_cached_vote_accounts: 0,
-            invalid_cached_stake_accounts: 0,
-            invalid_cached_stake_accounts_rent_epoch: 0,
             vote_accounts_cache_miss_count: vote_accounts_cache_miss_count.into_inner(),
         }
     }
@@ -2982,15 +2807,10 @@ impl Bank {
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
-        update_rewards_from_cached_accounts: bool,
     ) {
         let stake_history = self.stakes_cache.stakes().history().clone();
-        let vote_with_stake_delegations_map = self.load_vote_and_stake_accounts(
-            thread_pool,
-            reward_calc_tracer.as_ref(),
-            metrics,
-            update_rewards_from_cached_accounts,
-        );
+        let vote_with_stake_delegations_map =
+            self.load_vote_and_stake_accounts(thread_pool, reward_calc_tracer.as_ref(), metrics);
 
         let point_value = self.calculate_reward_points(
             &vote_with_stake_delegations_map,
@@ -3130,39 +2950,23 @@ impl Bank {
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
-        update_rewards_from_cached_accounts: bool,
     ) -> VoteWithStakeDelegationsMap {
         let (
             LoadVoteAndStakeAccountsResult {
                 vote_with_stake_delegations_map,
-                invalid_stake_keys,
                 invalid_vote_keys,
-                invalid_cached_vote_accounts,
-                invalid_cached_stake_accounts,
-                invalid_cached_stake_accounts_rent_epoch,
                 vote_accounts_cache_miss_count,
             },
             measure,
         ) = measure!({
-            if update_rewards_from_cached_accounts {
-                self._load_vote_and_stake_accounts(thread_pool, reward_calc_tracer.as_ref())
-            } else {
-                self._load_vote_and_stake_accounts_with_thread_pool(
-                    thread_pool,
-                    reward_calc_tracer.as_ref(),
-                )
-            }
+            self._load_vote_and_stake_accounts(thread_pool, reward_calc_tracer.as_ref())
         });
         metrics
             .load_vote_and_stake_accounts_us
             .fetch_add(measure.as_us(), Relaxed);
-        metrics.invalid_cached_vote_accounts += invalid_cached_vote_accounts;
-        metrics.invalid_cached_stake_accounts += invalid_cached_stake_accounts;
-        metrics.invalid_cached_stake_accounts_rent_epoch +=
-            invalid_cached_stake_accounts_rent_epoch;
         metrics.vote_accounts_cache_miss_count += vote_accounts_cache_miss_count;
         self.stakes_cache
-            .handle_invalid_keys(invalid_stake_keys, invalid_vote_keys, self.slot());
+            .handle_invalid_keys(invalid_vote_keys, self.slot());
         vote_with_stake_delegations_map
     }
 

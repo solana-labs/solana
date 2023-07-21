@@ -2072,9 +2072,6 @@ fn test_rent_eager_collect_rent_zero_lamport_deterministic() {
 fn test_bank_update_vote_stake_rewards() {
     let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
     check_bank_update_vote_stake_rewards(|bank: &Bank| {
-        bank._load_vote_and_stake_accounts_with_thread_pool(&thread_pool, null_tracer())
-    });
-    check_bank_update_vote_stake_rewards(|bank: &Bank| {
         bank._load_vote_and_stake_accounts(&thread_pool, null_tracer())
     });
 }
@@ -9143,12 +9140,6 @@ fn test_get_inflation_num_slots_already_activated() {
 #[test]
 fn test_stake_vote_account_validity() {
     let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
-    check_stake_vote_account_validity(
-        true, // check owner change,
-        |bank: &Bank| {
-            bank._load_vote_and_stake_accounts_with_thread_pool(&thread_pool, null_tracer())
-        },
-    );
     // TODO: stakes cache should be hardened for the case when the account
     // owner is changed from vote/stake program to something else. see:
     // https://github.com/solana-labs/solana/pull/24200#discussion_r849935444
@@ -9179,11 +9170,7 @@ where
         AccountSecondaryIndexes::default(),
         AccountShrinkThreshold::default(),
         false,
-        Some(AccountsDbConfig {
-            // at least one tests hit this assert, so disable it
-            assert_stakes_cache_consistency: false,
-            ..ACCOUNTS_DB_CONFIG_FOR_TESTING
-        }),
+        Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
         Arc::default(),
     ));
@@ -11953,7 +11940,6 @@ fn test_stake_account_consistency_with_rent_epoch_max_feature(
         Epoch::default()
     };
 
-    assert!(bank.rc.accounts.accounts_db.assert_stakes_cache_consistency);
     let mut pubkey_bytes_early = [0u8; 32];
     pubkey_bytes_early[31] = 2;
     let stake_id1 = Pubkey::from(pubkey_bytes_early);
