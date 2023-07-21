@@ -823,20 +823,22 @@ pub struct Bank {
     epoch_reward_status: EpochRewardStatus,
 }
 
+// XXX
 struct VoteWithStakeDelegations {
     vote_state: Arc<VoteState>,
     vote_account: AccountSharedData,
     delegations: Vec<(Pubkey, StakeAccount<Delegation>)>,
 }
 
+// XXX
 type VoteWithStakeDelegationsMap = DashMap<Pubkey, VoteWithStakeDelegations>;
 
 type InvalidCacheKeyMap = DashMap<Pubkey, InvalidCacheEntryReason>;
 
 struct LoadVoteAndStakeAccountsResult {
-    vote_with_stake_delegations_map: VoteWithStakeDelegationsMap,
+    vote_accounts: HashMap<Pubkey, (AccountSharedData, Arc<VoteState>)>,
+    stake_delegations: Vec<(Pubkey, StakeAccount<Delegation>)>,
     invalid_vote_keys: InvalidCacheKeyMap,
-    vote_accounts_cache_miss_count: usize,
 }
 
 #[derive(Debug)]
@@ -2624,49 +2626,14 @@ impl Bank {
         let stake_delegations = self.filter_stake_delegations(&stakes);
 
         // Obtain all unique voter pubkeys from stake delegations.
-        fn merge(mut acc: HashSet<Pubkey>, other: HashSet<Pubkey>) -> HashSet<Pubkey> {
-            if acc.len() < other.len() {
-                return merge(other, acc);
-            }
-            acc.extend(other);
-            acc
-        }
-        let voter_pubkeys = thread_pool.install(|| {
-            stake_delegations
-                .par_iter()
-                .fold(
-                    HashSet::default,
-                    |mut voter_pubkeys, (_stake_pubkey, stake_account)| {
-                        let delegation = stake_account.delegation();
-                        voter_pubkeys.insert(delegation.voter_pubkey);
-                        voter_pubkeys
-                    },
-                )
-                .reduce(HashSet::default, merge)
-        });
+        let voter_pubkeys = get_unique_voter_pubkeys(thread_pool, &stake_delegations);
+
         // Obtain vote-accounts for unique voter pubkeys.
         let cached_vote_accounts = stakes.vote_accounts();
         let solana_vote_program: Pubkey = solana_vote_program::id();
-        let vote_accounts_cache_miss_count = AtomicUsize::default();
-        let get_vote_account = |vote_pubkey: &Pubkey| -> Option<VoteAccount> {
-            if let Some(vote_account) = cached_vote_accounts.get(vote_pubkey) {
-                return Some(vote_account.clone());
-            }
-            // If accounts-db contains a valid vote account, then it should
-            // already have been cached in cached_vote_accounts; so the code
-            // below is only for sanity check, and can be removed once
-            // vote_accounts_cache_miss_count is shown to be always zero.
-            let account = self.get_account_with_fixed_root(vote_pubkey)?;
-            if account.owner() == &solana_vote_program
-                && VoteState::deserialize(account.data()).is_ok()
-            {
-                vote_accounts_cache_miss_count.fetch_add(1, Relaxed);
-            }
-            VoteAccount::try_from(account).ok()
-        };
         let invalid_vote_keys = DashMap::<Pubkey, InvalidCacheEntryReason>::new();
-        let make_vote_delegations_entry = |vote_pubkey| {
-            let Some(vote_account) = get_vote_account(&vote_pubkey) else {
+        let get_vote_account = |vote_pubkey| {
+            let Some(vote_account) = cached_vote_accounts.get(&vote_pubkey).cloned() else {
                 invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::Missing);
                 return None;
             };
@@ -2674,50 +2641,47 @@ impl Bank {
                 invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::WrongOwner);
                 return None;
             }
-            let Ok(vote_state) = vote_account.vote_state().cloned() else {
+            let Ok(vote_state) = vote_account.vote_state().cloned().map(Arc::new) else {
                 invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::BadState);
                 return None;
             };
-            let vote_with_stake_delegations = VoteWithStakeDelegations {
-                vote_state: Arc::new(vote_state),
-                vote_account: AccountSharedData::from(vote_account),
-                delegations: Vec::default(),
-            };
-            Some((vote_pubkey, vote_with_stake_delegations))
+            // XXX remove this!
+            let vote_account = AccountSharedData::from(vote_account);
+            Some((vote_pubkey, (vote_account, vote_state)))
         };
-        let vote_with_stake_delegations_map: DashMap<Pubkey, VoteWithStakeDelegations> =
-            thread_pool.install(|| {
+        let vote_accounts: HashMap<Pubkey, (AccountSharedData, Arc<VoteState>)> = thread_pool
+            .install(|| {
                 voter_pubkeys
                     .into_par_iter()
-                    .filter_map(make_vote_delegations_entry)
+                    .filter_map(get_vote_account)
                     .collect()
             });
-        // Join stake accounts with vote-accounts.
-        let push_stake_delegation = |(stake_pubkey, stake_account): (&Pubkey, &StakeAccount<_>)| {
-            let delegation = stake_account.delegation();
-            let Some(mut vote_delegations) =
-                vote_with_stake_delegations_map.get_mut(&delegation.voter_pubkey)
-            else {
-                return;
-            };
-            if let Some(reward_calc_tracer) = reward_calc_tracer.as_ref() {
-                let delegation =
-                    InflationPointCalculationEvent::Delegation(delegation, solana_vote_program);
-                let event = RewardCalculationEvent::Staking(stake_pubkey, &delegation);
-                reward_calc_tracer(&event);
-            }
-            let stake_delegation = (*stake_pubkey, stake_account.clone());
-            vote_delegations.delegations.push(stake_delegation);
-        };
-        thread_pool.install(|| {
-            stake_delegations
-                .into_par_iter()
-                .for_each(push_stake_delegation);
-        });
+        if let Some(reward_calc_tracer) = reward_calc_tracer.as_ref() {
+            thread_pool.install(|| {
+                stake_delegations
+                    .par_iter()
+                    .for_each(|(stake_pubkey, stake_account)| {
+                        let delegation = stake_account.delegation();
+                        if vote_accounts.contains_key(&delegation.voter_pubkey) {
+                            let delegation = InflationPointCalculationEvent::Delegation(
+                                delegation,
+                                solana_vote_program,
+                            );
+                            let event = RewardCalculationEvent::Staking(stake_pubkey, &delegation);
+                            reward_calc_tracer(&event);
+                        }
+                    });
+            });
+        }
+        let stake_delegations: Vec<(Pubkey, StakeAccount<Delegation>)> = stake_delegations
+            .into_iter()
+            .map(|(&stake_pubkey, stake_account)| (stake_pubkey, stake_account.clone()))
+            .collect();
+        // XXX fix this!
         LoadVoteAndStakeAccountsResult {
-            vote_with_stake_delegations_map,
+            vote_accounts,
+            stake_delegations,
             invalid_vote_keys,
-            vote_accounts_cache_miss_count: vote_accounts_cache_miss_count.into_inner(),
         }
     }
 
@@ -2920,12 +2884,15 @@ impl Bank {
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
-    ) -> VoteWithStakeDelegationsMap {
+    ) -> (
+        HashMap<Pubkey, (AccountSharedData, Arc<VoteState>)>,
+        Vec<(Pubkey, StakeAccount<Delegation>)>,
+    ) {
         let (
             LoadVoteAndStakeAccountsResult {
-                vote_with_stake_delegations_map,
+                vote_accounts,
+                stake_delegations,
                 invalid_vote_keys,
-                vote_accounts_cache_miss_count,
             },
             measure,
         ) = measure!({
@@ -2934,10 +2901,9 @@ impl Bank {
         metrics
             .load_vote_and_stake_accounts_us
             .fetch_add(measure.as_us(), Relaxed);
-        metrics.vote_accounts_cache_miss_count += vote_accounts_cache_miss_count;
         self.stakes_cache
             .handle_invalid_keys(invalid_vote_keys, self.slot());
-        vote_with_stake_delegations_map
+        (vote_accounts, stake_delegations)
     }
 
     /// Calculates epoch reward points from stake/vote accounts.
@@ -8364,6 +8330,33 @@ impl Drop for Bank {
                 .purge_slot(self.slot(), self.bank_id(), false);
         }
     }
+}
+
+// Returns unique voter pubkeys in stake delegations.
+fn get_unique_voter_pubkeys(
+    thread_pool: &ThreadPool,
+    stake_delegations: &[(&Pubkey, &StakeAccount<Delegation>)],
+) -> HashSet<Pubkey> {
+    fn merge(mut acc: HashSet<Pubkey>, other: HashSet<Pubkey>) -> HashSet<Pubkey> {
+        if acc.len() < other.len() {
+            return merge(other, acc);
+        }
+        acc.extend(other);
+        acc
+    }
+    thread_pool.install(|| {
+        stake_delegations
+            .par_iter()
+            .fold(
+                HashSet::default,
+                |mut voter_pubkeys, (_stake_pubkey, stake_account)| {
+                    let delegation = stake_account.delegation();
+                    voter_pubkeys.insert(delegation.voter_pubkey);
+                    voter_pubkeys
+                },
+            )
+            .reduce(HashSet::default, merge)
+    })
 }
 
 /// utility function used for testing and benchmarking.
