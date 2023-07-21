@@ -533,7 +533,7 @@ mod tests {
 
     #[test]
     fn test_try_drain_keys_found_in_lookup_table() {
-        let orig_keys = vec![
+        let orig_keys = [
             Pubkey::new_unique(),
             Pubkey::new_unique(),
             Pubkey::new_unique(),
@@ -598,7 +598,7 @@ mod tests {
 
     #[test]
     fn test_try_drain_keys_found_in_lookup_table_with_empty_table() {
-        let original_keys = vec![
+        let original_keys = [
             Pubkey::new_unique(),
             Pubkey::new_unique(),
             Pubkey::new_unique(),
