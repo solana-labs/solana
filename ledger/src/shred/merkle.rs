@@ -838,13 +838,11 @@ pub(super) fn make_shreds_from_data(
             .checked_sub(parent_slot)
             .and_then(|offset| u16::try_from(offset).ok())
             .ok_or(Error::InvalidParentSlot { slot, parent_slot })?;
-        let flags = unsafe {
-            ShredFlags::from_bits_unchecked(
-                ShredFlags::SHRED_TICK_REFERENCE_MASK
-                    .bits()
-                    .min(reference_tick),
-            )
-        };
+        let flags = ShredFlags::from_bits_retain(
+            ShredFlags::SHRED_TICK_REFERENCE_MASK
+                .bits()
+                .min(reference_tick),
+        );
         DataShredHeader {
             parent_offset,
             flags,
@@ -1191,7 +1189,7 @@ mod test {
             let reference_tick = rng.gen_range(0, 0x40);
             DataShredHeader {
                 parent_offset: rng.gen::<u16>().max(1),
-                flags: unsafe { ShredFlags::from_bits_unchecked(reference_tick) },
+                flags: ShredFlags::from_bits_retain(reference_tick),
                 size: 0,
             }
         };

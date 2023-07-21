@@ -236,13 +236,11 @@ impl ShredData {
         };
         let size = (data.len() + Self::SIZE_OF_HEADERS) as u16;
         let flags = flags
-            | unsafe {
-                ShredFlags::from_bits_unchecked(
-                    ShredFlags::SHRED_TICK_REFERENCE_MASK
-                        .bits()
-                        .min(reference_tick),
-                )
-            };
+            | ShredFlags::from_bits_retain(
+                ShredFlags::SHRED_TICK_REFERENCE_MASK
+                    .bits()
+                    .min(reference_tick),
+            );
         let data_header = DataShredHeader {
             parent_offset,
             flags,
