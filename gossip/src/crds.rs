@@ -44,6 +44,7 @@ use {
         clock::Slot,
         hash::{hash, Hash},
         pubkey::Pubkey,
+        signature::Signature,
     },
     std::{
         cmp::Ordering,
@@ -56,6 +57,13 @@ use {
 const CRDS_SHARDS_BITS: u32 = 12;
 // Number of vote slots to track in an lru-cache for metrics.
 const VOTE_SLOTS_METRICS_CAP: usize = 100;
+// Required number of leading zero bits for crds signature to get reported to influx
+// mean new push messages received per minute per node
+//      testnet: ~500k,
+//      mainnet: ~280k
+// target: 1 signature reported per minute
+// log2(500k) = ~18.9.
+const SIGNATURE_SAMPLE_LEADING_ZEROS: u32 = 19;
 
 pub struct Crds {
     /// Stores the map of labels and values
@@ -669,6 +677,22 @@ impl CrdsDataStats {
                 self.votes.put(slot, num_nodes + 1);
             }
         }
+
+        if should_report_message_signature(&entry.value.signature) {
+            datapoint_info!(
+                "gossip_crds_sample",
+                (
+                    "origin",
+                    entry.value.pubkey().to_string().get(..8),
+                    Option<String>
+                ),
+                (
+                    "signature",
+                    entry.value.signature.to_string().get(..8),
+                    Option<String>
+                )
+            );
+        }
     }
 
     fn record_fail(&mut self, entry: &VersionedCrdsValue) {
@@ -712,6 +736,15 @@ impl CrdsStats {
             GossipRoute::PullResponse => self.pull.record_fail(entry),
         }
     }
+}
+
+/// check if first SIGNATURE_SAMPLE_LEADING_ZEROS bits of signature are 0
+#[inline]
+fn should_report_message_signature(signature: &Signature) -> bool {
+    let Some(Ok(bytes)) = signature.as_ref().get(..8).map(<[u8; 8]>::try_from) else {
+        return false;
+    };
+    u64::from_le_bytes(bytes).trailing_zeros() >= SIGNATURE_SAMPLE_LEADING_ZEROS
 }
 
 #[cfg(test)]
