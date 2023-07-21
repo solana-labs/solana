@@ -42,13 +42,10 @@ impl TieredStorage {
     ///
     /// Note that the actual file will not be created until append_accounts
     /// is called.
-    pub fn new_writable(
-        path: impl Into<PathBuf>,
-        format: &TieredStorageFormat,
-    ) -> TieredStorageResult<Self> {
+    pub fn new_writable(path: PathBuf, format: &TieredStorageFormat) -> TieredStorageResult<Self> {
         Ok(Self {
             format: Some(format.clone()),
-            path: path.into(),
+            path,
         })
     }
 
@@ -65,7 +62,7 @@ mod tests {
     #[test]
     fn test_new_writable() {
         let path = PathBuf::default();
-        let ts = TieredStorage::new_writable(&path, &HOT_FORMAT).unwrap();
+        let ts = TieredStorage::new_writable(path.clone(), &HOT_FORMAT).unwrap();
 
         assert_eq!(ts.path(), path);
     }
