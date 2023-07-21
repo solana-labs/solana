@@ -14,7 +14,7 @@ use {
     error::TieredStorageError,
     footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
     index::AccountIndexFormat,
-    std::path::PathBuf,
+    std::path::{Path, PathBuf},
 };
 
 pub type TieredStorageResult<T> = Result<T, TieredStorageError>;
@@ -30,7 +30,6 @@ pub struct TieredStorageFormat {
     pub account_block_format: AccountBlockFormat,
 }
 
-/// The struct for a TieredStorage.
 #[derive(Debug)]
 pub struct TieredStorage {
     format: Option<TieredStorageFormat>,
@@ -54,20 +53,20 @@ impl TieredStorage {
     }
 
     /// Returns the path to this TieredStorage.
-    pub fn path(&self) -> &PathBuf {
-        &self.path
+    pub fn path(&self) -> &Path {
+        self.path.as_path()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use {super::*, hot::HOT_FORMAT, tempfile::NamedTempFile};
+    use {super::*, hot::HOT_FORMAT};
 
     #[test]
     fn test_new_writable() {
-        let temp_file = NamedTempFile::new().unwrap();
-        let ts = TieredStorage::new_writable(temp_file.path(), &HOT_FORMAT).unwrap();
+        let path = PathBuf::default();
+        let ts = TieredStorage::new_writable(&path, &HOT_FORMAT).unwrap();
 
-        assert_eq!(ts.path(), temp_file.path());
+        assert_eq!(ts.path(), path);
     }
 }
