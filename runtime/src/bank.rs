@@ -3714,6 +3714,7 @@ impl Bank {
             partition_index,
             store_stake_accounts_us,
             store_stake_accounts_count: this_partition_stake_rewards.len(),
+            distributed_rewards: total_rewards_in_lamports,
         };
 
         report_partitioned_reward_metrics(self, metrics);
