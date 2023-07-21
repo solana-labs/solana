@@ -19,12 +19,14 @@ use {
     error::TieredStorageError,
     footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
     index::AccountIndexFormat,
+    log::log_enabled,
     once_cell::sync::OnceCell,
     readable::TieredStorageReader,
+    solana_metrics::inc_new_counter_info,
     solana_sdk::{account::ReadableAccount, hash::Hash},
     std::{
         borrow::Borrow,
-        fs::OpenOptions,
+        fs::{remove_file, OpenOptions},
         path::{Path, PathBuf},
     },
     writer::TieredStorageWriter,
@@ -48,6 +50,20 @@ pub struct TieredStorage {
     reader: OnceCell<TieredStorageReader>,
     format: Option<TieredStorageFormat>,
     path: PathBuf,
+    remove_on_drop: bool,
+}
+
+impl Drop for TieredStorage {
+    fn drop(&mut self) {
+        if self.remove_on_drop {
+            if let Err(_e) = remove_file(&self.path) {
+                // Here we are doing similar behavior as AppendVec that we log error
+                // instead of paniking due to false positive warnings while running
+                // tests.
+                inc_new_counter_info!("tiered_storage_drop_fail", 1);
+            }
+        }
+    }
 }
 
 impl TieredStorage {
@@ -61,6 +77,7 @@ impl TieredStorage {
             reader: OnceCell::<TieredStorageReader>::new(),
             format: Some(format),
             path: path.into(),
+            remove_on_drop: true,
         }
     }
 
@@ -72,7 +89,13 @@ impl TieredStorage {
             reader: OnceCell::with_value(TieredStorageReader::new_from_path(&path)?),
             format: None,
             path,
+            remove_on_drop: true,
         })
+    }
+
+    /// Disable the remove-on-drop behavior.
+    pub fn set_no_remove_on_drop(&mut self) {
+        self.remove_on_drop = false;
     }
 
     /// Returns the path to this TieredStorage.
@@ -151,6 +174,7 @@ mod tests {
         footer::{TieredStorageFooter, TieredStorageMagicNumber},
         hot::HOT_FORMAT,
         solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
+        std::fs,
         tempfile::tempdir,
     };
 
@@ -205,8 +229,11 @@ mod tests {
         let tiered_storage_path = temp_dir.path().join("test_new_meta_file_only");
 
         {
-            let tiered_storage =
+            let mut tiered_storage =
                 TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
+            // make the file reopenable later during the test.
+            tiered_storage.set_no_remove_on_drop();
+
             assert!(!tiered_storage.is_read_only());
             assert_eq!(tiered_storage.path(), tiered_storage_path);
             assert_eq!(tiered_storage.file_size().unwrap(), 0);
@@ -251,5 +278,41 @@ mod tests {
                 tiered_storage_path,
             )),
         );
+    }
+
+    #[test]
+    fn test_remove_on_drop() {
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = tempdir().unwrap();
+        let tiered_storage_path = temp_dir.path().join("test_remove_on_drop");
+        {
+            let tiered_storage =
+                TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
+            write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
+        }
+        // expect error as the file has been removed on drop
+        assert!(fs::metadata(&tiered_storage_path).is_err());
+
+        {
+            let mut tiered_storage =
+                TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
+            tiered_storage.set_no_remove_on_drop();
+            write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
+        }
+        // expect ok as we have set_no_remove_on_drop() this time.
+        assert!(fs::metadata(&tiered_storage_path).is_ok());
+
+        {
+            let mut tiered_storage = TieredStorage::new_readonly(&tiered_storage_path).unwrap();
+            tiered_storage.set_no_remove_on_drop();
+        }
+        // again expect ok as we have set_no_remove_on_drop().
+        assert!(fs::metadata(&tiered_storage_path).is_ok());
+
+        // open again without set_no_remove_on_drop() in read-only mode
+        TieredStorage::new_readonly(&tiered_storage_path).unwrap();
+
+        // expect error as the file has been removed on drop
+        assert!(fs::metadata(&tiered_storage_path).is_err());
     }
 }
