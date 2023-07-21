@@ -59,8 +59,8 @@ else
         fi
       fi
 
-      if [[ -n "$BUILDKITE_ANALYTICS_TOKEN" ]]; then
-        if [[ -f "target/nextest/ci/junit.xml" ]]; then
+      if [[ -f "target/nextest/ci/junit.xml" ]]; then
+        if [[ -n "$BUILDKITE_ANALYTICS_TOKEN" ]]; then
           echo "~~~ Uploading test results to Buildkite Analytics"
           curl \
             -X POST \
