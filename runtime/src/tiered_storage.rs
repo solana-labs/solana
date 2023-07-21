@@ -39,7 +39,7 @@ pub struct TieredStorage {
 
 impl TieredStorage {
     /// Creates a new writable instance of TieredStorage based on the
-    /// specified file_path and TieredStorageFormat.
+    /// specified path and TieredStorageFormat.
     ///
     /// Note that the actual file will not be created until append_accounts
     /// is called.
