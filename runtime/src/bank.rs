@@ -69,7 +69,7 @@ use {
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_hash::SnapshotHash,
         sorted_storages::SortedStorages,
-        stake_account::{self, StakeAccount},
+        stake_account::StakeAccount,
         stake_history::StakeHistory,
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift,
@@ -168,7 +168,7 @@ use {
         self, InflationPointCalculationEvent, PointValue, StakeState,
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
-    solana_vote_program::vote_state::{VoteState, VoteStateVersions},
+    solana_vote_program::vote_state::VoteState,
     std::{
         borrow::Cow,
         cell::RefCell,
@@ -1076,8 +1076,7 @@ pub struct Bank {
 struct VoteWithStakeDelegations {
     vote_state: Arc<VoteState>,
     vote_account: AccountSharedData,
-    // TODO: use StakeAccount<Delegation> once the old code is deleted.
-    delegations: Vec<(Pubkey, StakeAccount<()>)>,
+    delegations: Vec<(Pubkey, StakeAccount<Delegation>)>,
 }
 
 type VoteWithStakeDelegationsMap = DashMap<Pubkey, VoteWithStakeDelegations>;
@@ -1086,11 +1085,7 @@ type InvalidCacheKeyMap = DashMap<Pubkey, InvalidCacheEntryReason>;
 
 struct LoadVoteAndStakeAccountsResult {
     vote_with_stake_delegations_map: VoteWithStakeDelegationsMap,
-    invalid_stake_keys: InvalidCacheKeyMap,
     invalid_vote_keys: InvalidCacheKeyMap,
-    invalid_cached_vote_accounts: usize,
-    invalid_cached_stake_accounts: usize,
-    invalid_cached_stake_accounts_rent_epoch: usize,
     vote_accounts_cache_miss_count: usize,
 }
 
@@ -2415,9 +2410,6 @@ impl Bank {
         } = self.calculate_previous_epoch_inflation_rewards(capitalization, prev_epoch);
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
-        let update_rewards_from_cached_accounts = self
-            .feature_set
-            .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
         self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
@@ -2426,7 +2418,6 @@ impl Bank {
             self.credits_auto_rewind(),
             thread_pool,
             metrics,
-            update_rewards_from_cached_accounts,
         );
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
@@ -2490,6 +2481,7 @@ impl Bank {
         );
     }
 
+<<<<<<< HEAD
     /// map stake delegations into resolved (pubkey, account) pairs
     ///  returns a map (has to be copied) of loaded
     ///   ( Vec<(staker info)> (voter account) ) keyed by voter pubkey
@@ -2654,6 +2646,8 @@ impl Bank {
         }
     }
 
+=======
+>>>>>>> 952d8861c6 (removes feature-gate code for updating rewards from cached accounts (#32514))
     fn filter_stake_delegations<'a>(
         &self,
         stakes: &'a Stakes<StakeAccount<Delegation>>,
@@ -2784,8 +2778,7 @@ impl Bank {
                 let event = RewardCalculationEvent::Staking(stake_pubkey, &delegation);
                 reward_calc_tracer(&event);
             }
-            let stake_account = StakeAccount::from(stake_account.clone());
-            let stake_delegation = (*stake_pubkey, stake_account);
+            let stake_delegation = (*stake_pubkey, stake_account.clone());
             vote_delegations.delegations.push(stake_delegation);
         };
         thread_pool.install(|| {
@@ -2796,10 +2789,6 @@ impl Bank {
         LoadVoteAndStakeAccountsResult {
             vote_with_stake_delegations_map,
             invalid_vote_keys,
-            invalid_stake_keys: DashMap::default(),
-            invalid_cached_vote_accounts: 0,
-            invalid_cached_stake_accounts: 0,
-            invalid_cached_stake_accounts_rent_epoch: 0,
             vote_accounts_cache_miss_count: vote_accounts_cache_miss_count.into_inner(),
         }
     }
@@ -2813,15 +2802,10 @@ impl Bank {
         credits_auto_rewind: bool,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
-        update_rewards_from_cached_accounts: bool,
     ) {
         let stake_history = self.stakes_cache.stakes().history().clone();
-        let vote_with_stake_delegations_map = self.load_vote_and_stake_accounts(
-            thread_pool,
-            reward_calc_tracer.as_ref(),
-            metrics,
-            update_rewards_from_cached_accounts,
-        );
+        let vote_with_stake_delegations_map =
+            self.load_vote_and_stake_accounts(thread_pool, reward_calc_tracer.as_ref(), metrics);
 
         let point_value = self.calculate_reward_points(
             &vote_with_stake_delegations_map,
@@ -2854,39 +2838,23 @@ impl Bank {
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
-        update_rewards_from_cached_accounts: bool,
     ) -> VoteWithStakeDelegationsMap {
         let (
             LoadVoteAndStakeAccountsResult {
                 vote_with_stake_delegations_map,
-                invalid_stake_keys,
                 invalid_vote_keys,
-                invalid_cached_vote_accounts,
-                invalid_cached_stake_accounts,
-                invalid_cached_stake_accounts_rent_epoch,
                 vote_accounts_cache_miss_count,
             },
             measure,
         ) = measure!({
-            if update_rewards_from_cached_accounts {
-                self._load_vote_and_stake_accounts(thread_pool, reward_calc_tracer.as_ref())
-            } else {
-                self._load_vote_and_stake_accounts_with_thread_pool(
-                    thread_pool,
-                    reward_calc_tracer.as_ref(),
-                )
-            }
+            self._load_vote_and_stake_accounts(thread_pool, reward_calc_tracer.as_ref())
         });
         metrics
             .load_vote_and_stake_accounts_us
             .fetch_add(measure.as_us(), Relaxed);
-        metrics.invalid_cached_vote_accounts += invalid_cached_vote_accounts;
-        metrics.invalid_cached_stake_accounts += invalid_cached_stake_accounts;
-        metrics.invalid_cached_stake_accounts_rent_epoch +=
-            invalid_cached_stake_accounts_rent_epoch;
         metrics.vote_accounts_cache_miss_count += vote_accounts_cache_miss_count;
         self.stakes_cache
-            .handle_invalid_keys(invalid_stake_keys, invalid_vote_keys, self.slot());
+            .handle_invalid_keys(invalid_vote_keys, self.slot());
         vote_with_stake_delegations_map
     }
 
