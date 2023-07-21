@@ -387,7 +387,8 @@ mod test {
             let mut shred = shred.clone();
             shred.data_header.flags |= ShredFlags::LAST_SHRED_IN_SLOT;
             assert_matches!(shred.sanitize(), Ok(()));
-            shred.data_header.flags &= !ShredFlags::DATA_COMPLETE_SHRED;
+            shred.data_header.flags &=
+                ShredFlags::from_bits_retain(!ShredFlags::DATA_COMPLETE_SHRED.bits());
             assert_matches!(shred.sanitize(), Err(Error::InvalidShredFlags(131u8)));
             shred.data_header.flags |= ShredFlags::SHRED_TICK_REFERENCE_MASK;
             assert_matches!(shred.sanitize(), Err(Error::InvalidShredFlags(191u8)));

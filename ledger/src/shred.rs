@@ -1678,6 +1678,12 @@ mod tests {
 
     #[test]
     fn test_shred_flags_serde() {
+        let flags: ShredFlags = bincode::deserialize(&[0b0001_0101]).unwrap();
+        assert!(!flags.contains(ShredFlags::DATA_COMPLETE_SHRED));
+        assert!(!flags.contains(ShredFlags::LAST_SHRED_IN_SLOT));
+        assert_eq!((flags & ShredFlags::SHRED_TICK_REFERENCE_MASK).bits(), 21u8);
+        assert_eq!(bincode::serialize(&flags).unwrap(), [0b0001_0101]);
+
         let flags: ShredFlags = bincode::deserialize(&[0b0111_0001]).unwrap();
         assert!(flags.contains(ShredFlags::DATA_COMPLETE_SHRED));
         assert!(!flags.contains(ShredFlags::LAST_SHRED_IN_SLOT));
