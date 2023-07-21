@@ -9,7 +9,7 @@ use {
             footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
             index::AccountIndexFormat,
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
-            TieredAccountsFileFormat,
+            TieredStorageFormat,
         },
     },
     modular_bitfield::prelude::*,
@@ -17,7 +17,7 @@ use {
     std::option::Option,
 };
 
-pub static HOT_FORMAT: TieredAccountsFileFormat = TieredAccountsFileFormat {
+pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
     meta_entry_size: std::mem::size_of::<HotAccountMeta>(),
     account_meta_format: AccountMetaFormat::Hot,
     owners_block_format: OwnersBlockFormat::LocalIndex,

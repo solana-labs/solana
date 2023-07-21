@@ -14,15 +14,15 @@ use {
     error::TieredStorageError,
     footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
     index::AccountIndexFormat,
-    std::path::{Path, PathBuf},
+    std::path::PathBuf,
 };
 
 pub type TieredStorageResult<T> = Result<T, TieredStorageError>;
 
 /// The struct that defines the formats of all building blocks of a
-/// TieredAccountsFile.
+/// TieredStorage.
 #[derive(Debug)]
-pub struct TieredAccountsFileFormat {
+pub struct TieredStorageFormat {
     pub meta_entry_size: usize,
     pub account_meta_format: AccountMetaFormat,
     pub owners_block_format: OwnersBlockFormat,
@@ -30,45 +30,44 @@ pub struct TieredAccountsFileFormat {
     pub account_block_format: AccountBlockFormat,
 }
 
-/// The struct for a TieredAccountsFile.
+/// The struct for a TieredStorage.
 #[derive(Debug)]
-pub struct TieredAccountsFile {
-    format: Option<&'static TieredAccountsFileFormat>,
+pub struct TieredStorage {
+    format: Option<&'static TieredStorageFormat>,
     path: PathBuf,
 }
 
-impl TieredAccountsFile {
-    /// Creates a new writable instance of TieredAccountsFile basedon the
-    /// specified file_path and TieredAccountsFileFormat.
+impl TieredStorage {
+    /// Creates a new writable instance of TieredStorage based on the
+    /// specified file_path and TieredStorageFormat.
     ///
     /// Note that the actual file will not be created until append_accounts
     /// is called.
     pub fn new_writable(
-        file_path: &Path,
-        format: &'static TieredAccountsFileFormat,
+        path: impl Into<PathBuf>,
+        format: &'static TieredStorageFormat,
     ) -> TieredStorageResult<Self> {
         Ok(Self {
             format: Some(format),
-            path: file_path.to_path_buf(),
+            path: path.into(),
         })
     }
 
-    /// Returns the path to this TieredAccountsFile.
-    pub fn get_path(&self) -> PathBuf {
-        self.path.clone()
+    /// Returns the path to this TieredStorage.
+    pub fn path(&self) -> &PathBuf {
+        &self.path
     }
 }
 
 #[cfg(test)]
-pub mod tests {
-    use {super::*, hot::HOT_FORMAT, tempfile::TempDir};
+mod tests {
+    use {super::*, hot::HOT_FORMAT, tempfile::NamedTempFile};
 
     #[test]
     fn test_new_writable() {
-        let temp_dir = TempDir::new().unwrap();
-        let path = temp_dir.path().join("test_new");
-        let ta_file = TieredAccountsFile::new_writable(&path, &HOT_FORMAT).unwrap();
+        let temp_file = NamedTempFile::new().unwrap();
+        let ts = TieredStorage::new_writable(temp_file.path(), &HOT_FORMAT).unwrap();
 
-        assert_eq!(ta_file.get_path(), path);
+        assert_eq!(ts.path(), temp_file.path());
     }
 }
