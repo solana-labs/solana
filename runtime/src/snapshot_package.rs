@@ -8,7 +8,7 @@ use {
         rent_collector::RentCollector,
         snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
         snapshot_hash::SnapshotHash,
-        snapshot_utils::{self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion},
+        snapshot_utils::{self, ArchiveFormat, BankSnapshotInfo, SnapshotVersion},
     },
     log::*,
     solana_sdk::{clock::Slot, feature_set, sysvar::epoch_schedule::EpochSchedule},
@@ -57,7 +57,7 @@ impl AccountsPackage {
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
         accounts_hash_for_testing: Option<AccountsHash>,
-    ) -> Result<Self> {
+    ) -> Self {
         if let AccountsPackageType::Snapshot(snapshot_type) = package_type {
             info!(
                 "Package snapshot for bank {} has {} account storage entries (snapshot type: {:?})",
@@ -84,13 +84,13 @@ impl AccountsPackage {
                 .to_path_buf(),
             epoch_accounts_hash: bank.get_epoch_accounts_hash_to_serialize(),
         };
-        Ok(Self::_new(
+        Self::_new(
             package_type,
             bank,
             snapshot_storages,
             accounts_hash_for_testing,
             Some(snapshot_info),
-        ))
+        )
     }
 
     /// Package up fields needed to compute an EpochAccountsHash
@@ -230,10 +230,14 @@ pub struct SnapshotPackage {
 impl SnapshotPackage {
     pub fn new(accounts_package: AccountsPackage, accounts_hash: AccountsHashEnum) -> Self {
         let AccountsPackageType::Snapshot(snapshot_type) = accounts_package.package_type else {
-            panic!("The AccountsPackage must be of type Snapshot in order to make a SnapshotPackage!");
+            panic!(
+                "The AccountsPackage must be of type Snapshot in order to make a SnapshotPackage!"
+            );
         };
         let Some(snapshot_info) = accounts_package.snapshot_info else {
-            panic!("The AccountsPackage must have snapshot info in order to make a SnapshotPackage!");
+            panic!(
+                "The AccountsPackage must have snapshot info in order to make a SnapshotPackage!"
+            );
         };
         let snapshot_hash =
             SnapshotHash::new(&accounts_hash, snapshot_info.epoch_accounts_hash.as_ref());

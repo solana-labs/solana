@@ -30,6 +30,7 @@ use {
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
         validator::BlockVerificationMethod,
     },
+    solana_cost_model::{cost_model::CostModel, cost_tracker::CostTracker},
     solana_entry::entry::Entry,
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
@@ -50,8 +51,6 @@ use {
         accounts_index::ScanConfig,
         bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
         bank_forks::BankForks,
-        cost_model::CostModel,
-        cost_tracker::CostTracker,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
@@ -64,7 +63,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
-        clock::{Epoch, Slot},
+        clock::{Epoch, Slot, UnixTimestamp},
         feature::{self, Feature},
         feature_set::{self, FeatureSet},
         genesis_config::ClusterType,
@@ -954,6 +953,73 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     Ok(())
 }
 
+/// Returns true if the supplied slot contains any nonvote transactions
+fn slot_contains_nonvote_tx(blockstore: &Blockstore, slot: Slot) -> bool {
+    let (entries, _, _) = blockstore
+        .get_slot_entries_with_shred_info(slot, 0, false)
+        .expect("Failed to get slot entries");
+    let contains_nonvote = entries
+        .iter()
+        .flat_map(|entry| entry.transactions.iter())
+        .flat_map(get_program_ids)
+        .any(|program_id| *program_id != solana_vote_program::id());
+    contains_nonvote
+}
+
+type OptimisticSlotInfo = (Slot, Option<(Hash, UnixTimestamp)>, bool);
+
+/// Return the latest `num_slots` optimistically confirmed slots, including
+/// ancestors of optimistically confirmed slots that may not have been marked
+/// as optimistically confirmed themselves.
+fn get_latest_optimistic_slots(
+    blockstore: &Blockstore,
+    num_slots: usize,
+    exclude_vote_only_slots: bool,
+) -> Vec<OptimisticSlotInfo> {
+    // Consider a chain X -> Y -> Z where X and Z have been optimistically
+    // confirmed. Given that Y is an ancestor of Z, Y can implicitly be
+    // considered as optimistically confirmed. However, there isn't an explicit
+    // guarantee that Y will be marked as optimistically confirmed in the
+    // blockstore.
+    //
+    // Because retrieving optimistically confirmed slots is an important part
+    // of cluster restarts, exercise caution in this function and manually walk
+    // the ancestors of the latest optimistically confirmed slot instead of
+    // solely relying on the contents of the optimistically confirmed column.
+    let Some(latest_slot) = blockstore
+        .get_latest_optimistic_slots(1)
+        .expect("get_latest_optimistic_slots() failed")
+        .pop()
+    else {
+        eprintln!("Blockstore does not contain any optimistically confirmed slots");
+        return vec![];
+    };
+    let latest_slot = latest_slot.0;
+
+    let slot_iter = AncestorIterator::new_inclusive(latest_slot, blockstore).map(|slot| {
+        let contains_nonvote_tx = slot_contains_nonvote_tx(blockstore, slot);
+        let hash_and_timestamp_opt = blockstore
+            .get_optimistic_slot(slot)
+            .expect("get_optimistic_slot() failed");
+        if hash_and_timestamp_opt.is_none() {
+            warn!(
+                "Slot {slot} is an ancestor of latest optimistically confirmed slot \
+                {latest_slot}, but was not marked as optimistically confirmed in blockstore."
+            );
+        }
+        (slot, hash_and_timestamp_opt, contains_nonvote_tx)
+    });
+
+    if exclude_vote_only_slots {
+        slot_iter
+            .filter(|(_, _, contains_nonvote)| *contains_nonvote)
+            .take(num_slots)
+            .collect()
+    } else {
+        slot_iter.take(num_slots).collect()
+    }
+}
+
 /// Finds the accounts needed to replay slots `snapshot_slot` to `ending_slot`.
 /// Removes all other accounts from accounts_db, and updates the accounts hash
 /// and capitalization. This is used by the --minimize option in create-snapshot
@@ -1553,6 +1619,12 @@ fn main() {
                     .long("skip-verification")
                     .takes_value(false)
                     .help("Skip ledger PoH and transaction verification."),
+            )
+            .arg(
+                Arg::with_name("enable_rpc_transaction_history")
+                    .long("enable-rpc-transaction-history")
+                    .takes_value(false)
+                    .help("Store transaction info for processed slots into local ledger"),
             )
             .arg(
                 Arg::with_name("run_final_hash_calc")
@@ -2944,10 +3016,9 @@ fn main() {
                             let mut bootstrap_validator_pubkeys_iter =
                                 bootstrap_validator_pubkeys.iter();
                             loop {
-                                let identity_pubkey = match bootstrap_validator_pubkeys_iter.next()
-                                {
-                                    None => break,
-                                    Some(identity_pubkey) => identity_pubkey,
+                                let Some(identity_pubkey) = bootstrap_validator_pubkeys_iter.next()
+                                else {
+                                    break;
                                 };
                                 let vote_pubkey = bootstrap_validator_pubkeys_iter.next().unwrap();
                                 let stake_pubkey = bootstrap_validator_pubkeys_iter.next().unwrap();
@@ -3902,44 +3973,26 @@ fn main() {
                 );
                 let num_slots = value_t_or_exit!(arg_matches, "num_slots", usize);
                 let exclude_vote_only_slots = arg_matches.is_present("exclude_vote_only_slots");
-
-                let slots_iter = blockstore
-                    .reversed_optimistic_slots_iterator()
-                    .expect("Failed to get reversed optimistic slots iterator")
-                    .map(|(slot, hash, timestamp)| {
-                        let (entries, _, _) = blockstore
-                            .get_slot_entries_with_shred_info(slot, 0, false)
-                            .expect("Failed to get slot entries");
-                        let contains_nonvote = entries
-                            .iter()
-                            .flat_map(|entry| entry.transactions.iter())
-                            .flat_map(get_program_ids)
-                            .any(|program_id| *program_id != solana_vote_program::id());
-                        (slot, hash, timestamp, contains_nonvote)
-                    });
-
-                let slots: Vec<_> = if exclude_vote_only_slots {
-                    slots_iter
-                        .filter(|(_, _, _, contains_nonvote)| *contains_nonvote)
-                        .take(num_slots)
-                        .collect()
-                } else {
-                    slots_iter.take(num_slots).collect()
-                };
+                let slots =
+                    get_latest_optimistic_slots(&blockstore, num_slots, exclude_vote_only_slots);
 
                 println!(
                     "{:>20} {:>44} {:>32} {:>13}",
                     "Slot", "Hash", "Timestamp", "Vote Only?"
                 );
-                for (slot, hash, timestamp, contains_nonvote) in slots.iter() {
-                    let time_str = {
-                        let secs: u64 = (timestamp / 1_000) as u64;
-                        let nanos: u32 = ((timestamp % 1_000) * 1_000_000) as u32;
-                        let t = UNIX_EPOCH + Duration::new(secs, nanos);
-                        let datetime: DateTime<Utc> = t.into();
-                        datetime.to_rfc3339()
-                    };
-                    let hash_str = format!("{hash}");
+                for (slot, hash_and_timestamp_opt, contains_nonvote) in slots.iter() {
+                    let (time_str, hash_str) =
+                        if let Some((hash, timestamp)) = hash_and_timestamp_opt {
+                            let secs: u64 = (timestamp / 1_000) as u64;
+                            let nanos: u32 = ((timestamp % 1_000) * 1_000_000) as u32;
+                            let t = UNIX_EPOCH + Duration::new(secs, nanos);
+                            let datetime: DateTime<Utc> = t.into();
+
+                            (datetime.to_rfc3339(), format!("{hash}"))
+                        } else {
+                            let unknown = "Unknown";
+                            (String::from(unknown), String::from(unknown))
+                        };
                     println!(
                         "{:>20} {:>44} {:>32} {:>13}",
                         slot, &hash_str, &time_str, !contains_nonvote
@@ -3965,7 +4018,6 @@ fn main() {
                     start_root.saturating_sub(max_slots)
                 };
                 assert!(start_root > end_root);
-                assert!(blockstore.is_root(start_root));
                 let num_slots = start_root - end_root - 1; // Adjust by one since start_root need not be checked
                 if arg_matches.is_present("end_root") && num_slots > max_slots {
                     eprintln!(
@@ -3975,25 +4027,14 @@ fn main() {
                     );
                     exit(1);
                 }
-                let ancestor_iterator = AncestorIterator::new(start_root, &blockstore)
-                    .take_while(|&slot| slot >= end_root);
-                let roots_to_fix: Vec<_> = ancestor_iterator
-                    .filter(|slot| !blockstore.is_root(*slot))
-                    .collect();
-                if !roots_to_fix.is_empty() {
-                    eprintln!("{} slots to be rooted", roots_to_fix.len());
-                    for chunk in roots_to_fix.chunks(100) {
-                        eprintln!("{chunk:?}");
-                        blockstore
-                            .set_roots(roots_to_fix.iter())
-                            .unwrap_or_else(|err| {
-                                eprintln!("Unable to set roots {roots_to_fix:?}: {err}");
-                                exit(1);
-                            });
-                    }
-                } else {
-                    println!("No missing roots found in range {end_root} to {start_root}");
-                }
+
+                let num_repaired_roots = blockstore
+                    .scan_and_fix_roots(Some(start_root), Some(end_root), &AtomicBool::new(false))
+                    .unwrap_or_else(|err| {
+                        eprintln!("Unable to repair roots: {err}");
+                        exit(1);
+                    });
+                println!("Successfully repaired {num_repaired_roots} roots");
             }
             ("bounds", Some(arg_matches)) => {
                 let blockstore = open_blockstore(
@@ -4123,5 +4164,45 @@ fn main() {
         };
         measure_total_execution_time.stop();
         info!("{}", measure_total_execution_time);
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use {
+        super::*,
+        solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path_auto_delete},
+    };
+
+    #[test]
+    fn test_latest_optimistic_ancestors() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        // Insert 5 slots into blockstore
+        let start_slot = 0;
+        let num_slots = 5;
+        let entries_per_shred = 5;
+        let (shreds, _) = make_many_slot_entries(start_slot, num_slots, entries_per_shred);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+
+        // Mark even shreds as optimistically confirmed
+        (0..num_slots).step_by(2).for_each(|slot| {
+            blockstore
+                .insert_optimistic_slot(slot, &Hash::default(), UnixTimestamp::default())
+                .unwrap();
+        });
+
+        let exclude_vote_only_slots = false;
+        let optimistic_slots: Vec<_> =
+            get_latest_optimistic_slots(&blockstore, num_slots as usize, exclude_vote_only_slots)
+                .iter()
+                .map(|(slot, _, _)| *slot)
+                .collect();
+
+        // Should see all slots here since they're all chained, despite only evens getting marked
+        // get_latest_optimistic_slots() returns slots in descending order so use .rev()
+        let expected: Vec<_> = (start_slot..num_slots).rev().collect();
+        assert_eq!(optimistic_slots, expected);
     }
 }

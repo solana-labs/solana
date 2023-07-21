@@ -44,7 +44,7 @@ pub mod solana_rpc_client {
                 &self,
                 _transaction: &Transaction,
             ) -> ClientResult<Signature> {
-                Ok(Signature::default())
+                Ok(Signature)
             }
 
             pub fn get_minimum_balance_for_rent_exemption(

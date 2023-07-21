@@ -402,7 +402,7 @@ where
             &SerializableBankAndStorage::<newer::Context> {
                 bank,
                 snapshot_storages,
-                phantom: std::marker::PhantomData::default(),
+                phantom: std::marker::PhantomData,
             },
         ),
     }
@@ -424,7 +424,7 @@ where
             &SerializableBankAndStorageNoExtra::<newer::Context> {
                 bank,
                 snapshot_storages,
-                phantom: std::marker::PhantomData::default(),
+                phantom: std::marker::PhantomData,
             },
         ),
     }
@@ -502,6 +502,23 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableBankAndStorage<'a, C> {
     {
         C::serialize_bank_and_storage(serializer, self)
     }
+}
+
+#[cfg(test)]
+pub fn serialize_test_bank_and_storage<S>(
+    bank: &Bank,
+    storage: &[Vec<Arc<AccountStorageEntry>>],
+    s: S,
+) -> std::result::Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    (SerializableBankAndStorage::<newer::Context> {
+        bank,
+        snapshot_storages: storage,
+        phantom: std::marker::PhantomData::default(),
+    })
+    .serialize(s)
 }
 
 #[cfg(test)]

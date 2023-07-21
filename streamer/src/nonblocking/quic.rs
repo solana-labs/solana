@@ -98,8 +98,13 @@ pub fn spawn_server(
     info!("Start {name} quic server on {sock:?}");
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
-    let endpoint = Endpoint::new(EndpointConfig::default(), Some(config), sock, TokioRuntime)
-        .map_err(QuicServerError::EndpointFailed)?;
+    let endpoint = Endpoint::new(
+        EndpointConfig::default(),
+        Some(config),
+        sock,
+        Arc::new(TokioRuntime),
+    )
+    .map_err(QuicServerError::EndpointFailed)?;
     let stats = Arc::<StreamStats>::default();
     let handle = tokio::spawn(run_server(
         name,
@@ -190,18 +195,22 @@ fn prune_unstaked_connection_table(
     }
 }
 
-fn get_connection_stake(
-    connection: &Connection,
-    staked_nodes: &RwLock<StakedNodes>,
-) -> Option<(Pubkey, u64, u64, u64, u64)> {
+pub fn get_remote_pubkey(connection: &Connection) -> Option<Pubkey> {
     // Use the client cert only if it is self signed and the chain length is 1.
-    let pubkey = connection
+    connection
         .peer_identity()?
         .downcast::<Vec<rustls::Certificate>>()
         .ok()
         .filter(|certs| certs.len() == 1)?
         .first()
-        .and_then(get_pubkey_from_tls_certificate)?;
+        .and_then(get_pubkey_from_tls_certificate)
+}
+
+fn get_connection_stake(
+    connection: &Connection,
+    staked_nodes: &RwLock<StakedNodes>,
+) -> Option<(Pubkey, u64, u64, u64, u64)> {
+    let pubkey = get_remote_pubkey(connection)?;
     debug!("Peer public key is {pubkey:?}");
     let staked_nodes = staked_nodes.read().unwrap();
     Some((
@@ -792,9 +801,8 @@ async fn handle_chunk(
                     stats.total_invalid_chunks.fetch_add(1, Ordering::Relaxed);
                     return true;
                 }
-                let end_of_chunk = match chunk.offset.checked_add(chunk_len) {
-                    Some(end) => end,
-                    None => return true,
+                let Some(end_of_chunk) = chunk.offset.checked_add(chunk_len) else {
+                    return true;
                 };
                 if end_of_chunk > PACKET_DATA_SIZE as u64 {
                     stats
@@ -815,10 +823,9 @@ async fn handle_chunk(
 
                 if let Some(accum) = packet_accum.as_mut() {
                     let offset = chunk.offset;
-                    let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len())
-                    {
-                        Some(end) => end,
-                        None => return true,
+                    let Some(end_of_chunk) = (chunk.offset as usize).checked_add(chunk.bytes.len())
+                    else {
+                        return true;
                     };
                     accum.chunks.push(PacketChunk {
                         bytes: chunk.bytes,
@@ -1130,7 +1137,7 @@ pub mod test {
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_single_cert(vec![cert], key)
+            .with_client_auth_cert(vec![cert], key)
             .expect("Failed to use client certificate");
 
         crypto.enable_early_data = true;
@@ -1187,9 +1194,13 @@ pub mod test {
         client_keypair: Option<&Keypair>,
     ) -> Connection {
         let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let mut endpoint =
-            quinn::Endpoint::new(EndpointConfig::default(), None, client_socket, TokioRuntime)
-                .unwrap();
+        let mut endpoint = quinn::Endpoint::new(
+            EndpointConfig::default(),
+            None,
+            client_socket,
+            Arc::new(TokioRuntime),
+        )
+        .unwrap();
         let default_keypair = Keypair::new();
         endpoint.set_default_client_config(get_client_config(
             client_keypair.unwrap_or(&default_keypair),
@@ -1457,9 +1468,13 @@ pub mod test {
         let (t, exit, _receiver, server_address, stats) = setup_quic_server(None, 2);
 
         let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let mut endpoint =
-            quinn::Endpoint::new(EndpointConfig::default(), None, client_socket, TokioRuntime)
-                .unwrap();
+        let mut endpoint = quinn::Endpoint::new(
+            EndpointConfig::default(),
+            None,
+            client_socket,
+            Arc::new(TokioRuntime),
+        )
+        .unwrap();
         let default_keypair = Keypair::new();
         endpoint.set_default_client_config(get_client_config(&default_keypair));
         let conn1 = endpoint

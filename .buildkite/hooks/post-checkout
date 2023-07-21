@@ -10,14 +10,17 @@ source ci/env.sh
 # previous CI job
 #
 (
-  containers=$(docker ps -q)
-  if [[ $(hostname) != metrics-main && $(hostname) != metrics-internal && -n $containers ]]; then
-    echo "+++ Killing stale docker containers"
-    docker ps
+  echo "+++ Killing stale docker containers"
+  while read -r line; do
+    read -r id image _ <<<"$line"
 
-    # shellcheck disable=SC2086 # Don't want to double quote $containers
-    docker kill $containers
-  fi
+    if [[ $image =~ "solanalabs/rust" ]]; then
+      if docker kill "$id" >/dev/null; then
+        echo "kill $id $image"
+      fi
+      continue
+    fi
+  done < <(docker ps | tail -n +2)
 )
 
 # Processes from previously aborted CI jobs seem to loiter, unclear why as one

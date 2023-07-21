@@ -12,10 +12,13 @@
 //!
 
 use {
-    crate::encryption::{
-        discrete_log::DiscreteLog,
-        elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey, ElGamalSecretKey},
-        pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
+    crate::{
+        encryption::{
+            discrete_log::DiscreteLog,
+            elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey, ElGamalSecretKey},
+            pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
+        },
+        RISTRETTO_POINT_LEN,
     },
     curve25519_dalek::scalar::Scalar,
     thiserror::Error,
@@ -163,7 +166,7 @@ impl<const N: usize> GroupedElGamalCiphertext<N> {
     /// `(N+1) * 32`.
     fn expected_byte_length() -> usize {
         N.checked_add(1)
-            .and_then(|length| length.checked_mul(32))
+            .and_then(|length| length.checked_mul(RISTRETTO_POINT_LEN))
             .unwrap()
     }
 
@@ -181,7 +184,7 @@ impl<const N: usize> GroupedElGamalCiphertext<N> {
             return None;
         }
 
-        let mut iter = bytes.chunks(32);
+        let mut iter = bytes.chunks(RISTRETTO_POINT_LEN);
         let commitment = PedersenCommitment::from_bytes(iter.next()?)?;
 
         let mut handles = Vec::with_capacity(N);

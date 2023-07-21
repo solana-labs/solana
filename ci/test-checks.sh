@@ -42,6 +42,8 @@ echo --- build environment
   cargo clippy --version --verbose
   $cargoNightly clippy --version --verbose
 
+  $cargoNightly hack --version --verbose
+
   # audit is done only with "$cargo stable"
   cargo audit --version
 
@@ -88,6 +90,7 @@ _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace -
   --deny=warnings \
   --deny=clippy::default_trait_access \
   --deny=clippy::integer_arithmetic \
+  --deny=clippy::manual_let_else \
   --deny=clippy::used_underscore_binding \
   "${nightly_clippy_allows[@]}"
 
@@ -101,6 +104,7 @@ _ scripts/cargo-for-all-lock-files.sh -- clippy --workspace  --tests --bins --ex
   --deny=warnings \
   --deny=clippy::default_trait_access \
   --deny=clippy::integer_arithmetic \
+  --deny=clippy::manual_let_else \
   --deny=clippy::used_underscore_binding
 
 if [[ -n $CI ]]; then
@@ -109,6 +113,8 @@ if [[ -n $CI ]]; then
 else
   _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" sort --workspace --check
 fi
+
+_ scripts/check-dev-context-only-utils.sh tree
 
 _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" fmt --all -- --check
 

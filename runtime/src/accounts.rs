@@ -13,12 +13,13 @@ use {
         },
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
-        bank::{Bank, NonceFull, NonceInfo, TransactionCheckResult, TransactionExecutionResult},
         blockhash_queue::BlockhashQueue,
+        nonce_info::{NonceFull, NonceInfo},
         rent_collector::RentCollector,
         rent_debits::RentDebits,
         storable_accounts::StorableAccounts,
         transaction_error_metrics::TransactionErrorMetrics,
+        transaction_results::{TransactionCheckResult, TransactionExecutionResult},
     },
     dashmap::DashMap,
     itertools::Itertools,
@@ -34,11 +35,10 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
-            self, add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
+            self, add_set_tx_loaded_accounts_data_size_instruction,
             include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
-            simplify_writable_program_account_check, use_default_units_in_fee_calculation,
-            FeatureSet,
+            simplify_writable_program_account_check, FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -83,7 +83,6 @@ pub struct AccountLocks {
     readonly_locks: HashMap<Pubkey, u64>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub(crate) enum RewardInterval {
     /// the slot within the epoch is INSIDE the reward distribution interval
@@ -722,15 +721,11 @@ impl Accounts {
                             hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
                         });
                     let fee = if let Some(lamports_per_signature) = lamports_per_signature {
-                        Bank::calculate_fee(
+                        fee_structure.calculate_fee(
                             tx.message(),
                             lamports_per_signature,
-                            fee_structure,
-                            feature_set.is_active(&use_default_units_in_fee_calculation::id()),
-                            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+                            &ComputeBudget::fee_budget_limits(tx.message().program_instructions_iter(), feature_set, Some(self.accounts_db.expected_cluster_type())),
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
-                            feature_set.is_active(&enable_request_heap_frame_ix::id()) || self.accounts_db.expected_cluster_type() != ClusterType::MainnetBeta,
-                            feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
                             feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                         )
                     } else {
@@ -1480,8 +1475,8 @@ mod tests {
     use {
         super::*,
         crate::{
-            bank::{DurableNonceFee, TransactionExecutionDetails},
             rent_collector::RentCollector,
+            transaction_results::{DurableNonceFee, TransactionExecutionDetails},
         },
         assert_matches::assert_matches,
         solana_address_lookup_table_program::state::LookupTableMeta,
@@ -1760,14 +1755,18 @@ mod tests {
             instructions,
         );
 
-        let fee = Bank::calculate_fee(
-            &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+        let mut feature_set = FeatureSet::all_enabled();
+        feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+
+        let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
+        let fee = FeeStructure::default().calculate_fee(
+            &message,
             lamports_per_signature,
-            &FeeStructure::default(),
-            true,
-            false,
-            true,
-            true,
+            &ComputeBudget::fee_budget_limits(
+                message.program_instructions_iter(),
+                &feature_set,
+                None,
+            ),
             true,
             false,
         );
@@ -4323,14 +4322,18 @@ mod tests {
             Hash::default(),
         );
 
-        let fee = Bank::calculate_fee(
-            &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+        let mut feature_set = FeatureSet::all_enabled();
+        feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+
+        let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
+        let fee = FeeStructure::default().calculate_fee(
+            &message,
             lamports_per_signature,
-            &FeeStructure::default(),
-            true,
-            false,
-            true,
-            true,
+            &ComputeBudget::fee_budget_limits(
+                message.program_instructions_iter(),
+                &feature_set,
+                None,
+            ),
             true,
             false,
         );

@@ -35,7 +35,7 @@ impl Keypair {
 
     /// Constructs a new, random `Keypair` using `OsRng`
     pub fn new() -> Self {
-        let mut rng = OsRng::default();
+        let mut rng = OsRng;
         Self::generate(&mut rng)
     }
 
@@ -91,7 +91,7 @@ impl Signer for Keypair {
     }
 
     fn sign_message(&self, message: &[u8]) -> Signature {
-        Signature::new(&self.0.sign(message).to_bytes())
+        Signature::from(self.0.sign(message).to_bytes())
     }
 
     fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {

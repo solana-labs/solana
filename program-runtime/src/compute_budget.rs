@@ -4,6 +4,12 @@ use {
         borsh::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
         entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
+        feature_set::{
+            add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
+            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
+        },
+        fee::FeeBudgetLimits,
+        genesis_config::ClusterType,
         instruction::{CompiledInstruction, InstructionError},
         pubkey::Pubkey,
         transaction::TransactionError,
@@ -176,7 +182,7 @@ impl ComputeBudget {
         enable_request_heap_frame_ix: bool,
         support_set_loaded_accounts_data_size_limit_ix: bool,
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
-        let mut num_non_compute_budget_instructions: usize = 0;
+        let mut num_non_compute_budget_instructions: u32 = 0;
         let mut updated_compute_unit_limit = None;
         let mut requested_heap_size = None;
         let mut prioritization_fee = None;
@@ -255,10 +261,10 @@ impl ComputeBudget {
             self.heap_size = Some(bytes as usize);
         }
 
-        self.compute_unit_limit = if default_units_per_instruction {
+        let compute_unit_limit = if default_units_per_instruction {
             updated_compute_unit_limit.or_else(|| {
                 Some(
-                    (num_non_compute_budget_instructions as u32)
+                    num_non_compute_budget_instructions
                         .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT),
                 )
             })
@@ -266,7 +272,8 @@ impl ComputeBudget {
             updated_compute_unit_limit
         }
         .unwrap_or(MAX_COMPUTE_UNIT_LIMIT)
-        .min(MAX_COMPUTE_UNIT_LIMIT) as u64;
+        .min(MAX_COMPUTE_UNIT_LIMIT);
+        self.compute_unit_limit = u64::from(compute_unit_limit);
 
         self.loaded_accounts_data_size_limit = updated_loaded_accounts_data_size_limit
             .unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
@@ -275,6 +282,39 @@ impl ComputeBudget {
         Ok(prioritization_fee
             .map(|fee_type| PrioritizationFeeDetails::new(fee_type, self.compute_unit_limit))
             .unwrap_or_default())
+    }
+
+    pub fn fee_budget_limits<'a>(
+        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
+        feature_set: &FeatureSet,
+        maybe_cluster_type: Option<ClusterType>,
+    ) -> FeeBudgetLimits {
+        let mut compute_budget = Self::default();
+
+        // A cluster specific feature gate, when not activated it keeps v1.13 behavior in mainnet-beta;
+        // once activated for v1.14+, it allows compute_budget::request_heap_frame and
+        // compute_budget::set_compute_unit_price co-exist in same transaction.
+        let enable_request_heap_frame_ix = feature_set
+            .is_active(&enable_request_heap_frame_ix::id())
+            || maybe_cluster_type
+                .and_then(|cluster_type| (cluster_type != ClusterType::MainnetBeta).then_some(0))
+                .is_some();
+        let prioritization_fee_details = compute_budget
+            .process_instructions(
+                instructions,
+                feature_set.is_active(&use_default_units_in_fee_calculation::id()),
+                !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+                enable_request_heap_frame_ix,
+                feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+            )
+            .unwrap_or_default();
+
+        FeeBudgetLimits {
+            loaded_accounts_data_size_limit: compute_budget.loaded_accounts_data_size_limit,
+            heap_cost: compute_budget.heap_cost,
+            compute_unit_limit: compute_budget.compute_unit_limit,
+            prioritization_fee: prioritization_fee_details.get_fee(),
+        }
     }
 }
 
@@ -289,6 +329,7 @@ mod tests {
             pubkey::Pubkey,
             signature::Keypair,
             signer::Signer,
+            system_instruction::{self},
             transaction::{SanitizedTransaction, Transaction},
         },
     };
@@ -834,5 +875,42 @@ mod tests {
                 support_set_loaded_accounts_data_size_limit_ix
             );
         }
+    }
+
+    #[test]
+    fn test_process_mixed_instructions_without_compute_budget() {
+        let payer_keypair = Keypair::new();
+
+        let transaction =
+            SanitizedTransaction::from_transaction_for_tests(Transaction::new_signed_with_payer(
+                &[
+                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                    system_instruction::transfer(&payer_keypair.pubkey(), &Pubkey::new_unique(), 2),
+                ],
+                Some(&payer_keypair.pubkey()),
+                &[&payer_keypair],
+                Hash::default(),
+            ));
+
+        let mut compute_budget = ComputeBudget::default();
+        let result = compute_budget.process_instructions(
+            transaction.message().program_instructions_iter(),
+            true,
+            false, //not support request_units_deprecated
+            true,  //enable_request_heap_frame_ix,
+            true,  //support_set_loaded_accounts_data_size_limit_ix,
+        );
+
+        // assert process_instructions will be successful with default,
+        assert_eq!(Ok(PrioritizationFeeDetails::default()), result);
+        // assert the default compute_unit_limit is 2 times default: one for bpf ix, one for
+        // builtin ix.
+        assert_eq!(
+            compute_budget,
+            ComputeBudget {
+                compute_unit_limit: 2 * DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+                ..ComputeBudget::default()
+            }
+        );
     }
 }

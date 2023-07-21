@@ -112,8 +112,7 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         use SingleValidatorVotes::*;
-        while !self.vote_account_keys.is_empty() {
-            let vote_account_key = self.vote_account_keys.pop().unwrap();
+        while let Some(vote_account_key) = self.vote_account_keys.pop() {
             // Get all the gossip votes we've queued up for this validator
             // that are:
             // 1) missing from the current leader bank
@@ -338,7 +337,7 @@ mod tests {
             vote_account_key,
             vote: VoteTransaction::from(vote.clone()),
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
         verified_vote_packets
@@ -358,7 +357,7 @@ mod tests {
             vote_account_key,
             vote: VoteTransaction::from(vote),
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
         verified_vote_packets
@@ -380,7 +379,7 @@ mod tests {
             vote_account_key,
             vote: VoteTransaction::from(vote),
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
         verified_vote_packets
@@ -403,7 +402,7 @@ mod tests {
             vote_account_key,
             vote: VoteTransaction::from(vote),
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[2u8; 64]),
+            signature: Signature::from([2u8; 64]),
         }])
         .unwrap();
         verified_vote_packets
@@ -442,7 +441,7 @@ mod tests {
                 vote_account_key,
                 vote: VoteTransaction::from(vote),
                 packet_batch: PacketBatch::default(),
-                signature: Signature::new(&[1u8; 64]),
+                signature: Signature::from([1u8; 64]),
             }])
             .unwrap();
         }
@@ -628,7 +627,7 @@ mod tests {
                 vote_account_key,
                 vote: VoteTransaction::from(vote),
                 packet_batch: PacketBatch::default(),
-                signature: Signature::new(&[1u8; 64]),
+                signature: Signature::from([1u8; 64]),
             }])
             .unwrap();
         }
@@ -651,7 +650,7 @@ mod tests {
             vote_account_key,
             vote: VoteTransaction::from(third_vote.clone()),
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
 
@@ -671,7 +670,7 @@ mod tests {
                 vote_account_key,
                 vote: VoteTransaction::from(vote),
                 packet_batch: PacketBatch::default(),
-                signature: Signature::new(&[1u8; 64]),
+                signature: Signature::from([1u8; 64]),
             }])
             .unwrap();
         }
@@ -702,7 +701,7 @@ mod tests {
             vote_account_key,
             vote: VoteTransaction::from(vote),
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
         verified_vote_packets
@@ -803,7 +802,7 @@ mod tests {
                 vote_account_key,
                 vote,
                 packet_batch: PacketBatch::default(),
-                signature: Signature::new(&[1u8; 64]),
+                signature: Signature::from([1u8; 64]),
             }])
             .unwrap();
         }
@@ -838,7 +837,7 @@ mod tests {
                 vote_account_key,
                 vote,
                 packet_batch: PacketBatch::default(),
-                signature: Signature::new(&[1u8; 64]),
+                signature: Signature::from([1u8; 64]),
             }])
             .unwrap();
         }
@@ -866,7 +865,7 @@ mod tests {
             vote_account_key,
             vote,
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
 
@@ -895,7 +894,7 @@ mod tests {
             vote_account_key,
             vote,
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
 
@@ -918,7 +917,7 @@ mod tests {
             vote_account_key,
             vote,
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
 
@@ -939,7 +938,7 @@ mod tests {
             vote_account_key,
             vote,
             packet_batch: PacketBatch::default(),
-            signature: Signature::new(&[1u8; 64]),
+            signature: Signature::from([1u8; 64]),
         }])
         .unwrap();
 

@@ -19,6 +19,7 @@ use {
         timing::{duration_as_us, AtomicInterval},
     },
     std::{sync::RwLock, time::Duration},
+    tokio::sync::mpsc::Sender as AsyncSender,
 };
 
 #[derive(Clone)]
@@ -33,7 +34,6 @@ pub struct StandardBroadcastRun {
     last_datapoint_submit: Arc<AtomicInterval>,
     num_batches: usize,
     cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
-    quic_connection_cache: Arc<QuicConnectionCache>,
     reed_solomon_cache: Arc<ReedSolomonCache>,
 }
 
@@ -43,7 +43,7 @@ enum BroadcastError {
 }
 
 impl StandardBroadcastRun {
-    pub(super) fn new(shred_version: u16, quic_connection_cache: Arc<QuicConnectionCache>) -> Self {
+    pub(super) fn new(shred_version: u16) -> Self {
         let cluster_nodes_cache = Arc::new(ClusterNodesCache::<BroadcastStage>::new(
             CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
             CLUSTER_NODES_CACHE_TTL,
@@ -59,7 +59,6 @@ impl StandardBroadcastRun {
             last_datapoint_submit: Arc::default(),
             num_batches: 0,
             cluster_nodes_cache,
-            quic_connection_cache,
             reed_solomon_cache: Arc::<ReedSolomonCache>::default(),
         }
     }
@@ -84,8 +83,7 @@ impl StandardBroadcastRun {
                 let shredder =
                     Shredder::new(state.slot, state.parent, reference_tick, self.shred_version)
                         .unwrap();
-                let merkle_variant =
-                    should_use_merkle_variant(state.slot, cluster_type, self.shred_version);
+                let merkle_variant = should_use_merkle_variant(state.slot, cluster_type);
                 let (mut shreds, coding_shreds) = shredder.entries_to_shreds(
                     keypair,
                     &[],  // entries
@@ -147,7 +145,7 @@ impl StandardBroadcastRun {
         };
         let shredder =
             Shredder::new(slot, parent_slot, reference_tick, self.shred_version).unwrap();
-        let merkle_variant = should_use_merkle_variant(slot, cluster_type, self.shred_version);
+        let merkle_variant = should_use_merkle_variant(slot, cluster_type);
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             keypair,
             entries,
@@ -195,18 +193,16 @@ impl StandardBroadcastRun {
         blockstore: &Blockstore,
         receive_results: ReceiveResults,
         bank_forks: &RwLock<BankForks>,
+        quic_endpoint_sender: &AsyncSender<(SocketAddr, Bytes)>,
     ) -> Result<()> {
         let (bsend, brecv) = unbounded();
         let (ssend, srecv) = unbounded();
         self.process_receive_results(keypair, blockstore, &ssend, &bsend, receive_results)?;
-        let srecv = Arc::new(Mutex::new(srecv));
-        let brecv = Arc::new(Mutex::new(brecv));
-
         //data
-        let _ = self.transmit(&srecv, cluster_info, sock, bank_forks);
+        let _ = self.transmit(&srecv, cluster_info, sock, bank_forks, quic_endpoint_sender);
         let _ = self.record(&brecv, blockstore);
         //coding
-        let _ = self.transmit(&srecv, cluster_info, sock, bank_forks);
+        let _ = self.transmit(&srecv, cluster_info, sock, bank_forks, quic_endpoint_sender);
         let _ = self.record(&brecv, blockstore);
         Ok(())
     }
@@ -405,6 +401,7 @@ impl StandardBroadcastRun {
         shreds: Arc<Vec<Shred>>,
         broadcast_shred_batch_info: Option<BroadcastShredBatchInfo>,
         bank_forks: &RwLock<BankForks>,
+        quic_endpoint_sender: &AsyncSender<(SocketAddr, Bytes)>,
     ) -> Result<()> {
         trace!("Broadcasting {:?} shreds", shreds.len());
         let mut transmit_stats = TransmitShredsStats::default();
@@ -415,12 +412,12 @@ impl StandardBroadcastRun {
             sock,
             &shreds,
             &self.cluster_nodes_cache,
-            &self.quic_connection_cache,
             &self.last_datapoint_submit,
             &mut transmit_stats,
             cluster_info,
             bank_forks,
             cluster_info.socket_addr_space(),
+            quic_endpoint_sender,
         )?;
         transmit_time.stop();
 
@@ -486,23 +483,34 @@ impl BroadcastRun for StandardBroadcastRun {
     }
     fn transmit(
         &mut self,
-        receiver: &Mutex<TransmitReceiver>,
+        receiver: &TransmitReceiver,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
         bank_forks: &RwLock<BankForks>,
+        quic_endpoint_sender: &AsyncSender<(SocketAddr, Bytes)>,
     ) -> Result<()> {
-        let (shreds, batch_info) = receiver.lock().unwrap().recv()?;
-        self.broadcast(sock, cluster_info, shreds, batch_info, bank_forks)
+        let (shreds, batch_info) = receiver.recv()?;
+        self.broadcast(
+            sock,
+            cluster_info,
+            shreds,
+            batch_info,
+            bank_forks,
+            quic_endpoint_sender,
+        )
     }
-    fn record(&mut self, receiver: &Mutex<RecordReceiver>, blockstore: &Blockstore) -> Result<()> {
-        let (shreds, slot_start_ts) = receiver.lock().unwrap().recv()?;
+    fn record(&mut self, receiver: &RecordReceiver, blockstore: &Blockstore) -> Result<()> {
+        let (shreds, slot_start_ts) = receiver.recv()?;
         self.insert(blockstore, shreds, slot_start_ts);
         Ok(())
     }
 }
 
-fn should_use_merkle_variant(slot: Slot, cluster_type: ClusterType, shred_version: u16) -> bool {
-    cluster_type == ClusterType::Testnet && shred_version == 28353 && (slot % 19 < 10)
+fn should_use_merkle_variant(slot: Slot, cluster_type: ClusterType) -> bool {
+    match cluster_type {
+        ClusterType::Testnet | ClusterType::Devnet | ClusterType::Development => true,
+        ClusterType::MainnetBeta => (slot % 19) < 4,
+    }
 }
 
 #[cfg(test)]
@@ -520,13 +528,8 @@ mod test {
             genesis_config::GenesisConfig,
             signature::{Keypair, Signer},
         },
-        solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
-        std::{
-            net::{IpAddr, Ipv4Addr},
-            ops::Deref,
-            sync::Arc,
-            time::Duration,
-        },
+        solana_streamer::socket::SocketAddrSpace,
+        std::{ops::Deref, sync::Arc, time::Duration},
     };
 
     #[allow(clippy::type_complexity)]
@@ -572,24 +575,10 @@ mod test {
         )
     }
 
-    fn new_quic_connection_cache(keypair: &Keypair) -> Arc<QuicConnectionCache> {
-        Arc::new(
-            solana_quic_client::new_quic_connection_cache(
-                "connection_cache_test",
-                keypair,
-                IpAddr::V4(Ipv4Addr::LOCALHOST),
-                &Arc::<RwLock<StakedNodes>>::default(),
-                4, // connection_pool_size
-            )
-            .unwrap(),
-        )
-    }
-
     #[test]
     fn test_interrupted_slot_last_shred() {
         let keypair = Arc::new(Keypair::new());
-        let quic_connection_cache = new_quic_connection_cache(&keypair);
-        let mut run = StandardBroadcastRun::new(0, quic_connection_cache);
+        let mut run = StandardBroadcastRun::new(0);
 
         // Set up the slot to be interrupted
         let next_shred_index = 10;
@@ -631,7 +620,8 @@ mod test {
         let num_shreds_per_slot = 2;
         let (blockstore, genesis_config, cluster_info, bank0, leader_keypair, socket, bank_forks) =
             setup(num_shreds_per_slot);
-        let quic_connection_cache = new_quic_connection_cache(&leader_keypair);
+        let (quic_endpoint_sender, _quic_endpoint_receiver) =
+            tokio::sync::mpsc::channel(/*capacity:*/ 128);
 
         // Insert 1 less than the number of ticks needed to finish the slot
         let ticks0 = create_ticks(genesis_config.ticks_per_slot - 1, 0, genesis_config.hash());
@@ -644,7 +634,7 @@ mod test {
         };
 
         // Step 1: Make an incomplete transmission for slot 0
-        let mut standard_broadcast_run = StandardBroadcastRun::new(0, quic_connection_cache);
+        let mut standard_broadcast_run = StandardBroadcastRun::new(0);
         standard_broadcast_run
             .test_process_receive_results(
                 &leader_keypair,
@@ -653,6 +643,7 @@ mod test {
                 &blockstore,
                 receive_results,
                 &bank_forks,
+                &quic_endpoint_sender,
             )
             .unwrap();
         let unfinished_slot = standard_broadcast_run.unfinished_slot.as_ref().unwrap();
@@ -719,6 +710,7 @@ mod test {
                 &blockstore,
                 receive_results,
                 &bank_forks,
+                &quic_endpoint_sender,
             )
             .unwrap();
         let unfinished_slot = standard_broadcast_run.unfinished_slot.as_ref().unwrap();
@@ -762,11 +754,10 @@ mod test {
         let num_shreds_per_slot = 2;
         let (blockstore, genesis_config, _cluster_info, bank, leader_keypair, _socket, _bank_forks) =
             setup(num_shreds_per_slot);
-        let quic_connection_cache = new_quic_connection_cache(&leader_keypair);
         let (bsend, brecv) = unbounded();
         let (ssend, _srecv) = unbounded();
         let mut last_tick_height = 0;
-        let mut standard_broadcast_run = StandardBroadcastRun::new(0, quic_connection_cache);
+        let mut standard_broadcast_run = StandardBroadcastRun::new(0);
         let mut process_ticks = |num_ticks| {
             let ticks = create_ticks(num_ticks, 0, genesis_config.hash());
             last_tick_height += (ticks.len() - 1) as u64;
@@ -796,13 +787,13 @@ mod test {
         }
         // At least as many coding shreds as data shreds.
         assert!(shreds.len() >= 29 * 2);
-        assert_eq!(shreds.iter().filter(|shred| shred.is_data()).count(), 29);
+        assert_eq!(shreds.iter().filter(|shred| shred.is_data()).count(), 30);
         process_ticks(75);
         while let Ok((recv_shreds, _)) = brecv.recv_timeout(Duration::from_secs(1)) {
             shreds.extend(recv_shreds.deref().clone());
         }
         assert!(shreds.len() >= 33 * 2);
-        assert_eq!(shreds.iter().filter(|shred| shred.is_data()).count(), 33);
+        assert_eq!(shreds.iter().filter(|shred| shred.is_data()).count(), 34);
     }
 
     #[test]
@@ -811,7 +802,8 @@ mod test {
         let num_shreds_per_slot = 2;
         let (blockstore, genesis_config, cluster_info, bank0, leader_keypair, socket, bank_forks) =
             setup(num_shreds_per_slot);
-        let quic_connection_cache = new_quic_connection_cache(&leader_keypair);
+        let (quic_endpoint_sender, _quic_endpoint_receiver) =
+            tokio::sync::mpsc::channel(/*capacity:*/ 128);
 
         // Insert complete slot of ticks needed to finish the slot
         let ticks = create_ticks(genesis_config.ticks_per_slot, 0, genesis_config.hash());
@@ -823,7 +815,7 @@ mod test {
             last_tick_height: ticks.len() as u64,
         };
 
-        let mut standard_broadcast_run = StandardBroadcastRun::new(0, quic_connection_cache);
+        let mut standard_broadcast_run = StandardBroadcastRun::new(0);
         standard_broadcast_run
             .test_process_receive_results(
                 &leader_keypair,
@@ -832,6 +824,7 @@ mod test {
                 &blockstore,
                 receive_results,
                 &bank_forks,
+                &quic_endpoint_sender,
             )
             .unwrap();
         assert!(standard_broadcast_run.unfinished_slot.is_none())
@@ -841,8 +834,7 @@ mod test {
     fn entries_to_shreds_max() {
         solana_logger::setup();
         let keypair = Keypair::new();
-        let quic_connection_cache = new_quic_connection_cache(&keypair);
-        let mut bs = StandardBroadcastRun::new(0, quic_connection_cache);
+        let mut bs = StandardBroadcastRun::new(0);
         bs.current_slot_and_parent = Some((1, 0));
         let entries = create_ticks(10_000, 1, solana_sdk::hash::Hash::default());
 

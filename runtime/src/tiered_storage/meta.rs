@@ -39,7 +39,7 @@ pub trait TieredAccountMeta: Sized {
 
     /// A builder function that initializes the account data size.
     /// The size here represents the logical data size without compression.
-    fn with_data_size(self, data_size: u64) -> Self;
+    fn with_account_data_size(self, account_data_size: u64) -> Self;
 
     /// A builder function that initializes the AccountMetaFlags of the current
     /// meta.
@@ -50,12 +50,6 @@ pub trait TieredAccountMeta: Sized {
 
     /// Returns the number of padding bytes for the associated account data
     fn account_data_padding(&self) -> u8;
-
-    /// Returns the size of its account data if the current accout meta
-    /// shares its account block with other account meta entries.
-    ///
-    /// Otherwise, None will be returned.
-    fn data_size_for_shared_block(&self) -> Option<usize>;
 
     /// Returns the index to the accounts' owner in the current AccountsFile.
     fn owner_index(&self) -> u32;
@@ -70,39 +64,27 @@ pub trait TieredAccountMeta: Sized {
     /// Returns the epoch that this account will next owe rent by parsing
     /// the specified account block.  None will be returned if this account
     /// does not persist this optional field.
-    fn rent_epoch(&self, _account_block: &[u8]) -> Option<Epoch> {
-        None
-    }
+    fn rent_epoch(&self, _account_block: &[u8]) -> Option<Epoch>;
 
     /// Returns the account hash by parsing the specified account block.  None
     /// will be returned if this account does not persist this optional field.
-    fn account_hash<'a>(&self, _account_block: &'a [u8]) -> Option<&'a Hash> {
-        None
-    }
+    fn account_hash<'a>(&self, _account_block: &'a [u8]) -> Option<&'a Hash>;
 
     /// Returns the write version by parsing the specified account block.  None
     /// will be returned if this account does not persist this optional field.
-    fn write_version(&self, _account_block: &[u8]) -> Option<StoredMetaWriteVersion> {
-        None
-    }
+    fn write_version(&self, _account_block: &[u8]) -> Option<StoredMetaWriteVersion>;
 
     /// Returns the offset of the optional fields based on the specified account
     /// block.
-    fn optional_fields_offset(&self, _account_block: &[u8]) -> usize {
-        unimplemented!();
-    }
+    fn optional_fields_offset(&self, _account_block: &[u8]) -> usize;
 
     /// Returns the length of the data associated to this account based on the
     /// specified account block.
-    fn data_len(&self, _account_block: &[u8]) -> usize {
-        unimplemented!();
-    }
+    fn account_data_size(&self, _account_block: &[u8]) -> usize;
 
     /// Returns the data associated to this account based on the specified
     /// account block.
-    fn account_data<'a>(&self, _account_block: &'a [u8]) -> &'a [u8] {
-        unimplemented!();
-    }
+    fn account_data<'a>(&self, _account_block: &'a [u8]) -> &'a [u8];
 }
 
 impl AccountMetaFlags {
@@ -155,6 +137,34 @@ impl AccountMetaOptionalFields {
         }
 
         fields_size
+    }
+
+    /// Given the specified AccountMetaFlags, returns the relative offset
+    /// of its rent_epoch field to the offset of its optional fields entry.
+    pub fn rent_epoch_offset(_flags: &AccountMetaFlags) -> usize {
+        0
+    }
+
+    /// Given the specified AccountMetaFlags, returns the relative offset
+    /// of its account_hash field to the offset of its optional fields entry.
+    pub fn account_hash_offset(flags: &AccountMetaFlags) -> usize {
+        let mut offset = Self::rent_epoch_offset(flags);
+        // rent_epoch is the previous field to account hash
+        if flags.has_rent_epoch() {
+            offset += std::mem::size_of::<Epoch>();
+        }
+        offset
+    }
+
+    /// Given the specified AccountMetaFlags, returns the relative offset
+    /// of its write_version field to the offset of its optional fields entry.
+    pub fn write_version_offset(flags: &AccountMetaFlags) -> usize {
+        let mut offset = Self::account_hash_offset(flags);
+        // account hash is the previous field to write version
+        if flags.has_account_hash() {
+            offset += std::mem::size_of::<Hash>();
+        }
+        offset
     }
 }
 
@@ -264,6 +274,54 @@ pub mod tests {
                         AccountMetaOptionalFields::size_from_flags(&AccountMetaFlags::new_from(
                             &opt_fields
                         ))
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_optional_fields_offset() {
+        let test_epoch = 5432312;
+        let test_write_version = 231;
+
+        for rent_epoch in [None, Some(test_epoch)] {
+            let rent_epoch_offset = 0;
+            for account_hash in [None, Some(Hash::new_unique())] {
+                let mut account_hash_offset = rent_epoch_offset;
+                if rent_epoch.is_some() {
+                    account_hash_offset += std::mem::size_of::<Epoch>();
+                }
+                for write_version in [None, Some(test_write_version)] {
+                    let mut write_version_offset = account_hash_offset;
+                    if account_hash.is_some() {
+                        write_version_offset += std::mem::size_of::<Hash>();
+                    }
+                    let opt_fields = AccountMetaOptionalFields {
+                        rent_epoch,
+                        account_hash,
+                        write_version,
+                    };
+                    let flags = AccountMetaFlags::new_from(&opt_fields);
+                    assert_eq!(
+                        AccountMetaOptionalFields::rent_epoch_offset(&flags),
+                        rent_epoch_offset
+                    );
+                    assert_eq!(
+                        AccountMetaOptionalFields::account_hash_offset(&flags),
+                        account_hash_offset
+                    );
+                    assert_eq!(
+                        AccountMetaOptionalFields::write_version_offset(&flags),
+                        write_version_offset
+                    );
+                    let mut derived_size = AccountMetaOptionalFields::write_version_offset(&flags);
+                    if flags.has_write_version() {
+                        derived_size += std::mem::size_of::<StoredMetaWriteVersion>();
+                    }
+                    assert_eq!(
+                        AccountMetaOptionalFields::size_from_flags(&flags),
+                        derived_size
                     );
                 }
             }

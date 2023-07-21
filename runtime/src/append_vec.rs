@@ -17,7 +17,7 @@ use {
     log::*,
     memmap2::MmapMut,
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount},
+        account::{AccountSharedData, ReadableAccount},
         clock::Slot,
         hash::Hash,
         pubkey::Pubkey,
@@ -118,16 +118,6 @@ pub struct AppendVecStoredAccountMeta<'append_vec> {
 }
 
 impl<'append_vec> AppendVecStoredAccountMeta<'append_vec> {
-    pub fn clone_account(&self) -> AccountSharedData {
-        AccountSharedData::from(Account {
-            lamports: self.account_meta.lamports,
-            owner: self.account_meta.owner,
-            executable: self.account_meta.executable,
-            rent_epoch: self.account_meta.rent_epoch,
-            data: self.data.to_vec(),
-        })
-    }
-
     pub fn pubkey(&self) -> &'append_vec Pubkey {
         &self.meta.pubkey
     }
@@ -175,7 +165,8 @@ impl<'append_vec> AppendVecStoredAccountMeta<'append_vec> {
 
     fn sanitize_lamports(&self) -> bool {
         // Sanitize 0 lamports to ensure to be same as AccountSharedData::default()
-        self.account_meta.lamports != 0 || self.clone_account() == AccountSharedData::default()
+        self.account_meta.lamports != 0
+            || self.to_account_shared_data() == AccountSharedData::default()
     }
 
     fn ref_executable_byte(&self) -> &u8 {
@@ -561,7 +552,7 @@ impl AppendVec {
     ) -> Option<(StoredMeta, solana_sdk::account::AccountSharedData)> {
         let (stored_account, _) = self.get_account(offset)?;
         let meta = stored_account.meta().clone();
-        Some((meta, stored_account.clone_account()))
+        Some((meta, stored_account.to_account_shared_data()))
     }
 
     pub fn get_path(&self) -> PathBuf {
@@ -1096,7 +1087,7 @@ pub mod tests {
         assert_eq!(accounts.len(), size);
         for (sample, v) in accounts.iter_mut().enumerate() {
             let account = create_test_account(sample);
-            let recovered = v.clone_account();
+            let recovered = v.to_account_shared_data();
             assert_eq!(recovered, account.1)
         }
         trace!(

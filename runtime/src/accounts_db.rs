@@ -933,7 +933,9 @@ impl<'a> LoadedAccount<'a> {
 
     pub fn take_account(self) -> AccountSharedData {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.clone_account(),
+            LoadedAccount::Stored(stored_account_meta) => {
+                stored_account_meta.to_account_shared_data()
+            }
             LoadedAccount::Cached(cached_account) => match cached_account {
                 Cow::Owned(cached_account) => cached_account.account.clone(),
                 Cow::Borrowed(cached_account) => cached_account.account.clone(),
@@ -1502,7 +1504,6 @@ pub struct AccountsDb {
 
     /// this will live here until the feature for partitioned epoch rewards is activated.
     /// At that point, this and other code can be deleted.
-    #[allow(dead_code)]
     pub(crate) partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig,
 
     /// the full accounts hash calculation as of a predetermined block height 'N'
@@ -4472,16 +4473,13 @@ impl AccountsDb {
 
         let len = sorted_slots.len();
         for slot in sorted_slots {
-            let old_storage = match self.get_storage_to_move_to_ancient_append_vec(
+            let Some(old_storage) = self.get_storage_to_move_to_ancient_append_vec(
                 slot,
                 &mut current_ancient,
                 can_randomly_shrink,
-            ) {
-                Some(old_storages) => old_storages,
-                None => {
-                    // nothing to squash for this slot
-                    continue;
-                }
+            ) else {
+                // nothing to squash for this slot
+                continue;
             };
 
             if guard.is_none() {
@@ -4944,7 +4942,19 @@ impl AccountsDb {
             // If the slot is not in the cache, then all the account information must have
             // been flushed. This is guaranteed because we only remove the rooted slot from
             // the cache *after* we've finished flushing in `flush_slot_cache`.
-            if let Some(storage) = self.storage.get_slot_storage_entry(slot) {
+            // Regarding `shrinking_in_progress_ok`:
+            // This fn could be running in the foreground, so shrinking could be running in the background, independently.
+            // Even if shrinking is running, there will be 0-1 active storages to scan here at any point.
+            // When a concurrent shrink completes, the active storage at this slot will
+            // be replaced with an equivalent storage with only alive accounts in it.
+            // A shrink on this slot could have completed anytime before the call here, a shrink could currently be in progress,
+            // or the shrink could complete immediately or anytime after this call. This has always been true.
+            // So, whether we get a never-shrunk, an about-to-be shrunk, or a will-be-shrunk-in-future storage here to scan,
+            // all are correct and possible in a normally running system.
+            if let Some(storage) = self
+                .storage
+                .get_slot_storage_entry_shrinking_in_progress_ok(slot)
+            {
                 storage
                     .accounts
                     .account_iter()
@@ -6073,7 +6083,7 @@ impl AccountsDb {
             &remove_unrooted_purge_stats,
             true,
         );
-        remove_unrooted_purge_stats.report("remove_unrooted_slots_purge_slots_stats", Some(0));
+        remove_unrooted_purge_stats.report("remove_unrooted_slots_purge_slots_stats", None);
 
         let mut currently_contended_slots = slots_under_contention.lock().unwrap();
         for (remove_slot, _) in remove_slots {
@@ -7608,6 +7618,7 @@ impl AccountsDb {
         flavor: CalcAccountsHashFlavor,
         accounts_hash_cache_path: PathBuf,
     ) -> Result<(AccountsHashEnum, u64), AccountsHashVerificationError> {
+        let total_time = Measure::start("");
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         stats.oldest_root = storages.range().start;
 
@@ -7616,7 +7627,12 @@ impl AccountsDb {
         let slot = storages.max_slot_inclusive();
         let use_bg_thread_pool = config.use_bg_thread_pool;
         let scan_and_hash = || {
-            let cache_hash_data = Self::get_cache_hash_data(accounts_hash_cache_path, config, slot);
+            let (cache_hash_data, cache_hash_data_us) = measure_us!(Self::get_cache_hash_data(
+                accounts_hash_cache_path,
+                config,
+                slot
+            ));
+            stats.cache_hash_data_us += cache_hash_data_us;
 
             let bounds = Range {
                 start: 0,
@@ -7677,6 +7693,7 @@ impl AccountsDb {
         } else {
             scan_and_hash()
         };
+        stats.total_us = total_time.end_as_us();
         stats.log();
         result
     }
@@ -12713,7 +12730,7 @@ pub mod tests {
             stored_size: CACHE_VIRTUAL_STORED_SIZE as usize,
             hash: &hash,
         });
-        let account = stored_account.clone_account();
+        let account = stored_account.to_account_shared_data();
 
         let expected_account_hash = if cfg!(debug_assertions) {
             Hash::from_str("6qtBXmRrLdTdAV5bK6bZZJxQA4fPSUBxzQGq2BQSat25").unwrap()

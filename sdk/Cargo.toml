@@ -35,6 +35,7 @@ full = [
     "sha3",
     "digest",
 ]
+dev-context-only-utils = []
 
 [dependencies]
 assert_matches = { workspace = true, optional = true }

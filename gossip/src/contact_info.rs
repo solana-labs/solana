@@ -428,13 +428,11 @@ impl TryFrom<ContactInfoLite> for ContactInfo {
         let mut port = 0u16;
         for &SocketEntry { key, index, offset } in &node.sockets {
             port += offset;
-            let entry = match node.cache.get_mut(usize::from(key)) {
-                None => continue,
-                Some(entry) => entry,
+            let Some(entry) = node.cache.get_mut(usize::from(key)) else {
+                continue;
             };
-            let addr = match node.addrs.get(usize::from(index)) {
-                None => continue,
-                Some(&addr) => addr,
+            let Some(&addr) = node.addrs.get(usize::from(index)) else {
+                continue;
             };
             let socket = SocketAddr::new(addr, port);
             if sanitize_socket(&socket).is_ok() {

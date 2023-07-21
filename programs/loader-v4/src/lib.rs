@@ -97,12 +97,9 @@ pub fn load_program_from_account(
             .unwrap_or(0),
         external_internal_function_hash_collision: true,
         reject_callx_r10: true,
-        dynamic_stack_frames: true,
-        enable_sdiv: true,
+        enable_sbpf_v1: false,
+        enable_sbpf_v2: true,
         optimize_rodata: true,
-        static_syscalls: true,
-        enable_elf_vaddr: true,
-        reject_rodata_stack_overlap: true,
         new_elf_parser: true,
         aligned_memory_mapping: true,
         // Warning, do not use `Config::default()` so that configuration here is explicit.
@@ -144,8 +141,9 @@ fn calculate_heap_cost(heap_size: u64, heap_cost: u64) -> u64 {
 pub fn create_vm<'a, 'b>(
     invoke_context: &'a mut InvokeContext<'b>,
     program: &'a Executable<RequisiteVerifier, InvokeContext<'b>>,
-) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, Box<dyn std::error::Error>> {
+) -> Result<EbpfVm<'a, InvokeContext<'b>>, Box<dyn std::error::Error>> {
     let config = program.get_config();
+    let sbpf_version = program.get_sbpf_version();
     let compute_budget = invoke_context.get_compute_budget();
     let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
     invoke_context.consume_checked(calculate_heap_cost(
@@ -163,22 +161,28 @@ pub fn create_vm<'a, 'b>(
         MemoryRegion::new_writable(heap.as_slice_mut(), ebpf::MM_HEAP_START),
     ];
     let log_collector = invoke_context.get_log_collector();
-    let memory_mapping = MemoryMapping::new(regions, config).map_err(|err| {
+    let memory_mapping = MemoryMapping::new(regions, config, sbpf_version).map_err(|err| {
         ic_logger_msg!(log_collector, "Failed to create SBF VM: {}", err);
         Box::new(InstructionError::ProgramEnvironmentSetupFailure)
     })?;
     Ok(EbpfVm::new(
-        program,
+        config,
+        sbpf_version,
         invoke_context,
         memory_mapping,
         stack_len,
     ))
 }
 
-fn execute(
-    invoke_context: &mut InvokeContext,
-    program: &Executable<RequisiteVerifier, InvokeContext<'static>>,
+fn execute<'a, 'b: 'a>(
+    invoke_context: &'a mut InvokeContext<'b>,
+    executable: &'a Executable<RequisiteVerifier, InvokeContext<'static>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // We dropped the lifetime tracking in the Executor by setting it to 'static,
+    // thus we need to reintroduce the correct lifetime of InvokeContext here again.
+    let executable = unsafe {
+        std::mem::transmute::<_, &'a Executable<RequisiteVerifier, InvokeContext<'b>>>(executable)
+    };
     let log_collector = invoke_context.get_log_collector();
     let stack_height = invoke_context.get_stack_height();
     let transaction_context = &invoke_context.transaction_context;
@@ -187,21 +191,16 @@ fn execute(
     #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
     let use_jit = false;
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
-    let use_jit = program.get_compiled_program().is_some();
+    let use_jit = executable.get_compiled_program().is_some();
 
     let compute_meter_prev = invoke_context.get_remaining();
     let mut create_vm_time = Measure::start("create_vm");
-    let mut vm = create_vm(
-        invoke_context,
-        // We dropped the lifetime tracking in the Executor by setting it to 'static,
-        // thus we need to reintroduce the correct lifetime of InvokeContext here again.
-        unsafe { std::mem::transmute(program) },
-    )?;
+    let mut vm = create_vm(invoke_context, executable)?;
     create_vm_time.stop();
 
     let mut execute_time = Measure::start("execute");
     stable_log::program_invoke(&log_collector, &program_id, stack_height);
-    let (compute_units_consumed, result) = vm.execute_program(!use_jit);
+    let (compute_units_consumed, result) = vm.execute_program(executable, !use_jit);
     drop(vm);
     ic_logger_msg!(
         log_collector,

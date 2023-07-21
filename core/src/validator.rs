@@ -16,10 +16,9 @@ use {
         },
         ledger_metric_report_service::LedgerMetricReportService,
         poh_timing_report_service::PohTimingReportService,
+        repair::{serve_repair::ServeRepair, serve_repair_service::ServeRepairService},
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
         sample_performance_service::SamplePerformanceService,
-        serve_repair::ServeRepair,
-        serve_repair_service::ServeRepairService,
         sigverify,
         snapshot_packager_service::SnapshotPackagerService,
         stats_reporter_service::StatsReporterService,
@@ -31,6 +30,7 @@ use {
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     lazy_static::lazy_static,
+    quinn::Endpoint,
     rand::{thread_rng, Rng},
     solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_entry::poh::compute_hash_time_ns,
@@ -114,7 +114,7 @@ use {
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
-    solana_turbine::broadcast_stage::BroadcastStageType,
+    solana_turbine::{self, broadcast_stage::BroadcastStageType},
     solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
@@ -133,8 +133,6 @@ use {
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
-
-pub const TURBINE_QUIC_CONNECTION_POOL_SIZE: usize = 4;
 
 #[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
@@ -389,7 +387,7 @@ impl Default for ValidatorStartProgress {
 }
 
 struct BlockstoreRootScan {
-    thread: Option<JoinHandle<Result<(), BlockstoreError>>>,
+    thread: Option<JoinHandle<Result<usize, BlockstoreError>>>,
 }
 
 impl BlockstoreRootScan {
@@ -402,7 +400,7 @@ impl BlockstoreRootScan {
             Some(
                 Builder::new()
                     .name("solBStoreRtScan".to_string())
-                    .spawn(move || blockstore.scan_and_fix_roots(&exit))
+                    .spawn(move || blockstore.scan_and_fix_roots(None, None, &exit))
                     .unwrap(),
             )
         } else {
@@ -462,6 +460,9 @@ pub struct Validator {
     ledger_metric_report_service: LedgerMetricReportService,
     accounts_background_service: AccountsBackgroundService,
     accounts_hash_verifier: AccountsHashVerifier,
+    turbine_quic_endpoint: Endpoint,
+    turbine_quic_endpoint_runtime: Option<tokio::runtime::Runtime>,
+    turbine_quic_endpoint_join_handle: solana_turbine::quic_endpoint::AsyncTryJoinHandle,
 }
 
 impl Validator {
@@ -486,13 +487,12 @@ impl Validator {
         let id = identity_keypair.pubkey();
         assert_eq!(&id, node.info.pubkey());
 
-        warn!("identity: {}", id);
-        warn!("vote account: {}", vote_account);
+        info!("identity pubkey: {id}");
+        info!("vote account pubkey: {vote_account}");
 
         if !config.no_os_network_stats_reporting {
-            if let Err(e) = verify_net_stats_access() {
-                return Err(format!("Failed to access Network stats: {e}",));
-            }
+            verify_net_stats_access()
+                .map_err(|err| format!("Failed to access network stats: {err:?}"))?;
         }
 
         let mut bank_notification_senders = Vec::new();
@@ -505,17 +505,14 @@ impl Validator {
                 bank_notification_senders.push(confirmed_bank_sender);
                 let rpc_to_plugin_manager_receiver_and_exit =
                     rpc_to_plugin_manager_receiver.map(|receiver| (receiver, exit.clone()));
-                let result = GeyserPluginService::new_with_receiver(
-                    confirmed_bank_receiver,
-                    geyser_plugin_config_files,
-                    rpc_to_plugin_manager_receiver_and_exit,
-                );
-                match result {
-                    Ok(geyser_plugin_service) => Some(geyser_plugin_service),
-                    Err(err) => {
-                        return Err(format!("Failed to load the Geyser plugin: {err:?}"));
-                    }
-                }
+                Some(
+                    GeyserPluginService::new_with_receiver(
+                        confirmed_bank_receiver,
+                        geyser_plugin_config_files,
+                        rpc_to_plugin_manager_receiver_and_exit,
+                    )
+                    .map_err(|err| format!("Failed to load the Geyser plugin: {err:?}"))?,
+                )
             } else {
                 None
             };
@@ -547,7 +544,7 @@ impl Validator {
             info!("Initializing sigverify...");
         }
         sigverify::init();
-        info!("Done.");
+        info!("Initializing sigverify done.");
 
         if !ledger_path.is_dir() {
             return Err(format!(
@@ -569,10 +566,10 @@ impl Validator {
 
         info!("Cleaning accounts paths..");
         *start_progress.write().unwrap() = ValidatorStartProgress::CleaningAccounts;
-        let mut start = Measure::start("clean_accounts_paths");
+        let mut timer = Measure::start("clean_accounts_paths");
         cleanup_accounts_paths(config);
-        start.stop();
-        info!("done. {}", start);
+        timer.stop();
+        info!("Cleaning accounts paths done. {timer}");
 
         snapshot_utils::purge_incomplete_bank_snapshots(&config.snapshot_config.bank_snapshots_dir);
         snapshot_utils::purge_old_bank_snapshots_at_startup(
@@ -580,14 +577,14 @@ impl Validator {
         );
 
         info!("Cleaning orphaned account snapshot directories..");
-        if let Err(e) = clean_orphaned_account_snapshot_dirs(
+        let mut timer = Measure::start("clean_orphaned_account_snapshot_dirs");
+        clean_orphaned_account_snapshot_dirs(
             &config.snapshot_config.bank_snapshots_dir,
             &config.account_snapshot_paths,
-        ) {
-            return Err(format!(
-                "Failed to clean orphaned account snapshot directories: {e:?}"
-            ));
-        }
+        )
+        .map_err(|err| format!("Failed to clean orphaned account snapshot directories: {err:?}"))?;
+        timer.stop();
+        info!("Cleaning orphaned account snapshot directories done. {timer}");
 
         {
             let exit = exit.clone();
@@ -1047,17 +1044,15 @@ impl Validator {
             repair_whitelist: config.repair_whitelist.clone(),
         });
 
-        let waited_for_supermajority = match wait_for_supermajority(
+        let waited_for_supermajority = wait_for_supermajority(
             config,
             Some(&mut process_blockstore),
             &bank_forks,
             &cluster_info,
             rpc_override_health_check,
             &start_progress,
-        ) {
-            Ok(waited) => waited,
-            Err(e) => return Err(format!("wait_for_supermajority failed: {e:?}")),
-        };
+        )
+        .map_err(|err| format!("wait_for_supermajority failed: {err:?}"))?;
 
         let ledger_metric_report_service =
             LedgerMetricReportService::new(blockstore.clone(), exit.clone());
@@ -1112,19 +1107,40 @@ impl Validator {
         let entry_notification_sender = entry_notifier_service
             .as_ref()
             .map(|service| service.sender_cloned());
-        let turbine_quic_connection_cache = Arc::new(
-            solana_quic_client::new_quic_connection_cache(
-                "connection_cache_tvu_quic",
-                &identity_keypair,
-                node.info
-                    .tvu(Protocol::QUIC)
-                    .expect("Operator must spin up node with valid TVU address")
-                    .ip(),
-                &staked_nodes,
-                TURBINE_QUIC_CONNECTION_POOL_SIZE,
-            )
-            .unwrap(),
-        );
+
+        // test-validator crate may start the validator in a tokio runtime
+        // context which forces us to use the same runtime because a nested
+        // runtime will cause panic at drop.
+        // Outside test-validator crate, we always need a tokio runtime (and
+        // the respective handle) to initialize the turbine QUIC endpoint.
+        let current_runtime_handle = tokio::runtime::Handle::try_current();
+        let turbine_quic_endpoint_runtime = current_runtime_handle.is_err().then(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .thread_name("solTurbineQuic")
+                .build()
+                .unwrap()
+        });
+        let (turbine_quic_endpoint_sender, turbine_quic_endpoint_receiver) = unbounded();
+        let (
+            turbine_quic_endpoint,
+            turbine_quic_endpoint_sender,
+            turbine_quic_endpoint_join_handle,
+        ) = solana_turbine::quic_endpoint::new_quic_endpoint(
+            turbine_quic_endpoint_runtime
+                .as_ref()
+                .map(tokio::runtime::Runtime::handle)
+                .unwrap_or_else(|| current_runtime_handle.as_ref().unwrap()),
+            &identity_keypair,
+            node.sockets.tvu_quic,
+            node.info
+                .tvu(Protocol::QUIC)
+                .expect("Operator must spin up node with valid QUIC TVU address")
+                .ip(),
+            turbine_quic_endpoint_sender,
+        )
+        .unwrap();
+
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
@@ -1135,7 +1151,6 @@ impl Validator {
                 repair: node.sockets.repair,
                 retransmit: node.sockets.retransmit_sockets,
                 fetch: node.sockets.tvu,
-                fetch_quic: node.sockets.tvu_quic,
                 ancestor_hashes_requests: node.sockets.ancestor_hashes_requests,
             },
             blockstore.clone(),
@@ -1176,8 +1191,8 @@ impl Validator {
             &connection_cache,
             &prioritization_fee_cache,
             banking_tracer.clone(),
-            staked_nodes.clone(),
-            turbine_quic_connection_cache.clone(),
+            turbine_quic_endpoint_sender.clone(),
+            turbine_quic_endpoint_receiver,
         )?;
 
         let tpu = Tpu::new(
@@ -1210,7 +1225,7 @@ impl Validator {
             config.tpu_coalesce,
             cluster_confirmed_slot_sender,
             &connection_cache,
-            turbine_quic_connection_cache,
+            turbine_quic_endpoint_sender,
             &identity_keypair,
             config.runtime_config.log_messages_bytes_limit,
             &staked_nodes,
@@ -1259,6 +1274,9 @@ impl Validator {
             ledger_metric_report_service,
             accounts_background_service,
             accounts_hash_verifier,
+            turbine_quic_endpoint,
+            turbine_quic_endpoint_runtime,
+            turbine_quic_endpoint_join_handle,
         })
     }
 
@@ -1303,6 +1321,7 @@ impl Validator {
     pub fn join(self) {
         drop(self.bank_forks);
         drop(self.cluster_info);
+        solana_turbine::quic_endpoint::close_quic_endpoint(&self.turbine_quic_endpoint);
 
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
@@ -1385,6 +1404,10 @@ impl Validator {
             .expect("accounts_hash_verifier");
         self.tpu.join().expect("tpu");
         self.tvu.join().expect("tvu");
+        self.turbine_quic_endpoint_runtime
+            .map(|runtime| runtime.block_on(self.turbine_quic_endpoint_join_handle))
+            .transpose()
+            .unwrap();
         self.completed_data_sets_service
             .join()
             .expect("completed_data_sets_service");
@@ -1783,7 +1806,7 @@ impl<'a> ProcessBlockStore<'a> {
                     })
                     .unwrap();
             }
-            if let Err(e) = blockstore_processor::process_blockstore_from_root(
+            blockstore_processor::process_blockstore_from_root(
                 self.blockstore,
                 self.bank_forks,
                 self.leader_schedule_cache,
@@ -1792,11 +1815,11 @@ impl<'a> ProcessBlockStore<'a> {
                 self.cache_block_meta_sender.as_ref(),
                 self.entry_notification_sender,
                 &self.accounts_background_request_sender,
-            ) {
+            )
+            .map_err(|err| {
                 exit.store(true, Ordering::Relaxed);
-                return Err(format!("Failed to load ledger: {e:?}"));
-            }
-
+                format!("Failed to load ledger: {err:?}")
+            })?;
             exit.store(true, Ordering::Relaxed);
 
             if let Some(blockstore_root_scan) = self.blockstore_root_scan.take() {
@@ -1807,13 +1830,12 @@ impl<'a> ProcessBlockStore<'a> {
                 let restored_tower = Tower::restore(self.config.tower_storage.as_ref(), self.id);
                 if let Ok(tower) = &restored_tower {
                     // reconciliation attempt 1 of 2 with tower
-                    if let Err(e) = reconcile_blockstore_roots_with_external_source(
+                    reconcile_blockstore_roots_with_external_source(
                         ExternalRootSource::Tower(tower.root()),
                         self.blockstore,
                         &mut self.original_blockstore_root,
-                    ) {
-                        return Err(format!("Failed to reconcile blockstore with tower: {e:?}"));
-                    }
+                    )
+                    .map_err(|err| format!("Failed to reconcile blockstore with tower: {err:?}"))?;
                 }
 
                 post_process_restored_tower(
@@ -1831,15 +1853,12 @@ impl<'a> ProcessBlockStore<'a> {
             ) {
                 // reconciliation attempt 2 of 2 with hard fork
                 // this should be #2 because hard fork root > tower root in almost all cases
-                if let Err(e) = reconcile_blockstore_roots_with_external_source(
+                reconcile_blockstore_roots_with_external_source(
                     ExternalRootSource::HardFork(hard_fork_restart_slot),
                     self.blockstore,
                     &mut self.original_blockstore_root,
-                ) {
-                    return Err(format!(
-                        "Failed to reconcile blockstore with hard fork: {e:?}"
-                    ));
-                }
+                )
+                .map_err(|err| format!("Failed to reconcile blockstore with hard fork: {err:?}"))?;
             }
 
             *self.start_progress.write().unwrap() = previous_start_process;

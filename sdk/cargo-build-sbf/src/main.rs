@@ -166,6 +166,9 @@ fn get_base_rust_version(platform_tools_version: &str) -> String {
     let target_path =
         make_platform_tools_path_for_version("platform-tools", platform_tools_version);
     let rustc = target_path.join("rust").join("bin").join("rustc");
+    if !rustc.exists() {
+        return String::from("");
+    }
     let args = vec!["--version"];
     let output = spawn(&rustc, args, false);
     let rustc_re = Regex::new(r"(rustc [0-9]+\.[0-9]+\.[0-9]+).*").unwrap();
@@ -336,9 +339,8 @@ fn postprocess_dump(program_dump: &Path) {
     let mut rel: HashMap<u64, String> = HashMap::new();
     let mut name = String::from("");
     let mut state = 0;
-    let file = match File::open(program_dump) {
-        Ok(x) => x,
-        _ => return,
+    let Ok(file) = File::open(program_dump) else {
+        return;
     };
     for line_result in BufReader::new(file).lines() {
         let line = line_result.unwrap();
@@ -368,14 +370,12 @@ fn postprocess_dump(program_dump: &Path) {
             }
         }
     }
-    let file = match File::create(&postprocessed_dump) {
-        Ok(x) => x,
-        _ => return,
+    let Ok(file) = File::create(&postprocessed_dump) else {
+        return;
     };
     let mut out = BufWriter::new(file);
-    let file = match File::open(program_dump) {
-        Ok(x) => x,
-        _ => return,
+    let Ok(file) = File::open(program_dump) else {
+        return;
     };
     let mut pc = 0u64;
     let mut step = 0u64;
@@ -423,9 +423,8 @@ fn postprocess_dump(program_dump: &Path) {
 // not known to the runtime and warn about them if any.
 fn check_undefined_symbols(config: &Config, program: &Path) {
     let syscalls_txt = config.sbf_sdk.join("syscalls.txt");
-    let file = match File::open(syscalls_txt) {
-        Ok(x) => x,
-        _ => return,
+    let Ok(file) = File::open(syscalls_txt) else {
+        return;
     };
     let mut syscalls = HashSet::new();
     for line_result in BufReader::new(file).lines() {

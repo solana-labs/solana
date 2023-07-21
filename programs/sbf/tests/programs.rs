@@ -19,14 +19,15 @@ use {
     solana_program_runtime::{compute_budget::ComputeBudget, timings::ExecuteTimings},
     solana_rbpf::vm::ContextObject,
     solana_runtime::{
-        bank::{
-            DurableNonceFee, InnerInstruction, TransactionBalancesSet, TransactionExecutionDetails,
-            TransactionExecutionResult, TransactionResults,
-        },
+        bank::TransactionBalancesSet,
         loader_utils::{
             create_program, load_and_finalize_program, load_program, load_program_from_file,
             load_upgradeable_buffer, load_upgradeable_program, set_upgrade_authority,
             upgrade_program,
+        },
+        transaction_results::{
+            DurableNonceFee, InnerInstruction, TransactionExecutionDetails,
+            TransactionExecutionResult, TransactionResults,
         },
     },
     solana_sbf_rust_invoke::instructions::*,
@@ -39,7 +40,7 @@ use {
         clock::MAX_PROCESSING_AGE,
         compute_budget::ComputeBudgetInstruction,
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
-        feature_set::{self, FeatureSet},
+        feature_set::{self, remove_deprecated_request_unit_ix, FeatureSet},
         fee::FeeStructure,
         loader_instruction,
         message::{v0::LoadedAddresses, SanitizedMessage},
@@ -2463,11 +2464,11 @@ fn test_program_sbf_upgrade_via_cpi() {
         .advance_slot(1, &Pubkey::default())
         .expect("Failed to advance the slot");
     let program_account = bank_client.get_account(&program_id).unwrap().unwrap();
-    let programdata_address = match program_account.state() {
-        Ok(bpf_loader_upgradeable::UpgradeableLoaderState::Program {
-            programdata_address,
-        }) => programdata_address,
-        _ => unreachable!(),
+    let Ok(bpf_loader_upgradeable::UpgradeableLoaderState::Program {
+        programdata_address,
+    }) = program_account.state()
+    else {
+        unreachable!()
     };
     let original_programdata = bank_client
         .get_account_data(&programdata_address)
@@ -3823,15 +3824,18 @@ fn test_program_fees() {
         Some(&mint_keypair.pubkey()),
     );
 
+    let mut feature_set = FeatureSet::all_enabled();
+    feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-    let expected_normal_fee = Bank::calculate_fee(
+    let expected_normal_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,
-        &fee_structure,
-        true,
-        false,
-        true,
-        true,
+        &ComputeBudget::fee_budget_limits(
+            sanitized_message.program_instructions_iter(),
+            &feature_set,
+            None,
+        ),
         true,
         false,
     );
@@ -3850,14 +3854,16 @@ fn test_program_fees() {
         Some(&mint_keypair.pubkey()),
     );
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-    let expected_prioritized_fee = Bank::calculate_fee(
+    let mut feature_set = FeatureSet::all_enabled();
+    feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+    let expected_prioritized_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,
-        &fee_structure,
-        true,
-        false,
-        true,
-        true,
+        &ComputeBudget::fee_budget_limits(
+            sanitized_message.program_instructions_iter(),
+            &feature_set,
+            None,
+        ),
         true,
         false,
     );

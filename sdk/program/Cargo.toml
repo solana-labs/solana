@@ -36,6 +36,15 @@ solana-frozen-abi-macro = { workspace = true }
 solana-sdk-macro = { workspace = true }
 thiserror = { workspace = true }
 
+# This is currently needed to build on-chain programs reliably.
+# Borsh 0.10 may pull in hashbrown 0.13, which uses ahash 0.8, which uses
+# getrandom 0.2 underneath. This explicit dependency allows for no-std if cargo
+# upgrades Borsh's dependency to hashbrown 0.13.
+# Remove this once borsh 0.11 or 1.0 is released, which correctly declares the
+# hashbrown dependency as optional.
+[target.'cfg(target_os = "solana")'.dependencies]
+getrandom = { version = "0.2", features = ["custom"] }
+
 [target.'cfg(not(target_os = "solana"))'.dependencies]
 ark-bn254 = { workspace = true }
 ark-ec = { workspace = true }

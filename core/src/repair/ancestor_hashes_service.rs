@@ -1,16 +1,18 @@
 use {
     crate::{
         cluster_slots_service::cluster_slots::ClusterSlots,
-        duplicate_repair_status::{
-            AncestorRequestDecision, AncestorRequestStatus, AncestorRequestType,
+        repair::{
+            duplicate_repair_status::{
+                AncestorRequestDecision, AncestorRequestStatus, AncestorRequestType,
+            },
+            outstanding_requests::OutstandingRequests,
+            packet_threshold::DynamicPacketToProcessThreshold,
+            repair_service::{AncestorDuplicateSlotsSender, RepairInfo, RepairStatsGroup},
+            serve_repair::{
+                AncestorHashesRepairType, AncestorHashesResponse, RepairProtocol, ServeRepair,
+            },
         },
-        outstanding_requests::OutstandingRequests,
-        packet_threshold::DynamicPacketToProcessThreshold,
-        repair_service::{AncestorDuplicateSlotsSender, RepairInfo, RepairStatsGroup},
         replay_stage::DUPLICATE_THRESHOLD,
-        serve_repair::{
-            AncestorHashesRepairType, AncestorHashesResponse, RepairProtocol, ServeRepair,
-        },
     },
     bincode::serialize,
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
@@ -356,31 +358,22 @@ impl AncestorHashesService {
         ancestor_socket: &UdpSocket,
     ) -> Option<AncestorRequestDecision> {
         let from_addr = packet.meta().socket_addr();
-        let packet_data = match packet.data(..) {
-            Some(data) => data,
-            None => {
-                stats.invalid_packets += 1;
-                return None;
-            }
+        let Some(packet_data) = packet.data(..) else {
+            stats.invalid_packets += 1;
+            return None;
         };
         let mut cursor = Cursor::new(packet_data);
-        let response = match deserialize_from_with_limit(&mut cursor) {
-            Ok(response) => response,
-            Err(_) => {
-                stats.invalid_packets += 1;
-                return None;
-            }
+        let Ok(response) = deserialize_from_with_limit(&mut cursor) else {
+            stats.invalid_packets += 1;
+            return None;
         };
 
         match response {
             AncestorHashesResponse::Hashes(ref hashes) => {
                 // deserialize trailing nonce
-                let nonce = match deserialize_from_with_limit(&mut cursor) {
-                    Ok(nonce) => nonce,
-                    Err(_) => {
-                        stats.invalid_packets += 1;
-                        return None;
-                    }
+                let Ok(nonce) = deserialize_from_with_limit(&mut cursor) else {
+                    stats.invalid_packets += 1;
+                    return None;
                 };
 
                 // verify that packet does not contain extraneous data
@@ -485,18 +478,16 @@ impl AncestorHashesService {
         // another ancestor repair request from the earliest returned
         // ancestor from this search.
 
-        let potential_slots_to_repair = ancestor_request_decision.slots_to_repair();
+        let potential_slot_to_repair = ancestor_request_decision.slot_to_repair();
 
-        // Now signal ReplayStage about the new updated slots. It's important to do this
+        // Now signal ReplayStage about the new updated slot. It's important to do this
         // AFTER we've removed the ancestor_hashes_status_ref in case replay
         // then sends us another dead slot signal based on the updates we are
         // about to send.
-        if let Some(slots_to_repair) = potential_slots_to_repair {
-            if !slots_to_repair.is_empty() {
-                // Signal ReplayStage to dump the fork that is descended from
-                // `earliest_mismatched_slot_to_dump`.
-                let _ = ancestor_duplicate_slots_sender.send(slots_to_repair);
-            }
+        if let Some(slot_to_repair) = potential_slot_to_repair {
+            // Signal ReplayStage to dump the fork that is descended from
+            // `earliest_mismatched_slot_to_dump`.
+            let _ = ancestor_duplicate_slots_sender.send(slot_to_repair);
         }
     }
 
@@ -865,13 +856,15 @@ mod test {
     use {
         super::*,
         crate::{
-            cluster_slot_state_verifier::{DuplicateSlotsToRepair, PurgeRepairSlotCounter},
-            duplicate_repair_status::DuplicateAncestorDecision,
+            repair::{
+                cluster_slot_state_verifier::{DuplicateSlotsToRepair, PurgeRepairSlotCounter},
+                duplicate_repair_status::DuplicateAncestorDecision,
+                serve_repair::MAX_ANCESTOR_RESPONSES,
+            },
             replay_stage::{
                 tests::{replay_blockstore_components, ReplayBlockstoreComponents},
                 ReplayStage,
             },
-            serve_repair::MAX_ANCESTOR_RESPONSES,
             vote_simulator::VoteSimulator,
         },
         solana_gossip::{
@@ -1229,9 +1222,12 @@ mod test {
 
             // Set up blockstore for responses
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-            // Create slots [slot, slot + MAX_ANCESTOR_RESPONSES) with 5 shreds apiece
-            let (shreds, _) =
-                make_many_slot_entries(slot_to_query, MAX_ANCESTOR_RESPONSES as u64, 5);
+            // Create slots [slot - MAX_ANCESTOR_RESPONSES, slot) with 5 shreds apiece
+            let (shreds, _) = make_many_slot_entries(
+                slot_to_query - MAX_ANCESTOR_RESPONSES as Slot + 1,
+                MAX_ANCESTOR_RESPONSES as u64,
+                5,
+            );
             blockstore
                 .insert_shreds(shreds, None, false)
                 .expect("Expect successful ledger write");
@@ -1342,6 +1338,9 @@ mod test {
         }
     }
 
+    /// Creates valid fork up to `dead_slot - 1`
+    /// For `dead_slot - 1` insert the wrong `bank_hash`
+    /// Mark `dead_slot` as dead
     fn setup_dead_slot(
         dead_slot: Slot,
         correct_bank_hashes: &HashMap<Slot, Hash>,
@@ -1373,13 +1372,15 @@ mod test {
         blockstore
             .insert_shreds(shreds, None, false)
             .expect("Expect successful ledger write");
-        for duplicate_confirmed_slot in 0..dead_slot {
+        for duplicate_confirmed_slot in 0..(dead_slot - 1) {
             let bank_hash = correct_bank_hashes
                 .get(&duplicate_confirmed_slot)
                 .cloned()
                 .unwrap_or_else(Hash::new_unique);
             blockstore.insert_bank_hash(duplicate_confirmed_slot, bank_hash, true);
         }
+        // Insert wrong hash for `dead_slot - 1`
+        blockstore.insert_bank_hash(dead_slot - 1, Hash::new_unique(), false);
         blockstore.set_dead_slot(dead_slot).unwrap();
         replay_blockstore_components
     }
@@ -1528,16 +1529,16 @@ mod test {
 
         assert_eq!(slot, dead_slot);
         assert_eq!(
-            decision
-                .repair_status()
-                .unwrap()
-                .correct_ancestors_to_repair,
-            vec![(dead_slot, *correct_bank_hashes.get(&dead_slot).unwrap())]
+            decision.repair_status().unwrap().correct_ancestor_to_repair,
+            (
+                dead_slot - 1,
+                *correct_bank_hashes.get(&(dead_slot - 1)).unwrap()
+            )
         );
         assert_matches!(
             (decision, request_type),
             (
-                DuplicateAncestorDecision::EarliestAncestorNotFrozen(_),
+                DuplicateAncestorDecision::EarliestMismatchFound(_),
                 AncestorRequestType::DeadDuplicateConfirmed,
             )
         );
@@ -1563,7 +1564,7 @@ mod test {
         assert_eq!(ancestor_hashes_request_statuses.len(), 1);
         assert!(ancestor_hashes_request_statuses.contains_key(&dead_slot));
 
-        // Should have received valid response since pruned doesn't check hashes
+        // Should have received valid response
         let mut response_packet = response_receiver
             .recv_timeout(Duration::from_millis(10_000))
             .unwrap();
@@ -1587,10 +1588,17 @@ mod test {
         .unwrap();
 
         assert_eq!(slot, dead_slot);
+        assert_eq!(
+            decision.repair_status().unwrap().correct_ancestor_to_repair,
+            (
+                dead_slot - 1,
+                *correct_bank_hashes.get(&(dead_slot - 1)).unwrap()
+            )
+        );
         assert_matches!(
             (decision, request_type),
             (
-                DuplicateAncestorDecision::AncestorsAllMatch,
+                DuplicateAncestorDecision::EarliestMismatchFound(_),
                 AncestorRequestType::PopularPruned,
             )
         );
@@ -2020,16 +2028,16 @@ mod test {
 
         assert_eq!(slot, dead_slot);
         assert_eq!(
-            decision
-                .repair_status()
-                .unwrap()
-                .correct_ancestors_to_repair,
-            vec![(dead_slot, *correct_bank_hashes.get(&dead_slot).unwrap())]
+            decision.repair_status().unwrap().correct_ancestor_to_repair,
+            (
+                dead_slot - 1,
+                *correct_bank_hashes.get(&(dead_slot - 1)).unwrap()
+            )
         );
         assert_matches!(
             (decision, request_type),
             (
-                DuplicateAncestorDecision::EarliestAncestorNotFrozen(_),
+                DuplicateAncestorDecision::EarliestMismatchFound(_),
                 AncestorRequestType::DeadDuplicateConfirmed
             )
         );

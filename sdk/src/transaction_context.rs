@@ -357,7 +357,7 @@ impl TransactionContext {
             }
         }
         {
-            let mut instruction_context = self.get_next_instruction_context()?;
+            let instruction_context = self.get_next_instruction_context()?;
             instruction_context.nesting_level = nesting_level;
             instruction_context.instruction_accounts_lamport_sum =
                 callee_instruction_accounts_lamport_sum;
@@ -886,9 +886,10 @@ impl<'a> BorrowedAccount<'a> {
     /// You should always prefer set_data_from_slice(). Calling this method is
     /// currently safe but requires some special casing during CPI when direct
     /// account mapping is enabled.
-    ///
-    /// Currently only used by tests and the program-test crate.
-    #[cfg(not(target_os = "solana"))]
+    #[cfg(all(
+        not(target_os = "solana"),
+        any(test, feature = "dev-context-only-utils")
+    ))]
     pub fn set_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
         self.can_data_be_changed()?;

@@ -69,7 +69,7 @@ impl<T: BloomHashIndex> Bloom<T> {
             keys,
             bits,
             num_bits_set: 0,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
     /// Create filter optimal for num size given the `FALSE_RATE`.
@@ -157,7 +157,7 @@ impl<T: BloomHashIndex> From<Bloom<T>> for AtomicBloom<T> {
                 .iter()
                 .map(|&x| AtomicU64::new(x))
                 .collect(),
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 }
@@ -215,7 +215,7 @@ impl<T: BloomHashIndex> From<AtomicBloom<T>> for Bloom<T> {
             keys: atomic_bloom.keys,
             bits,
             num_bits_set,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 }

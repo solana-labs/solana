@@ -1,11 +1,13 @@
 use {
     crate::{
         cluster_slots_service::cluster_slots::ClusterSlots,
-        duplicate_repair_status::get_ancestor_hash_repair_sample_size,
-        repair_response,
-        repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
-        request_response::RequestResponse,
-        result::{Error, Result},
+        repair::{
+            duplicate_repair_status::get_ancestor_hash_repair_sample_size,
+            repair_response,
+            repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
+            request_response::RequestResponse,
+            result::{Error, RepairVerifyError, Result},
+        },
     },
     bincode::serialize,
     crossbeam_channel::RecvTimeoutError,
@@ -55,7 +57,6 @@ use {
         thread::{Builder, JoinHandle},
         time::{Duration, Instant},
     },
-    thiserror::Error,
 };
 
 /// the number of slots to respond with when responding to `Orphan` requests
@@ -86,22 +87,6 @@ const SIGNED_REPAIR_TIME_WINDOW: Duration = Duration::from_secs(60 * 10); // 10 
 
 #[cfg(test)]
 static_assertions::const_assert_eq!(MAX_ANCESTOR_RESPONSES, 30);
-
-#[derive(Error, Debug)]
-pub enum RepairVerifyError {
-    #[error("IdMismatch")]
-    IdMismatch,
-    #[error("Malformed")]
-    Malformed,
-    #[error("SelfRepair")]
-    SelfRepair,
-    #[error("SigVerify")]
-    SigVerify,
-    #[error("TimeSkew")]
-    TimeSkew,
-    #[error("Unsigned")]
-    Unsigned,
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ShredRepairType {
@@ -229,7 +214,7 @@ pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
 #[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize, strum_macros::Display)]
-#[frozen_abi(digest = "6VyBwHjkAMXAN97fdhQgFv6VdPEnfJo9LdUAd2SFtwF3")]
+#[frozen_abi(digest = "HXKJuZAK4LsweUTRbsxEcG9jHA9JR9s8MYmmjx2Nb5X1")]
 pub enum RepairProtocol {
     LegacyWindowIndex(LegacyContactInfo, Slot, u64),
     LegacyHighestWindowIndex(LegacyContactInfo, Slot, u64),
@@ -882,25 +867,19 @@ impl ServeRepair {
                 if u128::from(time_diff_ms) > SIGNED_REPAIR_TIME_WINDOW.as_millis() {
                     return Err(Error::from(RepairVerifyError::TimeSkew));
                 }
-                let leading_buf = match packet.data(..4) {
-                    Some(buf) => buf,
-                    None => {
-                        debug_assert!(
-                            false,
-                            "request should have failed deserialization: {request:?}",
-                        );
-                        return Err(Error::from(RepairVerifyError::Malformed));
-                    }
+                let Some(leading_buf) = packet.data(..4) else {
+                    debug_assert!(
+                        false,
+                        "request should have failed deserialization: {request:?}",
+                    );
+                    return Err(Error::from(RepairVerifyError::Malformed));
                 };
-                let trailing_buf = match packet.data(4 + SIGNATURE_BYTES..) {
-                    Some(buf) => buf,
-                    None => {
-                        debug_assert!(
-                            false,
-                            "request should have failed deserialization: {request:?}",
-                        );
-                        return Err(Error::from(RepairVerifyError::Malformed));
-                    }
+                let Some(trailing_buf) = packet.data(4 + SIGNATURE_BYTES..) else {
+                    debug_assert!(
+                        false,
+                        "request should have failed deserialization: {request:?}",
+                    );
+                    return Err(Error::from(RepairVerifyError::Malformed));
                 };
                 let from_id = request.sender();
                 let signed_data = [leading_buf, trailing_buf].concat();
@@ -993,11 +972,10 @@ impl ServeRepair {
                 }
             }
             stats.processed += 1;
-            let rsp = match Self::handle_repair(
-                recycler, &from_addr, blockstore, request, stats, ping_cache,
-            ) {
-                None => continue,
-                Some(rsp) => rsp,
+            let Some(rsp) =
+                Self::handle_repair(recycler, &from_addr, blockstore, request, stats, ping_cache)
+            else {
+                continue;
             };
             let num_response_packets = rsp.len();
             let num_response_bytes = rsp.iter().map(|p| p.meta().size).sum();
@@ -1313,7 +1291,7 @@ impl ServeRepair {
         nonce: Nonce,
     ) -> Option<PacketBatch> {
         let mut res =
-            PacketBatch::new_unpinned_with_recycler(recycler.clone(), max_responses, "run_orphan");
+            PacketBatch::new_unpinned_with_recycler(recycler, max_responses, "run_orphan");
         // Try to find the next "n" parent slots of the input slot
         let packets = std::iter::successors(blockstore.meta(slot).ok()?, |meta| {
             blockstore.meta(meta.parent_slot?).ok()?
@@ -1371,7 +1349,7 @@ impl ServeRepair {
 mod tests {
     use {
         super::*,
-        crate::repair_response,
+        crate::repair::repair_response,
         solana_gossip::{contact_info::ContactInfo, socketaddr, socketaddr_any},
         solana_ledger::{
             blockstore::make_many_slot_entries,

@@ -539,7 +539,7 @@ fn start_verify_transactions_gpu(
         .map(|slice| {
             let vec_size = slice.len();
             let mut packet_batch = PacketBatch::new_with_recycler(
-                verify_recyclers.packet_recycler.clone(),
+                &verify_recyclers.packet_recycler,
                 vec_size,
                 "entry-sig-verify",
             );
@@ -782,9 +782,8 @@ impl EntrySlice for [Entry] {
         recyclers: VerifyRecyclers,
     ) -> EntryVerificationState {
         let start = Instant::now();
-        let api = match perf_libs::api() {
-            None => return self.verify_cpu(start_hash),
-            Some(api) => api,
+        let Some(api) = perf_libs::api() else {
+            return self.verify_cpu(start_hash);
         };
         inc_new_counter_info!("entry_verify-num_entries", self.len());
 

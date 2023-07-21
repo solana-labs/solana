@@ -1,7 +1,8 @@
 use {
     crate::{
-        bank::{Bank, TransactionResults},
+        bank::Bank,
         genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
+        transaction_results::TransactionResults,
         vote_parser,
         vote_sender_types::ReplayVoteSender,
     },

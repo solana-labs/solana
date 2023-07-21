@@ -356,8 +356,7 @@ impl HeaviestSubtreeForkChoice {
         let mut tree_root = None;
         // Find the subtrees to prune
         let mut to_visit = vec![self.tree_root];
-        while !to_visit.is_empty() {
-            let cur_slot = to_visit.pop().unwrap();
+        while let Some(cur_slot) = to_visit.pop() {
             if cur_slot == new_root {
                 tree_root = Some(new_root);
                 continue;
@@ -510,7 +509,7 @@ impl HeaviestSubtreeForkChoice {
     pub fn split_off(&mut self, slot_hash_key: &SlotHashKey) -> Self {
         assert_ne!(self.tree_root, *slot_hash_key);
         let mut split_tree_root = {
-            let mut node_to_split_at = self
+            let node_to_split_at = self
                 .fork_infos
                 .get_mut(slot_hash_key)
                 .expect("Slot hash key must exist in tree");
@@ -532,8 +531,7 @@ impl HeaviestSubtreeForkChoice {
         let mut split_tree_fork_infos = HashMap::new();
         let mut to_visit = vec![*slot_hash_key];
 
-        while !to_visit.is_empty() {
-            let current_node = to_visit.pop().unwrap();
+        while let Some(current_node) = to_visit.pop() {
             let current_fork_info = self
                 .fork_infos
                 .remove(&current_node)

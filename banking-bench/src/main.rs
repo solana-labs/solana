@@ -134,7 +134,7 @@ fn make_accounts_txs(
                 hash,
                 compute_unit_price,
             );
-            let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
+            let sig: [u8; 64] = std::array::from_fn(|_| thread_rng().gen::<u8>());
             new.message.account_keys[0] = pubkey::new_rand();
             new.message.account_keys[1] = match contention {
                 WriteLockContention::None => pubkey::new_rand(),
@@ -148,7 +148,7 @@ fn make_accounts_txs(
                 }
                 WriteLockContention::Full => to_pubkey,
             };
-            new.signatures = vec![Signature::new(&sig[0..64])];
+            new.signatures = vec![Signature::from(sig)];
             new
         })
         .collect()
@@ -220,8 +220,8 @@ impl PacketsPerIteration {
     fn refresh_blockhash(&mut self, new_blockhash: Hash) {
         for tx in self.transactions.iter_mut() {
             tx.message.recent_blockhash = new_blockhash;
-            let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
-            tx.signatures[0] = Signature::new(&sig[0..64]);
+            let sig: [u8; 64] = std::array::from_fn(|_| thread_rng().gen::<u8>());
+            tx.signatures[0] = Signature::from(sig);
         }
         self.packet_batches = to_packet_batches(&self.transactions, self.packets_per_batch);
     }
@@ -377,8 +377,8 @@ fn main() {
                     genesis_config.hash(),
                 );
                 // Ignore any pesky duplicate signature errors in the case we are using single-payer
-                let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
-                fund.signatures = vec![Signature::new(&sig[0..64])];
+                let sig: [u8; 64] = std::array::from_fn(|_| thread_rng().gen::<u8>());
+                fund.signatures = vec![Signature::from(sig)];
                 bank.process_transaction(&fund).unwrap();
             });
     });

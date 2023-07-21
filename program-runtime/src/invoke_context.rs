@@ -13,6 +13,7 @@ use {
     solana_measure::measure::Measure,
     solana_rbpf::{
         ebpf::MM_HEAP_START,
+        elf::SBPFVersion,
         memory_region::MemoryMapping,
         vm::{BuiltinFunction, Config, ContextObject, ProgramResult},
     },
@@ -744,7 +745,8 @@ impl<'a> InvokeContext<'a> {
         stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
         let pre_remaining_units = self.get_remaining();
         let mock_config = Config::default();
-        let mut mock_memory_mapping = MemoryMapping::new(Vec::new(), &mock_config).unwrap();
+        let mut mock_memory_mapping =
+            MemoryMapping::new(Vec::new(), &mock_config, &SBPFVersion::V2).unwrap();
         let mut result = ProgramResult::Ok(0);
         process_instruction(
             // Removes lifetime tracking

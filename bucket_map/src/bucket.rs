@@ -733,14 +733,11 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     pub fn insert(&mut self, key: &Pubkey, value: (&[T], RefCount)) {
         let (new, refct) = value;
         loop {
-            let rv = self.try_write(key, new.iter(), new.len(), refct);
-            match rv {
-                Ok(_) => return,
-                Err(err) => {
-                    self.grow(err);
-                    self.handle_delayed_grows();
-                }
-            }
+            let Err(err) = self.try_write(key, new.iter(), new.len(), refct) else {
+                return;
+            };
+            self.grow(err);
+            self.handle_delayed_grows();
         }
     }
 

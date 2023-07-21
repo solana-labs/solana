@@ -61,7 +61,7 @@ fn bench_sigs_bloom(bencher: &mut Bencher) {
         id = hash(id.as_ref());
         sigbytes.extend(id.as_ref());
 
-        let sig = Signature::new(&sigbytes);
+        let sig = Signature::try_from(sigbytes).unwrap();
         if sigs.contains(&sig) {
             falses += 1;
         }
@@ -89,7 +89,7 @@ fn bench_sigs_hashmap(bencher: &mut Bencher) {
         id = hash(id.as_ref());
         sigbytes.extend(id.as_ref());
 
-        let sig = Signature::new(&sigbytes);
+        let sig = Signature::try_from(sigbytes).unwrap();
         if sigs.contains(&sig) {
             falses += 1;
         }

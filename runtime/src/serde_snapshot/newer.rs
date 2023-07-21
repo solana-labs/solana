@@ -211,7 +211,7 @@ impl<'a> TypeContext<'a> for Context {
                 accounts_db: &serializable_bank.bank.rc.accounts.accounts_db,
                 slot: serializable_bank.bank.rc.slot,
                 account_storage_entries: serializable_bank.snapshot_storages,
-                phantom: std::marker::PhantomData::default(),
+                phantom: std::marker::PhantomData,
             },
             // Additional fields, we manually store the lamps per signature here so that
             // we can grab it on restart.
@@ -245,7 +245,7 @@ impl<'a> TypeContext<'a> for Context {
                 accounts_db: &serializable_bank.bank.rc.accounts.accounts_db,
                 slot: serializable_bank.bank.rc.slot,
                 account_storage_entries: serializable_bank.snapshot_storages,
-                phantom: std::marker::PhantomData::default(),
+                phantom: std::marker::PhantomData,
             },
         )
             .serialize(serializer)

@@ -2,13 +2,11 @@
 
 use {
     crate::{
-        ancestor_hashes_service::AncestorHashesReplayUpdateSender,
         banking_trace::BankingTracer,
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
             GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
         },
-        cluster_slot_state_verifier::*,
         cluster_slots_service::{cluster_slots::ClusterSlots, ClusterSlotsUpdateSender},
         commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
         consensus::{
@@ -21,9 +19,13 @@ use {
             SWITCH_FORK_THRESHOLD,
         },
         cost_update_service::CostUpdate,
-        duplicate_repair_status::AncestorDuplicateSlotsToRepair,
-        repair_service::{
-            AncestorDuplicateSlotsReceiver, DumpedSlotsSender, PopularPrunedForksReceiver,
+        repair::{
+            ancestor_hashes_service::AncestorHashesReplayUpdateSender,
+            cluster_slot_state_verifier::*,
+            duplicate_repair_status::AncestorDuplicateSlotToRepair,
+            repair_service::{
+                AncestorDuplicateSlotsReceiver, DumpedSlotsSender, PopularPrunedForksReceiver,
+            },
         },
         rewards_recorder_service::{RewardsMessage, RewardsRecorderSender},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
@@ -1414,46 +1416,42 @@ impl ReplayStage {
         purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
     ) {
         let root = bank_forks.read().unwrap().root();
-        for AncestorDuplicateSlotsToRepair {
-            slots_to_repair: maybe_repairable_duplicate_slots,
+        for AncestorDuplicateSlotToRepair {
+            slot_to_repair: (epoch_slots_frozen_slot, epoch_slots_frozen_hash),
             request_type,
         } in ancestor_duplicate_slots_receiver.try_iter()
         {
             warn!(
-                "{} ReplayStage notified of duplicate slots from ancestor hashes service but we observed as {}: {:?}",
-                pubkey, if request_type.is_pruned() {"pruned"} else {"dead"}, maybe_repairable_duplicate_slots,
+                "{} ReplayStage notified of duplicate slot from ancestor hashes service but we observed as {}: {:?}",
+                pubkey, if request_type.is_pruned() {"pruned"} else {"dead"}, (epoch_slots_frozen_slot, epoch_slots_frozen_hash),
             );
-            for (epoch_slots_frozen_slot, epoch_slots_frozen_hash) in
-                maybe_repairable_duplicate_slots.into_iter()
-            {
-                let epoch_slots_frozen_state = EpochSlotsFrozenState::new_from_state(
-                    epoch_slots_frozen_slot,
-                    epoch_slots_frozen_hash,
-                    gossip_duplicate_confirmed_slots,
-                    fork_choice,
-                    || progress.is_dead(epoch_slots_frozen_slot).unwrap_or(false),
-                    || {
-                        bank_forks
-                            .read()
-                            .unwrap()
-                            .get(epoch_slots_frozen_slot)
-                            .map(|b| b.hash())
-                    },
-                    request_type.is_pruned(),
-                );
-                check_slot_agrees_with_cluster(
-                    epoch_slots_frozen_slot,
-                    root,
-                    blockstore,
-                    duplicate_slots_tracker,
-                    epoch_slots_frozen_slots,
-                    fork_choice,
-                    duplicate_slots_to_repair,
-                    ancestor_hashes_replay_update_sender,
-                    purge_repair_slot_counter,
-                    SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
-                );
-            }
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new_from_state(
+                epoch_slots_frozen_slot,
+                epoch_slots_frozen_hash,
+                gossip_duplicate_confirmed_slots,
+                fork_choice,
+                || progress.is_dead(epoch_slots_frozen_slot).unwrap_or(false),
+                || {
+                    bank_forks
+                        .read()
+                        .unwrap()
+                        .get(epoch_slots_frozen_slot)
+                        .map(|b| b.hash())
+                },
+                request_type.is_pruned(),
+            );
+            check_slot_agrees_with_cluster(
+                epoch_slots_frozen_slot,
+                root,
+                blockstore,
+                duplicate_slots_tracker,
+                epoch_slots_frozen_slots,
+                fork_choice,
+                duplicate_slots_to_repair,
+                ancestor_hashes_replay_update_sender,
+                purge_repair_slot_counter,
+                SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
+            );
         }
     }
 
@@ -2274,17 +2272,14 @@ impl ReplayStage {
             return None;
         }
 
-        let authorized_voter_pubkey =
-            if let Some(authorized_voter_pubkey) = vote_state.get_authorized_voter(bank.epoch()) {
-                authorized_voter_pubkey
-            } else {
-                warn!(
-                    "Vote account {} has no authorized voter for epoch {}.  Unable to vote",
-                    vote_account_pubkey,
-                    bank.epoch()
-                );
-                return None;
-            };
+        let Some(authorized_voter_pubkey) = vote_state.get_authorized_voter(bank.epoch()) else {
+            warn!(
+                "Vote account {} has no authorized voter for epoch {}.  Unable to vote",
+                vote_account_pubkey,
+                bank.epoch()
+            );
+            return None;
+        };
 
         let authorized_voter_keypair = match authorized_voter_keypairs
             .iter()
@@ -2368,9 +2363,16 @@ impl ReplayStage {
                 last_voted_slot
             );
         }
+
+        // If we are a non voting validator or have an incorrect setup preventing us from
+        // generating vote txs, no need to refresh
+        let Some(last_vote_tx_blockhash) = tower.last_vote_tx_blockhash() else {
+            return;
+        };
+
         if my_latest_landed_vote >= last_voted_slot
             || heaviest_bank_on_same_fork
-                .is_hash_valid_for_age(&tower.last_vote_tx_blockhash(), MAX_PROCESSING_AGE)
+                .is_hash_valid_for_age(&last_vote_tx_blockhash, MAX_PROCESSING_AGE)
             || {
                 // In order to avoid voting on multiple forks all past MAX_PROCESSING_AGE that don't
                 // include the last voted blockhash
@@ -3167,7 +3169,7 @@ impl ReplayStage {
         }
 
         // Otherwise we have to check the votes for confirmation
-        let mut propagated_stats = progress
+        let propagated_stats = progress
             .get_propagated_stats_mut(slot)
             .unwrap_or_else(|| panic!("slot={slot} must exist in ProgressMap"));
 
@@ -7064,7 +7066,10 @@ pub(crate) mod tests {
         assert_eq!(votes.len(), 1);
         let vote_tx = &votes[0];
         assert_eq!(vote_tx.message.recent_blockhash, bank0.last_blockhash());
-        assert_eq!(tower.last_vote_tx_blockhash(), bank0.last_blockhash());
+        assert_eq!(
+            tower.last_vote_tx_blockhash().unwrap(),
+            bank0.last_blockhash()
+        );
         assert_eq!(tower.last_voted_slot().unwrap(), 0);
         bank1.process_transaction(vote_tx).unwrap();
         bank1.freeze();
@@ -7093,7 +7098,10 @@ pub(crate) mod tests {
             let votes = cluster_info.get_votes(&mut cursor);
             assert!(votes.is_empty());
             // Tower's latest vote tx blockhash hasn't changed either
-            assert_eq!(tower.last_vote_tx_blockhash(), bank0.last_blockhash());
+            assert_eq!(
+                tower.last_vote_tx_blockhash().unwrap(),
+                bank0.last_blockhash()
+            );
             assert_eq!(tower.last_voted_slot().unwrap(), 0);
         }
 
@@ -7126,7 +7134,10 @@ pub(crate) mod tests {
         assert_eq!(votes.len(), 1);
         let vote_tx = &votes[0];
         assert_eq!(vote_tx.message.recent_blockhash, bank1.last_blockhash());
-        assert_eq!(tower.last_vote_tx_blockhash(), bank1.last_blockhash());
+        assert_eq!(
+            tower.last_vote_tx_blockhash().unwrap(),
+            bank1.last_blockhash()
+        );
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
 
         // Trying to refresh the vote for bank 1 in bank 2 won't succeed because
@@ -7148,7 +7159,10 @@ pub(crate) mod tests {
         // No new votes have been submitted to gossip
         let votes = cluster_info.get_votes(&mut cursor);
         assert!(votes.is_empty());
-        assert_eq!(tower.last_vote_tx_blockhash(), bank1.last_blockhash());
+        assert_eq!(
+            tower.last_vote_tx_blockhash().unwrap(),
+            bank1.last_blockhash()
+        );
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
 
         // Create a bank where the last vote transaction will have expired
@@ -7207,7 +7221,7 @@ pub(crate) mod tests {
             expired_bank.last_blockhash()
         );
         assert_eq!(
-            tower.last_vote_tx_blockhash(),
+            tower.last_vote_tx_blockhash().unwrap(),
             expired_bank.last_blockhash()
         );
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
@@ -7263,7 +7277,7 @@ pub(crate) mod tests {
             expired_bank.last_blockhash()
         );
         assert_eq!(
-            tower.last_vote_tx_blockhash(),
+            tower.last_vote_tx_blockhash().unwrap(),
             expired_bank.last_blockhash()
         );
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
@@ -7320,7 +7334,10 @@ pub(crate) mod tests {
             vote_tx.message.recent_blockhash,
             parent_bank.last_blockhash()
         );
-        assert_eq!(tower.last_vote_tx_blockhash(), parent_bank.last_blockhash());
+        assert_eq!(
+            tower.last_vote_tx_blockhash().unwrap(),
+            parent_bank.last_blockhash()
+        );
         assert_eq!(tower.last_voted_slot().unwrap(), parent_bank.slot());
         let bank = Bank::new_from_parent(parent_bank, &Pubkey::default(), my_slot);
         bank.fill_bank_with_ticks_for_tests();

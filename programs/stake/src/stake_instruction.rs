@@ -489,12 +489,7 @@ mod tests {
             sysvar::{clock, rent, rewards, stake_history},
         },
         solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
-        std::{
-            borrow::{Borrow, BorrowMut},
-            collections::HashSet,
-            str::FromStr,
-            sync::Arc,
-        },
+        std::{collections::HashSet, str::FromStr, sync::Arc},
         test_case::test_case,
     };
 
@@ -6486,7 +6481,6 @@ mod tests {
             reference_vote_state.increment_credits(epoch as Epoch, 1);
         }
         reference_vote_account
-            .borrow_mut()
             .serialize_data(&VoteStateVersions::new_current(reference_vote_state))
             .unwrap();
 
@@ -6517,7 +6511,6 @@ mod tests {
             current_epoch - 1
         );
         reference_vote_account
-            .borrow_mut()
             .serialize_data(&VoteStateVersions::new_current(reference_vote_state))
             .unwrap();
 
@@ -6536,7 +6529,6 @@ mod tests {
             reference_vote_state.increment_credits(epoch, 1);
         }
         reference_vote_account
-            .borrow_mut()
             .serialize_data(&VoteStateVersions::new_current(reference_vote_state))
             .unwrap();
 
@@ -6824,9 +6816,7 @@ mod tests {
         );
 
         assert_eq!(output_accounts[0].lamports(), rent_exempt_reserve);
-        if let StakeState::Stake(meta, stake) =
-            output_accounts[0].borrow().deserialize_data().unwrap()
-        {
+        if let StakeState::Stake(meta, stake) = output_accounts[0].deserialize_data().unwrap() {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
             assert_eq!(
                 stake.delegation.stake,
@@ -6841,9 +6831,7 @@ mod tests {
             output_accounts[1].lamports(),
             minimum_delegation + rent_exempt_reserve
         );
-        if let StakeState::Stake(meta, stake) =
-            output_accounts[1].borrow().deserialize_data().unwrap()
-        {
+        if let StakeState::Stake(meta, stake) = output_accounts[1].deserialize_data().unwrap() {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
             assert_eq!(stake.delegation.stake, minimum_delegation);
             assert_eq!(stake.delegation.activation_epoch, current_epoch);
@@ -6986,9 +6974,7 @@ mod tests {
             output_accounts[1].lamports(),
             minimum_delegation + rent_exempt_reserve + 42
         );
-        if let StakeState::Stake(meta, stake) =
-            output_accounts[1].borrow().deserialize_data().unwrap()
-        {
+        if let StakeState::Stake(meta, stake) = output_accounts[1].deserialize_data().unwrap() {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
             assert_eq!(stake.delegation.stake, minimum_delegation + 42);
             assert_eq!(stake.delegation.activation_epoch, current_epoch);
@@ -7002,10 +6988,8 @@ mod tests {
         //
         let mut stake_account_over_allocated =
             prepare_stake_account(0 /*activation_epoch:*/, None);
-        if let StakeState::Stake(mut meta, stake) = stake_account_over_allocated
-            .borrow_mut()
-            .deserialize_data()
-            .unwrap()
+        if let StakeState::Stake(mut meta, stake) =
+            stake_account_over_allocated.deserialize_data().unwrap()
         {
             meta.rent_exempt_reserve += 42;
             stake_account_over_allocated
@@ -7032,9 +7016,7 @@ mod tests {
         );
 
         assert_eq!(output_accounts[0].lamports(), rent_exempt_reserve + 42);
-        if let StakeState::Stake(meta, _stake) =
-            output_accounts[0].borrow().deserialize_data().unwrap()
-        {
+        if let StakeState::Stake(meta, _stake) = output_accounts[0].deserialize_data().unwrap() {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve + 42);
         } else {
             panic!("Invalid output_accounts[0] data");
@@ -7043,9 +7025,7 @@ mod tests {
             output_accounts[1].lamports(),
             minimum_delegation + rent_exempt_reserve,
         );
-        if let StakeState::Stake(meta, stake) =
-            output_accounts[1].borrow().deserialize_data().unwrap()
-        {
+        if let StakeState::Stake(meta, stake) = output_accounts[1].deserialize_data().unwrap() {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
             assert_eq!(stake.delegation.stake, minimum_delegation);
         } else {
@@ -7183,10 +7163,8 @@ mod tests {
 
         let mut deactivating_stake_account =
             prepare_stake_account(0 /*activation_epoch:*/, None);
-        if let StakeState::Stake(meta, mut stake) = deactivating_stake_account
-            .borrow_mut()
-            .deserialize_data()
-            .unwrap()
+        if let StakeState::Stake(meta, mut stake) =
+            deactivating_stake_account.deserialize_data().unwrap()
         {
             stake.deactivate(current_epoch).unwrap();
             assert_eq!(
@@ -7220,10 +7198,8 @@ mod tests {
         //          (less than `minimum_delegation + rent_exempt_reserve`)
         //
         let mut stake_account_too_few_lamports = stake_account.clone();
-        if let StakeState::Stake(meta, mut stake) = stake_account_too_few_lamports
-            .borrow_mut()
-            .deserialize_data()
-            .unwrap()
+        if let StakeState::Stake(meta, mut stake) =
+            stake_account_too_few_lamports.deserialize_data().unwrap()
         {
             stake.delegation.stake -= 1;
             assert_eq!(

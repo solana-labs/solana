@@ -123,6 +123,8 @@ impl PartialEq for dyn Signer {
     }
 }
 
+impl Eq for dyn Signer {}
+
 impl std::fmt::Debug for dyn Signer {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(fmt, "Signer: {:?}", self.pubkey())

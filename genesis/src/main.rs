@@ -531,9 +531,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let mut bootstrap_validator_pubkeys_iter = bootstrap_validator_pubkeys.iter();
     loop {
-        let identity_pubkey = match bootstrap_validator_pubkeys_iter.next() {
-            None => break,
-            Some(identity_pubkey) => identity_pubkey,
+        let Some(identity_pubkey) = bootstrap_validator_pubkeys_iter.next() else {
+            break;
         };
         let vote_pubkey = bootstrap_validator_pubkeys_iter.next().unwrap();
         let stake_pubkey = bootstrap_validator_pubkeys_iter.next().unwrap();

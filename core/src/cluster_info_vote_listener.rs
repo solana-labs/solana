@@ -447,17 +447,14 @@ impl ClusterInfoVoteListener {
         verified_packets_sender: &BankingPacketSender,
         verified_vote_packets: &VerifiedVotePackets,
     ) -> Result<()> {
-        let current_working_bank = match current_working_bank {
-            Some(current_working_bank) => current_working_bank,
-            None => {
-                // We are not the leader!
-                if let Some(bank_vote_sender_state) = bank_vote_sender_state_option {
-                    // This ensures we report the last slot's metrics
-                    bank_vote_sender_state.report_metrics();
-                    *bank_vote_sender_state_option = None;
-                }
-                return Ok(());
+        let Some(current_working_bank) = current_working_bank else {
+            // We are not the leader!
+            if let Some(bank_vote_sender_state) = bank_vote_sender_state_option {
+                // This ensures we report the last slot's metrics
+                bank_vote_sender_state.report_metrics();
+                *bank_vote_sender_state_option = None;
             }
+            return Ok(());
         };
         // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
         if let Some(bank_vote_sender_state) = bank_vote_sender_state_option {

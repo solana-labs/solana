@@ -362,6 +362,13 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         )
     }
 
+    fn sol_get_epoch_rewards_sysvar(&self, var_addr: *mut u8) -> u64 {
+        get_sysvar(
+            get_invoke_context().get_sysvar_cache().get_epoch_rewards(),
+            var_addr,
+        )
+    }
+
     #[allow(deprecated)]
     fn sol_get_fees_sysvar(&self, var_addr: *mut u8) -> u64 {
         get_sysvar(get_invoke_context().get_sysvar_cache().get_fees(), var_addr)

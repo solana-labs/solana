@@ -242,8 +242,9 @@ impl From<generated::Transaction> for VersionedTransaction {
             signatures: value
                 .signatures
                 .into_iter()
-                .map(|x| Signature::new(&x))
-                .collect(),
+                .map(Signature::try_from)
+                .collect::<Result<_, _>>()
+                .unwrap(),
             message: value.message.expect("message is required").into(),
         }
     }
@@ -1158,7 +1159,8 @@ impl TryFrom<tx_by_addr::TransactionByAddrInfo> for TransactionByAddrInfo {
             .transpose()?;
 
         Ok(Self {
-            signature: Signature::new(&transaction_by_addr.signature),
+            signature: Signature::try_from(transaction_by_addr.signature)
+                .map_err(|_| "Invalid Signature")?,
             err,
             index: transaction_by_addr.index,
             memo: transaction_by_addr
@@ -1219,7 +1221,11 @@ mod test {
     #[test]
     fn test_transaction_by_addr_encode() {
         let info = TransactionByAddrInfo {
-            signature: Signature::new(&bs58::decode("Nfo6rgemG1KLbk1xuNwfrQTsdxaGfLuWURHNRy9LYnDrubG7LFQZaA5obPNas9LQ6DdorJqxh2LxA3PsnWdkSrL").into_vec().unwrap()),
+            signature: bs58::decode("Nfo6rgemG1KLbk1xuNwfrQTsdxaGfLuWURHNRy9LYnDrubG7LFQZaA5obPNas9LQ6DdorJqxh2LxA3PsnWdkSrL")
+                .into_vec()
+                .map(Signature::try_from)
+                .unwrap()
+                .unwrap(),
             err: None,
             index: 5,
             memo: Some("string".to_string()),

@@ -43,7 +43,7 @@ The basic idea to this approach is to stack consensus votes and double lockouts.
 
 We call this stack the Vote Tower.
 
-When a vote is added to the tower, the lockouts of all the previous votes in the tower are doubled \(more on this in [Vote Tower](tower-bft.md#Vote Tower)\). With each new vote, a validator commits the previous votes to an ever-increasing lockout. At 32 votes we can consider the vote to be at `max lockout` any votes with a lockout equal to or above `1<<32` are dequeued \(FIFO\). Dequeuing a vote is the trigger for a reward. If a vote expires before it is dequeued, it and all the votes above it are popped \(LIFO\) from the vote tower. The validator needs to start rebuilding the tower from that point.
+When a vote is added to the tower, the lockouts of all the previous votes in the tower are doubled (more on this in [Vote Tower](#vote-tower)). With each new vote, a validator commits the previous votes to an ever-increasing lockout. At 32 votes we can consider the vote to be at `max lockout` any votes with a lockout equal to or above `1<<32` are dequeued \(FIFO\). Dequeuing a vote is the trigger for a reward. If the vote on the top of the tower expires before it is dequeued, it and subsequent expired votes are popped in a LIFO fashion from the vote tower. The validator needs to start rebuilding the tower from that point.
 
 ### Vote Tower
 
@@ -76,14 +76,23 @@ _Vote 6_ is at slot 10
 |    2 |         2 |       8 |                   10 |
 |    1 |         1 |      16 |                   17 |
 
-At slot 10 the new votes caught up to the previous votes. But _vote 2_ expires at 10, so the when _vote 7_ at slot 11 is applied the votes including and above _vote 2_ will be popped.
+At slot 10 the new votes caught up to the previous votes. When _vote 7_ at slot 11 is applied we scan top down to pop expired votes. Although _vote 2_ has expired, since _vote 6_ has not expired, we do not continue scanning. Finally we have reached a new stack depth, lockouts are doubled
 
 | vote | vote slot | lockout | lock expiration slot |
 | ---: | --------: | ------: | -------------------: |
 |    7 |        11 |       2 |                   13 |
-|    1 |         1 |      16 |                   17 |
+|    6 |        10 |       4 |                   14 |
+|    5 |         9 |       8 |                   17 |
+|    2 |         2 |      16 |                   18 |
+|    1 |         1 |      32 |                   33 |
 
-The lockout for vote 1 will not increase from 16 until the tower contains 5 votes.
+Finally we have _vote 8_ at slot 18, this leads to the expiry of _vote 7_, _vote 6_, and _vote 5_.
+
+| vote | vote slot | lockout | lock expiration slot |
+| ---: | --------: | ------: | -------------------: |
+|    8 |        18 |       2 |                   20 |
+|    2 |         2 |      16 |                   18 |
+|    1 |         1 |      32 |                   33 |
 
 ### Cost of Rollback
 
@@ -143,20 +152,21 @@ ancestors.
 
 ### Voting Algorithm
 
-Each validator maintains a vote tower `T` which follows the rules described above in `[Vote Tower](tower-bft.md#Vote Tower)`, which is a sequence of blocks it has voted for (initially empty). The variable `l` records the length of the stack. For each entry in the tower, denoted by `B = T(x)` for `x < l` where `B` is the `xth` entry in the tower, we record also a value `lockexp(B)`.
+Each validator maintains a vote tower `T` which follows the rules described above in [Vote Tower](#vote-tower), which is a sequence of blocks it has voted for (initially empty). The variable `l` records the length of the stack. For each entry in the tower, denoted by `B = T(x)` for `x < l` where `B` is the `xth` entry in the tower, we record also a value `confcount(B)`. Define the lock expiration slot `lockexp(B) := slot(B) + 2 ^ confcount(B)`.
 
 The validator `i` runs a voting loop as as follows. Let `B` be the heaviest
-block returned by the fork choice rule above `[Fork Choice](tower-bft.md#Fork Choice)`. If `i` has not voted for `B` before, then `i` votes for `B` so long as the following conditions are satisfied:
+block returned by the fork choice rule above [Fork Choice](#fork-choice). If `i` has not voted for `B` before, then `i` votes for `B` so long as the following conditions are satisfied:
 
 1. Respecting lockouts: For any block `B′` in the tower that is not an ancestor of `B`, `lockexp(B′) ≤ slot(B)`.
-2. Threshold check: Described above in `[Threshold Check](tower-bft.md#Threshold Check)`
+2. Threshold check: Described above in [Threshold Check](#threshold-check)
 3. Switching threshold: Have sufficiently many votes on other forks if switching forks. Let `Btop` denote the block at the top of the stack. If `Btop` is not an ancestor of `B`, then:
-    - Let `VBtop ∈ V` be the set of votes on `Btop` or ancestors or descendents of `Btop`.
-    - We need `|V \VBtop | > 38%`. More details on this can be found in `[Optimistic Confirmation](optimistic_confirmation.md#Primitives)`
+    - Let `VBtop ⊆ V` be the set of votes on `Btop` or ancestors or descendents of `Btop`.
+    - We need `|V \ VBtop | > 38%`. More details on this can be found in [Optimistic Confirmation](../proposals/optimistic_confirmation.md)
 
-If all the conditions are satisfied and validator `i` votes for block `B` then it adjusts its tower as follows (same rules described above in `[Vote Tower](tower-bft.md#Vote Tower)`).
-1. Add block to tower. `T(l) := B`, `lockexp(B) := slot(B) + 2`, and sets `l := l + 1`.
-2. Remove expired blocks. For each element `B′ = S(x)` for `x < l − 1`, if `lockexp(B′) ≤ slot(B)`, remove `B′` from the tower.
+If all the conditions are satisfied and validator `i` votes for block `B` then it adjusts its tower as follows (same rules described above in [Vote Tower](#vote-tower)).
+1. Remove expired blocks top down. Let `x := l - 1`. While `x >= 0 && lockexp(T(x)) < slot(B)`, remove `T(x)` from the tower, and set `l := l - 1` and `x := x - 1`.
+2. Add block to tower. `T(l) := B`, `confcount(B) := 1`, and set `l := l + 1`.
+3. Double lockouts. For each element `B = T(x)` if `l > x + confcount(B)`, then `confcount(B) := confcount(B) + 1`.
 
 ## PoH ASIC Resistance
 

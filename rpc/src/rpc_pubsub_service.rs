@@ -407,13 +407,10 @@ async fn handle_connection(
                 }
             }
         }
-        let data_str = match str::from_utf8(&data) {
-            Ok(str) => str,
-            Err(_) => {
-                // Old implementation just closes the connection, so we preserve that behavior
-                // for now. It would be more correct to respond with an error.
-                break;
-            }
+        let Ok(data_str) = str::from_utf8(&data) else {
+            // Old implementation just closes the connection, so we preserve that behavior
+            // for now. It would be more correct to respond with an error.
+            break;
         };
 
         if let Some(response) = json_rpc_handler.handle_request(data_str).await {

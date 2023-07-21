@@ -53,8 +53,10 @@ impl DecisionMaker {
                     })
                 },
                 || {
-                    poh_recorder
-                        .would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT)
+                    poh_recorder.would_be_leader(
+                        (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1)
+                            * DEFAULT_TICKS_PER_SLOT,
+                    )
                 },
                 || {
                     poh_recorder

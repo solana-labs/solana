@@ -140,7 +140,9 @@ wait_step() {
 }
 
 all_test_steps() {
-  command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20 check
+  command_step checks1 ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20 check
+  command_step checks2 ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-dev-context-only-utils.sh check-bins" 15 check
+  command_step checks3 ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-dev-context-only-utils.sh check-all-targets" 15 check
   wait_step
 
   # Full test suite
@@ -291,7 +293,10 @@ pull_or_push_steps() {
   wait_step
 
   # Check for any .sh file changes
-  if affects .sh$; then
+  if affects \
+              .sh$ \
+              ^.buildkite/hooks \
+      ; then
     command_step shellcheck "ci/shellcheck.sh" 5 check
     wait_step
   fi
@@ -321,7 +326,7 @@ pull_or_push_steps() {
 
   # Run the full test suite by default, skipping only if modifications are local
   # to some particular areas of the tree
-  if affects_other_than ^.buildkite ^.mergify .md$ ^docs/ ^.gitbook; then
+  if affects_other_than ^.mergify .md$ ^docs/ ^.gitbook; then
     all_test_steps
   fi
 

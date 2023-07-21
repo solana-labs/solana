@@ -138,7 +138,9 @@ pub type StorageSizeQuartileStats = [usize; 6];
 
 #[derive(Debug, Default)]
 pub struct HashStats {
+    pub total_us: u64,
     pub mark_time_us: u64,
+    pub cache_hash_data_us: u64,
     pub scan_time_total_us: u64,
     pub zeros_time_total_us: u64,
     pub hash_time_total_us: u64,
@@ -189,99 +191,75 @@ impl HashStats {
         };
     }
 
-    pub fn log(&mut self) {
-        let total_time_us = self.scan_time_total_us
-            + self.zeros_time_total_us
-            + self.hash_time_total_us
-            + self.collect_snapshots_us
-            + self.storage_sort_us;
+    pub fn log(&self) {
         datapoint_info!(
             "calculate_accounts_hash_from_storages",
+            ("total_us", self.total_us, i64),
             ("mark_time_us", self.mark_time_us, i64),
+            ("cache_hash_data_us", self.cache_hash_data_us, i64),
             ("accounts_scan_us", self.scan_time_total_us, i64),
             ("eliminate_zeros_us", self.zeros_time_total_us, i64),
             ("hash_us", self.hash_time_total_us, i64),
-            ("sort", self.sort_time_total_us, i64),
+            ("sort_us", self.sort_time_total_us, i64),
             ("hash_total", self.hash_total, i64),
             ("storage_sort_us", self.storage_sort_us, i64),
-            ("unreduced_entries", self.unreduced_entries as i64, i64),
-            (
-                "collect_snapshots_us",
-                self.collect_snapshots_us as i64,
-                i64
-            ),
-            (
-                "num_snapshot_storage",
-                self.num_snapshot_storage as i64,
-                i64
-            ),
-            ("scan_chunks", self.scan_chunks as i64, i64),
-            ("num_slots", self.num_slots as i64, i64),
-            ("num_dirty_slots", self.num_dirty_slots as i64, i64),
-            ("min_bin_size", self.min_bin_size as i64, i64),
-            ("max_bin_size", self.max_bin_size as i64, i64),
-            (
-                "storage_size_min",
-                self.storage_size_quartiles[0] as i64,
-                i64
-            ),
+            ("unreduced_entries", self.unreduced_entries, i64),
+            ("collect_snapshots_us", self.collect_snapshots_us, i64),
+            ("num_snapshot_storage", self.num_snapshot_storage, i64),
+            ("scan_chunks", self.scan_chunks, i64),
+            ("num_slots", self.num_slots, i64),
+            ("num_dirty_slots", self.num_dirty_slots, i64),
+            ("min_bin_size", self.min_bin_size, i64),
+            ("max_bin_size", self.max_bin_size, i64),
+            ("storage_size_min", self.storage_size_quartiles[0], i64),
             (
                 "storage_size_quartile_1",
-                self.storage_size_quartiles[1] as i64,
+                self.storage_size_quartiles[1],
                 i64
             ),
             (
                 "storage_size_quartile_2",
-                self.storage_size_quartiles[2] as i64,
+                self.storage_size_quartiles[2],
                 i64
             ),
             (
                 "storage_size_quartile_3",
-                self.storage_size_quartiles[3] as i64,
+                self.storage_size_quartiles[3],
                 i64
             ),
-            (
-                "storage_size_max",
-                self.storage_size_quartiles[4] as i64,
-                i64
-            ),
-            (
-                "storage_size_avg",
-                self.storage_size_quartiles[5] as i64,
-                i64
-            ),
-            ("total_us", total_time_us as i64, i64),
+            ("storage_size_max", self.storage_size_quartiles[4], i64),
+            ("storage_size_avg", self.storage_size_quartiles[5], i64),
             (
                 "roots_older_than_epoch",
-                self.roots_older_than_epoch.load(Ordering::Relaxed) as i64,
+                self.roots_older_than_epoch.load(Ordering::Relaxed),
                 i64
             ),
-            ("oldest_root", self.oldest_root as i64, i64),
+            ("oldest_root", self.oldest_root, i64),
             (
                 "longest_ancient_scan_us",
-                self.longest_ancient_scan_us.load(Ordering::Relaxed) as i64,
+                self.longest_ancient_scan_us.load(Ordering::Relaxed),
                 i64
             ),
             (
                 "sum_ancient_scans_us",
-                self.sum_ancient_scans_us.load(Ordering::Relaxed) as i64,
+                self.sum_ancient_scans_us.load(Ordering::Relaxed),
                 i64
             ),
             (
                 "count_ancient_scans",
-                self.count_ancient_scans.load(Ordering::Relaxed) as i64,
+                self.count_ancient_scans.load(Ordering::Relaxed),
                 i64
             ),
             (
                 "append_vec_sizes_older_than_epoch",
                 self.append_vec_sizes_older_than_epoch
-                    .load(Ordering::Relaxed) as i64,
+                    .load(Ordering::Relaxed),
                 i64
             ),
             (
                 "accounts_in_roots_older_than_epoch",
                 self.accounts_in_roots_older_than_epoch
-                    .load(Ordering::Relaxed) as i64,
+                    .load(Ordering::Relaxed),
                 i64
             ),
         );

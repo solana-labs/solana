@@ -967,7 +967,11 @@ fn build_known_snapshot_hashes<'a>(
     }
 
     'to_next_node: for node in nodes {
-        let Some(SnapshotHash {full: full_snapshot_hash, incr: incremental_snapshot_hash}) = get_snapshot_hashes_for_node(node) else {
+        let Some(SnapshotHash {
+            full: full_snapshot_hash,
+            incr: incremental_snapshot_hash,
+        }) = get_snapshot_hashes_for_node(node)
+        else {
             continue 'to_next_node;
         };
 
