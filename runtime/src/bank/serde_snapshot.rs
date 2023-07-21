@@ -11,17 +11,15 @@ use {
         accounts_hash::{AccountsDeltaHash, AccountsHash},
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankTestConfig, EpochRewardStatus, StartBlockHeightAndRewards},
-        epoch_accounts_hash,
-        epoch_accounts_hash::EpochAccountsHash,
+        epoch_accounts_hash::{self, EpochAccountsHash},
         genesis_utils::{activate_all_features, activate_feature},
         runtime_config::RuntimeConfig,
         serde_snapshot::{
             reserialize_bank_with_new_accounts_hash, BankIncrementalSnapshotPersistence,
             SerdeAccountsHash, SerdeIncrementalAccountsHash, SerdeStyle, SnapshotStreams,
         },
-        snapshot_utils,
         snapshot_utils::{
-            create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
+            self, create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
             StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
         },
         stake_rewards::StakeReward,
@@ -603,8 +601,7 @@ fn test_blank_extra_fields() {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 mod test_bank_serialize {
-    use super::*;
-    use crate::serde_snapshot::serialize_test_bank_and_storage;
+    use {super::*, crate::serde_snapshot::serialize_test_bank_and_storage};
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
