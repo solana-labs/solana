@@ -116,14 +116,15 @@ mod tests {
     use {
         super::*,
         core::panic,
-        solana_ledger::blockstore::Blockstore,
-        solana_ledger::genesis_utils::create_genesis_config,
+        solana_ledger::{blockstore::Blockstore, genesis_utils::create_genesis_config},
         solana_poh::poh_recorder::create_test_recorder,
         solana_runtime::bank::Bank,
         solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS,
-        std::env::temp_dir,
-        std::sync::atomic::Ordering,
-        std::{sync::Arc, time::Instant},
+        std::{
+            env::temp_dir,
+            sync::{atomic::Ordering, Arc},
+            time::Instant,
+        },
     };
 
     #[test]
