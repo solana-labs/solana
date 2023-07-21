@@ -5520,6 +5520,7 @@ version = "1.17.0"
 dependencies = [
  "futures-util",
  "serde_json",
+ "solana-client",
  "solana-ledger",
  "solana-logger",
  "solana-measure",
