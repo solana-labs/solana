@@ -298,8 +298,8 @@ impl BankRc {
 enum ProgramAccountLoadResult {
     AccountNotFound,
     InvalidAccountData,
-    ProgramAccount(AccountSharedData),
-    ProgramDataAccount(AccountSharedData, AccountSharedData, Slot),
+    ProgramOfLoaderV1orV2(AccountSharedData),
+    ProgramOfLoaderV3(AccountSharedData, AccountSharedData, Slot),
 }
 
 pub struct LoadAndExecuteTransactionsOutput {
@@ -4807,7 +4807,7 @@ impl Bank {
         }
 
         if !bpf_loader_upgradeable::check_id(program_account.owner()) {
-            return ProgramAccountLoadResult::ProgramAccount(program_account);
+            return ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account);
         }
 
         if let Ok(UpgradeableLoaderState::Program {
@@ -4824,7 +4824,7 @@ impl Bank {
                 upgrade_authority_address: _,
             }) = programdata_account.state()
             {
-                return ProgramAccountLoadResult::ProgramDataAccount(
+                return ProgramAccountLoadResult::ProgramOfLoaderV3(
                     program_account,
                     programdata_account,
                     slot,
@@ -4857,7 +4857,7 @@ impl Bank {
                 Err(InstructionError::InvalidAccountData)
             }
 
-            ProgramAccountLoadResult::ProgramAccount(program_account) => {
+            ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account) => {
                 solana_bpf_loader_program::load_program_from_bytes(
                     &self.feature_set,
                     None,
@@ -4870,7 +4870,7 @@ impl Bank {
                 )
             }
 
-            ProgramAccountLoadResult::ProgramDataAccount(
+            ProgramAccountLoadResult::ProgramOfLoaderV3(
                 program_account,
                 programdata_account,
                 slot,
