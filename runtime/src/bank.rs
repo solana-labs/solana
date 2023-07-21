@@ -105,8 +105,8 @@ use {
         compute_budget::{self, ComputeBudget},
         invoke_context::ProcessInstructionWithContext,
         loaded_programs::{
-            LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType, LoadedPrograms,
-            LoadedProgramsForTxBatch, WorkingSlot,
+            LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
+            LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot,
         },
         log_collector::LogCollector,
         message_processor::MessageProcessor,
@@ -144,6 +144,7 @@ use {
         hash::{extend_and_hash, hashv, Hash},
         incinerator,
         inflation::Inflation,
+        instruction::InstructionError,
         lamports::LamportsError,
         loader_v4,
         message::{AccountKeys, SanitizedMessage},
@@ -293,6 +294,13 @@ impl BankRc {
             bank_id_generator: Arc::new(AtomicU64::new(0)),
         }
     }
+}
+
+enum ProgramAccountLoadResult {
+    AccountNotFound,
+    InvalidAccountData,
+    ProgramOfLoaderV1orV2(AccountSharedData),
+    ProgramOfLoaderV3(AccountSharedData, AccountSharedData, Slot),
 }
 
 pub struct LoadAndExecuteTransactionsOutput {
@@ -4594,86 +4602,114 @@ impl Bank {
         }
     }
 
-    pub fn load_program(&self, pubkey: &Pubkey) -> Arc<LoadedProgram> {
-        let Some(program) = self.get_account_with_fixed_root(pubkey) else {
-            return Arc::new(LoadedProgram::new_tombstone(
-                self.slot,
-                LoadedProgramType::Closed,
-            ));
+    fn load_program_accounts(&self, pubkey: &Pubkey) -> ProgramAccountLoadResult {
+        let program_account = match self.get_account_with_fixed_root(pubkey) {
+            None => return ProgramAccountLoadResult::AccountNotFound,
+            Some(account) => account,
         };
-        let mut transaction_accounts = vec![(*pubkey, program)];
-        let is_upgradeable_loader =
-            bpf_loader_upgradeable::check_id(transaction_accounts[0].1.owner());
-        if is_upgradeable_loader {
-            if let Ok(UpgradeableLoaderState::Program {
-                programdata_address,
-            }) = transaction_accounts[0].1.state()
+
+        debug_assert!(solana_bpf_loader_program::check_loader_id(
+            program_account.owner()
+        ));
+
+        if !bpf_loader_upgradeable::check_id(program_account.owner()) {
+            return ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account);
+        }
+
+        if let Ok(UpgradeableLoaderState::Program {
+            programdata_address,
+        }) = program_account.state()
+        {
+            let programdata_account = match self.get_account_with_fixed_root(&programdata_address) {
+                None => return ProgramAccountLoadResult::AccountNotFound,
+                Some(account) => account,
+            };
+
+            if let Ok(UpgradeableLoaderState::ProgramData {
+                slot,
+                upgrade_authority_address: _,
+            }) = programdata_account.state()
             {
-                if let Some(programdata_account) =
-                    self.get_account_with_fixed_root(&programdata_address)
-                {
-                    transaction_accounts.push((programdata_address, programdata_account));
-                } else {
-                    return Arc::new(LoadedProgram::new_tombstone(
-                        self.slot,
-                        LoadedProgramType::Closed,
-                    ));
-                }
-            } else {
-                return Arc::new(LoadedProgram::new_tombstone(
-                    self.slot,
-                    LoadedProgramType::Closed,
-                ));
+                return ProgramAccountLoadResult::ProgramOfLoaderV3(
+                    program_account,
+                    programdata_account,
+                    slot,
+                );
             }
         }
-        let mut transaction_context = TransactionContext::new(
-            transaction_accounts,
-            Some(sysvar::rent::Rent::default()),
-            1,
-            1,
-        );
-        let instruction_context = transaction_context.get_next_instruction_context().unwrap();
-        instruction_context.configure(if is_upgradeable_loader { &[0, 1] } else { &[0] }, &[], &[]);
-        transaction_context.push().unwrap();
-        let instruction_context = transaction_context
-            .get_current_instruction_context()
-            .unwrap();
-        let program = instruction_context
-            .try_borrow_program_account(&transaction_context, 0)
-            .unwrap();
-        let programdata = if is_upgradeable_loader {
-            Some(
-                instruction_context
-                    .try_borrow_program_account(&transaction_context, 1)
-                    .unwrap(),
-            )
-        } else {
-            None
-        };
+        ProgramAccountLoadResult::InvalidAccountData
+    }
+
+    pub fn load_program(&self, pubkey: &Pubkey) -> Arc<LoadedProgram> {
         let program_runtime_environment_v1 = self
             .loaded_programs_cache
             .read()
             .unwrap()
             .program_runtime_environment_v1
             .clone();
-        solana_bpf_loader_program::load_program_from_account(
-            &self.feature_set,
-            None, // log_collector
-            &program,
-            programdata.as_ref().unwrap_or(&program),
-            program_runtime_environment_v1.clone(),
-        )
-        .map(|(loaded_program, metrics)| {
-            let mut timings = ExecuteDetailsTimings::default();
-            metrics.submit_datapoint(&mut timings);
-            loaded_program
-        })
+
+        let mut load_program_metrics = LoadProgramMetrics {
+            program_id: pubkey.to_string(),
+            ..LoadProgramMetrics::default()
+        };
+
+        let loaded_program = match self.load_program_accounts(pubkey) {
+            ProgramAccountLoadResult::AccountNotFound => Ok(LoadedProgram::new_tombstone(
+                self.slot,
+                LoadedProgramType::Closed,
+            )),
+
+            ProgramAccountLoadResult::InvalidAccountData => {
+                Err(InstructionError::InvalidAccountData)
+            }
+
+            ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account) => {
+                solana_bpf_loader_program::load_program_from_bytes(
+                    &self.feature_set,
+                    None,
+                    &mut load_program_metrics,
+                    program_account.data(),
+                    program_account.owner(),
+                    program_account.data().len(),
+                    0,
+                    program_runtime_environment_v1.clone(),
+                )
+            }
+
+            ProgramAccountLoadResult::ProgramOfLoaderV3(
+                program_account,
+                programdata_account,
+                slot,
+            ) => programdata_account
+                .data()
+                .get(UpgradeableLoaderState::size_of_programdata_metadata()..)
+                .ok_or(InstructionError::InvalidAccountData)
+                .and_then(|programdata| {
+                    solana_bpf_loader_program::load_program_from_bytes(
+                        &self.feature_set,
+                        None,
+                        &mut load_program_metrics,
+                        programdata,
+                        program_account.owner(),
+                        program_account
+                            .data()
+                            .len()
+                            .saturating_add(programdata_account.data().len()),
+                        slot,
+                        program_runtime_environment_v1.clone(),
+                    )
+                }),
+        }
         .unwrap_or_else(|_| {
-            Arc::new(LoadedProgram::new_tombstone(
+            LoadedProgram::new_tombstone(
                 self.slot,
                 LoadedProgramType::FailedVerification(program_runtime_environment_v1),
-            ))
-        })
+            )
+        });
+
+        let mut timings = ExecuteDetailsTimings::default();
+        load_program_metrics.submit_datapoint(&mut timings);
+        Arc::new(loaded_program)
     }
 
     pub fn clear_program_cache(&self) {
