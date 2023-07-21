@@ -4802,9 +4802,9 @@ impl Bank {
             Some(account) => account,
         };
 
-        if !solana_bpf_loader_program::check_loader_id(program_account.owner()) {
-            return ProgramAccountLoadResult::InvalidAccountData;
-        }
+        debug_assert!(solana_bpf_loader_program::check_loader_id(
+            program_account.owner()
+        ));
 
         if !bpf_loader_upgradeable::check_id(program_account.owner()) {
             return ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account);
