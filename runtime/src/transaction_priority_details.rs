@@ -27,7 +27,6 @@ pub trait GetTransactionPriorityDetails {
         let prioritization_fee_details = compute_budget
             .process_instructions(
                 instructions,
-                true, // use default units per instruction
                 true, // supports prioritization by request_units_deprecated instruction
                 true, // enable request heap frame instruction
                 true, // enable support set accounts data size instruction

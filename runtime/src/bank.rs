@@ -5084,7 +5084,6 @@ impl Bank {
                             Measure::start("compute_budget_process_transaction_time");
                         let process_transaction_result = compute_budget.process_instructions(
                             tx.message().program_instructions_iter(),
-                            true,
                             !self
                                 .feature_set
                                 .is_active(&remove_deprecated_request_unit_ix::id()),
