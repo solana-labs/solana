@@ -505,6 +505,23 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableBankAndStorage<'a, C> {
 }
 
 #[cfg(test)]
+pub fn serialize_test_bank_and_storage<S>(
+    bank: &Bank,
+    storage: &[Vec<Arc<AccountStorageEntry>>],
+    s: S,
+) -> std::result::Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    (SerializableBankAndStorage::<newer::Context> {
+        bank,
+        snapshot_storages: storage,
+        phantom: std::marker::PhantomData::default(),
+    })
+    .serialize(s)
+}
+
+#[cfg(test)]
 struct SerializableBankAndStorageNoExtra<'a, C> {
     bank: &'a Bank,
     snapshot_storages: &'a [Vec<Arc<AccountStorageEntry>>],

@@ -604,6 +604,7 @@ fn test_blank_extra_fields() {
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 mod test_bank_serialize {
     use super::*;
+    use crate::serde_snapshot::serialize_test_bank_and_storage;
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
@@ -630,11 +631,10 @@ mod test_bank_serialize {
         // ensure there is a single snapshot storage example for ABI digesting
         assert_eq!(snapshot_storages.len(), 1);
 
-        (SerializableBankAndStorage::<newer::Context> {
+        serialize_test_bank_and_storage::<S>(
             bank,
-            snapshot_storages: &get_storages_to_serialize(&snapshot_storages),
-            phantom: std::marker::PhantomData::default(),
-        })
-        .serialize(s)
+            &get_storages_to_serialize(&snapshot_storages),
+            s,
+        )
     }
 }
