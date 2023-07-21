@@ -36,7 +36,6 @@ cat > "$CONFIG_FILE" <<EOF
     { "source": "/apps/break", "destination": "/developing/on-chain-programs/examples" },
     { "source": "/apps/builtins", "destination": "/developing/runtime-facilities/programs" },
     { "source": "/apps/drones", "destination": "/developing/on-chain-programs/examples" },
-    { "source": "/apps/hello-world", "destination": "/developing/on-chain-programs/examples" },
     { "source": "/apps/javascript-api", "destination": "/developing/clients/javascript-api" },
     { "source": "/apps/jsonrpc-api", "destination": "/api/http" },
     { "source": "/developing/clients/jsonrpc-api", "destination": "/api/http" },
