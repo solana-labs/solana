@@ -21,7 +21,7 @@ pub type TieredStorageResult<T> = Result<T, TieredStorageError>;
 
 /// The struct that defines the formats of all building blocks of a
 /// TieredStorage.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TieredStorageFormat {
     pub meta_entry_size: usize,
     pub account_meta_format: AccountMetaFormat,
@@ -33,7 +33,7 @@ pub struct TieredStorageFormat {
 /// The struct for a TieredStorage.
 #[derive(Debug)]
 pub struct TieredStorage {
-    format: Option<&'static TieredStorageFormat>,
+    format: Option<TieredStorageFormat>,
     path: PathBuf,
 }
 
@@ -45,10 +45,10 @@ impl TieredStorage {
     /// is called.
     pub fn new_writable(
         path: impl Into<PathBuf>,
-        format: &'static TieredStorageFormat,
+        format: &TieredStorageFormat,
     ) -> TieredStorageResult<Self> {
         Ok(Self {
-            format: Some(format),
+            format: Some(format.clone()),
             path: path.into(),
         })
     }
