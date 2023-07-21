@@ -261,13 +261,10 @@ impl ComputeBudget {
         }
 
         let compute_unit_limit = updated_compute_unit_limit
-            .or_else(|| {
-                Some(
-                    num_non_compute_budget_instructions
-                        .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT),
-                )
+            .unwrap_or_else(|| {
+                num_non_compute_budget_instructions
+                    .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT)
             })
-            .unwrap_or(MAX_COMPUTE_UNIT_LIMIT)
             .min(MAX_COMPUTE_UNIT_LIMIT);
         self.compute_unit_limit = u64::from(compute_unit_limit);
 
