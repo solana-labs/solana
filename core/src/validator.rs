@@ -2346,7 +2346,7 @@ mod tests {
             Arc::new(validator_keypair),
             &validator_ledger_path,
             &voting_keypair.pubkey(),
-            Arc::new(RwLock::new(vec![voting_keypair.clone()])),
+            Arc::new(RwLock::new(vec![voting_keypair])),
             vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
             &config,
             true, // should_check_duplicate_instance

@@ -215,8 +215,7 @@ mod tests {
 
     #[test]
     fn test_containers() {
-        use std::rc::Rc;
-        use std::sync::Arc;
+        use std::{rc::Rc, sync::Arc};
 
         struct Foo<S: Signer> {
             #[allow(unused)]
