@@ -68,7 +68,7 @@ use {
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_hash::SnapshotHash,
         sorted_storages::SortedStorages,
-        stake_account::{self, StakeAccount},
+        stake_account::StakeAccount,
         stake_history::StakeHistory,
         stake_rewards::StakeReward,
         stake_weighted_timestamp::{
@@ -105,8 +105,8 @@ use {
         compute_budget::{self, ComputeBudget},
         invoke_context::ProcessInstructionWithContext,
         loaded_programs::{
-            LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType, LoadedPrograms,
-            LoadedProgramsForTxBatch, WorkingSlot,
+            LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
+            LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot,
         },
         log_collector::LogCollector,
         message_processor::MessageProcessor,
@@ -144,6 +144,7 @@ use {
         hash::{extend_and_hash, hashv, Hash},
         incinerator,
         inflation::Inflation,
+        instruction::InstructionError,
         lamports::LamportsError,
         loader_v4,
         message::{AccountKeys, SanitizedMessage},
@@ -174,7 +175,7 @@ use {
         self, InflationPointCalculationEvent, PointValue, StakeState,
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
-    solana_vote_program::vote_state::{VoteState, VoteStateVersions},
+    solana_vote_program::vote_state::VoteState,
     std::{
         borrow::Cow,
         cell::RefCell,
@@ -293,6 +294,13 @@ impl BankRc {
             bank_id_generator: Arc::new(AtomicU64::new(0)),
         }
     }
+}
+
+enum ProgramAccountLoadResult {
+    AccountNotFound,
+    InvalidAccountData,
+    ProgramOfLoaderV1orV2(AccountSharedData),
+    ProgramOfLoaderV3(AccountSharedData, AccountSharedData, Slot),
 }
 
 pub struct LoadAndExecuteTransactionsOutput {
@@ -819,8 +827,7 @@ pub struct Bank {
 struct VoteWithStakeDelegations {
     vote_state: Arc<VoteState>,
     vote_account: AccountSharedData,
-    // TODO: use StakeAccount<Delegation> once the old code is deleted.
-    delegations: Vec<(Pubkey, StakeAccount<()>)>,
+    delegations: Vec<(Pubkey, StakeAccount<Delegation>)>,
 }
 
 type VoteWithStakeDelegationsMap = DashMap<Pubkey, VoteWithStakeDelegations>;
@@ -829,11 +836,7 @@ type InvalidCacheKeyMap = DashMap<Pubkey, InvalidCacheEntryReason>;
 
 struct LoadVoteAndStakeAccountsResult {
     vote_with_stake_delegations_map: VoteWithStakeDelegationsMap,
-    invalid_stake_keys: InvalidCacheKeyMap,
     invalid_vote_keys: InvalidCacheKeyMap,
-    invalid_cached_vote_accounts: usize,
-    invalid_cached_stake_accounts: usize,
-    invalid_cached_stake_accounts_rent_epoch: usize,
     vote_accounts_cache_miss_count: usize,
 }
 
@@ -2547,9 +2550,6 @@ impl Bank {
         } = self.calculate_previous_epoch_inflation_rewards(capitalization, prev_epoch);
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
-        let update_rewards_from_cached_accounts = self
-            .feature_set
-            .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
         self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
@@ -2557,7 +2557,6 @@ impl Bank {
             reward_calc_tracer,
             thread_pool,
             metrics,
-            update_rewards_from_cached_accounts,
         );
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
@@ -2619,167 +2618,6 @@ impl Bank {
             ("num_stake_accounts", num_stake_accounts, i64),
             ("num_vote_accounts", num_vote_accounts, i64),
         );
-    }
-
-    /// map stake delegations into resolved (pubkey, account) pairs
-    ///  returns a map (has to be copied) of loaded
-    ///   ( Vec<(staker info)> (voter account) ) keyed by voter pubkey
-    ///
-    /// Filters out invalid pairs
-    fn _load_vote_and_stake_accounts_with_thread_pool(
-        &self,
-        thread_pool: &ThreadPool,
-        reward_calc_tracer: Option<impl RewardCalcTracer>,
-    ) -> LoadVoteAndStakeAccountsResult {
-        let stakes = self.stakes_cache.stakes();
-        let cached_vote_accounts = stakes.vote_accounts();
-        let vote_with_stake_delegations_map = DashMap::with_capacity(cached_vote_accounts.len());
-        let invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason> = DashMap::new();
-        let invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason> = DashMap::new();
-        let invalid_cached_stake_accounts = AtomicUsize::default();
-        let invalid_cached_vote_accounts = AtomicUsize::default();
-        let invalid_cached_stake_accounts_rent_epoch = AtomicUsize::default();
-
-        let stake_delegations = self.filter_stake_delegations(&stakes);
-        thread_pool.install(|| {
-            stake_delegations
-                .into_par_iter()
-                .for_each(|(stake_pubkey, cached_stake_account)| {
-                    let delegation = cached_stake_account.delegation();
-                    let vote_pubkey = &delegation.voter_pubkey;
-                    if invalid_vote_keys.contains_key(vote_pubkey) {
-                        return;
-                    }
-                    let Some(stake_account) = self.get_account_with_fixed_root(stake_pubkey) else {
-                            invalid_stake_keys
-                                .insert(*stake_pubkey, InvalidCacheEntryReason::Missing);
-                            invalid_cached_stake_accounts.fetch_add(1, Relaxed);
-                            return;
-                        };
-                    if cached_stake_account.account() != &stake_account {
-                        if self.rc.accounts.accounts_db.assert_stakes_cache_consistency {
-                            panic!(
-                                "stakes cache accounts mismatch {cached_stake_account:?} {stake_account:?}"
-                            );
-                        }
-                        invalid_cached_stake_accounts.fetch_add(1, Relaxed);
-                        let cached_stake_account = cached_stake_account.account();
-                        if cached_stake_account.lamports() == stake_account.lamports()
-                            && cached_stake_account.data() == stake_account.data()
-                            && cached_stake_account.owner() == stake_account.owner()
-                            && cached_stake_account.executable() == stake_account.executable()
-                        {
-                            invalid_cached_stake_accounts_rent_epoch.fetch_add(1, Relaxed);
-                        } else {
-                            debug!(
-                                "cached stake account mismatch: {}: {:?}, {:?}",
-                                stake_pubkey, stake_account, cached_stake_account
-                            );
-                        }
-                    }
-                    let stake_account = match StakeAccount::<()>::try_from(stake_account) {
-                        Ok(stake_account) => stake_account,
-                        Err(stake_account::Error::InvalidOwner { .. }) => {
-                            invalid_stake_keys
-                                .insert(*stake_pubkey, InvalidCacheEntryReason::WrongOwner);
-                            return;
-                        }
-                        Err(stake_account::Error::InstructionError(_)) => {
-                            invalid_stake_keys
-                                .insert(*stake_pubkey, InvalidCacheEntryReason::BadState);
-                            return;
-                        }
-                        Err(stake_account::Error::InvalidDelegation(_)) => {
-                            // This should not happen.
-                            error!(
-                                "Unexpected code path! StakeAccount<()> \
-                                should not check if stake-state is a \
-                                Delegation."
-                            );
-                            return;
-                        }
-                    };
-                    let stake_delegation = (*stake_pubkey, stake_account);
-                    let mut vote_delegations = if let Some(vote_delegations) =
-                        vote_with_stake_delegations_map.get_mut(vote_pubkey)
-                    {
-                        vote_delegations
-                    } else {
-                        let cached_vote_account = cached_vote_accounts.get(vote_pubkey);
-                        let vote_account = match self.get_account_with_fixed_root(vote_pubkey) {
-                            Some(vote_account) => {
-                                if vote_account.owner() != &solana_vote_program::id() {
-                                    invalid_vote_keys
-                                        .insert(*vote_pubkey, InvalidCacheEntryReason::WrongOwner);
-                                    if cached_vote_account.is_some() {
-                                        invalid_cached_vote_accounts.fetch_add(1, Relaxed);
-                                    }
-                                    return;
-                                }
-                                vote_account
-                            }
-                            None => {
-                                if cached_vote_account.is_some() {
-                                    invalid_cached_vote_accounts.fetch_add(1, Relaxed);
-                                }
-                                invalid_vote_keys
-                                    .insert(*vote_pubkey, InvalidCacheEntryReason::Missing);
-                                return;
-                            }
-                        };
-
-                        let vote_state = if let Ok(vote_state) =
-                            StateMut::<VoteStateVersions>::state(&vote_account)
-                        {
-                            vote_state.convert_to_current()
-                        } else {
-                            invalid_vote_keys
-                                .insert(*vote_pubkey, InvalidCacheEntryReason::BadState);
-                            if cached_vote_account.is_some() {
-                                invalid_cached_vote_accounts.fetch_add(1, Relaxed);
-                            }
-                            return;
-                        };
-                        match cached_vote_account {
-                            Some(cached_vote_account)
-                                if cached_vote_account.account() == &vote_account => {}
-                            _ => {
-                                invalid_cached_vote_accounts.fetch_add(1, Relaxed);
-                            }
-                        };
-                        vote_with_stake_delegations_map
-                            .entry(*vote_pubkey)
-                            .or_insert_with(|| VoteWithStakeDelegations {
-                                vote_state: Arc::new(vote_state),
-                                vote_account,
-                                delegations: vec![],
-                            })
-                    };
-
-                    if let Some(reward_calc_tracer) = reward_calc_tracer.as_ref() {
-                        reward_calc_tracer(&RewardCalculationEvent::Staking(
-                            stake_pubkey,
-                            &InflationPointCalculationEvent::Delegation(
-                                delegation,
-                                solana_vote_program::id(),
-                            ),
-                        ));
-                    }
-
-                    vote_delegations.delegations.push(stake_delegation);
-                });
-        });
-        invalid_cached_stake_accounts.fetch_add(invalid_stake_keys.len(), Relaxed);
-        LoadVoteAndStakeAccountsResult {
-            vote_with_stake_delegations_map,
-            invalid_vote_keys,
-            invalid_stake_keys,
-            invalid_cached_vote_accounts: invalid_cached_vote_accounts.into_inner(),
-            invalid_cached_stake_accounts: invalid_cached_stake_accounts.into_inner(),
-            invalid_cached_stake_accounts_rent_epoch: invalid_cached_stake_accounts_rent_epoch
-                .into_inner(),
-            vote_accounts_cache_miss_count: 0,
-        }
     }
 
     fn filter_stake_delegations<'a>(
@@ -2906,8 +2744,7 @@ impl Bank {
                 let event = RewardCalculationEvent::Staking(stake_pubkey, &delegation);
                 reward_calc_tracer(&event);
             }
-            let stake_account = StakeAccount::from(stake_account.clone());
-            let stake_delegation = (*stake_pubkey, stake_account);
+            let stake_delegation = (*stake_pubkey, stake_account.clone());
             vote_delegations.delegations.push(stake_delegation);
         };
         thread_pool.install(|| {
@@ -2918,10 +2755,6 @@ impl Bank {
         LoadVoteAndStakeAccountsResult {
             vote_with_stake_delegations_map,
             invalid_vote_keys,
-            invalid_stake_keys: DashMap::default(),
-            invalid_cached_vote_accounts: 0,
-            invalid_cached_stake_accounts: 0,
-            invalid_cached_stake_accounts_rent_epoch: 0,
             vote_accounts_cache_miss_count: vote_accounts_cache_miss_count.into_inner(),
         }
     }
@@ -2982,15 +2815,10 @@ impl Bank {
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
-        update_rewards_from_cached_accounts: bool,
     ) {
         let stake_history = self.stakes_cache.stakes().history().clone();
-        let vote_with_stake_delegations_map = self.load_vote_and_stake_accounts(
-            thread_pool,
-            reward_calc_tracer.as_ref(),
-            metrics,
-            update_rewards_from_cached_accounts,
-        );
+        let vote_with_stake_delegations_map =
+            self.load_vote_and_stake_accounts(thread_pool, reward_calc_tracer.as_ref(), metrics);
 
         let point_value = self.calculate_reward_points(
             &vote_with_stake_delegations_map,
@@ -3130,39 +2958,23 @@ impl Bank {
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
-        update_rewards_from_cached_accounts: bool,
     ) -> VoteWithStakeDelegationsMap {
         let (
             LoadVoteAndStakeAccountsResult {
                 vote_with_stake_delegations_map,
-                invalid_stake_keys,
                 invalid_vote_keys,
-                invalid_cached_vote_accounts,
-                invalid_cached_stake_accounts,
-                invalid_cached_stake_accounts_rent_epoch,
                 vote_accounts_cache_miss_count,
             },
             measure,
         ) = measure!({
-            if update_rewards_from_cached_accounts {
-                self._load_vote_and_stake_accounts(thread_pool, reward_calc_tracer.as_ref())
-            } else {
-                self._load_vote_and_stake_accounts_with_thread_pool(
-                    thread_pool,
-                    reward_calc_tracer.as_ref(),
-                )
-            }
+            self._load_vote_and_stake_accounts(thread_pool, reward_calc_tracer.as_ref())
         });
         metrics
             .load_vote_and_stake_accounts_us
             .fetch_add(measure.as_us(), Relaxed);
-        metrics.invalid_cached_vote_accounts += invalid_cached_vote_accounts;
-        metrics.invalid_cached_stake_accounts += invalid_cached_stake_accounts;
-        metrics.invalid_cached_stake_accounts_rent_epoch +=
-            invalid_cached_stake_accounts_rent_epoch;
         metrics.vote_accounts_cache_miss_count += vote_accounts_cache_miss_count;
         self.stakes_cache
-            .handle_invalid_keys(invalid_stake_keys, invalid_vote_keys, self.slot());
+            .handle_invalid_keys(invalid_vote_keys, self.slot());
         vote_with_stake_delegations_map
     }
 
@@ -3714,6 +3526,7 @@ impl Bank {
             partition_index,
             store_stake_accounts_us,
             store_stake_accounts_count: this_partition_stake_rewards.len(),
+            distributed_rewards: total_rewards_in_lamports,
         };
 
         report_partitioned_reward_metrics(self, metrics);
@@ -4789,86 +4602,114 @@ impl Bank {
         }
     }
 
-    pub fn load_program(&self, pubkey: &Pubkey) -> Arc<LoadedProgram> {
-        let Some(program) = self.get_account_with_fixed_root(pubkey) else {
-            return Arc::new(LoadedProgram::new_tombstone(
-                self.slot,
-                LoadedProgramType::Closed,
-            ));
+    fn load_program_accounts(&self, pubkey: &Pubkey) -> ProgramAccountLoadResult {
+        let program_account = match self.get_account_with_fixed_root(pubkey) {
+            None => return ProgramAccountLoadResult::AccountNotFound,
+            Some(account) => account,
         };
-        let mut transaction_accounts = vec![(*pubkey, program)];
-        let is_upgradeable_loader =
-            bpf_loader_upgradeable::check_id(transaction_accounts[0].1.owner());
-        if is_upgradeable_loader {
-            if let Ok(UpgradeableLoaderState::Program {
-                programdata_address,
-            }) = transaction_accounts[0].1.state()
+
+        debug_assert!(solana_bpf_loader_program::check_loader_id(
+            program_account.owner()
+        ));
+
+        if !bpf_loader_upgradeable::check_id(program_account.owner()) {
+            return ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account);
+        }
+
+        if let Ok(UpgradeableLoaderState::Program {
+            programdata_address,
+        }) = program_account.state()
+        {
+            let programdata_account = match self.get_account_with_fixed_root(&programdata_address) {
+                None => return ProgramAccountLoadResult::AccountNotFound,
+                Some(account) => account,
+            };
+
+            if let Ok(UpgradeableLoaderState::ProgramData {
+                slot,
+                upgrade_authority_address: _,
+            }) = programdata_account.state()
             {
-                if let Some(programdata_account) =
-                    self.get_account_with_fixed_root(&programdata_address)
-                {
-                    transaction_accounts.push((programdata_address, programdata_account));
-                } else {
-                    return Arc::new(LoadedProgram::new_tombstone(
-                        self.slot,
-                        LoadedProgramType::Closed,
-                    ));
-                }
-            } else {
-                return Arc::new(LoadedProgram::new_tombstone(
-                    self.slot,
-                    LoadedProgramType::Closed,
-                ));
+                return ProgramAccountLoadResult::ProgramOfLoaderV3(
+                    program_account,
+                    programdata_account,
+                    slot,
+                );
             }
         }
-        let mut transaction_context = TransactionContext::new(
-            transaction_accounts,
-            Some(sysvar::rent::Rent::default()),
-            1,
-            1,
-        );
-        let instruction_context = transaction_context.get_next_instruction_context().unwrap();
-        instruction_context.configure(if is_upgradeable_loader { &[0, 1] } else { &[0] }, &[], &[]);
-        transaction_context.push().unwrap();
-        let instruction_context = transaction_context
-            .get_current_instruction_context()
-            .unwrap();
-        let program = instruction_context
-            .try_borrow_program_account(&transaction_context, 0)
-            .unwrap();
-        let programdata = if is_upgradeable_loader {
-            Some(
-                instruction_context
-                    .try_borrow_program_account(&transaction_context, 1)
-                    .unwrap(),
-            )
-        } else {
-            None
-        };
+        ProgramAccountLoadResult::InvalidAccountData
+    }
+
+    pub fn load_program(&self, pubkey: &Pubkey) -> Arc<LoadedProgram> {
         let program_runtime_environment_v1 = self
             .loaded_programs_cache
             .read()
             .unwrap()
             .program_runtime_environment_v1
             .clone();
-        solana_bpf_loader_program::load_program_from_account(
-            &self.feature_set,
-            None, // log_collector
-            &program,
-            programdata.as_ref().unwrap_or(&program),
-            program_runtime_environment_v1.clone(),
-        )
-        .map(|(loaded_program, metrics)| {
-            let mut timings = ExecuteDetailsTimings::default();
-            metrics.submit_datapoint(&mut timings);
-            loaded_program
-        })
+
+        let mut load_program_metrics = LoadProgramMetrics {
+            program_id: pubkey.to_string(),
+            ..LoadProgramMetrics::default()
+        };
+
+        let loaded_program = match self.load_program_accounts(pubkey) {
+            ProgramAccountLoadResult::AccountNotFound => Ok(LoadedProgram::new_tombstone(
+                self.slot,
+                LoadedProgramType::Closed,
+            )),
+
+            ProgramAccountLoadResult::InvalidAccountData => {
+                Err(InstructionError::InvalidAccountData)
+            }
+
+            ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account) => {
+                solana_bpf_loader_program::load_program_from_bytes(
+                    &self.feature_set,
+                    None,
+                    &mut load_program_metrics,
+                    program_account.data(),
+                    program_account.owner(),
+                    program_account.data().len(),
+                    0,
+                    program_runtime_environment_v1.clone(),
+                )
+            }
+
+            ProgramAccountLoadResult::ProgramOfLoaderV3(
+                program_account,
+                programdata_account,
+                slot,
+            ) => programdata_account
+                .data()
+                .get(UpgradeableLoaderState::size_of_programdata_metadata()..)
+                .ok_or(InstructionError::InvalidAccountData)
+                .and_then(|programdata| {
+                    solana_bpf_loader_program::load_program_from_bytes(
+                        &self.feature_set,
+                        None,
+                        &mut load_program_metrics,
+                        programdata,
+                        program_account.owner(),
+                        program_account
+                            .data()
+                            .len()
+                            .saturating_add(programdata_account.data().len()),
+                        slot,
+                        program_runtime_environment_v1.clone(),
+                    )
+                }),
+        }
         .unwrap_or_else(|_| {
-            Arc::new(LoadedProgram::new_tombstone(
+            LoadedProgram::new_tombstone(
                 self.slot,
                 LoadedProgramType::FailedVerification(program_runtime_environment_v1),
-            ))
-        })
+            )
+        });
+
+        let mut timings = ExecuteDetailsTimings::default();
+        load_program_metrics.submit_datapoint(&mut timings);
+        Arc::new(loaded_program)
     }
 
     pub fn clear_program_cache(&self) {
@@ -5243,7 +5084,6 @@ impl Bank {
                             Measure::start("compute_budget_process_transaction_time");
                         let process_transaction_result = compute_budget.process_instructions(
                             tx.message().program_instructions_iter(),
-                            true,
                             !self
                                 .feature_set
                                 .is_active(&remove_deprecated_request_unit_ix::id()),

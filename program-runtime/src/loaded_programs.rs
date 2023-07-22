@@ -857,8 +857,8 @@ mod tests {
         let mut cache = LoadedPrograms::default();
 
         let program1 = Pubkey::new_unique();
-        let program1_deployment_slots = vec![0, 10, 20];
-        let program1_usage_counters = vec![4, 5, 25];
+        let program1_deployment_slots = [0, 10, 20];
+        let program1_usage_counters = [4, 5, 25];
         program1_deployment_slots
             .iter()
             .enumerate()
@@ -891,8 +891,8 @@ mod tests {
         }
 
         let program2 = Pubkey::new_unique();
-        let program2_deployment_slots = vec![5, 11];
-        let program2_usage_counters = vec![0, 2];
+        let program2_deployment_slots = [5, 11];
+        let program2_usage_counters = [0, 2];
         program2_deployment_slots
             .iter()
             .enumerate()
@@ -924,8 +924,8 @@ mod tests {
         }
 
         let program3 = Pubkey::new_unique();
-        let program3_deployment_slots = vec![0, 5, 15];
-        let program3_usage_counters = vec![100, 3, 20];
+        let program3_deployment_slots = [0, 5, 15];
+        let program3_usage_counters = [100, 3, 20];
         program3_deployment_slots
             .iter()
             .enumerate()
