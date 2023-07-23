@@ -6,7 +6,7 @@ use {
     solana_rbpf::{
         aligned_memory::{AlignedMemory, Pod},
         ebpf::{HOST_ALIGN, MM_INPUT_START},
-        memory_region::MemoryRegion,
+        memory_region::{MemoryRegion, MemoryState},
     },
     solana_sdk::{
         bpf_loader_deprecated,
@@ -133,26 +133,14 @@ impl Serializer {
         account: &mut BorrowedAccount<'_>,
     ) -> Result<(), InstructionError> {
         if !account.get_data().is_empty() {
-            let region = if account.can_data_be_changed().is_ok() {
-                if account.is_shared() {
-                    // If the account is still shared it means it wasn't written to yet during this
-                    // transaction. We map it as CoW and it'll be copied the first time something
-                    // tries to write into it.
-                    let index_in_transaction = account.get_index_in_transaction();
-
-                    MemoryRegion::new_cow(
-                        account.get_data(),
-                        self.vaddr,
-                        index_in_transaction as u64,
-                    )
-                } else {
-                    // The account isn't shared anymore, meaning it was written to earlier during
-                    // this transaction. We can just map as writable no need for any fancy CoW
-                    // business.
+            let region = match account_data_region_memory_state(account) {
+                MemoryState::Readable => MemoryRegion::new_readonly(account.get_data(), self.vaddr),
+                MemoryState::Writable => {
                     MemoryRegion::new_writable(account.get_data_mut()?, self.vaddr)
                 }
-            } else {
-                MemoryRegion::new_readonly(account.get_data(), self.vaddr)
+                MemoryState::Cow(index_in_transaction) => {
+                    MemoryRegion::new_cow(account.get_data(), self.vaddr, index_in_transaction)
+                }
             };
             self.vaddr += region.len;
             self.regions.push(region);
@@ -613,6 +601,18 @@ pub fn deserialize_parameters_aligned<I: IntoIterator<Item = usize>>(
         }
     }
     Ok(())
+}
+
+pub(crate) fn account_data_region_memory_state(account: &BorrowedAccount<'_>) -> MemoryState {
+    if account.can_data_be_changed().is_ok() {
+        if account.is_shared() {
+            MemoryState::Cow(account.get_index_in_transaction() as u64)
+        } else {
+            MemoryState::Writable
+        }
+    } else {
+        MemoryState::Readable
+    }
 }
 
 #[cfg(test)]
