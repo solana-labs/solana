@@ -101,7 +101,7 @@ impl Serializer {
         } else {
             self.push_region(true);
             let vaddr = self.vaddr;
-            self.push_account_region(account)?;
+            self.push_account_data_region(account)?;
             vaddr
         };
 
@@ -128,7 +128,7 @@ impl Serializer {
         Ok(vm_data_addr)
     }
 
-    fn push_account_region(
+    fn push_account_data_region(
         &mut self,
         account: &mut BorrowedAccount<'_>,
     ) -> Result<(), InstructionError> {
