@@ -60,7 +60,7 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> ScanResult<NonCircu
                     non_circulating_accounts_set.insert(*pubkey);
                 }
             }
-            StakeState::Stake(meta, _stake) => {
+            StakeState::Stake(meta, _stake, _stake_flags) => {
                 if meta.lockup.is_in_force(&clock, None)
                     || withdraw_authority_list.contains(&meta.authorized.withdrawer)
                 {

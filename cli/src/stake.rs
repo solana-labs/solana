@@ -1628,7 +1628,7 @@ pub fn process_deactivate_stake_account(
 
         let vote_account_address = match stake_account.state() {
             Ok(stake_state) => match stake_state {
-                StakeState::Stake(_, stake) => stake.delegation.voter_pubkey,
+                StakeState::Stake(_, stake, _) => stake.delegation.voter_pubkey,
                 _ => {
                     return Err(CliError::BadParameter(format!(
                         "{stake_account_address} is not a delegated stake account",
@@ -2195,6 +2195,7 @@ pub fn build_stake_state(
                 lockup,
             },
             stake,
+            _,
         ) => {
             let current_epoch = clock.epoch;
             let StakeActivationStatus {

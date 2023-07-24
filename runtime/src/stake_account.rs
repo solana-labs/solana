@@ -110,11 +110,15 @@ impl AbiExample for StakeAccount<Delegation> {
     fn example() -> Self {
         use solana_sdk::{
             account::Account,
-            stake::state::{Meta, Stake},
+            stake::{
+                stake_flags::StakeFlags,
+                state::{Meta, Stake},
+            },
         };
-        let stake_state = StakeState::Stake(Meta::example(), Stake::example());
+        let stake_state =
+            StakeState::Stake(Meta::example(), Stake::example(), StakeFlags::example());
         let mut account = Account::example();
-        account.data.resize(196, 0u8);
+        account.data.resize(200, 0u8);
         account.owner = solana_stake_program::id();
         account.set_state(&stake_state).unwrap();
         Self::try_from(AccountSharedData::from(account)).unwrap()

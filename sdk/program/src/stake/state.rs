@@ -7,6 +7,7 @@ use {
         stake::{
             config::Config,
             instruction::{LockupArgs, StakeError},
+            stake_flags::StakeFlags,
         },
         stake_history::{StakeHistory, StakeHistoryEntry},
     },
@@ -22,7 +23,7 @@ pub enum StakeState {
     #[default]
     Uninitialized,
     Initialized(Meta),
-    Stake(Meta, Stake),
+    Stake(Meta, Stake, StakeFlags),
     RewardsPool,
 }
 
@@ -36,9 +37,10 @@ impl BorshDeserialize for StakeState {
                 Ok(StakeState::Initialized(meta))
             }
             2 => {
-                let meta = Meta::deserialize_reader(reader)?;
-                let stake = Stake::deserialize_reader(reader)?;
-                Ok(StakeState::Stake(meta, stake))
+                let meta: Meta = BorshDeserialize::deserialize_reader(reader)?;
+                let stake: Stake = BorshDeserialize::deserialize_reader(reader)?;
+                let stake_flags: StakeFlags = BorshDeserialize::deserialize_reader(reader)?;
+                Ok(StakeState::Stake(meta, stake, stake_flags))
             }
             3 => Ok(StakeState::RewardsPool),
             _ => Err(io::Error::new(
@@ -57,10 +59,11 @@ impl BorshSerialize for StakeState {
                 writer.write_all(&1u32.to_le_bytes())?;
                 meta.serialize(writer)
             }
-            StakeState::Stake(meta, stake) => {
+            StakeState::Stake(meta, stake, stake_flags) => {
                 writer.write_all(&2u32.to_le_bytes())?;
                 meta.serialize(writer)?;
-                stake.serialize(writer)
+                stake.serialize(writer)?;
+                stake_flags.serialize(writer)
             }
             StakeState::RewardsPool => writer.write_all(&3u32.to_le_bytes()),
         }
@@ -75,21 +78,21 @@ impl StakeState {
 
     pub fn stake(&self) -> Option<Stake> {
         match self {
-            StakeState::Stake(_meta, stake) => Some(*stake),
+            StakeState::Stake(_meta, stake, _stake_flags) => Some(*stake),
             _ => None,
         }
     }
 
     pub fn delegation(&self) -> Option<Delegation> {
         match self {
-            StakeState::Stake(_meta, stake) => Some(stake.delegation),
+            StakeState::Stake(_meta, stake, _stake_flags) => Some(stake.delegation),
             _ => None,
         }
     }
 
     pub fn authorized(&self) -> Option<Authorized> {
         match self {
-            StakeState::Stake(meta, _stake) => Some(meta.authorized),
+            StakeState::Stake(meta, _stake, _stake_flags) => Some(meta.authorized),
             StakeState::Initialized(meta) => Some(meta.authorized),
             _ => None,
         }
@@ -101,7 +104,7 @@ impl StakeState {
 
     pub fn meta(&self) -> Option<Meta> {
         match self {
-            StakeState::Stake(meta, _stake) => Some(*meta),
+            StakeState::Stake(meta, _stake, _stake_flags) => Some(*meta),
             StakeState::Initialized(meta) => Some(*meta),
             _ => None,
         }
@@ -629,6 +632,7 @@ mod test {
                 },
                 credits_observed: 1,
             },
+            StakeFlags::empty(),
         ));
     }
 
@@ -663,6 +667,7 @@ mod test {
                 },
                 credits_observed: 1,
             },
+            StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED,
         ));
     }
 
