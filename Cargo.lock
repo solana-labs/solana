@@ -608,6 +608,9 @@ name = "bitflags"
 version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "630be753d4e58660abd17930c71b647fe46c27ea6b63cc59e1e3851406972e42"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bitmaps"
@@ -6083,7 +6086,7 @@ version = "1.17.0"
 dependencies = [
  "assert_matches",
  "bincode",
- "bitflags 1.3.2",
+ "bitflags 2.3.3",
  "bs58",
  "byteorder",
  "chrono",
@@ -6431,7 +6434,7 @@ dependencies = [
  "assert_matches",
  "base64 0.21.2",
  "bincode",
- "bitflags 1.3.2",
+ "bitflags 2.3.3",
  "blake3",
  "borsh 0.10.3",
  "bs58",
@@ -6841,7 +6844,7 @@ dependencies = [
  "assert_matches",
  "base64 0.21.2",
  "bincode",
- "bitflags 1.3.2",
+ "bitflags 2.3.3",
  "borsh 0.10.3",
  "bs58",
  "bytemuck",
