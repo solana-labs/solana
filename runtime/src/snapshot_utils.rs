@@ -341,10 +341,10 @@ pub enum SnapshotError {
     #[error("source({1}) - I/O error: {0}, file: {2}")]
     IoWithSourceAndFile(#[source] std::io::Error, &'static str, PathBuf),
 
-    #[error("could not get file name from path: {}", .0.display())]
+    #[error("could not get file name from path: {0}")]
     PathToFileNameError(PathBuf),
 
-    #[error("could not get str from file name: {}", .0.display())]
+    #[error("could not get str from file name: {0}")]
     FileNameToStrError(PathBuf),
 
     #[error("could not parse snapshot archive's file name: {0}")]
@@ -365,16 +365,16 @@ pub enum SnapshotError {
     #[error("bank_snapshot_info new_from_dir failed: {0}")]
     NewFromDir(#[from] SnapshotNewFromDirError),
 
-    #[error("invalid snapshot dir path: {}", .0.display())]
+    #[error("invalid snapshot dir path: {0}")]
     InvalidSnapshotDirPath(PathBuf),
 
-    #[error("invalid AppendVec path: {}", .0.display())]
+    #[error("invalid AppendVec path: {0}")]
     InvalidAppendVecPath(PathBuf),
 
-    #[error("invalid account path: {}", .0.display())]
+    #[error("invalid account path: {0}")]
     InvalidAccountPath(PathBuf),
 
-    #[error("no valid snapshot dir found under {}", .0.display())]
+    #[error("no valid snapshot dir found under {0}")]
     NoSnapshotSlotDir(PathBuf),
 
     #[error("snapshot dir account paths mismatching")]
@@ -389,22 +389,22 @@ pub enum SnapshotNewFromDirError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("invalid bank snapshot directory {}", .0.display())]
+    #[error("invalid bank snapshot directory {0}")]
     InvalidBankSnapshotDir(PathBuf),
 
-    #[error("missing status cache file {}", .0.display())]
+    #[error("missing status cache file {0}")]
     MissingStatusCacheFile(PathBuf),
 
-    #[error("missing version file {}", .0.display())]
+    #[error("missing version file {0}")]
     MissingVersionFile(PathBuf),
 
     #[error("invalid snapshot version")]
     InvalidVersion,
 
-    #[error("snapshot directory incomplete {}", .0.display())]
+    #[error("snapshot directory incomplete {0}")]
     IncompleteDir(PathBuf),
 
-    #[error("missing snapshot file {}", .0.display())]
+    #[error("missing snapshot file {0}")]
     MissingSnapshotFile(PathBuf),
 }
 

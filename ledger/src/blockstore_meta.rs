@@ -13,7 +13,7 @@ use {
 };
 
 bitflags! {
-    #[derive(Deserialize, Serialize)]
+    #[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
     /// Flags to indicate whether a slot is a descendant of a slot on the main fork
     pub struct ConnectedFlags:u8 {
         // A slot S should be considered to be connected if:

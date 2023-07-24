@@ -187,6 +187,7 @@ mod tests {
     use {super::*, crate::instruction::AccountMeta, bitflags::bitflags};
 
     bitflags! {
+        #[derive(Clone, Copy)]
         pub struct KeyFlags: u8 {
             const SIGNER   = 0b00000001;
             const WRITABLE = 0b00000010;
