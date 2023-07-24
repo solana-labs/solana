@@ -22,6 +22,7 @@ use {
         genesis_utils::{self, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_bank_utils,
         snapshot_config::SnapshotConfig,
         snapshot_utils,
     },
@@ -439,7 +440,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
             };
 
             let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
-            let deserialized_bank = snapshot_utils::bank_from_snapshot_archives(
+            let deserialized_bank = snapshot_bank_utils::bank_from_snapshot_archives(
                 &[accounts_dir],
                 &snapshot_config.bank_snapshots_dir,
                 &full_snapshot_archive_info,

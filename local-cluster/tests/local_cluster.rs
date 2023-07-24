@@ -45,6 +45,7 @@ use {
         commitment::VOTE_THRESHOLD_SIZE,
         hardened_unpack::open_genesis_config,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_bank_utils,
         snapshot_config::SnapshotConfig,
         snapshot_package::SnapshotType,
         snapshot_utils::{self, create_accounts_run_and_snapshot_dirs},
@@ -2191,7 +2192,7 @@ fn create_snapshot_to_hard_fork(
     )
     .unwrap();
     let bank = bank_forks.read().unwrap().get(snapshot_slot).unwrap();
-    let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
+    let full_snapshot_archive_info = snapshot_bank_utils::bank_to_full_snapshot_archive(
         ledger_path,
         &bank,
         Some(snapshot_config.snapshot_version),

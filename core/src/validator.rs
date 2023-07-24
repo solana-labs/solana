@@ -94,11 +94,11 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_bank_utils::{self, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL},
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
             self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
-            DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         },
     },
     solana_sdk::{
@@ -1921,7 +1921,7 @@ fn maybe_warp_slot(
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
 
-        let full_snapshot_archive_info = match snapshot_utils::bank_to_full_snapshot_archive(
+        let full_snapshot_archive_info = match snapshot_bank_utils::bank_to_full_snapshot_archive(
             ledger_path,
             &bank_forks.root_bank(),
             None,
@@ -2582,24 +2582,24 @@ mod tests {
         ));
 
         let default_accounts_hash_interval =
-            snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS;
+            snapshot_bank_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS;
         assert!(is_snapshot_config_valid(
             &new_snapshot_config(
-                snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-                snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS
+                snapshot_bank_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+                snapshot_bank_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS
             ),
             default_accounts_hash_interval,
         ));
         assert!(is_snapshot_config_valid(
             &new_snapshot_config(
-                snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+                snapshot_bank_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
                 DISABLED_SNAPSHOT_ARCHIVE_INTERVAL
             ),
             default_accounts_hash_interval
         ));
         assert!(is_snapshot_config_valid(
             &new_snapshot_config(
-                snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+                snapshot_bank_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
                 DISABLED_SNAPSHOT_ARCHIVE_INTERVAL
             ),
             default_accounts_hash_interval

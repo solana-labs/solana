@@ -591,7 +591,7 @@ mod tests {
         rand::seq::SliceRandom,
         solana_gossip::contact_info::ContactInfo,
         solana_runtime::{
-            snapshot_package::SnapshotType, snapshot_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
+            snapshot_bank_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL, snapshot_package::SnapshotType,
         },
         solana_sdk::{
             signature::{Keypair, Signer},
