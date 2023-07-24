@@ -9,6 +9,7 @@ use {
         accounts_hash::CalcAccountsHashConfig,
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
+        snapshot_bank_utils,
         snapshot_config::SnapshotConfig,
         snapshot_package::{self, AccountsPackage, AccountsPackageType, SnapshotType},
         snapshot_utils::{self, SnapshotError},
@@ -383,10 +384,10 @@ impl SnapshotRequestHandler {
 
         // Snapshot the bank and send over an accounts package
         let mut snapshot_time = Measure::start("snapshot_time");
-        let snapshot_storages = snapshot_utils::get_snapshot_storages(&snapshot_root_bank);
+        let snapshot_storages = snapshot_bank_utils::get_snapshot_storages(&snapshot_root_bank);
         let accounts_package = match request_type {
             SnapshotRequestType::Snapshot => {
-                let bank_snapshot_info = snapshot_utils::add_bank_snapshot(
+                let bank_snapshot_info = snapshot_bank_utils::add_bank_snapshot(
                     &self.snapshot_config.bank_snapshots_dir,
                     &snapshot_root_bank,
                     &snapshot_storages,

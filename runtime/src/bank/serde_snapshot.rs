@@ -18,6 +18,7 @@ mod tests {
                 reserialize_bank_with_new_accounts_hash, BankIncrementalSnapshotPersistence,
                 SerdeAccountsHash, SerdeIncrementalAccountsHash, SerdeStyle, SnapshotStreams,
             },
+            snapshot_bank_utils,
             snapshot_utils::{
                 self, create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
                 StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
@@ -464,7 +465,7 @@ mod tests {
             let incremental_snapshot_archives_dir = TempDir::new().unwrap();
 
             // Serialize
-            let snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
+            let snapshot_archive_info = snapshot_bank_utils::bank_to_full_snapshot_archive(
                 &bank_snapshots_dir,
                 &bank,
                 None,
@@ -477,7 +478,7 @@ mod tests {
             .unwrap();
 
             // Deserialize
-            let (dbank, _) = snapshot_utils::bank_from_snapshot_archives(
+            let (dbank, _) = snapshot_bank_utils::bank_from_snapshot_archives(
                 &[accounts_dir],
                 bank_snapshots_dir.path(),
                 &snapshot_archive_info,

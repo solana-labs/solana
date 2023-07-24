@@ -54,9 +54,10 @@ use {
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_bank_utils,
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
-            self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
+            ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
             SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
@@ -3130,7 +3131,7 @@ fn main() {
                             }
 
                             let incremental_snapshot_archive_info =
-                                snapshot_utils::bank_to_incremental_snapshot_archive(
+                                snapshot_bank_utils::bank_to_incremental_snapshot_archive(
                                     ledger_path,
                                     &bank,
                                     full_snapshot_slot,
@@ -3155,7 +3156,7 @@ fn main() {
                             );
                         } else {
                             let full_snapshot_archive_info =
-                                snapshot_utils::bank_to_full_snapshot_archive(
+                                snapshot_bank_utils::bank_to_full_snapshot_archive(
                                     ledger_path,
                                     &bank,
                                     Some(snapshot_version),

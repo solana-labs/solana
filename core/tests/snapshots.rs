@@ -25,13 +25,13 @@ use {
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
         snapshot_archive_info::FullSnapshotArchiveInfo,
+        snapshot_bank_utils::{self, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL},
         snapshot_config::SnapshotConfig,
         snapshot_hash::SnapshotHash,
         snapshot_package::{AccountsPackage, AccountsPackageType, SnapshotPackage, SnapshotType},
         snapshot_utils::{
             self,
             SnapshotVersion::{self, V1_2_0},
-            DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         },
         status_cache::MAX_CACHE_ENTRIES,
     },
@@ -154,7 +154,7 @@ fn restore_from_snapshot(
     let full_snapshot_archive_info =
         FullSnapshotArchiveInfo::new_from_path(full_snapshot_archive_path).unwrap();
 
-    let (deserialized_bank, _timing) = snapshot_utils::bank_from_snapshot_archives(
+    let (deserialized_bank, _timing) = snapshot_bank_utils::bank_from_snapshot_archives(
         account_paths,
         &snapshot_config.bank_snapshots_dir,
         &full_snapshot_archive_info,
@@ -347,7 +347,7 @@ fn test_concurrent_snapshot_packaging(
     let bank0 = bank_forks.get(0).unwrap();
     let storages = bank0.get_snapshot_storages(None);
     let slot_deltas = bank0.status_cache.read().unwrap().root_slot_deltas();
-    snapshot_utils::add_bank_snapshot(
+    snapshot_bank_utils::add_bank_snapshot(
         bank_snapshots_dir,
         &bank0,
         &storages,
@@ -399,7 +399,7 @@ fn test_concurrent_snapshot_packaging(
 
         let snapshot_storages = bank.get_snapshot_storages(None);
         let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
-        let bank_snapshot_info = snapshot_utils::add_bank_snapshot(
+        let bank_snapshot_info = snapshot_bank_utils::add_bank_snapshot(
             bank_snapshots_dir,
             &bank,
             &snapshot_storages,
@@ -813,7 +813,7 @@ fn make_full_snapshot_archive(
                     "did not find bank snapshot with this path",
                 )
             })?;
-    snapshot_utils::package_and_archive_full_snapshot(
+    snapshot_bank_utils::package_and_archive_full_snapshot(
         bank,
         &bank_snapshot_info,
         &snapshot_config.full_snapshot_archives_dir,
@@ -851,7 +851,7 @@ fn make_incremental_snapshot_archive(
                 )
             })?;
     let storages = bank.get_snapshot_storages(Some(incremental_snapshot_base_slot));
-    snapshot_utils::package_and_archive_incremental_snapshot(
+    snapshot_bank_utils::package_and_archive_incremental_snapshot(
         bank,
         incremental_snapshot_base_slot,
         &bank_snapshot_info,
@@ -873,7 +873,7 @@ fn restore_from_snapshots_and_check_banks_are_equal(
     accounts_dir: PathBuf,
     genesis_config: &GenesisConfig,
 ) -> snapshot_utils::Result<()> {
-    let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
+    let (deserialized_bank, ..) = snapshot_bank_utils::bank_from_latest_snapshot_archives(
         &snapshot_config.bank_snapshots_dir,
         &snapshot_config.full_snapshot_archives_dir,
         &snapshot_config.incremental_snapshot_archives_dir,
@@ -1088,7 +1088,7 @@ fn test_snapshots_with_background_services(
 
     // Load the snapshot and ensure it matches what's in BankForks
     let (_tmp_dir, temporary_accounts_dir) = create_tmp_accounts_dir_for_tests();
-    let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
+    let (deserialized_bank, ..) = snapshot_bank_utils::bank_from_latest_snapshot_archives(
         &snapshot_test_config.snapshot_config.bank_snapshots_dir,
         &snapshot_test_config
             .snapshot_config
