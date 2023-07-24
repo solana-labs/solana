@@ -14,7 +14,7 @@ use {
     solana_sdk::{
         hash::Hash,
         message::Message,
-        signature::Signature,
+        signature::{Signature, SignerError},
         signers::Signers,
         transaction::{Transaction, TransactionError},
     },
@@ -363,16 +363,13 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
     }));
 
     // check if all the messages are signable by the signer
-    let signature_results = messages.iter().map(|x| {
-        let mut transaction = Transaction::new_unsigned(x.clone());
-        transaction.try_sign(signers, blockhash)
-    });
-
-    for signature_result in signature_results {
-        if let Err(e) = signature_result {
-            return Err(e.into());
-        }
-    }
+    messages
+        .iter()
+        .map(|x| {
+            let mut transaction = Transaction::new_unsigned(x.clone());
+            transaction.try_sign(signers, blockhash)
+        })
+        .collect::<std::result::Result<Vec<()>, SignerError>>()?;
 
     // get current blockheight
     let block_height = rpc_client.get_block_height().await?;
