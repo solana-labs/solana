@@ -586,6 +586,12 @@ impl Validator {
         timer.stop();
         info!("Cleaning orphaned account snapshot directories done. {timer}");
 
+        // The accounts hash cache dir was renamed, so cleanup the old dir if it exists.
+        let old_accounts_hash_cache_dir = ledger_path.join("calculate_accounts_hash_cache");
+        if old_accounts_hash_cache_dir.exists() {
+            snapshot_utils::move_and_async_delete_path(old_accounts_hash_cache_dir);
+        }
+
         {
             let exit = exit.clone();
             config
