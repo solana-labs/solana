@@ -1,4 +1,6 @@
 use crate::zk_token_elgamal::pod::{
+    elgamal::{ElGamalCiphertext, DECRYPT_HANDLE_LEN, ELGAMAL_CIPHERTEXT_LEN},
+    pedersen::{PedersenCommitment, PEDERSEN_COMMITMENT_LEN},
     GroupedElGamalCiphertext2Handles, GroupedElGamalCiphertext3Handles, Pod, PodU16, PodU64,
     Zeroable,
 };
@@ -22,6 +24,46 @@ impl TryFrom<TransferAmountCiphertext> for decoded::TransferAmountCiphertext {
 
     fn try_from(pod_ciphertext: TransferAmountCiphertext) -> Result<Self, Self::Error> {
         Ok(Self(pod_ciphertext.0.try_into()?))
+    }
+}
+
+// A `TransferAmountCiphertext` contains the following sequence of elements in order:
+//   - Pedersen commitment of the transfer amount (32 bytes)
+//   - Decrypt handle with respect to the source ElGamal public key (32 bytes)
+//   - Decrypt handle with respect to the destination ElGamal public key (32 bytes)
+//   - Decrypt handle with respect to the auditor ElGamal public key (32 bytes)
+impl TransferAmountCiphertext {
+    /// Extract the first 32 bytes of `TransferAmountCiphertext` as `PedersenCommitment`.
+    pub fn get_commitment(&self) -> PedersenCommitment {
+        let transfer_amount_ciphertext_bytes = bytemuck::bytes_of(self);
+        let mut commitment_bytes = [0u8; PEDERSEN_COMMITMENT_LEN];
+        commitment_bytes
+            .copy_from_slice(&transfer_amount_ciphertext_bytes[..PEDERSEN_COMMITMENT_LEN]);
+        PedersenCommitment(commitment_bytes)
+    }
+
+    /// Extract the first 64 bytes of `TransferAmountCiphertext` as `ElGamalCiphertext` pertaining
+    /// to the source ElGamal public key.
+    pub fn get_source_ciphertext(&self) -> ElGamalCiphertext {
+        let transfer_amount_ciphertext_bytes = bytemuck::bytes_of(self);
+        let mut source_ciphertext_bytes = [0u8; ELGAMAL_CIPHERTEXT_LEN];
+        source_ciphertext_bytes
+            .copy_from_slice(&transfer_amount_ciphertext_bytes[..ELGAMAL_CIPHERTEXT_LEN]);
+        ElGamalCiphertext(source_ciphertext_bytes)
+    }
+
+    /// Extract the first and third 32 bytes of `TransferAmountCiphertext` as `ElGamalCiphertext`
+    /// pertaining to the destination ElGamal public key.
+    pub fn get_destination_ciphertext(&self) -> ElGamalCiphertext {
+        let transfer_amount_ciphertext_bytes = bytemuck::bytes_of(self);
+        let mut destination_ciphertext_bytes = [0u8; ELGAMAL_CIPHERTEXT_LEN];
+        destination_ciphertext_bytes[..PEDERSEN_COMMITMENT_LEN]
+            .copy_from_slice(&transfer_amount_ciphertext_bytes[..PEDERSEN_COMMITMENT_LEN]);
+        destination_ciphertext_bytes[PEDERSEN_COMMITMENT_LEN..].copy_from_slice(
+            &transfer_amount_ciphertext_bytes
+                [ELGAMAL_CIPHERTEXT_LEN..ELGAMAL_CIPHERTEXT_LEN + DECRYPT_HANDLE_LEN],
+        );
+        ElGamalCiphertext(destination_ciphertext_bytes)
     }
 }
 
@@ -71,5 +113,68 @@ impl From<FeeParameters> for decoded::FeeParameters {
             fee_rate_basis_points: pod_fee_parameters.fee_rate_basis_points.into(),
             maximum_fee: pod_fee_parameters.maximum_fee.into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use {
+        super::*,
+        crate::encryption::{
+            elgamal::ElGamalKeypair, grouped_elgamal::GroupedElGamal, pedersen::Pedersen,
+        },
+    };
+
+    #[test]
+    fn test_transfer_amount_byte_conversions() {
+        let source_keypair = ElGamalKeypair::new_rand();
+        let destination_keypair = ElGamalKeypair::new_rand();
+        let auditor_keypair = ElGamalKeypair::new_rand();
+
+        let source_pubkey = source_keypair.pubkey();
+        let destination_pubkey = destination_keypair.pubkey();
+        let auditor_pubkey = auditor_keypair.pubkey();
+
+        let transfer_amount = 5_u64;
+        let (commitment, opening) = Pedersen::new(transfer_amount);
+
+        let grouped_elgamal_ciphertext = GroupedElGamal::encrypt_with(
+            [source_pubkey, destination_pubkey, auditor_pubkey],
+            transfer_amount,
+            &opening,
+        );
+
+        let pod_grouped_elgamal_ciphertext: GroupedElGamalCiphertext3Handles =
+            grouped_elgamal_ciphertext.into();
+        let pod_transfer_amount_ciphertext =
+            TransferAmountCiphertext(pod_grouped_elgamal_ciphertext);
+
+        let pod_commitment: PedersenCommitment = commitment.into();
+        assert_eq!(
+            pod_commitment,
+            pod_transfer_amount_ciphertext.get_commitment()
+        );
+
+        let source_decrypt_handle = source_pubkey.decrypt_handle(&opening);
+        let mut source_ciphertext_bytes = [0; ELGAMAL_CIPHERTEXT_LEN];
+        source_ciphertext_bytes[..32].copy_from_slice(&commitment.to_bytes());
+        source_ciphertext_bytes[32..].copy_from_slice(&source_decrypt_handle.to_bytes());
+        let pod_source_ciphertext = ElGamalCiphertext(source_ciphertext_bytes);
+
+        assert_eq!(
+            pod_source_ciphertext,
+            pod_transfer_amount_ciphertext.get_source_ciphertext(),
+        );
+
+        let destination_decrypt_handle = destination_pubkey.decrypt_handle(&opening);
+        let mut destination_ciphertext_bytes = [0; ELGAMAL_CIPHERTEXT_LEN];
+        destination_ciphertext_bytes[..32].copy_from_slice(&commitment.to_bytes());
+        destination_ciphertext_bytes[32..].copy_from_slice(&destination_decrypt_handle.to_bytes());
+        let pod_destination_ciphertext = ElGamalCiphertext(destination_ciphertext_bytes);
+
+        assert_eq!(
+            pod_destination_ciphertext,
+            pod_transfer_amount_ciphertext.get_destination_ciphertext(),
+        );
     }
 }

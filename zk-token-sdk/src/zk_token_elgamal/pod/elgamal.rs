@@ -21,7 +21,7 @@ const ELGAMAL_PUBKEY_LEN: usize = RISTRETTO_POINT_LEN;
 pub(crate) const DECRYPT_HANDLE_LEN: usize = RISTRETTO_POINT_LEN;
 
 /// Byte length of an ElGamal ciphertext
-const ELGAMAL_CIPHERTEXT_LEN: usize = PEDERSEN_COMMITMENT_LEN + DECRYPT_HANDLE_LEN;
+pub(crate) const ELGAMAL_CIPHERTEXT_LEN: usize = PEDERSEN_COMMITMENT_LEN + DECRYPT_HANDLE_LEN;
 
 /// The `ElGamalCiphertext` type as a `Pod`.
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
