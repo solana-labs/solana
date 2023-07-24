@@ -87,6 +87,44 @@ impl TryFrom<FeeEncryption> for decoded::FeeEncryption {
     }
 }
 
+// A `FeeEncryption` contains the following sequence of elements in order:
+//   - Pedersen commitment of the transfer amount (32 bytes)
+//   - Decrypt handle with respect to the destination ElGamal public key (32 bytes)
+//   - Decrypt handle with respect to the withdraw withheld authority ElGamal public key (32 bytes)
+impl FeeEncryption {
+    /// Extract the first 32 bytes of `FeeEncryption` as `PedersenCommitment`.
+    pub fn get_commitment(&self) -> PedersenCommitment {
+        let fee_encryption_bytes = bytemuck::bytes_of(self);
+        let mut commitment_bytes = [0u8; PEDERSEN_COMMITMENT_LEN];
+        commitment_bytes.copy_from_slice(&fee_encryption_bytes[..PEDERSEN_COMMITMENT_LEN]);
+        PedersenCommitment(commitment_bytes)
+    }
+
+    /// Extract the first 64 bytes of `FeeEncryption` as `ElGamalCiphertext` pertaining
+    /// to the destination ElGamal public key.
+    pub fn get_destination_ciphertext(&self) -> ElGamalCiphertext {
+        let fee_encryption_bytes = bytemuck::bytes_of(self);
+        let mut destination_ciphertext_bytes = [0u8; ELGAMAL_CIPHERTEXT_LEN];
+        destination_ciphertext_bytes
+            .copy_from_slice(&fee_encryption_bytes[..ELGAMAL_CIPHERTEXT_LEN]);
+        ElGamalCiphertext(destination_ciphertext_bytes)
+    }
+
+    /// Extract the first and third 32 bytes of `FeeEncryption` as `ElGamalCiphertext`
+    /// pertaining to the withdraw withheld authority ElGamal public key.
+    pub fn get_withdraw_withheld_authority_ciphertext(&self) -> ElGamalCiphertext {
+        let fee_encryption_bytes = bytemuck::bytes_of(self);
+        let mut withdraw_withheld_authority_ciphertext_bytes = [0u8; ELGAMAL_CIPHERTEXT_LEN];
+        withdraw_withheld_authority_ciphertext_bytes[..PEDERSEN_COMMITMENT_LEN]
+            .copy_from_slice(&fee_encryption_bytes[..PEDERSEN_COMMITMENT_LEN]);
+        withdraw_withheld_authority_ciphertext_bytes[PEDERSEN_COMMITMENT_LEN..].copy_from_slice(
+            &fee_encryption_bytes
+                [ELGAMAL_CIPHERTEXT_LEN..ELGAMAL_CIPHERTEXT_LEN + DECRYPT_HANDLE_LEN],
+        );
+        ElGamalCiphertext(withdraw_withheld_authority_ciphertext_bytes)
+    }
+}
+
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct FeeParameters {
@@ -126,7 +164,7 @@ mod test {
     };
 
     #[test]
-    fn test_transfer_amount_byte_conversions() {
+    fn test_transfer_amount_ciphertext_byte_conversions() {
         let source_keypair = ElGamalKeypair::new_rand();
         let destination_keypair = ElGamalKeypair::new_rand();
         let auditor_keypair = ElGamalKeypair::new_rand();
@@ -175,6 +213,56 @@ mod test {
         assert_eq!(
             pod_destination_ciphertext,
             pod_transfer_amount_ciphertext.get_destination_ciphertext(),
+        );
+    }
+
+    #[test]
+    fn test_fee_encryption_byte_conversions() {
+        let destination_keypair = ElGamalKeypair::new_rand();
+        let withdraw_withheld_authority_keypair = ElGamalKeypair::new_rand();
+
+        let destination_pubkey = destination_keypair.pubkey();
+        let withdraw_withheld_authority_pubkey = withdraw_withheld_authority_keypair.pubkey();
+
+        let fee_amount = 5_u64;
+        let (commitment, opening) = Pedersen::new(fee_amount);
+
+        let grouped_elgamal_ciphertext = GroupedElGamal::encrypt_with(
+            [destination_pubkey, withdraw_withheld_authority_pubkey],
+            fee_amount,
+            &opening,
+        );
+
+        let pod_grouped_elgamal_ciphertext: GroupedElGamalCiphertext2Handles =
+            grouped_elgamal_ciphertext.into();
+        let pod_fee_encryption = FeeEncryption(pod_grouped_elgamal_ciphertext);
+
+        let pod_commitment: PedersenCommitment = commitment.into();
+        assert_eq!(pod_commitment, pod_fee_encryption.get_commitment());
+
+        let destination_decrypt_handle = destination_pubkey.decrypt_handle(&opening);
+        let mut destination_ciphertext_bytes = [0; ELGAMAL_CIPHERTEXT_LEN];
+        destination_ciphertext_bytes[..32].copy_from_slice(&commitment.to_bytes());
+        destination_ciphertext_bytes[32..].copy_from_slice(&destination_decrypt_handle.to_bytes());
+        let pod_destination_ciphertext = ElGamalCiphertext(destination_ciphertext_bytes);
+
+        assert_eq!(
+            pod_destination_ciphertext,
+            pod_fee_encryption.get_destination_ciphertext(),
+        );
+
+        let withdraw_withheld_authority_decrypt_handle =
+            withdraw_withheld_authority_pubkey.decrypt_handle(&opening);
+        let mut withdraw_withheld_authority_ciphertext_bytes = [0; ELGAMAL_CIPHERTEXT_LEN];
+        withdraw_withheld_authority_ciphertext_bytes[..32].copy_from_slice(&commitment.to_bytes());
+        withdraw_withheld_authority_ciphertext_bytes[32..]
+            .copy_from_slice(&withdraw_withheld_authority_decrypt_handle.to_bytes());
+        let pod_withdraw_withheld_authority_ciphertext =
+            ElGamalCiphertext(withdraw_withheld_authority_ciphertext_bytes);
+
+        assert_eq!(
+            pod_withdraw_withheld_authority_ciphertext,
+            pod_fee_encryption.get_withdraw_withheld_authority_ciphertext(),
         );
     }
 }
