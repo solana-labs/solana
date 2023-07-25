@@ -774,7 +774,7 @@ mod test {
     use {
         super::*,
         crate::{
-            epoch_accounts_hash::{self, EpochAccountsHash},
+            bank::epoch_accounts_hash_utils, epoch_accounts_hash::EpochAccountsHash,
             genesis_utils::create_genesis_config,
         },
         crossbeam_channel::unbounded,
@@ -896,7 +896,7 @@ mod test {
 
                 // Since we're not using `BankForks::set_root()`, we have to handle sending the
                 // correct snapshot requests ourself.
-                if bank.slot() == epoch_accounts_hash::calculation_start(&bank) {
+                if bank.slot() == epoch_accounts_hash_utils::calculation_start(&bank) {
                     send_snapshot_request(
                         Arc::clone(&bank),
                         SnapshotRequestType::EpochAccountsHash,

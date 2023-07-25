@@ -16,9 +16,9 @@ use {
         },
         accounts_hash::CalcAccountsHashConfig,
         accounts_index::AccountSecondaryIndexes,
-        bank::{Bank, BankTestConfig},
+        bank::{epoch_accounts_hash_utils, Bank, BankTestConfig},
         bank_forks::BankForks,
-        epoch_accounts_hash::{self, EpochAccountsHash},
+        epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{self, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
@@ -140,7 +140,7 @@ impl TestEnvironment {
         assert!(bank
             .feature_set
             .is_active(&feature_set::epoch_accounts_hash::id()));
-        assert!(epoch_accounts_hash::is_enabled_this_epoch(&bank));
+        assert!(epoch_accounts_hash_utils::is_enabled_this_epoch(&bank));
 
         bank.set_startup_verification_complete();
 
@@ -304,7 +304,7 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
 
         // To ensure EAH calculations are correct, calculate the accounts hash here, in-band.
         // This will be the expected EAH that gets saved into the "stop" bank.
-        if bank.slot() == epoch_accounts_hash::calculation_start(&bank) {
+        if bank.slot() == epoch_accounts_hash_utils::calculation_start(&bank) {
             bank.freeze();
             let (accounts_hash, _) = bank
                 .rc
@@ -332,7 +332,7 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
         }
 
         // Test: Ensure that the "stop" bank has the correct EAH
-        if bank.slot() == epoch_accounts_hash::calculation_stop(&bank) {
+        if bank.slot() == epoch_accounts_hash_utils::calculation_stop(&bank) {
             // Sometimes AHV does not get scheduled to run, which causes the test to fail
             // spuriously.  Sleep a bit here to ensure AHV gets a chance to run.
             std::thread::sleep(Duration::from_secs(1));
@@ -414,7 +414,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
 
         // After submitting an EAH calculation request, wait until it gets handled by ABS so that
         // subsequent snapshot requests are not swallowed.
-        if bank.slot() == epoch_accounts_hash::calculation_start(&bank) {
+        if bank.slot() == epoch_accounts_hash_utils::calculation_start(&bank) {
             while bank.epoch_accounts_hash().is_none() {
                 std::thread::sleep(Duration::from_secs(1));
             }
@@ -520,7 +520,7 @@ fn test_background_services_request_handling_for_epoch_accounts_hash() {
 
         // Based on the EAH start and snapshot interval, pick a slot to mass-root all the banks in
         // this range such that an EAH request will be sent and also a snapshot request.
-        let eah_start_slot = epoch_accounts_hash::calculation_start(&bank);
+        let eah_start_slot = epoch_accounts_hash_utils::calculation_start(&bank);
         let set_root_slot = next_multiple_of(eah_start_slot, FULL_SNAPSHOT_INTERVAL);
 
         if bank.block_height() == set_root_slot {
@@ -577,7 +577,7 @@ fn test_epoch_accounts_hash_and_warping() {
 
     // Ensure warping past the EAH stop slot is OK
     info!("Warping past EAH stop slot...");
-    let eah_stop_offset = epoch_accounts_hash::calculation_offset_stop(&bank);
+    let eah_stop_offset = epoch_accounts_hash_utils::calculation_offset_stop(&bank);
     let eah_stop_slot_in_next_epoch =
         epoch_schedule.get_first_slot_in_epoch(bank.epoch() + 1) + eah_stop_offset;
     // have to set root here so that we can flush the write cache
@@ -619,7 +619,7 @@ fn test_epoch_accounts_hash_and_warping() {
 
     // Ensure warping past the EAH start slot is OK
     info!("Warping past EAH start slot...");
-    let eah_start_offset = epoch_accounts_hash::calculation_offset_start(&bank);
+    let eah_start_offset = epoch_accounts_hash_utils::calculation_offset_start(&bank);
     let eah_start_slot_in_next_epoch =
         epoch_schedule.get_first_slot_in_epoch(bank.epoch() + 1) + eah_start_offset;
     // flush the write cache so warping can calculate the accounts hash from storages

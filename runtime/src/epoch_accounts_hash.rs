@@ -9,9 +9,6 @@
 
 use {crate::accounts_hash::AccountsHash, solana_sdk::hash::Hash};
 
-mod utils;
-pub use utils::*;
-
 mod manager;
 pub use manager::Manager as EpochAccountsHashManager;
 

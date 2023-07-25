@@ -57,7 +57,7 @@ use {
         bank::metrics::*,
         blockhash_queue::BlockhashQueue,
         builtins::{BuiltinPrototype, BUILTINS},
-        epoch_accounts_hash::{self, EpochAccountsHash},
+        epoch_accounts_hash::EpochAccountsHash,
         epoch_rewards_hasher::hash_rewards_into_partitions,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         nonce_info::{NonceInfo, NoncePartial},
@@ -209,6 +209,7 @@ struct VerifyAccountsHashConfig {
 
 mod address_lookup_table;
 mod builtin_programs;
+pub mod epoch_accounts_hash_utils;
 mod metrics;
 mod serde_snapshot;
 mod sysvar_cache;
@@ -7030,11 +7031,11 @@ impl Bank {
             return false;
         }
 
-        if !epoch_accounts_hash::is_enabled_this_epoch(self) {
+        if !epoch_accounts_hash_utils::is_enabled_this_epoch(self) {
             return false;
         }
 
-        let stop_slot = epoch_accounts_hash::calculation_stop(self);
+        let stop_slot = epoch_accounts_hash_utils::calculation_stop(self);
         self.parent_slot() < stop_slot && self.slot() >= stop_slot
     }
 
@@ -8086,8 +8087,8 @@ impl Bank {
         let should_get_epoch_accounts_hash = self
             .feature_set
             .is_active(&feature_set::epoch_accounts_hash::id())
-            && epoch_accounts_hash::is_enabled_this_epoch(self)
-            && epoch_accounts_hash::is_in_calculation_window(self);
+            && epoch_accounts_hash_utils::is_enabled_this_epoch(self)
+            && epoch_accounts_hash_utils::is_in_calculation_window(self);
         if !should_get_epoch_accounts_hash {
             return None;
         }
