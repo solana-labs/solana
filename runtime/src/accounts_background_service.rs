@@ -771,12 +771,10 @@ fn cmp_requests_by_priority(
 
 #[cfg(test)]
 mod test {
+    use crate::epoch_accounts_hash_utils;
     use {
         super::*,
-        crate::{
-            epoch_accounts_hash::{self, EpochAccountsHash},
-            genesis_utils::create_genesis_config,
-        },
+        crate::{epoch_accounts_hash::EpochAccountsHash, genesis_utils::create_genesis_config},
         crossbeam_channel::unbounded,
         solana_sdk::{
             account::AccountSharedData, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey,
@@ -896,7 +894,7 @@ mod test {
 
                 // Since we're not using `BankForks::set_root()`, we have to handle sending the
                 // correct snapshot requests ourself.
-                if bank.slot() == epoch_accounts_hash::calculation_start(&bank) {
+                if bank.slot() == epoch_accounts_hash_utils::calculation_start(&bank) {
                     send_snapshot_request(
                         Arc::clone(&bank),
                         SnapshotRequestType::EpochAccountsHash,

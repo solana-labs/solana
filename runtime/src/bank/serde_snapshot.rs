@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use crate::epoch_accounts_hash_utils;
     use {
         crate::{
             account_storage::{AccountStorageMap, AccountStorageReference},
@@ -11,7 +12,7 @@ mod tests {
             accounts_hash::{AccountsDeltaHash, AccountsHash},
             accounts_index::AccountSecondaryIndexes,
             bank::{Bank, BankTestConfig, EpochRewardStatus, StartBlockHeightAndRewards},
-            epoch_accounts_hash::{self, EpochAccountsHash},
+            epoch_accounts_hash::EpochAccountsHash,
             genesis_utils::{activate_all_features, activate_feature},
             runtime_config::RuntimeConfig,
             serde_snapshot::{
@@ -97,7 +98,7 @@ mod tests {
         activate_feature(&mut genesis_config, feature_set::epoch_accounts_hash::id());
         genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-        let eah_start_slot = epoch_accounts_hash::calculation_start(&bank0);
+        let eah_start_slot = epoch_accounts_hash_utils::calculation_start(&bank0);
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank0.squash();
 

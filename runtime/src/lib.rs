@@ -36,6 +36,7 @@ pub mod cache_hash_data_stats;
 pub mod commitment;
 pub mod contains;
 pub mod epoch_accounts_hash;
+pub mod epoch_accounts_hash_utils;
 mod epoch_rewards_hasher;
 pub mod epoch_stakes;
 pub mod genesis_utils;
