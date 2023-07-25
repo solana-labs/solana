@@ -9,7 +9,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
-    solana_sdk::timing::AtomicInterval,
+    solana_sdk::{timing::AtomicInterval, signature::Keypair},
     std::{
         net::SocketAddr,
         sync::{atomic::Ordering, Arc, RwLock},
@@ -38,6 +38,12 @@ pub trait ConnectionManager: Send + Sync + 'static {
 
     fn new_connection_pool(&self) -> Self::ConnectionPool;
     fn new_connection_config(&self) -> Self::NewConnectionConfig;
+    fn update_key(&mut self, _key: &Keypair) {}
+}
+
+struct ConnectionMap<R, S> {
+    pub map: IndexMap<SocketAddr, /*ConnectionPool:*/ R>,
+    pub connection_manager: Arc<S>,
 }
 
 pub struct ConnectionCache<
@@ -47,7 +53,7 @@ pub struct ConnectionCache<
 > {
     name: &'static str,
     map: Arc<RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ R>>>,
-    connection_manager: Arc<S>,
+    connection_manager: RwLock<S>,
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     connection_pool_size: usize,
@@ -95,9 +101,9 @@ where
             Self::create_connection_async_thread(map.clone(), receiver, stats.clone());
         Self {
             name,
-            map,
-            stats,
-            connection_manager,
+            map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
+            connection_manager: RwLock::new(connection_manager),
+            stats: Arc::new(ConnectionCacheStats::default()),
             last_stats: AtomicInterval::default(),
             connection_pool_size,
             connection_config: config,
@@ -137,6 +143,11 @@ where
             .unwrap()
     }
 
+
+    pub(crate) fn update_key(&self, key: &Keypair) {
+        let mut connection_manager =self.connection_manager.write().unwrap();
+        connection_manager.update_key(key);
+    }
     /// Create a lazy connection object under the exclusive lock of the cache map if there is not
     /// enough used connections in the connection pool for the specified address.
     /// Returns CreateConnectionResult.
@@ -157,19 +168,24 @@ where
             .map(|pool| pool.check_pool_status(self.connection_pool_size))
             .unwrap_or(PoolStatus::Empty);
 
-        let (cache_hit, num_evictions, eviction_timing_ms) =
-            if matches!(pool_status, PoolStatus::Empty) {
-                Self::create_connection_internal(
-                    &self.connection_config,
-                    &self.connection_manager,
-                    &mut map,
-                    addr,
-                    self.connection_pool_size,
-                    None,
-                )
-            } else {
-                (true, 0, 0)
-            };
+        let (cache_hit, num_evictions, eviction_timing_ms) = if should_create_connection {
+            // evict a connection if the cache is reaching upper bounds
+            let mut num_evictions = 0;
+            let mut get_connection_cache_eviction_measure =
+                Measure::start("get_connection_cache_eviction_measure");
+            let existing_index = map.get_index_of(addr);
+            while map.len() >= MAX_CONNECTIONS {
+                let mut rng = thread_rng();
+                let n = rng.gen_range(0, MAX_CONNECTIONS);
+                if let Some(index) = existing_index {
+                    if n == index {
+                        continue;
+                    }
+                }
+                map.swap_remove_index(n);
+                num_evictions += 1;
+            }
+            get_connection_cache_eviction_measure.stop();
 
         if matches!(pool_status, PoolStatus::PartiallyFull) {
             // trigger an async connection create
@@ -710,7 +726,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         {
-            let map = connection_cache.map.read().unwrap();
+            let map = connection_cache.map.read().unwrap().map;
             assert!(map.len() == MAX_CONNECTIONS);
             addrs.iter().for_each(|addr| {
                 let conn = &map.get(addr).expect("Address not found").get(0).unwrap();
@@ -731,7 +747,7 @@ mod tests {
 
         let port = addr.port();
         let addr_with_quic_port = SocketAddr::new(addr.ip(), port);
-        let map = connection_cache.map.read().unwrap();
+        let map = connection_cache.map.read().unwrap().map;
         assert!(map.len() == MAX_CONNECTIONS);
         let _conn = map.get(&addr_with_quic_port).expect("Address not found");
     }

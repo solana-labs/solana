@@ -23,6 +23,7 @@ use {
         exit::Exit,
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair, Signer},
+        quic::NotifyKeyUpdate,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -47,6 +48,7 @@ pub struct AdminRpcRequestMetadata {
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
     pub rpc_to_plugin_manager_sender: Option<Sender<GeyserPluginManagerRequest>>,
+    notifies: Vec<Arc<dyn NotifyKeyUpdate>>,
 }
 
 impl Metadata for AdminRpcRequestMetadata {}
@@ -62,6 +64,12 @@ impl AdminRpcRequestMetadata {
             Err(jsonrpc_core::error::Error::invalid_params(
                 "Retry once validator start up is complete",
             ))
+        }
+    }
+
+    pub fn update_keypair(&self, key: &Keypair) {
+        for n in self.notifies.iter() {
+            n.update_key(key);
         }
     }
 }

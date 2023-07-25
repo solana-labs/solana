@@ -1,5 +1,5 @@
 //! Definitions related to Solana over QUIC.
-use std::time::Duration;
+use {std::time::Duration, crate::signature::Keypair};
 
 pub const QUIC_PORT_OFFSET: u16 = 6;
 // Empirically found max number of concurrent streams
@@ -35,3 +35,7 @@ pub const QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO: u64 = 128;
 /// The receive window for QUIC connection from maximum staked nodes is
 /// set to this ratio times [`solana_sdk::packet::PACKET_DATA_SIZE`]
 pub const QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO: u64 = 512;
+
+pub trait NotifyKeyUpdate {
+    fn update_key(&self, key: &Keypair);
+}

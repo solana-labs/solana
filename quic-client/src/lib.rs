@@ -93,12 +93,14 @@ pub struct QuicConfig {
     // The optional specified endpoint for the quic based client connections
     // If not specified, the connection cache will create as needed.
     client_endpoint: Option<Endpoint>,
+    ip: IpAddr,
 }
 
 impl NewConnectionConfig for QuicConfig {
     fn new() -> Result<Self, ClientError> {
+        let ip = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (cert, priv_key) =
-            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))?;
+            new_self_signed_tls_certificate(&Keypair::new(), ip)?;
         Ok(Self {
             client_certificate: Arc::new(QuicClientCertificate {
                 certificate: cert,
@@ -107,6 +109,7 @@ impl NewConnectionConfig for QuicConfig {
             maybe_staked_nodes: None,
             maybe_client_pubkey: None,
             client_endpoint: None,
+            ip,
         })
     }
 }
@@ -140,9 +143,16 @@ impl QuicConfig {
     pub fn update_client_certificate(
         &mut self,
         keypair: &Keypair,
-        ipaddr: IpAddr,
+        ipaddr: Option<IpAddr>,
     ) -> Result<(), RcgenError> {
-        let (cert, priv_key) = new_self_signed_tls_certificate(keypair, ipaddr)?;
+        let (cert, priv_key) = if let Some(ip) = ipaddr {
+            let res = new_self_signed_tls_certificate(keypair, ip)?;
+            self.ip = ip;
+            res
+        } 
+            else {
+                new_self_signed_tls_certificate(keypair, self.ip)?
+        };
         self.client_certificate = Arc::new(QuicClientCertificate {
             certificate: cert,
             key: priv_key,
@@ -212,6 +222,10 @@ impl ConnectionManager for QuicConnectionManager {
     fn new_connection_config(&self) -> QuicConfig {
         self.connection_config.clone()
     }
+
+    fn update_key(&mut self, key: &Keypair) {
+        let _ = self.connection_config.update_client_certificate(key, None);
+    }
 }
 
 impl QuicConnectionManager {
@@ -230,7 +244,7 @@ pub fn new_quic_connection_cache(
     connection_pool_size: usize,
 ) -> Result<QuicConnectionCache, ClientError> {
     let mut config = QuicConfig::new()?;
-    config.update_client_certificate(keypair, ipaddr)?;
+    config.update_client_certificate(keypair, Some(ipaddr))?;
     config.set_staked_nodes(staked_nodes, &keypair.pubkey());
     let connection_manager = QuicConnectionManager::new_with_connection_config(config);
     ConnectionCache::new(name, connection_manager, connection_pool_size)
