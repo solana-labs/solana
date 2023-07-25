@@ -5242,8 +5242,12 @@ fn test_duplicate_shreds_switch_failure() {
     let (mut cluster, _validator_keypairs) = test_faulty_node(
         BroadcastStageType::BroadcastDuplicates(BroadcastDuplicatesConfig {
             partition: ClusterPartition::Pubkey(vec![
+                // Don't include the other dup validator here, otherwise
+                // this dup version will have enough to be duplicate confirmed and
+                // will cause the dup leader to try and dump its own slot,
+                // crashing before it can signal the duplicate slot via the
+                // `duplicate_slot_receiver` below
                 duplicate_fork_validator1_pubkey,
-                duplicate_fork_validator2_pubkey,
             ]),
             duplicate_slot_sender: Some(duplicate_slot_sender),
         }),
@@ -5263,19 +5267,15 @@ fn test_duplicate_shreds_switch_failure() {
             .recv_timeout(Duration::from_millis(30_000))
             .expect("Duplicate leader failed to make a duplicate slot in allotted time");
         // Make sure both validators received and replay the complete blocks
-        let dup_frozen_hash1 = wait_for_duplicate_fork_frozen(
+        let dup_frozen_hash = wait_for_duplicate_fork_frozen(
             &cluster.ledger_path(&duplicate_fork_validator1_pubkey),
-            dup_slot,
-        );
-        let dup_frozen_hash2 = wait_for_duplicate_fork_frozen(
-            &cluster.ledger_path(&duplicate_fork_validator2_pubkey),
             dup_slot,
         );
         let original_frozen_hash = wait_for_duplicate_fork_frozen(
             &cluster.ledger_path(&target_switch_fork_validator_pubkey),
             dup_slot,
         );
-        if dup_frozen_hash1 == dup_frozen_hash2 && original_frozen_hash != dup_frozen_hash1 {
+        if original_frozen_hash != dup_frozen_hash {
             break;
         }
     }
@@ -5283,7 +5283,10 @@ fn test_duplicate_shreds_switch_failure() {
     // 3) Force `duplicate_fork_validator1_pubkey` to see a duplicate proof
     info!("Waiting for duplicate proof for slot: {}", dup_slot);
     let duplicate_proof = {
-        let ledger_path = cluster.ledger_path(&duplicate_fork_validator2_pubkey);
+        // Grab the other version of the slot from the `target_switch_fork_validator_pubkey`
+        // which we confirmed to have a different version of the frozen hash in the loop
+        // above
+        let ledger_path = cluster.ledger_path(&target_switch_fork_validator_pubkey);
         let blockstore = open_blockstore(&ledger_path);
         let dup_shred = blockstore
             .get_data_shreds_for_slot(dup_slot, 0)
@@ -5333,11 +5336,19 @@ fn test_duplicate_shreds_switch_failure() {
         &duplicate_fork_validator1_pubkey,
         dup_slot + 1,
     );
-    clear_ledger_and_tower(
-        &duplicate_fork_validator2_ledger_path,
-        &duplicate_fork_validator2_pubkey,
-        dup_slot + 1,
-    );
+    // Copy validator 1's ledger to validator 2 so that they have the same version
+    // of the duplicate slot
+    {
+        clear_ledger_and_tower(
+            &duplicate_fork_validator2_ledger_path,
+            &duplicate_fork_validator2_pubkey,
+            dup_slot,
+        );
+        Blockstore::destroy(&duplicate_fork_validator2_ledger_path).unwrap();
+        let blockstore1 = open_blockstore(&duplicate_fork_validator1_ledger_path);
+        let blockstore2 = open_blockstore(&duplicate_fork_validator2_ledger_path);
+        copy_blocks(dup_slot, &blockstore1, &blockstore2);
+    }
 
     // Set entrypoint to `target_switch_fork_validator_pubkey` so we can run discovery in gossip even without the
     // bad leader
