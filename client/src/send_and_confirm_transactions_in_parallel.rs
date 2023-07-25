@@ -456,6 +456,8 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
             break;
         }
 
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
         if let Some(progress_bar) = &progress_bar {
             progress_bar.println(format!(
                 "Blockhash expired. {expired_blockhash_retries} retries remaining"

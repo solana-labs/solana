@@ -83,6 +83,7 @@ pub enum ProgramCliCommand {
         max_len: Option<usize>,
         allow_excessive_balance: bool,
         skip_fee_check: bool,
+        deployment_method: DeploymentMethod,
     },
     WriteBuffer {
         program_location: String,
@@ -91,6 +92,7 @@ pub enum ProgramCliCommand {
         buffer_authority_signer_index: SignerIndex,
         max_len: Option<usize>,
         skip_fee_check: bool,
+        deployment_method: DeploymentMethod,
     },
     SetBufferAuthority {
         buffer_pubkey: Pubkey,
@@ -130,6 +132,25 @@ pub enum ProgramCliCommand {
 
 pub trait ProgramSubCommands {
     fn program_subcommands(self) -> Self;
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DeploymentMethod {
+    Rpc,
+    Quic,
+    Udp,
+}
+
+impl DeploymentMethod {
+    pub fn new(use_quic: bool, use_udp: bool) -> Self {
+        if use_quic {
+            DeploymentMethod::Quic
+        } else if use_udp {
+            DeploymentMethod::Udp
+        } else {
+            DeploymentMethod::Rpc
+        }
+    }
 }
 
 impl ProgramSubCommands for App<'_, '_> {
@@ -198,6 +219,19 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .long("allow-excessive-deploy-account-balance")
                                 .takes_value(false)
                                 .help("Use the designated program id even if the account already holds a large balance of SOL")
+                        )
+                        .arg(
+                            Arg::with_name("use_quic")
+                                .long("use-quic")
+                                .global(true)
+                                .help("Use QUIC when sending transactions."),
+                        )
+                        .arg(
+                            Arg::with_name("use_udp")
+                                .long("use-udp")
+                                .global(true)
+                                .conflicts_with("use_quic")
+                                .help("Use UDP when sending transactions."),
                         ),
                 )
                 .subcommand(
@@ -235,6 +269,18 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .required(false)
                                 .help("Maximum length of the upgradeable program \
                                       [default: twice the length of the original deployed program]")
+                        ).arg(
+                            Arg::with_name("use_quic")
+                                .long("use-quic")
+                                .global(true)
+                                .help("Use QUIC when sending transactions."),
+                        )
+                        .arg(
+                            Arg::with_name("use_udp")
+                                .long("use-udp")
+                                .global(true)
+                                .conflicts_with("use_quic")
+                                .help("Use UDP when sending transactions."),
                         ),
                 )
                 .subcommand(
@@ -477,6 +523,11 @@ pub fn parse_program_subcommand(
             let signer_info =
                 default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
 
+            let use_quic = matches.is_present("use_quic");
+            let use_udp = matches.is_present("use_udp");
+
+            let deployment_method = DeploymentMethod::new(use_quic, use_udp);
+
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location,
@@ -491,6 +542,7 @@ pub fn parse_program_subcommand(
                     max_len,
                     allow_excessive_balance: matches.is_present("allow_excessive_balance"),
                     skip_fee_check,
+                    deployment_method,
                 }),
                 signers: signer_info.signers,
             }
@@ -518,6 +570,10 @@ pub fn parse_program_subcommand(
             let signer_info =
                 default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
 
+            let use_quic = matches.is_present("use_quic");
+            let use_udp: bool = matches.is_present("use_udp");
+            let deployment_method = DeploymentMethod::new(use_quic, use_udp);
+
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
                     program_location: matches.value_of("program_location").unwrap().to_string(),
@@ -528,6 +584,7 @@ pub fn parse_program_subcommand(
                         .unwrap(),
                     max_len,
                     skip_fee_check,
+                    deployment_method,
                 }),
                 signers: signer_info.signers,
             }
@@ -699,6 +756,7 @@ pub fn process_program_subcommand(
             max_len,
             allow_excessive_balance,
             skip_fee_check,
+            deployment_method,
         } => process_program_deploy(
             rpc_client,
             config,
@@ -712,6 +770,7 @@ pub fn process_program_subcommand(
             *max_len,
             *allow_excessive_balance,
             *skip_fee_check,
+            *deployment_method,
         ),
         ProgramCliCommand::WriteBuffer {
             program_location,
@@ -720,6 +779,7 @@ pub fn process_program_subcommand(
             buffer_authority_signer_index,
             max_len,
             skip_fee_check,
+            deployment_method,
         } => process_write_buffer(
             rpc_client,
             config,
@@ -729,6 +789,7 @@ pub fn process_program_subcommand(
             *buffer_authority_signer_index,
             *max_len,
             *skip_fee_check,
+            *deployment_method,
         ),
         ProgramCliCommand::SetBufferAuthority {
             buffer_pubkey,
@@ -840,6 +901,7 @@ fn process_program_deploy(
     max_len: Option<usize>,
     allow_excessive_balance: bool,
     skip_fee_check: bool,
+    deployment_method: DeploymentMethod,
 ) -> ProcessResult {
     let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
     let (buffer_provided, buffer_signer, buffer_pubkey) = if let Some(i) = buffer_signer_index {
@@ -1020,6 +1082,7 @@ fn process_program_deploy(
             upgrade_authority_signer,
             allow_excessive_balance,
             skip_fee_check,
+            deployment_method,
         )
     } else {
         do_process_program_upgrade(
@@ -1031,6 +1094,7 @@ fn process_program_deploy(
             &buffer_pubkey,
             buffer_signer,
             skip_fee_check,
+            deployment_method,
         )
     };
     if result.is_ok() && is_final {
@@ -1058,6 +1122,7 @@ fn process_write_buffer(
     buffer_authority_signer_index: SignerIndex,
     max_len: Option<usize>,
     skip_fee_check: bool,
+    deployment_method: DeploymentMethod,
 ) -> ProcessResult {
     // Create ephemeral keypair to use for Buffer account, if not provided
     let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
@@ -1120,6 +1185,7 @@ fn process_write_buffer(
         buffer_authority,
         true,
         skip_fee_check,
+        deployment_method,
     );
 
     if result.is_err() && buffer_signer_index.is_none() && buffer_signer.is_some() {
@@ -1753,6 +1819,7 @@ fn do_process_program_write_and_deploy(
     buffer_authority_signer: &dyn Signer,
     allow_excessive_balance: bool,
     skip_fee_check: bool,
+    deployment_method: DeploymentMethod,
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
 
@@ -1878,6 +1945,7 @@ fn do_process_program_write_and_deploy(
         buffer_signer,
         Some(buffer_authority_signer),
         program_signers,
+        deployment_method,
     )?;
 
     if let Some(program_signers) = program_signers {
@@ -1902,6 +1970,7 @@ fn do_process_program_upgrade(
     buffer_pubkey: &Pubkey,
     buffer_signer: Option<&dyn Signer>,
     skip_fee_check: bool,
+    deployment_method: DeploymentMethod,
 ) -> ProcessResult {
     let loader_id = bpf_loader_upgradeable::id();
     let data_len = program_data.len();
@@ -2009,6 +2078,7 @@ fn do_process_program_upgrade(
         buffer_signer,
         Some(upgrade_authority),
         Some(&[upgrade_authority]),
+        deployment_method,
     )?;
 
     let program_id = CliProgramId {
@@ -2136,6 +2206,7 @@ fn send_deploy_messages(
     initial_signer: Option<&dyn Signer>,
     write_signer: Option<&dyn Signer>,
     final_signers: Option<&[&dyn Signer]>,
+    deployment_method: DeploymentMethod,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let payer_signer = config.signers[0];
 
@@ -2165,50 +2236,68 @@ fn send_deploy_messages(
     if !write_messages.is_empty() {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
-            let connection_cache = if config.use_quic {
-                ConnectionCache::new_quic("connection_cache_cli_program_quic", 1)
-            } else {
-                ConnectionCache::with_udp("connection_cache_cli_program_udp", 1)
-            };
-            let transaction_errors = match connection_cache {
-                ConnectionCache::Udp(cache) => TpuClient::new_with_connection_cache(
+
+            let transaction_errors = if deployment_method == DeploymentMethod::Rpc {
+                send_and_confirm_transactions_in_parallel_blocking(
                     rpc_client.clone(),
-                    &config.websocket_url,
-                    TpuClientConfig::default(),
-                    cache,
-                )?
-                .send_and_confirm_messages_with_spinner(
+                    None,
                     write_messages,
                     &[payer_signer, write_signer],
-                ),
-                ConnectionCache::Quic(cache) => {
-                    let tpu_client_fut = solana_client::nonblocking::tpu_client::TpuClient::new_with_connection_cache(
-                        rpc_client.get_inner_client().clone(),
-                        config.websocket_url.as_str(),
-                        solana_client::tpu_client::TpuClientConfig::default(),
-                        cache,
-                    );
-                    let tpu_client = rpc_client
-                        .runtime()
-                        .block_on(tpu_client_fut)
-                        .expect("Should return a valid tpu client");
-
-                    send_and_confirm_transactions_in_parallel_blocking(
+                    SendAndConfrimConfig {
+                        resign_txs_count: Some(5),
+                        with_spinner: true,
+                    },
+                )
+            } else {
+                let connection_cache = if deployment_method == DeploymentMethod::Quic {
+                    ConnectionCache::new_quic("connection_cache_cli_program_quic", 1)
+                } else if deployment_method == DeploymentMethod::Udp {
+                    ConnectionCache::with_udp("connection_cache_cli_program_udp", 1)
+                } else {
+                    return Err("Unknown deployment mode".into());
+                };
+                match connection_cache {
+                    ConnectionCache::Udp(cache) => TpuClient::new_with_connection_cache(
                         rpc_client.clone(),
-                        Some(tpu_client),
+                        &config.websocket_url,
+                        TpuClientConfig::default(),
+                        cache,
+                    )?
+                    .send_and_confirm_messages_with_spinner(
                         write_messages,
                         &[payer_signer, write_signer],
-                        SendAndConfrimConfig {
-                            resign_txs_count: Some(5),
-                            with_spinner: true,
-                        },
-                    )
-                },
-            }
-            .map_err(|err| format!("Data writes to account failed: {err}"))?
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+                    ),
+                    ConnectionCache::Quic(_) => {
+                        let tpu_client_fut = solana_client::nonblocking::tpu_client::TpuClient::new_with_connection_cache(
+                            rpc_client.get_inner_client().clone(),
+                            config.websocket_url.as_str(),
+                            solana_client::tpu_client::TpuClientConfig::default(),
+                            cache,
+                        );
+                        let tpu_client = rpc_client
+                            .runtime()
+                            .block_on(tpu_client_fut)
+                            .expect("Should return a valid tpu client");
+    
+                        send_and_confirm_transactions_in_parallel_blocking(
+                            rpc_client.clone(),
+                            Some(tpu_client),
+                            write_messages,
+                            &[payer_signer, write_signer],
+                            SendAndConfrimConfig {
+                                resign_txs_count: Some(5),
+                                with_spinner: true,
+                            },
+                        )
+                    }
+                }
+            };
+
+            let transaction_errors = transaction_errors
+                .map_err(|err| format!("Data writes to account failed: {err}"))?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
 
             if !transaction_errors.is_empty() {
                 for transaction_error in &transaction_errors {
@@ -2326,6 +2415,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    deployment_method: DeploymentMethod::Rpc,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2353,6 +2443,7 @@ mod tests {
                     max_len: Some(42),
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    deployment_method: DeploymentMethod::Rpc,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2382,6 +2473,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    deployment_method: DeploymentMethod::Rpc,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2413,6 +2505,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    deployment_method: DeploymentMethod::Rpc,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2443,6 +2536,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    deployment_method: DeploymentMethod::Rpc,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2476,6 +2570,7 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
+                    deployment_method: DeploymentMethod::Rpc,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2505,6 +2600,61 @@ mod tests {
                     max_len: None,
                     skip_fee_check: false,
                     allow_excessive_balance: false,
+                    deployment_method: DeploymentMethod::Rpc,
+                }),
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+            }
+        );
+
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program",
+            "deploy",
+            "/Users/test/program.so",
+            "--use-quic",
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::Deploy {
+                    program_location: Some("/Users/test/program.so".to_string()),
+                    buffer_signer_index: None,
+                    buffer_pubkey: None,
+                    program_signer_index: None,
+                    program_pubkey: None,
+                    upgrade_authority_signer_index: 0,
+                    is_final: false,
+                    max_len: None,
+                    allow_excessive_balance: false,
+                    skip_fee_check: false,
+                    deployment_method: DeploymentMethod::Quic,
+                }),
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+            }
+        );
+
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program",
+            "deploy",
+            "/Users/test/program.so",
+            "--use-udp",
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::Deploy {
+                    program_location: Some("/Users/test/program.so".to_string()),
+                    buffer_signer_index: None,
+                    buffer_pubkey: None,
+                    program_signer_index: None,
+                    program_pubkey: None,
+                    upgrade_authority_signer_index: 0,
+                    is_final: false,
+                    max_len: None,
+                    allow_excessive_balance: false,
+                    skip_fee_check: false,
+                    deployment_method: DeploymentMethod::Udp,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2538,6 +2688,7 @@ mod tests {
                     buffer_authority_signer_index: 0,
                     max_len: None,
                     skip_fee_check: false,
+                    deployment_method: DeploymentMethod::Rpc,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2562,6 +2713,7 @@ mod tests {
                     buffer_authority_signer_index: 0,
                     max_len: Some(42),
                     skip_fee_check: false,
+                    deployment_method: DeploymentMethod::Rpc,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2589,6 +2741,7 @@ mod tests {
                     buffer_authority_signer_index: 0,
                     max_len: None,
                     skip_fee_check: false,
+                    deployment_method: DeploymentMethod::Rpc,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2619,6 +2772,7 @@ mod tests {
                     buffer_authority_signer_index: 1,
                     max_len: None,
                     skip_fee_check: false,
+                    deployment_method: DeploymentMethod::Rpc,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2654,6 +2808,7 @@ mod tests {
                     buffer_authority_signer_index: 2,
                     max_len: None,
                     skip_fee_check: false,
+                    deployment_method: DeploymentMethod::Rpc,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -3155,6 +3310,7 @@ mod tests {
                 max_len: None,
                 allow_excessive_balance: false,
                 skip_fee_check: false,
+                deployment_method: DeploymentMethod::Quic,
             }),
             signers: vec![&default_keypair],
             output_format: OutputFormat::JsonCompact,

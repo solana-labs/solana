@@ -8,7 +8,7 @@ use {
     solana_clap_utils::input_parsers::pubkey_of,
     solana_cli::{
         cli::{process_command, CliCommand, CliConfig},
-        program::ProgramCliCommand,
+        program::{DeploymentMethod, ProgramCliCommand},
     },
     solana_client::transaction_executor::TransactionExecutor,
     solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT},
@@ -247,6 +247,7 @@ fn run_transactions_dos(
             is_final: true,
             max_len: None,
             skip_fee_check: true, // skip_fee_check
+            deployment_method: DeploymentMethod::Quic,
         });
 
         process_command(&config).expect("deploy didn't pass");

@@ -4,7 +4,7 @@ use {
     serde_json::Value,
     solana_cli::{
         cli::{process_command, CliCommand, CliConfig},
-        program::{ProgramCliCommand, CLOSE_PROGRAM_WARNING},
+        program::{DeploymentMethod, ProgramCliCommand, CLOSE_PROGRAM_WARNING},
     },
     solana_cli_output::OutputFormat,
     solana_faucet::faucet::run_local_faucet,
@@ -73,6 +73,7 @@ fn test_cli_program_deploy_non_upgradeable() {
         is_final: true,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     config.output_format = OutputFormat::JsonCompact;
     let response = process_command(&config);
@@ -117,6 +118,7 @@ fn test_cli_program_deploy_non_upgradeable() {
         is_final: true,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     process_command(&config).unwrap();
     let account1 = rpc_client
@@ -171,6 +173,7 @@ fn test_cli_program_deploy_non_upgradeable() {
         is_final: true,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     let err = process_command(&config).unwrap_err();
     assert_eq!(
@@ -193,6 +196,7 @@ fn test_cli_program_deploy_non_upgradeable() {
         is_final: true,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     process_command(&config).unwrap_err();
 }
@@ -253,6 +257,7 @@ fn test_cli_program_deploy_no_authority() {
         is_final: true,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     config.output_format = OutputFormat::JsonCompact;
     let response = process_command(&config);
@@ -279,6 +284,7 @@ fn test_cli_program_deploy_no_authority() {
         is_final: false,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     process_command(&config).unwrap_err();
 }
@@ -340,6 +346,7 @@ fn test_cli_program_deploy_with_authority() {
         is_final: false,
         max_len: Some(max_len),
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     config.output_format = OutputFormat::JsonCompact;
     let response = process_command(&config);
@@ -388,6 +395,7 @@ fn test_cli_program_deploy_with_authority() {
         is_final: false,
         max_len: Some(max_len),
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -430,6 +438,7 @@ fn test_cli_program_deploy_with_authority() {
         is_final: false,
         max_len: Some(max_len),
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     process_command(&config).unwrap();
     let program_account = rpc_client.get_account(&program_pubkey).unwrap();
@@ -485,6 +494,7 @@ fn test_cli_program_deploy_with_authority() {
         is_final: false,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     process_command(&config).unwrap();
     let program_account = rpc_client.get_account(&program_pubkey).unwrap();
@@ -560,6 +570,7 @@ fn test_cli_program_deploy_with_authority() {
         is_final: false,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     process_command(&config).unwrap_err();
 
@@ -576,6 +587,7 @@ fn test_cli_program_deploy_with_authority() {
         is_final: true,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -679,6 +691,7 @@ fn test_cli_program_close_program() {
         is_final: false,
         max_len: Some(max_len),
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     config.output_format = OutputFormat::JsonCompact;
     process_command(&config).unwrap();
@@ -781,6 +794,7 @@ fn test_cli_program_write_buffer() {
         buffer_authority_signer_index: 0,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     config.output_format = OutputFormat::JsonCompact;
     let response = process_command(&config);
@@ -816,6 +830,7 @@ fn test_cli_program_write_buffer() {
         buffer_authority_signer_index: 0,
         max_len: Some(max_len),
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -878,6 +893,7 @@ fn test_cli_program_write_buffer() {
         buffer_authority_signer_index: 2,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -916,6 +932,7 @@ fn test_cli_program_write_buffer() {
         buffer_authority_signer_index: 2,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -990,6 +1007,7 @@ fn test_cli_program_write_buffer() {
         buffer_authority_signer_index: 0,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     config.output_format = OutputFormat::JsonCompact;
     let response = process_command(&config);
@@ -1031,6 +1049,7 @@ fn test_cli_program_write_buffer() {
         buffer_authority_signer_index: 0,
         max_len: None, //Some(max_len),
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     process_command(&config).unwrap();
     config.signers = vec![&keypair, &buffer_keypair];
@@ -1045,6 +1064,7 @@ fn test_cli_program_write_buffer() {
         is_final: true,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     config.output_format = OutputFormat::JsonCompact;
     let error = process_command(&config).unwrap_err();
@@ -1103,6 +1123,7 @@ fn test_cli_program_set_buffer_authority() {
         buffer_authority_signer_index: 0,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     process_command(&config).unwrap();
     let buffer_account = rpc_client.get_account(&buffer_keypair.pubkey()).unwrap();
@@ -1219,6 +1240,7 @@ fn test_cli_program_mismatch_buffer_authority() {
         buffer_authority_signer_index: 2,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     process_command(&config).unwrap();
     let buffer_account = rpc_client.get_account(&buffer_keypair.pubkey()).unwrap();
@@ -1242,6 +1264,7 @@ fn test_cli_program_mismatch_buffer_authority() {
         is_final: true,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     process_command(&config).unwrap_err();
 
@@ -1258,6 +1281,7 @@ fn test_cli_program_mismatch_buffer_authority() {
         is_final: true,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     process_command(&config).unwrap();
 }
@@ -1315,6 +1339,7 @@ fn test_cli_program_show() {
         buffer_authority_signer_index: 2,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     process_command(&config).unwrap();
 
@@ -1375,6 +1400,7 @@ fn test_cli_program_show() {
         is_final: false,
         max_len: Some(max_len),
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     config.output_format = OutputFormat::JsonCompact;
     let min_slot = rpc_client.get_slot().unwrap();
@@ -1502,6 +1528,7 @@ fn test_cli_program_dump() {
         buffer_authority_signer_index: 2,
         max_len: None,
         skip_fee_check: false,
+        deployment_method: DeploymentMethod::Rpc,
     });
     process_command(&config).unwrap();
 
