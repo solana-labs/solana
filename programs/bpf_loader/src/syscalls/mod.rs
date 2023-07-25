@@ -573,7 +573,7 @@ fn translate_and_check_program_address_inputs<'a>(
     check_aligned: bool,
     check_size: bool,
 ) -> Result<(Vec<&'a [u8]>, &'a Pubkey), Error> {
-    let untranslated_seeds = translate_slice::<&[&u8]>(
+    let untranslated_seeds = translate_slice::<&[u8]>(
         memory_mapping,
         seeds_addr,
         seeds_len,
