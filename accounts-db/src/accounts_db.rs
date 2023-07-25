@@ -2427,15 +2427,19 @@ impl AccountsDb {
         let num_threads = get_thread_count();
         const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 400_000_000; // 400M bytes
 
-        let mut temp_accounts_hash_cache_path = None;
-        let accounts_hash_cache_path = accounts_hash_cache_path.unwrap_or_else(|| {
-            temp_accounts_hash_cache_path = Some(TempDir::new().unwrap());
-            temp_accounts_hash_cache_path
-                .as_ref()
-                .unwrap()
-                .path()
-                .to_path_buf()
-        });
+        let (accounts_hash_cache_path, temp_accounts_hash_cache_path) =
+            match accounts_hash_cache_path {
+                Some(accounts_hash_cache_path) => (accounts_hash_cache_path, None),
+                None => {
+                    let temp_accounts_hash_cache_path = Some(TempDir::new().unwrap());
+                    let accounts_hash_cache_path = temp_accounts_hash_cache_path
+                        .as_ref()
+                        .unwrap()
+                        .path()
+                        .to_path_buf();
+                    (accounts_hash_cache_path, temp_accounts_hash_cache_path)
+                }
+            };
 
         let mut bank_hash_stats = HashMap::new();
         bank_hash_stats.insert(0, BankHashStats::default());
