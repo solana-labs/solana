@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use crate::epoch_accounts_hash_utils;
     use {
         crate::{
             account_storage::{AccountStorageMap, AccountStorageReference},
@@ -11,7 +10,10 @@ mod tests {
             accounts_file::{AccountsFile, AccountsFileError},
             accounts_hash::{AccountsDeltaHash, AccountsHash},
             accounts_index::AccountSecondaryIndexes,
-            bank::{Bank, BankTestConfig, EpochRewardStatus, StartBlockHeightAndRewards},
+            bank::{
+                epoch_accounts_hash_utils, Bank, BankTestConfig, EpochRewardStatus,
+                StartBlockHeightAndRewards,
+            },
             epoch_accounts_hash::EpochAccountsHash,
             genesis_utils::{activate_all_features, activate_feature},
             runtime_config::RuntimeConfig,

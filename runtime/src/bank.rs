@@ -209,6 +209,7 @@ struct VerifyAccountsHashConfig {
 
 mod address_lookup_table;
 mod builtin_programs;
+pub mod epoch_accounts_hash_utils;
 mod metrics;
 mod serde_snapshot;
 mod sysvar_cache;
@@ -268,7 +269,6 @@ pub struct BankRc {
     pub(crate) bank_id_generator: Arc<AtomicU64>,
 }
 
-use crate::epoch_accounts_hash_utils;
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
 

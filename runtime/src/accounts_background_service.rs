@@ -771,10 +771,12 @@ fn cmp_requests_by_priority(
 
 #[cfg(test)]
 mod test {
-    use crate::epoch_accounts_hash_utils;
     use {
         super::*,
-        crate::{epoch_accounts_hash::EpochAccountsHash, genesis_utils::create_genesis_config},
+        crate::{
+            bank::epoch_accounts_hash_utils, epoch_accounts_hash::EpochAccountsHash,
+            genesis_utils::create_genesis_config,
+        },
         crossbeam_channel::unbounded,
         solana_sdk::{
             account::AccountSharedData, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey,

@@ -1,10 +1,9 @@
 //! The `bank_forks` module implements BankForks a DAG of checkpointed Banks
 
-use crate::epoch_accounts_hash_utils;
 use {
     crate::{
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
-        bank::{Bank, SquashTiming},
+        bank::{epoch_accounts_hash_utils, Bank, SquashTiming},
         snapshot_config::SnapshotConfig,
     },
     log::*,
