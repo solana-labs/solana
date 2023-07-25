@@ -4684,7 +4684,8 @@ impl Bank {
 
             ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account) => {
                 solana_bpf_loader_program::load_program_from_bytes(
-                    &self.feature_set,
+                    self.feature_set
+                        .is_active(&feature_set::delay_visibility_of_program_deployment::id()),
                     None,
                     &mut load_program_metrics,
                     program_account.data(),
@@ -4706,7 +4707,8 @@ impl Bank {
                 .ok_or(InstructionError::InvalidAccountData)
                 .and_then(|programdata| {
                     solana_bpf_loader_program::load_program_from_bytes(
-                        &self.feature_set,
+                        self.feature_set
+                            .is_active(&feature_set::delay_visibility_of_program_deployment::id()),
                         None,
                         &mut load_program_metrics,
                         programdata,
