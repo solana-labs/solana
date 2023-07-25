@@ -83,7 +83,12 @@ impl AccountsHashVerifier {
                     info!("handling accounts package: {accounts_package:?}");
                     let enqueued_time = accounts_package.enqueued.elapsed();
 
-                    let snapshot_storages = accounts_package.snapshot_storages.clone();
+                    // If this accounts package is for a snapshot, then clone the storages to
+                    // save for fastboot.
+                    let snapshot_storages_for_fastboot = accounts_package
+                        .snapshot_info
+                        .is_some()
+                        .then(|| accounts_package.snapshot_storages.clone());
 
                     let (_, handling_time_us) = measure_us!(Self::process_accounts_package(
                         accounts_package,
@@ -95,19 +100,9 @@ impl AccountsHashVerifier {
                         &exit,
                     ));
 
-                    // Done processing the current snapshot, so the current snapshot dir
-                    // has been converted to POST state.  It is the time to update
-                    // last_snapshot_storages to release the reference counts for the
-                    // previous POST snapshot dir, and save the new ones for the new
-                    // POST snapshot dir.
-                    last_snapshot_storages = Some(snapshot_storages);
-                    debug!(
-                        "Number of snapshot storages kept alive for fastboot: {}",
-                        last_snapshot_storages
-                            .as_ref()
-                            .map(|storages| storages.len())
-                            .unwrap_or(0)
-                    );
+                    if let Some(snapshot_storages_for_fastboot) = snapshot_storages_for_fastboot {
+                        last_snapshot_storages = Some(snapshot_storages_for_fastboot)
+                    }
 
                     datapoint_info!(
                         "accounts_hash_verifier",
