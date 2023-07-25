@@ -469,7 +469,7 @@ pub(crate) struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
-    accounts_hash_cache_path: None,
+    base_working_path: None,
     filler_accounts_config: FillerAccountsConfig::const_default(),
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
@@ -480,7 +480,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
-    accounts_hash_cache_path: None,
+    base_working_path: None,
     filler_accounts_config: FillerAccountsConfig::const_default(),
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
@@ -539,7 +539,8 @@ const ANCIENT_APPEND_VEC_DEFAULT_OFFSET: Option<i64> = Some(-10_000);
 #[derive(Debug, Default, Clone)]
 pub struct AccountsDbConfig {
     pub index: Option<AccountsIndexConfig>,
-    pub accounts_hash_cache_path: Option<PathBuf>,
+    /// Base directory for various necessary files
+    pub base_working_path: Option<PathBuf>,
     pub filler_accounts_config: FillerAccountsConfig,
     pub write_cache_limit_bytes: Option<u64>,
     /// if None, ancient append vecs are set to ANCIENT_APPEND_VEC_DEFAULT_OFFSET
@@ -1467,6 +1468,9 @@ pub struct AccountsDb {
     /// Set of storage paths to pick from
     pub paths: Vec<PathBuf>,
 
+    /// Base directory for various necessary files
+    base_working_path: PathBuf,
+    /// Directories for account hash calculations, within base_working_path
     full_accounts_hash_cache_path: PathBuf,
     incremental_accounts_hash_cache_path: PathBuf,
     transient_accounts_hash_cache_path: PathBuf,
@@ -2422,22 +2426,32 @@ impl AccountsDb {
 
     fn default_with_accounts_index(
         accounts_index: AccountInfoAccountsIndex,
-        accounts_hash_cache_path: Option<PathBuf>,
+        base_working_path: Option<PathBuf>,
     ) -> Self {
         let num_threads = get_thread_count();
         const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 400_000_000; // 400M bytes
 
-        let (accounts_hash_cache_path, temp_accounts_hash_cache_path) =
-            match accounts_hash_cache_path {
-                Some(accounts_hash_cache_path) => (accounts_hash_cache_path, None),
+        let (base_working_path, accounts_hash_cache_path, temp_accounts_hash_cache_path) =
+            match base_working_path {
+                Some(base_working_path) => {
+                    let accounts_hash_cache_path = base_working_path
+                        .join(Self::ACCOUNTS_HASH_CACHE_DIR);
+                    (base_working_path, accounts_hash_cache_path, None)
+                }
                 None => {
                     let temp_accounts_hash_cache_path = Some(TempDir::new().unwrap());
-                    let accounts_hash_cache_path = temp_accounts_hash_cache_path
+                    let base_working_path = temp_accounts_hash_cache_path
                         .as_ref()
                         .unwrap()
                         .path()
                         .to_path_buf();
-                    (accounts_hash_cache_path, temp_accounts_hash_cache_path)
+                    let accounts_hash_cache_path = base_working_path
+                        .join(Self::ACCOUNTS_HASH_CACHE_DIR);
+                    (
+                        base_working_path,
+                        accounts_hash_cache_path,
+                        temp_accounts_hash_cache_path,
+                    )
                 }
             };
 
@@ -2468,6 +2482,7 @@ impl AccountsDb {
             write_cache_limit_bytes: None,
             write_version: AtomicU64::new(0),
             paths: vec![],
+            base_working_path,
             full_accounts_hash_cache_path: accounts_hash_cache_path.join("full"),
             incremental_accounts_hash_cache_path: accounts_hash_cache_path.join("incremental"),
             transient_accounts_hash_cache_path: accounts_hash_cache_path.join("transient"),
@@ -2549,9 +2564,9 @@ impl AccountsDb {
             accounts_db_config.as_mut().and_then(|x| x.index.take()),
             exit,
         );
-        let accounts_hash_cache_path = accounts_db_config
+        let base_working_path = accounts_db_config
             .as_ref()
-            .and_then(|x| x.accounts_hash_cache_path.clone());
+            .and_then(|x| x.base_working_path.clone());
 
         let filler_accounts_config = accounts_db_config
             .as_ref()
@@ -2607,7 +2622,7 @@ impl AccountsDb {
                 .and_then(|x| x.write_cache_limit_bytes),
             partitioned_epoch_rewards_config,
             exhaustively_verify_refcounts,
-            ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
+            ..Self::default_with_accounts_index(accounts_index, base_working_path)
         };
         if paths_is_empty {
             // Create a temporary set of accounts directories, used primarily
@@ -2652,6 +2667,11 @@ impl AccountsDb {
 
     pub fn file_size(&self) -> u64 {
         self.file_size
+    }
+
+    /// Get the base working directory
+    pub fn get_base_working_path(&self) -> PathBuf {
+        self.base_working_path.clone()
     }
 
     pub fn new_single_for_tests() -> Self {

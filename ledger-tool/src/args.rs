@@ -1,7 +1,7 @@
 use {
     clap::{value_t, values_t_or_exit, ArgMatches},
     solana_accounts_db::{
-        accounts_db::{AccountsDb, AccountsDbConfig, FillerAccountsConfig},
+        accounts_db::{AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb},
         partitioned_rewards::TestPartitionedEpochRewards,
     },
@@ -57,7 +57,7 @@ pub fn get_accounts_db_config(
 
     AccountsDbConfig {
         index: Some(accounts_index_config),
-        accounts_hash_cache_path: Some(ledger_path.join(AccountsDb::ACCOUNTS_HASH_CACHE_DIR)),
+        base_working_path: Some(ledger_path.to_path_buf()),
         filler_accounts_config,
         ancient_append_vec_offset: value_t!(arg_matches, "accounts_db_ancient_append_vecs", i64)
             .ok(),
