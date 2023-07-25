@@ -1794,9 +1794,9 @@ dependencies = [
 
 [[package]]
 name = "etcd-client"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3bfae4cb9cd8c3c2a552d45e155cafd079f385a3b9421b9a010878f44531f1e"
+checksum = "585de5039d1ecce74773db49ba4e8107e42be7c2cd0b1a9e7fce27181db7b118"
 dependencies = [
  "http",
  "prost 0.9.0",
