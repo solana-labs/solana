@@ -453,13 +453,6 @@ impl Blockstore {
         false
     }
 
-    pub fn is_connected(&self, slot: Slot) -> bool {
-        if let Ok(Some(meta)) = self.meta_cf.get(slot) {
-            return meta.is_connected();
-        }
-        false
-    }
-
     fn erasure_meta(&self, erasure_set: ErasureSetId) -> Result<Option<ErasureMeta>> {
         self.erasure_meta_cf.get(erasure_set.store_key())
     }
