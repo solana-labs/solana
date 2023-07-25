@@ -134,10 +134,9 @@ impl std::fmt::Display for InsertDataShredError {
     }
 }
 
-<<<<<<< HEAD
-=======
 pub struct InsertResults {
     completed_data_set_infos: Vec<CompletedDataSetInfo>,
+    inserted_indices: Vec<usize>,
     duplicate_shreds: Vec<Shred>,
 }
 
@@ -150,7 +149,6 @@ pub struct InsertResults {
 ///
 /// `solana_core::completed_data_sets_service::CompletedDataSetsService` is the main receiver of
 /// `CompletedDataSetInfo`.
->>>>>>> b6927db6a8 (Detect duplicates in the same insert batch (#32528))
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CompletedDataSetInfo {
     pub slot: Slot,
@@ -829,14 +827,7 @@ impl Blockstore {
         retransmit_sender: Option<&Sender<Vec</*shred:*/ Vec<u8>>>>,
         reed_solomon_cache: &ReedSolomonCache,
         metrics: &mut BlockstoreInsertionMetrics,
-<<<<<<< HEAD
-    ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)>
-    where
-        F: Fn(Shred),
-    {
-=======
     ) -> Result<InsertResults> {
->>>>>>> b6927db6a8 (Detect duplicates in the same insert batch (#32528))
         assert_eq!(shreds.len(), is_repaired.len());
         let mut total_start = Measure::start("Total elapsed");
         let mut start = Measure::start("Blockstore lock");
@@ -1035,11 +1026,9 @@ impl Blockstore {
         metrics.total_elapsed_us += total_start.as_us();
         metrics.index_meta_time_us += index_meta_time_us;
 
-<<<<<<< HEAD
-        Ok((newly_completed_data_sets, inserted_indices))
-=======
         Ok(InsertResults {
             completed_data_set_infos: newly_completed_data_sets,
+            inserted_indices,
             duplicate_shreds,
         })
     }
@@ -1054,12 +1043,13 @@ impl Blockstore {
         handle_duplicate: &F,
         reed_solomon_cache: &ReedSolomonCache,
         metrics: &mut BlockstoreInsertionMetrics,
-    ) -> Result<Vec<CompletedDataSetInfo>>
+    ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)>
     where
         F: Fn(Shred),
     {
         let InsertResults {
             completed_data_set_infos,
+            inserted_indices,
             duplicate_shreds,
         } = self.do_insert_shreds(
             shreds,
@@ -1075,8 +1065,7 @@ impl Blockstore {
             handle_duplicate(shred);
         }
 
-        Ok(completed_data_set_infos)
->>>>>>> b6927db6a8 (Detect duplicates in the same insert batch (#32528))
+        Ok((completed_data_set_infos, inserted_indices))
     }
 
     pub fn add_new_shred_signal(&self, s: Sender<bool>) {
@@ -1163,7 +1152,10 @@ impl Blockstore {
             &ReedSolomonCache::default(),
             &mut BlockstoreInsertionMetrics::default(),
         )?;
-        Ok(insert_results.completed_data_set_infos)
+        Ok((
+            insert_results.completed_data_set_infos,
+            insert_results.inserted_indices,
+        ))
     }
 
     #[allow(clippy::too_many_arguments)]
