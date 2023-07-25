@@ -93,6 +93,24 @@ impl AccountsPackage {
         )
     }
 
+    /// Package up fields needed to verify an accounts hash
+    #[must_use]
+    pub fn new_for_accounts_hash_verifier(
+        package_type: AccountsPackageType,
+        bank: &Bank,
+        snapshot_storages: Vec<Arc<AccountStorageEntry>>,
+        accounts_hash_for_testing: Option<AccountsHash>,
+    ) -> Self {
+        assert_eq!(package_type, AccountsPackageType::AccountsHashVerifier);
+        Self::_new(
+            package_type,
+            bank,
+            snapshot_storages,
+            accounts_hash_for_testing,
+            None,
+        )
+    }
+
     /// Package up fields needed to compute an EpochAccountsHash
     #[must_use]
     pub fn new_for_epoch_accounts_hash(

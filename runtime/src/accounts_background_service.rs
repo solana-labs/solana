@@ -386,26 +386,38 @@ impl SnapshotRequestHandler {
         let mut snapshot_time = Measure::start("snapshot_time");
         let snapshot_storages = snapshot_bank_utils::get_snapshot_storages(&snapshot_root_bank);
         let accounts_package = match request_type {
-            SnapshotRequestType::Snapshot => {
-                let bank_snapshot_info = snapshot_bank_utils::add_bank_snapshot(
-                    &self.snapshot_config.bank_snapshots_dir,
-                    &snapshot_root_bank,
-                    &snapshot_storages,
-                    self.snapshot_config.snapshot_version,
-                    status_cache_slot_deltas,
-                )?;
-                AccountsPackage::new_for_snapshot(
-                    accounts_package_type,
-                    &snapshot_root_bank,
-                    &bank_snapshot_info,
-                    &self.snapshot_config.full_snapshot_archives_dir,
-                    &self.snapshot_config.incremental_snapshot_archives_dir,
-                    snapshot_storages,
-                    self.snapshot_config.archive_format,
-                    self.snapshot_config.snapshot_version,
-                    accounts_hash_for_testing,
-                )
-            }
+            SnapshotRequestType::Snapshot => match &accounts_package_type {
+                AccountsPackageType::Snapshot(_) => {
+                    let bank_snapshot_info = snapshot_bank_utils::add_bank_snapshot(
+                        &self.snapshot_config.bank_snapshots_dir,
+                        &snapshot_root_bank,
+                        &snapshot_storages,
+                        self.snapshot_config.snapshot_version,
+                        status_cache_slot_deltas,
+                    )?;
+                    AccountsPackage::new_for_snapshot(
+                        accounts_package_type,
+                        &snapshot_root_bank,
+                        &bank_snapshot_info,
+                        &self.snapshot_config.full_snapshot_archives_dir,
+                        &self.snapshot_config.incremental_snapshot_archives_dir,
+                        snapshot_storages,
+                        self.snapshot_config.archive_format,
+                        self.snapshot_config.snapshot_version,
+                        accounts_hash_for_testing,
+                    )
+                }
+                AccountsPackageType::AccountsHashVerifier => {
+                    // skip the bank snapshot, just make an accounts package to send to AHV
+                    AccountsPackage::new_for_accounts_hash_verifier(
+                        accounts_package_type,
+                        &snapshot_root_bank,
+                        snapshot_storages,
+                        accounts_hash_for_testing,
+                    )
+                }
+                AccountsPackageType::EpochAccountsHash => panic!("Illegal account package type: EpochAccountsHash packages must be from an EpochAccountsHash request!"),
+            },
             SnapshotRequestType::EpochAccountsHash => {
                 // skip the bank snapshot, just make an accounts package to send to AHV
                 AccountsPackage::new_for_epoch_accounts_hash(
