@@ -659,7 +659,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4114279215a005bc675e386011e594e1d9b800918cea18fcadadcce864a2046b"
 dependencies = [
  "borsh-derive 0.10.3",
- "hashbrown 0.13.2",
+ "hashbrown 0.11.2",
 ]
 
 [[package]]
@@ -3280,9 +3280,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openssl"
-version = "0.10.52"
+version = "0.10.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01b8574602df80f7b85fdfc5392fa884a4e3b3f4f35402c070ab34c3d3f78d56"
+checksum = "345df152bc43501c5eb9e4654ff05f794effb78d4efe3d53abc158baddc0703d"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -3321,9 +3321,9 @@ dependencies = [
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.87"
+version = "0.9.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e17f59264b2809d77ae94f0e1ebabc434773f370d6ca667bd223ea10e06cc7e"
+checksum = "4026ef4fae4cd0c85aee4846e497cea7855659077108067c0d37c0d628f3e40a"
 dependencies = [
  "cc",
  "libc",
