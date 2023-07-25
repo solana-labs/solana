@@ -5535,6 +5535,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "crossbeam-channel",
+ "dashmap 4.0.2",
  "futures 0.3.28",
  "futures-util",
  "indexmap 2.0.0",
@@ -5567,6 +5568,7 @@ version = "1.17.0"
 dependencies = [
  "futures-util",
  "serde_json",
+ "solana-client",
  "solana-ledger",
  "solana-logger",
  "solana-measure",
