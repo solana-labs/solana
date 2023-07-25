@@ -77,22 +77,20 @@ impl TieredStorage {
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
         skip: usize,
     ) -> Option<Vec<StoredAccountInfo>> {
-        let result;
-
-        {
-            let writer = TieredStorageWriter::new(&self.path, self.format.as_ref().unwrap());
-            result = writer.append_accounts(accounts, skip);
-        }
-
-        result
+        // Here we explicitly use unwrap() because it is required to have
+        // a valid TieredStorageFormat in order to persist accounts in
+        // tiered-storage.
+        let writer = TieredStorageWriter::new(&self.path, self.format.as_ref().unwrap());
+        writer.append_accounts(accounts, skip)
     }
 
     /// Returns the size of the underlying accounts file.
     pub fn file_size(&self) -> TieredStorageResult<u64> {
-        let file = OpenOptions::new().read(true).create(false).open(&self.path);
+        let file = OpenOptions::new().read(true).open(&self.path);
 
         Ok(file
-            .and_then(|f| f.metadata().map(|m| m.len()))
+            .and_then(|file| file.metadata())
+            .map(|metadata| metadata.len())
             .unwrap_or(0))
     }
 }
@@ -111,14 +109,13 @@ mod tests {
     #[test]
     fn test_new_footer_only() {
         let temp_file = NamedTempFile::new().unwrap();
-        let ts = TieredStorage::new_writable(temp_file.path(), HOT_FORMAT.clone());
-        assert_eq!(ts.path(), temp_file.path());
-        assert_eq!(ts.file_size().unwrap(), 0);
+        let tiered_storage = TieredStorage::new_writable(temp_file.path(), HOT_FORMAT.clone());
+        assert_eq!(tiered_storage.path(), temp_file.path());
+        assert_eq!(tiered_storage.file_size().unwrap(), 0);
 
         let slot_ignored = Slot::MAX;
         let account_refs = Vec::<(&Pubkey, &AccountSharedData)>::new();
-        let slice = &account_refs[..];
-        let account_data = (slot_ignored, slice);
+        let account_data = (slot_ignored, account_refs.as_slice());
         let storable_accounts =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
                 &account_data,
@@ -126,9 +123,9 @@ mod tests {
                 Vec::<StoredMetaWriteVersion>::new(),
             );
 
-        let _unused = ts.append_accounts(&storable_accounts, 0);
+        tiered_storage.append_accounts(&storable_accounts, 0);
         assert_eq!(
-            ts.file_size().unwrap() as usize,
+            tiered_storage.file_size().unwrap() as usize,
             std::mem::size_of::<TieredStorageFooter>()
                 + std::mem::size_of::<TieredStorageMagicNumber>()
         );
