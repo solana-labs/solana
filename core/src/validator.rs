@@ -552,14 +552,14 @@ impl Validator {
             ));
         }
 
-        if let Some(shred_version) = config.expected_shred_version {
+        if let Some(expected_shred_version) = config.expected_shred_version {
             if let Some(wait_for_supermajority_slot) = config.wait_for_supermajority {
                 *start_progress.write().unwrap() = ValidatorStartProgress::CleaningBlockStore;
                 backup_and_clear_blockstore(
                     ledger_path,
                     config,
                     wait_for_supermajority_slot + 1,
-                    shred_version,
+                    expected_shred_version,
                 );
             }
         }
@@ -1954,7 +1954,7 @@ fn maybe_warp_slot(
 fn blockstore_contains_bad_shred_version(
     blockstore: &Blockstore,
     start_slot: Slot,
-    shred_version: u16,
+    expected_shred_version: u16,
 ) -> bool {
     let now = Instant::now();
     // Search for shreds with incompatible version in blockstore
@@ -1963,7 +1963,7 @@ fn blockstore_contains_bad_shred_version(
         for (slot, _meta) in slot_meta_iterator {
             if let Ok(shreds) = blockstore.get_data_shreds_for_slot(slot, 0) {
                 for shred in &shreds {
-                    if shred.version() != shred_version {
+                    if shred.version() != expected_shred_version {
                         return true;
                     }
                 }
@@ -1981,12 +1981,12 @@ fn backup_and_clear_blockstore(
     ledger_path: &Path,
     config: &ValidatorConfig,
     start_slot: Slot,
-    shred_version: u16,
+    expected_shred_version: u16,
 ) {
     let blockstore =
         Blockstore::open_with_options(ledger_path, blockstore_options_from_config(config)).unwrap();
     let do_copy_and_clear =
-        blockstore_contains_bad_shred_version(&blockstore, start_slot, shred_version);
+        blockstore_contains_bad_shred_version(&blockstore, start_slot, expected_shred_version);
 
     // If found, then copy shreds to another db and clear from start_slot
     if do_copy_and_clear {
