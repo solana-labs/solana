@@ -406,19 +406,21 @@ pub fn test_faulty_node(
     assert_eq!(node_stakes.len(), num_nodes);
     assert_eq!(validator_keys.len(), num_nodes);
 
-    // Use a fixed leader schedule so that only the faulty node gets leader slots.
-    let validator_to_slots = vec![(
-        validator_keys[0].0.as_ref().pubkey(),
-        solana_sdk::clock::DEFAULT_DEV_SLOTS_PER_EPOCH as usize,
-    )];
-    let leader_schedule = create_custom_leader_schedule(validator_to_slots.into_iter());
-    let fixed_leader_schedule = Some(FixedSchedule {
-        leader_schedule: Arc::new(leader_schedule),
+    let fixed_leader_schedule = custom_leader_schedule.unwrap_or_else(|| {
+        // Use a fixed leader schedule so that only the faulty node gets leader slots.
+        let validator_to_slots = vec![(
+            validator_keys[0].0.as_ref().pubkey(),
+            solana_sdk::clock::DEFAULT_DEV_SLOTS_PER_EPOCH as usize,
+        )];
+        let leader_schedule = create_custom_leader_schedule(validator_to_slots.into_iter());
+        FixedSchedule {
+            leader_schedule: Arc::new(leader_schedule),
+        }
     });
 
     let error_validator_config = ValidatorConfig {
         broadcast_stage_type: faulty_node_type,
-        fixed_leader_schedule: fixed_leader_schedule.clone(),
+        fixed_leader_schedule: Some(fixed_leader_schedule.clone()),
         ..ValidatorConfig::default_for_test()
     };
     let mut validator_configs = Vec::with_capacity(num_nodes);
@@ -426,15 +428,9 @@ pub fn test_faulty_node(
     // First validator is the bootstrap leader with the malicious broadcast logic.
     validator_configs.push(error_validator_config);
     validator_configs.resize_with(num_nodes, || ValidatorConfig {
-        fixed_leader_schedule: fixed_leader_schedule.clone(),
+        fixed_leader_schedule: Some(fixed_leader_schedule.clone()),
         ..ValidatorConfig::default_for_test()
     });
-
-    if custom_leader_schedule.is_some() {
-        for validator_config in &mut validator_configs {
-            validator_config.fixed_leader_schedule = custom_leader_schedule.clone();
-        }
-    }
 
     let mut cluster_config = ClusterConfig {
         cluster_lamports: 10_000,
