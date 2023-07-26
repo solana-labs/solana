@@ -1488,7 +1488,7 @@ fn main() {
                     .requires("accounts")
                     .help("Do not print account data when printing account contents."),
             )
-            .arg(&accounts_data_encoding_arg.clone().requires("accounts"))
+            .arg(&accounts_data_encoding_arg)
         )
         .subcommand(
             SubCommand::with_name("genesis-hash")
