@@ -2317,7 +2317,8 @@ mod tests {
         super::*,
         crossbeam_channel::{bounded, RecvTimeoutError},
         solana_gossip::contact_info::{ContactInfo, LegacyContactInfo},
-        solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
+        solana_entry::entry,
+        solana_ledger::{blockstore, create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader, get_tmp_ledger_path_auto_delete},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         solana_tpu_client::tpu_client::{
             DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
@@ -2375,22 +2376,15 @@ mod tests {
 
     #[test]
     fn test_backup_and_clear_blockstore() {
-        use std::time::Instant;
         solana_logger::setup();
-        use {
-            solana_entry::entry,
-            solana_ledger::{blockstore, get_tmp_ledger_path},
-        };
 
         let validator_config = ValidatorConfig::default_for_test();
-        let blockstore_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
             let entries = entry::create_ticks(1, 0, Hash::default());
 
-            info!("creating shreds");
-            let mut last_print = Instant::now();
             for i in 1..10 {
                 let shreds = blockstore::entries_to_test_shreds(
                     &entries,
@@ -2401,17 +2395,13 @@ mod tests {
                     true,  // merkle_variant
                 );
                 blockstore.insert_shreds(shreds, None, true).unwrap();
-                if last_print.elapsed().as_millis() > 5000 {
-                    info!("inserted {}", i);
-                    last_print = Instant::now();
-                }
             }
             drop(blockstore);
 
             // this purges and compacts all slots greater than or equal to 5
-            backup_and_clear_blockstore(&blockstore_path, &validator_config, 5, 2);
+            backup_and_clear_blockstore(ledger_path.path(), &validator_config, 5, 2);
 
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let blockstore = Blockstore::open(ledger_path.path()).unwrap();
             // assert that slots less than 5 aren't affected
             assert!(blockstore.meta(4).unwrap().unwrap().next_slots.is_empty());
             for i in 5..10 {
