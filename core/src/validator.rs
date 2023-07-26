@@ -2018,8 +2018,11 @@ fn backup_and_clear_blockstore(
             blockstore_options_from_config(config),
         ) {
             Ok(backup_blockstore) => {
+                info!("Backing up slots from {start_slot} to {end_slot}");
+                let mut timer = Measure::start("blockstore backup");
+
                 const PRINT_INTERVAL_MS: u128 = 5000;
-                let mut timer = Instant::now();
+                let mut print_timer = Instant::now();
                 let mut num_slots_copied = 0;
                 let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
                 for (slot, _meta) in slot_meta_iterator {
@@ -2027,11 +2030,14 @@ fn backup_and_clear_blockstore(
                     let _ = backup_blockstore.insert_shreds(shreds, None, true);
                     num_slots_copied += 1;
 
-                    if timer.elapsed().as_millis() > PRINT_INTERVAL_MS {
+                    if print_timer.elapsed().as_millis() > PRINT_INTERVAL_MS {
                         info!("Backed up {num_slots_copied} slots thus far");
-                        timer = Instant::now();
+                        print_timer = Instant::now();
                     }
                 }
+
+                timer.stop();
+                info!("Backing up slots done. {timer}");
             }
             Err(err) => {
                 warn!("Unable to backup shreds with incorrect shred version: {err}");
