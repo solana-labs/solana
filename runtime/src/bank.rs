@@ -8220,7 +8220,7 @@ impl Bank {
         }
 
         let hash = self.hash();
-        let file_name = format!("{slot}.{hash}");
+        let file_name = format!("{slot}-{hash}.json");
         let parent_dir = self
             .rc
             .accounts
