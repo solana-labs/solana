@@ -1014,6 +1014,16 @@ struct CleanKeyTimings {
     dirty_ancient_stores: usize,
 }
 
+/// Fundamental details of an account
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
+pub struct AccountDetails {
+    pub pubkey: Pubkey,
+    pub lamports: u64,
+    pub rent_epoch: Epoch,
+    pub executable: bool,
+    pub hash: Hash,
+}
+
 /// Persistent storage structure holding the accounts
 #[derive(Debug)]
 pub struct AccountStorageEntry {
@@ -2434,8 +2444,8 @@ impl AccountsDb {
         let (base_working_path, accounts_hash_cache_path, temp_accounts_hash_cache_path) =
             match base_working_path {
                 Some(base_working_path) => {
-                    let accounts_hash_cache_path = base_working_path
-                        .join(Self::ACCOUNTS_HASH_CACHE_DIR);
+                    let accounts_hash_cache_path =
+                        base_working_path.join(Self::ACCOUNTS_HASH_CACHE_DIR);
                     (base_working_path, accounts_hash_cache_path, None)
                 }
                 None => {
@@ -2445,8 +2455,8 @@ impl AccountsDb {
                         .unwrap()
                         .path()
                         .to_path_buf();
-                    let accounts_hash_cache_path = base_working_path
-                        .join(Self::ACCOUNTS_HASH_CACHE_DIR);
+                    let accounts_hash_cache_path =
+                        base_working_path.join(Self::ACCOUNTS_HASH_CACHE_DIR);
                     (
                         base_working_path,
                         accounts_hash_cache_path,
@@ -7878,6 +7888,37 @@ impl AccountsDb {
             ScanStorageResult::Stored(stored_result) => stored_result.into_iter().collect(),
         };
         (hashes, scan.as_us(), accumulate)
+    }
+
+    /// Return details on all of the accounts for the given `slot`, sorted by pubkey.
+    pub(crate) fn get_account_details_for_slot(&self, slot: Slot) -> Vec<AccountDetails> {
+        let account_info_func = |loaded_account: &LoadedAccount| -> AccountDetails {
+            AccountDetails {
+                pubkey: *loaded_account.pubkey(),
+                lamports: loaded_account.lamports(),
+                rent_epoch: loaded_account.rent_epoch(),
+                executable: loaded_account.executable(),
+                hash: loaded_account.loaded_hash(),
+            }
+        };
+
+        type ScanResult = ScanStorageResult<AccountDetails, Mutex<Vec<AccountDetails>>>;
+        let scan_result: ScanResult = self.scan_account_storage(
+            slot,
+            |loaded_account: LoadedAccount| {
+                // Cache only has one version per key, don't need to worry about versioning
+                Some(account_info_func(&loaded_account))
+            },
+            |accum: &Mutex<Vec<AccountDetails>>, loaded_account: LoadedAccount| {
+                let account_info = account_info_func(&loaded_account);
+                accum.lock().unwrap().push(account_info);
+            },
+        );
+
+        match scan_result {
+            ScanStorageResult::Cached(cached_result) => cached_result,
+            ScanStorageResult::Stored(stored_result) => stored_result.into_inner().unwrap(),
+        }
     }
 
     /// Calculate accounts delta hash for `slot`

@@ -1663,6 +1663,13 @@ fn main() {
                     .takes_value(false)
                     .help("After verifying the ledger, print some information about the account stores"),
             )
+            .arg(
+                Arg::with_name("write_bank_file")
+                    .long("write-bank-file")
+                    .takes_value(false)
+                    .help("After verifying the ledger, write a file with that contains the \
+                        information that went into computing the final bank's bank hash"),
+            )
         ).subcommand(
             SubCommand::with_name("graph")
             .about("Create a Graphviz rendering of the ledger")
@@ -2645,6 +2652,7 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
+                let write_bank_file = arg_matches.is_present("write_bank_file");
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 info!("genesis hash: {}", genesis_config.hash());
 
@@ -2670,6 +2678,10 @@ fn main() {
                 if print_accounts_stats {
                     let working_bank = bank_forks.read().unwrap().working_bank();
                     working_bank.print_accounts_stats();
+                }
+                if write_bank_file {
+                    let working_bank = bank_forks.read().unwrap().working_bank();
+                    working_bank.write_hash_details_file();
                 }
                 exit_signal.store(true, Ordering::Relaxed);
                 system_monitor_service.join().unwrap();

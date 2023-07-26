@@ -99,6 +99,7 @@ use {
             TransactionResults,
         },
     },
+    serde_json::json,
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
     solana_cost_model::cost_tracker::CostTracker,
     solana_measure::{measure, measure::Measure, measure_us},
@@ -8206,6 +8207,66 @@ impl Bank {
             }
         }
         false
+    }
+
+    /// Output the components that comprise bank hash
+    // TODO: maybe give ledger-tool a unique path so it can bypass path.exists() check?
+    pub fn write_hash_details_file(&self) {
+        let slot = self.slot();
+        // Only allow generating (and thus comparing) results on frozen (complete) banks
+        if !self.is_frozen() {
+            warn!("Cannot write bank hash details for non-frozen bank {slot}");
+            return;
+        }
+
+        let hash = self.hash();
+        let file_name = format!("{slot}.{hash}");
+        let parent_dir = self
+            .rc
+            .accounts
+            .accounts_db
+            .get_base_working_path()
+            .join("bank_hash_details");
+        let path = parent_dir.join(file_name);
+        // A file with the same name implies the same hash for this slot. Skip
+        // rewriting a duplicate file in this scenario
+        if path.exists() {
+            return;
+        }
+        info!("writing details of bank {} to {}", slot, path.display());
+
+        // This bank is frozen; as a result, we know that the state has been
+        // hashed which means the delta hash is Some(). So, .unwrap() is safe
+        let accounts_delta_hash = self
+            .rc
+            .accounts
+            .accounts_db
+            .get_accounts_delta_hash(slot)
+            .unwrap()
+            .0;
+        let mut account_details = self
+            .rc
+            .accounts
+            .accounts_db
+            .get_account_details_for_slot(slot);
+        account_details.sort_by_key(|details| details.pubkey);
+
+        let output = json!({
+            "version": solana_version::version!(),
+            "slot": slot,
+            "hash": hash,
+            "parent_hash": self.parent_hash(),
+            "accounts_delta_hash": accounts_delta_hash,
+            "signature_count": self.signature_count(),
+            "last_blockhash": self.last_blockhash(),
+            "accounts": account_details
+        });
+
+        // std::fs::write may fail (depending on platform) if the full directory
+        // path does not exist. So, call std::fs_create_dir_all first.
+        // https://doc.rust-lang.org/std/fs/fn.write.html
+        _ = std::fs::create_dir_all(parent_dir);
+        _ = std::fs::write(path, serde_json::to_vec_pretty(&output).unwrap());
     }
 }
 
