@@ -560,7 +560,13 @@ impl Validator {
                     config,
                     wait_for_supermajority_slot + 1,
                     expected_shred_version,
-                );
+                )
+                .map_err(|err| {
+                    format!(
+                        "Failed to backup and clear shreds with incorrect \
+                        shred version from blockstore: {err}"
+                    )
+                })?;
             }
         }
 
@@ -1955,26 +1961,26 @@ fn blockstore_contains_bad_shred_version(
     blockstore: &Blockstore,
     start_slot: Slot,
     expected_shred_version: u16,
-) -> bool {
-    let now = Instant::now();
+) -> Result<bool, BlockstoreError> {
+    const TIMEOUT_MS: u128 = 60000;
+    let timer = Instant::now();
     // Search for shreds with incompatible version in blockstore
-    if let Ok(slot_meta_iterator) = blockstore.slot_meta_iterator(start_slot) {
-        info!("Searching for incorrect shreds..");
-        for (slot, _meta) in slot_meta_iterator {
-            if let Ok(shreds) = blockstore.get_data_shreds_for_slot(slot, 0) {
-                for shred in &shreds {
-                    if shred.version() != expected_shred_version {
-                        return true;
-                    }
-                }
-            }
-            if now.elapsed().as_secs() > 60 {
-                info!("Didn't find incorrect shreds after 60 seconds, aborting");
-                return false;
+    let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
+
+    info!("Searching blockstore for shred with incorrect version..");
+    for (slot, _meta) in slot_meta_iterator {
+        let shreds = blockstore.get_data_shreds_for_slot(slot, 0)?;
+        for shred in &shreds {
+            if shred.version() != expected_shred_version {
+                return Ok(true);
             }
         }
+        if timer.elapsed().as_millis() > TIMEOUT_MS {
+            info!("Didn't find incorrect shreds after 60 seconds, aborting");
+            break;
+        }
     }
-    false
+    Ok(false)
 }
 
 fn backup_and_clear_blockstore(
@@ -1982,11 +1988,11 @@ fn backup_and_clear_blockstore(
     config: &ValidatorConfig,
     start_slot: Slot,
     expected_shred_version: u16,
-) {
+) -> Result<(), BlockstoreError> {
     let blockstore =
-        Blockstore::open_with_options(ledger_path, blockstore_options_from_config(config)).unwrap();
+        Blockstore::open_with_options(ledger_path, blockstore_options_from_config(config))?;
     let do_copy_and_clear =
-        blockstore_contains_bad_shred_version(&blockstore, start_slot, expected_shred_version);
+        blockstore_contains_bad_shred_version(&blockstore, start_slot, expected_shred_version)?;
 
     // If found, then copy shreds to another db and clear from start_slot
     if do_copy_and_clear {
@@ -2005,13 +2011,12 @@ fn backup_and_clear_blockstore(
         let mut last_print = Instant::now();
         let mut copied = 0;
         let mut last_slot = None;
-        let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot).unwrap();
+        let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
         for (slot, _meta) in slot_meta_iterator {
-            if let Ok(shreds) = blockstore.get_data_shreds_for_slot(slot, 0) {
-                if let Ok(ref backup_blockstore) = backup_blockstore {
-                    copied += shreds.len();
-                    let _ = backup_blockstore.insert_shreds(shreds, None, true);
-                }
+            let shreds = blockstore.get_data_shreds_for_slot(slot, 0)?;
+            if let Ok(ref backup_blockstore) = backup_blockstore {
+                copied += shreds.len();
+                let _ = backup_blockstore.insert_shreds(shreds, None, true);
             }
             if last_print.elapsed().as_millis() > 3000 {
                 info!(
@@ -2030,6 +2035,7 @@ fn backup_and_clear_blockstore(
         info!("done");
     }
     drop(blockstore);
+    Ok(())
 }
 
 fn initialize_rpc_transaction_history_services(
@@ -2400,7 +2406,7 @@ mod tests {
         drop(blockstore);
 
         // this purges and compacts all slots greater than or equal to 5
-        backup_and_clear_blockstore(ledger_path.path(), &validator_config, 5, 2);
+        backup_and_clear_blockstore(ledger_path.path(), &validator_config, 5, 2).unwrap();
 
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         // assert that slots less than 5 aren't affected
