@@ -34,7 +34,6 @@ impl<'format> TieredStorageWriter<'format> {
         })
     }
 
-    #[inline]
     fn write_accounts_impl<
         'a,
         'b,
@@ -79,7 +78,7 @@ impl<'format> TieredStorageWriter<'format> {
             AccountMetaFormat::Cold => {
                 unimplemented!();
                 // ColdAccountMeta has not yet introduced.
-                // self.write_accounts_impl(accounts, footer, Vec::<HotAccountMeta>::new(), skip)
+                // self.write_accounts_impl(accounts, footer, Vec::<ColdAccountMeta>::new(), skip)
             }
         }
     }

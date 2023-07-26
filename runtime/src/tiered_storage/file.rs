@@ -30,7 +30,7 @@ impl TieredStorageFile {
             OpenOptions::new()
                 .create_new(true)
                 .write(true)
-                .open(&file_path)?,
+                .open(file_path)?,
         ))
     }
 
