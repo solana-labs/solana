@@ -99,8 +99,12 @@ use {
             TransactionResults,
         },
     },
+<<<<<<< HEAD
     serde_json::json,
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
+=======
+    solana_bpf_loader_program::syscalls::create_program_runtime_environment,
+>>>>>>> 53b2802e53 (Rework scan function and type to aggregate data)
     solana_cost_model::cost_tracker::CostTracker,
     solana_measure::{measure, measure::Measure, measure_us},
     solana_perf::perf_libs,
@@ -213,6 +217,8 @@ struct VerifyAccountsHashConfig {
 }
 
 mod address_lookup_table;
+mod bank_hash_details;
+use bank_hash_details::{BankHashAccounts, BankHashDetails};
 mod builtin_programs;
 pub mod epoch_accounts_hash_utils;
 mod metrics;
@@ -8244,23 +8250,24 @@ impl Bank {
             .get_accounts_delta_hash(slot)
             .unwrap()
             .0;
-        let mut account_details = self
+        let mut accounts = self
             .rc
             .accounts
             .accounts_db
-            .get_account_details_for_slot(slot);
-        account_details.sort_by_key(|details| details.pubkey);
+            .get_pubkey_hash_account_for_slot(slot);
+        // Sort by pubkey get_accounts_for_slot() returns an arbitrary ordering
+        accounts.sort_by_key(|(pubkey, _, _)| *pubkey);
 
-        let output = json!({
-            "version": solana_version::version!(),
-            "slot": slot,
-            "hash": hash,
-            "parent_hash": self.parent_hash(),
-            "accounts_delta_hash": accounts_delta_hash,
-            "signature_count": self.signature_count(),
-            "last_blockhash": self.last_blockhash(),
-            "accounts": account_details
-        });
+        let output = BankHashDetails {
+            version: solana_version::version!().to_string(),
+            slot,
+            hash: hash.to_string(),
+            parent_hash: self.parent_hash().to_string(),
+            accounts_delta_hash: accounts_delta_hash.to_string(),
+            signature_count: self.signature_count(),
+            last_blockhash: self.last_blockhash().to_string(),
+            accounts: BankHashAccounts(accounts),
+        };
 
         // std::fs::write may fail (depending on platform) if the full directory
         // path does not exist. So, call std::fs_create_dir_all first.

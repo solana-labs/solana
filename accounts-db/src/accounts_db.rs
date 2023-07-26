@@ -1014,16 +1014,6 @@ struct CleanKeyTimings {
     dirty_ancient_stores: usize,
 }
 
-/// Fundamental details of an account
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
-pub struct AccountDetails {
-    pub pubkey: Pubkey,
-    pub lamports: u64,
-    pub rent_epoch: Epoch,
-    pub executable: bool,
-    pub hash: Hash,
-}
-
 /// Persistent storage structure holding the accounts
 #[derive(Debug)]
 pub struct AccountStorageEntry {
@@ -7890,34 +7880,40 @@ impl AccountsDb {
         (hashes, scan.as_us(), accumulate)
     }
 
-    /// Return details on all of the accounts for the given `slot`, sorted by pubkey.
-    pub(crate) fn get_account_details_for_slot(&self, slot: Slot) -> Vec<AccountDetails> {
-        let account_info_func = |loaded_account: &LoadedAccount| -> AccountDetails {
-            AccountDetails {
-                pubkey: *loaded_account.pubkey(),
-                lamports: loaded_account.lamports(),
-                rent_epoch: loaded_account.rent_epoch(),
-                executable: loaded_account.executable(),
-                hash: loaded_account.loaded_hash(),
-            }
-        };
-
-        type ScanResult = ScanStorageResult<AccountDetails, Mutex<Vec<AccountDetails>>>;
+    /// Return all of the accounts for a given slot
+    pub(crate) fn get_pubkey_hash_account_for_slot(
+        &self,
+        slot: Slot,
+    ) -> Vec<(Pubkey, Hash, AccountSharedData)> {
+        type ScanResult = ScanStorageResult<
+            (Pubkey, Hash, AccountSharedData),
+            DashMap<Pubkey, (Hash, AccountSharedData)>,
+        >;
         let scan_result: ScanResult = self.scan_account_storage(
             slot,
             |loaded_account: LoadedAccount| {
                 // Cache only has one version per key, don't need to worry about versioning
-                Some(account_info_func(&loaded_account))
+                Some((
+                    *loaded_account.pubkey(),
+                    loaded_account.loaded_hash(),
+                    loaded_account.take_account(),
+                ))
             },
-            |accum: &Mutex<Vec<AccountDetails>>, loaded_account: LoadedAccount| {
-                let account_info = account_info_func(&loaded_account);
-                accum.lock().unwrap().push(account_info);
+            |accum: &DashMap<Pubkey, (Hash, AccountSharedData)>, loaded_account: LoadedAccount| {
+                // Storage may have duplicates so only keep the latest version for each key
+                accum.insert(
+                    *loaded_account.pubkey(),
+                    (loaded_account.loaded_hash(), loaded_account.take_account()),
+                );
             },
         );
 
         match scan_result {
             ScanStorageResult::Cached(cached_result) => cached_result,
-            ScanStorageResult::Stored(stored_result) => stored_result.into_inner().unwrap(),
+            ScanStorageResult::Stored(stored_result) => stored_result
+                .into_iter()
+                .map(|(pubkey, (hash, account))| (pubkey, hash, account))
+                .collect(),
         }
     }
 
