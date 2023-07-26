@@ -2013,25 +2013,28 @@ fn backup_and_clear_blockstore(
             start_slot,
             end_slot
         );
-        let backup_blockstore = Blockstore::open_with_options(
+        match Blockstore::open_with_options(
             &ledger_path.join(backup_folder),
             blockstore_options_from_config(config),
-        );
+        ) {
+            Ok(backup_blockstore) => {
+                const PRINT_INTERVAL_MS: u128 = 5000;
+                let mut timer = Instant::now();
+                let mut num_slots_copied = 0;
+                let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
+                for (slot, _meta) in slot_meta_iterator {
+                    let shreds = blockstore.get_data_shreds_for_slot(slot, 0)?;
+                    let _ = backup_blockstore.insert_shreds(shreds, None, true);
+                    num_slots_copied += 1;
 
-        const PRINT_INTERVAL_MS: u128 = 5000;
-        let mut timer = Instant::now();
-        let mut num_slots_copied = 0;
-        let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
-        for (slot, _meta) in slot_meta_iterator {
-            let shreds = blockstore.get_data_shreds_for_slot(slot, 0)?;
-            if let Ok(ref backup_blockstore) = backup_blockstore {
-                let _ = backup_blockstore.insert_shreds(shreds, None, true);
-                num_slots_copied += 1;
+                    if timer.elapsed().as_millis() > PRINT_INTERVAL_MS {
+                        info!("Backed up {num_slots_copied} slots thus far");
+                        timer = Instant::now();
+                    }
+                }
             }
-
-            if timer.elapsed().as_millis() > PRINT_INTERVAL_MS {
-                info!("Backed up {num_slots_copied} slots thus far");
-                timer = Instant::now();
+            Err(err) => {
+                warn!("Unable to backup shreds with incorrect shred version: {err}");
             }
         }
 
