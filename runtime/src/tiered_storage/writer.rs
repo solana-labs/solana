@@ -25,20 +25,16 @@ pub struct TieredStorageWriter<'format> {
 
 impl<'format> TieredStorageWriter<'format> {
     pub fn new(
-        file_path: &Path,
+        file_path: impl AsRef<Path>,
         format: &'format TieredStorageFormat,
     ) -> TieredStorageResult<Self> {
-        if file_path.exists() {
-            return Err(TieredStorageError::ReadOnlyFileUpdateError(
-                file_path.to_path_buf(),
-            ));
-        }
         Ok(Self {
-            storage: TieredStorageFile::new_writable(file_path),
+            storage: TieredStorageFile::new_writable(file_path)?,
             format,
         })
     }
 
+    #[inline]
     fn write_accounts_impl<
         'a,
         'b,

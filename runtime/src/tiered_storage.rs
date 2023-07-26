@@ -77,12 +77,11 @@ impl TieredStorage {
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
         skip: usize,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
-        let writer = TieredStorageWriter::new(
-            &self.path,
-            self.format
-                .as_ref()
-                .ok_or(TieredStorageError::UnknownFormat(self.path.to_path_buf()))?,
-        )?;
+        // self.format must be Some as write_accounts can only be called on a
+        // TieredStorage instance created via new_writable() where it format
+        // field is required.
+        assert!(self.format.is_some());
+        let writer = TieredStorageWriter::new(&self.path, self.format.as_ref().unwrap())?;
         writer.write_accounts(accounts, skip)
     }
 
