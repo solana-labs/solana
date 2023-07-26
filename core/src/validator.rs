@@ -2316,9 +2316,12 @@ mod tests {
     use {
         super::*,
         crossbeam_channel::{bounded, RecvTimeoutError},
-        solana_gossip::contact_info::{ContactInfo, LegacyContactInfo},
         solana_entry::entry,
-        solana_ledger::{blockstore, create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader, get_tmp_ledger_path_auto_delete},
+        solana_gossip::contact_info::{ContactInfo, LegacyContactInfo},
+        solana_ledger::{
+            blockstore, create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader,
+            get_tmp_ledger_path_auto_delete,
+        },
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         solana_tpu_client::tpu_client::{
             DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
@@ -2380,36 +2383,33 @@ mod tests {
 
         let validator_config = ValidatorConfig::default_for_test();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
-        {
-            let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-            let entries = entry::create_ticks(1, 0, Hash::default());
+        let entries = entry::create_ticks(1, 0, Hash::default());
+        for i in 1..10 {
+            let shreds = blockstore::entries_to_test_shreds(
+                &entries,
+                i,     // slot
+                i - 1, // parent_slot
+                true,  // is_full_slot
+                1,     // version
+                true,  // merkle_variant
+            );
+            blockstore.insert_shreds(shreds, None, true).unwrap();
+        }
+        drop(blockstore);
 
-            for i in 1..10 {
-                let shreds = blockstore::entries_to_test_shreds(
-                    &entries,
-                    i,     // slot
-                    i - 1, // parent_slot
-                    true,  // is_full_slot
-                    1,     // version
-                    true,  // merkle_variant
-                );
-                blockstore.insert_shreds(shreds, None, true).unwrap();
-            }
-            drop(blockstore);
+        // this purges and compacts all slots greater than or equal to 5
+        backup_and_clear_blockstore(ledger_path.path(), &validator_config, 5, 2);
 
-            // this purges and compacts all slots greater than or equal to 5
-            backup_and_clear_blockstore(ledger_path.path(), &validator_config, 5, 2);
-
-            let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-            // assert that slots less than 5 aren't affected
-            assert!(blockstore.meta(4).unwrap().unwrap().next_slots.is_empty());
-            for i in 5..10 {
-                assert!(blockstore
-                    .get_data_shreds_for_slot(i, 0)
-                    .unwrap()
-                    .is_empty());
-            }
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        // assert that slots less than 5 aren't affected
+        assert!(blockstore.meta(4).unwrap().unwrap().next_slots.is_empty());
+        for i in 5..10 {
+            assert!(blockstore
+                .get_data_shreds_for_slot(i, 0)
+                .unwrap()
+                .is_empty());
         }
     }
 
