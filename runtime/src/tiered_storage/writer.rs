@@ -7,9 +7,7 @@ use {
         tiered_storage::{
             error::TieredStorageError,
             file::TieredStorageFile,
-            footer::{AccountMetaFormat, TieredStorageFooter},
-            hot::HotAccountMeta,
-            meta::TieredAccountMeta,
+            footer::TieredStorageFooter,
             TieredStorageFormat, TieredStorageResult,
         },
     },
@@ -34,25 +32,6 @@ impl<'format> TieredStorageWriter<'format> {
         })
     }
 
-    fn write_accounts_impl<
-        'a,
-        'b,
-        T: ReadableAccount + Sync,
-        U: StorableAccounts<'a, T>,
-        V: Borrow<Hash>,
-        W: TieredAccountMeta,
-    >(
-        &self,
-        _accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
-        footer: TieredStorageFooter,
-        mut _account_metas: Vec<W>,
-        _skip: usize,
-    ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
-        footer.write_footer_block(&self.storage)?;
-
-        Err(TieredStorageError::Unsupported())
-    }
-
     pub fn write_accounts<
         'a,
         'b,
@@ -61,8 +40,8 @@ impl<'format> TieredStorageWriter<'format> {
         V: Borrow<Hash>,
     >(
         &self,
-        accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
-        skip: usize,
+        _accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
+        _skip: usize,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
         let footer = TieredStorageFooter {
             account_meta_format: self.format.account_meta_format,
@@ -71,15 +50,9 @@ impl<'format> TieredStorageWriter<'format> {
             account_index_format: self.format.account_index_format,
             ..TieredStorageFooter::default()
         };
-        match footer.account_meta_format {
-            AccountMetaFormat::Hot => {
-                self.write_accounts_impl(accounts, footer, Vec::<HotAccountMeta>::new(), skip)
-            }
-            AccountMetaFormat::Cold => {
-                unimplemented!();
-                // ColdAccountMeta has not yet introduced.
-                // self.write_accounts_impl(accounts, footer, Vec::<ColdAccountMeta>::new(), skip)
-            }
-        }
+
+        footer.write_footer_block(&self.storage)?;
+
+        Err(TieredStorageError::Unsupported())
     }
 }
