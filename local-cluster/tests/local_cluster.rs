@@ -5258,6 +5258,15 @@ fn test_duplicate_shreds_switch_failure() {
         }),
     );
 
+    // Kill two validators that might duplicate confirm the duplicate block
+    info!("Killing unnecessary validators");
+    let duplicate_fork_validator2_ledger_path =
+        cluster.ledger_path(&duplicate_fork_validator2_pubkey);
+    let duplicate_fork_validator2_info = cluster.exit_node(&duplicate_fork_validator2_pubkey);
+    let target_switch_fork_validator_ledger_path =
+        cluster.ledger_path(&target_switch_fork_validator_pubkey);
+    let target_switch_fork_validator_info = cluster.exit_node(&target_switch_fork_validator_pubkey);
+
     // 2) Wait for a duplicate slot to land on both validators and for the target switch
     // fork validator to get another version of the slot. Also ensure all versions of
     // the block are playable
@@ -5272,7 +5281,7 @@ fn test_duplicate_shreds_switch_failure() {
             dup_slot,
         );
         let original_frozen_hash = wait_for_duplicate_fork_frozen(
-            &cluster.ledger_path(&target_switch_fork_validator_pubkey),
+            &cluster.ledger_path(&duplicate_leader_validator_pubkey),
             dup_slot,
         );
         if original_frozen_hash != dup_frozen_hash {
@@ -5283,10 +5292,10 @@ fn test_duplicate_shreds_switch_failure() {
     // 3) Force `duplicate_fork_validator1_pubkey` to see a duplicate proof
     info!("Waiting for duplicate proof for slot: {}", dup_slot);
     let duplicate_proof = {
-        // Grab the other version of the slot from the `target_switch_fork_validator_pubkey`
+        // Grab the other version of the slot from the `duplicate_leader_validator_pubkey`
         // which we confirmed to have a different version of the frozen hash in the loop
         // above
-        let ledger_path = cluster.ledger_path(&target_switch_fork_validator_pubkey);
+        let ledger_path = cluster.ledger_path(&duplicate_leader_validator_pubkey);
         let blockstore = open_blockstore(&ledger_path);
         let dup_shred = blockstore
             .get_data_shreds_for_slot(dup_slot, 0)
@@ -5307,16 +5316,11 @@ fn test_duplicate_shreds_switch_failure() {
     };
 
     // 3) Kill all the validators
-    info!("Killing all validators");
+    info!("Killing remaining validators");
     let duplicate_fork_validator1_ledger_path =
         cluster.ledger_path(&duplicate_fork_validator1_pubkey);
     let duplicate_fork_validator1_info = cluster.exit_node(&duplicate_fork_validator1_pubkey);
-    let duplicate_fork_validator2_ledger_path =
-        cluster.ledger_path(&duplicate_fork_validator2_pubkey);
-    let duplicate_fork_validator2_info = cluster.exit_node(&duplicate_fork_validator2_pubkey);
-    let target_switch_fork_validator_ledger_path =
-        cluster.ledger_path(&target_switch_fork_validator_pubkey);
-    let target_switch_fork_validator_info = cluster.exit_node(&target_switch_fork_validator_pubkey);
+    let duplicate_leader_ledger_path = cluster.ledger_path(&duplicate_leader_validator_pubkey);
     cluster.exit_node(&duplicate_leader_validator_pubkey);
 
     let dup_shred1 = Shred::new_from_serialized_shred(duplicate_proof.shred1.clone()).unwrap();
@@ -5325,26 +5329,45 @@ fn test_duplicate_shreds_switch_failure() {
     assert_eq!(dup_shred1.slot(), dup_slot);
 
     // Purge everything including the `dup_slot` from the `target_switch_fork_validator_pubkey`
-    info!("Purging towers and ledgers of duplicate slot: {}", dup_slot);
+    info!(
+        "Purging towers and ledgers for: {:?}",
+        duplicate_leader_validator_pubkey
+    );
+    Blockstore::destroy(&target_switch_fork_validator_ledger_path).unwrap();
+    {
+        let blockstore1 = open_blockstore(&duplicate_leader_ledger_path);
+        let blockstore2 = open_blockstore(&target_switch_fork_validator_ledger_path);
+        copy_blocks(dup_slot, &blockstore1, &blockstore2);
+    }
     clear_ledger_and_tower(
         &target_switch_fork_validator_ledger_path,
         &target_switch_fork_validator_pubkey,
         dup_slot,
+    );
+
+    info!(
+        "Purging towers and ledgers for: {:?}",
+        duplicate_fork_validator1_pubkey
     );
     clear_ledger_and_tower(
         &duplicate_fork_validator1_ledger_path,
         &duplicate_fork_validator1_pubkey,
         dup_slot + 1,
     );
+
+    info!(
+        "Purging towers and ledgers for: {:?}",
+        duplicate_fork_validator2_pubkey
+    );
     // Copy validator 1's ledger to validator 2 so that they have the same version
     // of the duplicate slot
+    clear_ledger_and_tower(
+        &duplicate_fork_validator2_ledger_path,
+        &duplicate_fork_validator2_pubkey,
+        dup_slot,
+    );
+    Blockstore::destroy(&duplicate_fork_validator2_ledger_path).unwrap();
     {
-        clear_ledger_and_tower(
-            &duplicate_fork_validator2_ledger_path,
-            &duplicate_fork_validator2_pubkey,
-            dup_slot,
-        );
-        Blockstore::destroy(&duplicate_fork_validator2_ledger_path).unwrap();
         let blockstore1 = open_blockstore(&duplicate_fork_validator1_ledger_path);
         let blockstore2 = open_blockstore(&duplicate_fork_validator2_ledger_path);
         copy_blocks(dup_slot, &blockstore1, &blockstore2);
