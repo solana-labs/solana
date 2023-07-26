@@ -66,7 +66,7 @@ impl TieredStorage {
     }
 
     /// Writes the specified accounts into this TieredStorage.
-    pub fn append_accounts<
+    pub fn write_accounts<
         'a,
         'b,
         T: ReadableAccount + Sync,
@@ -76,11 +76,13 @@ impl TieredStorage {
         &self,
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
         skip: usize,
-    ) -> Option<Vec<StoredAccountInfo>> {
-        // Here we explicitly use unwrap() because it is required to have
-        // a valid TieredStorageFormat in order to persist accounts in
-        // tiered-storage.
-        let writer = TieredStorageWriter::new(&self.path, self.format.as_ref().unwrap());
+    ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
+        let writer = TieredStorageWriter::new(
+            &self.path,
+            self.format
+                .as_ref()
+                .ok_or(TieredStorageError::UnknownFormat(self.path.to_path_buf()))?,
+        )?;
         writer.append_accounts(accounts, skip)
     }
 
@@ -108,9 +110,10 @@ mod tests {
 
     #[test]
     fn test_new_footer_only() {
-        let temp_file = NamedTempFile::new().unwrap();
-        let tiered_storage = TieredStorage::new_writable(temp_file.path(), HOT_FORMAT.clone());
-        assert_eq!(tiered_storage.path(), temp_file.path());
+        let path = NamedTempFile::new().unwrap().path().to_path_buf();
+
+        let tiered_storage = TieredStorage::new_writable(path.clone(), HOT_FORMAT.clone());
+        assert_eq!(tiered_storage.path(), path);
         assert_eq!(tiered_storage.file_size().unwrap(), 0);
 
         let slot_ignored = Slot::MAX;
@@ -123,7 +126,11 @@ mod tests {
                 Vec::<StoredMetaWriteVersion>::new(),
             );
 
-        tiered_storage.append_accounts(&storable_accounts, 0);
+        let result = tiered_storage.append_accounts(&storable_accounts, 0);
+        // Expect the result to be TieredStorageError::Unsupported as the feature
+        // is not yet fully supported, but we can still check its partial results
+        // in the test.
+        assert!(result.is_err());
         assert_eq!(
             tiered_storage.file_size().unwrap() as usize,
             std::mem::size_of::<TieredStorageFooter>()

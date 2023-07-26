@@ -5,15 +5,16 @@ use {
         account_storage::meta::{StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo},
         storable_accounts::StorableAccounts,
         tiered_storage::{
+            error::TieredStorageError,
             file::TieredStorageFile,
             footer::{AccountMetaFormat, TieredStorageFooter},
             hot::HotAccountMeta,
             meta::TieredAccountMeta,
-            TieredStorageFormat,
+            TieredStorageFormat, TieredStorageResult,
         },
     },
     solana_sdk::{account::ReadableAccount, hash::Hash},
-    std::{borrow::Borrow, fs::remove_file, path::Path},
+    std::{borrow::Borrow, path::Path},
 };
 
 #[derive(Debug)]
@@ -23,15 +24,22 @@ pub struct TieredStorageWriter<'format> {
 }
 
 impl<'format> TieredStorageWriter<'format> {
-    pub fn new(file_path: &Path, format: &'format TieredStorageFormat) -> Self {
-        let _ignored = remove_file(file_path);
-        Self {
+    pub fn new(
+        file_path: &Path,
+        format: &'format TieredStorageFormat,
+    ) -> TieredStorageResult<Self> {
+        if file_path.exists() {
+            return Err(TieredStorageError::ReadOnlyFileUpdateError(
+                file_path.to_path_buf(),
+            ));
+        }
+        Ok(Self {
             storage: TieredStorageFile::new_writable(file_path),
             format,
-        }
+        })
     }
 
-    fn append_accounts_impl<
+    fn write_accounts_impl<
         'a,
         'b,
         T: ReadableAccount + Sync,
@@ -44,12 +52,13 @@ impl<'format> TieredStorageWriter<'format> {
         footer: TieredStorageFooter,
         mut _account_metas: Vec<W>,
         _skip: usize,
-    ) -> Option<Vec<StoredAccountInfo>> {
-        footer.write_footer_block(&self.storage).ok()?;
-        None
+    ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
+        footer.write_footer_block(&self.storage)?;
+
+        Err(TieredStorageResult::Unsupported())
     }
 
-    pub fn append_accounts<
+    pub fn write_accounts<
         'a,
         'b,
         T: ReadableAccount + Sync,
@@ -59,7 +68,7 @@ impl<'format> TieredStorageWriter<'format> {
         &self,
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
         skip: usize,
-    ) -> Option<Vec<StoredAccountInfo>> {
+    ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
         let footer = TieredStorageFooter {
             account_meta_format: self.format.account_meta_format,
             owners_block_format: self.format.owners_block_format,
@@ -69,7 +78,12 @@ impl<'format> TieredStorageWriter<'format> {
         };
         match footer.account_meta_format {
             AccountMetaFormat::Hot => {
-                self.append_accounts_impl(accounts, footer, Vec::<HotAccountMeta>::new(), skip)
+                self.write_accounts_impl(accounts, footer, Vec::<HotAccountMeta>::new(), skip)
+            }
+            AccountMetaFormat::Cold => {
+                unsupported!();
+                // ColdAccountMeta has not yet introduced.
+                // self.write_accounts_impl(accounts, footer, Vec::<HotAccountMeta>::new(), skip)
             }
         }
     }
