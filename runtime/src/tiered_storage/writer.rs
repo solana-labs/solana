@@ -5,9 +5,7 @@ use {
         account_storage::meta::{StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo},
         storable_accounts::StorableAccounts,
         tiered_storage::{
-            error::TieredStorageError,
-            file::TieredStorageFile,
-            footer::TieredStorageFooter,
+            error::TieredStorageError, file::TieredStorageFile, footer::TieredStorageFooter,
             TieredStorageFormat, TieredStorageResult,
         },
     },
