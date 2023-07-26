@@ -51,7 +51,7 @@ impl TieredStorage {
     /// Creates a new writable instance of TieredStorage based on the
     /// specified path and TieredStorageFormat.
     ///
-    /// Note that the actual file will not be created until append_accounts
+    /// Note that the actual file will not be created until write_accounts
     /// is called.
     pub fn new_writable(path: impl Into<PathBuf>, format: TieredStorageFormat) -> Self {
         Self {
@@ -83,7 +83,7 @@ impl TieredStorage {
                 .as_ref()
                 .ok_or(TieredStorageError::UnknownFormat(self.path.to_path_buf()))?,
         )?;
-        writer.append_accounts(accounts, skip)
+        writer.write_accounts(accounts, skip)
     }
 
     /// Returns the size of the underlying accounts file.
@@ -126,7 +126,7 @@ mod tests {
                 Vec::<StoredMetaWriteVersion>::new(),
             );
 
-        let result = tiered_storage.append_accounts(&storable_accounts, 0);
+        let result = tiered_storage.write_accounts(&storable_accounts, 0);
         // Expect the result to be TieredStorageError::Unsupported as the feature
         // is not yet fully supported, but we can still check its partial results
         // in the test.

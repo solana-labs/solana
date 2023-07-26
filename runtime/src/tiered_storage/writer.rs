@@ -55,7 +55,7 @@ impl<'format> TieredStorageWriter<'format> {
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
         footer.write_footer_block(&self.storage)?;
 
-        Err(TieredStorageResult::Unsupported())
+        Err(TieredStorageError::Unsupported())
     }
 
     pub fn write_accounts<
@@ -81,7 +81,7 @@ impl<'format> TieredStorageWriter<'format> {
                 self.write_accounts_impl(accounts, footer, Vec::<HotAccountMeta>::new(), skip)
             }
             AccountMetaFormat::Cold => {
-                unsupported!();
+                unimplemented!();
                 // ColdAccountMeta has not yet introduced.
                 // self.write_accounts_impl(accounts, footer, Vec::<HotAccountMeta>::new(), skip)
             }
