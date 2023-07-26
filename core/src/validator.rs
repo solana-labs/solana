@@ -31,7 +31,6 @@ use {
     crossbeam_channel::{bounded, unbounded, Receiver},
     lazy_static::lazy_static,
     quinn::Endpoint,
-    rand::{thread_rng, Rng},
     solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::{
@@ -1957,6 +1956,7 @@ fn maybe_warp_slot(
     Ok(())
 }
 
+/// Searches the blockstore for data shreds with the incorrect shred version.
 fn blockstore_contains_bad_shred_version(
     blockstore: &Blockstore,
     start_slot: Slot,
@@ -1983,6 +1983,8 @@ fn blockstore_contains_bad_shred_version(
     Ok(false)
 }
 
+/// If the blockstore contains any shreds with the incorrect shred version,
+/// copy them to a backup blockstore and purge them from the actual blockstore.
 fn backup_and_clear_blockstore(
     ledger_path: &Path,
     config: &ValidatorConfig,
@@ -1996,45 +1998,50 @@ fn backup_and_clear_blockstore(
 
     // If found, then copy shreds to another db and clear from start_slot
     if do_copy_and_clear {
-        let folder_name = format!(
-            "backup_{}_{}",
+        // .unwrap() safe because getting to this point implies blockstore has slots/shreds
+        let end_slot = blockstore.highest_slot()?.unwrap();
+
+        // Backing up the shreds that will be deleted from primary blockstore is
+        // not critical, so swallow errors from backup blockstore operations.
+        let backup_folder = format!(
+            "{}_backup_{}_{}_{}",
             config
                 .ledger_column_options
                 .shred_storage_type
                 .blockstore_directory(),
-            thread_rng().gen_range(0, 99999)
+            expected_shred_version,
+            start_slot,
+            end_slot
         );
         let backup_blockstore = Blockstore::open_with_options(
-            &ledger_path.join(folder_name),
+            &ledger_path.join(backup_folder),
             blockstore_options_from_config(config),
         );
-        let mut last_print = Instant::now();
-        let mut copied = 0;
-        let mut last_slot = None;
+
+        const PRINT_INTERVAL_MS: u128 = 5000;
+        let mut timer = Instant::now();
+        let mut num_slots_copied = 0;
         let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
         for (slot, _meta) in slot_meta_iterator {
             let shreds = blockstore.get_data_shreds_for_slot(slot, 0)?;
             if let Ok(ref backup_blockstore) = backup_blockstore {
-                copied += shreds.len();
                 let _ = backup_blockstore.insert_shreds(shreds, None, true);
+                num_slots_copied += 1;
             }
-            if last_print.elapsed().as_millis() > 3000 {
-                info!(
-                    "Copying shreds from slot {} copied {} so far.",
-                    start_slot, copied
-                );
-                last_print = Instant::now();
+
+            if timer.elapsed().as_millis() > PRINT_INTERVAL_MS {
+                info!("Backed up {num_slots_copied} slots thus far");
+                timer = Instant::now();
             }
-            last_slot = Some(slot);
         }
 
-        let end_slot = last_slot.unwrap();
-        info!("Purging slots {} to {}", start_slot, end_slot);
+        info!("Purging slots {start_slot} to {end_slot} from blockstore");
+        let mut timer = Measure::start("blockstore purge");
         blockstore.purge_from_next_slots(start_slot, end_slot);
         blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
-        info!("done");
+        timer.stop();
+        info!("Purging slots done. {timer}");
     }
-    drop(blockstore);
     Ok(())
 }
 
