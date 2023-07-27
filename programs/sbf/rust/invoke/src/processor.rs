@@ -1220,6 +1220,70 @@ fn process_instruction(
             )
             .unwrap();
         }
+        TEST_CPI_CHANGE_ACCOUNT_DATA_MEMORY_ALLOCATION => {
+            msg!("TEST_CPI_CHANGE_ACCOUNT_DATA_MEMORY_ALLOCATION");
+            const CALLEE_PROGRAM_INDEX: usize = 2;
+            let account = &accounts[ARGUMENT_INDEX];
+            let callee_program_id = accounts[CALLEE_PROGRAM_INDEX].key;
+            let original_data_len = account.data_len();
+
+            // Initial data is all [0xFF; 20]
+            assert_eq!(&*account.data.borrow(), &[0xFF; 20]);
+
+            // Realloc to [0xFE; 10]
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (account.key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![0xFE; 10],
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            // Check that [10..20] is zeroed
+            let new_len = account.data_len();
+            assert_eq!(&*account.data.borrow(), &[0xFE; 10]);
+            assert_eq!(
+                unsafe {
+                    slice::from_raw_parts(
+                        account.data.borrow().as_ptr().add(new_len),
+                        original_data_len - new_len,
+                    )
+                },
+                &vec![0; original_data_len - new_len]
+            );
+
+            // Realloc to [0xFD; 5]
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![0xFD; 5],
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            // Check that [5..20] is zeroed
+            let new_len = account.data_len();
+            assert_eq!(&*account.data.borrow(), &[0xFD; 5]);
+            assert_eq!(
+                unsafe {
+                    slice::from_raw_parts(
+                        account.data.borrow().as_ptr().add(new_len),
+                        original_data_len - new_len,
+                    )
+                },
+                &vec![0; original_data_len - new_len]
+            );
+        }
         TEST_WRITE_ACCOUNT => {
             msg!("TEST_WRITE_ACCOUNT");
             let target_account_index = instruction_data[1] as usize;

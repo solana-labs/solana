@@ -4381,6 +4381,87 @@ fn test_cpi_deprecated_loader_realloc() {
 
 #[test]
 #[cfg(feature = "sbf_rust")]
+fn test_cpi_change_account_data_memory_allocation() {
+    use solana_program_runtime::{declare_process_instruction, loaded_programs::LoadedProgram};
+
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(100_123_456_789);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    let feature_set = FeatureSet::all_enabled();
+    bank.feature_set = Arc::new(feature_set);
+
+    declare_process_instruction!(process_instruction, 42, |invoke_context| {
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context.get_current_instruction_context()?;
+        let instruction_data = instruction_context.get_instruction_data();
+
+        let index_in_transaction =
+            instruction_context.get_index_of_instruction_account_in_transaction(0)?;
+
+        let mut account = transaction_context
+            .accounts()
+            .get(index_in_transaction)
+            .unwrap()
+            .borrow_mut();
+
+        // Test changing the account data both in place and by changing the
+        // underlying vector. CPI will have to detect the vector change and
+        // update the corresponding memory region. In both cases CPI will have
+        // to zero the spare bytes correctly.
+        if instruction_data[0] == 0xFE {
+            account.set_data(instruction_data.to_vec());
+        } else {
+            account.set_data_from_slice(instruction_data);
+        }
+
+        Ok(())
+    });
+
+    let builtin_program_id = Pubkey::new_unique();
+    bank.add_builtin(
+        builtin_program_id,
+        "test_cpi_change_account_data_memory_allocation_builtin".to_string(),
+        LoadedProgram::new_builtin(0, 42, process_instruction),
+    );
+
+    let bank = Arc::new(bank);
+    let mut bank_client = BankClient::new_shared(bank);
+
+    let (bank, invoke_program_id) = load_program_and_advance_slot(
+        &mut bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_sbf_rust_invoke",
+    );
+
+    let account_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let account_metas = vec![
+        AccountMeta::new(mint_pubkey, true),
+        AccountMeta::new(account_keypair.pubkey(), false),
+        AccountMeta::new_readonly(builtin_program_id, false),
+        AccountMeta::new_readonly(invoke_program_id, false),
+    ];
+
+    let mut account = AccountSharedData::new(42, 20, &builtin_program_id);
+    account.set_data(vec![0xFF; 20]);
+    bank.store_account(&account_keypair.pubkey(), &account);
+    let mut instruction_data = vec![TEST_CPI_CHANGE_ACCOUNT_DATA_MEMORY_ALLOCATION];
+    instruction_data.extend_from_slice(builtin_program_id.as_ref());
+    let instruction =
+        Instruction::new_with_bytes(invoke_program_id, &instruction_data, account_metas.clone());
+
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+#[cfg(feature = "sbf_rust")]
 fn test_cpi_invalid_account_info_pointers() {
     solana_logger::setup();
 
