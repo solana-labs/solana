@@ -580,7 +580,7 @@ impl Stake {
 #[cfg(test)]
 mod test {
     use {
-        super::*, crate::borsh::try_from_slice_unchecked, assert_matches::assert_matches,
+        super::*, crate::borsh0_10::try_from_slice_unchecked, assert_matches::assert_matches,
         bincode::serialize,
     };
 

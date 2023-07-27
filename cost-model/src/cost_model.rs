@@ -12,7 +12,7 @@ use {
         ComputeBudget, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
     },
     solana_sdk::{
-        borsh::try_from_slice_unchecked,
+        borsh0_10::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
         feature_set::{
             add_set_tx_loaded_accounts_data_size_instruction,
