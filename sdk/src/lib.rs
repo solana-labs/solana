@@ -51,7 +51,7 @@ pub use solana_program::{
     loader_v4, loader_v4_instruction, message, msg, native_token, nonce, program, program_error,
     program_memory, program_option, program_pack, rent, sanitize, sdk_ids, secp256k1_program,
     secp256k1_recover, serde_varint, serialize_utils, short_vec, slot_hashes, slot_history,
-    stable_layout, stake, stake_history, syscalls, system_instruction, system_program, sysvar,
+    stable_layout, stake_history, syscalls, system_instruction, system_program, sysvar,
     unchecked_div_by_const, vote, wasm_bindgen,
 };
 
@@ -93,6 +93,23 @@ pub mod secp256k1_instruction;
 pub mod shred_version;
 pub mod signature;
 pub mod signer;
+pub mod stake {
+    use super::{feature_set, native_token};
+    pub use solana_program::stake::*;
+    /// The minimum stake amount that can be delegated, in lamports.
+    /// NOTE: This is also used to calculate the minimum balance of a stake account, which is the
+    /// rent exempt reserve _plus_ the minimum stake delegation.
+    #[inline(always)]
+    pub fn get_minimum_delegation(feature_set: &feature_set::FeatureSet) -> u64 {
+        if feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_1_sol::id()) {
+            const MINIMUM_DELEGATION_SOL: u64 = 1;
+            MINIMUM_DELEGATION_SOL.saturating_mul(native_token::LAMPORTS_PER_SOL)
+        } else {
+            #[allow(deprecated)]
+            MINIMUM_STAKE_DELEGATION
+        }
+    }
+}
 pub mod system_transaction;
 pub mod timing;
 pub mod transaction;
