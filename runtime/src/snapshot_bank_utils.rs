@@ -76,7 +76,6 @@ pub fn add_bank_snapshot(
     // the AddBankSnapshotError and SnapshotError types
     let do_add_bank_snapshot = || {
         let mut measure_everything = Measure::start("");
-        let mut add_snapshot_time = Measure::start("add-snapshot-ms");
         let slot = bank.slot();
         let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
         if bank_snapshot_dir.exists() {
@@ -126,7 +125,6 @@ pub fn add_bank_snapshot(
                 .map_err(|err| AddBankSnapshotError::SerializeBank(Box::new(err)))?,
             "bank serialize"
         );
-        add_snapshot_time.stop();
 
         let status_cache_path =
             bank_snapshot_dir.join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILENAME);
@@ -150,29 +148,28 @@ pub fn add_bank_snapshot(
 
         // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
         datapoint_info!(
-            "snapshot-bank-file",
+            "snapshot_bank",
             ("slot", slot, i64),
             ("bank_size", bank_snapshot_consumed_size, i64),
             ("status_cache_size", status_cache_consumed_size, i64),
-            ("bank_serialize_ms", bank_serialize.as_ms(), i64),
-            ("add_snapshot_ms", add_snapshot_time.as_ms(), i64),
+            ("hard_link_storages_us", measure_hard_linking.as_us(), i64),
+            ("bank_serialize_us", bank_serialize.as_us(), i64),
             (
-                "status_cache_serialize_ms",
-                status_cache_serialize.as_ms(),
-                i64
-            ),
-            ("hard_link_storages_ms", measure_hard_linking.as_ms(), i64),
-            (
-                "write_version_file_ms",
-                measure_write_version_file.as_ms(),
+                "status_cache_serialize_us",
+                status_cache_serialize.as_us(),
                 i64
             ),
             (
-                "write_state_complete_file_ms",
-                measure_write_state_complete_file.as_ms(),
+                "write_version_file_us",
+                measure_write_version_file.as_us(),
                 i64
             ),
-            ("total_ms", measure_everything.as_ms(), i64),
+            (
+                "write_state_complete_file_us",
+                measure_write_state_complete_file.as_us(),
+                i64
+            ),
+            ("total_us", measure_everything.as_us(), i64),
         );
 
         info!(
