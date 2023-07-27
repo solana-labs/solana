@@ -159,7 +159,7 @@ use {
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
         slot_history::{Check, SlotHistory},
-        stake::state::Delegation,
+        stake::state::{Delegation, StakeState},
         system_transaction,
         sysvar::{self, last_restart_slot::LastRestartSlot, Sysvar, SysvarId},
         timing::years_as_slots,
@@ -171,9 +171,7 @@ use {
             ExecutionRecord, TransactionAccount, TransactionContext, TransactionReturnData,
         },
     },
-    solana_stake_program::stake_state::{
-        self, InflationPointCalculationEvent, PointValue, StakeState,
-    },
+    solana_stake_program::stake_state::{self, InflationPointCalculationEvent, PointValue},
     solana_system_program::{get_system_account_kind, SystemAccountKind},
     solana_vote_program::vote_state::VoteState,
     std::{

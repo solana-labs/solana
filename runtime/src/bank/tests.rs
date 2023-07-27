@@ -82,7 +82,7 @@ use {
         signature::{keypair_from_seed, Keypair, Signature, Signer},
         stake::{
             instruction as stake_instruction,
-            state::{Authorized, Delegation, Lockup, Stake},
+            state::{Authorized, Delegation, Lockup, Stake, StakeState},
         },
         system_instruction::{
             self, SystemError, MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION,
@@ -96,7 +96,7 @@ use {
         },
         transaction_context::{TransactionAccount, TransactionContext},
     },
-    solana_stake_program::stake_state::{self, StakeState},
+    solana_stake_program::stake_state,
     solana_vote_program::{
         vote_instruction,
         vote_state::{
