@@ -8273,7 +8273,14 @@ impl Bank {
         // path does not exist. So, call std::fs_create_dir_all first.
         // https://doc.rust-lang.org/std/fs/fn.write.html
         _ = std::fs::create_dir_all(parent_dir);
-        _ = std::fs::write(path, serde_json::to_vec_pretty(&output).unwrap());
+        match std::fs::File::create(path) {
+            Ok(file) => {
+                let _ = serde_json::to_writer_pretty(file, &output);
+            }
+            Err(err) => {
+                warn!("Unable to create bank hash file: {err}");
+            }
+        }
     }
 }
 
