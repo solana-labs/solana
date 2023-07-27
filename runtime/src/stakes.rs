@@ -16,7 +16,10 @@ use {
         account::{AccountSharedData, ReadableAccount},
         clock::{Epoch, Slot},
         pubkey::Pubkey,
-        stake::state::{Delegation, StakeActivationStatus},
+        stake::{
+            program::check_id as solana_stake_program_check_id,
+            state::{Delegation, StakeActivationStatus},
+        },
         vote::state::VoteStateVersions,
     },
     std::{
@@ -76,7 +79,7 @@ impl StakesCache {
             if solana_vote_program::check_id(owner) {
                 let mut stakes = self.0.write().unwrap();
                 stakes.remove_vote_account(pubkey);
-            } else if solana_stake_program::check_id(owner) {
+            } else if solana_stake_program_check_id(owner) {
                 let mut stakes = self.0.write().unwrap();
                 stakes.remove_stake_delegation(pubkey);
             }
@@ -103,7 +106,7 @@ impl StakesCache {
                 let mut stakes = self.0.write().unwrap();
                 stakes.remove_vote_account(pubkey)
             };
-        } else if solana_stake_program::check_id(owner) {
+        } else if solana_stake_program_check_id(owner) {
             match StakeAccount::try_from(account.to_account_shared_data()) {
                 Ok(stake_account) => {
                     let mut stakes = self.0.write().unwrap();

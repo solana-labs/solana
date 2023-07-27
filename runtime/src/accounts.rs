@@ -54,6 +54,7 @@ use {
         pubkey::Pubkey,
         saturating_add_assign,
         slot_hashes::SlotHashes,
+        stake::program::check_id as solana_stake_program_check_id,
         sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
@@ -471,7 +472,7 @@ impl Accounts {
 
                     if in_reward_interval
                         && message.is_writable(i)
-                        && solana_stake_program::check_id(account.owner())
+                        && solana_stake_program_check_id(account.owner())
                     {
                         error_counters.program_execution_temporarily_restricted += 1;
                         return Err(TransactionError::ProgramExecutionTemporarilyRestricted {
