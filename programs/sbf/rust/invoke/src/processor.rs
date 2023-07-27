@@ -22,7 +22,7 @@ use {
     },
     solana_sbf_rust_invoked::instructions::*,
     solana_sbf_rust_realloc::instructions::*,
-    std::slice,
+    std::{mem, slice},
 };
 
 fn do_nested_invokes(num_nested_invokes: u64, accounts: &[AccountInfo]) -> ProgramResult {
@@ -954,6 +954,99 @@ fn process_instruction(
             let account = &accounts[ARGUMENT_INDEX];
             let new_len = usize::from_le_bytes(instruction_data[1..9].try_into().unwrap());
             account.realloc(new_len, false).unwrap();
+        }
+        TEST_CPI_INVALID_KEY_POINTER => {
+            msg!("TEST_CPI_INVALID_KEY_POINTER");
+            const CALLEE_PROGRAM_INDEX: usize = 2;
+            let account = &accounts[ARGUMENT_INDEX];
+            let key = *account.key;
+            let key = &key as *const _ as usize;
+            unsafe {
+                *mem::transmute::<_, *mut *const Pubkey>(&account.key) = key as *const Pubkey;
+            }
+            let callee_program_id = accounts[CALLEE_PROGRAM_INDEX].key;
+
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![],
+                ),
+                accounts,
+            )
+            .unwrap();
+        }
+        TEST_CPI_INVALID_LAMPORTS_POINTER => {
+            msg!("TEST_CPI_INVALID_LAMPORTS_POINTER");
+            const CALLEE_PROGRAM_INDEX: usize = 2;
+            let account = &accounts[ARGUMENT_INDEX];
+            let mut lamports = account.lamports();
+            account
+                .lamports
+                .replace(unsafe { mem::transmute(&mut lamports) });
+            let callee_program_id = accounts[CALLEE_PROGRAM_INDEX].key;
+
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![],
+                ),
+                accounts,
+            )
+            .unwrap();
+        }
+        TEST_CPI_INVALID_OWNER_POINTER => {
+            msg!("TEST_CPI_INVALID_OWNER_POINTER");
+            const CALLEE_PROGRAM_INDEX: usize = 2;
+            let account = &accounts[ARGUMENT_INDEX];
+            let owner = account.owner as *const _ as usize + 1;
+            unsafe {
+                *mem::transmute::<_, *mut *const Pubkey>(&account.owner) = owner as *const Pubkey;
+            }
+            let callee_program_id = accounts[CALLEE_PROGRAM_INDEX].key;
+
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![],
+                ),
+                accounts,
+            )
+            .unwrap();
+        }
+        TEST_CPI_INVALID_DATA_POINTER => {
+            msg!("TEST_CPI_INVALID_DATA_POINTER");
+            const CALLEE_PROGRAM_INDEX: usize = 2;
+            let account = &accounts[ARGUMENT_INDEX];
+            let data = unsafe {
+                slice::from_raw_parts_mut(account.data.borrow_mut()[1..].as_mut_ptr(), 0)
+            };
+            account.data.replace(data);
+            let callee_program_id = accounts[CALLEE_PROGRAM_INDEX].key;
+
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![],
+                ),
+                accounts,
+            )
+            .unwrap();
         }
         _ => panic!("unexpected program data"),
     }

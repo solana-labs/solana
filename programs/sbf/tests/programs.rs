@@ -4334,3 +4334,59 @@ fn test_cpi_deprecated_loader_realloc() {
         assert_eq!(account.data(), b"foobar");
     }
 }
+
+#[test]
+#[cfg(feature = "sbf_rust")]
+fn test_cpi_invalid_account_info_pointers() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(100_123_456_789);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    let feature_set = FeatureSet::all_enabled();
+    bank.feature_set = Arc::new(feature_set);
+    let bank = Arc::new(bank);
+    let mut bank_client = BankClient::new_shared(bank);
+
+    let (bank, invoke_program_id) = load_program_and_advance_slot(
+        &mut bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_sbf_rust_invoke",
+    );
+
+    let account_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let account_metas = vec![
+        AccountMeta::new(mint_pubkey, true),
+        AccountMeta::new(account_keypair.pubkey(), false),
+        AccountMeta::new_readonly(invoke_program_id, false),
+    ];
+
+    for ix in [
+        TEST_CPI_INVALID_KEY_POINTER,
+        TEST_CPI_INVALID_LAMPORTS_POINTER,
+        TEST_CPI_INVALID_OWNER_POINTER,
+        TEST_CPI_INVALID_DATA_POINTER,
+    ] {
+        let account = AccountSharedData::new(42, 5, &invoke_program_id);
+        bank.store_account(&account_keypair.pubkey(), &account);
+        let instruction = Instruction::new_with_bytes(
+            invoke_program_id,
+            &[ix, 42, 42, 42],
+            account_metas.clone(),
+        );
+
+        let message = Message::new(&[instruction], Some(&mint_pubkey));
+        let tx = Transaction::new(&[&mint_keypair], message.clone(), bank.last_blockhash());
+        let (result, _, logs) = process_transaction_and_record_inner(&bank, tx);
+        assert!(result.is_err(), "{result:?}");
+        assert!(
+            logs.iter().any(|log| log.contains("Invalid pointer")),
+            "{logs:?}"
+        );
+    }
+}
