@@ -75,6 +75,7 @@ pub fn add_bank_snapshot(
     // this lambda function is to facilitate converting between
     // the AddBankSnapshotError and SnapshotError types
     let do_add_bank_snapshot = || {
+        let mut measure_everything = Measure::start("");
         let mut add_snapshot_time = Measure::start("add-snapshot-ms");
         let slot = bank.slot();
         let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
@@ -101,8 +102,11 @@ pub fn add_bank_snapshot(
         // constructing a bank from this directory.  It acts like an archive to include the full state.
         // The set of the account storages files is the necessary part of this snapshot state.  Hard-link them
         // from the operational accounts/ directory to here.
-        hard_link_storages_to_snapshot(&bank_snapshot_dir, slot, snapshot_storages)
-            .map_err(AddBankSnapshotError::HardLinkStorages)?;
+        let (_, measure_hard_linking) =
+            measure!(
+                hard_link_storages_to_snapshot(&bank_snapshot_dir, slot, snapshot_storages)
+                    .map_err(AddBankSnapshotError::HardLinkStorages)?
+            );
 
         let bank_snapshot_serializer =
             move |stream: &mut BufWriter<std::fs::File>| -> snapshot_utils::Result<()> {
@@ -131,14 +135,18 @@ pub fn add_bank_snapshot(
                 .map_err(|err| AddBankSnapshotError::SerializeStatusCache(Box::new(err)))?);
 
         let version_path = bank_snapshot_dir.join(snapshot_utils::SNAPSHOT_VERSION_FILENAME);
-        write_snapshot_version_file(version_path, snapshot_version)
-            .map_err(AddBankSnapshotError::WriteSnapshotVersionFile)?;
+        let (_, measure_write_version_file) =
+            measure!(write_snapshot_version_file(version_path, snapshot_version)
+                .map_err(AddBankSnapshotError::WriteSnapshotVersionFile)?);
 
         // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
         let state_complete_path =
             bank_snapshot_dir.join(snapshot_utils::SNAPSHOT_STATE_COMPLETE_FILENAME);
-        fs_err::File::create(state_complete_path)
-            .map_err(AddBankSnapshotError::CreateStateCompleteFile)?;
+        let (_, measure_write_state_complete_file) =
+            measure!(fs_err::File::create(state_complete_path)
+                .map_err(AddBankSnapshotError::CreateStateCompleteFile)?);
+
+        measure_everything.stop();
 
         // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
         datapoint_info!(
@@ -153,6 +161,18 @@ pub fn add_bank_snapshot(
                 status_cache_serialize.as_ms(),
                 i64
             ),
+            ("hard_link_storages_ms", measure_hard_linking.as_ms(), i64),
+            (
+                "write_version_file_ms",
+                measure_write_version_file.as_ms(),
+                i64
+            ),
+            (
+                "write_state_complete_file_ms",
+                measure_write_state_complete_file.as_ms(),
+                i64
+            ),
+            ("total_ms", measure_everything.as_ms(), i64),
         );
 
         info!(
