@@ -1,4 +1,5 @@
 use {
+    base64::{prelude::BASE64_STANDARD, Engine},
     serde::ser::{Serialize, SerializeSeq, Serializer},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -24,15 +25,13 @@ pub(crate) struct BankHashDetails {
 pub(crate) struct BankHashAccounts(pub Vec<(Pubkey, Hash, AccountSharedData)>);
 
 #[derive(Serialize)]
-struct TempAccount<'a> {
+struct TempAccount {
     pubkey: String,
     hash: String,
     lamports: u64,
     rent_epoch: Epoch,
     executable: bool,
-    #[serde(with = "serde_bytes")]
-    // a slice so we don't have to make a copy just to serialize this
-    data: &'a [u8],
+    data: String,
 }
 
 impl Serialize for BankHashAccounts {
@@ -48,7 +47,7 @@ impl Serialize for BankHashAccounts {
                 lamports: account.lamports(),
                 rent_epoch: account.rent_epoch(),
                 executable: account.executable(),
-                data: account.data(),
+                data: BASE64_STANDARD.encode(account.data()),
             };
             seq.serialize_element(&temp)?;
         }

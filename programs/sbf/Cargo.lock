@@ -5597,6 +5597,7 @@ name = "solana-runtime"
 version = "1.17.0"
 dependencies = [
  "arrayref",
+ "base64 0.21.2",
  "bincode",
  "blake3",
  "bv",

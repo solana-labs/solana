@@ -6880,6 +6880,7 @@ version = "1.17.0"
 dependencies = [
  "arrayref",
  "assert_matches",
+ "base64 0.21.2",
  "bincode",
  "blake3",
  "bv",
@@ -6917,7 +6918,6 @@ dependencies = [
  "regex",
  "rustc_version 0.4.0",
  "serde",
- "serde_bytes",
  "serde_derive",
  "serde_json",
  "siphasher",
