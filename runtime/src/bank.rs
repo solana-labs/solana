@@ -159,7 +159,10 @@ use {
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
         slot_history::{Check, SlotHistory},
-        stake::state::{Delegation, StakeState},
+        stake::{
+            self,
+            state::{Delegation, StakeState},
+        },
         system_transaction,
         sysvar::{self, last_restart_slot::LastRestartSlot, Sysvar, SysvarId},
         timing::years_as_slots,
@@ -2629,8 +2632,7 @@ impl Bank {
         {
             let num_stake_delegations = stakes.stake_delegations().len();
             let min_stake_delegation =
-                solana_stake_program::get_minimum_delegation(&self.feature_set)
-                    .max(LAMPORTS_PER_SOL);
+                stake::get_minimum_delegation(&self.feature_set).max(LAMPORTS_PER_SOL);
 
             let (stake_delegations, filter_timer) = measure!(stakes
                 .stake_delegations()
