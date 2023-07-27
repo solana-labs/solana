@@ -828,7 +828,7 @@ fn process_instruction(
             assert_eq!(account.data_len(), rc_box_size);
 
             // update the serialized length so we don't error out early with AccountDataSizeChanged
-            unsafe { *serialized_len_ptr = account.data_len() as u64 };
+            unsafe { *serialized_len_ptr = rc_box_size as u64 };
 
             // hack to avoid dropping the RcBox, which is supposed to be on the
             // heap but we put it into account data. If we don't do this,
@@ -847,13 +847,17 @@ fn process_instruction(
             const INVOKE_PROGRAM_INDEX: usize = 3;
             const REALLOC_PROGRAM_INDEX: usize = 4;
             let account = &accounts[ARGUMENT_INDEX];
+            let target_account_index = instruction_data[1] as usize;
+            let target_account = &accounts[target_account_index];
             let realloc_program_id = accounts[REALLOC_PROGRAM_INDEX].key;
             let invoke_program_id = accounts[INVOKE_PROGRAM_INDEX].key;
             account.realloc(0, false).unwrap();
             account.assign(realloc_program_id);
+            target_account.realloc(0, false).unwrap();
+            target_account.assign(realloc_program_id);
 
             let rc_box_addr =
-                account.data.borrow_mut().as_mut_ptr() as *mut RcBox<RefCell<&mut [u8]>>;
+                target_account.data.borrow_mut().as_mut_ptr() as *mut RcBox<RefCell<&mut [u8]>>;
             let rc_box_size = mem::size_of::<RcBox<RefCell<&mut [u8]>>>();
             unsafe {
                 std::ptr::write(
@@ -876,6 +880,8 @@ fn process_instruction(
                 );
             }
 
+            let serialized_len_ptr =
+                unsafe { account.data.borrow_mut().as_mut_ptr().offset(-8) as *mut u64 };
             // Place a RcBox<RefCell<&mut [u8]>> in the account data. This
             // allows us to test having CallerAccount::ref_to_len_in_vm in an
             // account region.
@@ -897,6 +903,7 @@ fn process_instruction(
                     *realloc_program_id,
                     &[
                         (accounts[ARGUMENT_INDEX].key, true, false),
+                        (target_account.key, true, false),
                         (realloc_program_id, false, false),
                         (invoke_program_id, false, false),
                     ],
@@ -906,6 +913,7 @@ fn process_instruction(
             )
             .unwrap();
 
+            unsafe { *serialized_len_ptr = rc_box_size as u64 };
             // hack to avoid dropping the RcBox, which is supposed to be on the
             // heap but we put it into account data. If we don't do this,
             // dropping the Rc will cause
