@@ -1000,8 +1000,8 @@ impl<'a> BorrowedAccount<'a> {
         // transaction reallocs, we don't have to copy the whole account data a
         // second time to fullfill the realloc.
         //
-        // NOTE: The account memory region CoW code in Serializer::push_account_region() implements
-        // the same logic and must be kept in sync.
+        // NOTE: The account memory region CoW code in bpf_loader::create_vm() implements the same
+        // logic and must be kept in sync.
         if self.account.is_shared() {
             self.account.reserve(MAX_PERMITTED_DATA_INCREASE);
         }
