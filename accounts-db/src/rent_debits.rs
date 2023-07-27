@@ -44,9 +44,15 @@ impl RentDebits {
             .unwrap_or_default()
     }
 
-    #[cfg(test)]
+    // These functions/fields are only usable from a dev context (i.e. tests and benches)
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     pub fn insert(&mut self, address: &Pubkey, rent_collected: u64, post_balance: u64) {

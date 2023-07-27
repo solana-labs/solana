@@ -1,5 +1,3 @@
-use solana_accounts_db::transaction_error_metrics::TransactionErrorMetrics;
-use solana_accounts_db::transaction_results::TransactionCheckResult;
 use {
     super::{
         committer::{CommitTransactionDetails, Committer, PreBalanceInfo},
@@ -11,6 +9,10 @@ use {
         BankingStageStats,
     },
     itertools::Itertools,
+    solana_accounts_db::{
+        transaction_error_metrics::TransactionErrorMetrics,
+        transaction_results::TransactionCheckResult,
+    },
     solana_ledger::token_balances::collect_token_balances,
     solana_measure::{measure::Measure, measure_us},
     solana_poh::poh_recorder::{

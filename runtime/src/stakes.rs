@@ -4,7 +4,6 @@ use {
     crate::{
         stake_account,
         stake_history::StakeHistory,
-        stake_rewards::StakeReward,
         vote_account::{VoteAccount, VoteAccounts},
     },
     dashmap::DashMap,
@@ -13,6 +12,7 @@ use {
     num_derive::ToPrimitive,
     num_traits::ToPrimitive,
     rayon::{prelude::*, ThreadPool},
+    solana_accounts_db::stake_rewards::StakeReward,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::{Epoch, Slot},

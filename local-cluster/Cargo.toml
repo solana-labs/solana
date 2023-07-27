@@ -15,6 +15,7 @@ itertools = { workspace = true }
 log = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-client = { workspace = true }
 solana-config-program = { workspace = true }
 solana-core = { workspace = true }

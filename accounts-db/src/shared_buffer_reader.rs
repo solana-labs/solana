@@ -5,8 +5,8 @@
 //!  the buffer is recycled and reading ahead continues.
 //! A primary use case is the underlying reader being decompressing a file, which can be computationally expensive.
 //! The clients of SharedBufferReaders could be parallel instances which need access to the decompressed data.
-use solana_accounts_db::waitable_condvar::WaitableCondvar;
 use {
+    crate::waitable_condvar::WaitableCondvar,
     log::*,
     solana_measure::measure::Measure,
     std::{

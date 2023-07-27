@@ -1,7 +1,6 @@
-use solana_accounts_db::accounts_db::AccountStorageEntry;
 use {
-    crate::accounts_db::AccountStorageEntry,
     serde::{Deserialize, Serialize},
+    solana_accounts_db::accounts_db::AccountStorageEntry,
 };
 
 /// The serialized AppendVecId type is fixed as usize

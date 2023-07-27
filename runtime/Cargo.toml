@@ -45,7 +45,7 @@ regex = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
 siphasher = { workspace = true }
-solana-accounts-db = { workspace = true }
+solana-accounts-db = { workspace = true, features = ["dev-context-only-utils"]}
 solana-address-lookup-table-program = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-bucket-map = { workspace = true }
@@ -60,7 +60,7 @@ solana-metrics = { workspace = true }
 solana-perf = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
-solana-sdk = { workspace = true }
+solana-sdk = { workspace = true, features = ["dev-context-only-utils"]}
 solana-stake-program = { workspace = true }
 solana-system-program = { workspace = true }
 solana-vote-program = { workspace = true }

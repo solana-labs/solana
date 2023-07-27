@@ -1,7 +1,8 @@
+/*
 //! Types used by snapshots for safe serialization/deserialization
 use {
-    crate::accounts_hash::{AccountsDeltaHash, AccountsHash, IncrementalAccountsHash},
     serde::{Deserialize, Serialize},
+    solana_accounts_db::accounts_hash::{AccountsDeltaHash, AccountsHash, IncrementalAccountsHash},
     solana_sdk::hash::Hash,
 };
 
@@ -49,3 +50,4 @@ impl From<IncrementalAccountsHash> for SerdeIncrementalAccountsHash {
         Self(incremental_accounts_hash.0)
     }
 }
+*/

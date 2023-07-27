@@ -8,7 +8,7 @@ use {
     dashmap::DashMap,
     rand::Rng,
     rayon::iter::{IntoParallelRefIterator, ParallelIterator},
-    solana_runtime::{
+    solana_accounts_db::{
         accounts::{AccountAddressFilter, Accounts},
         accounts_db::{
             test_utils::create_test_accounts, AccountShrinkThreshold,
@@ -16,8 +16,8 @@ use {
         },
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
-        bank::*,
     },
+    solana_runtime::bank::*,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         genesis_config::{create_genesis_config, ClusterType},

@@ -3,7 +3,7 @@ extern crate test;
 
 use {
     rand::{thread_rng, Rng},
-    solana_runtime::{
+    solana_accounts_db::{
         account_storage::meta::{
             StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredMeta,
         },
@@ -13,11 +13,7 @@ use {
             AppendVec,
         },
     },
-    solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
-        clock::Slot,
-        hash::Hash,
-    },
+    solana_sdk::{account::AccountSharedData, clock::Slot, hash::Hash},
     std::{
         sync::{Arc, Mutex},
         thread::{sleep, spawn},

@@ -1,8 +1,8 @@
-use solana_accounts_db::transaction_results::{DurableNonceFee, TransactionExecutionDetails};
 use {
     crate::transaction_notifier_interface::TransactionNotifierLock,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     itertools::izip,
+    solana_accounts_db::transaction_results::{DurableNonceFee, TransactionExecutionDetails},
     solana_ledger::{
         blockstore::Blockstore,
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},

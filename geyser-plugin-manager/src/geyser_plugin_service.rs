@@ -11,12 +11,12 @@ use {
     },
     crossbeam_channel::Receiver,
     log::*,
+    solana_accounts_db::accounts_update_notifier_interface::AccountsUpdateNotifier,
     solana_ledger::entry_notifier_interface::EntryNotifierLock,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::SlotNotification,
         transaction_notifier_interface::TransactionNotifierLock,
     },
-    solana_runtime::accounts_update_notifier_interface::AccountsUpdateNotifier,
     std::{
         path::{Path, PathBuf},
         sync::{

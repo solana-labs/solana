@@ -1,6 +1,6 @@
 //! Helper types and functions for handling and dealing with snapshot hashes.
 use {
-    crate::{accounts_hash::AccountsHashEnum, epoch_accounts_hash::EpochAccountsHash},
+    solana_accounts_db::{accounts_hash::AccountsHashEnum, epoch_accounts_hash::EpochAccountsHash},
     solana_sdk::{
         clock::Slot,
         hash::{Hash, Hasher},

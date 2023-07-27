@@ -33,50 +33,21 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-use solana_accounts_db::blockhash_queue::BlockhashQueue;
-use solana_accounts_db::nonce_info::{NonceInfo, NoncePartial};
-use solana_accounts_db::partitioned_rewards::PartitionedEpochRewardsConfig;
-use solana_accounts_db::rent_collector::{CollectedInfo, RentCollector};
-use solana_accounts_db::rent_debits::{RentDebits, RewardInfo};
-use solana_accounts_db::storable_accounts::StorableAccounts;
-use solana_accounts_db::transaction_error_metrics::TransactionErrorMetrics;
-use solana_accounts_db::transaction_results::{
-    inner_instructions_list_from_instruction_trace, DurableNonceFee, TransactionCheckResult,
-    TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
-};
+use solana_accounts_db::stake_rewards::StakeReward;
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
 use {
     crate::{
-        account_overrides::AccountOverrides,
-        account_rent_state::RentState,
-        accounts::{
-            AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot, RewardInterval,
-            TransactionLoadResult,
-        },
-        accounts_db::{
-            AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig,
-            CalcAccountsHashDataSource, IncludeSlotInHash, VerifyAccountsHashAndLamportsConfig,
-            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
-        },
-        accounts_hash::{AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash},
-        accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
-        accounts_partition::{self, Partition, PartitionIndex},
-        accounts_update_notifier_interface::AccountsUpdateNotifier,
-        ancestors::{Ancestors, AncestorsForSerialization},
         bank::metrics::*,
         builtins::{BuiltinPrototype, BUILTINS},
-        epoch_accounts_hash::EpochAccountsHash,
         epoch_rewards_hasher::hash_rewards_into_partitions,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         runtime_config::RuntimeConfig,
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_hash::SnapshotHash,
-        sorted_storages::SortedStorages,
         stake_account::StakeAccount,
         stake_history::StakeHistory,
-        stake_rewards::StakeReward,
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift,
             MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW_V2,
@@ -95,6 +66,38 @@ use {
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         slice::ParallelSlice,
         ThreadPool, ThreadPoolBuilder,
+    },
+    solana_accounts_db::{
+        account_overrides::AccountOverrides,
+        account_rent_state::RentState,
+        accounts::{
+            AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot, RewardInterval,
+            TransactionLoadResult,
+        },
+        accounts_db::{
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig,
+            CalcAccountsHashDataSource, IncludeSlotInHash, VerifyAccountsHashAndLamportsConfig,
+            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+        },
+        accounts_hash::{AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash},
+        accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
+        accounts_partition::{self, Partition, PartitionIndex},
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
+        ancestors::{Ancestors, AncestorsForSerialization},
+        blockhash_queue::BlockhashQueue,
+        epoch_accounts_hash::EpochAccountsHash,
+        nonce_info::{NonceInfo, NoncePartial},
+        partitioned_rewards::PartitionedEpochRewardsConfig,
+        rent_collector::{CollectedInfo, RentCollector},
+        rent_debits::{RentDebits, RewardInfo},
+        sorted_storages::SortedStorages,
+        storable_accounts::StorableAccounts,
+        transaction_error_metrics::TransactionErrorMetrics,
+        transaction_results::{
+            inner_instructions_list_from_instruction_trace, DurableNonceFee,
+            TransactionCheckResult, TransactionExecutionDetails, TransactionExecutionResult,
+            TransactionResults,
+        },
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment,
     solana_cost_model::cost_tracker::CostTracker,
@@ -920,29 +923,6 @@ pub struct CommitTransactionCounts {
     pub signature_count: u64,
 }
 
-/// allow [StakeReward] to be passed to `StoreAccounts` directly without copies or vec construction
-impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward], IncludeSlotInHash) {
-    fn pubkey(&self, index: usize) -> &Pubkey {
-        &self.1[index].stake_pubkey
-    }
-    fn account(&self, index: usize) -> &AccountSharedData {
-        &self.1[index].stake_account
-    }
-    fn slot(&self, _index: usize) -> Slot {
-        // per-index slot is not unique per slot when per-account slot is not included in the source data
-        self.target_slot()
-    }
-    fn target_slot(&self) -> Slot {
-        self.0
-    }
-    fn len(&self) -> usize {
-        self.1.len()
-    }
-    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
-        self.2
-    }
-}
-
 impl WorkingSlot for Bank {
     fn current_slot(&self) -> Slot {
         self.slot
@@ -1270,7 +1250,7 @@ impl Bank {
             1
         } else {
             const MAX_FACTOR_OF_REWARD_BLOCKS_IN_EPOCH: u64 = 10;
-            let num_chunks = crate::accounts_hash::AccountsHasher::div_ceil(
+            let num_chunks = solana_accounts_db::accounts_hash::AccountsHasher::div_ceil(
                 total_stake_accounts,
                 self.partitioned_rewards_stake_account_stores_per_block() as usize,
             ) as u64;
@@ -6055,7 +6035,7 @@ impl Bank {
             // divide the range into num_threads smaller ranges and process in parallel
             // Note that 'pubkey_range_from_partition' cannot easily be re-used here to break the range smaller.
             // It has special handling of 0..0 and partition_count changes affect all ranges unevenly.
-            let num_threads = crate::accounts_db::quarter_thread_count() as u64;
+            let num_threads = solana_accounts_db::accounts_db::quarter_thread_count() as u64;
             let sz = std::mem::size_of::<u64>();
             let start_prefix = accounts_partition::prefix_from_pubkey(subrange_full.start());
             let end_prefix_inclusive = accounts_partition::prefix_from_pubkey(subrange_full.end());

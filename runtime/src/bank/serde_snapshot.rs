@@ -17,7 +17,6 @@ mod tests {
                 self, create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
                 StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
             },
-            stake_rewards::StakeReward,
             status_cache::StatusCache,
         },
         solana_accounts_db::{
@@ -30,6 +29,7 @@ mod tests {
             accounts_hash::{AccountsDeltaHash, AccountsHash},
             accounts_index::AccountSecondaryIndexes,
             epoch_accounts_hash::EpochAccountsHash,
+            stake_rewards::StakeReward,
         },
         solana_sdk::{
             epoch_schedule::EpochSchedule,
@@ -271,7 +271,7 @@ mod tests {
             None,
             AccountShrinkThreshold::default(),
             false,
-            Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            Some(solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             Arc::default(),
         )
@@ -406,7 +406,7 @@ mod tests {
                 None,
                 AccountShrinkThreshold::default(),
                 false,
-                Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+                Some(solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
                 None,
                 Arc::default(),
             )
@@ -498,7 +498,7 @@ mod tests {
                 false,
                 false,
                 false,
-                Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+                Some(solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
                 None,
                 Arc::default(),
             )
@@ -592,7 +592,7 @@ mod tests {
             None,
             AccountShrinkThreshold::default(),
             false,
-            Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            Some(solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             Arc::default(),
         )

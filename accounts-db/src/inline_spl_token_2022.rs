@@ -1,6 +1,5 @@
-use solana_accounts_db::inline_spl_token;
 /// Partial SPL Token declarations inlined to avoid an external dependency on the spl-token-2022 crate
-use solana_accounts_db::inline_spl_token::{self, GenericTokenAccount};
+use crate::inline_spl_token::{self, GenericTokenAccount};
 
 solana_sdk::declare_id!("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 

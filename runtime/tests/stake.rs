@@ -1,10 +1,10 @@
 #![allow(clippy::integer_arithmetic)]
 
 use {
+    solana_accounts_db::epoch_accounts_hash::EpochAccountsHash,
     solana_runtime::{
         bank::Bank,
         bank_client::BankClient,
-        epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
     },
     solana_sdk::{

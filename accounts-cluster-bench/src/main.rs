@@ -1,10 +1,10 @@
 #![allow(clippy::integer_arithmetic)]
-use solana_accounts_db::inline_spl_token;
 use {
     clap::{crate_description, crate_name, value_t, values_t_or_exit, App, Arg},
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
+    solana_accounts_db::inline_spl_token,
     solana_clap_utils::{
         hidden_unless_forced, input_parsers::pubkey_of, input_validators::is_url_or_moniker,
     },

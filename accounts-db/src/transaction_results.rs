@@ -1,6 +1,8 @@
-use solana_accounts_db::nonce_info::{NonceFull, NonceInfo, NoncePartial};
-use solana_accounts_db::rent_debits::RentDebits;
 use {
+    crate::{
+        nonce_info::{NonceFull, NonceInfo, NoncePartial},
+        rent_debits::RentDebits,
+    },
     solana_program_runtime::loaded_programs::LoadedProgramsForTxBatch,
     solana_sdk::{
         instruction::{CompiledInstruction, TRANSACTION_LEVEL_STACK_HEIGHT},

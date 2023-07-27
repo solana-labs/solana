@@ -7,6 +7,7 @@ use {
     gag::BufferRedirect,
     log::*,
     serial_test::serial,
+    solana_accounts_db::hardened_unpack::open_genesis_config,
     solana_client::thin_client::ThinClient,
     solana_core::{
         consensus::{
@@ -44,7 +45,6 @@ use {
     },
     solana_runtime::{
         commitment::VOTE_THRESHOLD_SIZE,
-        hardened_unpack::open_genesis_config,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils,
         snapshot_config::SnapshotConfig,

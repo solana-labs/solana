@@ -2,7 +2,6 @@ use {
     crate::{
         bank::{Bank, BankFieldsToDeserialize, BankRc},
         builtins::BuiltinPrototype,
-        epoch_accounts_hash::EpochAccountsHash,
         epoch_stakes::EpochStakes,
         runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
@@ -14,6 +13,7 @@ use {
     bincode::{self, config::Options, Error},
     log::*,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
+    solana_accounts_db::epoch_accounts_hash::EpochAccountsHash,
     solana_accounts_db::{
         account_storage::meta::StoredMetaWriteVersion,
         accounts::Accounts,
@@ -61,8 +61,10 @@ mod types;
 mod utils;
 
 pub(crate) use {
+    solana_accounts_db::accounts_hash::{
+        SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash,
+    },
     storage::SerializedAppendVecId,
-    types::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
 };
 
 #[derive(Copy, Clone, Eq, PartialEq)]
