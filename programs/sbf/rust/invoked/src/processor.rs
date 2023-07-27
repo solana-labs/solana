@@ -297,6 +297,14 @@ fn process_instruction(
 
             set_return_data(b"Set by invoked");
         }
+        ASSIGN_ACCOUNT_TO_CALLER => {
+            msg!("Assigning account to caller");
+            const ARGUMENT_INDEX: usize = 0;
+            const CALLER_PROGRAM_ID: usize = 2;
+            let account = &accounts[ARGUMENT_INDEX];
+            let caller_program_id = accounts[CALLER_PROGRAM_ID].key;
+            account.assign(caller_program_id);
+        }
         _ => panic!(),
     }
 

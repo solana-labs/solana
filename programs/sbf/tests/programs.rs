@@ -3939,3 +3939,112 @@ fn test_program_sbf_inner_instruction_alignment_checks() {
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
     assert!(result.is_ok());
 }
+
+#[test]
+#[cfg(feature = "sbf_rust")]
+fn test_cpi_account_ownership_writability() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(100_123_456_789);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    bank.feature_set = Arc::new(FeatureSet::all_enabled());
+    let bank = Arc::new(bank);
+    let mut bank_client = BankClient::new_shared(&bank);
+
+    let invoke_program_id = load_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_sbf_rust_invoke",
+    );
+
+    let (bank, invoked_program_id) = load_program_and_advance_slot(
+        &mut bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_sbf_rust_invoked",
+    );
+
+    let account_keypair = Keypair::new();
+
+    let mint_pubkey = mint_keypair.pubkey();
+    let account_metas = vec![
+        AccountMeta::new(mint_pubkey, true),
+        AccountMeta::new(account_keypair.pubkey(), false),
+        AccountMeta::new_readonly(invoked_program_id, false),
+        AccountMeta::new_readonly(invoke_program_id, false),
+    ];
+
+    for (account_size, byte_index) in [
+        (0, 0),                                     // first realloc byte
+        (0, MAX_PERMITTED_DATA_INCREASE as u8),     // last realloc byte
+        (2, 0),                                     // first data byte
+        (2, 1),                                     // last data byte
+        (2, 3),                                     // first realloc byte
+        (2, 2 + MAX_PERMITTED_DATA_INCREASE as u8), // last realloc byte
+    ] {
+        bank.register_recent_blockhash(&Hash::new_unique());
+        let account = AccountSharedData::new(42, account_size, &invoke_program_id);
+        bank.store_account(&account_keypair.pubkey(), &account);
+
+        let instruction = Instruction::new_with_bytes(
+            invoke_program_id,
+            &[
+                TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_TO_SYSTEM_ACCOUNT,
+                byte_index,
+                42,
+                42,
+            ],
+            account_metas.clone(),
+        );
+        let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified)
+        );
+
+        let instruction = Instruction::new_with_bytes(
+            invoke_program_id,
+            &[
+                TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_TO_OTHER_PROGRAM,
+                byte_index,
+                42,
+                42,
+            ],
+            account_metas.clone(),
+        );
+        let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified)
+        );
+
+        // assign the account to invoked_program_id, which will then assign to invoke_program_id
+        let mut account = bank.get_account(&account_keypair.pubkey()).unwrap();
+        account.set_owner(invoked_program_id);
+        bank.store_account(&account_keypair.pubkey(), &account);
+
+        let instruction = Instruction::new_with_bytes(
+            invoke_program_id,
+            &[
+                TEST_ALLOW_WRITE_AFTER_OWNERSHIP_CHANGE_TO_CALLER,
+                byte_index,
+                42,
+                42,
+            ],
+            account_metas.clone(),
+        );
+        let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+        assert!(result.is_ok(), "{result:?}");
+        let account = bank.get_account(&account_keypair.pubkey()).unwrap();
+        let mut data = vec![0; account.data().len()];
+        if (byte_index as usize) < data.len() {
+            data[byte_index as usize] = 42;
+        }
+        assert_eq!(account.data(), data);
+    }
+}
