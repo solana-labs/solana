@@ -476,7 +476,6 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
-    assert_stakes_cache_consistency: true,
     create_ancient_storage: CreateAncientStorage::Pack,
     test_partitioned_epoch_rewards: TestPartitionedEpochRewards::CompareResults,
 };
@@ -488,7 +487,6 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
-    assert_stakes_cache_consistency: false,
     create_ancient_storage: CreateAncientStorage::Pack,
     test_partitioned_epoch_rewards: TestPartitionedEpochRewards::None,
 };
@@ -550,8 +548,6 @@ pub struct AccountsDbConfig {
     pub ancient_append_vec_offset: Option<i64>,
     pub skip_initial_hash_calc: bool,
     pub exhaustively_verify_refcounts: bool,
-    /// when stakes cache consistency check occurs, assert that cached accounts match accounts db
-    pub assert_stakes_cache_consistency: bool,
     /// how to create ancient storages
     pub create_ancient_storage: CreateAncientStorage,
     pub test_partitioned_epoch_rewards: TestPartitionedEpochRewards,
@@ -1377,9 +1373,6 @@ pub struct AccountsDb {
     pub skip_initial_hash_calc: bool,
 
     pub(crate) storage: AccountStorage,
-
-    /// from AccountsDbConfig
-    pub(crate) assert_stakes_cache_consistency: bool,
 
     #[allow(dead_code)]
     /// from AccountsDbConfig
@@ -2390,7 +2383,6 @@ impl AccountsDb {
         const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
 
         AccountsDb {
-            assert_stakes_cache_consistency: false,
             bank_progress: BankCreationFreezingProgress::default(),
             create_ancient_storage: CreateAncientStorage::Pack,
             verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
@@ -2515,11 +2507,6 @@ impl AccountsDb {
             .map(|config| config.exhaustively_verify_refcounts)
             .unwrap_or_default();
 
-        let assert_stakes_cache_consistency = accounts_db_config
-            .as_ref()
-            .map(|config| config.assert_stakes_cache_consistency)
-            .unwrap_or_default();
-
         let create_ancient_storage = accounts_db_config
             .as_ref()
             .map(|config| config.create_ancient_storage)
@@ -2549,7 +2536,6 @@ impl AccountsDb {
             accounts_update_notifier,
             filler_accounts_config,
             filler_account_suffix,
-            assert_stakes_cache_consistency,
             create_ancient_storage,
             write_cache_limit_bytes: accounts_db_config
                 .as_ref()
@@ -4942,7 +4928,19 @@ impl AccountsDb {
             // If the slot is not in the cache, then all the account information must have
             // been flushed. This is guaranteed because we only remove the rooted slot from
             // the cache *after* we've finished flushing in `flush_slot_cache`.
-            if let Some(storage) = self.storage.get_slot_storage_entry(slot) {
+            // Regarding `shrinking_in_progress_ok`:
+            // This fn could be running in the foreground, so shrinking could be running in the background, independently.
+            // Even if shrinking is running, there will be 0-1 active storages to scan here at any point.
+            // When a concurrent shrink completes, the active storage at this slot will
+            // be replaced with an equivalent storage with only alive accounts in it.
+            // A shrink on this slot could have completed anytime before the call here, a shrink could currently be in progress,
+            // or the shrink could complete immediately or anytime after this call. This has always been true.
+            // So, whether we get a never-shrunk, an about-to-be shrunk, or a will-be-shrunk-in-future storage here to scan,
+            // all are correct and possible in a normally running system.
+            if let Some(storage) = self
+                .storage
+                .get_slot_storage_entry_shrinking_in_progress_ok(slot)
+            {
                 storage
                     .accounts
                     .account_iter()

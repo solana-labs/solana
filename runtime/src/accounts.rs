@@ -251,7 +251,6 @@ impl Accounts {
                 ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
             let _process_transaction_result = compute_budget.process_instructions(
                 tx.message().program_instructions_iter(),
-                true, // default_units_per_instruction has enabled in MNB
                 !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
                 true, // don't reject txs that use request heap size ix
                 feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),

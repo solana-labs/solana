@@ -19,7 +19,7 @@ pub(crate) enum ShredSource {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Copy, Clone, Default)]
     struct SlotFlags: u8 {
         const DEAD   = 0b00000001;
         const FULL   = 0b00000010;

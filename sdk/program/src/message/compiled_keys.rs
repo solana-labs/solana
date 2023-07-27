@@ -187,6 +187,7 @@ mod tests {
     use {super::*, crate::instruction::AccountMeta, bitflags::bitflags};
 
     bitflags! {
+        #[derive(Clone, Copy)]
         pub struct KeyFlags: u8 {
             const SIGNER   = 0b00000001;
             const WRITABLE = 0b00000010;
@@ -533,7 +534,7 @@ mod tests {
 
     #[test]
     fn test_try_drain_keys_found_in_lookup_table() {
-        let orig_keys = vec![
+        let orig_keys = [
             Pubkey::new_unique(),
             Pubkey::new_unique(),
             Pubkey::new_unique(),
@@ -598,7 +599,7 @@ mod tests {
 
     #[test]
     fn test_try_drain_keys_found_in_lookup_table_with_empty_table() {
-        let original_keys = vec![
+        let original_keys = [
             Pubkey::new_unique(),
             Pubkey::new_unique(),
             Pubkey::new_unique(),

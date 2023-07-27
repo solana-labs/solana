@@ -6,7 +6,7 @@ use {
         entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
         feature_set::{
             add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
-            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
+            remove_deprecated_request_unit_ix, FeatureSet,
         },
         fee::FeeBudgetLimits,
         genesis_config::ClusterType,
@@ -177,12 +177,11 @@ impl ComputeBudget {
     pub fn process_instructions<'a>(
         &mut self,
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-        default_units_per_instruction: bool,
         support_request_units_deprecated: bool,
         enable_request_heap_frame_ix: bool,
         support_set_loaded_accounts_data_size_limit_ix: bool,
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
-        let mut num_non_compute_budget_instructions: usize = 0;
+        let mut num_non_compute_budget_instructions: u32 = 0;
         let mut updated_compute_unit_limit = None;
         let mut requested_heap_size = None;
         let mut prioritization_fee = None;
@@ -261,18 +260,13 @@ impl ComputeBudget {
             self.heap_size = Some(bytes as usize);
         }
 
-        self.compute_unit_limit = if default_units_per_instruction {
-            updated_compute_unit_limit.or_else(|| {
-                Some(
-                    (num_non_compute_budget_instructions as u32)
-                        .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT),
-                )
+        let compute_unit_limit = updated_compute_unit_limit
+            .unwrap_or_else(|| {
+                num_non_compute_budget_instructions
+                    .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT)
             })
-        } else {
-            updated_compute_unit_limit
-        }
-        .unwrap_or(MAX_COMPUTE_UNIT_LIMIT)
-        .min(MAX_COMPUTE_UNIT_LIMIT) as u64;
+            .min(MAX_COMPUTE_UNIT_LIMIT);
+        self.compute_unit_limit = u64::from(compute_unit_limit);
 
         self.loaded_accounts_data_size_limit = updated_loaded_accounts_data_size_limit
             .unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
@@ -301,7 +295,6 @@ impl ComputeBudget {
         let prioritization_fee_details = compute_budget
             .process_instructions(
                 instructions,
-                feature_set.is_active(&use_default_units_in_fee_calculation::id()),
                 !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
                 enable_request_heap_frame_ix,
                 feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
@@ -344,7 +337,6 @@ mod tests {
             let mut compute_budget = ComputeBudget::default();
             let result = compute_budget.process_instructions(
                 tx.message().program_instructions_iter(),
-                true,
                 false, /*not support request_units_deprecated*/
                 $enable_request_heap_frame_ix,
                 $support_set_loaded_accounts_data_size_limit_ix,
@@ -894,7 +886,6 @@ mod tests {
         let mut compute_budget = ComputeBudget::default();
         let result = compute_budget.process_instructions(
             transaction.message().program_instructions_iter(),
-            true,
             false, //not support request_units_deprecated
             true,  //enable_request_heap_frame_ix,
             true,  //support_set_loaded_accounts_data_size_limit_ix,

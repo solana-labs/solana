@@ -52,7 +52,7 @@ use {
 };
 
 #[cfg(feature = "spinner")]
-fn set_message_for_confirmed_transactions(
+pub fn set_message_for_confirmed_transactions(
     progress_bar: &ProgressBar,
     confirmed_transactions: u32,
     total_transactions: usize,

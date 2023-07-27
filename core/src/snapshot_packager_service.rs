@@ -204,6 +204,7 @@ mod tests {
         rand::seq::SliceRandom,
         solana_runtime::{
             snapshot_archive_info::SnapshotArchiveInfo,
+            snapshot_bank_utils,
             snapshot_hash::SnapshotHash,
             snapshot_package::{SnapshotPackage, SnapshotType},
             snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
@@ -253,7 +254,7 @@ mod tests {
         let num_snapshots = 1;
 
         let genesis_config = GenesisConfig::default();
-        let bank = snapshot_utils::create_snapshot_dirs_for_tests(
+        let bank = snapshot_bank_utils::create_snapshot_dirs_for_tests(
             &genesis_config,
             &bank_snapshots_dir,
             num_snapshots,
@@ -265,7 +266,7 @@ mod tests {
         let snapshot_storages = bank.get_snapshot_storages(None);
         let archive_format = ArchiveFormat::TarBzip2;
 
-        let full_archive = snapshot_utils::package_and_archive_full_snapshot(
+        let full_archive = snapshot_bank_utils::package_and_archive_full_snapshot(
             &bank,
             &bank_snapshot_info,
             full_snapshot_archives_dir,

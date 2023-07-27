@@ -7,3 +7,7 @@ fail-fast = false
 
 [profile.ci.junit]
 path = "junit.xml"
+
+[[profile.ci.overrides]]
+filter = "package(solana-zk-token-proof-program-tests) & test(/^test_batched_range_proof_u256$/)"
+threads-required = "num-cpus"

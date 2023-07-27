@@ -165,7 +165,7 @@ fn test_stake_redelegation() {
     let stake_state: StakeState = stake_account.state().unwrap();
 
     let rent_exempt_reserve = match stake_state {
-        StakeState::Stake(meta, stake) => {
+        StakeState::Stake(meta, stake, _) => {
             assert_eq!(stake.delegation.voter_pubkey, vote_keypair.pubkey());
             meta.rent_exempt_reserve
         }
@@ -271,7 +271,7 @@ fn test_stake_redelegation() {
     let stake2_state: StakeState = stake2_account.state().unwrap();
 
     match stake2_state {
-        StakeState::Stake(_meta, stake) => {
+        StakeState::Stake(_meta, stake, _) => {
             assert_eq!(stake.delegation.voter_pubkey, vote2_keypair.pubkey());
         }
         _ => panic!("Unexpected stake2 state!"),

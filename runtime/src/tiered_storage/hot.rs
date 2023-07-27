@@ -6,12 +6,23 @@ use {
         account_storage::meta::StoredMetaWriteVersion,
         tiered_storage::{
             byte_block,
+            footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
+            index::AccountIndexFormat,
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
+            TieredStorageFormat,
         },
     },
     modular_bitfield::prelude::*,
     solana_sdk::{hash::Hash, stake_history::Epoch},
     std::option::Option,
+};
+
+pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
+    meta_entry_size: std::mem::size_of::<HotAccountMeta>(),
+    account_meta_format: AccountMetaFormat::Hot,
+    owners_block_format: OwnersBlockFormat::LocalIndex,
+    account_index_format: AccountIndexFormat::AddressAndOffset,
+    account_block_format: AccountBlockFormat::AlignedRaw,
 };
 
 /// The maximum number of padding bytes used in a hot account entry.

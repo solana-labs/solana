@@ -128,7 +128,6 @@ impl CostModel {
         let enable_request_heap_frame_ix = true;
         let result = compute_budget.process_instructions(
             transaction.message().program_instructions_iter(),
-            true, // default_units_per_instruction has enabled in MNB
             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
             enable_request_heap_frame_ix,
             feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),

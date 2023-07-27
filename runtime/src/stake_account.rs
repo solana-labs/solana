@@ -44,10 +44,6 @@ impl<T> StakeAccount<T> {
     pub(crate) fn stake_state(&self) -> &StakeState {
         &self.stake_state
     }
-
-    pub(crate) fn account(&self) -> &AccountSharedData {
-        &self.account
-    }
 }
 
 impl StakeAccount<Delegation> {
@@ -91,17 +87,6 @@ impl TryFrom<AccountSharedData> for StakeAccount<Delegation> {
     }
 }
 
-impl From<StakeAccount<Delegation>> for StakeAccount<()> {
-    #[inline]
-    fn from(stake_account: StakeAccount<Delegation>) -> Self {
-        Self {
-            account: stake_account.account,
-            stake_state: stake_account.stake_state,
-            _phantom: PhantomData,
-        }
-    }
-}
-
 impl<T> From<StakeAccount<T>> for (AccountSharedData, StakeState) {
     #[inline]
     fn from(stake_account: StakeAccount<T>) -> Self {
@@ -125,11 +110,15 @@ impl AbiExample for StakeAccount<Delegation> {
     fn example() -> Self {
         use solana_sdk::{
             account::Account,
-            stake::state::{Meta, Stake},
+            stake::{
+                stake_flags::StakeFlags,
+                state::{Meta, Stake},
+            },
         };
-        let stake_state = StakeState::Stake(Meta::example(), Stake::example());
+        let stake_state =
+            StakeState::Stake(Meta::example(), Stake::example(), StakeFlags::example());
         let mut account = Account::example();
-        account.data.resize(196, 0u8);
+        account.data.resize(200, 0u8);
         account.owner = solana_stake_program::id();
         account.set_state(&stake_state).unwrap();
         Self::try_from(AccountSharedData::from(account)).unwrap()

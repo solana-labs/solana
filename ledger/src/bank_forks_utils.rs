@@ -17,6 +17,7 @@ use {
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
+        snapshot_bank_utils,
         snapshot_config::SnapshotConfig,
         snapshot_hash::{FullSnapshotHash, IncrementalSnapshotHash, StartingSnapshotHashes},
         snapshot_utils,
@@ -249,7 +250,7 @@ fn bank_forks_from_snapshot(
         // the archives, causing the out-of-memory problem.  So, purge the snapshot dirs upfront before loading from the archive.
         snapshot_utils::purge_old_bank_snapshots(&snapshot_config.bank_snapshots_dir, 0, None);
 
-        let (bank, _) = snapshot_utils::bank_from_snapshot_archives(
+        let (bank, _) = snapshot_bank_utils::bank_from_snapshot_archives(
             &account_paths,
             &snapshot_config.bank_snapshots_dir,
             &full_snapshot_archive_info,
@@ -310,7 +311,7 @@ fn bank_forks_from_snapshot(
             );
         }
 
-        let (bank, _) = snapshot_utils::bank_from_snapshot_dir(
+        let (bank, _) = snapshot_bank_utils::bank_from_snapshot_dir(
             &account_paths,
             &bank_snapshot,
             genesis_config,

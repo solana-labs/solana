@@ -118,7 +118,7 @@ pub const LEGACY_SHRED_DATA_CAPACITY: usize = legacy::ShredData::CAPACITY;
 // LAST_SHRED_IN_SLOT also implies DATA_COMPLETE_SHRED.
 // So it cannot be LAST_SHRED_IN_SLOT if not also DATA_COMPLETE_SHRED.
 bitflags! {
-    #[derive(Default, Serialize, Deserialize)]
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
     pub struct ShredFlags:u8 {
         const SHRED_TICK_REFERENCE_MASK = 0b0011_1111;
         const DATA_COMPLETE_SHRED       = 0b0100_0000;
@@ -995,7 +995,9 @@ pub fn max_entries_per_n_shred(
     num_shreds: u64,
     shred_data_size: Option<usize>,
 ) -> u64 {
-    let data_buffer_size = ShredData::capacity(/*merkle_proof_size:*/ None).unwrap();
+    // Default 32:32 erasure batches yields 64 shreds; log2(64) = 6.
+    let merkle_proof_size = Some(6);
+    let data_buffer_size = ShredData::capacity(merkle_proof_size).unwrap();
     let shred_data_size = shred_data_size.unwrap_or(data_buffer_size) as u64;
     let vec_size = bincode::serialized_size(&vec![entry]).unwrap();
     let entry_size = bincode::serialized_size(entry).unwrap();
@@ -1676,6 +1678,12 @@ mod tests {
 
     #[test]
     fn test_shred_flags_serde() {
+        let flags: ShredFlags = bincode::deserialize(&[0b0001_0101]).unwrap();
+        assert!(!flags.contains(ShredFlags::DATA_COMPLETE_SHRED));
+        assert!(!flags.contains(ShredFlags::LAST_SHRED_IN_SLOT));
+        assert_eq!((flags & ShredFlags::SHRED_TICK_REFERENCE_MASK).bits(), 21u8);
+        assert_eq!(bincode::serialize(&flags).unwrap(), [0b0001_0101]);
+
         let flags: ShredFlags = bincode::deserialize(&[0b0111_0001]).unwrap();
         assert!(flags.contains(ShredFlags::DATA_COMPLETE_SHRED));
         assert!(!flags.contains(ShredFlags::LAST_SHRED_IN_SLOT));

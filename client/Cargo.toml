@@ -12,6 +12,7 @@ edition = { workspace = true }
 [dependencies]
 async-trait = { workspace = true }
 bincode = { workspace = true }
+dashmap = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 indexmap = { workspace = true }

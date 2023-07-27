@@ -9,6 +9,7 @@ use {
         accounts_hash::CalcAccountsHashConfig,
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
+        snapshot_bank_utils,
         snapshot_config::SnapshotConfig,
         snapshot_package::{self, AccountsPackage, AccountsPackageType, SnapshotType},
         snapshot_utils::{self, SnapshotError},
@@ -383,30 +384,40 @@ impl SnapshotRequestHandler {
 
         // Snapshot the bank and send over an accounts package
         let mut snapshot_time = Measure::start("snapshot_time");
-        let snapshot_storages = snapshot_utils::get_snapshot_storages(&snapshot_root_bank);
+        let snapshot_storages = snapshot_bank_utils::get_snapshot_storages(&snapshot_root_bank);
         let accounts_package = match request_type {
-            SnapshotRequestType::Snapshot => {
-                let bank_snapshot_info = snapshot_utils::add_bank_snapshot(
-                    &self.snapshot_config.bank_snapshots_dir,
-                    &snapshot_root_bank,
-                    &snapshot_storages,
-                    self.snapshot_config.snapshot_version,
-                    status_cache_slot_deltas,
-                )
-                .expect("snapshot bank");
-                AccountsPackage::new_for_snapshot(
-                    accounts_package_type,
-                    &snapshot_root_bank,
-                    &bank_snapshot_info,
-                    &self.snapshot_config.full_snapshot_archives_dir,
-                    &self.snapshot_config.incremental_snapshot_archives_dir,
-                    snapshot_storages,
-                    self.snapshot_config.archive_format,
-                    self.snapshot_config.snapshot_version,
-                    accounts_hash_for_testing,
-                )
-                .expect("new accounts package for snapshot")
-            }
+            SnapshotRequestType::Snapshot => match &accounts_package_type {
+                AccountsPackageType::Snapshot(_) => {
+                    let bank_snapshot_info = snapshot_bank_utils::add_bank_snapshot(
+                        &self.snapshot_config.bank_snapshots_dir,
+                        &snapshot_root_bank,
+                        &snapshot_storages,
+                        self.snapshot_config.snapshot_version,
+                        status_cache_slot_deltas,
+                    )?;
+                    AccountsPackage::new_for_snapshot(
+                        accounts_package_type,
+                        &snapshot_root_bank,
+                        &bank_snapshot_info,
+                        &self.snapshot_config.full_snapshot_archives_dir,
+                        &self.snapshot_config.incremental_snapshot_archives_dir,
+                        snapshot_storages,
+                        self.snapshot_config.archive_format,
+                        self.snapshot_config.snapshot_version,
+                        accounts_hash_for_testing,
+                    )
+                }
+                AccountsPackageType::AccountsHashVerifier => {
+                    // skip the bank snapshot, just make an accounts package to send to AHV
+                    AccountsPackage::new_for_accounts_hash_verifier(
+                        accounts_package_type,
+                        &snapshot_root_bank,
+                        snapshot_storages,
+                        accounts_hash_for_testing,
+                    )
+                }
+                AccountsPackageType::EpochAccountsHash => panic!("Illegal account package type: EpochAccountsHash packages must be from an EpochAccountsHash request!"),
+            },
             SnapshotRequestType::EpochAccountsHash => {
                 // skip the bank snapshot, just make an accounts package to send to AHV
                 AccountsPackage::new_for_epoch_accounts_hash(
@@ -643,12 +654,16 @@ impl AccountsBackgroundService {
                     if let Some(snapshot_handle_result) = snapshot_handle_result {
                         // Safe, see proof above
 
-                        if let Ok(snapshot_block_height) = snapshot_handle_result {
-                            assert!(last_cleaned_block_height <= snapshot_block_height);
-                            last_cleaned_block_height = snapshot_block_height;
-                        } else {
-                            exit.store(true, Ordering::Relaxed);
-                            return;
+                        match snapshot_handle_result {
+                            Ok(snapshot_block_height) => {
+                                assert!(last_cleaned_block_height <= snapshot_block_height);
+                                last_cleaned_block_height = snapshot_block_height;
+                            }
+                            Err(err) => {
+                                error!("Stopping AccountsBackgroundService! Fatal error while handling snapshot requests: {err}");
+                                exit.store(true, Ordering::Relaxed);
+                                break;
+                            }
                         }
                     } else {
                         if bank.block_height() - last_cleaned_block_height
@@ -771,7 +786,7 @@ mod test {
     use {
         super::*,
         crate::{
-            epoch_accounts_hash::{self, EpochAccountsHash},
+            bank::epoch_accounts_hash_utils, epoch_accounts_hash::EpochAccountsHash,
             genesis_utils::create_genesis_config,
         },
         crossbeam_channel::unbounded,
@@ -893,7 +908,7 @@ mod test {
 
                 // Since we're not using `BankForks::set_root()`, we have to handle sending the
                 // correct snapshot requests ourself.
-                if bank.slot() == epoch_accounts_hash::calculation_start(&bank) {
+                if bank.slot() == epoch_accounts_hash_utils::calculation_start(&bank) {
                     send_snapshot_request(
                         Arc::clone(&bank),
                         SnapshotRequestType::EpochAccountsHash,

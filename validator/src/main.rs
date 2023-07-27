@@ -46,10 +46,11 @@ use {
         },
         partitioned_rewards::TestPartitionedEpochRewards,
         runtime_config::RuntimeConfig,
+        snapshot_bank_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
             self, create_all_accounts_run_and_snapshot_dirs, create_and_canonicalize_directories,
-            ArchiveFormat, SnapshotVersion, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
+            ArchiveFormat, SnapshotVersion,
         },
     },
     solana_sdk::{

@@ -258,7 +258,7 @@ mod tests {
 
         // Persist the expected footer.
         {
-            let file = TieredStorageFile::new_writable(&path.path);
+            let file = TieredStorageFile::new_writable(&path.path).unwrap();
             expected_footer.write_footer_block(&file).unwrap();
         }
 

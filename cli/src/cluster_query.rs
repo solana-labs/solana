@@ -1819,7 +1819,7 @@ pub fn process_show_stakes(
                         });
                     }
                 }
-                StakeState::Stake(_, stake) => {
+                StakeState::Stake(_, stake, _) => {
                     if vote_account_pubkeys.is_none()
                         || vote_account_pubkeys
                             .unwrap()

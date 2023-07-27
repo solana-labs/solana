@@ -61,6 +61,7 @@ pub mod secondary_index;
 pub mod serde_snapshot;
 mod shared_buffer_reader;
 pub mod snapshot_archive_info;
+pub mod snapshot_bank_utils;
 pub mod snapshot_config;
 pub mod snapshot_hash;
 pub mod snapshot_minimizer;

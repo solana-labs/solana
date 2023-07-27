@@ -304,6 +304,7 @@ pub fn load_and_process_ledger(
                     AccessType::PrimaryForMaintenance,
                     None,
                     false,
+                    false,
                 ))
             } else {
                 blockstore.clone()
@@ -356,6 +357,7 @@ pub fn open_blockstore(
     access_type: AccessType,
     wal_recovery_mode: Option<BlockstoreRecoveryMode>,
     force_update_to_open: bool,
+    enforce_ulimit_nofile: bool,
 ) -> Blockstore {
     let shred_storage_type = get_shred_storage_type(
         ledger_path,
@@ -370,7 +372,7 @@ pub fn open_blockstore(
         BlockstoreOptions {
             access_type: access_type.clone(),
             recovery_mode: wal_recovery_mode.clone(),
-            enforce_ulimit_nofile: true,
+            enforce_ulimit_nofile,
             column_options: LedgerColumnOptions {
                 shred_storage_type,
                 ..LedgerColumnOptions::default()
