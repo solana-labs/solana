@@ -133,7 +133,7 @@ mod tests {
             .collect();
 
         {
-            let file = TieredStorageFile::new_writable(&path);
+            let file = TieredStorageFile::new_writable(&path).unwrap();
             let indexer = AccountIndexFormat::AddressAndOffset;
             indexer.write_index_block(&file, &index_entries).unwrap();
         }

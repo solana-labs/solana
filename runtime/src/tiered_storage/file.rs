@@ -25,20 +25,13 @@ impl TieredStorageFile {
         )
     }
 
-    pub fn new_writable(file_path: impl AsRef<Path>) -> Self {
-        Self(
+    pub fn new_writable(file_path: impl AsRef<Path>) -> Result<Self, std::io::Error> {
+        Ok(Self(
             OpenOptions::new()
+                .create_new(true)
                 .write(true)
-                .create(true)
-                .open(&file_path)
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "[TieredStorageError] Unable to create {:?} as writable: {:?}",
-                        file_path.as_ref().display(),
-                        e,
-                    );
-                }),
-        )
+                .open(file_path)?,
+        ))
     }
 
     pub fn write_type<T>(&self, value: &T) -> Result<usize, std::io::Error> {
