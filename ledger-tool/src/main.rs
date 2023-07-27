@@ -1339,6 +1339,15 @@ fn main() {
                        blockstore to make necessary updates in order to open it"),
         )
         .arg(
+            Arg::with_name("ignore_ulimit_nofile_error")
+                .long("ignore-ulimit-nofile-error")
+                .value_name("FORMAT")
+                .global(true)
+                .help("Allow opening the blockstore to succeed even if the desired open file \
+                    descriptor limit cannot be configured. Use with caution as some commands may \
+                    run fine with a reduced file descriptor limit while others will not"),
+        )
+        .arg(
             Arg::with_name("snapshot_archive_path")
                 .long("snapshot-archive-path")
                 .value_name("DIR")
@@ -2158,6 +2167,7 @@ fn main() {
         .value_of("wal_recovery_mode")
         .map(BlockstoreRecoveryMode::from);
     let force_update_to_open = matches.is_present("force_update_to_open");
+    let enforce_ulimit_nofile = !matches.is_present("ignore_ulimit_nofile_error");
     let verbose_level = matches.occurrences_of("verbose");
 
     if let ("bigtable", Some(arg_matches)) = matches.subcommand() {
@@ -2178,6 +2188,7 @@ fn main() {
                         AccessType::Secondary,
                         wal_recovery_mode,
                         force_update_to_open,
+                        enforce_ulimit_nofile,
                     ),
                     starting_slot,
                     ending_slot,
@@ -2198,6 +2209,7 @@ fn main() {
                     AccessType::Secondary,
                     None,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
 
                 // Check if shred storage type can be inferred; if not, a new
@@ -2215,8 +2227,13 @@ fn main() {
                         &target_db
                     ),
                 );
-                let target =
-                    open_blockstore(&target_db, AccessType::Primary, None, force_update_to_open);
+                let target = open_blockstore(
+                    &target_db,
+                    AccessType::Primary,
+                    None,
+                    force_update_to_open,
+                    enforce_ulimit_nofile,
+                );
                 for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
                     if slot > ending_slot {
                         break;
@@ -2297,6 +2314,7 @@ fn main() {
                     get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 match load_and_process_ledger(
                     arg_matches,
@@ -2341,6 +2359,7 @@ fn main() {
                     AccessType::Secondary,
                     None,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 for (slot, _meta) in ledger
                     .slot_meta_iterator(starting_slot)
@@ -2381,6 +2400,7 @@ fn main() {
                     get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 match load_and_process_ledger(
                     arg_matches,
@@ -2407,6 +2427,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 for slot in slots {
                     println!("Slot {slot}");
@@ -2431,6 +2452,7 @@ fn main() {
                         AccessType::Secondary,
                         wal_recovery_mode,
                         force_update_to_open,
+                        enforce_ulimit_nofile,
                     ),
                     starting_slot,
                     Slot::MAX,
@@ -2447,6 +2469,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
@@ -2459,6 +2482,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
@@ -2472,6 +2496,7 @@ fn main() {
                     AccessType::Primary,
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 for slot in slots {
                     match blockstore.set_dead_slot(slot) {
@@ -2487,6 +2512,7 @@ fn main() {
                     AccessType::Primary,
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 for slot in slots {
                     match blockstore.remove_dead_slot(slot) {
@@ -2505,6 +2531,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 let mut ancestors = BTreeSet::new();
                 assert!(
@@ -2624,6 +2651,7 @@ fn main() {
                     get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 let (bank_forks, ..) = load_and_process_ledger(
                     arg_matches,
@@ -2673,6 +2701,7 @@ fn main() {
                     get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 match load_and_process_ledger(
                     arg_matches,
@@ -2803,6 +2832,7 @@ fn main() {
                     get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 ));
 
                 let snapshot_slot = if Some("ROOT") == arg_matches.value_of("snapshot_slot") {
@@ -3221,6 +3251,7 @@ fn main() {
                     get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 let (bank_forks, ..) = load_and_process_ledger(
                     arg_matches,
@@ -3315,6 +3346,7 @@ fn main() {
                     get_access_type(&process_options),
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 match load_and_process_ledger(
                     arg_matches,
@@ -3845,6 +3877,7 @@ fn main() {
                     AccessType::PrimaryForMaintenance,
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
 
                 let end_slot = match end_slot {
@@ -3918,6 +3951,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 let max_height = if let Some(height) = arg_matches.value_of("max_height") {
                     usize::from_str(height).expect("Maximum height must be a number")
@@ -3971,6 +4005,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 let num_slots = value_t_or_exit!(arg_matches, "num_slots", usize);
                 let exclude_vote_only_slots = arg_matches.is_present("exclude_vote_only_slots");
@@ -4006,6 +4041,7 @@ fn main() {
                     AccessType::Primary,
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
                 let start_root = if let Some(root) = arg_matches.value_of("start_root") {
                     Slot::from_str(root).expect("Before root must be a number")
@@ -4043,6 +4079,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
 
                 match blockstore.slot_meta_iterator(0) {
@@ -4115,6 +4152,7 @@ fn main() {
                         AccessType::Secondary,
                         wal_recovery_mode,
                         force_update_to_open,
+                        enforce_ulimit_nofile,
                     )
                     .db(),
                 );
@@ -4125,6 +4163,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
 
                 let mut slots: Vec<u64> = vec![];
@@ -4148,6 +4187,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     false,
+                    enforce_ulimit_nofile,
                 );
                 let sst_file_name = arg_matches.value_of("file_name");
                 if let Err(err) = print_blockstore_file_metadata(&blockstore, &sst_file_name) {

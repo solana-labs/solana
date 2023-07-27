@@ -8,7 +8,8 @@ pub struct BlockstoreOptions {
     pub access_type: AccessType,
     // Whether to open a blockstore under a recovery mode. Default: None.
     pub recovery_mode: Option<BlockstoreRecoveryMode>,
-    // Whether to allow unlimited number of open files. Default: true.
+    // When opening the Blockstore, determines whether to error or not if the
+    // desired open file descriptor limit cannot be configured. Default: true.
     pub enforce_ulimit_nofile: bool,
     pub column_options: LedgerColumnOptions,
 }

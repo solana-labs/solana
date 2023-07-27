@@ -77,6 +77,7 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
     let debug_keys = pubkeys_of(arg_matches, "debug_key")
         .map(|pubkeys| Arc::new(pubkeys.into_iter().collect::<HashSet<_>>()));
     let force_update_to_open = arg_matches.is_present("force_update_to_open");
+    let enforce_ulimit_nofile = !arg_matches.is_present("ignore_ulimit_nofile_error");
     let process_options = ProcessOptions {
         new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
         run_verification: false,
@@ -116,6 +117,7 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
         AccessType::Secondary,
         wal_recovery_mode,
         force_update_to_open,
+        enforce_ulimit_nofile,
     );
     let (bank_forks, ..) = load_and_process_ledger(
         arg_matches,

@@ -990,6 +990,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
     let verbose = matches.is_present("verbose");
     let force_update_to_open = matches.is_present("force_update_to_open");
     let output_format = OutputFormat::from_matches(matches, "output_format", verbose);
+    let enforce_ulimit_nofile = !matches.is_present("ignore_ulimit_nofile_error");
 
     let (subcommand, sub_matches) = matches.subcommand();
     let instance_name = get_global_subcommand_arg(
@@ -1015,6 +1016,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 AccessType::Secondary,
                 None,
                 force_update_to_open,
+                enforce_ulimit_nofile,
             );
             let config = solana_storage_bigtable::LedgerStorageConfig {
                 read_only: false,
