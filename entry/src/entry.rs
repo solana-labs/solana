@@ -5,8 +5,7 @@
 use {
     crate::poh::Poh,
     crossbeam_channel::{Receiver, Sender},
-    dlopen::symbor::{Container, SymBorApi, Symbol},
-    dlopen_derive::SymBorApi,
+    dlopen2::symbor::{Container, SymBorApi, Symbol},
     lazy_static::lazy_static,
     log::*,
     rand::{thread_rng, Rng},
