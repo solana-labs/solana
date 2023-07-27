@@ -1220,6 +1220,13 @@ fn process_instruction(
             )
             .unwrap();
         }
+        TEST_WRITE_ACCOUNT => {
+            msg!("TEST_WRITE_ACCOUNT");
+            let target_account_index = instruction_data[1] as usize;
+            let target_account = &accounts[target_account_index];
+            let byte_index = usize::from_le_bytes(instruction_data[2..10].try_into().unwrap());
+            target_account.data.borrow_mut()[byte_index] = instruction_data[10];
+        }
         _ => panic!("unexpected program data"),
     }
 

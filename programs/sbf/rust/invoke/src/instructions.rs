@@ -37,6 +37,7 @@ pub const TEST_CPI_INVALID_KEY_POINTER: u8 = 34;
 pub const TEST_CPI_INVALID_OWNER_POINTER: u8 = 35;
 pub const TEST_CPI_INVALID_LAMPORTS_POINTER: u8 = 36;
 pub const TEST_CPI_INVALID_DATA_POINTER: u8 = 37;
+pub const TEST_WRITE_ACCOUNT: u8 = 38;
 
 pub const MINT_INDEX: usize = 0;
 pub const ARGUMENT_INDEX: usize = 1;
