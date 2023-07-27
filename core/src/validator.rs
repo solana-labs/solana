@@ -1962,7 +1962,7 @@ fn blockstore_contains_bad_shred_version(
     start_slot: Slot,
     expected_shred_version: u16,
 ) -> Result<bool, BlockstoreError> {
-    const TIMEOUT_MS: u128 = 60000;
+    const TIMEOUT: Duration = Duration::from_secs(60);
     let timer = Instant::now();
     // Search for shreds with incompatible version in blockstore
     let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
@@ -1975,7 +1975,7 @@ fn blockstore_contains_bad_shred_version(
                 return Ok(true);
             }
         }
-        if timer.elapsed().as_millis() > TIMEOUT_MS {
+        if timer.elapsed() > TIMEOUT {
             info!("Didn't find incorrect shreds after 60 seconds, aborting");
             break;
         }
@@ -2023,7 +2023,7 @@ fn backup_and_clear_blockstore(
             info!("Backing up slots from {start_slot} to {end_slot}");
             let mut timer = Measure::start("blockstore backup");
 
-            const PRINT_INTERVAL_MS: u128 = 5000;
+            const PRINT_INTERVAL: Duration = Duration::from_secs(5);
             let mut print_timer = Instant::now();
             let mut num_slots_copied = 0;
             let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
@@ -2032,7 +2032,7 @@ fn backup_and_clear_blockstore(
                 let _ = backup_blockstore.insert_shreds(shreds, None, true);
                 num_slots_copied += 1;
 
-                if print_timer.elapsed().as_millis() > PRINT_INTERVAL_MS {
+                if print_timer.elapsed() > PRINT_INTERVAL {
                     info!("Backed up {num_slots_copied} slots thus far");
                     print_timer = Instant::now();
                 }
