@@ -1,7 +1,6 @@
 use {
     core::ffi::c_void,
-    dlopen::symbor::{Container, SymBorApi, Symbol},
-    dlopen_derive::SymBorApi,
+    dlopen2::symbor::{Container, SymBorApi, Symbol},
     log::*,
     std::{
         env,
