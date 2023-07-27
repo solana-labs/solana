@@ -5270,11 +5270,12 @@ fn test_duplicate_shreds_switch_failure() {
     // 2) Wait for a duplicate slot to land on both validators and for the target switch
     // fork validator to get another version of the slot. Also ensure all versions of
     // the block are playable
-    let mut dup_slot;
+    let dup_slot;
     loop {
         dup_slot = duplicate_slot_receiver
             .recv_timeout(Duration::from_millis(30_000))
             .expect("Duplicate leader failed to make a duplicate slot in allotted time");
+
         // Make sure both validators received and replay the complete blocks
         let dup_frozen_hash = wait_for_duplicate_fork_frozen(
             &cluster.ledger_path(&duplicate_fork_validator1_pubkey),
@@ -5286,6 +5287,8 @@ fn test_duplicate_shreds_switch_failure() {
         );
         if original_frozen_hash != dup_frozen_hash {
             break;
+        } else {
+            panic!("Duplicate leader and partition target got same hash: {}", original_frozen_hash);
         }
     }
 
