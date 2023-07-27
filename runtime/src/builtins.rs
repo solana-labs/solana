@@ -2,6 +2,7 @@ use {
     solana_program_runtime::invoke_context::ProcessInstructionWithContext,
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, feature_set, pubkey::Pubkey,
+        stake::program::id as solana_stake_program_id,
     },
 };
 
@@ -55,7 +56,7 @@ pub static BUILTINS: &[BuiltinPrototype] = &[
     },
     BuiltinPrototype {
         feature_id: None,
-        program_id: solana_stake_program::id(),
+        program_id: solana_stake_program_id(),
         name: "stake_program",
         entrypoint: solana_stake_program::stake_instruction::process_instruction,
     },

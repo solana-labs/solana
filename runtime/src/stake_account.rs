@@ -6,7 +6,10 @@ use {
         account_utils::StateMut,
         instruction::InstructionError,
         pubkey::Pubkey,
-        stake::state::{Delegation, StakeState},
+        stake::{
+            program::id as solana_stake_program_id,
+            state::{Delegation, StakeState},
+        },
     },
     std::marker::PhantomData,
     thiserror::Error,
@@ -58,7 +61,7 @@ impl StakeAccount<Delegation> {
 impl TryFrom<AccountSharedData> for StakeAccount<()> {
     type Error = Error;
     fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
-        if account.owner() != &solana_stake_program::id() {
+        if account.owner() != &solana_stake_program_id() {
             return Err(Error::InvalidOwner(*account.owner()));
         }
         let stake_state = account.state()?;
@@ -119,7 +122,7 @@ impl AbiExample for StakeAccount<Delegation> {
             StakeState::Stake(Meta::example(), Stake::example(), StakeFlags::example());
         let mut account = Account::example();
         account.data.resize(200, 0u8);
-        account.owner = solana_stake_program::id();
+        account.owner = solana_stake_program_id();
         account.set_state(&stake_state).unwrap();
         Self::try_from(AccountSharedData::from(account)).unwrap()
     }
