@@ -964,7 +964,10 @@ impl<'a> BorrowedAccount<'a> {
     /// in the given account. Does nothing if capacity is already sufficient.
     #[cfg(not(target_os = "solana"))]
     pub fn reserve(&mut self, additional: usize) -> Result<(), InstructionError> {
-        self.can_data_be_changed()?;
+        // Note that we don't need to call can_data_be_changed() here nor
+        // touch() the account. reserve() only changes the capacity of the
+        // memory that holds the account but it doesn't actually change content
+        // nor length of the account.
         self.make_data_mut();
         self.account.reserve(additional);
 
