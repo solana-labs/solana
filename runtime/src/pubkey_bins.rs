@@ -11,12 +11,12 @@ impl PubkeyBinCalculator24 {
         std::mem::size_of::<T>() * 8
     }
 
-    pub fn log_2(x: u32) -> u32 {
+    pub(crate) fn log_2(x: u32) -> u32 {
         assert!(x > 0);
         Self::num_bits::<u32>() as u32 - x.leading_zeros() - 1
     }
 
-    pub fn new(bins: usize) -> Self {
+    pub(crate) fn new(bins: usize) -> Self {
         const MAX_BITS: u32 = 24;
         assert!(bins > 0);
         let max_plus_1 = 1 << MAX_BITS;
@@ -28,13 +28,14 @@ impl PubkeyBinCalculator24 {
         }
     }
 
-    pub fn bin_from_pubkey(&self, pubkey: &Pubkey) -> usize {
+    pub(crate) fn bin_from_pubkey(&self, pubkey: &Pubkey) -> usize {
         let as_ref = pubkey.as_ref();
         ((as_ref[0] as usize * 256 + as_ref[1] as usize) * 256 + as_ref[2] as usize)
             >> self.shift_bits
     }
 
-    pub fn lowest_pubkey_from_bin(&self, mut bin: usize, bins: usize) -> Pubkey {
+    #[cfg(test)]
+    pub(crate) fn lowest_pubkey_from_bin(&self, mut bin: usize, bins: usize) -> Pubkey {
         assert!(bin < bins);
         bin <<= self.shift_bits;
         let mut pubkey = Pubkey::from([0; 32]);
