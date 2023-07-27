@@ -286,7 +286,7 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
 
         // wait till all transactions are confirmed or we have surpassed max processing age for the last sent transaction
         while !unconfirmed_transasction_map.is_empty()
-            && current_block_height.load(Ordering::Relaxed) < max_valid_block_height
+            && current_block_height.load(Ordering::Relaxed) <= max_valid_block_height
         {
             let blockheight = current_block_height.load(Ordering::Relaxed);
 

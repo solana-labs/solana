@@ -21,6 +21,9 @@ use {
     },
     solana_client::{
         connection_cache::ConnectionCache,
+        send_and_confirm_transactions_in_parallel::{
+            send_and_confirm_transactions_in_parallel_blocking, SendAndConfrimConfig,
+        },
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
@@ -2178,16 +2181,29 @@ fn send_deploy_messages(
                     write_messages,
                     &[payer_signer, write_signer],
                 ),
-                ConnectionCache::Quic(cache) => TpuClient::new_with_connection_cache(
-                    rpc_client.clone(),
-                    &config.websocket_url,
-                    TpuClientConfig::default(),
-                    cache,
-                )?
-                .send_and_confirm_messages_with_spinner(
-                    write_messages,
-                    &[payer_signer, write_signer],
-                ),
+                ConnectionCache::Quic(cache) => {
+                    let tpu_client_fut = solana_client::nonblocking::tpu_client::TpuClient::new_with_connection_cache(
+                        rpc_client.get_inner_client().clone(),
+                        config.websocket_url.as_str(),
+                        solana_client::tpu_client::TpuClientConfig::default(),
+                        cache,
+                    );
+                    let tpu_client = rpc_client
+                        .runtime()
+                        .block_on(tpu_client_fut)
+                        .expect("Should return a valid tpu client");
+
+                    send_and_confirm_transactions_in_parallel_blocking(
+                        rpc_client.clone(),
+                        Some(tpu_client),
+                        write_messages,
+                        &[payer_signer, write_signer],
+                        SendAndConfrimConfig {
+                            resign_txs_count: Some(5),
+                            with_spinner: true,
+                        },
+                    )
+                },
             }
             .map_err(|err| format!("Data writes to account failed: {err}"))?
             .into_iter()
