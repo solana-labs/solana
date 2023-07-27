@@ -22,7 +22,7 @@ use {
     },
     solana_sbf_rust_invoked::instructions::*,
     solana_sbf_rust_realloc::instructions::*,
-    std::{mem, slice},
+    std::{cell::RefCell, mem, rc::Rc, slice},
 };
 
 fn do_nested_invokes(num_nested_invokes: u64, accounts: &[AccountInfo]) -> ProgramResult {
@@ -754,6 +754,171 @@ fn process_instruction(
                     .get_unchecked_mut(instruction_data[1] as usize) = 42
             };
         }
+        TEST_FORBID_LEN_UPDATE_AFTER_OWNERSHIP_CHANGE_MOVING_DATA_POINTER => {
+            msg!("TEST_FORBID_LEN_UPDATE_AFTER_OWNERSHIP_CHANGE_MOVING_DATA_POINTER");
+            const INVOKE_PROGRAM_INDEX: usize = 3;
+            const REALLOC_PROGRAM_INDEX: usize = 4;
+            let account = &accounts[ARGUMENT_INDEX];
+            let realloc_program_id = accounts[REALLOC_PROGRAM_INDEX].key;
+            let invoke_program_id = accounts[INVOKE_PROGRAM_INDEX].key;
+            account.realloc(0, false).unwrap();
+            account.assign(realloc_program_id);
+
+            // Place a RcBox<RefCell<&mut [u8]>> in the account data. This
+            // allows us to test having CallerAccount::ref_to_len_in_vm in an
+            // account region.
+            let rc_box_addr =
+                account.data.borrow_mut().as_mut_ptr() as *mut RcBox<RefCell<&mut [u8]>>;
+            let rc_box_size = mem::size_of::<RcBox<RefCell<&mut [u8]>>>();
+            unsafe {
+                std::ptr::write(
+                    rc_box_addr,
+                    RcBox {
+                        strong: 1,
+                        weak: 0,
+                        // We're testing what happens if we make CPI update the
+                        // slice length after we put the slice in the account
+                        // address range. To do so, we need to move the data
+                        // pointer past the RcBox or CPI will clobber the length
+                        // change when it copies the callee's account data back
+                        // into the caller's account data
+                        // https://github.com/solana-labs/solana/blob/fa28958bd69054d1c2348e0a731011e93d44d7af/programs/bpf_loader/src/syscalls/cpi.rs#L1487
+                        value: RefCell::new(slice::from_raw_parts_mut(
+                            account.data.borrow_mut().as_mut_ptr().add(rc_box_size),
+                            0,
+                        )),
+                    },
+                );
+            }
+
+            // CPI now will update the serialized length in the wrong place,
+            // since we moved the account data slice. To hit the corner case we
+            // want to hit, we'll need to update the serialized length manually
+            // or during deserialize_parameters() we'll get
+            // AccountDataSizeChanged
+            let serialized_len_ptr =
+                unsafe { account.data.borrow_mut().as_mut_ptr().offset(-8) as *mut u64 };
+            unsafe {
+                std::ptr::write(
+                    &account.data as *const _ as usize as *mut Rc<RefCell<&mut [u8]>>,
+                    Rc::from_raw(((rc_box_addr as usize) + mem::size_of::<usize>() * 2) as *mut _),
+                );
+            }
+
+            let mut instruction_data = vec![REALLOC, 0];
+            instruction_data.extend_from_slice(&rc_box_size.to_le_bytes());
+
+            // check that the account is empty before we CPI
+            assert_eq!(account.data_len(), 0);
+
+            invoke(
+                &create_instruction(
+                    *realloc_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (realloc_program_id, false, false),
+                        (invoke_program_id, false, false),
+                    ],
+                    instruction_data.to_vec(),
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            // verify that CPI did update `ref_to_len_in_vm`
+            assert_eq!(account.data_len(), rc_box_size);
+
+            // update the serialized length so we don't error out early with AccountDataSizeChanged
+            unsafe { *serialized_len_ptr = account.data_len() as u64 };
+
+            // hack to avoid dropping the RcBox, which is supposed to be on the
+            // heap but we put it into account data. If we don't do this,
+            // dropping the Rc will cause
+            // global_deallocator.dealloc(rc_box_addr) which is invalid and
+            // happens to write a poison value into the account.
+            unsafe {
+                std::ptr::write(
+                    &account.data as *const _ as usize as *mut Rc<RefCell<&mut [u8]>>,
+                    Rc::new(RefCell::new(&mut [])),
+                );
+            }
+        }
+        TEST_FORBID_LEN_UPDATE_AFTER_OWNERSHIP_CHANGE => {
+            msg!("TEST_FORBID_LEN_UPDATE_AFTER_OWNERSHIP_CHANGE");
+            const INVOKE_PROGRAM_INDEX: usize = 3;
+            const REALLOC_PROGRAM_INDEX: usize = 4;
+            let account = &accounts[ARGUMENT_INDEX];
+            let realloc_program_id = accounts[REALLOC_PROGRAM_INDEX].key;
+            let invoke_program_id = accounts[INVOKE_PROGRAM_INDEX].key;
+            account.realloc(0, false).unwrap();
+            account.assign(realloc_program_id);
+
+            let rc_box_addr =
+                account.data.borrow_mut().as_mut_ptr() as *mut RcBox<RefCell<&mut [u8]>>;
+            let rc_box_size = mem::size_of::<RcBox<RefCell<&mut [u8]>>>();
+            unsafe {
+                std::ptr::write(
+                    rc_box_addr,
+                    RcBox {
+                        strong: 1,
+                        weak: 0,
+                        // The difference with
+                        // TEST_FORBID_LEN_UPDATE_AFTER_OWNERSHIP_CHANGE_MOVING_DATA_POINTER
+                        // is that we don't move the data pointer past the
+                        // RcBox. This is needed to avoid the "Invalid account
+                        // info pointer" check when direct mapping is enabled.
+                        // This also means we don't need to update the
+                        // serialized len like we do in the other test.
+                        value: RefCell::new(slice::from_raw_parts_mut(
+                            account.data.borrow_mut().as_mut_ptr(),
+                            0,
+                        )),
+                    },
+                );
+            }
+
+            // Place a RcBox<RefCell<&mut [u8]>> in the account data. This
+            // allows us to test having CallerAccount::ref_to_len_in_vm in an
+            // account region.
+            unsafe {
+                std::ptr::write(
+                    &account.data as *const _ as usize as *mut Rc<RefCell<&mut [u8]>>,
+                    Rc::from_raw(((rc_box_addr as usize) + mem::size_of::<usize>() * 2) as *mut _),
+                );
+            }
+
+            let mut instruction_data = vec![REALLOC, 0];
+            instruction_data.extend_from_slice(&rc_box_size.to_le_bytes());
+
+            // check that the account is empty before we CPI
+            assert_eq!(account.data_len(), 0);
+
+            invoke(
+                &create_instruction(
+                    *realloc_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (realloc_program_id, false, false),
+                        (invoke_program_id, false, false),
+                    ],
+                    instruction_data.to_vec(),
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            // hack to avoid dropping the RcBox, which is supposed to be on the
+            // heap but we put it into account data. If we don't do this,
+            // dropping the Rc will cause
+            // global_deallocator.dealloc(rc_box_addr) which is invalid and
+            // happens to write a poison value into the account.
+            unsafe {
+                std::ptr::write(
+                    &account.data as *const _ as usize as *mut Rc<RefCell<&mut [u8]>>,
+                    Rc::new(RefCell::new(&mut [])),
+                );
+            }
+        }
         TEST_ALLOW_WRITE_AFTER_OWNERSHIP_CHANGE_TO_CALLER => {
             msg!("TEST_ALLOW_WRITE_AFTER_OWNERSHIP_CHANGE_TO_CALLER");
             const INVOKE_PROGRAM_INDEX: usize = 3;
@@ -1052,4 +1217,11 @@ fn process_instruction(
     }
 
     Ok(())
+}
+
+#[repr(C)]
+struct RcBox<T> {
+    strong: usize,
+    weak: usize,
+    value: T,
 }

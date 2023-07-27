@@ -3967,11 +3967,18 @@ fn test_cpi_account_ownership_writability() {
             "solana_sbf_rust_invoke",
         );
 
-        let (bank, invoked_program_id) = load_program_and_advance_slot(
-            &mut bank_client,
+        let invoked_program_id = load_program(
+            &bank_client,
             &bpf_loader::id(),
             &mint_keypair,
             "solana_sbf_rust_invoked",
+        );
+
+        let (bank, realloc_program_id) = load_program_and_advance_slot(
+            &mut bank_client,
+            &bpf_loader::id(),
+            &mint_keypair,
+            "solana_sbf_rust_realloc",
         );
 
         let account_keypair = Keypair::new();
@@ -3982,6 +3989,7 @@ fn test_cpi_account_ownership_writability() {
             AccountMeta::new(account_keypair.pubkey(), false),
             AccountMeta::new_readonly(invoked_program_id, false),
             AccountMeta::new_readonly(invoke_program_id, false),
+            AccountMeta::new_readonly(realloc_program_id, false),
         ];
 
         for (account_size, byte_index) in [
@@ -4074,6 +4082,71 @@ fn test_cpi_account_ownership_writability() {
             }
             assert_eq!(account.data(), data);
         }
+
+        // Test that the CPI code that updates `ref_to_len_in_vm` fails if we
+        // make it write to an invalid location. This is the first variant which
+        // correctly triggers ExternalAccountDataModified when direct mapping is
+        // disabled. When direct mapping is enabled this tests fails early
+        // because we move the account data pointer.
+        // TEST_FORBID_LEN_UPDATE_AFTER_OWNERSHIP_CHANGE is able to make more
+        // progress when direct mapping is on.
+        let account = AccountSharedData::new(42, 0, &invoke_program_id);
+        bank.store_account(&account_keypair.pubkey(), &account);
+        let instruction_data = vec![
+            TEST_FORBID_LEN_UPDATE_AFTER_OWNERSHIP_CHANGE_MOVING_DATA_POINTER,
+            42,
+            42,
+            42,
+        ];
+        let instruction = Instruction::new_with_bytes(
+            invoke_program_id,
+            &instruction_data,
+            account_metas.clone(),
+        );
+        let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            if direct_mapping {
+                // We move the data pointer, direct mapping doesn't allow it
+                // anymore so it errors out earlier. See
+                // test_cpi_invalid_account_info_pointers.
+                TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
+            } else {
+                // We managed to make CPI write into the account data, but the
+                // usual checks still apply and we get an error.
+                TransactionError::InstructionError(0, InstructionError::ExternalAccountDataModified)
+            }
+        );
+
+        // Similar to the test above where we try to make CPI write into account
+        // data. This variant is for when direct mapping is enabled.
+        let account = AccountSharedData::new(42, 0, &invoke_program_id);
+        bank.store_account(&account_keypair.pubkey(), &account);
+        let instruction_data = vec![TEST_FORBID_LEN_UPDATE_AFTER_OWNERSHIP_CHANGE, 42, 42, 42];
+        let instruction = Instruction::new_with_bytes(
+            invoke_program_id,
+            &instruction_data,
+            account_metas.clone(),
+        );
+        let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+        if direct_mapping {
+            assert_eq!(
+                result.unwrap_err().unwrap(),
+                TransactionError::InstructionError(
+                    0,
+                    InstructionError::ExternalAccountDataModified
+                )
+            );
+        } else {
+            // we expect this to succeed as after updating `ref_to_len_in_vm`,
+            // CPI will sync the actual account data between the callee and the
+            // caller, _always_ writing over the location pointed by
+            // `ref_to_len_in_vm`. To verify this, we check that the account
+            // data is in fact all zeroes like it is in the callee.
+            result.unwrap();
+            let account = bank.get_account(&account_keypair.pubkey()).unwrap();
+            assert_eq!(account.data(), vec![0; 40]);
+        }
     }
 }
 
@@ -4154,7 +4227,7 @@ fn test_cpi_account_data_updates() {
             account_metas.clone(),
         );
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
-        assert!(result.is_ok(), "{result:?}");
+        result.unwrap();
         let account = bank.get_account(&account_keypair.pubkey()).unwrap();
         // "bar" here was copied from the realloc region
         assert_eq!(account.data(), b"foobar");
