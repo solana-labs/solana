@@ -1036,18 +1036,14 @@ fn deserialize_snapshot_data_files_capped<T: Sized>(
         if let Some(ref incremental_snapshot_root_file_path) =
             snapshot_root_paths.incremental_snapshot_root_file_path
         {
-            let (incremental_snapshot_file_size, incremental_snapshot_data_file_stream) =
-                create_snapshot_data_file_stream(
-                    incremental_snapshot_root_file_path,
-                    maximum_file_size,
-                )?;
-            (
-                Some(incremental_snapshot_file_size),
-                Some(incremental_snapshot_data_file_stream),
-            )
+            Some(create_snapshot_data_file_stream(
+                incremental_snapshot_root_file_path,
+                maximum_file_size,
+            )?)
         } else {
-            (None, None)
-        };
+            None
+        }
+        .unzip();
 
     let mut snapshot_streams = SnapshotStreams {
         full_snapshot_stream: &mut full_snapshot_data_file_stream,
