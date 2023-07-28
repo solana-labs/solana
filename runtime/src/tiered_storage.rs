@@ -148,7 +148,6 @@ mod tests {
     use {
         super::*,
         crate::account_storage::meta::StoredMetaWriteVersion,
-        assert_matches::assert_matches,
         footer::{TieredStorageFooter, TieredStorageMagicNumber},
         hot::HOT_FORMAT,
         solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
@@ -163,7 +162,10 @@ mod tests {
 
     /// Simply invoke write_accounts with empty vector to allow the tiered storage
     /// to persist non-account blocks such as footer, index block, etc.
-    fn write_zero_accounts(tiered_storage: &TieredStorage, expected_error_message: &str) {
+    fn write_zero_accounts(
+        tiered_storage: &TieredStorage,
+        expected_result: TieredStorageResult<Vec<StoredAccountInfo>>,
+    ) {
         let slot_ignored = Slot::MAX;
         let account_refs = Vec::<(&Pubkey, &AccountSharedData)>::new();
         let account_data = (slot_ignored, account_refs.as_slice());
@@ -175,7 +177,18 @@ mod tests {
             );
 
         let result = tiered_storage.write_accounts(&storable_accounts, 0);
-        assert_matches!(result, Err(ref message) if message.to_string().contains(expected_error_message));
+
+        match (&result, &expected_result) {
+            (
+                Err(TieredStorageError::AttemptToUpdateReadOnly(_)),
+                Err(TieredStorageError::AttemptToUpdateReadOnly(_)),
+            ) => {}
+            (Err(TieredStorageError::Unsupported()), Err(TieredStorageError::Unsupported())) => {}
+            _ => {
+                assert_eq!(format!("{:?}", result), format!("{:?}", expected_result));
+            }
+        };
+
         assert!(tiered_storage.is_read_only());
         assert_eq!(
             tiered_storage.file_size().unwrap() as usize,
@@ -196,10 +209,7 @@ mod tests {
             // Expect the result to be TieredStorageError::Unsupported as the feature
             // is not yet fully supported, but we can still check its partial results
             // in the test.
-            write_zero_accounts(
-                &tiered_storage,
-                "Unsupported: the feature is not yet supported",
-            );
+            write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
         }
 
         let tiered_storage_readonly = TieredStorage::new_readonly(&path).unwrap();
@@ -220,19 +230,16 @@ mod tests {
     #[test]
     fn test_write_accounts_twice() {
         let path = NamedTempFile::new().unwrap().path().to_path_buf();
-        let tiered_storage = TieredStorage::new_writable(path, HOT_FORMAT.clone());
+        let tiered_storage = TieredStorage::new_writable(path.clone(), HOT_FORMAT.clone());
         // Expect the result to be TieredStorageError::Unsupported as the feature
         // is not yet fully supported, but we can still check its partial results
         // in the test.
-        write_zero_accounts(
-            &tiered_storage,
-            "Unsupported: the feature is not yet supported",
-        );
+        write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
         // Expect AttemptToUpdateReadOnly error as write_accounts can only
         // be invoked once.
         write_zero_accounts(
             &tiered_storage,
-            "AttemptToUpdateReadOnly: attempted to update read-only file",
+            Err(TieredStorageError::AttemptToUpdateReadOnly(path)),
         );
     }
 }
