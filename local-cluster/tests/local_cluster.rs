@@ -5288,7 +5288,10 @@ fn test_duplicate_shreds_switch_failure() {
         if original_frozen_hash != dup_frozen_hash {
             break;
         } else {
-            panic!("Duplicate leader and partition target got same hash: {}", original_frozen_hash);
+            panic!(
+                "Duplicate leader and partition target got same hash: {}",
+                original_frozen_hash
+            );
         }
     }
 
