@@ -728,10 +728,10 @@ where
 
     // unwrapping here is fine: we're in a syscall and the method below fails
     // only outside syscalls
-    let orig_data_lens = &invoke_context
+    let accounts_metadata = &invoke_context
         .get_syscall_context()
         .unwrap()
-        .orig_account_lengths;
+        .accounts_metadata;
 
     let direct_mapping = invoke_context
         .feature_set
@@ -763,7 +763,7 @@ where
         } else if let Some(caller_account_index) =
             account_info_keys.iter().position(|key| *key == account_key)
         {
-            let original_data_len = *orig_data_lens
+            let original_data_len = accounts_metadata
                 .get(instruction_account.index_in_caller as usize)
                 .ok_or_else(|| {
                     ic_msg!(
@@ -772,7 +772,8 @@ where
                         account_key
                     );
                     Box::new(InstructionError::MissingAccount)
-                })?;
+                })?
+                .original_data_len;
 
             // build the CallerAccount corresponding to this account.
             let caller_account =
@@ -1266,7 +1267,9 @@ mod tests {
     use {
         super::*,
         crate::mock_create_vm,
-        solana_program_runtime::with_mock_invoke_context,
+        solana_program_runtime::{
+            invoke_context::SerializedAccountMetadata, with_mock_invoke_context,
+        },
         solana_rbpf::{
             ebpf::MM_INPUT_START, elf::SBPFVersion, memory_region::MemoryRegion, vm::Config,
         },
@@ -2155,7 +2158,7 @@ mod tests {
         mock_create_vm!(
             _vm,
             Vec::new(),
-            vec![original_data_len],
+            vec![SerializedAccountMetadata { original_data_len }],
             &mut invoke_context
         );
 
