@@ -64,6 +64,10 @@ fn get_declaration_packed_len(
 ///
 /// Note: due to the serializer currently used by Borsh, this function cannot
 /// be used on-chain in the Solana SBF execution environment.
+#[deprecated(
+    since = "1.17.0",
+    note = "Please upgrade to Borsh 0.10 and use `borsh0_10::get_packed_len` instead"
+)]
 pub fn get_packed_len<S: BorshSchema>() -> usize {
     let schema_container = S::schema_container();
     get_declaration_packed_len(&schema_container.declaration, &schema_container.definitions)
@@ -78,6 +82,10 @@ pub fn get_packed_len<S: BorshSchema>() -> usize {
 /// or equal to the expected size will properly deserialize. For example, if the
 /// user passes a buffer destined for a different type, the error won't get caught
 /// as easily.
+#[deprecated(
+    since = "1.17.0",
+    note = "Please upgrade to Borsh 0.10 and use `borsh0_10::try_from_slice_unchecked` instead"
+)]
 pub fn try_from_slice_unchecked<T: BorshDeserialize>(data: &[u8]) -> Result<T, Error> {
     let mut data_mut = data;
     let result = T::deserialize(&mut data_mut)?;
@@ -108,6 +116,10 @@ impl Write for WriteCounter {
 /// sequence, such as a Vec or HashMap.  Since it is impossible to know the packed
 /// length only from the type's schema, this can be used when an instance already
 /// exists, to figure out how much space to allocate in an account.
+#[deprecated(
+    since = "1.17.0",
+    note = "Please upgrade to Borsh 0.10 and use `borsh0_10::get_instance_packed_len` instead"
+)]
 pub fn get_instance_packed_len<T: BorshSerialize>(instance: &T) -> Result<usize, Error> {
     let mut counter = WriteCounter::default();
     instance.serialize(&mut counter)?;
