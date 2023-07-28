@@ -706,10 +706,9 @@ fn rebuild_bank_from_unarchived_snapshots(
         if let Some(snapshot_unpacked_snapshots_dir_and_version) =
             incremental_snapshot_unpacked_snapshots_dir_and_version
         {
-            let (snapshot_version, bank_snapshot_info) = verify_unpacked_snapshots_dir_and_version(
+            Some(verify_unpacked_snapshots_dir_and_version(
                 snapshot_unpacked_snapshots_dir_and_version,
-            )?;
-            Some((snapshot_version, bank_snapshot_info))
+            )?)
         } else {
             None
         }
