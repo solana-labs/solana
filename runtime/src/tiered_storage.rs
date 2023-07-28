@@ -82,11 +82,6 @@ impl TieredStorage {
         self.path.as_path()
     }
 
-    /// Returns the number of accounts in this TieredStorage
-    pub fn num_accounts(&self) -> usize {
-        self.reader.get().map(|r| r.num_accounts()).unwrap_or(0)
-    }
-
     /// Writes the specified accounts into this TieredStorage.
     ///
     /// Note that this function can only be called once per a TieredStorage
@@ -125,6 +120,12 @@ impl TieredStorage {
             .map_err(|_| TieredStorageError::UnableToCreateReader(self.path.to_path_buf()))?;
 
         result
+    }
+
+    /// Returns the underlying reader of the TieredStorage.  None will be
+    /// returned if it's is_read_only() returns false.
+    pub fn reader(&self) -> Option<&TieredStorageReader> {
+        self.reader.get()
     }
 
     /// Returns true if the TieredStorage is read-only.
@@ -199,11 +200,12 @@ mod tests {
 
     #[test]
     fn test_new_meta_file_only() {
-        let path = NamedTempFile::new().unwrap().path().to_path_buf();
+        let tiered_storage_path = NamedTempFile::new().unwrap().path().to_path_buf();
         {
-            let tiered_storage = TieredStorage::new_writable(&path, HOT_FORMAT.clone());
+            let tiered_storage =
+                TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
             assert!(!tiered_storage.is_read_only());
-            assert_eq!(tiered_storage.path(), path);
+            assert_eq!(tiered_storage.path(), tiered_storage_path);
             assert_eq!(tiered_storage.file_size().unwrap(), 0);
 
             // Expect the result to be TieredStorageError::Unsupported as the feature
@@ -212,10 +214,10 @@ mod tests {
             write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
         }
 
-        let tiered_storage_readonly = TieredStorage::new_readonly(&path).unwrap();
+        let tiered_storage_readonly = TieredStorage::new_readonly(&tiered_storage_path).unwrap();
         let footer = tiered_storage_readonly.footer().unwrap();
         assert!(tiered_storage_readonly.is_read_only());
-        assert_eq!(tiered_storage_readonly.num_accounts(), 0);
+        assert_eq!(tiered_storage_readonly.reader().unwrap().num_accounts(), 0);
         assert_eq!(footer.account_meta_format, HOT_FORMAT.account_meta_format);
         assert_eq!(footer.owners_block_format, HOT_FORMAT.owners_block_format);
         assert_eq!(footer.account_index_format, HOT_FORMAT.account_index_format);
@@ -229,8 +231,8 @@ mod tests {
 
     #[test]
     fn test_write_accounts_twice() {
-        let path = NamedTempFile::new().unwrap().path().to_path_buf();
-        let tiered_storage = TieredStorage::new_writable(path.clone(), HOT_FORMAT.clone());
+        let tiered_storage_path = NamedTempFile::new().unwrap().path().to_path_buf();
+        let tiered_storage = TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
         // Expect the result to be TieredStorageError::Unsupported as the feature
         // is not yet fully supported, but we can still check its partial results
         // in the test.
@@ -239,7 +241,9 @@ mod tests {
         // be invoked once.
         write_zero_accounts(
             &tiered_storage,
-            Err(TieredStorageError::AttemptToUpdateReadOnly(path)),
+            Err(TieredStorageError::AttemptToUpdateReadOnly(
+                tiered_storage_path,
+            )),
         );
     }
 }
