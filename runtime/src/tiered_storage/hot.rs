@@ -205,22 +205,19 @@ impl TieredAccountMeta for HotAccountMeta {
 /// The reader to a hot accounts file.
 #[derive(Debug)]
 pub struct HotStorageReader {
-    map: Mmap,
+    mmap: Mmap,
     footer: TieredStorageFooter,
 }
 
 impl HotStorageReader {
     /// Constructs a HotStorageReader from the specified path.
-    pub fn new_from_path<P: AsRef<Path>>(path: P) -> TieredStorageResult<Self> {
-        let file = OpenOptions::new()
-            .read(true)
-            .create(false)
-            .open(path.as_ref())?;
-        let map = unsafe { MmapOptions::new().map(&file)? };
-        let footer = TieredStorageFooter::new_from_mmap(&map)?.clone();
-        assert!(map.len() > 0);
+    pub fn new_from_path(path: impl AsRef<Path>) -> TieredStorageResult<Self> {
+        let file = OpenOptions::new().read(true).open(path)?;
+        let mmap = unsafe { MmapOptions::new().map(&file)? };
+        let footer = TieredStorageFooter::new_from_mmap(&mmap)?.clone();
+        assert_ne!(mmap.len(), 0);
 
-        Ok(Self { map, footer })
+        Ok(Self { mmap, footer })
     }
 
     /// Returns the footer of the underlying tiered-storage accounts file.

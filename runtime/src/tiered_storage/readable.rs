@@ -116,7 +116,7 @@ impl TieredStorageReader {
     /// Returns the total number of accounts.
     pub fn num_accounts(&self) -> usize {
         match self {
-            Self::Hot(hs) => hs.num_accounts(),
+            Self::Hot(hot) => hot.num_accounts(),
         }
     }
 }

@@ -66,14 +66,14 @@ impl TieredStorage {
 
     /// Creates a new read-only instance of TieredStorage from the
     /// specified path.
-    pub fn new_readonly(path: impl AsRef<Path>) -> TieredStorageResult<Self> {
-        let reader = TieredStorageReader::new_from_path(path.as_ref())?;
-        let reader_cell = OnceCell::<TieredStorageReader>::new();
-        reader_cell.set(reader).unwrap();
+    pub fn new_readonly(path: impl Into<PathBuf>) -> TieredStorageResult<Self> {
+        let pathbuf = path.into();
+        let reader = TieredStorageReader::new_from_path(&pathbuf)?;
+        let reader_cell = OnceCell::with_value(reader);
         Ok(Self {
             reader: reader_cell,
             format: None,
-            path: path.as_ref().to_path_buf(),
+            path: pathbuf,
         })
     }
 
