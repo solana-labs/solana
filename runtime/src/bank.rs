@@ -8261,8 +8261,8 @@ impl Bank {
         let output = BankHashDetails {
             version: solana_version::version!().to_string(),
             slot,
-            hash: hash.to_string(),
-            parent_hash: self.parent_hash().to_string(),
+            bank_hash: hash.to_string(),
+            parent_bank_hash: self.parent_hash().to_string(),
             accounts_delta_hash: accounts_delta_hash.to_string(),
             signature_count: self.signature_count(),
             last_blockhash: self.last_blockhash().to_string(),

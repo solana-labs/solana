@@ -14,8 +14,8 @@ pub(crate) struct BankHashDetails {
     /// client version
     pub version: String,
     pub slot: Slot,
-    pub hash: String,
-    pub parent_hash: String,
+    pub bank_hash: String,
+    pub parent_bank_hash: String,
     pub accounts_delta_hash: String,
     pub signature_count: u64,
     pub last_blockhash: String,
