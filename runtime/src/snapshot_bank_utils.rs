@@ -709,10 +709,11 @@ fn rebuild_bank_from_unarchived_snapshots(
             let (snapshot_version, bank_snapshot_info) = verify_unpacked_snapshots_dir_and_version(
                 snapshot_unpacked_snapshots_dir_and_version,
             )?;
-            (Some(snapshot_version), Some(bank_snapshot_info))
+            Some((snapshot_version, bank_snapshot_info))
         } else {
-            (None, None)
-        };
+            None
+        }
+        .unzip();
     info!(
         "Rebuilding bank from full snapshot {} and incremental snapshot {:?}",
         full_snapshot_root_paths.snapshot_path().display(),
