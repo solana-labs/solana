@@ -88,6 +88,7 @@ use {
     percentage::Percentage,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+        slice::ParallelSlice,
         ThreadPool, ThreadPoolBuilder,
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment,
@@ -2660,7 +2661,26 @@ impl Bank {
                 metrics,
             );
 
+<<<<<<< HEAD
             self.store_stake_accounts(&stake_rewards, metrics);
+=======
+            // this checking of an unactivated feature can be enabled in tests or with a validator by passing `--partitioned-epoch-rewards-compare-calculation`
+            if self
+                .partitioned_epoch_rewards_config()
+                .test_compare_partitioned_epoch_rewards
+            {
+                // immutable `&self` to avoid side effects
+                (self as &Bank).compare_with_partitioned_rewards(
+                    &stake_rewards,
+                    &vote_account_rewards,
+                    rewarded_epoch,
+                    thread_pool,
+                    null_tracer(),
+                );
+            }
+
+            self.store_stake_accounts(thread_pool, &stake_rewards, metrics);
+>>>>>>> ad4ddd3cb0 (stores stake-accounts in parallel after epoch rewards calculations (#32633))
             let vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
             self.update_reward_history(stake_rewards, vote_rewards);
         }
@@ -2827,15 +2847,30 @@ impl Bank {
         (vote_account_rewards, stake_rewards)
     }
 
-    fn store_stake_accounts(&self, stake_rewards: &[StakeReward], metrics: &mut RewardsMetrics) {
+    fn store_stake_accounts(
+        &self,
+        thread_pool: &ThreadPool,
+        stake_rewards: &[StakeReward],
+        metrics: &mut RewardsMetrics,
+    ) {
         // store stake account even if stake_reward is 0
         // because credits observed has changed
-        let (_, measure) = measure!({
-            self.store_accounts((self.slot(), stake_rewards, self.include_slot_in_hash()))
+        let now = Instant::now();
+        let slot = self.slot();
+        let include_slot_in_hash = self.include_slot_in_hash();
+        self.stakes_cache
+            .update_stake_accounts(thread_pool, stake_rewards);
+        assert!(!self.freeze_started());
+        thread_pool.install(|| {
+            stake_rewards.par_chunks(512).for_each(|chunk| {
+                self.rc
+                    .accounts
+                    .store_accounts_cached((slot, chunk, include_slot_in_hash))
+            })
         });
         metrics
             .store_stake_accounts_us
-            .fetch_add(measure.as_us(), Relaxed);
+            .fetch_add(now.elapsed().as_micros() as u64, Relaxed);
     }
 
     fn store_vote_accounts(

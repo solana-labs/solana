@@ -55,33 +55,19 @@ impl StakeAccount<Delegation> {
     }
 }
 
-impl TryFrom<AccountSharedData> for StakeAccount<()> {
+impl TryFrom<AccountSharedData> for StakeAccount<Delegation> {
     type Error = Error;
     fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
         if account.owner() != &solana_stake_program::id() {
             return Err(Error::InvalidOwner(*account.owner()));
         }
-        let stake_state = account.state()?;
+        let stake_state: StakeState = account.state()?;
+        if stake_state.delegation().is_none() {
+            return Err(Error::InvalidDelegation(Box::new(stake_state)));
+        }
         Ok(Self {
             account,
             stake_state,
-            _phantom: PhantomData,
-        })
-    }
-}
-
-impl TryFrom<AccountSharedData> for StakeAccount<Delegation> {
-    type Error = Error;
-    fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
-        let stake_account = StakeAccount::<()>::try_from(account)?;
-        if stake_account.stake_state.delegation().is_none() {
-            return Err(Error::InvalidDelegation(Box::new(
-                stake_account.stake_state,
-            )));
-        }
-        Ok(Self {
-            account: stake_account.account,
-            stake_state: stake_account.stake_state,
             _phantom: PhantomData,
         })
     }
