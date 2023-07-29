@@ -26,6 +26,29 @@ pub(crate) struct BankHashDetails {
     pub accounts: BankHashAccounts,
 }
 
+impl BankHashDetails {
+    pub fn new(
+        slot: Slot,
+        bank_hash: Hash,
+        parent_bank_hash: Hash,
+        accounts_delta_hash: Hash,
+        signature_count: u64,
+        last_blockhash: Hash,
+        accounts: BankHashAccounts,
+    ) -> Self {
+        Self {
+            version: solana_version::version!().to_string(),
+            slot,
+            bank_hash: bank_hash.to_string(),
+            parent_bank_hash: parent_bank_hash.to_string(),
+            accounts_delta_hash: accounts_delta_hash.to_string(),
+            signature_count,
+            last_blockhash: last_blockhash.to_string(),
+            accounts,
+        }
+    }
+}
+
 // Wrap the Vec<...> so we can implement custom Serialize/Deserialize traits on the wrapper type
 pub(crate) struct BankHashAccounts(pub Vec<(Pubkey, Hash, AccountSharedData)>);
 

@@ -8258,16 +8258,15 @@ impl Bank {
         // Sort by pubkey get_accounts_for_slot() returns an arbitrary ordering
         accounts.sort_by_key(|(pubkey, _, _)| *pubkey);
 
-        let output = BankHashDetails {
-            version: solana_version::version!().to_string(),
+        let output = BankHashDetails::new(
             slot,
-            bank_hash: hash.to_string(),
-            parent_bank_hash: self.parent_hash().to_string(),
-            accounts_delta_hash: accounts_delta_hash.to_string(),
-            signature_count: self.signature_count(),
-            last_blockhash: self.last_blockhash().to_string(),
-            accounts: BankHashAccounts(accounts),
-        };
+            hash,
+            self.parent_hash(),
+            accounts_delta_hash,
+            self.signature_count(),
+            self.last_blockhash(),
+            BankHashAccounts(accounts),
+        );
 
         // std::fs::write may fail (depending on platform) if the full directory
         // path does not exist. So, call std::fs_create_dir_all first.
