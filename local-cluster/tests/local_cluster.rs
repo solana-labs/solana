@@ -5082,6 +5082,7 @@ fn test_duplicate_shreds_switch_failure() {
         dup_shred2: &Shred,
     ) {
         let disable_turbine = Arc::new(AtomicBool::new(true));
+        duplicate_fork_validator_info.config.voting_disabled = false;
         duplicate_fork_validator_info.config.turbine_disabled = disable_turbine.clone();
         info!("Restarting node: {}", pubkey);
         cluster.restart_node(
@@ -5151,6 +5152,7 @@ fn test_duplicate_shreds_switch_failure() {
     .iter()
     .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
     .collect::<Vec<_>>();
+
     let validators = validator_keypairs
         .iter()
         .map(|(kp, _)| kp.pubkey())
@@ -5239,6 +5241,23 @@ fn test_duplicate_shreds_switch_failure() {
 
     // 1) Set up the cluster
     let (duplicate_slot_sender, duplicate_slot_receiver) = unbounded();
+    let validator_configs = validator_keypairs
+        .into_iter()
+        .map(|(validator_keypair, in_genesis)| {
+            let pubkey = validator_keypair.pubkey();
+            // Only allow the leader to vote so that no version gets duplicate confirmed.
+            // This is to avoid the leader dumping his own block.
+            let voting_disabled = { pubkey != duplicate_leader_validator_pubkey };
+            ValidatorTestConfig {
+                validator_keypair,
+                validator_config: ValidatorConfig {
+                    voting_disabled,
+                    ..ValidatorConfig::default()
+                },
+                in_genesis,
+            }
+        })
+        .collect();
     let (mut cluster, _validator_keypairs) = test_faulty_node(
         BroadcastStageType::BroadcastDuplicates(BroadcastDuplicatesConfig {
             partition: ClusterPartition::Pubkey(vec![
@@ -5252,7 +5271,7 @@ fn test_duplicate_shreds_switch_failure() {
             duplicate_slot_sender: Some(duplicate_slot_sender),
         }),
         node_stakes,
-        Some(validator_keypairs),
+        Some(validator_configs),
         Some(FixedSchedule {
             leader_schedule: Arc::new(leader_schedule),
         }),
@@ -5265,7 +5284,8 @@ fn test_duplicate_shreds_switch_failure() {
     let duplicate_fork_validator2_info = cluster.exit_node(&duplicate_fork_validator2_pubkey);
     let target_switch_fork_validator_ledger_path =
         cluster.ledger_path(&target_switch_fork_validator_pubkey);
-    let target_switch_fork_validator_info = cluster.exit_node(&target_switch_fork_validator_pubkey);
+    let mut target_switch_fork_validator_info =
+        cluster.exit_node(&target_switch_fork_validator_pubkey);
 
     // 2) Wait for a duplicate slot to land on both validators and for the target switch
     // fork validator to get another version of the slot. Also ensure all versions of
@@ -5386,6 +5406,7 @@ fn test_duplicate_shreds_switch_failure() {
     // 4) Restart `target_switch_fork_validator_pubkey`, and ensure they vote on their own leader slot
     // that's not descended from the duplicate slot
     info!("Restarting switch fork node");
+    target_switch_fork_validator_info.config.voting_disabled = false;
     cluster.restart_node(
         &target_switch_fork_validator_pubkey,
         target_switch_fork_validator_info,

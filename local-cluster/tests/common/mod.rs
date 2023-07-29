@@ -390,18 +390,32 @@ pub fn run_cluster_partition<C>(
     on_partition_resolved(&mut cluster, &mut context);
 }
 
+pub struct ValidatorTestConfig {
+    pub validator_keypair: Arc<Keypair>,
+    pub validator_config: ValidatorConfig,
+    pub in_genesis: bool,
+}
+
 pub fn test_faulty_node(
     faulty_node_type: BroadcastStageType,
     node_stakes: Vec<u64>,
-    validator_keys: Option<Vec<(Arc<Keypair>, bool)>>,
+    validator_test_configs: Option<Vec<ValidatorTestConfig>>,
     custom_leader_schedule: Option<FixedSchedule>,
 ) -> (LocalCluster, Vec<Arc<Keypair>>) {
     let num_nodes = node_stakes.len();
-    let validator_keys = validator_keys.unwrap_or_else(|| {
-        let mut validator_keys = Vec::with_capacity(num_nodes);
-        validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
-        validator_keys
-    });
+    let validator_keys = validator_test_configs
+        .as_ref()
+        .map(|configs| {
+            configs
+                .iter()
+                .map(|config| (config.validator_keypair.clone(), config.in_genesis))
+                .collect()
+        })
+        .unwrap_or_else(|| {
+            let mut validator_keys = Vec::with_capacity(num_nodes);
+            validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
+            validator_keys
+        });
 
     assert_eq!(node_stakes.len(), num_nodes);
     assert_eq!(validator_keys.len(), num_nodes);
@@ -418,19 +432,24 @@ pub fn test_faulty_node(
         }
     });
 
-    let error_validator_config = ValidatorConfig {
-        broadcast_stage_type: faulty_node_type,
-        fixed_leader_schedule: Some(fixed_leader_schedule.clone()),
-        ..ValidatorConfig::default_for_test()
-    };
-    let mut validator_configs = Vec::with_capacity(num_nodes);
+    let mut validator_configs = validator_test_configs
+        .map(|configs| {
+            configs
+                .into_iter()
+                .map(|config| config.validator_config)
+                .collect()
+        })
+        .unwrap_or_else(|| {
+            let mut configs = Vec::with_capacity(num_nodes);
+            configs.resize_with(num_nodes, ValidatorConfig::default_for_test);
+            configs
+        });
 
     // First validator is the bootstrap leader with the malicious broadcast logic.
-    validator_configs.push(error_validator_config);
-    validator_configs.resize_with(num_nodes, || ValidatorConfig {
-        fixed_leader_schedule: Some(fixed_leader_schedule.clone()),
-        ..ValidatorConfig::default_for_test()
-    });
+    validator_configs[0].broadcast_stage_type = faulty_node_type;
+    for config in &mut validator_configs {
+        config.fixed_leader_schedule = Some(fixed_leader_schedule.clone());
+    }
 
     let mut cluster_config = ClusterConfig {
         cluster_lamports: 10_000,
