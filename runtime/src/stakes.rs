@@ -4,6 +4,7 @@ use {
     crate::{
         stake_account,
         stake_history::StakeHistory,
+        stake_rewards::StakeReward,
         vote_account::{VoteAccount, VoteAccounts},
     },
     dashmap::DashMap,
@@ -21,7 +22,7 @@ use {
     },
     std::{
         collections::{HashMap, HashSet},
-        ops::Add,
+        ops::{Add, Deref},
         sync::{Arc, RwLock, RwLockReadGuard},
     },
     thiserror::Error,
@@ -120,6 +121,17 @@ impl StakesCache {
     pub(crate) fn activate_epoch(&self, next_epoch: Epoch, thread_pool: &ThreadPool) {
         let mut stakes = self.0.write().unwrap();
         stakes.activate_epoch(next_epoch, thread_pool)
+    }
+
+    pub(crate) fn update_stake_accounts(
+        &self,
+        thread_pool: &ThreadPool,
+        stake_rewards: &[StakeReward],
+    ) {
+        self.0
+            .write()
+            .unwrap()
+            .update_stake_accounts(thread_pool, stake_rewards)
     }
 
     pub(crate) fn handle_invalid_keys(
@@ -261,16 +273,6 @@ impl Stakes<StakeAccount> {
     }
 
     fn activate_epoch(&mut self, next_epoch: Epoch, thread_pool: &ThreadPool) {
-        type StakesHashMap = HashMap</*voter:*/ Pubkey, /*stake:*/ u64>;
-        fn merge(mut acc: StakesHashMap, other: StakesHashMap) -> StakesHashMap {
-            if acc.len() < other.len() {
-                return merge(other, acc);
-            }
-            for (key, stake) in other {
-                *acc.entry(key).or_default() += stake;
-            }
-            acc
-        }
         let stake_delegations: Vec<_> = self.stake_delegations.values().collect();
         // Wrap up the prev epoch by adding new stake history entry for the
         // prev epoch.
@@ -288,28 +290,13 @@ impl Stakes<StakeAccount> {
         self.epoch = next_epoch;
         // Refresh the stake distribution of vote accounts for the next epoch,
         // using new stake history.
-        let delegated_stakes = thread_pool.install(|| {
-            stake_delegations
-                .par_iter()
-                .fold(HashMap::default, |mut delegated_stakes, stake_account| {
-                    let delegation = stake_account.delegation();
-                    let entry = delegated_stakes.entry(delegation.voter_pubkey).or_default();
-                    *entry += delegation.stake(self.epoch, Some(&self.stake_history));
-                    delegated_stakes
-                })
-                .reduce(HashMap::default, merge)
-        });
-        self.vote_accounts = self
-            .vote_accounts
-            .iter()
-            .map(|(&vote_pubkey, vote_account)| {
-                let delegated_stake = delegated_stakes
-                    .get(&vote_pubkey)
-                    .copied()
-                    .unwrap_or_default();
-                (vote_pubkey, (delegated_stake, vote_account.clone()))
-            })
-            .collect();
+        self.vote_accounts = refresh_vote_accounts(
+            thread_pool,
+            self.epoch,
+            &self.vote_accounts,
+            &stake_delegations,
+            &self.stake_history,
+        );
     }
 
     /// Sum the stakes that point to the given voter_pubkey
@@ -380,6 +367,33 @@ impl Stakes<StakeAccount> {
                 }
             }
         }
+    }
+
+    fn update_stake_accounts(&mut self, thread_pool: &ThreadPool, stake_rewards: &[StakeReward]) {
+        let stake_delegations: Vec<_> = thread_pool.install(|| {
+            stake_rewards
+                .into_par_iter()
+                .filter_map(|stake_reward| {
+                    let stake_account = StakeAccount::try_from(stake_reward.stake_account.clone());
+                    Some((stake_reward.stake_pubkey, stake_account.ok()?))
+                })
+                .collect()
+        });
+        self.stake_delegations = std::mem::take(&mut self.stake_delegations)
+            .into_iter()
+            .chain(stake_delegations)
+            .collect::<HashMap<Pubkey, StakeAccount>>()
+            .into_iter()
+            .filter(|(_, account)| account.lamports() != 0u64)
+            .collect();
+        let stake_delegations: Vec<_> = self.stake_delegations.values().collect();
+        self.vote_accounts = refresh_vote_accounts(
+            thread_pool,
+            self.epoch,
+            &self.vote_accounts,
+            &stake_delegations,
+            &self.stake_history,
+        );
     }
 
     pub(crate) fn stake_delegations(&self) -> &ImHashMap<Pubkey, StakeAccount> {
@@ -487,6 +501,47 @@ pub(crate) mod serde_stakes_enum_compat {
         let stakes = Stakes::<Delegation>::deserialize(deserializer)?;
         Ok(Arc::new(StakesEnum::Delegations(stakes)))
     }
+}
+
+fn refresh_vote_accounts(
+    thread_pool: &ThreadPool,
+    epoch: Epoch,
+    vote_accounts: &VoteAccounts,
+    stake_delegations: &[&StakeAccount],
+    stake_history: &StakeHistory,
+) -> VoteAccounts {
+    type StakesHashMap = HashMap</*voter:*/ Pubkey, /*stake:*/ u64>;
+    fn merge(mut stakes: StakesHashMap, other: StakesHashMap) -> StakesHashMap {
+        if stakes.len() < other.len() {
+            return merge(other, stakes);
+        }
+        for (pubkey, stake) in other {
+            *stakes.entry(pubkey).or_default() += stake;
+        }
+        stakes
+    }
+    let stake_history = Some(stake_history.deref());
+    let delegated_stakes = thread_pool.install(|| {
+        stake_delegations
+            .par_iter()
+            .fold(HashMap::default, |mut delegated_stakes, stake_account| {
+                let delegation = stake_account.delegation();
+                let entry = delegated_stakes.entry(delegation.voter_pubkey).or_default();
+                *entry += delegation.stake(epoch, stake_history);
+                delegated_stakes
+            })
+            .reduce(HashMap::default, merge)
+    });
+    vote_accounts
+        .iter()
+        .map(|(&vote_pubkey, vote_account)| {
+            let delegated_stake = delegated_stakes
+                .get(&vote_pubkey)
+                .copied()
+                .unwrap_or_default();
+            (vote_pubkey, (delegated_stake, vote_account.clone()))
+        })
+        .collect()
 }
 
 #[cfg(test)]
