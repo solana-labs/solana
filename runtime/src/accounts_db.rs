@@ -8937,8 +8937,7 @@ impl AccountsDb {
         genesis_config: &GenesisConfig,
     ) -> IndexGenerationInfo {
         let mut slots = self.storage.all_slots();
-        #[allow(clippy::stable_sort_primitive)]
-        slots.sort();
+        slots.sort_unstable();
         if let Some(limit) = limit_load_slot_count_from_snapshot {
             slots.truncate(limit); // get rid of the newer slots and keep just the older
         }
