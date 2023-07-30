@@ -58,9 +58,6 @@ mod tests;
 mod types;
 mod utils;
 
-// a number of test cases in accounts_db use this
-#[cfg(test)]
-pub(crate) use tests::reconstruct_accounts_db_via_serialization;
 pub(crate) use {
     storage::SerializedAppendVecId,
     types::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
