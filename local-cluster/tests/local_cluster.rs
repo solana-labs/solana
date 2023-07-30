@@ -3264,7 +3264,8 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     {
         // Find latest vote in B, and wait for it to reach blockstore
         let b_last_vote =
-            wait_for_last_vote_in_tower_to_land_in_ledger(&val_b_ledger_path, &validator_b_pubkey);
+            wait_for_last_vote_in_tower_to_land_in_ledger(&val_b_ledger_path, &validator_b_pubkey)
+                .unwrap();
 
         // Now we copy these blocks to A
         let b_blockstore = open_blockstore(&val_b_ledger_path);
@@ -3474,11 +3475,13 @@ fn test_fork_choice_refresh_old_votes() {
             let lighter_fork_latest_vote = wait_for_last_vote_in_tower_to_land_in_ledger(
                 &lighter_fork_ledger_path,
                 &context.lighter_fork_validator_key,
-            );
+            )
+            .unwrap();
             let heaviest_fork_latest_vote = wait_for_last_vote_in_tower_to_land_in_ledger(
                 &heaviest_ledger_path,
                 &context.heaviest_validator_key,
-            );
+            )
+            .unwrap();
 
             // Open ledgers
             let smallest_blockstore = open_blockstore(&smallest_ledger_path);
@@ -4434,7 +4437,8 @@ fn test_slot_hash_expiry() {
     let mut last_vote_on_a;
     // Keep A running for a while longer so the majority fork has some decent size
     loop {
-        last_vote_on_a = wait_for_last_vote_in_tower_to_land_in_ledger(&a_ledger_path, &a_pubkey);
+        last_vote_on_a =
+            wait_for_last_vote_in_tower_to_land_in_ledger(&a_ledger_path, &a_pubkey).unwrap();
         if last_vote_on_a
             >= common_ancestor_slot + 2 * (solana_sdk::slot_hashes::get_entries() as u64)
         {
@@ -4460,7 +4464,8 @@ fn test_slot_hash_expiry() {
     info!("Allowing B to fork");
     loop {
         let blockstore = open_blockstore(&b_ledger_path);
-        let last_vote = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
+        let last_vote =
+            wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey).unwrap();
         let mut ancestors = AncestorIterator::new(last_vote, &blockstore);
         if let Some(index) = ancestors.position(|x| x == common_ancestor_slot) {
             if index > 7 {
@@ -4674,7 +4679,8 @@ fn test_duplicate_with_pruned_ancestor() {
         last_minority_vote
     );
     let last_minority_vote =
-        wait_for_last_vote_in_tower_to_land_in_ledger(&minority_ledger_path, &minority_pubkey);
+        wait_for_last_vote_in_tower_to_land_in_ledger(&minority_ledger_path, &minority_pubkey)
+            .unwrap();
     let minority_validator_info = cluster.exit_node(&minority_pubkey);
 
     info!("Truncating majority validator ledger to {fork_slot}");
@@ -4720,7 +4726,8 @@ fn test_duplicate_with_pruned_ancestor() {
     }
 
     let last_majority_vote =
-        wait_for_last_vote_in_tower_to_land_in_ledger(&majority_ledger_path, &majority_pubkey);
+        wait_for_last_vote_in_tower_to_land_in_ledger(&majority_ledger_path, &majority_pubkey)
+            .unwrap();
     info!(
         "Creating duplicate block built off of pruned branch for our node.
            Last majority vote {last_majority_vote}, Last minority vote {last_minority_vote}"
@@ -5222,7 +5229,8 @@ fn test_duplicate_shreds_switch_failure() {
         // The `target_switch_fork_validator_pubkey` fork is necessary in 2. to force the validator stall trying to switch
         // vote on that other fork and prevent the validator from making a freebie vote from `A` and allowing consensus to continue.
 
-        // It's important we give the `duplicate_fork_validator1_pubkey` very few leader slots so that:
+        // It's important we don't give the `duplicate_fork_validator1_pubkey` leader slots until a certain number
+        // of slots have elapsed to ensure:
         // 1. We have ample time to ensure he doesn't have a chance to make a block until after 2 when they see the block is duplicate.
         // Otherwise, they'll build the block on top of the duplicate block, which will possibly include a vote for the duplicate block.
         // We want to avoid this because this will make fork choice pick the duplicate block.
@@ -5417,11 +5425,11 @@ fn test_duplicate_shreds_switch_failure() {
 
     info!("Waiting for switch fork to make block past duplicate fork");
     loop {
-        let last_vote = last_vote_in_tower(
+        let last_vote = wait_for_last_vote_in_tower_to_land_in_ledger(
             &target_switch_fork_validator_ledger_path,
             &target_switch_fork_validator_pubkey,
         );
-        if let Some((latest_vote_slot, _hash)) = last_vote {
+        if let Some(latest_vote_slot) = last_vote {
             if latest_vote_slot > dup_slot {
                 let blockstore = open_blockstore(&target_switch_fork_validator_ledger_path);
                 let ancestor_slots: HashSet<Slot> =

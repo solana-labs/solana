@@ -24,7 +24,8 @@ pub enum ClusterPartition {
 
 #[derive(Clone, Debug)]
 pub struct BroadcastDuplicatesConfig {
-    /// Amount of stake (excluding the leader) to send different version of slots to.
+    /// Amount of stake (excluding the leader) or a set of validator pubkeys
+    /// to send a duplicate version of some slots to.
     /// Note this is sampled from a list of stakes sorted least to greatest.
     pub partition: ClusterPartition,
     /// If passed `Some(receiver)`, will signal all the duplicate slots via the given
@@ -295,7 +296,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         let cluster_partition: HashSet<Pubkey> = {
             match &self.config.partition {
                 ClusterPartition::Stake(partition_total_stake) => {
-                    let mut cumilative_stake = 0;
+                    let mut cumulative_stake = 0;
                     let epoch = root_bank.get_leader_schedule_epoch(slot);
                     root_bank
                         .epoch_staked_nodes(epoch)
@@ -304,8 +305,8 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                         .filter(|(pubkey, _)| **pubkey != self_pubkey)
                         .sorted_by_key(|(pubkey, stake)| (**stake, **pubkey))
                         .take_while(|(_, stake)| {
-                            cumilative_stake += *stake;
-                            cumilative_stake <= *partition_total_stake
+                            cumulative_stake += *stake;
+                            cumulative_stake <= *partition_total_stake
                         })
                         .map(|(pubkey, _)| *pubkey)
                         .collect()

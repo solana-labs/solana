@@ -123,17 +123,18 @@ pub fn purge_slots_with_count(blockstore: &Blockstore, start_slot: Slot, slot_co
 pub fn wait_for_last_vote_in_tower_to_land_in_ledger(
     ledger_path: &Path,
     node_pubkey: &Pubkey,
-) -> Slot {
-    let (last_vote, _) = last_vote_in_tower(ledger_path, node_pubkey).unwrap();
-    loop {
-        // We reopen in a loop to make sure we get updates
-        let blockstore = open_blockstore(ledger_path);
-        if blockstore.is_full(last_vote) {
-            break;
+) -> Option<Slot> {
+    last_vote_in_tower(ledger_path, node_pubkey).map(|(last_vote, _)| {
+        loop {
+            // We reopen in a loop to make sure we get updates
+            let blockstore = open_blockstore(ledger_path);
+            if blockstore.is_full(last_vote) {
+                break;
+            }
+            sleep(Duration::from_millis(100));
         }
-        sleep(Duration::from_millis(100));
-    }
-    last_vote
+        last_vote
+    })
 }
 
 pub fn copy_blocks(end_slot: Slot, source: &Blockstore, dest: &Blockstore) {
