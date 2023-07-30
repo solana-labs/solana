@@ -8929,7 +8929,6 @@ impl AccountsDb {
         );
     }
 
-    #[allow(clippy::needless_collect)]
     pub fn generate_index(
         &self,
         limit_load_slot_count_from_snapshot: Option<usize>,
