@@ -3,6 +3,7 @@
 use {
     dashmap::{mapref::entry::Entry, DashMap},
     index_list::{Index, IndexList},
+    solana_measure::measure_us,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
@@ -39,6 +40,7 @@ pub(crate) struct ReadOnlyAccountsCache {
     hits: AtomicU64,
     misses: AtomicU64,
     evicts: AtomicU64,
+    load_us: AtomicU64,
 }
 
 impl ReadOnlyAccountsCache {
@@ -51,6 +53,7 @@ impl ReadOnlyAccountsCache {
             hits: AtomicU64::default(),
             misses: AtomicU64::default(),
             evicts: AtomicU64::default(),
+            load_us: AtomicU64::default(),
         }
     }
 
@@ -63,6 +66,7 @@ impl ReadOnlyAccountsCache {
         self.hits.store(0, Ordering::Relaxed);
         self.misses.store(0, Ordering::Relaxed);
         self.evicts.store(0, Ordering::Relaxed);
+        self.load_us.store(0, Ordering::Relaxed);
     }
 
     /// true if pubkey is in cache at slot
@@ -71,21 +75,27 @@ impl ReadOnlyAccountsCache {
     }
 
     pub(crate) fn load(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
-        let key = (pubkey, slot);
-        let Some(mut entry) = self.cache.get_mut(&key) else {
-            self.misses.fetch_add(1, Ordering::Relaxed);
-            return None;
-        };
-        self.hits.fetch_add(1, Ordering::Relaxed);
-        // Move the entry to the end of the queue.
-        // self.queue is modified while holding a reference to the cache entry;
-        // so that another thread cannot write to the same key.
-        {
-            let mut queue = self.queue.lock().unwrap();
-            queue.remove(entry.index);
-            entry.index = queue.insert_last(key);
-        }
-        Some(entry.account.clone())
+        let (account, load_us) = measure_us!({
+            let key = (pubkey, slot);
+            let Some(mut entry) = self.cache.get_mut(&key) else {
+                self.misses.fetch_add(1, Ordering::Relaxed);
+                return None;
+            };
+            // Move the entry to the end of the queue.
+            // self.queue is modified while holding a reference to the cache entry;
+            // so that another thread cannot write to the same key.
+            {
+                let mut queue = self.queue.lock().unwrap();
+                queue.remove(entry.index);
+                entry.index = queue.insert_last(key);
+            }
+            let account = entry.account.clone();
+            drop(entry);
+            self.hits.fetch_add(1, Ordering::Relaxed);
+            Some(account)
+        });
+        self.load_us.fetch_add(load_us, Ordering::Relaxed);
+        account
     }
 
     fn account_size(&self, account: &AccountSharedData) -> usize {
@@ -147,12 +157,13 @@ impl ReadOnlyAccountsCache {
         self.data_size.load(Ordering::Relaxed)
     }
 
-    pub(crate) fn get_and_reset_stats(&self) -> (u64, u64, u64) {
+    pub(crate) fn get_and_reset_stats(&self) -> (u64, u64, u64, u64) {
         let hits = self.hits.swap(0, Ordering::Relaxed);
         let misses = self.misses.swap(0, Ordering::Relaxed);
         let evicts = self.evicts.swap(0, Ordering::Relaxed);
+        let load_us = self.load_us.swap(0, Ordering::Relaxed);
 
-        (hits, misses, evicts)
+        (hits, misses, evicts, load_us)
     }
 }
 
