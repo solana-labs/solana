@@ -49,7 +49,6 @@ use {
 
 // Below modules are pub to allow use by banking_stage bench
 pub mod committer;
-mod consume_worker;
 pub mod consumer;
 pub mod leader_slot_metrics;
 pub mod qos_service;
