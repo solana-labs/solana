@@ -774,9 +774,9 @@ impl AccountsHasher {
     /// Vec, with one entry per bin
     ///  for each entry, Vec<Hash> in pubkey order
     /// If return Vec<AccountHashesFile> was flattened, it would be all hashes, in pubkey order.
-    fn de_dup_accounts<'a>(
+    fn de_dup_accounts(
         &self,
-        sorted_data_by_pubkey: &'a [&'a [CalculateHashIntermediate]],
+        sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
         stats: &mut HashStats,
         max_bin: usize,
     ) -> (Vec<AccountHashesFile>, u64) {
@@ -817,15 +817,15 @@ impl AccountsHasher {
     }
 
     // returns true if this vector was exhausted
-    fn get_item<'a, 'b>(
+    fn get_item<'a>(
         min_index: usize,
         bin: usize,
-        first_items: &'a mut Vec<Pubkey>,
-        sorted_data_by_pubkey: &'a [&'b [CalculateHashIntermediate]],
-        indexes: &'a mut Vec<usize>,
-        first_item_to_pubkey_division: &'a mut Vec<usize>,
+        first_items: &mut Vec<Pubkey>,
+        sorted_data_by_pubkey: &[&'a [CalculateHashIntermediate]],
+        indexes: &mut Vec<usize>,
+        first_item_to_pubkey_division: &mut Vec<usize>,
         binner: &PubkeyBinCalculator24,
-    ) -> &'b CalculateHashIntermediate {
+    ) -> &'a CalculateHashIntermediate {
         let first_item = first_items[min_index];
         let key = &first_item;
         let division_index = first_item_to_pubkey_division[min_index];
@@ -950,9 +950,9 @@ impl AccountsHasher {
     // 3. produce this output:
     //   a. AccountHashesFile: individual account hashes in pubkey order
     //   b. lamport sum
-    fn de_dup_accounts_in_parallel<'a>(
+    fn de_dup_accounts_in_parallel(
         &self,
-        sorted_data_by_pubkey: &'a [&'a [CalculateHashIntermediate]],
+        sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
         pubkey_bin: usize,
         bins: usize,
         stats: &HashStats,
