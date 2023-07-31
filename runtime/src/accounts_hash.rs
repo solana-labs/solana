@@ -930,12 +930,13 @@ impl AccountsHasher {
                 (i + 1)..hash_data.len()
             };
             Some(
+                range.start +
                 // binary search the subset
                 Self::binary_search_for_first_pubkey_in_bin(
-                    &hash_data[range.clone()],
+                    &hash_data[range],
                     bin,
                     binner,
-                )? + range.start,
+                )?,
             )
         });
         stats.pubkey_bin_search_us.fetch_add(us, Ordering::Relaxed);
