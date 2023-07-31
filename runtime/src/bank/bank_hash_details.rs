@@ -17,6 +17,7 @@ use {
 pub(crate) struct BankHashDetails {
     /// client version
     pub version: String,
+    pub account_data_encoding: String,
     pub slot: Slot,
     pub bank_hash: String,
     pub parent_bank_hash: String,
@@ -38,6 +39,7 @@ impl BankHashDetails {
     ) -> Self {
         Self {
             version: solana_version::version!().to_string(),
+            account_data_encoding: "base64".to_string(),
             slot,
             bank_hash: bank_hash.to_string(),
             parent_bank_hash: parent_bank_hash.to_string(),
