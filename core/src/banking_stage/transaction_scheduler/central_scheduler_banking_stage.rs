@@ -1,3 +1,5 @@
+use solana_sdk::slot_history::Slot;
+
 use {
     super::{
         multi_iterator_consume_scheduler::MultiIteratorConsumeScheduler,
@@ -53,6 +55,27 @@ pub struct CentralSchedulerBankingStage {
     finished_forward_work_receiver: Receiver<FinishedForwardWork>,
 }
 
+#[derive(Default, Debug)]
+struct SchedulerMetrics {
+    received_packet_count: usize,
+    consumed_packet_count: usize,
+    forwarded_packet_count: usize,
+}
+
+impl SchedulerMetrics {
+    fn report(&mut self, slot: Slot) {
+        datapoint_info!(
+            "scheduler",
+            ("slot", slot, i64),
+            ("received_packet_count", self.received_packet_count, i64),
+            ("consumed_packet_count", self.consumed_packet_count, i64),
+            ("forwarded_packet_count", self.forwarded_packet_count, i64),
+        );
+
+        *self = Self::default();
+    }
+}
+
 impl CentralSchedulerBankingStage {
     pub fn new(
         decision_maker: DecisionMaker,
@@ -77,6 +100,8 @@ impl CentralSchedulerBankingStage {
     }
 
     pub fn run(mut self) -> Result<(), SchedulerError> {
+        let mut last_slot = 0;
+        let mut scheduler_metrics = SchedulerMetrics::default();
         loop {
             // If there are queued transactions/packets, make a decision about what to do with them
             // and schedule work accordingly
@@ -84,26 +109,39 @@ impl CentralSchedulerBankingStage {
                 let decision = self.decision_maker.make_consume_or_forward_decision();
                 match decision {
                     BufferedPacketsDecision::Consume(_) => {
-                        self.consume_scheduler.schedule(&mut self.container)?
+                        let num_scheduled = self.consume_scheduler.schedule(&mut self.container)?;
+                        scheduler_metrics.consumed_packet_count += num_scheduled;
                     }
-                    BufferedPacketsDecision::Forward => self.schedule_forward(false)?,
-                    BufferedPacketsDecision::ForwardAndHold => self.schedule_forward(true)?,
+                    BufferedPacketsDecision::Forward => {
+                        let num_scheduled = self.schedule_forward(false)?;
+                        scheduler_metrics.forwarded_packet_count += num_scheduled;
+                    }
+                    BufferedPacketsDecision::ForwardAndHold => {
+                        let num_scheduled = self.schedule_forward(true)?;
+                        scheduler_metrics.forwarded_packet_count += num_scheduled;
+                    }
                     BufferedPacketsDecision::Hold => {}
                 }
             }
 
-            self.receive_and_buffer_packets()?;
+            scheduler_metrics.received_packet_count += self.receive_and_buffer_packets()?;
             self.receive_and_process_finished_work()?;
+
+            let slot = self.bank_forks.read().unwrap().working_bank().slot();
+            if slot != last_slot {
+                scheduler_metrics.report(slot);
+                last_slot = slot;
+            }
         }
     }
 
-    fn schedule_forward(&mut self, hold: bool) -> Result<(), SchedulerError> {
+    fn schedule_forward(&mut self, hold: bool) -> Result<usize, SchedulerError> {
         let bank = self.bank_forks.read().unwrap().root_bank();
         self.forward_scheduler
             .schedule(&bank, &mut self.container, hold)
     }
 
-    fn receive_and_buffer_packets(&mut self) -> Result<(), SchedulerError> {
+    fn receive_and_buffer_packets(&mut self) -> Result<usize, SchedulerError> {
         const EMPTY_RECEIVE_TIMEOUT: Duration = Duration::from_millis(100);
         const NON_EMPTY_RECEIVE_TIMEOUT: Duration = Duration::from_millis(0);
         let timeout = if self.container.is_empty() {
@@ -117,8 +155,12 @@ impl CentralSchedulerBankingStage {
             .packet_deserializer
             .receive_packets(timeout, remaining_capacity);
 
+        let mut received_packet_count = 0;
         match receive_packet_results {
-            Ok(receive_packet_results) => self.sanitize_and_buffer(receive_packet_results),
+            Ok(receive_packet_results) => {
+                received_packet_count = receive_packet_results.deserialized_packets.len();
+                self.sanitize_and_buffer(receive_packet_results);
+            }
             Err(RecvTimeoutError::Disconnected) => {
                 return Err(SchedulerError::DisconnectedReceiveChannel(
                     "packet deserializer",
@@ -127,7 +169,7 @@ impl CentralSchedulerBankingStage {
             Err(RecvTimeoutError::Timeout) => {}
         }
 
-        Ok(())
+        Ok(received_packet_count)
     }
 
     fn sanitize_and_buffer(&mut self, receive_packet_results: ReceivePacketResults) {

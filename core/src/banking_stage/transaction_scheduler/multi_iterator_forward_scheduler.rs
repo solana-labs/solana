@@ -51,7 +51,7 @@ impl MultiIteratorForwardScheduler {
         bank: &Bank,
         container: &mut TransactionPacketContainer,
         hold: bool,
-    ) -> Result<(), SchedulerError> {
+    ) -> Result<usize, SchedulerError> {
         let blockhash_queue = bank.read_blockhash_queue().unwrap();
         let status_cache = bank.status_cache.read().unwrap();
         let next_durable_nonce = DurableNonce::from_blockhash(&blockhash_queue.last_hash());
@@ -79,9 +79,11 @@ impl MultiIteratorForwardScheduler {
             |id, payload| payload.should_schedule(id, container),
         );
 
+        let mut num_scheduled = 0;
         while let Some((ids, payload)) = scanner.iterate() {
             let ids = ids.iter().map(|id| id.id);
             let forwardable_packets = payload.forward_batch.get_forwardable_packets();
+            num_scheduled += ids.len();
 
             for chunk in forwardable_packets
                 .iter()
@@ -107,7 +109,7 @@ impl MultiIteratorForwardScheduler {
             }
         }
 
-        Ok(())
+        Ok(num_scheduled)
     }
 
     fn max_forwading_age() -> usize {

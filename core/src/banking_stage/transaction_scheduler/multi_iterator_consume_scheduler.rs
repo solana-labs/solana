@@ -45,7 +45,7 @@ impl MultiIteratorConsumeScheduler {
     pub(crate) fn schedule(
         &mut self,
         container: &mut TransactionPacketContainer,
-    ) -> Result<(), SchedulerError> {
+    ) -> Result<usize, SchedulerError> {
         let num_threads = self.consume_work_senders.len();
         let mut schedulable_threads = ThreadSet::any(num_threads);
         let outstanding = self.in_flight_tracker.num_in_flight_per_thread();
@@ -78,11 +78,13 @@ impl MultiIteratorConsumeScheduler {
             |id, payload| payload.should_schedule(id, container),
         );
 
+        let mut num_scheduled = 0;
         while let Some((_ids, payload)) = scanner.iterate() {
             for thread_id in 0..num_threads {
                 if !payload.batches.transactions.is_empty() {
                     let (ids, transactions, max_age_slots) = payload.batches.take_batch(thread_id);
                     let batch_id = self.batch_id_generator.next();
+                    num_scheduled += ids.len();
                     payload
                         .in_flight_tracker
                         .track_batch(batch_id, transactions.len(), thread_id);
@@ -121,7 +123,7 @@ impl MultiIteratorConsumeScheduler {
             container.push_id_into_queue(id);
         }
 
-        Ok(())
+        Ok(num_scheduled)
     }
 
     pub(crate) fn complete_batch(
