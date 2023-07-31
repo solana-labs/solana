@@ -7654,16 +7654,9 @@ impl AccountsDb {
                 .map(|d| d.get_cache_hash_data())
                 .collect::<Vec<_>>();
 
-            // rework slices of data into bins for parallel processing and to match data shape expected by 'rest_of_hash_calculation'
-            let result = AccountsHasher::get_binned_data(
-                &cache_hash_intermediates,
-                PUBKEY_BINS_FOR_CALCULATING_HASHES,
-                &bounds,
-            );
-
             // turn raw data into merkle tree hashes and sum of lamports
             let (accounts_hash, capitalization) =
-                accounts_hasher.rest_of_hash_calculation(result, &mut stats);
+                accounts_hasher.rest_of_hash_calculation(&cache_hash_intermediates, &mut stats);
             let accounts_hash = match flavor {
                 CalcAccountsHashFlavor::Full => AccountsHashEnum::Full(AccountsHash(accounts_hash)),
                 CalcAccountsHashFlavor::Incremental => {
