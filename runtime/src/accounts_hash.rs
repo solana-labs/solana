@@ -856,7 +856,7 @@ impl AccountsHasher {
         zeros.stop();
         stats.zeros_time_total_us += zeros.as_us();
         let (min, max, lamports_sum, entries, hash_total) =
-            *min_max_sum_entries_hashes.lock().unwrap();
+            min_max_sum_entries_hashes.into_inner().unwrap();
         stats.min_bin_size = min;
         stats.max_bin_size = max;
         stats.unreduced_entries += entries;
