@@ -491,7 +491,7 @@ impl PrunedBanksRequestHandler {
     pub fn handle_request(&self, bank: &Bank, is_serialized_with_abs: bool) -> usize {
         let slots = self.pruned_banks_receiver.try_iter().collect::<Vec<_>>();
         let count = slots.len();
-        bank.accounts().accounts_db.thread_pool_clean.install(|| {
+        bank.rc.accounts.accounts_db.thread_pool_clean.install(|| {
             slots
                 .into_par_iter()
                 .for_each(|(pruned_slot, pruned_bank_id)| {
