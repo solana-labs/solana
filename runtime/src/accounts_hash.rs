@@ -1077,8 +1077,7 @@ impl AccountsHasher {
 
     // input:
     // vec: group of slot data, ordered by Slot (low to high)
-    //   vec: [0..bins] - where bins are pubkey ranges (these are ordered by Pubkey range)
-    //     vec: [..] - items which fit in the containing bin. Sorted by: Pubkey, higher Slot, higher Write version (if pubkey =)
+    //   vec: [..] - items which fit in the containing bin. Sorted by: Pubkey, higher Slot, higher Write version (if pubkey =)
     pub fn rest_of_hash_calculation(
         &self,
         sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
