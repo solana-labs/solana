@@ -816,7 +816,11 @@ impl AccountsHasher {
         (hashes, lamports_sum)
     }
 
-    // returns true if this vector was exhausted
+    /// returns the item referenced by `min_index`
+    ///   updates `indexes` to skip over the pubkey and its duplicates
+    ///   updates `first_items` to point to the next pubkey
+    /// or removes the entire pubkey division entries (for `min_index`) if the referenced pubkey is the last entry in the same `bin`
+    ///     removed from: `first_items`, `indexes`, and `first_item_pubkey_division`
     fn get_item<'a>(
         min_index: usize,
         bin: usize,
