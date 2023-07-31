@@ -13,7 +13,7 @@ use {
     std::str::FromStr,
 };
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct BankHashDetails {
     /// client version
     pub version: String,
@@ -52,6 +52,7 @@ impl BankHashDetails {
 }
 
 // Wrap the Vec<...> so we can implement custom Serialize/Deserialize traits on the wrapper type
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct BankHashAccounts(pub Vec<(Pubkey, Hash, AccountSharedData)>);
 
 #[derive(Deserialize, Serialize)]
@@ -114,5 +115,50 @@ impl<'de> Deserialize<'de> for BankHashAccounts {
             .collect();
         let pubkey_hash_accounts = pubkey_hash_accounts?;
         Ok(BankHashAccounts(pubkey_hash_accounts))
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    fn test_serde_bank_hash_details() {
+        use solana_sdk::hash::hash;
+
+        let slot = 123_456_789;
+        let signature_count = 314;
+
+        let account = AccountSharedData::from(Account {
+            lamports: 123_456_789,
+            data: vec![0, 9, 1, 8, 2, 7, 3, 6, 4, 5],
+            owner: Pubkey::new_unique(),
+            executable: true,
+            rent_epoch: 123,
+        });
+        let account_pubkey = Pubkey::new_unique();
+        let account_hash = hash("account".as_bytes());
+        let accounts = BankHashAccounts(vec![(account_pubkey, account_hash, account)]);
+
+        let bank_hash = hash("bank".as_bytes());
+        let parent_bank_hash = hash("parent_bank".as_bytes());
+        let accounts_delta_hash = hash("accounts_delta".as_bytes());
+        let last_blockhash = hash("last_blockhash".as_bytes());
+
+        let bank_hash_details = BankHashDetails::new(
+            slot,
+            bank_hash,
+            parent_bank_hash,
+            accounts_delta_hash,
+            signature_count,
+            last_blockhash,
+            accounts,
+        );
+
+        let serialized_bytes = serde_json::to_vec(&bank_hash_details).unwrap();
+        let deserialized_bank_hash_details: BankHashDetails =
+            serde_json::from_slice(&serialized_bytes).unwrap();
+
+        assert_eq!(bank_hash_details, deserialized_bank_hash_details);
     }
 }
