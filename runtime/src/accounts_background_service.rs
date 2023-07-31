@@ -17,6 +17,7 @@ use {
     crossbeam_channel::{Receiver, SendError, Sender},
     log::*,
     rand::{thread_rng, Rng},
+    rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_measure::measure::Measure,
     solana_sdk::clock::{BankId, Slot},
     stats::StatsManager,
@@ -499,15 +500,19 @@ pub struct PrunedBanksRequestHandler {
 
 impl PrunedBanksRequestHandler {
     pub fn handle_request(&self, bank: &Bank, is_serialized_with_abs: bool) -> usize {
-        let mut count = 0;
-        for (pruned_slot, pruned_bank_id) in self.pruned_banks_receiver.try_iter() {
-            count += 1;
-            bank.rc.accounts.accounts_db.purge_slot(
-                pruned_slot,
-                pruned_bank_id,
-                is_serialized_with_abs,
-            );
-        }
+        let slots = self.pruned_banks_receiver.try_iter().collect::<Vec<_>>();
+        let count = slots.len();
+        bank.rc.accounts.accounts_db.thread_pool_clean.install(|| {
+            slots
+                .into_par_iter()
+                .for_each(|(pruned_slot, pruned_bank_id)| {
+                    bank.rc.accounts.accounts_db.purge_slot(
+                        pruned_slot,
+                        pruned_bank_id,
+                        is_serialized_with_abs,
+                    );
+                });
+        });
 
         count
     }
