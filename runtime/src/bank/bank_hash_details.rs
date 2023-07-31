@@ -1,3 +1,5 @@
+//! Container to capture information relevant to computing a bank hash
+
 use {
     base64::{prelude::BASE64_STANDARD, Engine},
     serde::{
