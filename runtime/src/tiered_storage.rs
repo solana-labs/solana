@@ -68,10 +68,8 @@ impl TieredStorage {
     /// specified path.
     pub fn new_readonly(path: impl Into<PathBuf>) -> TieredStorageResult<Self> {
         let pathbuf = path.into();
-        let reader = TieredStorageReader::new_from_path(&pathbuf)?;
-        let reader_cell = OnceCell::with_value(reader);
         Ok(Self {
-            reader: reader_cell,
+            reader: OnceCell::with_value(TieredStorageReader::new_from_path(&pathbuf)?),
             format: None,
             path: pathbuf,
         })
@@ -85,8 +83,9 @@ impl TieredStorage {
     /// Writes the specified accounts into this TieredStorage.
     ///
     /// Note that this function can only be called once per a TieredStorage
-    /// file.  TieredStorageError::AttemptToUpdateReadOnly will be returned
-    /// if this function is invoked more than once.
+    /// instance.  TieredStorageError::AttemptToUpdateReadOnly will be returned
+    /// if this function is invoked more than once on the same TieredStorage
+    /// instance.
     pub fn write_accounts<
         'a,
         'b,
@@ -115,9 +114,13 @@ impl TieredStorage {
             result = writer.write_accounts(accounts, skip)
         }
 
+        // assert & panic here if self.reader.get() is not None as
+        // self.reader can only be None since we have passed `is_read_only()`
+        // check previously, indicating self.reader is not yet set.
+        assert!(self.reader.get().is_none());
         self.reader
-            .set(TieredStorageReader::new_from_path(&self.path).unwrap())
-            .map_err(|_| TieredStorageError::UnableToCreateReader(self.path.to_path_buf()))?;
+            .set(TieredStorageReader::new_from_path(&self.path)?)
+            .unwrap();
 
         result
     }
@@ -128,7 +131,7 @@ impl TieredStorage {
         self.reader.get()
     }
 
-    /// Returns true if the TieredStorage is read-only.
+    /// Returns true if the TieredStorage instance is read-only.
     pub fn is_read_only(&self) -> bool {
         self.reader.get().is_some()
     }
@@ -185,6 +188,7 @@ mod tests {
                 Err(TieredStorageError::AttemptToUpdateReadOnly(_)),
             ) => {}
             (Err(TieredStorageError::Unsupported()), Err(TieredStorageError::Unsupported())) => {}
+            // we don't expect error type mis-match or other error types here
             _ => {
                 assert_eq!(format!("{:?}", result), format!("{:?}", expected_result));
             }

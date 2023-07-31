@@ -11,9 +11,6 @@ pub enum TieredStorageError {
     #[error("AttemptToUpdateReadOnly: attempted to update read-only file {0}")]
     AttemptToUpdateReadOnly(PathBuf),
 
-    #[error("UnableToCreateReader: unable to create tiered-storage reader for {0}")]
-    UnableToCreateReader(PathBuf),
-
     #[error("UnknownFormat: the tiered storage format is unavailable for file {0}")]
     UnknownFormat(PathBuf),
 
