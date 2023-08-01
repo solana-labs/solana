@@ -219,7 +219,6 @@ impl HotStorageReader {
         // This can help improve cache locality and reduce the overhead
         // of indirection associated with memory-mapped accesses.
         let footer = TieredStorageFooter::new_from_mmap(&mmap)?.clone();
-        assert_ne!(mmap.len(), 0);
 
         Ok(Self { mmap, footer })
     }

@@ -67,11 +67,11 @@ impl TieredStorage {
     /// Creates a new read-only instance of TieredStorage from the
     /// specified path.
     pub fn new_readonly(path: impl Into<PathBuf>) -> TieredStorageResult<Self> {
-        let pathbuf = path.into();
+        let path = path.into();
         Ok(Self {
-            reader: OnceCell::with_value(TieredStorageReader::new_from_path(&pathbuf)?),
+            reader: OnceCell::with_value(TieredStorageReader::new_from_path(&path)?),
             format: None,
-            path: pathbuf,
+            path,
         })
     }
 
@@ -103,21 +103,17 @@ impl TieredStorage {
             ));
         }
 
-        let result;
-
-        {
+        let result = {
             // self.format must be Some as write_accounts can only be called on a
             // TieredStorage instance created via new_writable() where its format
             // field is required.
-            assert!(self.format.is_some());
             let writer = TieredStorageWriter::new(&self.path, self.format.as_ref().unwrap())?;
-            result = writer.write_accounts(accounts, skip)
-        }
+            writer.write_accounts(accounts, skip)
+        };
 
-        // assert & panic here if self.reader.get() is not None as
-        // self.reader can only be None since we have passed `is_read_only()`
-        // check previously, indicating self.reader is not yet set.
-        assert!(self.reader.get().is_none());
+        // panic here if self.reader.get() is not None as self.reader can only be
+        // None since we have passed `is_read_only()` check previously, indicating
+        // self.reader is not yet set.
         self.reader
             .set(TieredStorageReader::new_from_path(&self.path)?)
             .unwrap();
@@ -190,7 +186,7 @@ mod tests {
             (Err(TieredStorageError::Unsupported()), Err(TieredStorageError::Unsupported())) => {}
             // we don't expect error type mis-match or other error types here
             _ => {
-                assert_eq!(format!("{:?}", result), format!("{:?}", expected_result));
+                panic!("actual: {result:?}, expected: {expected_result:?}");
             }
         };
 
