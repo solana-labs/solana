@@ -853,7 +853,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
     purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
     slot_state_update: SlotStateUpdate,
 ) {
-    error!(
+    info!(
         "check_slot_agrees_with_cluster() slot: {}, root: {}, slot_state_update: {:?}",
         slot, root, slot_state_update
     );
@@ -870,7 +870,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
             return;
         }
 
-        datapoint_error!(
+        datapoint_info!(
             "duplicate_slot",
             ("slot", slot, i64),
             (
@@ -902,7 +902,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
             }
         }
 
-        datapoint_error!(
+        datapoint_info!(
             "duplicate_confirmed_slot",
             ("slot", slot, i64),
             (
