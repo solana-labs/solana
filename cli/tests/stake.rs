@@ -26,7 +26,7 @@ use {
         stake::{
             self,
             instruction::LockupArgs,
-            state::{Lockup, StakeAuthorize, StakeState},
+            state::{Lockup, StakeAuthorize, StakeStateWithFlags},
         },
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -162,10 +162,10 @@ fn test_stake_redelegation() {
 
     // `stake_keypair` should now be delegated to `vote_keypair` and fully activated
     let stake_account = rpc_client.get_account(&stake_keypair.pubkey()).unwrap();
-    let stake_state: StakeState = stake_account.state().unwrap();
+    let stake_state: StakeStateWithFlags = stake_account.state().unwrap();
 
     let rent_exempt_reserve = match stake_state {
-        StakeState::Stake(meta, stake, _) => {
+        StakeStateWithFlags::Stake(meta, stake, _) => {
             assert_eq!(stake.delegation.voter_pubkey, vote_keypair.pubkey());
             meta.rent_exempt_reserve
         }
@@ -268,10 +268,10 @@ fn test_stake_redelegation() {
 
     // `stake2_keypair` should now be delegated to `vote2_keypair` and fully activated
     let stake2_account = rpc_client.get_account(&stake2_keypair.pubkey()).unwrap();
-    let stake2_state: StakeState = stake2_account.state().unwrap();
+    let stake2_state: StakeStateWithFlags = stake2_account.state().unwrap();
 
     match stake2_state {
-        StakeState::Stake(_meta, stake, _) => {
+        StakeStateWithFlags::Stake(_meta, stake, _) => {
             assert_eq!(stake.delegation.voter_pubkey, vote2_keypair.pubkey());
         }
         _ => panic!("Unexpected stake2 state!"),
@@ -966,9 +966,9 @@ fn test_stake_authorize() {
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
-    let stake_state: StakeState = stake_account.state().unwrap();
+    let stake_state: StakeStateWithFlags = stake_account.state().unwrap();
     let current_authority = match stake_state {
-        StakeState::Initialized(meta) => meta.authorized.staker,
+        StakeStateWithFlags::Initialized(meta) => meta.authorized.staker,
         _ => panic!("Unexpected stake state!"),
     };
     assert_eq!(current_authority, online_authority_pubkey);
@@ -1008,9 +1008,11 @@ fn test_stake_authorize() {
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
-    let stake_state: StakeState = stake_account.state().unwrap();
+    let stake_state: StakeStateWithFlags = stake_account.state().unwrap();
     let (current_staker, current_withdrawer) = match stake_state {
-        StakeState::Initialized(meta) => (meta.authorized.staker, meta.authorized.withdrawer),
+        StakeStateWithFlags::Initialized(meta) => {
+            (meta.authorized.staker, meta.authorized.withdrawer)
+        }
         _ => panic!("Unexpected stake state!"),
     };
     assert_eq!(current_staker, online_authority2_pubkey);
@@ -1040,9 +1042,9 @@ fn test_stake_authorize() {
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
-    let stake_state: StakeState = stake_account.state().unwrap();
+    let stake_state: StakeStateWithFlags = stake_account.state().unwrap();
     let current_authority = match stake_state {
-        StakeState::Initialized(meta) => meta.authorized.staker,
+        StakeStateWithFlags::Initialized(meta) => meta.authorized.staker,
         _ => panic!("Unexpected stake state!"),
     };
     assert_eq!(current_authority, offline_authority_pubkey);
@@ -1097,9 +1099,9 @@ fn test_stake_authorize() {
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
-    let stake_state: StakeState = stake_account.state().unwrap();
+    let stake_state: StakeStateWithFlags = stake_account.state().unwrap();
     let current_authority = match stake_state {
-        StakeState::Initialized(meta) => meta.authorized.staker,
+        StakeStateWithFlags::Initialized(meta) => meta.authorized.staker,
         _ => panic!("Unexpected stake state!"),
     };
     assert_eq!(current_authority, nonced_authority_pubkey);
@@ -1184,9 +1186,9 @@ fn test_stake_authorize() {
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
-    let stake_state: StakeState = stake_account.state().unwrap();
+    let stake_state: StakeStateWithFlags = stake_account.state().unwrap();
     let current_authority = match stake_state {
-        StakeState::Initialized(meta) => meta.authorized.staker,
+        StakeStateWithFlags::Initialized(meta) => meta.authorized.staker,
         _ => panic!("Unexpected stake state!"),
     };
     assert_eq!(current_authority, online_authority_pubkey);
@@ -1434,7 +1436,7 @@ fn test_stake_split() {
 
     // Create stake account, identity is authority
     let stake_balance = rpc_client
-        .get_minimum_balance_for_rent_exemption(StakeState::size_of())
+        .get_minimum_balance_for_rent_exemption(StakeStateWithFlags::size_of())
         .unwrap()
         + 10_000_000_000;
     let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
@@ -1587,7 +1589,7 @@ fn test_stake_set_lockup() {
 
     // Create stake account, identity is authority
     let stake_balance = rpc_client
-        .get_minimum_balance_for_rent_exemption(StakeState::size_of())
+        .get_minimum_balance_for_rent_exemption(StakeStateWithFlags::size_of())
         .unwrap()
         + 10_000_000_000;
 
@@ -1645,9 +1647,9 @@ fn test_stake_set_lockup() {
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
-    let stake_state: StakeState = stake_account.state().unwrap();
+    let stake_state: StakeStateWithFlags = stake_account.state().unwrap();
     let current_lockup = match stake_state {
-        StakeState::Initialized(meta) => meta.lockup,
+        StakeStateWithFlags::Initialized(meta) => meta.lockup,
         _ => panic!("Unexpected stake state!"),
     };
     assert_eq!(
@@ -1704,9 +1706,9 @@ fn test_stake_set_lockup() {
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
-    let stake_state: StakeState = stake_account.state().unwrap();
+    let stake_state: StakeStateWithFlags = stake_account.state().unwrap();
     let current_lockup = match stake_state {
-        StakeState::Initialized(meta) => meta.lockup,
+        StakeStateWithFlags::Initialized(meta) => meta.lockup,
         _ => panic!("Unexpected stake state!"),
     };
     assert_eq!(
@@ -1811,9 +1813,9 @@ fn test_stake_set_lockup() {
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
-    let stake_state: StakeState = stake_account.state().unwrap();
+    let stake_state: StakeStateWithFlags = stake_account.state().unwrap();
     let current_lockup = match stake_state {
-        StakeState::Initialized(meta) => meta.lockup,
+        StakeStateWithFlags::Initialized(meta) => meta.lockup,
         _ => panic!("Unexpected stake state!"),
     };
     assert_eq!(
@@ -2187,9 +2189,9 @@ fn test_stake_checked_instructions() {
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
-    let stake_state: StakeState = stake_account.state().unwrap();
+    let stake_state: StakeStateWithFlags = stake_account.state().unwrap();
     let current_authority = match stake_state {
-        StakeState::Initialized(meta) => meta.authorized.staker,
+        StakeStateWithFlags::Initialized(meta) => meta.authorized.staker,
         _ => panic!("Unexpected stake state!"),
     };
     assert_eq!(current_authority, staker_pubkey);
@@ -2244,9 +2246,9 @@ fn test_stake_checked_instructions() {
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
-    let stake_state: StakeState = stake_account.state().unwrap();
+    let stake_state: StakeStateWithFlags = stake_account.state().unwrap();
     let current_authority = match stake_state {
-        StakeState::Initialized(meta) => meta.authorized.withdrawer,
+        StakeStateWithFlags::Initialized(meta) => meta.authorized.withdrawer,
         _ => panic!("Unexpected stake state!"),
     };
     assert_eq!(current_authority, new_withdrawer_pubkey);
@@ -2293,9 +2295,9 @@ fn test_stake_checked_instructions() {
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
-    let stake_state: StakeState = stake_account.state().unwrap();
+    let stake_state: StakeStateWithFlags = stake_account.state().unwrap();
     let current_lockup = match stake_state {
-        StakeState::Initialized(meta) => meta.lockup,
+        StakeStateWithFlags::Initialized(meta) => meta.lockup,
         _ => panic!("Unexpected stake state!"),
     };
     assert_eq!(

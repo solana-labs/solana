@@ -19,7 +19,7 @@ use {
         signature::{Keypair, Signer},
         stake::{
             self, instruction as stake_instruction,
-            state::{Authorized, Lockup, StakeState},
+            state::{Authorized, Lockup, StakeStateWithFlags},
         },
         sysvar::{self, stake_history::StakeHistory},
     },
@@ -145,7 +145,7 @@ fn test_stake_create_and_split_single_signature() {
 
     let lamports = {
         let rent = &bank.rent_collector().rent;
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let minimum_delegation = solana_stake_program::get_minimum_delegation(&bank.feature_set);
         2 * (rent_exempt_reserve + minimum_delegation)
     };
@@ -221,7 +221,7 @@ fn test_stake_create_and_split_to_existing_system_account() {
 
     let lamports = {
         let rent = &bank.rent_collector().rent;
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let minimum_delegation = solana_stake_program::get_minimum_delegation(&bank.feature_set);
         2 * (rent_exempt_reserve + minimum_delegation)
     };
@@ -314,7 +314,7 @@ fn test_stake_account_lifetime() {
         let rent = &bank.rent_collector().rent;
         (
             rent.minimum_balance(VoteState::size_of()),
-            rent.minimum_balance(StakeState::size_of()),
+            rent.minimum_balance(StakeStateWithFlags::size_of()),
             solana_stake_program::get_minimum_delegation(&bank.feature_set),
         )
     };
@@ -367,7 +367,7 @@ fn test_stake_account_lifetime() {
     // Test that correct lamports are staked
     let account = bank.get_account(&stake_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
-    if let StakeState::Stake(_meta, stake, _stake_flags) = stake_state {
+    if let StakeStateWithFlags::Stake(_meta, stake, _stake_flags) = stake_state {
         assert_eq!(stake.delegation.stake, stake_starting_delegation,);
     } else {
         panic!("wrong account type found")
@@ -391,7 +391,7 @@ fn test_stake_account_lifetime() {
     // Test that lamports are still staked
     let account = bank.get_account(&stake_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
-    if let StakeState::Stake(_meta, stake, _stake_flags) = stake_state {
+    if let StakeStateWithFlags::Stake(_meta, stake, _stake_flags) = stake_state {
         assert_eq!(stake.delegation.stake, stake_starting_delegation,);
     } else {
         panic!("wrong account type found")
@@ -615,7 +615,7 @@ fn test_create_stake_account_from_seed() {
     let authorized = Authorized::auto(&mint_pubkey);
     let (balance, delegation) = {
         let rent = &bank.rent_collector().rent;
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let minimum_delegation = solana_stake_program::get_minimum_delegation(&bank.feature_set);
         (rent_exempt_reserve + minimum_delegation, minimum_delegation)
     };
@@ -641,7 +641,7 @@ fn test_create_stake_account_from_seed() {
     // Test that correct lamports are staked
     let account = bank.get_account(&stake_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
-    if let StakeState::Stake(_meta, stake, _) = stake_state {
+    if let StakeStateWithFlags::Stake(_meta, stake, _) = stake_state {
         assert_eq!(stake.delegation.stake, delegation);
     } else {
         panic!("wrong account type found")

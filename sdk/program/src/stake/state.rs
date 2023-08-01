@@ -33,7 +33,7 @@ pub fn warmup_cooldown_rate(current_epoch: Epoch, new_rate_activation_epoch: Opt
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
 #[allow(clippy::large_enum_variant)]
-pub enum StakeState {
+pub enum StakeStateWithFlags {
     #[default]
     Uninitialized,
     Initialized(Meta),
@@ -41,22 +41,22 @@ pub enum StakeState {
     RewardsPool,
 }
 
-impl BorshDeserialize for StakeState {
+impl BorshDeserialize for StakeStateWithFlags {
     fn deserialize_reader<R: io::Read>(reader: &mut R) -> io::Result<Self> {
         let enum_value = u32::deserialize_reader(reader)?;
         match enum_value {
-            0 => Ok(StakeState::Uninitialized),
+            0 => Ok(StakeStateWithFlags::Uninitialized),
             1 => {
                 let meta = Meta::deserialize_reader(reader)?;
-                Ok(StakeState::Initialized(meta))
+                Ok(StakeStateWithFlags::Initialized(meta))
             }
             2 => {
                 let meta: Meta = BorshDeserialize::deserialize_reader(reader)?;
                 let stake: Stake = BorshDeserialize::deserialize_reader(reader)?;
                 let stake_flags: StakeFlags = BorshDeserialize::deserialize_reader(reader)?;
-                Ok(StakeState::Stake(meta, stake, stake_flags))
+                Ok(StakeStateWithFlags::Stake(meta, stake, stake_flags))
             }
-            3 => Ok(StakeState::RewardsPool),
+            3 => Ok(StakeStateWithFlags::RewardsPool),
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "Invalid enum value",
@@ -65,26 +65,26 @@ impl BorshDeserialize for StakeState {
     }
 }
 
-impl BorshSerialize for StakeState {
+impl BorshSerialize for StakeStateWithFlags {
     fn serialize<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         match self {
-            StakeState::Uninitialized => writer.write_all(&0u32.to_le_bytes()),
-            StakeState::Initialized(meta) => {
+            StakeStateWithFlags::Uninitialized => writer.write_all(&0u32.to_le_bytes()),
+            StakeStateWithFlags::Initialized(meta) => {
                 writer.write_all(&1u32.to_le_bytes())?;
                 meta.serialize(writer)
             }
-            StakeState::Stake(meta, stake, stake_flags) => {
+            StakeStateWithFlags::Stake(meta, stake, stake_flags) => {
                 writer.write_all(&2u32.to_le_bytes())?;
                 meta.serialize(writer)?;
                 stake.serialize(writer)?;
                 stake_flags.serialize(writer)
             }
-            StakeState::RewardsPool => writer.write_all(&3u32.to_le_bytes()),
+            StakeStateWithFlags::RewardsPool => writer.write_all(&3u32.to_le_bytes()),
         }
     }
 }
 
-impl StakeState {
+impl StakeStateWithFlags {
     /// The fixed number of bytes used to serialize each stake account
     pub const fn size_of() -> usize {
         200 // see test_size_of
@@ -92,22 +92,22 @@ impl StakeState {
 
     pub fn stake(&self) -> Option<Stake> {
         match self {
-            StakeState::Stake(_meta, stake, _stake_flags) => Some(*stake),
+            StakeStateWithFlags::Stake(_meta, stake, _stake_flags) => Some(*stake),
             _ => None,
         }
     }
 
     pub fn delegation(&self) -> Option<Delegation> {
         match self {
-            StakeState::Stake(_meta, stake, _stake_flags) => Some(stake.delegation),
+            StakeStateWithFlags::Stake(_meta, stake, _stake_flags) => Some(stake.delegation),
             _ => None,
         }
     }
 
     pub fn authorized(&self) -> Option<Authorized> {
         match self {
-            StakeState::Stake(meta, _stake, _stake_flags) => Some(meta.authorized),
-            StakeState::Initialized(meta) => Some(meta.authorized),
+            StakeStateWithFlags::Stake(meta, _stake, _stake_flags) => Some(meta.authorized),
+            StakeStateWithFlags::Initialized(meta) => Some(meta.authorized),
             _ => None,
         }
     }
@@ -118,8 +118,8 @@ impl StakeState {
 
     pub fn meta(&self) -> Option<Meta> {
         match self {
-            StakeState::Stake(meta, _stake, _stake_flags) => Some(*meta),
-            StakeState::Initialized(meta) => Some(*meta),
+            StakeStateWithFlags::Stake(meta, _stake, _stake_flags) => Some(*meta),
+            StakeStateWithFlags::Initialized(meta) => Some(*meta),
             _ => None,
         }
     }
@@ -615,28 +615,31 @@ mod test {
         bincode::serialize,
     };
 
-    fn check_borsh_deserialization(stake: StakeState) {
+    fn check_borsh_deserialization(stake: StakeStateWithFlags) {
         let serialized = serialize(&stake).unwrap();
-        let deserialized = StakeState::try_from_slice(&serialized).unwrap();
+        let deserialized = StakeStateWithFlags::try_from_slice(&serialized).unwrap();
         assert_eq!(stake, deserialized);
     }
 
-    fn check_borsh_serialization(stake: StakeState) {
+    fn check_borsh_serialization(stake: StakeStateWithFlags) {
         let bincode_serialized = serialize(&stake).unwrap();
-        let borsh_serialized = StakeState::try_to_vec(&stake).unwrap();
+        let borsh_serialized = StakeStateWithFlags::try_to_vec(&stake).unwrap();
         assert_eq!(bincode_serialized, borsh_serialized);
     }
 
     #[test]
     fn test_size_of() {
-        assert_eq!(StakeState::size_of(), std::mem::size_of::<StakeState>());
+        assert_eq!(
+            StakeStateWithFlags::size_of(),
+            std::mem::size_of::<StakeStateWithFlags>()
+        );
     }
 
     #[test]
     fn bincode_vs_borsh_deserialization() {
-        check_borsh_deserialization(StakeState::Uninitialized);
-        check_borsh_deserialization(StakeState::RewardsPool);
-        check_borsh_deserialization(StakeState::Initialized(Meta {
+        check_borsh_deserialization(StakeStateWithFlags::Uninitialized);
+        check_borsh_deserialization(StakeStateWithFlags::RewardsPool);
+        check_borsh_deserialization(StakeStateWithFlags::Initialized(Meta {
             rent_exempt_reserve: u64::MAX,
             authorized: Authorized {
                 staker: Pubkey::new_unique(),
@@ -644,7 +647,7 @@ mod test {
             },
             lockup: Lockup::default(),
         }));
-        check_borsh_deserialization(StakeState::Stake(
+        check_borsh_deserialization(StakeStateWithFlags::Stake(
             Meta {
                 rent_exempt_reserve: 1,
                 authorized: Authorized {
@@ -669,9 +672,9 @@ mod test {
 
     #[test]
     fn bincode_vs_borsh_serialization() {
-        check_borsh_serialization(StakeState::Uninitialized);
-        check_borsh_serialization(StakeState::RewardsPool);
-        check_borsh_serialization(StakeState::Initialized(Meta {
+        check_borsh_serialization(StakeStateWithFlags::Uninitialized);
+        check_borsh_serialization(StakeStateWithFlags::RewardsPool);
+        check_borsh_serialization(StakeStateWithFlags::Initialized(Meta {
             rent_exempt_reserve: u64::MAX,
             authorized: Authorized {
                 staker: Pubkey::new_unique(),
@@ -679,7 +682,7 @@ mod test {
             },
             lockup: Lockup::default(),
         }));
-        check_borsh_serialization(StakeState::Stake(
+        check_borsh_serialization(StakeStateWithFlags::Stake(
             Meta {
                 rent_exempt_reserve: 1,
                 authorized: Authorized {
@@ -717,10 +720,10 @@ mod test {
         ];
         // As long as we get the 4-byte enum and the first field right, then
         // we're sure the rest works out
-        let deserialized = try_from_slice_unchecked::<StakeState>(&data).unwrap();
+        let deserialized = try_from_slice_unchecked::<StakeStateWithFlags>(&data).unwrap();
         assert_matches!(
             deserialized,
-            StakeState::Initialized(Meta {
+            StakeStateWithFlags::Initialized(Meta {
                 rent_exempt_reserve: 2282880,
                 ..
             })

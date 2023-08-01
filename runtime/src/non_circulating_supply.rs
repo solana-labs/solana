@@ -7,7 +7,7 @@ use {
     solana_sdk::{
         account::ReadableAccount,
         pubkey::Pubkey,
-        stake::{self, state::StakeState},
+        stake::{self, state::StakeStateWithFlags},
     },
     solana_stake_program::stake_state,
     std::{collections::HashSet, sync::Arc},
@@ -53,14 +53,14 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> ScanResult<NonCircu
     for (pubkey, account) in stake_accounts.iter() {
         let stake_account = stake_state::from(account).unwrap_or_default();
         match stake_account {
-            StakeState::Initialized(meta) => {
+            StakeStateWithFlags::Initialized(meta) => {
                 if meta.lockup.is_in_force(&clock, None)
                     || withdraw_authority_list.contains(&meta.authorized.withdrawer)
                 {
                     non_circulating_accounts_set.insert(*pubkey);
                 }
             }
-            StakeState::Stake(meta, _stake, _stake_flags) => {
+            StakeStateWithFlags::Stake(meta, _stake, _stake_flags) => {
                 if meta.lockup.is_in_force(&clock, None)
                     || withdraw_authority_list.contains(&meta.authorized.withdrawer)
                 {
@@ -264,8 +264,8 @@ mod tests {
             };
             let stake_account = Account::new_data_with_space(
                 balance,
-                &StakeState::Initialized(meta),
-                StakeState::size_of(),
+                &StakeStateWithFlags::Initialized(meta),
+                StakeStateWithFlags::size_of(),
                 &stake::program::id(),
             )
             .unwrap();

@@ -47,7 +47,10 @@ use {
         stake::{
             self,
             instruction::{self as stake_instruction, LockupArgs, StakeError},
-            state::{Authorized, Lockup, Meta, StakeActivationStatus, StakeAuthorize, StakeState},
+            state::{
+                Authorized, Lockup, Meta, StakeActivationStatus, StakeAuthorize,
+                StakeStateWithFlags,
+            },
             tools::{acceptable_reference_epoch_credits, eligible_for_deactivate_delinquent},
         },
         stake_history::{Epoch, StakeHistory},
@@ -1422,7 +1425,7 @@ pub fn process_create_stake_account(
         }
 
         let minimum_balance =
-            rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())?;
+            rpc_client.get_minimum_balance_for_rent_exemption(StakeStateWithFlags::size_of())?;
 
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
@@ -1500,8 +1503,8 @@ pub fn process_stake_authorize(
         let authority = config.signers[*authority];
         if let Some(current_stake_account) = current_stake_account {
             let authorized = match current_stake_account {
-                StakeState::Stake(Meta { authorized, .. }, ..) => Some(authorized),
-                StakeState::Initialized(Meta { authorized, .. }) => Some(authorized),
+                StakeStateWithFlags::Stake(Meta { authorized, .. }, ..) => Some(authorized),
+                StakeStateWithFlags::Initialized(Meta { authorized, .. }) => Some(authorized),
                 _ => None,
             };
             if let Some(authorized) = authorized {
@@ -1630,7 +1633,7 @@ pub fn process_deactivate_stake_account(
 
         let vote_account_address = match stake_account.state() {
             Ok(stake_state) => match stake_state {
-                StakeState::Stake(_, stake, _) => stake.delegation.voter_pubkey,
+                StakeStateWithFlags::Stake(_, stake, _) => stake.delegation.voter_pubkey,
                 _ => {
                     return Err(CliError::BadParameter(format!(
                         "{stake_account_address} is not a delegated stake account",
@@ -1895,7 +1898,7 @@ pub fn process_split_stake(
         }
 
         let minimum_balance =
-            rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())?;
+            rpc_client.get_minimum_balance_for_rent_exemption(StakeStateWithFlags::size_of())?;
 
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
@@ -2116,8 +2119,8 @@ pub fn process_stake_set_lockup(
     if !sign_only {
         let state = get_stake_account_state(rpc_client, stake_account_pubkey, config.commitment)?;
         let lockup = match state {
-            StakeState::Stake(Meta { lockup, .. }, ..) => Some(lockup),
-            StakeState::Initialized(Meta { lockup, .. }) => Some(lockup),
+            StakeStateWithFlags::Stake(Meta { lockup, .. }, ..) => Some(lockup),
+            StakeStateWithFlags::Initialized(Meta { lockup, .. }) => Some(lockup),
             _ => None,
         };
         if let Some(lockup) = lockup {
@@ -2184,14 +2187,14 @@ fn u64_some_if_not_zero(n: u64) -> Option<u64> {
 
 pub fn build_stake_state(
     account_balance: u64,
-    stake_state: &StakeState,
+    stake_state: &StakeStateWithFlags,
     use_lamports_unit: bool,
     stake_history: &StakeHistory,
     clock: &Clock,
     new_rate_activation_epoch: Option<Epoch>,
 ) -> CliStakeState {
     match stake_state {
-        StakeState::Stake(
+        StakeStateWithFlags::Stake(
             Meta {
                 rent_exempt_reserve,
                 authorized,
@@ -2248,16 +2251,16 @@ pub fn build_stake_state(
                 ..CliStakeState::default()
             }
         }
-        StakeState::RewardsPool => CliStakeState {
+        StakeStateWithFlags::RewardsPool => CliStakeState {
             stake_type: CliStakeType::RewardsPool,
             account_balance,
             ..CliStakeState::default()
         },
-        StakeState::Uninitialized => CliStakeState {
+        StakeStateWithFlags::Uninitialized => CliStakeState {
             account_balance,
             ..CliStakeState::default()
         },
-        StakeState::Initialized(Meta {
+        StakeStateWithFlags::Initialized(Meta {
             rent_exempt_reserve,
             authorized,
             lockup,
@@ -2285,7 +2288,7 @@ fn get_stake_account_state(
     rpc_client: &RpcClient,
     stake_account_pubkey: &Pubkey,
     commitment_config: CommitmentConfig,
-) -> Result<StakeState, Box<dyn std::error::Error>> {
+) -> Result<StakeStateWithFlags, Box<dyn std::error::Error>> {
     let stake_account = rpc_client
         .get_account_with_commitment(stake_account_pubkey, commitment_config)?
         .value

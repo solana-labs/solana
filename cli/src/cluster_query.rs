@@ -54,7 +54,7 @@ use {
         rpc_port::DEFAULT_RPC_PORT_STR,
         signature::Signature,
         slot_history,
-        stake::{self, state::StakeState},
+        stake::{self, state::StakeStateWithFlags},
         system_instruction,
         sysvar::{
             self,
@@ -1768,7 +1768,7 @@ pub fn process_show_stakes(
         // Use server-side filtering if only one vote account is provided
         if vote_account_pubkeys.len() == 1 {
             program_accounts_config.filters = Some(vec![
-                // Filter by `StakeState::Stake(_, _)`
+                // Filter by `StakeStateWithFlags::Stake(_, _)`
                 RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &[2, 0, 0, 0])),
                 // Filter by `Delegation::voter_pubkey`, which begins at byte offset 124
                 RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
@@ -1809,7 +1809,7 @@ pub fn process_show_stakes(
     for (stake_pubkey, stake_account) in all_stake_accounts {
         if let Ok(stake_state) = stake_account.state() {
             match stake_state {
-                StakeState::Initialized(_) => {
+                StakeStateWithFlags::Initialized(_) => {
                     if vote_account_pubkeys.is_none() {
                         stake_accounts.push(CliKeyedStakeState {
                             stake_pubkey: stake_pubkey.to_string(),
@@ -1824,7 +1824,7 @@ pub fn process_show_stakes(
                         });
                     }
                 }
-                StakeState::Stake(_, stake, _) => {
+                StakeStateWithFlags::Stake(_, stake, _) => {
                     if vote_account_pubkeys.is_none()
                         || vote_account_pubkeys
                             .unwrap()
@@ -2157,7 +2157,7 @@ impl RentLengthValue {
     pub fn length(&self) -> usize {
         match self {
             Self::Nonce => NonceState::size(),
-            Self::Stake => StakeState::size_of(),
+            Self::Stake => StakeStateWithFlags::size_of(),
             Self::System => 0,
             Self::Vote => VoteState::size_of(),
             Self::Bytes(l) => *l,
