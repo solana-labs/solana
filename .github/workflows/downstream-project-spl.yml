@@ -1,0 +1,39 @@
+name: Downstream Project - SPL
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  push:
+    branches:
+      - master
+      - v[0-9]+.[0-9]+
+  pull_request:
+    branches:
+      - master
+      - v[0-9]+.[0-9]+
+    paths:
+      - "**.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "cargo-build-bpf"
+      - "cargo-test-bpf"
+      - "cargo-build-sbf"
+      - "cargo-test-sbf"
+      - "ci/downstream-projects/run-spl.sh"
+      - ".github/workflows/downstream-project.yml"
+
+env:
+  SHELL: /bin/bash
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: mozilla-actions/sccache-action@v0.0.3
+
+      - run: |
+          ci/downstream-projects/run-spl.sh
