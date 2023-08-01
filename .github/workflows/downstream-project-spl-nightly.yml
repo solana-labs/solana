@@ -26,5 +26,10 @@ jobs:
 
       - uses: mozilla-actions/sccache-action@v0.0.3
 
+      # Get more space on a runner
+      - run: |
+          sudo docker rmi $(docker image ls -aq)
+          sudo rm -rf /usr/local/lib/android
+
       - run: |
           ci/downstream-projects/run-spl.sh
