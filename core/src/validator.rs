@@ -1332,7 +1332,6 @@ impl Validator {
     pub fn join(self) {
         drop(self.bank_forks);
         drop(self.cluster_info);
-        solana_turbine::quic_endpoint::close_quic_endpoint(&self.turbine_quic_endpoint);
 
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
@@ -1413,6 +1412,7 @@ impl Validator {
         self.accounts_hash_verifier
             .join()
             .expect("accounts_hash_verifier");
+        solana_turbine::quic_endpoint::close_quic_endpoint(&self.turbine_quic_endpoint);
         self.tpu.join().expect("tpu");
         self.tvu.join().expect("tvu");
         self.turbine_quic_endpoint_runtime

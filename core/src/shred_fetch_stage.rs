@@ -12,7 +12,7 @@ use {
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         feature_set,
-        packet::PACKET_DATA_SIZE,
+        packet::{Meta, PACKET_DATA_SIZE},
         pubkey::Pubkey,
     },
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
@@ -276,10 +276,13 @@ fn receive_quic_datagrams(
             .filter(|(_, _, bytes)| bytes.len() <= PACKET_DATA_SIZE)
             .zip(packet_batch.iter_mut())
             .map(|((_pubkey, addr, bytes), packet)| {
+                *packet.meta_mut() = Meta {
+                    size: bytes.len(),
+                    addr: addr.ip(),
+                    port: addr.port(),
+                    flags: PacketFlags::empty(),
+                };
                 packet.buffer_mut()[..bytes.len()].copy_from_slice(&bytes);
-                let meta = packet.meta_mut();
-                meta.size = bytes.len();
-                meta.set_socket_addr(&addr);
             })
             .count();
         if size > 0 {
