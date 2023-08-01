@@ -7867,6 +7867,97 @@ pub(crate) mod tests {
         );
     }
 
+    #[test]
+    fn test_skip_leader_slot_for_existing_slot() {
+        solana_logger::setup();
+
+        let ReplayBlockstoreComponents {
+            blockstore,
+            my_pubkey,
+            leader_schedule_cache,
+            poh_recorder,
+            vote_simulator,
+            rpc_subscriptions,
+            ..
+        } = replay_blockstore_components(None, 1, None);
+        let VoteSimulator {
+            bank_forks,
+            mut progress,
+            ..
+        } = vote_simulator;
+
+        let working_bank = bank_forks.read().unwrap().working_bank();
+        assert!(working_bank.is_complete());
+        assert!(working_bank.is_frozen());
+        // Mark startup verification as complete to avoid skipping leader slots
+        working_bank.set_startup_verification_complete();
+
+        // Insert a block two slots greater than current bank. This slot does
+        // not have a corresponding Bank in BankForks; this emulates a scenario
+        // where the block had previously been created and added to BankForks,
+        // but then got removed. This could be the case if the Bank was not on
+        // the major fork.
+        let dummy_slot = working_bank.slot() + 2;
+        let initial_slot = working_bank.slot();
+        let num_entries = 10;
+        let merkle_variant = true;
+        let (shreds, _) = make_slot_entries(dummy_slot, initial_slot, num_entries, merkle_variant);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+
+        // Reset PoH recorder to the completed bank to ensure consistent state
+        ReplayStage::reset_poh_recorder(
+            &my_pubkey,
+            &blockstore,
+            working_bank.clone(),
+            &poh_recorder,
+            &leader_schedule_cache,
+        );
+
+        // Register just over one slot worth of ticks directly with PoH recorder
+        let num_poh_ticks =
+            (working_bank.ticks_per_slot() * working_bank.hashes_per_tick().unwrap()) + 1;
+        poh_recorder
+            .write()
+            .map(|mut poh_recorder| {
+                for _ in 0..num_poh_ticks + 1 {
+                    poh_recorder.tick();
+                }
+            })
+            .unwrap();
+
+        let poh_recorder = Arc::new(poh_recorder);
+        let (retransmit_slots_sender, _) = unbounded();
+        let (banking_tracer, _) = BankingTracer::new(None).unwrap();
+        // A vote has not technically been rooted, but it doesn't matter for
+        // this test to use true to avoid skipping the leader slot
+        let has_new_vote_been_rooted = true;
+        let track_transaction_indexes = false;
+
+        ReplayStage::maybe_start_leader(
+            &my_pubkey,
+            &bank_forks,
+            &poh_recorder,
+            &leader_schedule_cache,
+            &rpc_subscriptions,
+            &mut progress,
+            &retransmit_slots_sender,
+            &mut SkippedSlotsInfo::default(),
+            &banking_tracer,
+            has_new_vote_been_rooted,
+            track_transaction_indexes,
+        );
+
+        // Get the new working bank, which is also the new leader bank/slot
+        let working_bank = bank_forks.read().unwrap().working_bank();
+        // There should be a new bank so the slot must be different
+        assert_ne!(working_bank.slot(), initial_slot);
+        // The new bank's slot must NOT be dummy_slot as the blockstore already
+        // had a shred inserted for dummy_slot prior to maybe_start_leader().
+        // maybe_start_leader() must not pick dummy_slot to avoid creating a
+        // duplicate block.
+        assert_ne!(working_bank.slot(), dummy_slot);
+    }
+
     fn run_compute_and_select_forks(
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
