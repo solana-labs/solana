@@ -390,12 +390,11 @@ struct BlockstoreRootScan {
 }
 
 impl BlockstoreRootScan {
-    fn new(config: &ValidatorConfig, blockstore: &Arc<Blockstore>, exit: Arc<AtomicBool>) -> Self {
+    fn new(config: &ValidatorConfig, blockstore: Arc<Blockstore>, exit: Arc<AtomicBool>) -> Self {
         let thread = if config.rpc_addrs.is_some()
             && config.rpc_config.enable_rpc_transaction_history
             && config.rpc_config.rpc_scan_and_fix_roots
         {
-            let blockstore = blockstore.clone();
             Some(
                 Builder::new()
                     .name("solBStoreRtScan".to_string())
@@ -822,7 +821,7 @@ impl Validator {
             if config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history {
                 Some(SamplePerformanceService::new(
                     &bank_forks,
-                    &blockstore,
+                    blockstore.clone(),
                     exit.clone(),
                 ))
             } else {
@@ -1222,7 +1221,7 @@ impl Validator {
             &rpc_subscriptions,
             transaction_status_sender,
             entry_notification_sender,
-            &blockstore,
+            blockstore.clone(),
             &config.broadcast_stage_type,
             exit,
             node.info.shred_version(),
@@ -1645,7 +1644,7 @@ fn load_blockstore(
     let original_blockstore_root = blockstore.last_root();
 
     let blockstore = Arc::new(blockstore);
-    let blockstore_root_scan = BlockstoreRootScan::new(config, &blockstore, exit.clone());
+    let blockstore_root_scan = BlockstoreRootScan::new(config, blockstore.clone(), exit.clone());
     let halt_at_slot = config
         .halt_at_slot
         .or_else(|| blockstore.highest_slot().unwrap_or(None));

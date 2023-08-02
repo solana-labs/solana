@@ -61,7 +61,7 @@ impl TransactionStatusService {
         max_complete_transaction_status_slot: &Arc<AtomicU64>,
         enable_rpc_transaction_history: bool,
         transaction_notifier: Option<TransactionNotifierLock>,
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         enable_extended_tx_metadata_storage: bool,
     ) -> Result<(), RecvTimeoutError> {
         match write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))? {

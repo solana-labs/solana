@@ -2091,7 +2091,7 @@ impl ReplayStage {
         vote_account_pubkey: &Pubkey,
         identity_keypair: &Keypair,
         authorized_voter_keypairs: &[Arc<Keypair>],
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         lockouts_sender: &Sender<CommitmentAggregationData>,
         accounts_background_request_sender: &AbsRequestSender,
