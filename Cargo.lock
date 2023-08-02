@@ -6386,6 +6386,7 @@ dependencies = [
  "bitflags 2.3.3",
  "blake3",
  "borsh 0.10.3",
+ "borsh 0.9.3",
  "bs58",
  "bv",
  "bytemuck",
