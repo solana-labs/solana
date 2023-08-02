@@ -11,7 +11,7 @@ pub const QUIC_MIN_STAKED_CONCURRENT_STREAMS: usize = 128;
 pub const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: usize = 100_000;
 
 // Set the maximum concurrent stream numbers to avoid excessive streams
-pub const QUIC_MAX_STAKED_CONCURRENT_STREAMS: usize = 2048;
+pub const QUIC_MAX_STAKED_CONCURRENT_STREAMS: usize = 512;
 
 pub const QUIC_MAX_TIMEOUT: Duration = Duration::from_secs(2);
 pub const QUIC_KEEP_ALIVE: Duration = Duration::from_secs(1);
@@ -31,4 +31,4 @@ pub const QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO: u64 = 2;
 
 /// The receive window for QUIC connection from maximum staked nodes is
 /// set to this ratio times [`solana_sdk::packet::PACKET_DATA_SIZE`]
-pub const QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO: u64 = 40;
+pub const QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO: u64 = 10;
