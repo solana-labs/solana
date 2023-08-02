@@ -12,6 +12,7 @@ env:
 jobs:
   main:
     strategy:
+      fail-fast: false
       matrix:
         branch:
           - master
