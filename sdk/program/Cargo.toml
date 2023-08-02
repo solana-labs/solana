@@ -83,8 +83,10 @@ serde_json = { workspace = true }
 static_assertions = { workspace = true }
 
 [build-dependencies]
-cc = { workspace = true, features = ["jobserver", "parallel"] }
 rustc_version = { workspace = true }
+
+[target.'cfg(any(unix, windows))'.build-dependencies]
+cc = { workspace = true, features = ["jobserver", "parallel"] }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
