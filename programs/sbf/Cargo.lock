@@ -2138,7 +2138,7 @@ dependencies = [
  "futures-util",
  "http",
  "hyper",
- "rustls 0.21.5",
+ "rustls 0.21.6",
  "tokio",
  "tokio-rustls 0.24.1",
 ]
@@ -3642,7 +3642,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash",
- "rustls 0.21.5",
+ "rustls 0.21.6",
  "thiserror",
  "tokio",
  "tracing",
@@ -3658,7 +3658,7 @@ dependencies = [
  "rand 0.8.5",
  "ring",
  "rustc-hash",
- "rustls 0.21.5",
+ "rustls 0.21.6",
  "rustls-native-certs",
  "slab",
  "thiserror",
@@ -3906,7 +3906,7 @@ dependencies = [
  "once_cell",
  "percent-encoding 2.3.0",
  "pin-project-lite",
- "rustls 0.21.5",
+ "rustls 0.21.6",
  "rustls-pemfile 1.0.0",
  "serde",
  "serde_json",
@@ -4049,9 +4049,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.21.5"
+version = "0.21.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79ea77c539259495ce8ca47f53e66ae0330a8819f67e23ac96ca02f50e7b7d36"
+checksum = "1d1feddffcfcc0b33f5c6ce9a29e341e4cd59c3f78e7ee45f4a40c038b1d6cbb"
 dependencies = [
  "log",
  "ring",
@@ -4091,9 +4091,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.101.1"
+version = "0.101.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15f36a6828982f422756984e47912a7a51dcbc2a197aa791158f8ca61cd8204e"
+checksum = "513722fd73ad80a71f72b61009ea1b584bcfa1483ca93949c8f290298837fa59"
 dependencies = [
  "ring",
  "untrusted",
@@ -5357,7 +5357,7 @@ dependencies = [
  "quinn",
  "quinn-proto",
  "rcgen",
- "rustls 0.21.5",
+ "rustls 0.21.6",
  "solana-connection-cache",
  "solana-measure",
  "solana-metrics",
@@ -6123,7 +6123,7 @@ dependencies = [
  "quinn-proto",
  "rand 0.7.3",
  "rcgen",
- "rustls 0.21.5",
+ "rustls 0.21.6",
  "solana-metrics",
  "solana-perf",
  "solana-sdk",
@@ -6249,7 +6249,7 @@ dependencies = [
  "rand_chacha 0.2.2",
  "rayon",
  "rcgen",
- "rustls 0.21.5",
+ "rustls 0.21.6",
  "solana-entry",
  "solana-gossip",
  "solana-ledger",
@@ -6915,7 +6915,7 @@ version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c28327cf380ac148141087fbfb9de9d7bd4e84ab5d2c28fbc911d753de8a7081"
 dependencies = [
- "rustls 0.21.5",
+ "rustls 0.21.6",
  "tokio",
 ]
 

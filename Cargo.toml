@@ -273,7 +273,7 @@ rolling-file = "0.2.0"
 reqwest = { version = "0.11.18", default-features = false }
 rpassword = "7.2"
 rustc_version = "0.4"
-rustls = { version = "0.21.5", default-features = false, features = ["quic"] }
+rustls = { version = "0.21.6", default-features = false, features = ["quic"] }
 rustversion = "1.0.14"
 scopeguard = "1.2.0"
 semver = "1.0.18"
