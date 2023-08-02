@@ -2719,7 +2719,6 @@ impl ReplayStage {
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         replay_result_vec: &[ReplaySlotFromBlockstore],
-        prioritization_fee_cache: &PrioritizationFeeCache,
         purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
     ) -> bool {
         // TODO: See if processing of blockstore replay results and bank completion can be made thread safe.
@@ -2794,9 +2793,6 @@ impl ReplayStage {
                     .unwrap_or_else(|err| {
                         warn!("cost_update_sender failed sending bank stats: {:?}", err)
                     });
-
-                // finalize block's minimum prioritization fee cache for this bank
-                prioritization_fee_cache.finalize_priority_fee(bank.slot());
 
                 assert_ne!(bank.hash(), Hash::default());
                 // Needs to be updated before `check_slot_agrees_with_cluster()` so that
@@ -2985,7 +2981,6 @@ impl ReplayStage {
                 ancestor_hashes_replay_update_sender,
                 block_metadata_notifier,
                 &replay_result_vec,
-                prioritization_fee_cache,
                 purge_repair_slot_counter,
             )
         } else {
