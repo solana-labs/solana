@@ -28,7 +28,6 @@ ahash = { workspace = true }
 blake3 = { workspace = true, features = ["digest", "traits-preview"] }
 block-buffer = { workspace = true }
 byteorder = { workspace = true, features = ["i128"] }
-cc = { workspace = true, features = ["jobserver", "parallel"] }
 either = { workspace = true, features = ["use_std"] }
 generic-array = { workspace = true, features = ["serde", "more_lengths"] }
 getrandom = { workspace = true, features = ["dummy"] }
@@ -37,6 +36,9 @@ memmap2 = { workspace = true }
 once_cell = { workspace = true, features = ["alloc", "race"] }
 rand_core = { workspace = true, features = ["std"] }
 subtle = { workspace = true }
+
+[target.'cfg(any(unix, windows))'.dependencies]
+cc = { workspace = true, features = ["jobserver", "parallel"] }
 
 [target.'cfg(not(target_os = "solana"))'.dev-dependencies]
 solana-logger = { workspace = true }
