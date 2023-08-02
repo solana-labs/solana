@@ -19,7 +19,7 @@ Returns the account information for a list of Pubkeys.
 
 ### Parameters:
 
-<Parameter type={"array"} optional={true}>
+<Parameter type={"array"} required={true}>
   An array of Pubkeys to query, as base-58 encoded strings (up to a maximum of
   100)
 </Parameter>
@@ -50,7 +50,7 @@ Data slicing is only available for <code>base58</code>, <code>base64</code>, or 
 :::
 </Field>
 
-<Field name="encoding" type="string" optional={true} defaultValue={"json"} href="/api/http#parsed-responses">
+<Field name="encoding" type="string" optional={true} defaultValue={"base64"} href="/api/http#parsed-responses">
 
 encoding format for the returned Account data
 
