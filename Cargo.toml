@@ -156,7 +156,7 @@ bytes = "1.2"
 bzip2 = "0.4.4"
 caps = "0.5.5"
 cargo_metadata = "0.15.4"
-cc = "1.0.80"
+cc = "1.0.81"
 chrono = { version = "0.4.26", default-features = false }
 chrono-humanize = "0.2.3"
 clap = "2.33.1"
