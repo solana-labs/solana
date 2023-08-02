@@ -294,8 +294,7 @@ async fn get_connection(
     sender: Sender<(Pubkey, SocketAddr, Bytes)>,
     cache: Arc<RwLock<ConnectionCache>>,
 ) -> Result<Connection, Error> {
-    let key = (remote_address, /*remote_pubkey:*/ None);
-    let entry = cache.write().await.entry(key).or_default().clone();
+    let entry = get_cache_entry(remote_address, &cache).await;
     {
         let connection: Option<Connection> = entry.read().await.clone();
         if let Some(connection) = connection {
@@ -340,6 +339,17 @@ fn get_remote_pubkey(connection: &Connection) -> Result<Pubkey, Error> {
             Err(Error::InvalidIdentity(connection.remote_address()))
         }
     }
+}
+
+async fn get_cache_entry(
+    remote_address: SocketAddr,
+    cache: &RwLock<ConnectionCache>,
+) -> Arc<RwLock<Option<Connection>>> {
+    let key = (remote_address, /*remote_pubkey:*/ None);
+    if let Some(entry) = cache.read().await.get(&key) {
+        return entry.clone();
+    }
+    cache.write().await.entry(key).or_default().clone()
 }
 
 async fn cache_connection(
