@@ -77,12 +77,18 @@ pub fn restore_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
     Tower::restore(&file_tower_storage, node_pubkey).ok()
 }
 
-pub fn remove_tower(tower_path: &Path, node_pubkey: &Pubkey) {
+pub fn remove_tower_if_exists(tower_path: &Path, node_pubkey: &Pubkey) {
     let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
     let filename = file_tower_storage.filename(node_pubkey);
     if filename.exists() {
         fs::remove_file(file_tower_storage.filename(node_pubkey)).unwrap();
     }
+}
+
+pub fn remove_tower(tower_path: &Path, node_pubkey: &Pubkey) {
+    let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
+    let filename = file_tower_storage.filename(node_pubkey);
+    fs::remove_file(file_tower_storage.filename(node_pubkey)).unwrap();
 }
 
 pub fn open_blockstore(ledger_path: &Path) -> Blockstore {

@@ -5069,7 +5069,7 @@ fn test_duplicate_shreds_switch_failure() {
     }
 
     fn clear_ledger_and_tower(ledger_path: &Path, pubkey: &Pubkey, start_slot: Slot) {
-        remove_tower(ledger_path, pubkey);
+        remove_tower_if_exists(ledger_path, pubkey);
         let blockstore = open_blockstore(ledger_path);
         purge_slots_with_count(&blockstore, start_slot, 1000);
         {
@@ -5169,7 +5169,7 @@ fn test_duplicate_shreds_switch_failure() {
     // 1) Two nodes that sum to > DUPLICATE_THRESHOLD but < 2/3+ supermajority. It's important both
     // of them individually have <= DUPLICATE_THRESHOLD to avoid duplicate confirming their own blocks
     // immediately upon voting
-    // 2) One with < SWITCHING_THRESHOLD so that validator from 1) can't switch to it
+    // 2) One with <= SWITCHING_THRESHOLD so that validator from 1) can't switch to it
     // 3) One bad leader to make duplicate slots
     let total_stake = 100 * DEFAULT_NODE_STAKE;
     let target_switch_fork_stake = (total_stake as f64 * SWITCH_FORK_THRESHOLD) as u64;

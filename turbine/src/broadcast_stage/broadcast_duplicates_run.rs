@@ -218,9 +218,6 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     bank.slot(),
                     sigs,
                 );
-                if let Some(duplicate_slot_sender) = &self.config.duplicate_slot_sender {
-                    let _ = duplicate_slot_sender.send(bank.slot());
-                }
 
                 self.next_shred_index += 1;
                 (original_last_data_shred, partition_last_data_shred)
@@ -267,6 +264,9 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                 .iter()
                 .all(|shred| shred.slot() == bank.slot()));
 
+            if let Some(duplicate_slot_sender) = &self.config.duplicate_slot_sender {
+                let _ = duplicate_slot_sender.send(bank.slot());
+            }
             socket_sender.send((original_last_data_shred, None))?;
             socket_sender.send((partition_last_data_shred, None))?;
         }
