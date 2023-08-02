@@ -431,11 +431,13 @@ fn process_instruction_inner(
             transaction_context.get_key_of_account_at_index(index_in_transaction)
         });
         let program_id = instruction_context.get_last_program_key(transaction_context)?;
-        if first_account_key == program_id
-            || second_account_key
-                .map(|key| key == program_id)
-                .unwrap_or(false)
+        let program_account_index = if first_account_key == program_id {
+            first_instruction_account
+        } else if second_account_key
+            .map(|key| key == program_id)
+            .unwrap_or(false)
         {
+            first_instruction_account.saturating_add(1)
         } else {
             let first_account = try_borrow_account(
                 transaction_context,
@@ -446,6 +448,19 @@ fn process_instruction_inner(
                 ic_logger_msg!(log_collector, "BPF loader is executable");
                 return Err(Box::new(InstructionError::IncorrectProgramId));
             }
+            first_instruction_account
+        };
+        let program = try_borrow_account(
+            transaction_context,
+            instruction_context,
+            program_account_index,
+        )?;
+        if program.is_executable() && !check_loader_id(program.get_owner()) {
+            ic_logger_msg!(
+                log_collector,
+                "Executable account not owned by the BPF loader"
+            );
+            return Err(Box::new(InstructionError::IncorrectProgramId));
         }
     }
 
