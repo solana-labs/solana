@@ -7981,6 +7981,13 @@ impl Bank {
             feature_set::switch_to_new_elf_parser::id(),
             feature_set::bpf_account_data_direct_mapping::id(),
             feature_set::enable_alt_bn128_syscall::id(),
+            feature_set::enable_big_mod_exp_syscall::id(),
+            feature_set::blake3_syscall_enabled::id(),
+            feature_set::curve25519_syscall_enabled::id(),
+            feature_set::disable_fees_sysvar::id(),
+            feature_set::enable_partitioned_epoch_reward::id(),
+            feature_set::disable_deploy_of_alloc_free_syscall::id(),
+            feature_set::last_restart_slot_sysvar::id(),
         ];
         if !only_apply_transitions_for_new_features
             || FEATURES_AFFECTING_RBPF
