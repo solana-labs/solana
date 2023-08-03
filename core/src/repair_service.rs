@@ -23,6 +23,7 @@ use {
         shred,
     },
     solana_measure::measure::Measure,
+    solana_repair_and_restart::repair_and_restart::RestartSlotsToRepairReceiver,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::{Slot, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
@@ -103,6 +104,7 @@ pub struct RepairStats {
     pub shred: RepairStatsGroup,
     pub highest_shred: RepairStatsGroup,
     pub orphan: RepairStatsGroup,
+    pub wen_restart: RepairStatsGroup,
     pub get_best_orphans_us: u64,
     pub get_best_shreds_us: u64,
 }
@@ -205,6 +207,8 @@ pub struct RepairInfo {
     pub repair_validators: Option<HashSet<Pubkey>>,
     // Validators which should be given priority when serving
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
+    pub repair_and_restart_receiver: RestartSlotsToRepairReceiver,
+    pub in_wen_restart: Arc<AtomicBool>,
 }
 
 pub struct RepairSlotRange {
@@ -285,7 +289,16 @@ impl RepairService {
         dumped_slots_receiver: DumpedSlotsReceiver,
         popular_pruned_forks_sender: PopularPrunedForksSender,
     ) {
-        let mut repair_weight = RepairWeight::new(repair_info.bank_forks.read().unwrap().root());
+        let slots_to_repair_for_wen_restart = if repair_info.in_wen_restart.load(Ordering::Relaxed)
+        {
+            Some(Arc::new(Vec::new()))
+        } else {
+            None
+        };
+        let mut repair_weight = RepairWeight::new(
+            repair_info.bank_forks.read().unwrap().root(),
+            slots_to_repair_for_wen_restart,
+        );
         let serve_repair = ServeRepair::new(
             repair_info.cluster_info.clone(),
             repair_info.bank_forks.clone(),
@@ -372,6 +385,16 @@ impl RepairService {
                 );
                 add_votes_elapsed.stop();
 
+                if repair_info.in_wen_restart.load(Ordering::Relaxed) {
+                    repair_info.repair_and_restart_receiver.try_iter().for_each(
+                        |new_slots_option| {
+                            if new_slots_option.is_none() {
+                                repair_info.in_wen_restart.swap(false, Ordering::Relaxed);
+                            }
+                            repair_weight.update_slots_to_repair_for_wen_restart(new_slots_option);
+                        },
+                    )
+                }
                 let repairs = repair_weight.get_best_weighted_repairs(
                     blockstore,
                     root_bank.epoch_stakes_map(),
@@ -888,7 +911,7 @@ mod test {
             let (shreds2, _) = make_slot_entries(5, 2, 1, /*merkle_variant:*/ true);
             shreds.extend(shreds2);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            let mut repair_weight = RepairWeight::new(0);
+            let mut repair_weight = RepairWeight::new(0, false);
             assert_eq!(
                 repair_weight.get_best_weighted_repairs(
                     &blockstore,
@@ -922,7 +945,7 @@ mod test {
             // Write this shred to slot 2, should chain to slot 0, which we haven't received
             // any shreds for
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            let mut repair_weight = RepairWeight::new(0);
+            let mut repair_weight = RepairWeight::new(0, false);
 
             // Check that repair tries to patch the empty slot
             assert_eq!(
@@ -983,7 +1006,7 @@ mod test {
                 })
                 .collect();
 
-            let mut repair_weight = RepairWeight::new(0);
+            let mut repair_weight = RepairWeight::new(0, false);
             sleep_shred_deferment_period();
             assert_eq!(
                 repair_weight.get_best_weighted_repairs(
@@ -1045,7 +1068,7 @@ mod test {
                 vec![ShredRepairType::HighestShred(0, num_shreds_per_slot - 1)];
 
             sleep_shred_deferment_period();
-            let mut repair_weight = RepairWeight::new(0);
+            let mut repair_weight = RepairWeight::new(0, false);
             assert_eq!(
                 repair_weight.get_best_weighted_repairs(
                     &blockstore,

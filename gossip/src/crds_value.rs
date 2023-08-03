@@ -38,6 +38,9 @@ pub const MAX_VOTES: VoteIndex = 32;
 
 pub type EpochSlotsIndex = u8;
 pub const MAX_EPOCH_SLOTS: EpochSlotsIndex = 255;
+// We now keep 81000 slots, 81000/MAX_SLOTS_PER_ENTRY = 5.
+pub const MAX_LAST_VOTED_FORK_SLOTS: EpochSlotsIndex = 5;
+pub const MAX_PERCENT: u16 = 10000;
 
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
@@ -94,6 +97,8 @@ pub enum CrdsData {
     DuplicateShred(DuplicateShredIndex, DuplicateShred),
     SnapshotHashes(SnapshotHashes),
     ContactInfo(ContactInfo),
+    LastVotedForkSlots(EpochSlotsIndex, EpochSlots, Slot, Hash),
+    HeaviestFork(Slot, Hash, Percent),
 }
 
 impl Sanitize for CrdsData {
@@ -132,6 +137,18 @@ impl Sanitize for CrdsData {
             }
             CrdsData::SnapshotHashes(val) => val.sanitize(),
             CrdsData::ContactInfo(node) => node.sanitize(),
+            CrdsData::LastVotedForkSlots(ix, slots, _last_vote_slot, last_vote_hash) => {
+                if *ix as usize >= MAX_LAST_VOTED_FORK_SLOTS as usize {
+                    return Err(SanitizeError::ValueOutOfBounds);
+                }
+                slots.sanitize().and(last_vote_hash.sanitize())
+            }
+            CrdsData::HeaviestFork(_slot, hash, percent) => {
+                if percent.percent > MAX_PERCENT {
+                    return Err(SanitizeError::ValueOutOfBounds);
+                }
+                hash.sanitize()
+            }
         }
     }
 }
@@ -157,8 +174,15 @@ impl CrdsData {
             3 => CrdsData::AccountsHashes(AccountsHashes::new_rand(rng, pubkey)),
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
             5 => CrdsData::Vote(rng.gen_range(0, MAX_VOTES), Vote::new_rand(rng, pubkey)),
-            _ => CrdsData::EpochSlots(
+            6 => CrdsData::LastVotedForkSlots(
                 rng.gen_range(0, MAX_EPOCH_SLOTS),
+                EpochSlots::new_rand(rng, pubkey),
+                0,
+                Hash::default(),
+            ),
+            7 => CrdsData::HeaviestFork(0, Hash::default(), Percent::new(pubkey.unwrap(), 1)),
+            _ => CrdsData::EpochSlots(
+                rng.gen_range(0, MAX_LAST_VOTED_FORK_SLOTS),
                 EpochSlots::new_rand(rng, pubkey),
             ),
         }
@@ -486,6 +510,33 @@ impl Sanitize for NodeInstance {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
+pub struct Percent {
+    pub from: Pubkey,
+    pub(crate) percent: u16,
+    pub(crate) wallclock: u64,
+}
+
+impl Percent {
+    pub fn new(from: Pubkey, percent: u16) -> Self {
+        Self {
+            from,
+            percent,
+            wallclock: timestamp(),
+        }
+    }
+}
+
+impl Sanitize for Percent {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        sanitize_wallclock(self.wallclock)?;
+        if self.percent > MAX_PERCENT {
+            return Err(SanitizeError::ValueOutOfBounds);
+        }
+        self.from.sanitize()
+    }
+}
+
 /// Type of the replicated value
 /// These are labels for values in a record that is associated with `Pubkey`
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]
@@ -502,6 +553,8 @@ pub enum CrdsValueLabel {
     DuplicateShred(DuplicateShredIndex, Pubkey),
     SnapshotHashes(Pubkey),
     ContactInfo(Pubkey),
+    LastVotedForkSlots(EpochSlotsIndex, Pubkey),
+    HeaviestFork(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -525,6 +578,10 @@ impl fmt::Display for CrdsValueLabel {
                 write!(f, "SnapshotHashes({})", self.pubkey())
             }
             CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
+            CrdsValueLabel::LastVotedForkSlots(ix, _) => {
+                write!(f, "LastVotedForkSlots({}, {})", ix, self.pubkey())
+            }
+            CrdsValueLabel::HeaviestFork(_) => write!(f, "HeaviestFork({})", self.pubkey()),
         }
     }
 }
@@ -544,6 +601,8 @@ impl CrdsValueLabel {
             CrdsValueLabel::DuplicateShred(_, p) => *p,
             CrdsValueLabel::SnapshotHashes(p) => *p,
             CrdsValueLabel::ContactInfo(pubkey) => *pubkey,
+            CrdsValueLabel::LastVotedForkSlots(_, p) => *p,
+            CrdsValueLabel::HeaviestFork(p) => *p,
         }
     }
 }
@@ -594,6 +653,8 @@ impl CrdsValue {
             CrdsData::DuplicateShred(_, shred) => shred.wallclock,
             CrdsData::SnapshotHashes(hash) => hash.wallclock,
             CrdsData::ContactInfo(node) => node.wallclock(),
+            CrdsData::LastVotedForkSlots(_, slots, _, _) => slots.wallclock,
+            CrdsData::HeaviestFork(_, _, percent) => percent.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -610,6 +671,8 @@ impl CrdsValue {
             CrdsData::DuplicateShred(_, shred) => shred.from,
             CrdsData::SnapshotHashes(hash) => hash.from,
             CrdsData::ContactInfo(node) => *node.pubkey(),
+            CrdsData::LastVotedForkSlots(_, slots, _, _) => slots.from,
+            CrdsData::HeaviestFork(_, _, percent) => percent.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -628,6 +691,10 @@ impl CrdsValue {
             CrdsData::DuplicateShred(ix, shred) => CrdsValueLabel::DuplicateShred(*ix, shred.from),
             CrdsData::SnapshotHashes(_) => CrdsValueLabel::SnapshotHashes(self.pubkey()),
             CrdsData::ContactInfo(node) => CrdsValueLabel::ContactInfo(*node.pubkey()),
+            CrdsData::LastVotedForkSlots(ix, _, _, _) => {
+                CrdsValueLabel::LastVotedForkSlots(*ix, self.pubkey())
+            }
+            CrdsData::HeaviestFork(_, _, percent) => CrdsValueLabel::HeaviestFork(percent.from),
         }
     }
     pub fn contact_info(&self) -> Option<&LegacyContactInfo> {
@@ -647,6 +714,7 @@ impl CrdsValue {
     pub(crate) fn epoch_slots(&self) -> Option<&EpochSlots> {
         match &self.data {
             CrdsData::EpochSlots(_, slots) => Some(slots),
+            CrdsData::LastVotedForkSlots(_, slots, _, _) => Some(slots),
             _ => None,
         }
     }

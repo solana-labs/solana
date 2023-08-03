@@ -4975,6 +4975,7 @@ pub mod tests {
                     *root,
                     &AbsRequestSender::default(),
                     Some(0),
+                    false,
                 );
                 let block_time = self
                     .bank_forks

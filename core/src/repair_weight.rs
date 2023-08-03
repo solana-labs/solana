@@ -22,6 +22,7 @@ use {
     std::{
         collections::{HashMap, HashSet, VecDeque},
         iter,
+        sync::Arc,
     },
 };
 
@@ -56,6 +57,10 @@ impl From<TreeRoot> for Slot {
 
 #[derive(Clone)]
 pub struct RepairWeight {
+    // Whether it is in wen restart mode, such that ignore all signals from bank forks and
+    // stick to given slots_to_repair list.
+    slots_to_repair_for_wen_restart: Option<Arc<Vec<Slot>>>,
+
     // Map from root -> a subtree rooted at that `root`
     trees: HashMap<Slot, HeaviestSubtreeForkChoice>,
     // Map from root -> pruned subtree
@@ -72,15 +77,25 @@ pub struct RepairWeight {
 }
 
 impl RepairWeight {
-    pub fn new(root: Slot) -> Self {
+    pub fn new(root: Slot, slots_to_repair_for_wen_restart: Option<Arc<Vec<Slot>>>) -> Self {
         let root_tree = HeaviestSubtreeForkChoice::new((root, Hash::default()));
         let slot_to_tree = HashMap::from([(root, TreeRoot::Root(root))]);
         let trees = HashMap::from([(root, root_tree)]);
         Self {
+            slots_to_repair_for_wen_restart,
             trees,
             slot_to_tree,
             root,
             pruned_trees: HashMap::new(),
+        }
+    }
+
+    pub fn update_slots_to_repair_for_wen_restart(&mut self, new_slots_option: Option<Vec<Slot>>) {
+        if self.slots_to_repair_for_wen_restart.is_some() {
+            match new_slots_option {
+                None => self.slots_to_repair_for_wen_restart = None,
+                Some(new_slots) => self.slots_to_repair_for_wen_restart = Some(Arc::new(new_slots)),
+            }
         }
     }
 
@@ -215,6 +230,19 @@ impl RepairWeight {
         stats: &mut BestRepairsStats,
     ) -> Vec<ShredRepairType> {
         let mut repairs = vec![];
+
+        match &self.slots_to_repair_for_wen_restart {
+            Some(slots_to_repair) => {
+                let my_slots_to_repair = slots_to_repair.clone();
+                repairs = my_slots_to_repair
+                    .iter()
+                    .map(|slot| ShredRepairType::WenRestart(slot.clone()))
+                    .collect();
+                return repairs;
+            }
+            None => (),
+        }
+
         let mut processed_slots = HashSet::from([self.root]);
         let mut slot_meta_cache = HashMap::default();
 

@@ -1575,6 +1575,7 @@ fn load_frozen_forks(
                     root,
                     accounts_background_request_sender,
                     None,
+                    false,
                 );
                 m.stop();
                 set_root_us += m.as_us();

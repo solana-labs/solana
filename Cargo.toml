@@ -70,6 +70,7 @@ members = [
     "rayon-threadlimit",
     "rbpf-cli",
     "remote-wallet",
+    "repair-and-restart",
     "rpc",
     "rpc-client",
     "rpc-client-api",
@@ -337,6 +338,7 @@ solana-pubsub-client = { path = "pubsub-client", version = "=1.17.0" }
 solana-quic-client = { path = "quic-client", version = "=1.17.0" }
 solana-rayon-threadlimit = { path = "rayon-threadlimit", version = "=1.17.0" }
 solana-remote-wallet = { path = "remote-wallet", version = "=1.17.0", default-features = false }
+solana-repair-and-restart = { path = "repair-and-restart", version = "=1.17.0" }
 solana-rpc = { path = "rpc", version = "=1.17.0" }
 solana-rpc-client = { path = "rpc-client", version = "=1.17.0", default-features = false }
 solana-rpc-client-api = { path = "rpc-client-api", version = "=1.17.0" }

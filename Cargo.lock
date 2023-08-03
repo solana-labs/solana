@@ -5515,6 +5515,7 @@ dependencies = [
  "solana-poh",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
+ "solana-repair-and-restart",
  "solana-rpc",
  "solana-rpc-client-api",
  "solana-runtime",
@@ -6371,6 +6372,42 @@ dependencies = [
  "solana-sdk",
  "thiserror",
  "uriparse",
+]
+
+[[package]]
+name = "solana-repair-and-restart"
+version = "1.17.0"
+dependencies = [
+ "bincode",
+ "bv",
+ "clap 2.33.3",
+ "crossbeam-channel",
+ "flate2",
+ "indexmap",
+ "itertools",
+ "log",
+ "lru",
+ "matches",
+ "num-traits",
+ "num_cpus",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
+ "rayon",
+ "regex",
+ "rustc_version 0.4.0",
+ "serde",
+ "serde_bytes",
+ "serde_derive",
+ "serial_test",
+ "solana-gossip",
+ "solana-ledger",
+ "solana-logger",
+ "solana-program",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-vote-program",
+ "static_assertions",
+ "thiserror",
 ]
 
 [[package]]

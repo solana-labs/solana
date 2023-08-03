@@ -111,6 +111,8 @@ pub enum ShredRepairType {
     HighestShred(Slot, u64),
     /// Requesting the missing shred at a particular index
     Shred(Slot, u64),
+    /// Reuqest from wen restart
+    WenRestart(Slot),
 }
 
 impl ShredRepairType {
@@ -119,6 +121,7 @@ impl ShredRepairType {
             ShredRepairType::Orphan(slot) => *slot,
             ShredRepairType::HighestShred(slot, _) => *slot,
             ShredRepairType::Shred(slot, _) => *slot,
+            ShredRepairType::WenRestart(slot) => *slot,
         }
     }
 }
@@ -130,6 +133,7 @@ impl RequestResponse for ShredRepairType {
             ShredRepairType::Orphan(_) => (MAX_ORPHAN_REPAIR_RESPONSES) as u32,
             ShredRepairType::HighestShred(_, _) => 1,
             ShredRepairType::Shred(_, _) => 1,
+            ShredRepairType::WenRestart(_) => (MAX_ORPHAN_REPAIR_RESPONSES) as u32,
         }
     }
     fn verify_response(&self, response_shred: &Shred) -> bool {
@@ -141,6 +145,7 @@ impl RequestResponse for ShredRepairType {
             ShredRepairType::Shred(slot, index) => {
                 response_shred.slot() == *slot && response_shred.index() as u64 == *index
             }
+            ShredRepairType::WenRestart(slot) => response_shred.slot() == *slot,
         }
     }
 }
@@ -257,6 +262,10 @@ pub enum RepairProtocol {
         header: RepairRequestHeader,
         slot: Slot,
     },
+    WenRestart {
+        header: RepairRequestHeader,
+        slot: Slot,
+    },
 }
 
 const REPAIR_REQUEST_PONG_SERIALIZED_BYTES: usize = PUBKEY_BYTES + HASH_BYTES + SIGNATURE_BYTES;
@@ -299,6 +308,7 @@ impl RepairProtocol {
             Self::HighestWindowIndex { header, .. } => &header.sender,
             Self::Orphan { header, .. } => &header.sender,
             Self::AncestorHashes { header, .. } => &header.sender,
+            Self::WenRestart { header, .. } => &header.sender,
         }
     }
 
@@ -315,6 +325,7 @@ impl RepairProtocol {
             | Self::WindowIndex { .. }
             | Self::HighestWindowIndex { .. }
             | Self::Orphan { .. }
+            | Self::WenRestart { .. }
             | Self::AncestorHashes { .. } => true,
         }
     }
@@ -327,9 +338,9 @@ impl RepairProtocol {
             | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
             | RepairProtocol::AncestorHashes { .. }
             | RepairProtocol::LegacyAncestorHashes(_, _, _) => 1,
-            RepairProtocol::Orphan { .. } | RepairProtocol::LegacyOrphanWithNonce(_, _, _) => {
-                MAX_ORPHAN_REPAIR_RESPONSES
-            }
+            RepairProtocol::Orphan { .. }
+            | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
+            | RepairProtocol::WenRestart { .. } => MAX_ORPHAN_REPAIR_RESPONSES,
             RepairProtocol::Pong(_) => 0, // no response
             RepairProtocol::LegacyWindowIndex(_, _, _)
             | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
@@ -466,6 +477,10 @@ impl ServeRepair {
                     )
                 }
                 RepairProtocol::Orphan {
+                    header: RepairRequestHeader { nonce, .. },
+                    slot,
+                }
+                | RepairProtocol::WenRestart {
                     header: RepairRequestHeader { nonce, .. },
                     slot,
                 }
@@ -886,7 +901,8 @@ impl ServeRepair {
             RepairProtocol::WindowIndex { header, .. }
             | RepairProtocol::HighestWindowIndex { header, .. }
             | RepairProtocol::Orphan { header, .. }
-            | RepairProtocol::AncestorHashes { header, .. } => {
+            | RepairProtocol::AncestorHashes { header, .. }
+            | RepairProtocol::WenRestart { header, .. } => {
                 if &header.recipient != my_id {
                     return Err(Error::from(RepairVerifyError::IdMismatch));
                 }
@@ -944,7 +960,8 @@ impl ServeRepair {
                 | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
                 | RepairProtocol::WindowIndex { .. }
                 | RepairProtocol::HighestWindowIndex { .. }
-                | RepairProtocol::Orphan { .. } => {
+                | RepairProtocol::Orphan { .. }
+                | RepairProtocol::WenRestart { .. } => {
                     let ping = RepairResponse::Ping(ping);
                     Packet::from_data(Some(from_addr), ping).ok()
                 }
@@ -1174,6 +1191,13 @@ impl ServeRepair {
             ShredRepairType::Orphan(slot) => {
                 repair_stats.orphan.update(repair_peer_id, *slot, 0);
                 RepairProtocol::Orphan {
+                    header,
+                    slot: *slot,
+                }
+            }
+            ShredRepairType::WenRestart(slot) => {
+                repair_stats.wen_restart.update(repair_peer_id, *slot, 0);
+                RepairProtocol::WenRestart {
                     header,
                     slot: *slot,
                 }

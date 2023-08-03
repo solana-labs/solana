@@ -123,6 +123,16 @@ impl BankForks {
             .collect()
     }
 
+    pub fn are_all_slots_frozen(&self, slots: Vec<&Slot>) -> bool {
+        slots.iter().all(|slot| {
+            if let Some(bank) = self.banks.get(slot) {
+                bank.is_frozen()
+            } else {
+                false
+            }
+        })
+    }
+
     pub fn active_bank_slots(&self) -> Vec<Slot> {
         self.banks
             .iter()
@@ -229,6 +239,12 @@ impl BankForks {
         Some(bank)
     }
 
+    pub fn highest_frozen_bank(&self) -> Arc<Bank> {
+        let highest_frozen_slot = self.banks.values().filter(|bank| bank.is_frozen())
+            .map(|bank| bank.slot()).max().unwrap();
+        self[highest_frozen_slot].clone()
+    }
+
     pub fn highest_slot(&self) -> Slot {
         self.banks.values().map(|bank| bank.slot()).max().unwrap()
     }
@@ -242,6 +258,7 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_super_majority_root: Option<Slot>,
+        write_incremental_snapshot: bool,
     ) -> (Vec<Arc<Bank>>, SetRootMetrics) {
         let old_epoch = self.root_bank().epoch();
         // To support `RootBankCache` (via `ReadOnlyAtomicSlot`) accessing `root` *without* locking
@@ -333,10 +350,15 @@ impl BankForks {
         // part of the same set of `banks` in a single `set_root()` invocation.  While (very)
         // unlikely for a validator with default snapshot intervals (and accounts hash verifier
         // intervals), it *is* possible, and there are tests to exercise this possibility.
-        if let Some(bank) = banks.iter().find(|bank| {
-            bank.slot() > self.last_accounts_hash_slot
-                && bank.block_height() % self.accounts_hash_interval_slots == 0
-        }) {
+        let bank_for_snapshot = if write_incremental_snapshot {
+            Some(&root_bank)
+        } else {
+            banks.iter().find(|bank| {
+                bank.slot() > self.last_accounts_hash_slot
+                    && bank.block_height() % self.accounts_hash_interval_slots == 0
+            })
+        };
+        if let Some(bank) = bank_for_snapshot {
             let bank_slot = bank.slot();
             self.last_accounts_hash_slot = bank_slot;
             squash_timing += bank.squash();
@@ -412,6 +434,7 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_super_majority_root: Option<Slot>,
+        write_incremental_snapshot: bool,
     ) -> Vec<Arc<Bank>> {
         let program_cache_prune_start = Instant::now();
         let root_bank = self
@@ -428,6 +451,7 @@ impl BankForks {
             root,
             accounts_background_request_sender,
             highest_super_majority_root,
+            write_incremental_snapshot,
         );
         datapoint_info!(
             "bank-forks_set_root",

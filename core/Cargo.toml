@@ -51,6 +51,7 @@ solana-perf = { workspace = true }
 solana-poh = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
+solana-repair-and-restart = { workspace = true }
 solana-rpc = { workspace = true }
 solana-rpc-client-api = { workspace = true }
 solana-runtime = { workspace = true }

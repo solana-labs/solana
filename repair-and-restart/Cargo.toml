@@ -1,0 +1,52 @@
+[package]
+name = "solana-repair-and-restart"
+description = "Automatically repair and restart protocol"
+documentation = "https://github.com/solana-foundation/solana-improvement-documents/pull/46"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bincode = { workspace = true }
+bv = { workspace = true, features = ["serde"] }
+clap = { workspace = true }
+crossbeam-channel = { workspace = true }
+flate2 = { workspace = true }
+indexmap = { workspace = true, features = ["rayon"] }
+itertools = { workspace = true }
+log = { workspace = true }
+lru = { workspace = true }
+matches = { workspace = true }
+num-traits = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true }
+serde_bytes = { workspace = true }
+serde_derive = { workspace = true }
+solana-gossip = { workspace = true }
+solana-ledger = { workspace = true }
+solana-logger = { workspace = true }
+solana-program = { workspace = true }
+solana-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-vote-program = { workspace = true }
+static_assertions = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+num_cpus = { workspace = true }
+regex = { workspace = true }
+serial_test = { workspace = true }
+
+[build-dependencies]
+rustc_version = { workspace = true }
+
+[lib]
+name = "solana_repair_and_restart"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

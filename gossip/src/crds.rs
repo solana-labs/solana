@@ -69,6 +69,10 @@ pub struct Crds {
     epoch_slots: BTreeMap<u64 /*insert order*/, usize /*index*/>,
     // Indices of DuplicateShred keyed by insert order.
     duplicate_shreds: BTreeMap<u64 /*insert order*/, usize /*index*/>,
+    // Indices of LastVotedForkSlots keyed by insert order.
+    last_voted_fork_slots: BTreeMap<u64 /*insert order*/, usize /*index*/>,
+    // Indices of HeaviestFork keyed by insert order.
+    heaviest_fork: BTreeMap<u64 /*insert order*/, usize /*index*/>,
     // Indices of all crds values associated with a node.
     records: HashMap<Pubkey, IndexSet<usize>>,
     // Indices of all entries keyed by insert order.
@@ -166,6 +170,8 @@ impl Default for Crds {
             purged: VecDeque::default(),
             shred_versions: HashMap::default(),
             stats: Mutex::<CrdsStats>::default(),
+            last_voted_fork_slots: BTreeMap::default(),
+            heaviest_fork: BTreeMap::default(),
         }
     }
 }
@@ -234,6 +240,13 @@ impl Crds {
                     CrdsData::DuplicateShred(_, _) => {
                         self.duplicate_shreds.insert(value.ordinal, entry_index);
                     }
+                    CrdsData::LastVotedForkSlots(_, _, _, _) => {
+                        self.last_voted_fork_slots
+                            .insert(value.ordinal, entry_index);
+                    }
+                    CrdsData::HeaviestFork(_, _, _) => {
+                        self.heaviest_fork.insert(value.ordinal, entry_index);
+                    }
                     _ => (),
                 };
                 self.entries.insert(value.ordinal, entry_index);
@@ -268,6 +281,15 @@ impl Crds {
                     CrdsData::DuplicateShred(_, _) => {
                         self.duplicate_shreds.remove(&entry.get().ordinal);
                         self.duplicate_shreds.insert(value.ordinal, entry_index);
+                    }
+                    CrdsData::LastVotedForkSlots(_, _, _, _) => {
+                        self.last_voted_fork_slots.remove(&entry.get().ordinal);
+                        self.last_voted_fork_slots
+                            .insert(value.ordinal, entry_index);
+                    }
+                    CrdsData::HeaviestFork(_, _, _) => {
+                        self.heaviest_fork.remove(&entry.get().ordinal);
+                        self.heaviest_fork.insert(value.ordinal, entry_index);
                     }
                     _ => (),
                 }
@@ -362,6 +384,36 @@ impl Crds {
     ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
         let range = (Bound::Included(cursor.ordinal()), Bound::Unbounded);
         self.duplicate_shreds
+            .range(range)
+            .map(move |(ordinal, index)| {
+                cursor.consume(*ordinal);
+                self.table.index(*index)
+            })
+    }
+
+    /// Returns last_voted_fork_slots inserted since the given cursor.
+    /// Updates the cursor as the values are consumed.
+    pub(crate) fn get_last_voted_fork_slots<'a>(
+        &'a self,
+        cursor: &'a mut Cursor,
+    ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
+        let range = (Bound::Included(cursor.ordinal()), Bound::Unbounded);
+        self.last_voted_fork_slots
+            .range(range)
+            .map(move |(ordinal, index)| {
+                cursor.consume(*ordinal);
+                self.table.index(*index)
+            })
+    }
+
+    /// Returns heaviest_fork inserted since the given cursor.
+    /// Updates the cursor as the values are consumed.
+    pub(crate) fn get_heaviest_fork<'a>(
+        &'a self,
+        cursor: &'a mut Cursor,
+    ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
+        let range = (Bound::Included(cursor.ordinal()), Bound::Unbounded);
+        self.heaviest_fork
             .range(range)
             .map(move |(ordinal, index)| {
                 cursor.consume(*ordinal);
@@ -537,6 +589,12 @@ impl Crds {
             CrdsData::DuplicateShred(_, _) => {
                 self.duplicate_shreds.remove(&value.ordinal);
             }
+            CrdsData::LastVotedForkSlots(_, _, _, _) => {
+                self.last_voted_fork_slots.remove(&value.ordinal);
+            }
+            CrdsData::HeaviestFork(_, _, _) => {
+                self.heaviest_fork.remove(&value.ordinal);
+            }
             _ => (),
         }
         self.entries.remove(&value.ordinal);
@@ -574,6 +632,12 @@ impl Crds {
                 }
                 CrdsData::DuplicateShred(_, _) => {
                     self.duplicate_shreds.insert(value.ordinal, index);
+                }
+                CrdsData::LastVotedForkSlots(_, _, _, _) => {
+                    self.last_voted_fork_slots.insert(value.ordinal, index);
+                }
+                CrdsData::HeaviestFork(_, _, _) => {
+                    self.heaviest_fork.insert(value.ordinal, index);
                 }
                 _ => (),
             };
@@ -690,6 +754,8 @@ impl CrdsDataStats {
             CrdsData::DuplicateShred(_, _) => 9,
             CrdsData::SnapshotHashes(_) => 10,
             CrdsData::ContactInfo(_) => 11,
+            CrdsData::LastVotedForkSlots(_, _, _, _) => 12,
+            CrdsData::HeaviestFork(_, _, _) => 13,
             // Update CrdsCountsArray if new items are added here.
         }
     }

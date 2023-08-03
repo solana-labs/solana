@@ -33,7 +33,7 @@ impl ShredFetchStage {
         recvr: PacketBatchReceiver,
         sendr: Sender<PacketBatch>,
         bank_forks: &RwLock<BankForks>,
-        shred_version: u16,
+        shred_version: &RwLock<u16>,
         name: &'static str,
         flags: PacketFlags,
         repair_context: Option<(&UdpSocket, &ClusterInfo)>,
@@ -54,6 +54,7 @@ impl ShredFetchStage {
         let mut stats = ShredFetchStats::default();
 
         for mut packet_batch in recvr {
+            let cur_shred_version = *shred_version.read().unwrap();
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
                 last_updated = Instant::now();
                 {
@@ -94,7 +95,7 @@ impl ShredFetchStage {
                         packet,
                         last_root,
                         max_slot,
-                        shred_version,
+                        cur_shred_version,
                         should_drop_merkle_shreds,
                         &mut stats,
                     )
@@ -118,7 +119,7 @@ impl ShredFetchStage {
         sender: Sender<PacketBatch>,
         recycler: PacketBatchRecycler,
         bank_forks: Arc<RwLock<BankForks>>,
-        shred_version: u16,
+        shred_version: Arc<RwLock<u16>>,
         name: &'static str,
         flags: PacketFlags,
         repair_context: Option<(Arc<UdpSocket>, Arc<ClusterInfo>)>,
@@ -150,7 +151,7 @@ impl ShredFetchStage {
                     packet_receiver,
                     sender,
                     &bank_forks,
-                    shred_version,
+                    &shred_version,
                     name,
                     flags,
                     repair_context,
@@ -166,7 +167,7 @@ impl ShredFetchStage {
         forward_sockets: Vec<Arc<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
         sender: Sender<PacketBatch>,
-        shred_version: u16,
+        shred_version: Arc<RwLock<u16>>,
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<ClusterInfo>,
         turbine_disabled: Arc<AtomicBool>,
@@ -180,7 +181,7 @@ impl ShredFetchStage {
             sender.clone(),
             recycler.clone(),
             bank_forks.clone(),
-            shred_version,
+            shred_version.clone(),
             "shred_fetch",
             PacketFlags::empty(),
             None, // repair_context
@@ -193,7 +194,7 @@ impl ShredFetchStage {
             sender.clone(),
             recycler.clone(),
             bank_forks.clone(),
-            shred_version,
+            shred_version.clone(),
             "shred_fetch_tvu_forwards",
             PacketFlags::FORWARDED,
             None, // repair_context

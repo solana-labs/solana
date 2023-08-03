@@ -62,6 +62,9 @@ use {
         poh_recorder::PohRecorder,
         poh_service::{self, PohService},
     },
+    solana_repair_and_restart::repair_and_restart::{
+        repair_and_restart, RestartSlotsToRepairSender,
+    },
     solana_rpc::{
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::{
@@ -249,6 +252,7 @@ pub struct ValidatorConfig {
     pub block_verification_method: BlockVerificationMethod,
     pub block_production_method: BlockProductionMethod,
     pub generator_config: Option<GeneratorConfig>,
+    pub repair_and_restart: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -315,6 +319,7 @@ impl Default for ValidatorConfig {
             block_verification_method: BlockVerificationMethod::default(),
             block_production_method: BlockProductionMethod::default(),
             generator_config: None,
+            repair_and_restart: false,
         }
     }
 }
@@ -1057,8 +1062,16 @@ impl Validator {
         let ledger_metric_report_service =
             LedgerMetricReportService::new(blockstore.clone(), exit.clone());
 
-        let wait_for_vote_to_start_leader =
-            !waited_for_supermajority && !config.no_wait_for_vote_to_start_leader;
+        let wait_for_vote_to_start_leader = !waited_for_supermajority
+            && !config.no_wait_for_vote_to_start_leader
+            && !config.repair_and_restart;
+
+        let mut last_vote = None;
+        if config.repair_and_restart {
+            config.turbine_disabled.swap(true, Ordering::Relaxed);
+            last_vote = process_blockstore.last_vote();
+            node.info.set_shred_version((node.info.shred_version() + 1) % 0xffff);
+        }
 
         let poh_service = PohService::new(
             poh_recorder.clone(),
@@ -1108,6 +1121,9 @@ impl Validator {
             .as_ref()
             .map(|service| service.sender_cloned());
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
+        let (restart_slots_to_repair_sender, restart_slots_to_repair_receiver) =
+            crossbeam_channel::unbounded::<Option<Vec<Slot>>>();
+        let tvu_shred_version = Arc::new(RwLock::new(node.info.shred_version()));
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -1144,7 +1160,7 @@ impl Validator {
             cluster_confirmed_slot_receiver,
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
-                shred_version: node.info.shred_version(),
+                shred_version: tvu_shred_version.clone(),
                 repair_validators: config.repair_validators.clone(),
                 repair_whitelist: config.repair_whitelist.clone(),
                 wait_for_vote_to_start_leader,
@@ -1153,12 +1169,44 @@ impl Validator {
             &max_slots,
             block_metadata_notifier,
             config.wait_to_vote_slot,
-            accounts_background_request_sender,
+            accounts_background_request_sender.clone(),
             config.runtime_config.log_messages_bytes_limit,
             &connection_cache,
             &prioritization_fee_cache,
             banking_tracer.clone(),
+            restart_slots_to_repair_receiver,
+            config.repair_and_restart,
         )?;
+
+        // repair and restart don't need to produce new blocks but it does need
+        // repair and replay, just not voting. So we need TVU, but not TPU.
+        if config.repair_and_restart {
+            match wait_for_repair_and_restart(
+                last_vote,
+                blockstore.clone(),
+                cluster_info.clone(),
+                bank_forks.clone(),
+                restart_slots_to_repair_sender,
+                accounts_background_request_sender,
+                &config.snapshot_config,
+            ) {
+                Ok(new_root_slot) => {
+                    config.turbine_disabled.swap(false, Ordering::Relaxed);
+                    let working_bank = bank_forks.read().unwrap().working_bank();
+                    working_bank.hard_forks()
+                        .write().unwrap()
+                        .register(new_root_slot);
+                    let new_shred_version = compute_shred_version(
+                        &genesis_config.hash(),
+                        Some(&working_bank.hard_forks().read().unwrap()),
+                    );
+                    *tvu_shred_version.write().unwrap() = new_shred_version;
+                    cluster_info.my_contact_info().set_shred_version(new_shred_version);
+                    ()
+                }
+                Err(e) => return Err(format!("wait_for_repair_and_restart failed: {e:?}")),
+            };
+        }
 
         let tpu = Tpu::new(
             &cluster_info,
@@ -1844,6 +1892,13 @@ impl<'a> ProcessBlockStore<'a> {
         self.process()?;
         Ok(self.tower.unwrap())
     }
+
+    pub(crate) fn last_vote(&self) -> Option<vote_state::VoteTransaction> {
+        match &self.tower {
+            Some(tower) => Some(tower.last_vote()),
+            None => None,
+        }
+    }
 }
 
 fn maybe_warp_slot(
@@ -1886,6 +1941,7 @@ fn maybe_warp_slot(
             warp_slot,
             accounts_background_request_sender,
             Some(warp_slot),
+            false,
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
 
@@ -2142,6 +2198,31 @@ fn wait_for_supermajority(
             rpc_override_health_check.store(false, Ordering::Relaxed);
             Ok(true)
         }
+    }
+}
+
+fn wait_for_repair_and_restart(
+    last_vote: Option<vote_state::VoteTransaction>,
+    blockstore: Arc<Blockstore>,
+    cluster_info: Arc<ClusterInfo>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    restart_slots_to_repair_sender: RestartSlotsToRepairSender,
+    accounts_background_request_sender: AbsRequestSender,
+    snapshot_config: &SnapshotConfig,
+) -> Result<Slot, Box<dyn std::error::Error>> {
+    match last_vote {
+        Some(vote_tx) => {
+            repair_and_restart(
+                vote_tx,
+                blockstore,
+                cluster_info,
+                bank_forks,
+                restart_slots_to_repair_sender,
+                accounts_background_request_sender,
+                snapshot_config,
+            )
+        }
+        None => panic!("No last vote for repair_and_restart"),
     }
 }
 
