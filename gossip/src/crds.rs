@@ -679,7 +679,7 @@ impl CrdsDataStats {
         }
 
         match route {
-            GossipRoute::LocalMessage => {
+            GossipRoute::PushMessage => {
                 if should_report_message_signature(&entry.value.signature) {
                     datapoint_info!(
                         "gossip_crds_sample",
