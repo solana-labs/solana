@@ -124,27 +124,16 @@ impl StakesCache {
 
     pub(crate) fn handle_invalid_keys(
         &self,
-        invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
         invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
         current_slot: Slot,
     ) {
-        if invalid_stake_keys.is_empty() && invalid_vote_keys.is_empty() {
+        if invalid_vote_keys.is_empty() {
             return;
         }
 
         // Prune invalid stake delegations and vote accounts that were
         // not properly evicted in normal operation.
         let mut stakes = self.0.write().unwrap();
-
-        for (stake_pubkey, reason) in invalid_stake_keys {
-            stakes.remove_stake_delegation(&stake_pubkey);
-            datapoint_warn!(
-                "bank-stake_delegation_accounts-invalid-account",
-                ("slot", current_slot as i64, i64),
-                ("stake-address", format!("{stake_pubkey:?}"), String),
-                ("reason", reason.to_i64().unwrap_or_default(), i64),
-            );
-        }
 
         for (vote_pubkey, reason) in invalid_vote_keys {
             stakes.remove_vote_account(&vote_pubkey);
