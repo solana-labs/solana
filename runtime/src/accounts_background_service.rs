@@ -594,7 +594,7 @@ impl AccountsBackgroundService {
                     let start_time = Instant::now();
 
                     // Grab the current root bank
-                    let bank = bank_forks.read().unwrap().root_bank().clone();
+                    let bank = bank_forks.read().unwrap().root_bank();
 
                     // Purge accounts of any dead slots
                     request_handlers
