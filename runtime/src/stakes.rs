@@ -2,9 +2,9 @@
 //! node stakes
 use {
     crate::{
+        bank::StakeReward,
         stake_account,
         stake_history::StakeHistory,
-        stake_rewards::StakeReward,
         vote_account::{VoteAccount, VoteAccounts},
     },
     dashmap::DashMap,

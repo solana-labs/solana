@@ -1128,9 +1128,9 @@ pub struct CommitTransactionCounts {
 
 #[derive(AbiExample, Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub(crate) struct StakeReward {
-    stake_pubkey: Pubkey,
+    pub(crate) stake_pubkey: Pubkey,
     stake_reward_info: RewardInfo,
-    stake_account: AccountSharedData,
+    pub(crate) stake_account: AccountSharedData,
 }
 
 impl StakeReward {
@@ -2661,26 +2661,7 @@ impl Bank {
                 metrics,
             );
 
-<<<<<<< HEAD
-            self.store_stake_accounts(&stake_rewards, metrics);
-=======
-            // this checking of an unactivated feature can be enabled in tests or with a validator by passing `--partitioned-epoch-rewards-compare-calculation`
-            if self
-                .partitioned_epoch_rewards_config()
-                .test_compare_partitioned_epoch_rewards
-            {
-                // immutable `&self` to avoid side effects
-                (self as &Bank).compare_with_partitioned_rewards(
-                    &stake_rewards,
-                    &vote_account_rewards,
-                    rewarded_epoch,
-                    thread_pool,
-                    null_tracer(),
-                );
-            }
-
             self.store_stake_accounts(thread_pool, &stake_rewards, metrics);
->>>>>>> ad4ddd3cb0 (stores stake-accounts in parallel after epoch rewards calculations (#32633))
             let vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
             self.update_reward_history(stake_rewards, vote_rewards);
         }
