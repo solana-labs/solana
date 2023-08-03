@@ -53,7 +53,7 @@ impl RewardsRecorderService {
     fn write_rewards(
         rewards_receiver: &RewardsRecorderReceiver,
         max_complete_rewards_slot: &Arc<AtomicU64>,
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
     ) -> Result<(), RecvTimeoutError> {
         match rewards_receiver.recv_timeout(Duration::from_secs(1))? {
             RewardsMessage::Batch((slot, rewards)) => {

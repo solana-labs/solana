@@ -95,7 +95,7 @@ impl LedgerCleanupService {
     /// - `total_shreds` (u64): the total estimated number of shreds before the
     ///   `root`.
     fn find_slots_to_clean(
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         root: Slot,
         max_ledger_shreds: u64,
     ) -> (bool, Slot, u64) {
