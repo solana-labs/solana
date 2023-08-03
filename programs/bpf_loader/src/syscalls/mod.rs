@@ -274,7 +274,7 @@ pub fn create_program_runtime_environment<'a>(
     register_feature_gated_function!(
         result,
         epoch_rewards_syscall_enabled,
-        b"sol_get_epoch_rewrds_sysvar",
+        b"sol_get_epoch_rewards_sysvar",
         SyscallGetEpochRewardsSysvar::call,
     )?;
 
