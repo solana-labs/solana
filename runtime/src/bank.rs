@@ -491,7 +491,6 @@ impl PartialEq for Bank {
             return true;
         }
         let Self {
-            bank_freeze_or_destruction_incremented: _,
             rc: _,
             status_cache: _,
             blockhash_queue,
@@ -820,9 +819,6 @@ pub struct Bank {
 
     pub check_program_modification_slot: bool,
 
-    /// true when the bank's freezing or destruction has completed
-    bank_freeze_or_destruction_incremented: AtomicBool,
-
     epoch_reward_status: EpochRewardStatus,
 }
 
@@ -1029,7 +1025,6 @@ impl Bank {
 
     fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
-            bank_freeze_or_destruction_incremented: AtomicBool::default(),
             incremental_snapshot_persistence: None,
             rc: BankRc::new(accounts, Slot::default()),
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
@@ -1092,7 +1087,6 @@ impl Bank {
             epoch_reward_status: EpochRewardStatus::default(),
         };
 
-        bank.bank_created();
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
         bank.accounts_data_size_initial = accounts_data_size_initial;
 
@@ -1359,9 +1353,7 @@ impl Bank {
         let (feature_set, feature_set_time_us) = measure_us!(parent.feature_set.clone());
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
-        parent.bank_created();
         let mut new = Self {
-            bank_freeze_or_destruction_incremented: AtomicBool::default(),
             incremental_snapshot_persistence: None,
             rc,
             status_cache,
@@ -1728,27 +1720,6 @@ impl Bank {
         self.vote_only_bank
     }
 
-    fn bank_created(&self) {
-        self.rc
-            .accounts
-            .accounts_db
-            .bank_progress
-            .increment_bank_creation_count();
-    }
-
-    fn bank_frozen_or_destroyed(&self) {
-        if !self
-            .bank_freeze_or_destruction_incremented
-            .swap(true, AcqRel)
-        {
-            self.rc
-                .accounts
-                .accounts_db
-                .bank_progress
-                .increment_bank_frozen_or_destroyed();
-        }
-    }
-
     /// Like `new_from_parent` but additionally:
     /// * Doesn't assume that the parent is anywhere near `slot`, parent could be millions of slots
     /// in the past
@@ -1832,7 +1803,6 @@ impl Bank {
         let feature_set = new();
         let mut bank = Self {
             incremental_snapshot_persistence: fields.incremental_snapshot_persistence,
-            bank_freeze_or_destruction_incremented: AtomicBool::default(),
             rc: bank_rc,
             status_cache: new(),
             blockhash_queue: RwLock::new(fields.blockhash_queue),
@@ -1893,8 +1863,6 @@ impl Bank {
             check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
         };
-        bank.bank_created();
-
         bank.finish_init(
             genesis_config,
             additional_builtins,
@@ -3774,7 +3742,6 @@ impl Bank {
             self.freeze_started.store(true, Relaxed);
             *hash = self.hash_internal_state();
             self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
-            self.bank_frozen_or_destroyed();
         }
     }
 
@@ -8333,7 +8300,6 @@ impl TotalAccountsStats {
 
 impl Drop for Bank {
     fn drop(&mut self) {
-        self.bank_frozen_or_destroyed();
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
             drop_callback.callback(self);
         } else {
