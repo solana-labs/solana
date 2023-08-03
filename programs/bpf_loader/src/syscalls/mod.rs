@@ -154,10 +154,11 @@ pub fn create_program_runtime_environment<'a>(
     let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
+    // !!! ATTENTION !!!
+    // When adding new features for RBPF here,
+    // also add them to `Bank::apply_builtin_program_feature_transitions()`.
 
     use rand::Rng;
-    // When adding new features for RBPF,
-    // also add them to `Bank::apply_builtin_program_feature_transitions()`.
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
