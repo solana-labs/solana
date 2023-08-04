@@ -902,9 +902,19 @@ mod tests {
         slot: Slot,
     ) -> Arc<LoadedProgram> {
         let unloaded = Arc::new(
-            new_test_loaded_program(slot, slot.saturating_add(1))
-                .to_unloaded()
-                .expect("Failed to unload the program"),
+            LoadedProgram {
+                program: LoadedProgramType::TestLoaded(
+                    cache.program_runtime_environment_v1.clone(),
+                ),
+                account_size: 0,
+                deployment_slot: slot,
+                effective_slot: slot.saturating_add(1),
+                maybe_expiration_slot: None,
+                tx_usage_counter: AtomicU64::default(),
+                ix_usage_counter: AtomicU64::default(),
+            }
+            .to_unloaded()
+            .expect("Failed to unload the program"),
         );
         cache.replenish(key, unloaded).1
     }
@@ -1878,6 +1888,125 @@ mod tests {
         assert!(match_slot(&found, &program2, 11, 12));
 
         assert!(missing.contains(&(program1, 1)));
+        assert!(missing.contains(&(program3, 1)));
+        assert!(unloaded.is_empty());
+    }
+
+    #[test]
+    fn test_extract_unloaded() {
+        let mut cache = LoadedPrograms::default();
+
+        // Fork graph created for the test
+        //                   0
+        //                 /   \
+        //                10    5
+        //                |     |
+        //                20    11
+        //                |     | \
+        //                22   15  25
+        //                      |   |
+        //                     16  27
+        //                      |
+        //                     19
+        //                      |
+        //                     23
+
+        let mut fork_graph = TestForkGraphSpecific::default();
+        fork_graph.insert_fork(&[0, 10, 20, 22]);
+        fork_graph.insert_fork(&[0, 5, 11, 15, 16, 19, 21, 23]);
+        fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
+
+        let program1 = Pubkey::new_unique();
+        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(20, 21)).0);
+
+        let program2 = Pubkey::new_unique();
+        assert!(!cache.replenish(program2, new_test_loaded_program(5, 6)).0);
+        assert!(!cache.replenish(program2, new_test_loaded_program(11, 12)).0);
+
+        let program3 = Pubkey::new_unique();
+        // Insert an unloaded program with correct/cache's environment at slot 25
+        let _ = insert_unloaded_program(&mut cache, program3, 25);
+
+        // Insert another unloaded program with a different environment at slot 20
+        // Since this entry's environment won't match cache's environment, looking up this
+        // entry should return missing instead of unloaded entry.
+        assert!(
+            !cache
+                .replenish(
+                    program3,
+                    Arc::new(
+                        new_test_loaded_program(20, 21)
+                            .to_unloaded()
+                            .expect("Failed to create unloaded program")
+                    )
+                )
+                .0
+        );
+
+        // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
+        let working_slot = TestWorkingSlot::new(19, &[0, 5, 11, 12, 15, 16, 18, 19, 21, 23]);
+        let ExtractedPrograms {
+            loaded: found,
+            missing,
+            unloaded,
+        } = cache.extract(
+            &working_slot,
+            vec![
+                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0, 19));
+        assert!(match_slot(&found, &program2, 11, 19));
+
+        assert!(missing.contains(&(program3, 1)));
+        assert!(unloaded.is_empty());
+
+        // Testing fork 0 - 5 - 11 - 25 - 27 with current slot at 27
+        let working_slot = TestWorkingSlot::new(27, &[0, 5, 11, 25, 27]);
+        let ExtractedPrograms {
+            loaded: found,
+            missing,
+            unloaded,
+        } = cache.extract(
+            &working_slot,
+            vec![
+                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0, 27));
+        assert!(match_slot(&found, &program2, 11, 27));
+
+        assert!(unloaded.contains(&(program3, 1)));
+        assert!(missing.is_empty());
+
+        // Testing fork 0 - 10 - 20 - 22 with current slot at 22
+        let working_slot = TestWorkingSlot::new(22, &[0, 10, 20, 22]);
+        let ExtractedPrograms {
+            loaded: found,
+            missing,
+            unloaded,
+        } = cache.extract(
+            &working_slot,
+            vec![
+                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+                (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 20, 22));
+
+        assert!(missing.contains(&(program2, 1)));
         assert!(missing.contains(&(program3, 1)));
         assert!(unloaded.is_empty());
     }
