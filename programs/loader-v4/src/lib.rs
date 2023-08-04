@@ -664,6 +664,7 @@ mod tests {
                         programdata,
                         account.data().len(),
                         &mut load_program_metrics,
+                        false,
                     ) {
                         invoke_context.programs_modified_by_tx.set_slot_for_tests(0);
                         invoke_context

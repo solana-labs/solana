@@ -75,6 +75,7 @@ pub fn load_program_from_bytes(
     account_size: usize,
     deployment_slot: Slot,
     program_runtime_environment: Arc<BuiltinProgram<InvokeContext<'static>>>,
+    reloading: bool,
 ) -> Result<LoadedProgram, InstructionError> {
     let effective_slot = if feature_set.is_active(&delay_visibility_of_program_deployment::id()) {
         deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET)
@@ -90,6 +91,7 @@ pub fn load_program_from_bytes(
         programdata,
         account_size,
         load_program_metrics,
+        reloading,
     )
     .map_err(|err| {
         ic_logger_msg!(log_collector, "{}", err);
@@ -123,6 +125,7 @@ macro_rules! deploy_program {
             $account_size,
             $slot,
             Arc::new(program_runtime_environment),
+            false,
         )?;
         if let Some(old_entry) = $invoke_context.find_program_in_cache(&$program_id) {
             executor.tx_usage_counter.store(
@@ -1700,6 +1703,7 @@ pub mod test_utils {
                     account.data().len(),
                     0,
                     program_runtime_environment.clone(),
+                    false,
                 ) {
                     invoke_context
                         .programs_modified_by_tx

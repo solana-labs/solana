@@ -4656,7 +4656,8 @@ impl Bank {
         ProgramAccountLoadResult::InvalidAccountData
     }
 
-    pub fn load_program(&self, pubkey: &Pubkey) -> Arc<LoadedProgram> {
+    pub fn load_program(&self, pubkey: &Pubkey, reload: bool) -> Arc<LoadedProgram> {
+        let program_runtime_environment_v1 = self
         let environments = self
             .loaded_programs_cache
             .read()
@@ -4689,6 +4690,7 @@ impl Bank {
                     program_account.data().len(),
                     0,
                     environments.program_runtime_v1.clone(),
+                    reload,
                 )
             }
 
@@ -4713,6 +4715,7 @@ impl Bank {
                             .saturating_add(programdata_account.data().len()),
                         slot,
                         environments.program_runtime_v1.clone(),
+                        reload,
                     )
                 }),
 
@@ -4730,6 +4733,7 @@ impl Bank {
                             elf_bytes,
                             program_account.data().len(),
                             &mut load_program_metrics,
+                            reload,
                         )
                         .ok()
                     })
@@ -4987,7 +4991,7 @@ impl Bank {
                     .collect()
             };
 
-        let (mut loaded_programs_for_txs, missing_programs) = {
+        let (mut loaded_programs_for_txs, missing_programs, unloaded_programs) = {
             // Lock the global cache to figure out which programs need to be loaded
             let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
             loaded_programs_cache.extract(self, programs_and_slots.into_iter())
@@ -4997,7 +5001,17 @@ impl Bank {
         let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
             .iter()
             .map(|(key, count)| {
-                let program = self.load_program(key);
+                let program = self.load_program(key, false);
+                program.tx_usage_counter.store(*count, Ordering::Relaxed);
+                (*key, program)
+            })
+            .collect();
+
+        // Reload unloaded programs while global cache is unlocked
+        let unloaded_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = unloaded_programs
+            .iter()
+            .map(|(key, count)| {
+                let program = self.load_program(key, true);
                 program.tx_usage_counter.store(*count, Ordering::Relaxed);
                 (*key, program)
             })
@@ -5006,6 +5020,11 @@ impl Bank {
         // Lock the global cache again to replenish the missing programs
         let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
         for (key, program) in missing_programs {
+            let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
+            // Use the returned entry as that might have been deduplicated globally
+            loaded_programs_for_txs.replenish(key, entry);
+        }
+        for (key, program) in unloaded_programs {
             let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
             // Use the returned entry as that might have been deduplicated globally
             loaded_programs_for_txs.replenish(key, entry);

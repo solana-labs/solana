@@ -365,6 +365,7 @@ fn load_program<'a>(
             account_size,
             slot,
             Arc::new(program_runtime_environment),
+            false,
         );
         match result {
             Ok(loaded_program) => match loaded_program.program {
@@ -548,7 +549,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
             .clone(),
     );
     for key in cached_account_keys {
-        loaded_programs.replenish(key, bank.load_program(&key));
+        loaded_programs.replenish(key, bank.load_program(&key, false));
         debug!("Loaded program {}", key);
     }
     invoke_context.programs_loaded_for_tx_batch = &loaded_programs;
