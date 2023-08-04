@@ -678,25 +678,22 @@ impl CrdsDataStats {
             }
         }
 
-        match route {
-            GossipRoute::PushMessage => {
-                if should_report_message_signature(&entry.value.signature) {
-                    datapoint_info!(
-                        "gossip_crds_sample",
-                        (
-                            "origin",
-                            entry.value.pubkey().to_string().get(..8),
-                            Option<String>
-                        ),
-                        (
-                            "signature",
-                            entry.value.signature.to_string().get(..8),
-                            Option<String>
-                        )
-                    );
-                }
+        if let GossipRoute::PushMessage = route {
+            if should_report_message_signature(&entry.value.signature) {
+                datapoint_info!(
+                    "gossip_crds_sample",
+                    (
+                        "origin",
+                        entry.value.pubkey().to_string().get(..8),
+                        Option<String>
+                    ),
+                    (
+                        "signature",
+                        entry.value.signature.to_string().get(..8),
+                        Option<String>
+                    )
+                );
             }
-            _ => {}
         }
     }
 
