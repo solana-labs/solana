@@ -3490,17 +3490,17 @@ impl AccountsDb {
             ),
             (
                 "roots_added",
-                self.accounts_index.roots_added.swap(0, Ordering::Relaxed) as i64,
+                self.accounts_index.roots_added.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "roots_removed",
-                self.accounts_index.roots_removed.swap(0, Ordering::Relaxed) as i64,
+                self.accounts_index.roots_removed.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "active_scans",
-                self.accounts_index.active_scans.load(Ordering::Relaxed) as i64,
+                self.accounts_index.active_scans.load(Ordering::Relaxed),
                 i64
             ),
             (
