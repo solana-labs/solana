@@ -7308,6 +7308,10 @@ impl Bank {
         old
     }
 
+    /// Returns the `AccountsHash` that was calculated for this bank's slot
+    ///
+    /// This fn is used when creating a snapshot with ledger-tool, or when
+    /// packaging a snapshot into an archive (used to get the `SnapshotHash`).
     pub fn get_accounts_hash(&self) -> Option<AccountsHash> {
         self.rc
             .accounts
@@ -7316,6 +7320,10 @@ impl Bank {
             .map(|(accounts_hash, _)| accounts_hash)
     }
 
+    /// Returns the `IncrementalAccountsHash` that was calculated for this bank's slot
+    ///
+    /// This fn is used when creating an incremental snapshot with ledger-tool, or when
+    /// packaging a snapshot into an archive (used to get the `SnapshotHash`).
     pub fn get_incremental_accounts_hash(&self) -> Option<IncrementalAccountsHash> {
         self.rc
             .accounts
@@ -7324,6 +7332,14 @@ impl Bank {
             .map(|(incremental_accounts_hash, _)| incremental_accounts_hash)
     }
 
+    /// Returns the `SnapshotHash` for this bank's slot
+    ///
+    /// This fn is used at startup to verify the bank was rebuilt correctly.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there is both-or-neither of an `AccountsHash` and an `IncrementalAccountsHash`
+    /// for this bank's slot.  There may only be one or the other.
     pub fn get_snapshot_hash(&self) -> SnapshotHash {
         let accounts_hash = self.get_accounts_hash();
         let incremental_accounts_hash = self.get_incremental_accounts_hash();
