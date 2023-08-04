@@ -6990,7 +6990,7 @@ impl AccountsDb {
     }
 
     /// This is only valid to call from tests.
-    /// run the accounts hash calculation. Store the result in `set_accounts_hash`
+    /// run the accounts hash calculation and store the results
     pub fn update_accounts_hash_for_tests(
         &self,
         slot: Slot,
