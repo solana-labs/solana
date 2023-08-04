@@ -3768,7 +3768,7 @@ impl Bank {
 
     /// squash the parent's state up into this Bank,
     ///   this Bank becomes a root
-    /// Note that this thread is not thread-safe. If it is called concurrently on the same bank
+    /// Note that this function is not thread-safe. If it is called concurrently on the same bank
     /// by multiple threads, the end result could be inconsistent.
     /// Calling code does not currently call this concurrently.
     pub fn squash(&self) -> SquashTiming {
