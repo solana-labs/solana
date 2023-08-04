@@ -381,7 +381,7 @@ impl<T: 'static> ClusterNodesCache<T> {
             .iter()
             .find_map(|bank| bank.epoch_staked_nodes(epoch));
         if epoch_staked_nodes.is_none() {
-            inc_new_counter_info!("cluster_nodes-unknown_epoch_staked_nodes", 1);
+            inc_new_counter_debug!("cluster_nodes-unknown_epoch_staked_nodes", 1);
             if epoch != root_bank.get_leader_schedule_epoch(root_bank.slot()) {
                 return self.get(root_bank.slot(), root_bank, working_bank, cluster_info);
             }
