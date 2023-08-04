@@ -702,11 +702,13 @@ pub mod tests {
     }
 
     impl AppendVecStoredAccountMeta<'_> {
-        #[allow(clippy::cast_ref_to_mut)]
         fn set_data_len_unsafe(&self, new_data_len: u64) {
             // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
             unsafe {
-                *(&self.meta.data_len as *const u64 as *mut u64) = new_data_len;
+                std::ptr::write(
+                    std::mem::transmute::<*const u64, *mut u64>(&self.meta.data_len),
+                    new_data_len,
+                );
             }
         }
 
@@ -717,11 +719,13 @@ pub mod tests {
             executable_byte
         }
 
-        #[allow(clippy::cast_ref_to_mut)]
         fn set_executable_as_byte(&self, new_executable_byte: u8) {
             // UNSAFE: Force to interpret mmap-backed &bool as &u8 to write some crafted value;
             unsafe {
-                *(&self.account_meta.executable as *const bool as *mut u8) = new_executable_byte;
+                std::ptr::write(
+                    std::mem::transmute::<*const bool, *mut u8>(&self.account_meta.executable),
+                    new_executable_byte,
+                );
             }
         }
     }
