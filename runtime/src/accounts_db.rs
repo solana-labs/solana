@@ -5008,6 +5008,8 @@ impl AccountsDb {
         account_accessor.account_matches_owners(owners)
     }
 
+    /// load the account with `pubkey` into the read only accounts cache.
+    /// The goal is to make subsequent loads (which caller expects to occur) to find the account quickly.
     pub fn load_account_into_read_cache(&self, ancestors: &Ancestors, pubkey: &Pubkey) {
         self.do_load_with_populate_read_cache(
             ancestors,
@@ -6987,6 +6989,8 @@ impl AccountsDb {
         Ok((accounts_hash, total_lamports))
     }
 
+    /// This is only valid to call from tests.
+    /// run the accounts hash calculation and store the results
     pub fn update_accounts_hash_for_tests(
         &self,
         slot: Slot,
@@ -7311,6 +7315,7 @@ impl AccountsDb {
         Ok((accounts_hash, total_lamports))
     }
 
+    /// run the accounts hash calculation and store the results
     #[allow(clippy::too_many_arguments)]
     pub fn update_accounts_hash(
         &self,
