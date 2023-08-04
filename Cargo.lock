@@ -6769,6 +6769,7 @@ dependencies = [
  "solana-perf",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
+ "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
  "solana-system-program",

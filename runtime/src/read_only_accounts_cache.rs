@@ -59,6 +59,7 @@ impl ReadOnlyAccountsCache {
 
     /// reset the read only accounts cache
     /// useful for benches/tests
+    #[allow(dead_code)]
     pub fn reset_for_tests(&self) {
         self.cache.clear();
         self.queue.lock().unwrap().clear();

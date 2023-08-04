@@ -911,7 +911,7 @@ pub mod tests {
             account_storage::meta::{AccountMeta, StoredAccountMeta, StoredMeta},
             accounts_db::{
                 get_temp_accounts_paths,
-                tests::{
+                test_utils::{
                     append_single_account_with_default_hash, compare_all_accounts,
                     create_db_with_storages_and_index, create_storages_and_update_index,
                     get_all_accounts, remove_account_for_tests, CAN_RANDOMLY_SHRINK_FALSE,
