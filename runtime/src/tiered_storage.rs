@@ -151,7 +151,7 @@ mod tests {
         footer::{TieredStorageFooter, TieredStorageMagicNumber},
         hot::HOT_FORMAT,
         solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
-        tempfile::NamedTempFile,
+        tempfile::tempdir,
     };
 
     impl TieredStorage {
@@ -200,7 +200,10 @@ mod tests {
 
     #[test]
     fn test_new_meta_file_only() {
-        let tiered_storage_path = NamedTempFile::new().unwrap().path().to_path_buf();
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = tempdir().unwrap();
+        let tiered_storage_path = temp_dir.path().join("test_new_meta_file_only");
+
         {
             let tiered_storage =
                 TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
@@ -231,7 +234,10 @@ mod tests {
 
     #[test]
     fn test_write_accounts_twice() {
-        let tiered_storage_path = NamedTempFile::new().unwrap().path().to_path_buf();
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = tempdir().unwrap();
+        let tiered_storage_path = temp_dir.path().join("test_write_accounts_twice");
+
         let tiered_storage = TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
         // Expect the result to be TieredStorageError::Unsupported as the feature
         // is not yet fully supported, but we can still check its partial results
