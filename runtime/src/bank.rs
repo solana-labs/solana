@@ -276,6 +276,7 @@ pub struct BankRc {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
+use solana_program_runtime::loaded_programs::ExtractedPrograms;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
@@ -4991,14 +4992,18 @@ impl Bank {
                     .collect()
             };
 
-        let (mut loaded_programs_for_txs, missing_programs, unloaded_programs) = {
+        let ExtractedPrograms {
+            loaded: mut loaded_programs_for_txs,
+            missing,
+            unloaded,
+        } = {
             // Lock the global cache to figure out which programs need to be loaded
             let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
             loaded_programs_cache.extract(self, programs_and_slots.into_iter())
         };
 
         // Load missing programs while global cache is unlocked
-        let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
+        let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing
             .iter()
             .map(|(key, count)| {
                 let program = self.load_program(key, false);
@@ -5008,7 +5013,7 @@ impl Bank {
             .collect();
 
         // Reload unloaded programs while global cache is unlocked
-        let unloaded_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = unloaded_programs
+        let unloaded_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = unloaded
             .iter()
             .map(|(key, count)| {
                 let program = self.load_program(key, true);
