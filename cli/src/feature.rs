@@ -3,7 +3,7 @@ use {
         cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
-    clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
+    clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
     console::style,
     serde::{Deserialize, Serialize},
     solana_clap_utils::{
@@ -19,6 +19,7 @@ use {
         epoch_schedule::EpochSchedule,
         feature::{self, Feature},
         feature_set::FEATURE_NAMES,
+        genesis_config::ClusterType,
         message::Message,
         pubkey::Pubkey,
         transaction::Transaction,
@@ -43,6 +44,7 @@ pub enum FeatureCliCommand {
     },
     Activate {
         feature: Pubkey,
+        cluster: ClusterType,
         force: ForceActivation,
         fee_payer: SignerIndex,
     },
@@ -385,6 +387,25 @@ pub struct CliSoftwareVersionStats {
     rpc_percent: f32,
 }
 
+/// Check an RPC's reported genesis hash against the ClusterType's known genesis hash
+fn check_rpc_genesis_hash(
+    cluster_type: &ClusterType,
+    rpc_client: &RpcClient,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(genesis_hash) = cluster_type.get_genesis_hash() {
+        let rpc_genesis_hash = rpc_client.get_genesis_hash()?;
+        if rpc_genesis_hash != genesis_hash {
+            return Err(format!(
+                "The genesis hash for the specified cluster {cluster_type:?} does not match the \
+                genesis hash reported by the specified RPC. Cluster genesis hash: {genesis_hash}, \
+                RPC reported genesis hash: {rpc_genesis_hash}"
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
 pub trait FeatureSubCommands {
     fn feature_subcommands(self) -> Self;
 }
@@ -424,6 +445,13 @@ impl FeatureSubCommands for App<'_, '_> {
                                 .help("The signer for the feature to activate"),
                         )
                         .arg(
+                            Arg::with_name("cluster")
+                                .value_name("CLUSTER")
+                                .possible_values(&ClusterType::STRINGS)
+                                .required(true)
+                                .help("The cluster to activate the feature on"),
+                        )
+                        .arg(
                             Arg::with_name("force")
                                 .long("yolo")
                                 .hidden(hidden_unless_forced())
@@ -453,6 +481,7 @@ pub fn parse_feature_subcommand(
 ) -> Result<CliCommandInfo, CliError> {
     let response = match matches.subcommand() {
         ("activate", Some(matches)) => {
+            let cluster = value_t_or_exit!(matches, "cluster", ClusterType);
             let (feature_signer, feature) = signer_of(matches, "feature", wallet_manager)?;
             let (fee_payer, fee_payer_pubkey) =
                 signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
@@ -476,6 +505,7 @@ pub fn parse_feature_subcommand(
             CliCommandInfo {
                 command: CliCommand::Feature(FeatureCliCommand::Activate {
                     feature,
+                    cluster,
                     force,
                     fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
                 }),
@@ -519,9 +549,10 @@ pub fn process_feature_subcommand(
         } => process_status(rpc_client, config, features, *display_all),
         FeatureCliCommand::Activate {
             feature,
+            cluster,
             force,
             fee_payer,
-        } => process_activate(rpc_client, config, *feature, *force, *fee_payer),
+        } => process_activate(rpc_client, config, *feature, *cluster, *force, *fee_payer),
     }
 }
 
@@ -855,9 +886,12 @@ fn process_activate(
     rpc_client: &RpcClient,
     config: &CliConfig,
     feature_id: Pubkey,
+    cluster: ClusterType,
     force: ForceActivation,
     fee_payer: SignerIndex,
 ) -> ProcessResult {
+    check_rpc_genesis_hash(&cluster, rpc_client)?;
+
     let fee_payer = config.signers[fee_payer];
     let account = rpc_client
         .get_multiple_accounts(&[feature_id])?
