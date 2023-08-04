@@ -12,16 +12,15 @@ and so this document attempts to clarify and codify the process for new releases
 
 - Solana software releases include APIs, SDKs, and CLI tooling (with a few [exceptions](#exceptions)).
 - Solana software releases *do not always* follow semantic versioning, more details below.
-- Software for a `MINOR` version release will be compatible with the previous 3
-  `MINOR` releases, and following 3 `MINOR` releases, accounting for skipped minor
-  versions, more details below.
+- Software for a `MINOR` version release will be compatible with the previous
+  `MINOR` releases, and following `MINOR` releases, for at least one year.
 
 ### Deprecation Process
 
 1. In any `PATCH` or `MINOR` release, a feature, API, endpoint, etc. could be marked as deprecated.
 2. According to code upgrade difficulty, some features will remain deprecated for a few release
    cycles.
-3. At least 4 `MINOR` releases later, deprecated features may be removed in an incompatible way.
+3. At least one year later, deprecated features may be removed in an incompatible way.
 
 ### Release Cadence
 
@@ -53,16 +52,8 @@ those changes have been patched as needed and proven to be reliable, the `MINOR`
 be upgraded to the `stable` release channel and deployed to the Mainnet Beta cluster.
 
 The Rust SDK may contain breaking changes and removal of previously deprecated features
-in a `MINOR` release. According to code upgrade difficulty, every `MINOR` release
-will be compatible with at least the 3 preceding `MINOR` releases and 3 future
-`MINOR` releases.
-
-For example, software using version `1.20` will be compatible with versions up
-to `1.23` going forward, and back to `1.17`. Any release numbers that are skipped,
-such as `1.15`, are not considered in this calculation.
-
-At a projected cadence of 4 minor releases per year, that gives developers at least
-one year to update a project.
+in a `MINOR` release. Every `MINOR` release will be compatible with at least one year of
+preceding `MINOR` releases, and at least one year of future `MINOR` releases.
 
 More details in [Why not just use SemVer](#why-not-just-use-semver).
 
@@ -105,8 +96,8 @@ Patch releases:
 Minor releases:
 
 - New APIs
-- Removal of deprecated APIs
-- Backwards incompatible behavior changes
+- Removal of deprecated APIs, subject to deprecation delay
+- Backwards incompatible behavior changes, subject to deprecation delay
 
 Major releases:
 
@@ -177,15 +168,15 @@ error messages.
 
 ### Why not just use SemVer
 
-The Solana Rust SDK crates use a model for introducing breaking changes that does
-*not* follow semantic versioning (SemVer).
+The Solana Rust SDK crates do *not* follow semantic versioning (SemVer) for
+breaking changes.
 
 #### SemVer in Rust
 
 Under SemVer, breaking changes, such as removal of functions or types, only happens
 in a new major version.
 
-In many situations, this is useful -- it's very difficult to pick up a breaking
+In many situations, this is useful -- it is undesirable to pick up a breaking
 change accidentally. The default dependency declaration in Cargo follows SemVer.
 It assumes that all minor versions are compatible, and will automatically update
 to the newest minor version available.
@@ -205,7 +196,8 @@ either at compile-time or runtime, if the conflicting types in the public APIs
 are ever used together.
 
 Because of these issues, developers should only want one instance of `solana-program`
-in their project.
+in their project. This includes *all* direct and indirect dependencies: they should
+all use the same `solana-program`.
 
 If developers all use the default versioning declaration with major version `1`,
 then we can ensure that only one version of `solana-program` exists in the resolution.
@@ -216,20 +208,21 @@ You can find more information about the Cargo resolver in
 
 #### So what's your solution?
 
-Rather than forcing developers to disentangle these kinds of messes on every
-major version release, our solution is to keep everything on the same major version.
+We would like all releases to be 100% backwards compatible, allowing everyone
+to upgrade at any time with no effort.  This model, however, would put overly
+strict constraints on the development of the Rust SDK crates, considering we cannot
+in practice increase the major version.
 
-However, to avoid chaos and ensure that no downstream client ever breaks from updating
-from one `MINOR` version to the next, we must provide new functions or structs
-and deprecate the old ones.
+So we settle on a compromise.  We guarantee full compatibility, but only for a
+certain period of time.  First we deprecate APIs, and only remove or break the
+API after at least one year has passed.
 
-We have broken this commitment in the past, but through expanded downstream
-testing and conscientiously exposing APIs, we aim to never repeat that mistake.
-If it does happen accidentally, we will do whatever is necessary to restore
-the functionality, within reason.
+We are in the process of setting up tests that verify compatibility guarantees to match
+our policy.  But, as any test, it may have gaps, and is subject to engineering time
+invested in the test coverage.
 
-To avoid maintaining too much old code, however, we reserve the right to remove
-deprecated code after at least one year, or roughly 4 `MINOR` versions later.
+Should we break backwards compatibility, we will do whatever is necessary to restore
+functionality, within reason.
 
 This model has precedents in many other platforms.
 [Rust editions](https://blog.rust-lang.org/2021/05/11/edition-2021.html#what-is-an-edition),
