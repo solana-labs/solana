@@ -37,13 +37,12 @@ updates of a particular `MINOR` version release.
 
 #### Major Releases (x.0.0)
 
-`MAJOR` version releases (e.g. 2.0.0) may contain breaking changes and removal of previously
-deprecated features. Client SDKs and tooling will begin using new features and endpoints
-that were enabled in the previous `MAJOR` version.
+RPC `MAJOR` version releases (e.g. 2.0.0) may contain breaking changes and removal
+of previously deprecated features.
 
-The Rust SDK will not have any future `MAJOR` releases, and will stay on `1.X` to
-provide a better developer experience. More details in
-[Why not just use semver](#why-not-just-use-semver).
+We do not expect the Rust SDK `MAJOR` version to be changed. Any breaking changes
+will be done though the deprecation process described in
+[Why not just use SemVer](#why-not-just-use-semver) in a `MINOR` version.
 
 #### Minor Releases (1.x.0)
 
@@ -65,7 +64,7 @@ such as `1.15`, are not considered in this calculation.
 At a projected cadence of 4 minor releases per year, that gives developers at least
 one year to update a project.
 
-More details in [Why not just use semver](#why-not-just-use-semver).
+More details in [Why not just use SemVer](#why-not-just-use-semver).
 
 #### Patch Releases (1.0.x)
 
@@ -111,7 +110,7 @@ Minor releases:
 
 Major releases:
 
-- Are not projected to happen ever. More details in [Why not just use semver](#why-not-just-use-semver).
+- Are not projected to happen ever. More details in [Why not just use SemVer](#why-not-just-use-semver).
 
 ### CLI Tools
 
@@ -176,62 +175,44 @@ CLI tooling json output (`output --json`) compatibility will be preserved; howev
 for a human reader is subject to change. This includes output as well as potential help, warning, or
 error messages.
 
-### Why not just use semver
+### Why not just use SemVer
 
 The Solana Rust SDK crates use a model for introducing breaking changes that does
-*not* follow semantic versioning (semver).
+*not* follow semantic versioning (SemVer).
 
-#### Semver in Rust
+#### SemVer in Rust
 
-Under semver, breaking changes, such as removal of functions or types, only happens
+Under SemVer, breaking changes, such as removal of functions or types, only happens
 in a new major version.
 
 In many situations, this is useful -- it's very difficult to pick up a breaking
-change accidentally. The default dependency declaration in Cargo follows this
-concept. It assumes that all minor versions are compatible, and will automatically
-update to the newest minor version available.
+change accidentally. The default dependency declaration in Cargo follows SemVer.
+It assumes that all minor versions are compatible, and will automatically update
+to the newest minor version available.
 
 For example, if you declare `solana-program = "1.10"`, Cargo can pull in version
 `1.16`, since it assumes that all `1.X.Y` releases are compatible.
 
-Additionally, Cargo will force all crates in a build to use the same major version
-of a dependency. For example, if your crate `my-crate` declares `solana-program = "1.10"`,
-and a dependency `my-dependency` declares `solana-program = "1.16"`, both your crate and your
-dependency will be built with version `1.16`, at least.
+If, however, Cargo deems that two versions of a package are incompatible, it will
+treat them as two completely separate packages.
 
-Additionally, the types in `solana-program` used by both your crate and your
-dependency are treated as the same.
+Packages can be deemed incompatible for many reasons, but the most common situation
+under the default declaration format (SemVer) is due to different major versions.
 
-For example, if `solana-program` has a struct declared as:
+If a package ends up with two or more instances of `solana-program`,
+[bad things will happen](https://doc.rust-lang.org/cargo/reference/resolver.html#version-incompatibility-hazards),
+either at compile-time or runtime, if the conflicting types in the public APIs
+are ever used together.
 
-```
-#[derive(PartialEq)]
-pub struct Pubkey(pub [u8; 32]);
-```
+Because of these issues, developers should only want one instance of `solana-program`
+in their project.
 
-And `my-dependency` has:
+If developers all use the default versioning declaration with major version `1`,
+then we can ensure that only one version of `solana-program` exists in the resolution.
 
-```
-pub const DEPENDENCY_PUBKEY = Pubkey([1; 32]);
-```
-
-Then `my-crate` can say:
-
-```
-use solana_program::Pubkey;
-let my_pubkey = Pubkey([1; 32]);
-if my_pubkey == my_dependency::DEPENDENCY_PUBKEY {
-    println!("They're the same");
-}
-```
-
-On the other hand, types from crates with different major versions are treated as
-completely different types. If `my-crate` declares `solana-program = "2"` and
-`my-dependency` declares `solana-program = "1"`, then the preceding code *will not*
-compile.
-
-To get this code to compile, you need to create functions to convert between the
-types in v1 and v2. And whenever v3 is released, the entire problem becomes multiplied.
+The specifics of the Cargo resolver are beyond the scope of this document.
+You can find more information about the Cargo resolver in
+[The Cargo Book](https://doc.rust-lang.org/cargo/reference/resolver.html).
 
 #### So what's your solution?
 
@@ -250,41 +231,22 @@ the functionality, within reason.
 To avoid maintaining too much old code, however, we reserve the right to remove
 deprecated code after at least one year, or roughly 4 `MINOR` versions later.
 
-This model has precedents in the Rust ecosystem. Through
+This model has precedents in many other platforms.
 [Rust editions](https://blog.rust-lang.org/2021/05/11/edition-2021.html#what-is-an-edition),
-the Rust developers can introduce backwards-incompatible changes, all while staying
-on major version 1. As crate developers, we have less flexibility than a language,
-but the concept is similar.
+can introduce backwards-incompatible changes.
+
+And there are even more examples in
+[Why Semantic Versioning Isn't](https://gist.github.com/jashkenas/cbd2b088e20279ae2c8e):
+
+> Node doesn't follow SemVer, Rails doesn't do it, Python doesn't do it, Ruby doesn't do it, even npm doesn't follow SemVer.
+
+The Solana SDK is closer to a platform than a library, so it makes more sense to
+follow other platforms.
 
 Additionally, the
 [Minimum Supported Rust Version (MSRV) Policies](https://github.com/rust-lang/api-guidelines/discussions/231)
-suggest that updating MSRV is *not* a semver breaking change, even though it
+suggest that updating MSRV is *not* a SemVer breaking change, even though it
 effectively forces users to upgrade their compiler just to update a crate.
 
 By ensuring that projects will never immediately break, and giving developers
-one year to update, this model will keep some stability while avoiding stagnation.
-
-#### But why was the upgrade to 1.16 so difficult?
-
-In version `1.16` of the Rust crates, the Borsh dependency was upgraded from
-`0.9` to `0.10`, which constituted a breaking change.
-
-Downstream developers faced unsolvable resolution problems because their dependencies
-were also forced to use `1.16`, but if the dependencies were not explicitly updated
-to use Borsh `0.10`, they were met with incompatible traits, since they implemented
-`BorshSerialize` and `BorshDerialize` on version 0.9, which as described earlier,
-are treated as completely different traits from `BorshSerialize` and `BorshDeserialize`
-on version 0.10.
-
-To address this problem, we've implemented the older Borsh 0.9 traits on required
-types, and exposed the Solana Borsh utilities through explicit versioning. This
-allows us to upgrade to any other version of Borsh without ever breaking a
-downstream developer.
-
-In a year, however, we reserve the right to remove the implementations of the
-Borsh 0.9 traits and potentially break downstream projects that have not updated
-within the last year.
-
-Even if the Rust crates implemented proper semantic versioning, downstream
-projects would have been broken as soon as they tried to mix `Pubkey`s from
-a non-updated dependency with `Pubkey`s from the new major version.
+one year to update, this model will keep stability while avoiding stagnation.
