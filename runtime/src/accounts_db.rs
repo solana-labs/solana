@@ -7315,8 +7315,8 @@ impl AccountsDb {
         Ok((accounts_hash, total_lamports))
     }
 
+    /// run the accounts hash calculation and store the results
     #[allow(clippy::too_many_arguments)]
-    /// run the accounts hash calculation. Store the result in `set_accounts_hash`
     pub fn update_accounts_hash(
         &self,
         data_source: CalcAccountsHashDataSource,
