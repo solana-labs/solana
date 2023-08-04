@@ -979,9 +979,9 @@ impl ClusterInfo {
             update = &update[n..];
             if n > 0 {
                 let data = if is_epoch_slot {
-                    CrdsData::LastVotedForkSlots(ix, slots, update[0], last_vote_bankhash.unwrap())
-                } else {
                     CrdsData::EpochSlots(ix, slots)
+                } else {
+                    CrdsData::LastVotedForkSlots(ix, slots, update[0], last_vote_bankhash.unwrap())
                 };
                 let entry = CrdsValue::new_signed(data, &keypair);
                 entries.push(entry);
