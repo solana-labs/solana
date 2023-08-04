@@ -1,8 +1,15 @@
 use {
     crate::{
-        account_storage::meta::StoredMetaWriteVersion, tiered_storage::meta::TieredAccountMeta,
+        account_storage::meta::StoredMetaWriteVersion,
+        tiered_storage::{
+            footer::{AccountMetaFormat, TieredStorageFooter},
+            hot::HotStorageReader,
+            meta::TieredAccountMeta,
+            TieredStorageResult,
+        },
     },
     solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
+    std::path::Path,
 };
 
 /// The struct that offers read APIs for accessing a TieredAccount.
@@ -81,5 +88,35 @@ impl<'accounts_file, M: TieredAccountMeta> ReadableAccount
     /// Returns the data associated to this account.
     fn data(&self) -> &'accounts_file [u8] {
         self.data()
+    }
+}
+
+/// The reader of a tiered storage instance.
+#[derive(Debug)]
+pub enum TieredStorageReader {
+    Hot(HotStorageReader),
+}
+
+impl TieredStorageReader {
+    /// Creates a reader for the specified tiered storage accounts file.
+    pub fn new_from_path(path: impl AsRef<Path>) -> TieredStorageResult<Self> {
+        let footer = TieredStorageFooter::new_from_path(&path)?;
+        match footer.account_meta_format {
+            AccountMetaFormat::Hot => Ok(Self::Hot(HotStorageReader::new_from_path(path)?)),
+        }
+    }
+
+    /// Returns the footer of the associated HotAccountsFile.
+    pub fn footer(&self) -> &TieredStorageFooter {
+        match self {
+            Self::Hot(hot) => hot.footer(),
+        }
+    }
+
+    /// Returns the total number of accounts.
+    pub fn num_accounts(&self) -> usize {
+        match self {
+            Self::Hot(hot) => hot.num_accounts(),
+        }
     }
 }
