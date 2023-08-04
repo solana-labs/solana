@@ -188,7 +188,7 @@ impl OptimisticallyConfirmedBankTracker {
                     SlotNotification::OptimisticallyConfirmed(bank.slot()),
                 );
             }
-        } else if bank.slot() > bank_forks.read().unwrap().root_bank().slot() {
+        } else if bank.slot() > bank_forks.read().unwrap().root() {
             pending_optimistically_confirmed_banks.insert(bank.slot());
             debug!("notify_or_defer defer notifying for slot {:?}", bank.slot());
         }
@@ -287,7 +287,7 @@ impl OptimisticallyConfirmedBankTracker {
                         *highest_confirmed_slot = slot;
                     }
                     drop(w_optimistically_confirmed_bank);
-                } else if slot > bank_forks.read().unwrap().root_bank().slot() {
+                } else if slot > bank_forks.read().unwrap().root() {
                     pending_optimistically_confirmed_banks.insert(slot);
                 } else {
                     inc_new_counter_info!("dropped-already-rooted-optimistic-bank-notification", 1);
