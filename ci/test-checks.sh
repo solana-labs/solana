@@ -7,6 +7,35 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+usage() {
+  cat <<EOF
+usage: $0 [-h] [-l]
+
+Run sanity check for solana build
+
+  -h              Show help
+  -l              Run sanity check for local repo (allow uncommitted changes)
+
+EOF
+}
+
+local=false
+
+while getopts ":h:l" opt; do
+  case $opt in
+  h)
+    usage
+    exit 0
+    ;;
+  l)
+    local=true
+    ;;
+ *)
+    ;;
+  esac
+done
+shift $((OPTIND - 1))
+
 source ci/_
 source ci/rust-version.sh stable
 source ci/rust-version.sh nightly
@@ -15,6 +44,7 @@ cargoNightly="$(readlink -f "./cargo") nightly"
 
 scripts/increment-cargo-version.sh check
 
+if [ "$local" = false ] ; then
 # Disallow uncommitted Cargo.lock changes
 (
   _ scripts/cargo-for-all-lock-files.sh tree >/dev/null
@@ -28,6 +58,7 @@ EOF
     exit 1
   fi
 )
+fi
 
 echo --- build environment
 (
