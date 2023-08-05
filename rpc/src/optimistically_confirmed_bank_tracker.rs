@@ -137,7 +137,7 @@ impl OptimisticallyConfirmedBankTracker {
         highest_confirmed_slot: &mut Slot,
         newest_root_slot: &mut Slot,
         slot_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
-        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        prioritization_fee_cache: &PrioritizationFeeCache,
     ) -> Result<(), RecvTimeoutError> {
         let notification = receiver.recv_timeout(Duration::from_secs(1))?;
         Self::process_notification(
@@ -267,7 +267,7 @@ impl OptimisticallyConfirmedBankTracker {
         highest_confirmed_slot: &mut Slot,
         newest_root_slot: &mut Slot,
         slot_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
-        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        prioritization_fee_cache: &PrioritizationFeeCache,
     ) {
         debug!("received bank notification: {:?}", notification);
         match notification {
