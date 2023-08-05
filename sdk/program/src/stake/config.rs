@@ -10,7 +10,7 @@ use {
 crate::declare_deprecated_id!("StakeConfig11111111111111111111111111111111");
 
 #[deprecated(
-    since = "1.14.21",
+    since = "1.16.7",
     note = "Please use `solana_sdk::stake::state::warmup_cooldown_rate()` instead"
 )]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]

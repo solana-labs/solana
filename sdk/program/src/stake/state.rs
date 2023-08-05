@@ -326,7 +326,7 @@ pub struct Delegation {
     pub deactivation_epoch: Epoch,
     /// how much stake we can activate per-epoch as a fraction of currently effective stake
     #[deprecated(
-        since = "1.14.21",
+        since = "1.16.7",
         note = "Please use `solana_sdk::stake::state::warmup_cooldown_rate()` instead"
     )]
     pub warmup_cooldown_rate: f64,

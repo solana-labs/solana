@@ -120,7 +120,7 @@ pub struct UiDelegation {
     pub activation_epoch: StringAmount,
     pub deactivation_epoch: StringAmount,
     #[deprecated(
-        since = "1.14.21",
+        since = "1.16.7",
         note = "Please use `solana_sdk::stake::stake::warmup_cooldown_rate()` instead"
     )]
     pub warmup_cooldown_rate: f64,
