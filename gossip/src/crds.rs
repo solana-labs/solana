@@ -107,7 +107,7 @@ impl std::fmt::Display for GossipRoute {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             GossipRoute::PushMessage(pubkey) => write!(f, "{:?}", pubkey),
-            _ => Ok(())
+            _ => Ok(()),
         }
     }
 }
