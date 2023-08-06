@@ -9432,7 +9432,7 @@ impl AccountsDb {
         }
     }
 
-    pub fn accounts_delta_hashes_for_tests(&self) -> &Mutex<HashMap<Slot, AccountsDeltaHash>> {
+    pub fn accounts_delta_hashes(&self) -> &Mutex<HashMap<Slot, AccountsDeltaHash>> {
         &self.accounts_delta_hashes
     }
 
@@ -9444,9 +9444,7 @@ impl AccountsDb {
         self.set_accounts_delta_hash(slot, accounts_delta_hash);
     }
 
-    pub fn accounts_hashes_for_tests(
-        &self,
-    ) -> &Mutex<HashMap<Slot, (AccountsHash, /*capitalization*/ u64)>> {
+    pub fn accounts_hashes(&self) -> &Mutex<HashMap<Slot, (AccountsHash, /*capitalization*/ u64)>> {
         &self.accounts_hashes
     }
 
@@ -12330,18 +12328,8 @@ mod tests {
 
             // Get the hashes for the latest slot, which should be the only hashes in the
             // map on the deserialized AccountsDb
-            assert_eq!(
-                daccounts
-                    .accounts_delta_hashes_for_tests()
-                    .lock()
-                    .unwrap()
-                    .len(),
-                1
-            );
-            assert_eq!(
-                daccounts.accounts_hashes_for_tests().lock().unwrap().len(),
-                1
-            );
+            assert_eq!(daccounts.accounts_delta_hashes().lock().unwrap().len(), 1);
+            assert_eq!(daccounts.accounts_hashes().lock().unwrap().len(), 1);
             assert_eq!(
                 daccounts.get_accounts_delta_hash(latest_slot).unwrap(),
                 accounts.get_accounts_delta_hash(latest_slot).unwrap(),
@@ -13095,10 +13083,7 @@ mod tests {
             Ok(_)
         );
 
-        db.accounts_hashes_for_tests()
-            .lock()
-            .unwrap()
-            .remove(&some_slot);
+        db.accounts_hashes().lock().unwrap().remove(&some_slot);
 
         assert_matches!(
             db.verify_accounts_hash_and_lamports(some_slot, 1, None, config.clone()),
