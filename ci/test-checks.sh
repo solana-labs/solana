@@ -7,18 +7,6 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-usage() {
-  cat <<EOF
-usage: $0 [-h] [-l]
-
-Run sanity check for solana build
-
-  -h              Show help
-  -l              Run sanity check for local repo (allow uncommitted changes)
-
-EOF
-}
-
 source ci/_
 source ci/rust-version.sh stable
 source ci/rust-version.sh nightly
