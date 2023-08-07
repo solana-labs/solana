@@ -96,20 +96,11 @@ pub enum CrdsError {
 }
 
 #[derive(Clone, Copy)]
-pub enum GossipRoute {
+pub enum GossipRoute<'a> {
     LocalMessage,
     PullRequest,
     PullResponse,
-    PushMessage(/*from:*/ Pubkey),
-}
-
-impl std::fmt::Display for GossipRoute {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            GossipRoute::PushMessage(pubkey) => write!(f, "{:?}", pubkey),
-            _ => Ok(()),
-        }
-    }
+    PushMessage(/*from:*/&'a Pubkey),
 }
 
 type CrdsCountsArray = [usize; 12];
@@ -687,9 +678,11 @@ impl CrdsDataStats {
             }
         }
 
-        if matches!(route, GossipRoute::PushMessage(_))
-            && should_report_message_signature(&entry.value.signature)
-        {
+        let GossipRoute::PushMessage(from) = route else {
+            return;
+        };
+
+        if should_report_message_signature(&entry.value.signature) {
             datapoint_info!(
                 "gossip_crds_sample",
                 (
@@ -704,7 +697,7 @@ impl CrdsDataStats {
                 ),
                 (
                     "from",
-                    route.to_string().get(..8),
+                    from.to_string().get(..8),
                     Option<String>
                 )
             );
