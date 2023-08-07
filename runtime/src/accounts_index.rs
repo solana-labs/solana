@@ -658,7 +658,8 @@ impl ScanSlotTracker {
     }
 }
 
-#[derive(Copy, Clone)]
+#[repr(u8)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum AccountsIndexScanResult {
     /// if the entry is not in the in-memory index, do not add it unless the entry becomes dirty
     OnlyKeepInMemoryIfDirty,
@@ -666,6 +667,8 @@ pub enum AccountsIndexScanResult {
     KeepInMemory,
     /// reduce refcount by 1
     Unref,
+    /// unknown (defer to user supplied function)
+    Unknown,
 }
 
 #[derive(Debug)]
@@ -1348,12 +1351,17 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     /// For each pubkey, find the slot list in the accounts index
     ///   apply 'avoid_callback_result' if specified.
     ///   otherwise, call `callback`
-    /// if 'provide_entry_in_callback' is true, populate callback with the Arc of the entry itself.
-    pub(crate) fn scan<'a, F, I, const PROVIDE_ENTRY_IN_CALLBACK: bool>(
+    /// if 'PROVIDE_ENTRY_IN_CALLBACK' is true, populate callback with the Arc of the entry itself.
+    pub(crate) fn scan<
+        'a,
+        F,
+        I,
+        const PROVIDE_ENTRY_IN_CALLBACK: bool,
+        const AVOID_CALLBACK_RESULT: u8,
+    >(
         &self,
         pubkeys: I,
         mut callback: F,
-        avoid_callback_result: Option<AccountsIndexScanResult>,
     ) where
         // params:
         //  pubkey looked up
@@ -1362,7 +1370,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         //   slot_list: comes from accounts index for 'pubkey'
         //   ref_count: refcount of entry in index
         //   entry, if 'provide_entry_in_callback' is true
-        // if 'avoid_callback_result' is Some(_), then callback is NOT called
+        // if 'AVOID_CALLBACK_RESULT' is not Unknown, then callback is NOT called
         //  and _ is returned as if callback were called.
         F: FnMut(
             &'a Pubkey,
@@ -1382,18 +1390,21 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             }
             lock.as_ref().unwrap().get_internal(pubkey, |entry| {
                 let mut cache = false;
+
                 match entry {
                     Some(locked_entry) => {
-                        let result = if let Some(result) = avoid_callback_result.as_ref() {
-                            *result
-                        } else {
-                            let slot_list = &locked_entry.slot_list.read().unwrap();
-                            callback(
-                                pubkey,
-                                Some((slot_list, locked_entry.ref_count())),
-                                PROVIDE_ENTRY_IN_CALLBACK.then_some(locked_entry),
-                            )
-                        };
+                        let result =
+                            if AVOID_CALLBACK_RESULT == AccountsIndexScanResult::Unknown as u8 {
+                                let slot_list = &locked_entry.slot_list.read().unwrap();
+                                callback(
+                                    pubkey,
+                                    Some((slot_list, locked_entry.ref_count())),
+                                    PROVIDE_ENTRY_IN_CALLBACK.then_some(locked_entry),
+                                )
+                            } else {
+                                unsafe { std::mem::transmute(AVOID_CALLBACK_RESULT as u8) }
+                            };
+
                         cache = match result {
                             AccountsIndexScanResult::Unref => {
                                 if locked_entry.unref() {
@@ -1403,10 +1414,15 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                             }
                             AccountsIndexScanResult::KeepInMemory => true,
                             AccountsIndexScanResult::OnlyKeepInMemoryIfDirty => false,
+                            AccountsIndexScanResult::Unknown => {
+                                panic!("should not be Unknown for AccountIndexScanResult here!")
+                            }
                         };
                     }
                     None => {
-                        avoid_callback_result.unwrap_or_else(|| callback(pubkey, None, None));
+                        if AVOID_CALLBACK_RESULT == AccountsIndexScanResult::Unknown as u8 {
+                            callback(pubkey, None, None);
+                        }
                     }
                 }
                 (cache, ())

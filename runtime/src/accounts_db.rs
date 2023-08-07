@@ -3186,75 +3186,77 @@ impl AccountsDb {
                         let mut not_found_on_fork = 0;
                         let mut missing = 0;
                         let mut useful = 0;
-                        self.accounts_index.scan::<_, _, false>(
-                            pubkeys.iter(),
-                            |pubkey, slots_refs, _entry| {
-                                let mut useless = true;
-                                if let Some((slot_list, ref_count)) = slots_refs {
-                                    let index_in_slot_list = self.accounts_index.latest_slot(
-                                        None,
-                                        slot_list,
-                                        max_clean_root_inclusive,
-                                    );
 
-                                    match index_in_slot_list {
-                                        Some(index_in_slot_list) => {
-                                            // found info relative to max_clean_root
-                                            let (slot, account_info) =
-                                                &slot_list[index_in_slot_list];
-                                            if account_info.is_zero_lamport() {
-                                                useless = false;
-                                                purges_zero_lamports.insert(
-                                                    *pubkey,
-                                                    (
-                                                        self.accounts_index.get_rooted_entries(
-                                                            slot_list,
-                                                            max_clean_root_inclusive,
+                        const AVOID_CALLBACK_RESULT: u8 = AccountsIndexScanResult::Unknown as u8;
+                        self.accounts_index
+                            .scan::<_, _, false, AVOID_CALLBACK_RESULT>(
+                                pubkeys.iter(),
+                                |pubkey, slots_refs, _entry| {
+                                    let mut useless = true;
+                                    if let Some((slot_list, ref_count)) = slots_refs {
+                                        let index_in_slot_list = self.accounts_index.latest_slot(
+                                            None,
+                                            slot_list,
+                                            max_clean_root_inclusive,
+                                        );
+
+                                        match index_in_slot_list {
+                                            Some(index_in_slot_list) => {
+                                                // found info relative to max_clean_root
+                                                let (slot, account_info) =
+                                                    &slot_list[index_in_slot_list];
+                                                if account_info.is_zero_lamport() {
+                                                    useless = false;
+                                                    purges_zero_lamports.insert(
+                                                        *pubkey,
+                                                        (
+                                                            self.accounts_index.get_rooted_entries(
+                                                                slot_list,
+                                                                max_clean_root_inclusive,
+                                                            ),
+                                                            ref_count,
                                                         ),
-                                                        ref_count,
-                                                    ),
-                                                );
-                                            } else {
-                                                found_not_zero += 1;
-                                            }
-                                            if uncleaned_roots.contains(slot) {
-                                                // Assertion enforced by `accounts_index.get()`, the latest slot
-                                                // will not be greater than the given `max_clean_root`
-                                                if let Some(max_clean_root_inclusive) =
-                                                    max_clean_root_inclusive
-                                                {
-                                                    assert!(slot <= &max_clean_root_inclusive);
+                                                    );
+                                                } else {
+                                                    found_not_zero += 1;
                                                 }
-                                                purges_old_accounts.push(*pubkey);
+                                                if uncleaned_roots.contains(slot) {
+                                                    // Assertion enforced by `accounts_index.get()`, the latest slot
+                                                    // will not be greater than the given `max_clean_root`
+                                                    if let Some(max_clean_root_inclusive) =
+                                                        max_clean_root_inclusive
+                                                    {
+                                                        assert!(slot <= &max_clean_root_inclusive);
+                                                    }
+                                                    purges_old_accounts.push(*pubkey);
+                                                    useless = false;
+                                                }
+                                            }
+                                            None => {
+                                                // This pubkey is in the index but not in a root slot, so clean
+                                                // it up by adding it to the to-be-purged list.
+                                                //
+                                                // Also, this pubkey must have been touched by some slot since
+                                                // it was in the dirty list, so we assume that the slot it was
+                                                // touched in must be unrooted.
+                                                not_found_on_fork += 1;
                                                 useless = false;
+                                                purges_old_accounts.push(*pubkey);
                                             }
                                         }
-                                        None => {
-                                            // This pubkey is in the index but not in a root slot, so clean
-                                            // it up by adding it to the to-be-purged list.
-                                            //
-                                            // Also, this pubkey must have been touched by some slot since
-                                            // it was in the dirty list, so we assume that the slot it was
-                                            // touched in must be unrooted.
-                                            not_found_on_fork += 1;
-                                            useless = false;
-                                            purges_old_accounts.push(*pubkey);
-                                        }
+                                    } else {
+                                        missing += 1;
                                     }
-                                } else {
-                                    missing += 1;
-                                }
-                                if !useless {
-                                    useful += 1;
-                                }
-                                if useless {
-                                    AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
-                                } else {
-                                    AccountsIndexScanResult::KeepInMemory
-                                }
-                            },
-                            None,
-                        );
+                                    if !useless {
+                                        useful += 1;
+                                    }
+                                    if useless {
+                                        AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
+                                    } else {
+                                        AccountsIndexScanResult::KeepInMemory
+                                    }
+                                },
+                            );
                         found_not_zero_accum.fetch_add(found_not_zero, Ordering::Relaxed);
                         not_found_on_fork_accum.fetch_add(not_found_on_fork, Ordering::Relaxed);
                         missing_accum.fetch_add(missing, Ordering::Relaxed);
@@ -3742,38 +3744,39 @@ impl AccountsDb {
         let mut index = 0;
         let mut all_are_zero_lamports = true;
         let mut index_entries_being_shrunk = Vec::with_capacity(accounts.len());
-        self.accounts_index.scan::<_, _, true>(
-            accounts.iter().map(|account| account.pubkey()),
-            |pubkey, slots_refs, entry| {
-                let mut result = AccountsIndexScanResult::OnlyKeepInMemoryIfDirty;
-                if let Some((slot_list, ref_count)) = slots_refs {
-                    let stored_account = &accounts[index];
-                    let is_alive = slot_list.iter().any(|(slot, _acct_info)| {
-                        // if the accounts index contains an entry at this slot, then the append vec we're asking about contains this item and thus, it is alive at this slot
-                        *slot == slot_to_shrink
-                    });
-                    if !is_alive {
-                        // This pubkey was found in the storage, but no longer exists in the index.
-                        // It would have had a ref to the storage from the initial store, but it will
-                        // not exist in the re-written slot. Unref it to keep the index consistent with
-                        // rewriting the storage entries.
-                        unrefed_pubkeys.push(pubkey);
-                        result = AccountsIndexScanResult::Unref;
-                        dead += 1;
-                    } else {
-                        // Hold onto the index entry arc so that it cannot be flushed.
-                        // Since we are shrinking these entries, we need to disambiguate append_vec_ids during this period and those only exist in the in-memory accounts index.
-                        index_entries_being_shrunk.push(Arc::clone(entry.unwrap()));
-                        all_are_zero_lamports &= stored_account.lamports() == 0;
-                        alive_accounts.add(ref_count, stored_account);
-                        alive += 1;
+        const AVOID_CALLBACK_RESULT: u8 = AccountsIndexScanResult::Unknown as u8;
+        self.accounts_index
+            .scan::<_, _, true, AVOID_CALLBACK_RESULT>(
+                accounts.iter().map(|account| account.pubkey()),
+                |pubkey, slots_refs, entry| {
+                    let mut result = AccountsIndexScanResult::OnlyKeepInMemoryIfDirty;
+                    if let Some((slot_list, ref_count)) = slots_refs {
+                        let stored_account = &accounts[index];
+                        let is_alive = slot_list.iter().any(|(slot, _acct_info)| {
+                            // if the accounts index contains an entry at this slot, then the append vec we're asking about contains this item and thus, it is alive at this slot
+                            *slot == slot_to_shrink
+                        });
+                        if !is_alive {
+                            // This pubkey was found in the storage, but no longer exists in the index.
+                            // It would have had a ref to the storage from the initial store, but it will
+                            // not exist in the re-written slot. Unref it to keep the index consistent with
+                            // rewriting the storage entries.
+                            unrefed_pubkeys.push(pubkey);
+                            result = AccountsIndexScanResult::Unref;
+                            dead += 1;
+                        } else {
+                            // Hold onto the index entry arc so that it cannot be flushed.
+                            // Since we are shrinking these entries, we need to disambiguate append_vec_ids during this period and those only exist in the in-memory accounts index.
+                            index_entries_being_shrunk.push(Arc::clone(entry.unwrap()));
+                            all_are_zero_lamports &= stored_account.lamports() == 0;
+                            alive_accounts.add(ref_count, stored_account);
+                            alive += 1;
+                        }
                     }
-                }
-                index += 1;
-                result
-            },
-            None,
-        );
+                    index += 1;
+                    result
+                },
+            );
         assert_eq!(index, std::cmp::min(accounts.len(), count));
         stats.alive_accounts.fetch_add(alive, Ordering::Relaxed);
         stats.dead_accounts.fetch_add(dead, Ordering::Relaxed);
@@ -8141,23 +8144,24 @@ impl AccountsDb {
         self.thread_pool_clean.install(|| {
             (0..batches).into_par_iter().for_each(|batch| {
                 let skip = batch * UNREF_ACCOUNTS_BATCH_SIZE;
-                self.accounts_index.scan::<_, _, false>(
-                    pubkeys
-                        .clone()
-                        .skip(skip)
-                        .take(UNREF_ACCOUNTS_BATCH_SIZE)
-                        .filter(|pubkey| {
-                            // filter out pubkeys that have already been removed from the accounts index in a previous step
-                            let already_removed =
-                                pubkeys_removed_from_accounts_index.contains(pubkey);
-                            !already_removed
-                        }),
-                    |_pubkey, _slots_refs, _entry| {
-                        /* unused */
-                        AccountsIndexScanResult::Unref
-                    },
-                    Some(AccountsIndexScanResult::Unref),
-                )
+                const AVOID_CALLBACK_RESULT: u8 = AccountsIndexScanResult::Unref as u8;
+                self.accounts_index
+                    .scan::<_, _, false, AVOID_CALLBACK_RESULT>(
+                        pubkeys
+                            .clone()
+                            .skip(skip)
+                            .take(UNREF_ACCOUNTS_BATCH_SIZE)
+                            .filter(|pubkey| {
+                                // filter out pubkeys that have already been removed from the accounts index in a previous step
+                                let already_removed =
+                                    pubkeys_removed_from_accounts_index.contains(pubkey);
+                                !already_removed
+                            }),
+                        |_pubkey, _slots_refs, _entry| {
+                            /* unused */
+                            AccountsIndexScanResult::Unref
+                        },
+                    )
             });
         });
     }

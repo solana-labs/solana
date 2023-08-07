@@ -328,21 +328,22 @@ impl AccountsDb {
 
     /// for each account in `unrefed_pubkeys`, in each `accounts_to_combine`, addref
     fn addref_accounts_failed_to_shrink_ancient(&self, accounts_to_combine: AccountsToCombine) {
+        const AVOID_CALLBACK_RESULT: u8 = AccountsIndexScanResult::Unknown as u8;
         self.thread_pool_clean.install(|| {
             accounts_to_combine
                 .accounts_to_combine
                 .into_par_iter()
                 .for_each(|combine| {
-                    self.accounts_index.scan::<_, _, true>(
-                        combine.unrefed_pubkeys.into_iter(),
-                        |_pubkey, _slots_refs, entry| {
-                            if let Some(entry) = entry {
-                                entry.addref();
-                            }
-                            AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
-                        },
-                        None,
-                    );
+                    self.accounts_index
+                        .scan::<_, _, true, AVOID_CALLBACK_RESULT>(
+                            combine.unrefed_pubkeys.into_iter(),
+                            |_pubkey, _slots_refs, entry| {
+                                if let Some(entry) = entry {
+                                    entry.addref();
+                                }
+                                AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
+                            },
+                        );
                 });
         });
     }
@@ -620,33 +621,37 @@ impl AccountsDb {
         let pks = Self::get_many_refs_pubkeys(shrink_collect);
         let mut index = 0;
         let mut saved = 0;
-        self.accounts_index.scan::<_, _, false>(
-            pks.iter(),
-            |_pubkey, slots_refs, _entry| {
-                index += 1;
-                if let Some((_slot_list, ref_count)) = slots_refs {
-                    if ref_count == 1 {
-                        // This entry has been unref'd during shrink ancient, so it can now move out of `many_refs` and into `one_ref`.
-                        // This could happen if the same pubkey is in 2 append vecs that are BOTH being shrunk right now.
-                        // Note that `shrink_collect()`, which was previously called to create `shrink_collect`, unrefs any dead accounts.
-                        let many_refs = &mut shrink_collect.alive_accounts.many_refs;
-                        let account = many_refs.accounts.remove(index - 1);
-                        if many_refs.accounts.is_empty() {
-                            // all accounts in `many_refs` now have only 1 ref, so this slot can now be combined into another.
-                            saved += 1;
+        const AVOID_CALLBACK_RESULT: u8 = AccountsIndexScanResult::Unknown as u8;
+        self.accounts_index
+            .scan::<_, _, false, AVOID_CALLBACK_RESULT>(
+                pks.iter(),
+                |_pubkey, slots_refs, _entry| {
+                    index += 1;
+                    if let Some((_slot_list, ref_count)) = slots_refs {
+                        if ref_count == 1 {
+                            // This entry has been unref'd during shrink ancient, so it can now move out of `many_refs` and into `one_ref`.
+                            // This could happen if the same pubkey is in 2 append vecs that are BOTH being shrunk right now.
+                            // Note that `shrink_collect()`, which was previously called to create `shrink_collect`, unrefs any dead accounts.
+                            let many_refs = &mut shrink_collect.alive_accounts.many_refs;
+                            let account = many_refs.accounts.remove(index - 1);
+                            if many_refs.accounts.is_empty() {
+                                // all accounts in `many_refs` now have only 1 ref, so this slot can now be combined into another.
+                                saved += 1;
+                            }
+                            let bytes = account.stored_size();
+                            shrink_collect.alive_accounts.one_ref.accounts.push(account);
+                            saturating_add_assign!(
+                                shrink_collect.alive_accounts.one_ref.bytes,
+                                bytes
+                            );
+                            many_refs.bytes -= bytes;
+                            // since we removed an entry from many_refs.accounts, we need to index one less
+                            index -= 1;
                         }
-                        let bytes = account.stored_size();
-                        shrink_collect.alive_accounts.one_ref.accounts.push(account);
-                        saturating_add_assign!(shrink_collect.alive_accounts.one_ref.bytes, bytes);
-                        many_refs.bytes -= bytes;
-                        // since we removed an entry from many_refs.accounts, we need to index one less
-                        index -= 1;
                     }
-                }
-                AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
-            },
-            None,
-        );
+                    AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
+                },
+            );
         self.shrink_ancient_stats
             .second_pass_one_ref
             .fetch_add(saved, Ordering::Relaxed);
@@ -3142,14 +3147,16 @@ pub mod tests {
                 target_slots_sorted: Vec::default(),
             };
             db.addref_accounts_failed_to_shrink_ancient(accounts_to_combine);
-            db.accounts_index.scan::<_, _, false>(
-                unrefed_pubkeys.iter(),
-                |k, slot_refs, _entry| {
-                    assert_eq!(expected_ref_counts.remove(k).unwrap(), slot_refs.unwrap().1);
-                    AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
-                },
-                None,
-            );
+
+            const AVOID_CALLBACK_RESULT: u8 = AccountsIndexScanResult::Unknown as u8;
+            db.accounts_index
+                .scan::<_, _, false, AVOID_CALLBACK_RESULT>(
+                    unrefed_pubkeys.iter(),
+                    |k, slot_refs, _entry| {
+                        assert_eq!(expected_ref_counts.remove(k).unwrap(), slot_refs.unwrap().1);
+                        AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
+                    },
+                );
             // should have removed all of them
             assert!(expected_ref_counts.is_empty());
         }
