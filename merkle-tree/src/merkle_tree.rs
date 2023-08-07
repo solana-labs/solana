@@ -1,4 +1,4 @@
-use solana_program::hash::{hashv, Hash};
+use {std::cmp::max, solana_program::hash::{hashv, Hash}};
 
 // We need to discern between leaf and intermediate nodes to prevent trivial second
 // pre-image attacks.
@@ -137,6 +137,91 @@ impl MerkleTree {
 
     pub fn get_root(&self) -> Option<&Hash> {
         self.nodes.iter().last()
+    }
+
+    fn private_merge(a: &mut Hash, b: &Hash) {
+        //todo: verify and implement jump's fancy avx implementation
+        let hash = hash_intermediate!(a, b);
+        *a = hash;
+    }
+
+    pub fn append_nodes(&mut self, nodes: Vec<Hash>,) {
+        let mut leaf_count = self.leaf_count;
+        for mut node in nodes {
+            let tmp = &mut node;
+            let mut layer: usize = 0;
+            leaf_count += 1;
+            let mut cursor = leaf_count;
+            while (cursor & 1) == 0 {
+                Self::private_merge(tmp, &self.nodes[layer]);
+                layer += 1;
+                cursor >>= 1;
+            }
+        
+            unsafe {
+                self.nodes.set_len(max(layer + 1, self.nodes.len()));
+            }
+            self.nodes[layer] = *tmp;
+            
+        }
+        self.leaf_count = leaf_count;
+    }
+
+    fn private_depth(leaf_count: usize) -> usize {
+        if leaf_count <= 1 {
+            leaf_count
+        }
+        else {
+            (63 - (leaf_count - 1).leading_zeros()) as usize + 2
+        }
+    }
+
+    pub fn commit_finish(&mut self) -> Hash {
+        let leaf_count = self.leaf_count;
+        let root_idx: usize = Self::private_depth(leaf_count) - 1;
+        unsafe {
+            self.nodes.set_len(max(root_idx + 1, self.nodes.len()))
+        }
+        if !leaf_count.is_power_of_two() {
+            let mut layer = leaf_count.trailing_zeros() as usize;
+            let mut layer_count = leaf_count >> layer;
+            let mut tmp = self.nodes[layer];
+
+            while layer_count > 1 {
+                if (layer_count & 1) != 0 {
+                    let arg1 = &tmp;
+                    let arg2 = &tmp;
+                    let hash = hash_intermediate!(arg1, arg2);
+                    tmp = hash;
+                }
+                else {
+                    let arg1 = &self.nodes[layer];
+                    let hash = hash_intermediate!(tmp, arg1);
+                    tmp = hash;
+                }
+                layer+=1; 
+                layer_count = (layer_count+1) >> 1;
+            }
+            self.nodes[root_idx] = tmp;
+        }
+        self.nodes[root_idx]
+    }
+
+    pub fn merkle_root<T: AsRef<[u8]>>(items: &[T]) -> Hash {
+        let cap = MerkleTree::calculate_vec_capacity(items.len());
+        let mut mt = MerkleTree {
+            leaf_count: 0,
+            nodes: Vec::with_capacity(cap),
+        };
+
+        let hashes = items.iter().map(|item| {
+            let item = item.as_ref();
+            hash_leaf!(item)
+        }).collect::<Vec<_>>();
+
+        mt.append_nodes(hashes);
+
+        mt.commit_finish()
     }
 
     pub fn find_path(&self, index: usize) -> Option<Proof> {

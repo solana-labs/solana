@@ -231,12 +231,19 @@ pub fn hash_transactions(transactions: &[VersionedTransaction]) -> Hash {
         .iter()
         .flat_map(|tx| tx.signatures.iter())
         .collect();
-    let merkle_tree = MerkleTree::new(&signatures);
+
+    if !signatures.is_empty() {
+        MerkleTree::merkle_root(&signatures)
+    }
+    else {
+        Hash::default()
+    }
+    /*let merkle_tree = MerkleTree::new(&signatures);
     if let Some(root_hash) = merkle_tree.get_root() {
         *root_hash
     } else {
         Hash::default()
-    }
+    }*/
 }
 
 /// Creates the hash `num_hashes` after `start_hash`. If the transaction contains
