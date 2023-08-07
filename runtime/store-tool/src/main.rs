@@ -7,6 +7,7 @@ use {
         hash::Hash,
         pubkey::Pubkey,
     },
+    std::mem::ManuallyDrop,
 };
 
 fn main() {
@@ -34,8 +35,11 @@ fn main() {
     let len = value_t!(matches, "len", usize)
         .unwrap_or_else(|_| std::fs::metadata(&file).unwrap().len() as usize);
 
-    let mut store = AppendVec::new_from_file_unchecked(file, len).expect("should succeed");
-    store.set_no_remove_on_drop();
+    // When the AppendVec is dropped, the backing file will be removed.  We do not want to remove
+    // the backing file here in the store-tool, so prevent dropping.
+    let store = ManuallyDrop::new(
+        AppendVec::new_from_file_unchecked(file, len).expect("new AppendVec from file"),
+    );
     info!("store: len: {} capacity: {}", store.len(), store.capacity());
     let mut num_accounts: usize = 0;
     let mut stored_accounts_len: usize = 0;
@@ -67,6 +71,3 @@ fn is_account_zeroed(account: &StoredAccountMeta) -> bool {
         && account.pubkey() == &Pubkey::default()
         && account.to_account_shared_data() == AccountSharedData::default()
 }
-
-#[cfg(test)]
-pub mod test {}
