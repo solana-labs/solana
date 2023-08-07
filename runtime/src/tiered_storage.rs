@@ -26,7 +26,7 @@ use {
     solana_sdk::{account::ReadableAccount, hash::Hash},
     std::{
         borrow::Borrow,
-        fs::{remove_file, OpenOptions},
+        fs::OpenOptions,
         path::{Path, PathBuf},
     },
     writer::TieredStorageWriter,
@@ -54,7 +54,7 @@ pub struct TieredStorage {
 
 impl Drop for TieredStorage {
     fn drop(&mut self) {
-        if let Err(err) = remove_file(&self.path) {
+        if let Err(err) = fs_err::remove_file(&self.path) {
             inc_new_counter_info!("tiered_storage_drop_fail", 1);
             panic!("TieredStorage failed to remove backing storage file: {err}");
         }
