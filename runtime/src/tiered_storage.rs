@@ -19,10 +19,8 @@ use {
     error::TieredStorageError,
     footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
     index::AccountIndexFormat,
-    log::log_enabled,
     once_cell::sync::OnceCell,
     readable::TieredStorageReader,
-    solana_metrics::inc_new_counter_info,
     solana_sdk::{account::ReadableAccount, hash::Hash},
     std::{
         borrow::Borrow,
@@ -55,7 +53,6 @@ pub struct TieredStorage {
 impl Drop for TieredStorage {
     fn drop(&mut self) {
         if let Err(err) = fs_err::remove_file(&self.path) {
-            inc_new_counter_info!("tiered_storage_drop_fail", 1);
             panic!("TieredStorage failed to remove backing storage file: {err}");
         }
     }
