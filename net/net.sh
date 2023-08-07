@@ -975,7 +975,7 @@ while [[ -n $1 ]]; do
       maybeSkipRequireTower="$1"
       shift 1
     elif [[ $1 = --wen_restart ]]; then
-      wenRestart="$1"
+      wenRestart=true
       shift 1
     elif [[ $1 = --client-type ]]; then
       clientType=$2
