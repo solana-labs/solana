@@ -398,8 +398,8 @@ mod serde_snapshot_tests {
 
             // Get the hashes for the latest slot, which should be the only hashes in the
             // map on the deserialized AccountsDb
-            assert_eq!(daccounts.accounts_delta_hashes.lock().unwrap().len(), 1);
-            assert_eq!(daccounts.accounts_hashes.lock().unwrap().len(), 1);
+            assert_eq!(daccounts.accounts_delta_hashes().lock().unwrap().len(), 1);
+            assert_eq!(daccounts.accounts_hashes().lock().unwrap().len(), 1);
             assert_eq!(
                 daccounts.get_accounts_delta_hash(latest_slot).unwrap(),
                 accounts.get_accounts_delta_hash(latest_slot).unwrap(),

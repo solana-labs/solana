@@ -1421,8 +1421,8 @@ pub struct AccountsDb {
     pub thread_pool_clean: ThreadPool,
 
     bank_hash_stats: Mutex<HashMap<Slot, BankHashStats>>,
-    pub accounts_delta_hashes: Mutex<HashMap<Slot, AccountsDeltaHash>>,
-    pub accounts_hashes: Mutex<HashMap<Slot, (AccountsHash, /*capitalization*/ u64)>>,
+    accounts_delta_hashes: Mutex<HashMap<Slot, AccountsDeltaHash>>,
+    accounts_hashes: Mutex<HashMap<Slot, (AccountsHash, /*capitalization*/ u64)>>,
     incremental_accounts_hashes:
         Mutex<HashMap<Slot, (IncrementalAccountsHash, /*capitalization*/ u64)>>,
 
@@ -9503,6 +9503,30 @@ impl AccountsDb {
     }
 }
 
+// These functions/fields are only usable from a dev context (i.e. tests and benches)
+#[cfg(feature = "dev-context-only-utils")]
+impl AccountsDb {
+    pub fn accounts_delta_hashes(&self) -> &Mutex<HashMap<Slot, AccountsDeltaHash>> {
+        &self.accounts_delta_hashes
+    }
+
+    pub fn set_accounts_delta_hash_for_tests(
+        &self,
+        slot: Slot,
+        accounts_delta_hash: AccountsDeltaHash,
+    ) {
+        self.set_accounts_delta_hash(slot, accounts_delta_hash);
+    }
+
+    pub fn accounts_hashes(&self) -> &Mutex<HashMap<Slot, (AccountsHash, /*capitalization*/ u64)>> {
+        &self.accounts_hashes
+    }
+
+    pub fn set_accounts_hash_for_tests(&self, slot: Slot, accounts_hash: AccountsHash) {
+        self.set_accounts_hash(slot, (accounts_hash, u64::default()));
+    }
+}
+
 /// A set of utility functions used for testing and benchmarking
 pub mod test_utils {
     use {
@@ -9648,20 +9672,6 @@ pub mod tests {
 
         fn get_storage_for_slot(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
             self.storage.get_slot_storage_entry(slot)
-        }
-
-        // used by serde_snapshot tests
-        pub fn set_accounts_hash_for_tests(&self, slot: Slot, accounts_hash: AccountsHash) {
-            self.set_accounts_hash(slot, (accounts_hash, u64::default()));
-        }
-
-        // used by serde_snapshot tests
-        pub fn set_accounts_delta_hash_for_tests(
-            &self,
-            slot: Slot,
-            accounts_delta_hash: AccountsDeltaHash,
-        ) {
-            self.set_accounts_delta_hash(slot, accounts_delta_hash);
         }
     }
 
