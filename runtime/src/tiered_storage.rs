@@ -50,6 +50,14 @@ pub struct TieredStorage {
     path: PathBuf,
 }
 
+impl Drop for TieredStorage {
+    fn drop(&mut self) {
+        if let Err(err) = fs_err::remove_file(&self.path) {
+            panic!("TieredStorage failed to remove backing storage file: {err}");
+        }
+    }
+}
+
 impl TieredStorage {
     /// Creates a new writable instance of TieredStorage based on the
     /// specified path and TieredStorageFormat.
@@ -151,6 +159,7 @@ mod tests {
         footer::{TieredStorageFooter, TieredStorageMagicNumber},
         hot::HOT_FORMAT,
         solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
+        std::mem::ManuallyDrop,
         tempfile::tempdir,
     };
 
@@ -205,8 +214,11 @@ mod tests {
         let tiered_storage_path = temp_dir.path().join("test_new_meta_file_only");
 
         {
-            let tiered_storage =
-                TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
+            let tiered_storage = ManuallyDrop::new(TieredStorage::new_writable(
+                &tiered_storage_path,
+                HOT_FORMAT.clone(),
+            ));
+
             assert!(!tiered_storage.is_read_only());
             assert_eq!(tiered_storage.path(), tiered_storage_path);
             assert_eq!(tiered_storage.file_size().unwrap(), 0);
@@ -251,5 +263,43 @@ mod tests {
                 tiered_storage_path,
             )),
         );
+    }
+
+    #[test]
+    fn test_remove_on_drop() {
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = tempdir().unwrap();
+        let tiered_storage_path = temp_dir.path().join("test_remove_on_drop");
+        {
+            let tiered_storage =
+                TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
+            write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
+        }
+        // expect the file does not exists as it has been removed on drop
+        assert!(!tiered_storage_path.try_exists().unwrap());
+
+        {
+            let tiered_storage = ManuallyDrop::new(TieredStorage::new_writable(
+                &tiered_storage_path,
+                HOT_FORMAT.clone(),
+            ));
+            write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
+        }
+        // expect the file exists as we have ManuallyDrop this time.
+        assert!(tiered_storage_path.try_exists().unwrap());
+
+        {
+            // open again in read-only mode with ManuallyDrop.
+            _ = ManuallyDrop::new(TieredStorage::new_readonly(&tiered_storage_path).unwrap());
+        }
+        // again expect the file exists as we have ManuallyDrop.
+        assert!(tiered_storage_path.try_exists().unwrap());
+
+        {
+            // open again without ManuallyDrop in read-only mode
+            _ = TieredStorage::new_readonly(&tiered_storage_path).unwrap();
+        }
+        // expect the file does not exist as the file has been removed on drop
+        assert!(!tiered_storage_path.try_exists().unwrap());
     }
 }
