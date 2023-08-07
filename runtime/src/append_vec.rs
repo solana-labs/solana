@@ -217,9 +217,6 @@ pub struct AppendVec {
 
     /// The number of bytes available for storing items.
     file_size: u64,
-
-    /// True if the file should automatically be deleted when this AppendVec is dropped.
-    remove_on_drop: bool,
 }
 
 lazy_static! {
@@ -228,15 +225,13 @@ lazy_static! {
 
 impl Drop for AppendVec {
     fn drop(&mut self) {
-        if self.remove_on_drop {
-            APPEND_VEC_MMAPPED_FILES_OPEN.fetch_sub(1, Ordering::Relaxed);
-            if let Err(_e) = remove_file(&self.path) {
-                // promote this to panic soon.
-                // disabled due to many false positive warnings while running tests.
-                // blocked by rpc's upgrade to jsonrpc v17
-                //error!("AppendVec failed to remove {:?}: {:?}", &self.path, e);
-                inc_new_counter_info!("append_vec_drop_fail", 1);
-            }
+        APPEND_VEC_MMAPPED_FILES_OPEN.fetch_sub(1, Ordering::Relaxed);
+        if let Err(_err) = remove_file(&self.path) {
+            // promote this to panic soon.
+            // disabled due to many false positive warnings while running tests.
+            // blocked by rpc's upgrade to jsonrpc v17
+            //error!("AppendVec failed to remove {}: {err}", &self.path.display());
+            inc_new_counter_info!("append_vec_drop_fail", 1);
         }
     }
 }
@@ -294,12 +289,11 @@ impl AppendVec {
             append_lock: Mutex::new(()),
             current_len: AtomicUsize::new(initial_len),
             file_size: size as u64,
-            remove_on_drop: true,
         }
     }
 
     pub fn set_no_remove_on_drop(&mut self) {
-        self.remove_on_drop = false;
+        // noop: will be removed next
     }
 
     fn sanitize_len_and_size(current_len: usize, file_size: usize) -> Result<()> {
@@ -398,7 +392,6 @@ impl AppendVec {
             append_lock: Mutex::new(()),
             current_len: AtomicUsize::new(current_len),
             file_size,
-            remove_on_drop: true,
         })
     }
 
@@ -667,7 +660,7 @@ pub mod tests {
             account::{accounts_equal, Account, AccountSharedData, WritableAccount},
             timing::duration_as_ms,
         },
-        std::time::Instant,
+        std::{mem::ManuallyDrop, time::Instant},
     };
 
     impl AppendVec {
@@ -1176,26 +1169,27 @@ pub mod tests {
     fn test_new_from_file_crafted_data_len() {
         let file = get_append_vec_path("test_new_from_file_crafted_data_len");
         let path = &file.path;
-        let mut av = AppendVec::new(path, true, 1024 * 1024);
-        av.set_no_remove_on_drop();
+        let accounts_len = {
+            // wrap AppendVec in ManuallyDrop to ensure we do not remove the backing file when dropped
+            let av = ManuallyDrop::new(AppendVec::new(path, true, 1024 * 1024));
 
-        let crafted_data_len = 1;
+            let crafted_data_len = 1;
 
-        av.append_account_test(&create_test_account(10)).unwrap();
+            av.append_account_test(&create_test_account(10)).unwrap();
 
-        let accounts = av.accounts(0);
-        let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
-        account.set_data_len_unsafe(crafted_data_len);
-        assert_eq!(account.data_len(), crafted_data_len);
+            let accounts = av.accounts(0);
+            let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
+            account.set_data_len_unsafe(crafted_data_len);
+            assert_eq!(account.data_len(), crafted_data_len);
 
-        // Reload accounts and observe crafted_data_len
-        let accounts = av.accounts(0);
-        let account = accounts.first().unwrap();
-        assert_eq!(account.data_len(), crafted_data_len);
+            // Reload accounts and observe crafted_data_len
+            let accounts = av.accounts(0);
+            let account = accounts.first().unwrap();
+            assert_eq!(account.data_len(), crafted_data_len);
 
-        av.flush().unwrap();
-        let accounts_len = av.len();
-        drop(av);
+            av.flush().unwrap();
+            av.len()
+        };
         let result = AppendVec::new_from_file(path, accounts_len);
         assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
     }
@@ -1204,24 +1198,25 @@ pub mod tests {
     fn test_new_from_file_too_large_data_len() {
         let file = get_append_vec_path("test_new_from_file_too_large_data_len");
         let path = &file.path;
-        let mut av = AppendVec::new(path, true, 1024 * 1024);
-        av.set_no_remove_on_drop();
+        let accounts_len = {
+            // wrap AppendVec in ManuallyDrop to ensure we do not remove the backing file when dropped
+            let av = ManuallyDrop::new(AppendVec::new(path, true, 1024 * 1024));
 
-        let too_large_data_len = u64::max_value();
-        av.append_account_test(&create_test_account(10)).unwrap();
+            let too_large_data_len = u64::max_value();
+            av.append_account_test(&create_test_account(10)).unwrap();
 
-        let accounts = av.accounts(0);
-        let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
-        account.set_data_len_unsafe(too_large_data_len);
-        assert_eq!(account.data_len(), too_large_data_len);
+            let accounts = av.accounts(0);
+            let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
+            account.set_data_len_unsafe(too_large_data_len);
+            assert_eq!(account.data_len(), too_large_data_len);
 
-        // Reload accounts and observe no account with bad offset
-        let accounts = av.accounts(0);
-        assert_matches!(accounts.first(), None);
+            // Reload accounts and observe no account with bad offset
+            let accounts = av.accounts(0);
+            assert_matches!(accounts.first(), None);
 
-        av.flush().unwrap();
-        let accounts_len = av.len();
-        drop(av);
+            av.flush().unwrap();
+            av.len()
+        };
         let result = AppendVec::new_from_file(path, accounts_len);
         assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
     }
@@ -1230,60 +1225,61 @@ pub mod tests {
     fn test_new_from_file_crafted_executable() {
         let file = get_append_vec_path("test_new_from_crafted_executable");
         let path = &file.path;
-        let mut av = AppendVec::new(path, true, 1024 * 1024);
-        av.set_no_remove_on_drop();
-        av.append_account_test(&create_test_account(10)).unwrap();
-        {
-            let mut executable_account = create_test_account(10);
-            executable_account.1.set_executable(true);
-            av.append_account_test(&executable_account).unwrap();
-        }
-
-        // reload accounts
-        let accounts = av.accounts(0);
-
-        // ensure false is 0u8 and true is 1u8 actually
-        assert_eq!(*accounts[0].ref_executable_byte(), 0);
-        assert_eq!(*accounts[1].ref_executable_byte(), 1);
-
-        let StoredAccountMeta::AppendVec(account) = &accounts[0];
-        let crafted_executable = u8::max_value() - 1;
-
-        account.set_executable_as_byte(crafted_executable);
-
-        // reload crafted accounts
-        let accounts = av.accounts(0);
-        let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
-
-        // upper 7-bits are not 0, so sanitization should fail
-        assert!(!account.sanitize_executable());
-
-        // we can observe crafted value by ref
-        {
-            let executable_bool: &bool = &account.account_meta.executable;
-            // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
-            // assert_eq! thinks *executable_bool is equal to false but the if condition thinks it's not, contradictorily.
-            assert!(!*executable_bool);
-            #[cfg(not(target_arch = "aarch64"))]
+        let accounts_len = {
+            // wrap AppendVec in ManuallyDrop to ensure we do not remove the backing file when dropped
+            let av = ManuallyDrop::new(AppendVec::new(path, true, 1024 * 1024));
+            av.append_account_test(&create_test_account(10)).unwrap();
             {
-                const FALSE: bool = false; // keep clippy happy
-                if *executable_bool == FALSE {
-                    panic!("This didn't occur if this test passed.");
-                }
+                let mut executable_account = create_test_account(10);
+                executable_account.1.set_executable(true);
+                av.append_account_test(&executable_account).unwrap();
             }
-            assert_eq!(*account.ref_executable_byte(), crafted_executable);
-        }
 
-        // we can NOT observe crafted value by value
-        {
-            let executable_bool: bool = account.executable();
-            assert!(!executable_bool);
-            assert_eq!(account.get_executable_byte(), 0); // Wow, not crafted_executable!
-        }
+            // reload accounts
+            let accounts = av.accounts(0);
 
-        av.flush().unwrap();
-        let accounts_len = av.len();
-        drop(av);
+            // ensure false is 0u8 and true is 1u8 actually
+            assert_eq!(*accounts[0].ref_executable_byte(), 0);
+            assert_eq!(*accounts[1].ref_executable_byte(), 1);
+
+            let StoredAccountMeta::AppendVec(account) = &accounts[0];
+            let crafted_executable = u8::max_value() - 1;
+
+            account.set_executable_as_byte(crafted_executable);
+
+            // reload crafted accounts
+            let accounts = av.accounts(0);
+            let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
+
+            // upper 7-bits are not 0, so sanitization should fail
+            assert!(!account.sanitize_executable());
+
+            // we can observe crafted value by ref
+            {
+                let executable_bool: &bool = &account.account_meta.executable;
+                // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
+                // assert_eq! thinks *executable_bool is equal to false but the if condition thinks it's not, contradictorily.
+                assert!(!*executable_bool);
+                #[cfg(not(target_arch = "aarch64"))]
+                {
+                    const FALSE: bool = false; // keep clippy happy
+                    if *executable_bool == FALSE {
+                        panic!("This didn't occur if this test passed.");
+                    }
+                }
+                assert_eq!(*account.ref_executable_byte(), crafted_executable);
+            }
+
+            // we can NOT observe crafted value by value
+            {
+                let executable_bool: bool = account.executable();
+                assert!(!executable_bool);
+                assert_eq!(account.get_executable_byte(), 0); // Wow, not crafted_executable!
+            }
+
+            av.flush().unwrap();
+            av.len()
+        };
         let result = AppendVec::new_from_file(path, accounts_len);
         assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
     }
