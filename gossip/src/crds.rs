@@ -669,7 +669,7 @@ impl Default for CrdsDataStats {
 }
 
 impl CrdsDataStats {
-    fn record_insert(&mut self, entry: &VersionedCrdsValue) {
+    fn record_insert(&mut self, entry: &VersionedCrdsValue, route: GossipRoute) {
         self.counts[Self::ordinal(entry)] += 1;
         if let CrdsData::Vote(_, vote) = &entry.value.data {
             if let Some(slot) = vote.slot() {
@@ -678,7 +678,9 @@ impl CrdsDataStats {
             }
         }
 
-        if should_report_message_signature(&entry.value.signature) {
+        if matches!(route, GossipRoute::PushMessage)
+            && should_report_message_signature(&entry.value.signature)
+        {
             datapoint_info!(
                 "gossip_crds_sample",
                 (
@@ -723,8 +725,8 @@ impl CrdsStats {
         match route {
             GossipRoute::LocalMessage => (),
             GossipRoute::PullRequest => (),
-            GossipRoute::PushMessage => self.push.record_insert(entry),
-            GossipRoute::PullResponse => self.pull.record_insert(entry),
+            GossipRoute::PushMessage => self.push.record_insert(entry, route),
+            GossipRoute::PullResponse => self.pull.record_insert(entry, route),
         }
     }
 
