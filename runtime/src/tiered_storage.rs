@@ -53,13 +53,10 @@ pub struct TieredStorage {
 }
 
 impl Drop for TieredStorage {
-    /// All AccountsFile instances default to remove-on-drop behavior.
     fn drop(&mut self) {
-        if let Err(_e) = remove_file(&self.path) {
-            // Here we are doing similar behavior as AppendVec that we log error
-            // instead of paniking due to false positive warnings while running
-            // tests.
+        if let Err(err) = remove_file(&self.path) {
             inc_new_counter_info!("tiered_storage_drop_fail", 1);
+            panic!("TieredStorage failed to remove backing storage file: {err}");
         }
     }
 }
@@ -165,7 +162,7 @@ mod tests {
         footer::{TieredStorageFooter, TieredStorageMagicNumber},
         hot::HOT_FORMAT,
         solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
-        std::{fs, mem::ManuallyDrop},
+        std::mem::ManuallyDrop,
         tempfile::tempdir,
     };
 
@@ -281,8 +278,8 @@ mod tests {
                 TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
             write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
         }
-        // expect error as the file has been removed on drop
-        assert!(fs::metadata(&tiered_storage_path).is_err());
+        // expect the file does not exists as it has been removed on drop
+        assert!(!tiered_storage_path.try_exists().unwrap());
 
         {
             let tiered_storage = ManuallyDrop::new(TieredStorage::new_writable(
@@ -291,20 +288,21 @@ mod tests {
             ));
             write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
         }
-        // expect ok as we have ManuallyDrop this time.
-        assert!(fs::metadata(&tiered_storage_path).is_ok());
+        // expect the file exists as we have ManuallyDrop this time.
+        assert!(tiered_storage_path.try_exists().unwrap());
 
         {
             // open again in read-only mode with ManuallyDrop.
-            let _ = ManuallyDrop::new(TieredStorage::new_readonly(&tiered_storage_path).unwrap());
+            _ = ManuallyDrop::new(TieredStorage::new_readonly(&tiered_storage_path).unwrap());
         }
-        // again expect ok as we have ManuallyDrop.
-        assert!(fs::metadata(&tiered_storage_path).is_ok());
+        // again expect the file exists as we have ManuallyDrop.
+        assert!(tiered_storage_path.try_exists().unwrap());
 
-        // open again without ManuallyDrop in read-only mode
-        TieredStorage::new_readonly(&tiered_storage_path).unwrap();
-
-        // expect error as the file has been removed on drop
-        assert!(fs::metadata(&tiered_storage_path).is_err());
+        {
+            // open again without ManuallyDrop in read-only mode
+            _ = TieredStorage::new_readonly(&tiered_storage_path).unwrap();
+        }
+        // expect the file does not exist as the file has been removed on drop
+        assert!(!tiered_storage_path.try_exists().unwrap());
     }
 }
