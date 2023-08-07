@@ -789,12 +789,11 @@ impl AccountsHasher {
                 let (hashes_file, lamports_bin) =
                     self.de_dup_accounts_in_parallel(sorted_data_by_pubkey, bin, max_bin, stats);
                 {
+                    hash_total.fetch_add(hashes_file.count(), Ordering::Relaxed);
                     let mut lamports_sum = sum.lock().unwrap();
                     *lamports_sum = Self::checked_cast_for_capitalization(
                         *lamports_sum as u128 + lamports_bin as u128,
                     );
-                    drop(lamports_sum);
-                    hash_total.fetch_add(hashes_file.count(), Ordering::Relaxed);
                 }
                 hashes_file
             })
