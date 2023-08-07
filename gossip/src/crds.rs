@@ -100,7 +100,7 @@ pub enum GossipRoute<'a> {
     LocalMessage,
     PullRequest,
     PullResponse,
-    PushMessage(/*from:*/&'a Pubkey),
+    PushMessage(/*from:*/ &'a Pubkey),
 }
 
 type CrdsCountsArray = [usize; 12];
