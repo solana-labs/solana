@@ -823,6 +823,7 @@ maybeDisableAirdrops=""
 maybeWaitForSupermajority=""
 maybeAccountsDbSkipShrink=""
 maybeSkipRequireTower=""
+wenRestart=""
 debugBuild=false
 profileBuild=false
 doBuild=true
@@ -972,6 +973,9 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 = --skip-require-tower ]]; then
       maybeSkipRequireTower="$1"
+      shift 1
+    elif [[ $1 = --wen_restart ]]; then
+      wenRestart="$1"
       shift 1
     elif [[ $1 = --client-type ]]; then
       clientType=$2
