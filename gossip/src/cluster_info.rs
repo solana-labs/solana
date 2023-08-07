@@ -271,7 +271,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "Ctxue3UVFXXqnHoMVAPmfBoCy3Cyg7gNCYBY7Cg9P3so")]
+#[frozen_abi(digest = "3U6DqJ4X4UE1DxRP1sbwP5QtyFxexMxzjLSKXXRDrt4q")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -824,7 +824,7 @@ impl ClusterInfo {
                     }
                     let ip_addr = node.gossip().as_ref().map(SocketAddr::ip).ok();
                     Some(format!(
-                        "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}|  {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
+                        "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}|  {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
                         node.gossip()
                             .ok()
                             .filter(|addr| self.socket_addr_space.check(addr))
@@ -846,6 +846,7 @@ impl ClusterInfo {
                         self.addr_to_string(&ip_addr, &node.tpu(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tpu_forwards(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tvu(contact_info::Protocol::UDP).ok()),
+                        self.addr_to_string(&ip_addr, &node.tvu(contact_info::Protocol::QUIC).ok()),
                         self.addr_to_string(&ip_addr, &node.repair().ok()),
                         self.addr_to_string(&ip_addr, &node.serve_repair().ok()),
                         node.shred_version(),
@@ -856,9 +857,9 @@ impl ClusterInfo {
 
         format!(
             "IP Address        |Age(ms)| Node identifier                              \
-             | Version |Gossip|TPUvote| TPU  |TPUfwd| TVU  |Repair|ServeR|ShredVer\n\
-             ------------------+-------+---------------------------------------\
-             +---------+------+-------+------+------+------+------+------+--------\n\
+             | Version |Gossip|TPUvote| TPU  |TPUfwd| TVU  |TVU Q |Repair|ServeR|ShredVer\n\
+             ------------------+-------+----------------------------------------------\
+             +---------+------+-------+------+------+------+------+------+------+--------\n\
              {}\
              Nodes: {}{}{}",
             nodes.join(""),
@@ -2826,8 +2827,8 @@ impl Node {
         let (gossip_port, (gossip, ip_echo)) =
             bind_common_in_range(localhost_ip_addr, port_range).unwrap();
         let gossip_addr = SocketAddr::new(localhost_ip_addr, gossip_port);
-        let ((_tvu_port, tvu), (_tvu_quic_port, tvu_quic)) =
-            bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
+        let tvu = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let tvu_quic = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let ((_tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
             bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let tpu_vote = UdpSocket::bind(&localhost_bind_addr).unwrap();
@@ -2856,6 +2857,7 @@ impl Node {
         }
         set_socket!(set_gossip, gossip_addr, "gossip");
         set_socket!(set_tvu, tvu.local_addr().unwrap(), "TVU");
+        set_socket!(set_tvu_quic, tvu_quic.local_addr().unwrap(), "TVU QUIC");
         set_socket!(set_repair, repair.local_addr().unwrap(), "repair");
         set_socket!(set_tpu, tpu.local_addr().unwrap(), "TPU");
         set_socket!(
@@ -2920,8 +2922,8 @@ impl Node {
     ) -> Self {
         let (gossip_port, (gossip, ip_echo)) =
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
-        let ((tvu_port, tvu), (_tvu_quic_port, tvu_quic)) =
-            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
+        let (tvu_port, tvu) = Self::bind(bind_ip_addr, port_range);
+        let (tvu_quic_port, tvu_quic) = Self::bind(bind_ip_addr, port_range);
         let ((tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
             bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let ((tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
@@ -2952,6 +2954,7 @@ impl Node {
         }
         set_socket!(set_gossip, gossip_port, "gossip");
         set_socket!(set_tvu, tvu_port, "TVU");
+        set_socket!(set_tvu_quic, tvu_quic_port, "TVU QUIC");
         set_socket!(set_repair, repair_port, "repair");
         set_socket!(set_tpu, tpu_port, "TPU");
         set_socket!(set_tpu_forwards, tpu_forwards_port, "TPU-forwards");
@@ -2995,10 +2998,7 @@ impl Node {
 
         let (tvu_port, tvu_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tvu multi_bind");
-        let (_tvu_port_quic, tvu_quic) = Self::bind(
-            bind_ip_addr,
-            (tvu_port + QUIC_PORT_OFFSET, tvu_port + QUIC_PORT_OFFSET + 1),
-        );
+        let (tvu_quic_port, tvu_quic) = Self::bind(bind_ip_addr, port_range);
         let (tpu_port, tpu_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 32).expect("tpu multi_bind");
 
@@ -3040,6 +3040,7 @@ impl Node {
         let addr = gossip_addr.ip();
         let _ = info.set_gossip((addr, gossip_port));
         let _ = info.set_tvu((addr, tvu_port));
+        let _ = info.set_tvu_quic((addr, tvu_quic_port));
         let _ = info.set_repair((addr, repair_port));
         let _ = info.set_tpu(public_tpu_addr.unwrap_or_else(|| SocketAddr::new(addr, tpu_port)));
         let _ = info.set_tpu_forwards(
@@ -3618,6 +3619,7 @@ mod tests {
     fn check_node_sockets(node: &Node, ip: IpAddr, range: (u16, u16)) {
         check_socket(&node.sockets.gossip, ip, range);
         check_socket(&node.sockets.repair, ip, range);
+        check_socket(&node.sockets.tvu_quic, ip, range);
 
         check_sockets(&node.sockets.tvu, ip, range);
         check_sockets(&node.sockets.tpu, ip, range);

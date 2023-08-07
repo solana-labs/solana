@@ -214,7 +214,7 @@ pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
 #[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize, strum_macros::Display)]
-#[frozen_abi(digest = "HXKJuZAK4LsweUTRbsxEcG9jHA9JR9s8MYmmjx2Nb5X1")]
+#[frozen_abi(digest = "DPHju3YufeNw1qfr22ZWRgJdXb1TvZt8iwLqWXUTyrtW")]
 pub enum RepairProtocol {
     LegacyWindowIndex(LegacyContactInfo, Slot, u64),
     LegacyHighestWindowIndex(LegacyContactInfo, Slot, u64),
@@ -1911,6 +1911,7 @@ mod tests {
         );
         nxt.set_gossip((Ipv4Addr::LOCALHOST, 1234)).unwrap();
         nxt.set_tvu((Ipv4Addr::LOCALHOST, 1235)).unwrap();
+        nxt.set_tvu_quic((Ipv4Addr::LOCALHOST, 1236)).unwrap();
         nxt.set_repair((Ipv4Addr::LOCALHOST, 1237)).unwrap();
         nxt.set_tpu((Ipv4Addr::LOCALHOST, 1238)).unwrap();
         nxt.set_tpu_forwards((Ipv4Addr::LOCALHOST, 1239)).unwrap();
@@ -1941,6 +1942,7 @@ mod tests {
         );
         nxt.set_gossip((Ipv4Addr::LOCALHOST, 1234)).unwrap();
         nxt.set_tvu((Ipv4Addr::LOCALHOST, 1235)).unwrap();
+        nxt.set_tvu_quic((Ipv4Addr::LOCALHOST, 1236)).unwrap();
         nxt.set_repair((Ipv4Addr::LOCALHOST, 1237)).unwrap();
         nxt.set_tpu((Ipv4Addr::LOCALHOST, 1238)).unwrap();
         nxt.set_tpu_forwards((Ipv4Addr::LOCALHOST, 1239)).unwrap();
