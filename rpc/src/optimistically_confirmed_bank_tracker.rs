@@ -469,7 +469,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &None,
-            &Arc::new(PrioritizationFeeCache::default()),
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 2);
         assert_eq!(highest_confirmed_slot, 2);
@@ -485,7 +485,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &None,
-            &Arc::new(PrioritizationFeeCache::default()),
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 2);
         assert_eq!(highest_confirmed_slot, 2);
@@ -501,7 +501,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &None,
-            &Arc::new(PrioritizationFeeCache::default()),
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 2);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 1);
@@ -522,7 +522,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &None,
-            &Arc::new(PrioritizationFeeCache::default()),
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 3);
         assert_eq!(highest_confirmed_slot, 3);
@@ -542,7 +542,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &None,
-            &Arc::new(PrioritizationFeeCache::default()),
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 3);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 1);
@@ -570,7 +570,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &subscribers,
-            &Arc::new(PrioritizationFeeCache::default()),
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 5);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
@@ -589,7 +589,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &subscribers,
-            &Arc::new(PrioritizationFeeCache::default()),
+            &PrioritizationFeeCache::default(),
         );
 
         assert_eq!(newest_root_slot, 5);
@@ -619,7 +619,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &None,
-            &Arc::new(PrioritizationFeeCache::default()),
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 5);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
@@ -641,7 +641,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &subscribers,
-            &Arc::new(PrioritizationFeeCache::default()),
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 7);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
@@ -659,7 +659,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &subscribers,
-            &Arc::new(PrioritizationFeeCache::default()),
+            &PrioritizationFeeCache::default(),
         );
 
         assert_eq!(newest_root_slot, 7);
