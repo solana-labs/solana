@@ -51,7 +51,6 @@ solana-perf = { workspace = true }
 solana-poh = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
-solana-repair-and-restart = { workspace = true }
 solana-rpc = { workspace = true }
 solana-rpc-client-api = { workspace = true }
 solana-runtime = { workspace = true }
@@ -62,6 +61,7 @@ solana-tpu-client = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
+solana-wen-restart = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
 sys-info = { workspace = true }

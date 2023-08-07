@@ -143,6 +143,9 @@ Operate a configured testnet
  startnode/stopnode-specific options:
    -i [ip address]                    - IP Address of the node to start or stop
 
+ startnode-specific options:
+   --wen_restart                      - Apply Wen restart during startNode.
+
  startclients-specific options:
    $CLIENT_OPTIONS
 
@@ -312,6 +315,8 @@ startBootstrapLeader() {
   declare ipAddress=$1
   declare nodeIndex="$2"
   declare logFile="$3"
+  declare wenRestart=$4
+
   echo "--- Starting bootstrap validator: $ipAddress"
   echo "start log: $logFile"
 
@@ -348,6 +353,7 @@ startBootstrapLeader() {
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
          \"$enableUdp\" \
+         \"$wenRestart\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -361,6 +367,7 @@ startNode() {
   declare ipAddress=$1
   declare nodeType=$2
   declare nodeIndex="$3"
+  declare wenRestart=$4
 
   initLogDir
   declare logFile="$netLogDir/validator-$ipAddress.log"
@@ -422,6 +429,7 @@ startNode() {
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
          \"$enableUdp\" \
+         \"$wenRestart\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -1160,8 +1168,12 @@ startnode)
   fi
   nodeType=
   nodeIndex=
+  wenRestart=
+  if [[ -z $wen_restart ]]; then
+    wenRestart="--wen_restart"
+  fi
   getNodeType
-  startNode "$nodeAddress" "$nodeType" "$nodeIndex"
+  startNode "$nodeAddress" "$nodeType" "$nodeIndex" "$wenRestart"
   ;;
 startclients)
   startClients

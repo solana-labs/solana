@@ -1,14 +1,8 @@
 use {
     solana_program::clock::Epoch,
-    solana_runtime::{
-        bank::Bank,
-        epoch_stakes::EpochStakes,
-    },
+    solana_runtime::{bank::Bank, epoch_stakes::EpochStakes},
     solana_sdk::clock::Slot,
-    std::{
-        collections::HashSet,
-        sync::Arc,
-    },
+    std::{collections::HashSet, sync::Arc},
 };
 
 pub struct EpochStakesMap {
@@ -41,16 +35,24 @@ impl EpochStakesMap {
         let my_epoch = self.bank_with_all_epochstakes.epoch();
         match slot {
             Some(my_slot) => {
-                let slot_epoch = self.bank_with_all_epochstakes.epoch_schedule().get_epoch(my_slot);
+                let slot_epoch = self
+                    .bank_with_all_epochstakes
+                    .epoch_schedule()
+                    .get_epoch(my_slot);
                 match self.bank_with_all_epochstakes.epoch_stakes(slot_epoch) {
                     Some(new_map) => new_map,
                     None => {
                         self.missing_epochs.insert(slot_epoch);
-                        self.bank_with_all_epochstakes.epoch_stakes(my_epoch).unwrap()
+                        self.bank_with_all_epochstakes
+                            .epoch_stakes(my_epoch)
+                            .unwrap()
                     }
                 }
             }
-            None => self.bank_with_all_epochstakes.epoch_stakes(my_epoch).unwrap(),
+            None => self
+                .bank_with_all_epochstakes
+                .epoch_stakes(my_epoch)
+                .unwrap(),
         }
     }
 }

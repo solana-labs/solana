@@ -1,5 +1,5 @@
 [package]
-name = "solana-repair-and-restart"
+name = "solana-wen-restart"
 description = "Automatically repair and restart protocol"
 documentation = "https://github.com/solana-foundation/solana-improvement-documents/pull/46"
 version = { workspace = true }
@@ -46,7 +46,7 @@ serial_test = { workspace = true }
 rustc_version = { workspace = true }
 
 [lib]
-name = "solana_repair_and_restart"
+name = "solana_wen_restart"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

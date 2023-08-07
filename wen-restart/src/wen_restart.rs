@@ -1,4 +1,4 @@
-//! The `repair-and-restart` module handles automatically repair in cluster restart
+//! The `wen-restart` module handles automatically repair in cluster restart
 use {
     crate::{
         epoch_stakes_map::EpochStakesMap,
@@ -10,19 +10,15 @@ use {
     solana_gossip::{cluster_info::ClusterInfo, crds::Cursor},
     solana_ledger::blockstore::Blockstore,
     solana_runtime::{
-        accounts_background_service::AbsRequestSender,
-        bank_forks::BankForks,
-        snapshot_config::SnapshotConfig,
-        snapshot_archive_info::SnapshotArchiveInfoGetter,
+        accounts_background_service::AbsRequestSender, bank_forks::BankForks,
+        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
         snapshot_utils::get_incremental_snapshot_archives,
     },
     solana_sdk::{clock::Slot, hash::Hash},
     solana_vote_program::vote_state::VoteTransaction,
     std::{
         collections::HashMap,
-        sync::{
-            Arc, RwLock, RwLockReadGuard,
-        },
+        sync::{Arc, RwLock, RwLockReadGuard},
         thread::sleep,
         time::Duration,
     },
@@ -76,7 +72,7 @@ fn select_heaviest_fork(
     }
 }
 
-pub fn repair_and_restart(
+pub fn wen_restart(
     last_vote: VoteTransaction,
     blockstore: Arc<Blockstore>,
     cluster_info: Arc<ClusterInfo>,
@@ -108,7 +104,7 @@ pub fn repair_and_restart(
     let root_bank = bank_forks.read().unwrap().root_bank();
     let mut cursor = Cursor::default();
     let mut epoch_stakes_map = EpochStakesMap::new(root_bank.clone());
-    let last_voted_fork_slots_aggregate = LastVotedForkSlotsAggregate::new(root_bank.slot());
+    let mut last_voted_fork_slots_aggregate = LastVotedForkSlotsAggregate::new(root_bank.slot());
     // Aggregate LastVotedForkSlots until seeing this message from 80% of the validators.
     loop {
         let last_voted_fork_slots = cluster_info.get_last_voted_fork_slots(&mut cursor);
@@ -162,11 +158,8 @@ pub fn repair_and_restart(
         sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
     }
     // Aggregate heaviest fork and sanity check.
-    let heaviest_fork_aggregate = HeaviestForkAggregate::new(
-        cluster_info.id(),
-        my_selected_slot,
-        my_selected_hash,
-    );
+    let mut heaviest_fork_aggregate =
+        HeaviestForkAggregate::new(cluster_info.id(), my_selected_slot, my_selected_hash);
     cursor = Cursor::default();
     loop {
         let heaviest_fork_list = cluster_info.get_heaviest_fork(&mut cursor);
@@ -181,12 +174,17 @@ pub fn repair_and_restart(
     }
     restart_slots_to_repair_sender.send(None)?;
     let mut my_bank_forks = bank_forks.write().unwrap();
-    my_bank_forks.set_root(my_selected_slot, &accounts_background_request_sender, None, true);
+    my_bank_forks.set_root(
+        my_selected_slot,
+        &accounts_background_request_sender,
+        None,
+        true,
+    );
     loop {
         if get_incremental_snapshot_archives(&snapshot_config.incremental_snapshot_archives_dir)
-            .iter().any(|archive_info| {
-                archive_info.slot() == my_selected_slot
-            }) {
+            .iter()
+            .any(|archive_info| archive_info.slot() == my_selected_slot)
+        {
             break;
         }
         sleep(Duration::from_millis(LISTEN_INTERVAL_MS));

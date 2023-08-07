@@ -179,6 +179,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --accounts-db-skip-shrink ]]; then
       args+=("$1")
       shift
+    elif [[ $1 == --wen-restart ]]; then
+      args+=("$1")
+      shift
     elif [[ $1 == --skip-require-tower ]]; then
       maybeRequireTower=false
       shift

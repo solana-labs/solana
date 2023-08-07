@@ -1368,6 +1368,21 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .possible_values(BlockProductionMethod::cli_names())
                 .help(BlockProductionMethod::cli_message())
         )
+        .arg(
+            Arg::with_name("wen_restart")
+                .long("wen-restart")
+                .hidden(hidden_unless_forced())
+                .takes_value(true)
+                .value_name("BOOLEAN")
+                .default_value(&default_args.wen_restart)
+                .help(
+                    "When specified, make validator enter Wen Restart, where it doesn't
+                    vote, create new blocks, or transmit new blocks. The only thing it
+                    does is Gossip last vote information with other validators in Wen
+                    Restart and figure out whether consensus can be reached to proceed
+                    into a cluster restart.
+                ")
+        )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
         .subcommand(
@@ -1897,6 +1912,8 @@ pub struct DefaultArgs {
     pub accounts_shrink_ratio: String,
     pub tpu_connection_pool_size: String,
 
+    pub wen_restart: String,
+
     // Exit subcommand
     pub exit_min_idle_time: String,
     pub exit_max_delinquent_stake: String,
@@ -1985,6 +2002,7 @@ impl DefaultArgs {
             wait_for_restart_window_min_idle_time: "10".to_string(),
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
             banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
+            wen_restart: false.to_string(),
         }
     }
 }

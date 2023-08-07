@@ -1,19 +1,8 @@
 use {
     crate::epoch_stakes_map::EpochStakesMap,
-    solana_gossip::{
-        crds_value::EpochSlotsIndex,
-        epoch_slots::EpochSlots,
-    },
-    solana_runtime::bank::Bank,
-    solana_sdk::{
-        clock::Slot,
-        hash::Hash,
-        pubkey::Pubkey,
-    },
-    std::{
-        collections::{BTreeMap, HashSet},
-        sync::{Arc, RwLock},
-    },
+    solana_gossip::{crds_value::EpochSlotsIndex, epoch_slots::EpochSlots},
+    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
+    std::collections::{BTreeMap, HashSet},
 };
 
 pub type SlotsToRepairList = Vec<(Slot, f64)>;
@@ -22,80 +11,80 @@ pub type SlotsToRepairList = Vec<(Slot, f64)>;
 // single-thread loop.
 pub struct LastVotedForkSlotsAggregate {
     root_slot: Slot,
-    slots_aggregate: RwLock<BTreeMap<Slot, HashSet<Pubkey>>>,
-    active_peers: RwLock<HashSet<Pubkey>>,
+    slots_aggregate: BTreeMap<Slot, HashSet<Pubkey>>,
+    active_peers: HashSet<Pubkey>,
 }
 
 impl LastVotedForkSlotsAggregate {
     pub(crate) fn new(root_slot: Slot) -> Self {
         Self {
             root_slot,
-            slots_aggregate: RwLock::new(BTreeMap::new()),
-            active_peers: RwLock::new(HashSet::new()),
+            slots_aggregate: BTreeMap::new(),
+            active_peers: HashSet::new(),
         }
     }
 
     pub(crate) fn aggregate(
-        &self,
+        &mut self,
         last_voted_fork_slots: Vec<(EpochSlotsIndex, EpochSlots, Slot, Hash)>,
         epoch_stakes_map: &mut EpochStakesMap,
     ) -> (Option<SlotsToRepairList>, f64) {
         let node_stakes = epoch_stakes_map.epoch_stakes(None);
-        let mut slots_aggregate = self.slots_aggregate.write().unwrap();
-        let mut active_peers = self.active_peers.write().unwrap();
         let mut changed_slots = HashSet::new();
         last_voted_fork_slots
             .into_iter()
             .for_each(|(_, epoch_slots, _, _)| {
                 let from = epoch_slots.from;
-                active_peers.insert(from);
+                self.active_peers.insert(from);
                 epoch_slots
                     .to_slots(self.root_slot)
                     .into_iter()
                     .for_each(|slot| {
                         changed_slots.insert(slot);
-                        match slots_aggregate.get_mut(&slot) {
+                        match self.slots_aggregate.get_mut(&slot) {
                             Some(value) => value.insert(from),
                             None => {
                                 let mut new_set = HashSet::new();
                                 new_set.insert(from);
-                                slots_aggregate.insert(slot, new_set).is_some()
+                                self.slots_aggregate.insert(slot, new_set).is_some()
                             }
                         };
                     });
             });
-        let total_active_stake = active_peers
+        let total_active_stake = self
+            .active_peers
             .iter()
-            .map(|pubkey| {
-                match node_stakes
-                    .node_id_to_vote_accounts()
-                    .get(pubkey) {
+            .map(
+                |pubkey| match node_stakes.node_id_to_vote_accounts().get(pubkey) {
                     Some(node_vote_accounts) => node_vote_accounts.total_stake,
                     None => 0,
-                }
-            })
+                },
+            )
             .reduce(|a, b| a + b)
             .unwrap();
-        let not_active_percenage = 1.0 - (total_active_stake as f64 / node_stakes.total_stake() as f64);
+        let not_active_percenage =
+            1.0 - (total_active_stake as f64 / node_stakes.total_stake() as f64);
         let threshold_for_repair = 0.62 - not_active_percenage;
         if threshold_for_repair > 0.1 {
-            let slots_to_repair = slots_aggregate
+            let slots_to_repair = self
+                .slots_aggregate
                 .iter()
                 .filter_map(|(slot, pubkeys)| {
                     let node_stakes_at_slot = epoch_stakes_map.epoch_stakes(Some(slot.clone()));
                     let total_slot_stake = pubkeys
                         .iter()
                         .map(|pubkey| {
-                            match node_stakes_at_slot
-                                .node_id_to_vote_accounts()
-                                .get(pubkey) {
-                                Some(node_id_to_vote_accounts) => node_id_to_vote_accounts.total_stake,
+                            match node_stakes_at_slot.node_id_to_vote_accounts().get(pubkey) {
+                                Some(node_id_to_vote_accounts) => {
+                                    node_id_to_vote_accounts.total_stake
+                                }
                                 None => 0,
                             }
                         })
                         .reduce(|a, b| a + b)
                         .unwrap();
-                    let my_percent = total_slot_stake as f64 / node_stakes_at_slot.total_stake() as f64;
+                    let my_percent =
+                        total_slot_stake as f64 / node_stakes_at_slot.total_stake() as f64;
                     if my_percent > threshold_for_repair {
                         Some((slot.clone(), my_percent))
                     } else {

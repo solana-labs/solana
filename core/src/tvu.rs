@@ -40,7 +40,6 @@ use {
         entry_notifier_service::EntryNotifierSender, leader_schedule_cache::LeaderScheduleCache,
     },
     solana_poh::poh_recorder::PohRecorder,
-    solana_repair_and_restart::repair_and_restart::RestartSlotsToRepairReceiver,
     solana_rpc::{
         max_slots::MaxSlots, optimistically_confirmed_bank_tracker::BankNotificationSenderConfig,
         rpc_subscriptions::RpcSubscriptions,
@@ -51,6 +50,7 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
+    solana_wen_restart::wen_restart::RestartSlotsToRepairReceiver,
     std::{
         collections::HashSet,
         net::UdpSocket,
@@ -139,7 +139,7 @@ impl Tvu {
         connection_cache: &Arc<ConnectionCache>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         banking_tracer: Arc<BankingTracer>,
-        repair_and_restart_receiver: RestartSlotsToRepairReceiver,
+        wen_restart_receiver: RestartSlotsToRepairReceiver,
         in_wen_restart: bool,
     ) -> Result<Self, String> {
         let TvuSockets {
@@ -207,7 +207,7 @@ impl Tvu {
                 repair_whitelist: tvu_config.repair_whitelist,
                 cluster_info: cluster_info.clone(),
                 cluster_slots: cluster_slots.clone(),
-                repair_and_restart_receiver,
+                wen_restart_receiver,
                 in_wen_restart: Arc::new(AtomicBool::new(in_wen_restart)),
             };
             WindowService::new(

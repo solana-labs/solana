@@ -240,8 +240,13 @@ impl BankForks {
     }
 
     pub fn highest_frozen_bank(&self) -> Arc<Bank> {
-        let highest_frozen_slot = self.banks.values().filter(|bank| bank.is_frozen())
-            .map(|bank| bank.slot()).max().unwrap();
+        let highest_frozen_slot = self
+            .banks
+            .values()
+            .filter(|bank| bank.is_frozen())
+            .map(|bank| bank.slot())
+            .max()
+            .unwrap();
         self[highest_frozen_slot].clone()
     }
 

@@ -602,9 +602,12 @@ fn test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clust
                 snapshot_test_config.bank_forks.insert(new_bank);
                 current_bank = snapshot_test_config.bank_forks[new_slot].clone();
             }
-            snapshot_test_config
-                .bank_forks
-                .set_root(current_bank.slot(), &request_sender, None, false);
+            snapshot_test_config.bank_forks.set_root(
+                current_bank.slot(),
+                &request_sender,
+                None,
+                false,
+            );
 
             // Since the accounts background services are not runnning, EpochAccountsHash
             // calculation requests will not be handled. To prevent banks from hanging during
