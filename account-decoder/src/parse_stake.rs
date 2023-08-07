@@ -119,11 +119,16 @@ pub struct UiDelegation {
     pub stake: StringAmount,
     pub activation_epoch: StringAmount,
     pub deactivation_epoch: StringAmount,
+    #[deprecated(
+        since = "1.16.7",
+        note = "Please use `solana_sdk::stake::stake::warmup_cooldown_rate()` instead"
+    )]
     pub warmup_cooldown_rate: f64,
 }
 
 impl From<Delegation> for UiDelegation {
     fn from(delegation: Delegation) -> Self {
+        #[allow(deprecated)]
         Self {
             voter: delegation.voter_pubkey.to_string(),
             stake: delegation.stake.to_string(),
@@ -139,6 +144,7 @@ mod test {
     use {super::*, bincode::serialize, solana_sdk::stake::stake_flags::StakeFlags};
 
     #[test]
+    #[allow(deprecated)]
     fn test_parse_stake() {
         let stake_state = StakeState::Uninitialized;
         let stake_data = serialize(&stake_state).unwrap();

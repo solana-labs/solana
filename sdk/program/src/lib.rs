@@ -575,6 +575,7 @@ pub mod sdk_ids {
                 vote::program::id(),
                 feature::id(),
                 bpf_loader_deprecated::id(),
+                #[allow(deprecated)]
                 stake::config::id(),
             ];
             sdk_ids.extend(sysvar::ALL_IDS.iter());

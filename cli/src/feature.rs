@@ -22,6 +22,7 @@ use {
         genesis_config::ClusterType,
         message::Message,
         pubkey::Pubkey,
+        stake_history::Epoch,
         transaction::Transaction,
     },
     std::{cmp::Ordering, collections::HashMap, fmt, str::FromStr, sync::Arc},
@@ -815,6 +816,22 @@ pub fn get_feature_is_active(
 ) -> Result<bool, Box<dyn std::error::Error>> {
     get_feature_status(rpc_client, feature_id)
         .map(|status| matches!(status, Some(CliFeatureStatus::Active(_))))
+}
+
+pub fn get_feature_activation_epoch(
+    rpc_client: &RpcClient,
+    feature_id: &Pubkey,
+) -> Result<Option<Epoch>, ClientError> {
+    rpc_client
+        .get_feature_activation_slot(feature_id)
+        .and_then(|activation_slot: Option<Slot>| {
+            rpc_client
+                .get_epoch_schedule()
+                .map(|epoch_schedule| (activation_slot, epoch_schedule))
+        })
+        .map(|(activation_slot, epoch_schedule)| {
+            activation_slot.map(|slot| epoch_schedule.get_epoch(slot))
+        })
 }
 
 fn process_status(

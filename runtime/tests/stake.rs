@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     solana_runtime::{
         bank::Bank,
@@ -10,6 +11,7 @@ use {
         account::from_account,
         account_utils::StateMut,
         client::SyncClient,
+        epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
         hash::Hash,
         message::Message,
         pubkey::Pubkey,
@@ -98,6 +100,7 @@ fn warmed_up(bank: &Bank, stake_pubkey: &Pubkey) -> bool {
                 )
                 .unwrap(),
             ),
+            bank.new_warmup_cooldown_rate_epoch(),
         )
 }
 
@@ -112,6 +115,7 @@ fn get_staked(bank: &Bank, stake_pubkey: &Pubkey) -> u64 {
                 )
                 .unwrap(),
             ),
+            bank.new_warmup_cooldown_rate_epoch(),
         )
 }
 
@@ -292,6 +296,7 @@ fn test_stake_account_lifetime() {
         &solana_sdk::pubkey::new_rand(),
         2_000_000_000,
     );
+    genesis_config.epoch_schedule = EpochSchedule::new(MINIMUM_SLOTS_PER_EPOCH);
     genesis_config.rent = Rent::default();
     let bank = Bank::new_for_tests(&genesis_config);
     let mint_pubkey = mint_keypair.pubkey();

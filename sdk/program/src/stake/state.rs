@@ -1,11 +1,11 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     crate::{
         clock::{Clock, Epoch, UnixTimestamp},
         instruction::InstructionError,
         pubkey::Pubkey,
         stake::{
-            config::Config,
             instruction::{LockupArgs, StakeError},
             stake_flags::StakeFlags,
         },
@@ -16,6 +16,20 @@ use {
 };
 
 pub type StakeActivationStatus = StakeHistoryEntry;
+
+// means that no more than RATE of current effective stake may be added or subtracted per
+// epoch
+pub const DEFAULT_WARMUP_COOLDOWN_RATE: f64 = 0.25;
+pub const NEW_WARMUP_COOLDOWN_RATE: f64 = 0.09;
+pub const DEFAULT_SLASH_PENALTY: u8 = ((5 * std::u8::MAX as usize) / 100) as u8;
+
+pub fn warmup_cooldown_rate(current_epoch: Epoch, new_rate_activation_epoch: Option<Epoch>) -> f64 {
+    if current_epoch < new_rate_activation_epoch.unwrap_or(u64::MAX) {
+        DEFAULT_WARMUP_COOLDOWN_RATE
+    } else {
+        NEW_WARMUP_COOLDOWN_RATE
+    }
+}
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
 #[allow(clippy::large_enum_variant)]
@@ -311,33 +325,32 @@ pub struct Delegation {
     /// epoch the stake was deactivated, std::Epoch::MAX if not deactivated
     pub deactivation_epoch: Epoch,
     /// how much stake we can activate per-epoch as a fraction of currently effective stake
+    #[deprecated(
+        since = "1.16.7",
+        note = "Please use `solana_sdk::stake::state::warmup_cooldown_rate()` instead"
+    )]
     pub warmup_cooldown_rate: f64,
 }
 
 impl Default for Delegation {
     fn default() -> Self {
+        #[allow(deprecated)]
         Self {
             voter_pubkey: Pubkey::default(),
             stake: 0,
             activation_epoch: 0,
             deactivation_epoch: std::u64::MAX,
-            warmup_cooldown_rate: Config::default().warmup_cooldown_rate,
+            warmup_cooldown_rate: 0.0,
         }
     }
 }
 
 impl Delegation {
-    pub fn new(
-        voter_pubkey: &Pubkey,
-        stake: u64,
-        activation_epoch: Epoch,
-        warmup_cooldown_rate: f64,
-    ) -> Self {
+    pub fn new(voter_pubkey: &Pubkey, stake: u64, activation_epoch: Epoch) -> Self {
         Self {
             voter_pubkey: *voter_pubkey,
             stake,
             activation_epoch,
-            warmup_cooldown_rate,
             ..Delegation::default()
         }
     }
@@ -345,8 +358,13 @@ impl Delegation {
         self.activation_epoch == std::u64::MAX
     }
 
-    pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
-        self.stake_activating_and_deactivating(epoch, history)
+    pub fn stake(
+        &self,
+        epoch: Epoch,
+        history: Option<&StakeHistory>,
+        new_rate_activation_epoch: Option<Epoch>,
+    ) -> u64 {
+        self.stake_activating_and_deactivating(epoch, history, new_rate_activation_epoch)
             .effective
     }
 
@@ -355,9 +373,11 @@ impl Delegation {
         &self,
         target_epoch: Epoch,
         history: Option<&StakeHistory>,
+        new_rate_activation_epoch: Option<Epoch>,
     ) -> StakeActivationStatus {
         // first, calculate an effective and activating stake
-        let (effective_stake, activating_stake) = self.stake_and_activating(target_epoch, history);
+        let (effective_stake, activating_stake) =
+            self.stake_and_activating(target_epoch, history, new_rate_activation_epoch);
 
         // then de-activate some portion if necessary
         if target_epoch < self.deactivation_epoch {
@@ -404,10 +424,12 @@ impl Delegation {
                 //   this account is entitled to take
                 let weight =
                     current_effective_stake as f64 / prev_cluster_stake.deactivating as f64;
+                let warmup_cooldown_rate =
+                    warmup_cooldown_rate(current_epoch, new_rate_activation_epoch);
 
                 // portion of newly not-effective cluster stake I'm entitled to at current epoch
                 let newly_not_effective_cluster_stake =
-                    prev_cluster_stake.effective as f64 * self.warmup_cooldown_rate;
+                    prev_cluster_stake.effective as f64 * warmup_cooldown_rate;
                 let newly_not_effective_stake =
                     ((weight * newly_not_effective_cluster_stake) as u64).max(1);
 
@@ -441,6 +463,7 @@ impl Delegation {
         &self,
         target_epoch: Epoch,
         history: Option<&StakeHistory>,
+        new_rate_activation_epoch: Option<Epoch>,
     ) -> (u64, u64) {
         let delegated_stake = self.stake;
 
@@ -489,10 +512,12 @@ impl Delegation {
                 let remaining_activating_stake = delegated_stake - current_effective_stake;
                 let weight =
                     remaining_activating_stake as f64 / prev_cluster_stake.activating as f64;
+                let warmup_cooldown_rate =
+                    warmup_cooldown_rate(current_epoch, new_rate_activation_epoch);
 
                 // portion of newly effective cluster stake I'm entitled to at current epoch
                 let newly_effective_cluster_stake =
-                    prev_cluster_stake.effective as f64 * self.warmup_cooldown_rate;
+                    prev_cluster_stake.effective as f64 * warmup_cooldown_rate;
                 let newly_effective_stake =
                     ((weight * newly_effective_cluster_stake) as u64).max(1);
 
@@ -544,8 +569,14 @@ pub struct Stake {
 }
 
 impl Stake {
-    pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
-        self.delegation.stake(epoch, history)
+    pub fn stake(
+        &self,
+        epoch: Epoch,
+        history: Option<&StakeHistory>,
+        new_rate_activation_epoch: Option<Epoch>,
+    ) -> u64 {
+        self.delegation
+            .stake(epoch, history, new_rate_activation_epoch)
     }
 
     pub fn split(
@@ -628,7 +659,7 @@ mod test {
                     stake: u64::MAX,
                     activation_epoch: Epoch::MAX,
                     deactivation_epoch: Epoch::MAX,
-                    warmup_cooldown_rate: f64::MAX,
+                    ..Delegation::default()
                 },
                 credits_observed: 1,
             },
@@ -663,7 +694,7 @@ mod test {
                     stake: u64::MAX,
                     activation_epoch: Epoch::MAX,
                     deactivation_epoch: Epoch::MAX,
-                    warmup_cooldown_rate: f64::MAX,
+                    ..Default::default()
                 },
                 credits_observed: 1,
             },

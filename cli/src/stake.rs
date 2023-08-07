@@ -6,6 +6,7 @@ use {
             ProcessResult,
         },
         compute_unit_price::WithComputeUnitPrice,
+        feature::get_feature_activation_epoch,
         memo::WithMemo,
         nonce::check_nonce_account,
         spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
@@ -40,6 +41,7 @@ use {
         clock::{Clock, UnixTimestamp, SECONDS_PER_DAY},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
+        feature_set,
         message::Message,
         pubkey::Pubkey,
         stake::{
@@ -48,7 +50,7 @@ use {
             state::{Authorized, Lockup, Meta, StakeActivationStatus, StakeAuthorize, StakeState},
             tools::{acceptable_reference_epoch_credits, eligible_for_deactivate_delinquent},
         },
-        stake_history::StakeHistory,
+        stake_history::{Epoch, StakeHistory},
         system_instruction::SystemError,
         sysvar::{clock, stake_history},
         transaction::Transaction,
@@ -2186,6 +2188,7 @@ pub fn build_stake_state(
     use_lamports_unit: bool,
     stake_history: &StakeHistory,
     clock: &Clock,
+    new_rate_activation_epoch: Option<Epoch>,
 ) -> CliStakeState {
     match stake_state {
         StakeState::Stake(
@@ -2202,9 +2205,11 @@ pub fn build_stake_state(
                 effective,
                 activating,
                 deactivating,
-            } = stake
-                .delegation
-                .stake_activating_and_deactivating(current_epoch, Some(stake_history));
+            } = stake.delegation.stake_activating_and_deactivating(
+                current_epoch,
+                Some(stake_history),
+                new_rate_activation_epoch,
+            );
             let lockup = if lockup.is_in_force(clock, None) {
                 Some(lockup.into())
             } else {
@@ -2424,6 +2429,10 @@ pub fn process_show_stake_account(
             let clock: Clock = from_account(&clock_account).ok_or_else(|| {
                 CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
             })?;
+            let new_rate_activation_epoch = get_feature_activation_epoch(
+                rpc_client,
+                &feature_set::reduce_stake_warmup_cooldown::id(),
+            )?;
 
             let mut state = build_stake_state(
                 stake_account.lamports,
@@ -2431,6 +2440,7 @@ pub fn process_show_stake_account(
                 use_lamports_unit,
                 &stake_history,
                 &clock,
+                new_rate_activation_epoch,
             );
 
             if state.stake_type == CliStakeType::Stake && state.activation_epoch.is_some() {

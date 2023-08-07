@@ -1,3 +1,5 @@
+#[allow(deprecated)]
+use crate::stake::config;
 use {
     crate::{
         clock::{Epoch, UnixTimestamp},
@@ -5,7 +7,6 @@ use {
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         stake::{
-            config,
             program::id,
             state::{Authorized, Lockup, StakeAuthorize, StakeState},
         },
@@ -676,6 +677,7 @@ pub fn delegate_stake(
         AccountMeta::new_readonly(*vote_pubkey, false),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
         AccountMeta::new_readonly(sysvar::stake_history::id(), false),
+        #[allow(deprecated)]
         AccountMeta::new_readonly(config::id(), false),
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];
@@ -780,6 +782,7 @@ fn _redelegate(
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new(*uninitialized_stake_pubkey, false),
         AccountMeta::new_readonly(*vote_pubkey, false),
+        #[allow(deprecated)]
         AccountMeta::new_readonly(config::id(), false),
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];

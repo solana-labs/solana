@@ -135,6 +135,7 @@ use {
             self, add_set_tx_loaded_accounts_data_size_instruction,
             enable_early_verification_of_account_modifications,
             include_loaded_accounts_data_size_in_fee_calculation,
+            reduce_stake_warmup_cooldown::NewWarmupCooldownRateEpoch,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
             FeatureSet,
         },
@@ -1525,6 +1526,12 @@ impl Bank {
         new
     }
 
+    /// Epoch in which the new cooldown warmup rate for stake was activated
+    pub fn new_warmup_cooldown_rate_epoch(&self) -> Option<Epoch> {
+        self.feature_set
+            .new_warmup_cooldown_rate_epoch(&self.epoch_schedule)
+    }
+
     /// process for the start of a new epoch
     fn process_new_epoch(
         &mut self,
@@ -1549,7 +1556,11 @@ impl Bank {
         // update vote accounts with warmed up stakes before saving a
         // snapshot of stakes in epoch stakes
         let (_, activate_epoch_time) = measure!(
-            self.stakes_cache.activate_epoch(epoch, &thread_pool),
+            self.stakes_cache.activate_epoch(
+                epoch,
+                &thread_pool,
+                self.new_warmup_cooldown_rate_epoch()
+            ),
             "activate_epoch",
         );
 
@@ -3010,6 +3021,7 @@ impl Bank {
                         stake_account.stake_state(),
                         vote_state,
                         Some(stake_history),
+                        self.new_warmup_cooldown_rate_epoch(),
                     )
                     .unwrap_or(0)
                 })
@@ -3045,6 +3057,7 @@ impl Bank {
                                 stake_account.stake_state(),
                                 vote_state,
                                 Some(stake_history),
+                                self.new_warmup_cooldown_rate_epoch(),
                             )
                             .unwrap_or(0)
                         })
@@ -3131,6 +3144,7 @@ impl Bank {
                         &point_value,
                         Some(stake_history),
                         reward_calc_tracer.as_ref(),
+                        self.new_warmup_cooldown_rate_epoch(),
                     );
 
                     let post_lamport = stake_account.lamports();
@@ -3248,6 +3262,7 @@ impl Bank {
                         &point_value,
                         Some(stake_history),
                         reward_calc_tracer.as_ref(),
+                        self.new_warmup_cooldown_rate_epoch(),
                     );
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
                         // track voter rewards
@@ -3298,8 +3313,11 @@ impl Bank {
         let now = Instant::now();
         let slot = self.slot();
         let include_slot_in_hash = self.include_slot_in_hash();
-        self.stakes_cache
-            .update_stake_accounts(thread_pool, stake_rewards);
+        self.stakes_cache.update_stake_accounts(
+            thread_pool,
+            stake_rewards,
+            self.new_warmup_cooldown_rate_epoch(),
+        );
         assert!(!self.freeze_started());
         thread_pool.install(|| {
             stake_rewards.par_chunks(512).for_each(|chunk| {
@@ -6518,8 +6536,11 @@ impl Bank {
         assert!(!self.freeze_started());
         let mut m = Measure::start("stakes_cache.check_and_store");
         (0..accounts.len()).for_each(|i| {
-            self.stakes_cache
-                .check_and_store(accounts.pubkey(i), accounts.account(i))
+            self.stakes_cache.check_and_store(
+                accounts.pubkey(i),
+                accounts.account(i),
+                self.new_warmup_cooldown_rate_epoch(),
+            )
         });
         self.rc.accounts.store_accounts_cached(accounts);
         m.stop();
@@ -7637,7 +7658,11 @@ impl Bank {
             .for_each(|(pubkey, account)| {
                 // note that this could get timed to: self.rc.accounts.accounts_db.stats.stakes_cache_check_and_store_us,
                 //  but this code path is captured separately in ExecuteTimingType::UpdateStakesCacheUs
-                self.stakes_cache.check_and_store(pubkey, account);
+                self.stakes_cache.check_and_store(
+                    pubkey,
+                    account,
+                    self.new_warmup_cooldown_rate_epoch(),
+                );
             });
     }
 
