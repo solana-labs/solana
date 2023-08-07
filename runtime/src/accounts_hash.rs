@@ -793,6 +793,7 @@ impl AccountsHasher {
                     *lamports_sum = Self::checked_cast_for_capitalization(
                         *lamports_sum as u128 + lamports_bin as u128,
                     );
+                    drop(lamports_sum);
                     hash_total.fetch_add(hashes_file.count(), Ordering::Relaxed);
                 }
                 hashes_file
