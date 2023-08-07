@@ -54,6 +54,7 @@ pub struct TieredStorage {
 }
 
 impl Drop for TieredStorage {
+    /// All AccountsFile instances default to remove-on-drop behavior.
     fn drop(&mut self) {
         if self.remove_on_drop {
             if let Err(_e) = remove_file(&self.path) {
@@ -91,11 +92,6 @@ impl TieredStorage {
             path,
             remove_on_drop: true,
         })
-    }
-
-    /// Disable the remove-on-drop behavior.
-    pub fn set_no_remove_on_drop(&mut self) {
-        self.remove_on_drop = false;
     }
 
     /// Returns the path to this TieredStorage.
@@ -174,7 +170,7 @@ mod tests {
         footer::{TieredStorageFooter, TieredStorageMagicNumber},
         hot::HOT_FORMAT,
         solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
-        std::fs,
+        std::{fs, mem::ManuallyDrop},
         tempfile::tempdir,
     };
 
@@ -229,10 +225,10 @@ mod tests {
         let tiered_storage_path = temp_dir.path().join("test_new_meta_file_only");
 
         {
-            let mut tiered_storage =
-                TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
-            // make the file reopenable later during the test.
-            tiered_storage.set_no_remove_on_drop();
+            let tiered_storage = ManuallyDrop::new(TieredStorage::new_writable(
+                &tiered_storage_path,
+                HOT_FORMAT.clone(),
+            ));
 
             assert!(!tiered_storage.is_read_only());
             assert_eq!(tiered_storage.path(), tiered_storage_path);
@@ -294,22 +290,23 @@ mod tests {
         assert!(fs::metadata(&tiered_storage_path).is_err());
 
         {
-            let mut tiered_storage =
-                TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
-            tiered_storage.set_no_remove_on_drop();
+            let tiered_storage = ManuallyDrop::new(TieredStorage::new_writable(
+                &tiered_storage_path,
+                HOT_FORMAT.clone(),
+            ));
             write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
         }
-        // expect ok as we have set_no_remove_on_drop() this time.
+        // expect ok as we have ManuallyDrop this time.
         assert!(fs::metadata(&tiered_storage_path).is_ok());
 
         {
-            let mut tiered_storage = TieredStorage::new_readonly(&tiered_storage_path).unwrap();
-            tiered_storage.set_no_remove_on_drop();
+            // open again in read-only mode with ManuallyDrop.
+            let _ = ManuallyDrop::new(TieredStorage::new_readonly(&tiered_storage_path).unwrap());
         }
-        // again expect ok as we have set_no_remove_on_drop().
+        // again expect ok as we have ManuallyDrop.
         assert!(fs::metadata(&tiered_storage_path).is_ok());
 
-        // open again without set_no_remove_on_drop() in read-only mode
+        // open again without ManuallyDrop in read-only mode
         TieredStorage::new_readonly(&tiered_storage_path).unwrap();
 
         // expect error as the file has been removed on drop
