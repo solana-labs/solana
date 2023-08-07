@@ -10,7 +10,7 @@ use {
         pubkey::Pubkey,
     },
     std::sync::{
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
         Mutex,
     },
 };
@@ -23,7 +23,7 @@ type ReadOnlyCacheKey = (Pubkey, Slot);
 #[derive(Debug)]
 struct ReadOnlyAccountCacheEntry {
     account: AccountSharedData,
-    index: Index, // Index of the entry in the eviction queue.
+    index: AtomicU32, // Index of the entry in the eviction queue.
 }
 
 #[derive(Debug)]
@@ -77,7 +77,7 @@ impl ReadOnlyAccountsCache {
     pub(crate) fn load(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
         let (account, load_us) = measure_us!({
             let key = (pubkey, slot);
-            let Some(mut entry) = self.cache.get_mut(&key) else {
+            let Some(entry) = self.cache.get(&key) else {
                 self.misses.fetch_add(1, Ordering::Relaxed);
                 return None;
             };
@@ -86,8 +86,8 @@ impl ReadOnlyAccountsCache {
             // so that another thread cannot write to the same key.
             {
                 let mut queue = self.queue.lock().unwrap();
-                queue.remove(entry.index);
-                entry.index = queue.insert_last(key);
+                queue.remove(entry.index());
+                entry.set_index(queue.insert_last(key));
             }
             let account = entry.account.clone();
             drop(entry);
@@ -113,7 +113,7 @@ impl ReadOnlyAccountsCache {
                 // Insert the entry at the end of the queue.
                 let mut queue = self.queue.lock().unwrap();
                 let index = queue.insert_last(key);
-                entry.insert(ReadOnlyAccountCacheEntry { account, index });
+                entry.insert(ReadOnlyAccountCacheEntry::new(account, index));
             }
             Entry::Occupied(mut entry) => {
                 let entry = entry.get_mut();
@@ -122,8 +122,8 @@ impl ReadOnlyAccountsCache {
                 entry.account = account;
                 // Move the entry to the end of the queue.
                 let mut queue = self.queue.lock().unwrap();
-                queue.remove(entry.index);
-                entry.index = queue.insert_last(key);
+                queue.remove(entry.index());
+                entry.set_index(queue.insert_last(key));
             }
         };
         // Evict entries from the front of the queue.
@@ -143,7 +143,7 @@ impl ReadOnlyAccountsCache {
         // self.queue should be modified only after removing the entry from the
         // cache, so that this is still safe if another thread writes to the
         // same key.
-        self.queue.lock().unwrap().remove(entry.index);
+        self.queue.lock().unwrap().remove(entry.index());
         let account_size = self.account_size(&entry.account);
         self.data_size.fetch_sub(account_size, Ordering::Relaxed);
         Some(entry.account)
@@ -164,6 +164,26 @@ impl ReadOnlyAccountsCache {
         let load_us = self.load_us.swap(0, Ordering::Relaxed);
 
         (hits, misses, evicts, load_us)
+    }
+}
+
+impl ReadOnlyAccountCacheEntry {
+    fn new(account: AccountSharedData, index: Index) -> Self {
+        let index = unsafe { std::mem::transmute::<Index, u32>(index) };
+        let index = AtomicU32::new(index);
+        Self { account, index }
+    }
+
+    #[inline]
+    fn index(&self) -> Index {
+        let index = self.index.load(Ordering::Relaxed);
+        unsafe { std::mem::transmute::<u32, Index>(index) }
+    }
+
+    #[inline]
+    fn set_index(&self, index: Index) {
+        let index = unsafe { std::mem::transmute::<Index, u32>(index) };
+        self.index.store(index, Ordering::Relaxed);
     }
 }
 
