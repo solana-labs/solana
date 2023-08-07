@@ -50,19 +50,16 @@ pub struct TieredStorage {
     reader: OnceCell<TieredStorageReader>,
     format: Option<TieredStorageFormat>,
     path: PathBuf,
-    remove_on_drop: bool,
 }
 
 impl Drop for TieredStorage {
     /// All AccountsFile instances default to remove-on-drop behavior.
     fn drop(&mut self) {
-        if self.remove_on_drop {
-            if let Err(_e) = remove_file(&self.path) {
-                // Here we are doing similar behavior as AppendVec that we log error
-                // instead of paniking due to false positive warnings while running
-                // tests.
-                inc_new_counter_info!("tiered_storage_drop_fail", 1);
-            }
+        if let Err(_e) = remove_file(&self.path) {
+            // Here we are doing similar behavior as AppendVec that we log error
+            // instead of paniking due to false positive warnings while running
+            // tests.
+            inc_new_counter_info!("tiered_storage_drop_fail", 1);
         }
     }
 }
@@ -78,7 +75,6 @@ impl TieredStorage {
             reader: OnceCell::<TieredStorageReader>::new(),
             format: Some(format),
             path: path.into(),
-            remove_on_drop: true,
         }
     }
 
@@ -90,7 +86,6 @@ impl TieredStorage {
             reader: OnceCell::with_value(TieredStorageReader::new_from_path(&path)?),
             format: None,
             path,
-            remove_on_drop: true,
         })
     }
 
