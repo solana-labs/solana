@@ -58,15 +58,6 @@ impl AccountsFile {
         Ok((Self::AppendVec(av), num_accounts))
     }
 
-    /// By default, all AccountsFile will remove its underlying file on
-    /// drop.  Calling this function to disable such behavior for this
-    /// instance.
-    pub fn set_no_remove_on_drop(&mut self) {
-        match self {
-            Self::AppendVec(av) => av.set_no_remove_on_drop(),
-        }
-    }
-
     pub fn flush(&self) -> Result<()> {
         match self {
             Self::AppendVec(av) => av.flush(),
