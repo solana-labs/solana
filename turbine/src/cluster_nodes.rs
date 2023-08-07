@@ -5,7 +5,7 @@ use {
     rand::{seq::SliceRandom, Rng, SeedableRng},
     rand_chacha::ChaChaRng,
     solana_gossip::{
-        cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
+        cluster_info::ClusterInfo,
         contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo, Protocol},
         crds::GossipRoute,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
@@ -36,6 +36,7 @@ use {
     thiserror::Error,
 };
 
+const DATA_PLANE_FANOUT: usize = 200;
 pub(crate) const MAX_NUM_TURBINE_HOPS: usize = 4;
 
 #[derive(Debug, Error)]
