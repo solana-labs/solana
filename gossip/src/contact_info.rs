@@ -240,7 +240,8 @@ impl ContactInfo {
         SOCKET_TAG_TPU_FORWARDS_QUIC
     );
     set_socket!(set_tpu_vote, SOCKET_TAG_TPU_VOTE);
-    set_socket!(set_tvu, SOCKET_TAG_TVU, SOCKET_TAG_TVU_QUIC);
+    set_socket!(set_tvu, SOCKET_TAG_TVU);
+    set_socket!(set_tvu_quic, SOCKET_TAG_TVU_QUIC);
 
     remove_socket!(remove_serve_repair, SOCKET_TAG_SERVE_REPAIR);
     remove_socket!(remove_tpu, SOCKET_TAG_TPU, SOCKET_TAG_TPU_QUIC);
@@ -355,6 +356,7 @@ impl ContactInfo {
         let mut node = Self::new(*pubkey, wallclock, /*shred_version:*/ 0u16);
         node.set_gossip((Ipv4Addr::LOCALHOST, 8000)).unwrap();
         node.set_tvu((Ipv4Addr::LOCALHOST, 8001)).unwrap();
+        node.set_tvu_quic((Ipv4Addr::LOCALHOST, 8002)).unwrap();
         node.set_repair((Ipv4Addr::LOCALHOST, 8007)).unwrap();
         node.set_tpu((Ipv4Addr::LOCALHOST, 8003)).unwrap(); // quic: 8009
         node.set_tpu_forwards((Ipv4Addr::LOCALHOST, 8004)).unwrap(); // quic: 8010
@@ -378,6 +380,7 @@ impl ContactInfo {
         let (addr, port) = (socket.ip(), socket.port());
         node.set_gossip((addr, port + 1)).unwrap();
         node.set_tvu((addr, port + 2)).unwrap();
+        node.set_tvu_quic((addr, port + 3)).unwrap();
         node.set_repair((addr, port + 4)).unwrap();
         node.set_tpu((addr, port)).unwrap(); // quic: port + 6
         node.set_tpu_forwards((addr, port + 5)).unwrap(); // quic: port + 11

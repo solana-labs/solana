@@ -25,8 +25,8 @@ pub struct LegacyContactInfo {
     gossip: SocketAddr,
     /// address to connect to for replication
     tvu: SocketAddr,
-    /// address to forward shreds to
-    tvu_forwards: SocketAddr,
+    /// TVU over QUIC protocol.
+    tvu_quic: SocketAddr,
     /// address to send repair responses to
     repair: SocketAddr,
     /// transactions address
@@ -60,6 +60,16 @@ macro_rules! get_socket {
     ($name:ident) => {
         pub fn $name(&self) -> Result<SocketAddr, Error> {
             let socket = &self.$name;
+            sanitize_socket(socket)?;
+            Ok(socket).copied()
+        }
+    };
+    ($name:ident, $quic:ident) => {
+        pub fn $name(&self, protocol: Protocol) -> Result<SocketAddr, Error> {
+            let socket = match protocol {
+                Protocol::QUIC => &self.$quic,
+                Protocol::UDP => &self.$name,
+            };
             sanitize_socket(socket)?;
             Ok(socket).copied()
         }
@@ -113,7 +123,7 @@ impl Default for LegacyContactInfo {
             id: Pubkey::default(),
             gossip: socketaddr_any!(),
             tvu: socketaddr_any!(),
-            tvu_forwards: socketaddr_any!(),
+            tvu_quic: socketaddr_any!(),
             repair: socketaddr_any!(),
             tpu: socketaddr_any!(),
             tpu_forwards: socketaddr_any!(),
@@ -133,7 +143,7 @@ impl LegacyContactInfo {
             id: *id,
             gossip: socketaddr!(Ipv4Addr::LOCALHOST, 1234),
             tvu: socketaddr!(Ipv4Addr::LOCALHOST, 1235),
-            tvu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1236),
+            tvu_quic: socketaddr!(Ipv4Addr::LOCALHOST, 1236),
             repair: socketaddr!(Ipv4Addr::LOCALHOST, 1237),
             tpu: socketaddr!(Ipv4Addr::LOCALHOST, 1238),
             tpu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1239),
@@ -195,7 +205,7 @@ impl LegacyContactInfo {
     }
 
     get_socket!(gossip);
-    get_socket!(@quic tvu);
+    get_socket!(tvu, tvu_quic);
     get_socket!(repair);
     get_socket!(@quic tpu);
     get_socket!(@quic tpu_forwards);
@@ -263,7 +273,7 @@ impl TryFrom<&ContactInfo> for LegacyContactInfo {
             id: *node.pubkey(),
             gossip: unwrap_socket!(gossip),
             tvu: unwrap_socket!(tvu, Protocol::UDP),
-            tvu_forwards: SOCKET_ADDR_UNSPECIFIED,
+            tvu_quic: unwrap_socket!(tvu, Protocol::QUIC),
             repair: unwrap_socket!(repair),
             tpu: unwrap_socket!(tpu, Protocol::UDP),
             tpu_forwards: unwrap_socket!(tpu_forwards, Protocol::UDP),
