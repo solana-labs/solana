@@ -54,11 +54,9 @@ impl LogCollector {
             ..Self::default()
         }))
     }
-}
 
-impl From<LogCollector> for Vec<String> {
-    fn from(log_collector: LogCollector) -> Self {
-        log_collector.messages
+    pub fn into_messages(self) -> Vec<String> {
+        self.messages
     }
 }
 
@@ -114,7 +112,7 @@ pub(crate) mod tests {
             lc.log("x");
         }
 
-        let logs: Vec<_> = lc.into();
+        let logs: Vec<_> = lc.into_messages();
         assert_eq!(logs.len(), LOG_MESSAGES_BYTES_LIMIT);
         for log in logs.iter().take(LOG_MESSAGES_BYTES_LIMIT - 1) {
             assert_eq!(*log, "x".to_string());
