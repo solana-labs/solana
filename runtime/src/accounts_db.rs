@@ -3794,16 +3794,15 @@ impl AccountsDb {
         &self,
         store: &'a Arc<AccountStorageEntry>,
     ) -> GetUniqueAccountsResult<'a> {
-        let mut stored_accounts: HashMap<Pubkey, StoredAccountMeta> = HashMap::new();
+        use std::collections::BTreeMap;
+        // Use BTreeMap to reorganize the accounts by sorted pubkeys
+        let mut stored_accounts: BTreeMap<Pubkey, StoredAccountMeta> = BTreeMap::new();
         let capacity = store.capacity();
         store.accounts.account_iter().for_each(|account| {
             stored_accounts.insert(*account.pubkey(), account);
         });
 
-        // sort by pubkey to keep account index lookups close
-        let mut stored_accounts = stored_accounts.drain().map(|(_k, v)| v).collect::<Vec<_>>();
-        stored_accounts.sort_unstable_by(|a, b| a.pubkey().cmp(b.pubkey()));
-
+        let stored_accounts = stored_accounts.into_values().collect::<Vec<_>>();
         GetUniqueAccountsResult {
             stored_accounts,
             capacity,
