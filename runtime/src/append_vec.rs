@@ -292,10 +292,6 @@ impl AppendVec {
         }
     }
 
-    pub fn set_no_remove_on_drop(&mut self) {
-        // noop: will be removed next
-    }
-
     fn sanitize_len_and_size(current_len: usize, file_size: usize) -> Result<()> {
         if file_size == 0 {
             Err(AccountsFileError::AppendVecError(
