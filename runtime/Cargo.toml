@@ -97,3 +97,6 @@ rustc_version = { workspace = true }
 
 [[bench]]
 name = "prioritization_fee_cache"
+
+[[bench]]
+name = "accounts_db"

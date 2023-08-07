@@ -1352,13 +1352,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     ///   apply 'avoid_callback_result' if specified.
     ///   otherwise, call `callback`
     /// if 'PROVIDE_ENTRY_IN_CALLBACK' is true, populate callback with the Arc of the entry itself.
-    pub(crate) fn scan<
-        'a,
-        F,
-        I,
-        const PROVIDE_ENTRY_IN_CALLBACK: bool,
-        const AVOID_CALLBACK_RESULT: u8,
-    >(
+    pub fn scan<'a, F, I, const PROVIDE_ENTRY_IN_CALLBACK: bool, const AVOID_CALLBACK_RESULT: u8>(
         &self,
         pubkeys: I,
         mut callback: F,
