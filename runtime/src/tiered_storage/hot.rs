@@ -6,15 +6,18 @@ use {
         account_storage::meta::StoredMetaWriteVersion,
         tiered_storage::{
             byte_block,
-            footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
+            footer::{
+                AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
+            },
             index::AccountIndexFormat,
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
-            TieredStorageFormat,
+            TieredStorageFormat, TieredStorageResult,
         },
     },
+    memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
     solana_sdk::{hash::Hash, stake_history::Epoch},
-    std::option::Option,
+    std::{fs::OpenOptions, option::Option, path::Path},
 };
 
 pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
@@ -196,6 +199,39 @@ impl TieredAccountMeta for HotAccountMeta {
     /// account block.
     fn account_data<'a>(&self, account_block: &'a [u8]) -> &'a [u8] {
         &account_block[..self.account_data_size(account_block)]
+    }
+}
+
+/// The reader to a hot accounts file.
+#[derive(Debug)]
+pub struct HotStorageReader {
+    mmap: Mmap,
+    footer: TieredStorageFooter,
+}
+
+impl HotStorageReader {
+    /// Constructs a HotStorageReader from the specified path.
+    pub fn new_from_path(path: impl AsRef<Path>) -> TieredStorageResult<Self> {
+        let file = OpenOptions::new().read(true).open(path)?;
+        let mmap = unsafe { MmapOptions::new().map(&file)? };
+        // Here we are cloning the footer as accessing any data in a
+        // TieredStorage instance requires accessing its Footer.
+        // This can help improve cache locality and reduce the overhead
+        // of indirection associated with memory-mapped accesses.
+        let footer = TieredStorageFooter::new_from_mmap(&mmap)?.clone();
+
+        Ok(Self { mmap, footer })
+    }
+
+    /// Returns the footer of the underlying tiered-storage accounts file.
+    pub fn footer(&self) -> &TieredStorageFooter {
+        &self.footer
+    }
+
+    /// Returns the number of files inside the underlying tiered-storage
+    /// accounts file.
+    pub fn num_accounts(&self) -> usize {
+        self.footer.account_entry_count as usize
     }
 }
 

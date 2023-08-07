@@ -404,9 +404,13 @@ impl TransactionLogCollector {
     }
 }
 
-// Bank's common fields shared by all supported snapshot versions for deserialization.
-// Sync fields with BankFieldsToSerialize! This is paired with it.
-// All members are made public to remain Bank's members private and to make versioned deserializer workable on this
+/// Bank's common fields shared by all supported snapshot versions for deserialization.
+/// Sync fields with BankFieldsToSerialize! This is paired with it.
+/// All members are made public to remain Bank's members private and to make versioned deserializer workable on this
+/// Note that some fields are missing from the serializer struct. This is because of fields added later.
+/// Since it is difficult to insert fields to serialize/deserialize against existing code already deployed,
+/// new fields can be optionally serialized and optionally deserialized. At some point, the serialization and
+/// deserialization will use a new mechanism or otherwise be in sync more clearly.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BankFieldsToDeserialize {
     pub(crate) blockhash_queue: BlockhashQueue,
@@ -445,10 +449,14 @@ pub struct BankFieldsToDeserialize {
     pub(crate) epoch_reward_status: EpochRewardStatus,
 }
 
-// Bank's common fields shared by all supported snapshot versions for serialization.
-// This is separated from BankFieldsToDeserialize to avoid cloning by using refs.
-// So, sync fields with BankFieldsToDeserialize!
-// all members are made public to keep Bank private and to make versioned serializer workable on this
+/// Bank's common fields shared by all supported snapshot versions for serialization.
+/// This is separated from BankFieldsToDeserialize to avoid cloning by using refs.
+/// So, sync fields with BankFieldsToDeserialize!
+/// all members are made public to keep Bank private and to make versioned serializer workable on this.
+/// Note that some fields are missing from the serializer struct. This is because of fields added later.
+/// Since it is difficult to insert fields to serialize/deserialize against existing code already deployed,
+/// new fields can be optionally serialized and optionally deserialized. At some point, the serialization and
+/// deserialization will use a new mechanism or otherwise be in sync more clearly.
 #[derive(Debug)]
 pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) blockhash_queue: &'a RwLock<BlockhashQueue>,
@@ -989,6 +997,8 @@ impl Bank {
         )
     }
 
+    /// Intended for use by tests only.
+    /// create new bank with the given configs.
     pub fn new_with_runtime_config_for_tests(
         genesis_config: &GenesisConfig,
         runtime_config: Arc<RuntimeConfig>,
@@ -1115,6 +1125,8 @@ impl Bank {
         )
     }
 
+    /// Intended for use by benches only.
+    /// create new bank with the given config and paths.
     pub fn new_with_paths_for_benches(genesis_config: &GenesisConfig, paths: Vec<PathBuf>) -> Self {
         Self::new_with_paths(
             genesis_config,
@@ -3756,6 +3768,9 @@ impl Bank {
 
     /// squash the parent's state up into this Bank,
     ///   this Bank becomes a root
+    /// Note that this function is not thread-safe. If it is called concurrently on the same bank
+    /// by multiple threads, the end result could be inconsistent.
+    /// Calling code does not currently call this concurrently.
     pub fn squash(&self) -> SquashTiming {
         self.freeze();
 
@@ -4028,6 +4043,7 @@ impl Bank {
         Some(self.get_fee_for_message_with_lamports_per_signature(message, lamports_per_signature))
     }
 
+    /// Returns true when startup accounts hash verification has completed or never had to run in background.
     pub fn get_startup_verification_complete(&self) -> &Arc<AtomicBool> {
         &self
             .rc
@@ -4037,6 +4053,9 @@ impl Bank {
             .verified
     }
 
+    /// return true if bg hash verification is complete
+    /// return false if bg hash verification has not completed yet
+    /// if hash verification failed, a panic will occur
     pub fn is_startup_verification_complete(&self) -> bool {
         self.rc
             .accounts
@@ -6478,6 +6497,8 @@ impl Bank {
         parents
     }
 
+    /// fn store the single `account` with `pubkey`.
+    /// Uses `store_accounts`, which works on a vector of accounts.
     pub fn store_account<T: ReadableAccount + Sync + ZeroLamport>(
         &self,
         pubkey: &Pubkey,
@@ -7040,6 +7061,8 @@ impl Bank {
         epoch_accounts_hash
     }
 
+    /// Used by ledger tool to run a final hash calculation once all ledger replay has completed.
+    /// This should not be called by validator code.
     pub fn run_final_hash_calc(&self, on_halt_store_hash_raw_data_for_debug: bool) {
         self.force_flush_accounts_cache();
         // note that this slot may not be a root
@@ -7174,6 +7197,8 @@ impl Bank {
             .check_complete()
     }
 
+    /// This is only valid to call from tests.
+    /// block until initial accounts hash verification has completed
     pub fn wait_for_initial_accounts_hash_verification_completed_for_tests(&self) {
         self.rc
             .accounts
@@ -7308,6 +7333,10 @@ impl Bank {
         old
     }
 
+    /// Returns the `AccountsHash` that was calculated for this bank's slot
+    ///
+    /// This fn is used when creating a snapshot with ledger-tool, or when
+    /// packaging a snapshot into an archive (used to get the `SnapshotHash`).
     pub fn get_accounts_hash(&self) -> Option<AccountsHash> {
         self.rc
             .accounts
@@ -7316,6 +7345,10 @@ impl Bank {
             .map(|(accounts_hash, _)| accounts_hash)
     }
 
+    /// Returns the `IncrementalAccountsHash` that was calculated for this bank's slot
+    ///
+    /// This fn is used when creating an incremental snapshot with ledger-tool, or when
+    /// packaging a snapshot into an archive (used to get the `SnapshotHash`).
     pub fn get_incremental_accounts_hash(&self) -> Option<IncrementalAccountsHash> {
         self.rc
             .accounts
@@ -7324,6 +7357,14 @@ impl Bank {
             .map(|(incremental_accounts_hash, _)| incremental_accounts_hash)
     }
 
+    /// Returns the `SnapshotHash` for this bank's slot
+    ///
+    /// This fn is used at startup to verify the bank was rebuilt correctly.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there is both-or-neither of an `AccountsHash` and an `IncrementalAccountsHash`
+    /// for this bank's slot.  There may only be one or the other.
     pub fn get_snapshot_hash(&self) -> SnapshotHash {
         let accounts_hash = self.get_accounts_hash();
         let incremental_accounts_hash = self.get_incremental_accounts_hash();
@@ -7545,6 +7586,7 @@ impl Bank {
         *self.inflation.read().unwrap()
     }
 
+    /// Return the rent collector for this Bank
     pub fn rent_collector(&self) -> &RentCollector {
         &self.rent_collector
     }

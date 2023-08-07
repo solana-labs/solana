@@ -15,6 +15,7 @@ cargoNightly="$(readlink -f "./cargo") nightly"
 
 scripts/increment-cargo-version.sh check
 
+if [ -n "$CI" ] ; then
 # Disallow uncommitted Cargo.lock changes
 (
   _ scripts/cargo-for-all-lock-files.sh tree >/dev/null
@@ -28,6 +29,7 @@ EOF
     exit 1
   fi
 )
+fi
 
 echo --- build environment
 (

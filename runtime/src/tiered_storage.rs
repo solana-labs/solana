@@ -19,6 +19,8 @@ use {
     error::TieredStorageError,
     footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
     index::AccountIndexFormat,
+    once_cell::sync::OnceCell,
+    readable::TieredStorageReader,
     solana_sdk::{account::ReadableAccount, hash::Hash},
     std::{
         borrow::Borrow,
@@ -43,6 +45,7 @@ pub struct TieredStorageFormat {
 
 #[derive(Debug)]
 pub struct TieredStorage {
+    reader: OnceCell<TieredStorageReader>,
     format: Option<TieredStorageFormat>,
     path: PathBuf,
 }
@@ -55,9 +58,21 @@ impl TieredStorage {
     /// is called.
     pub fn new_writable(path: impl Into<PathBuf>, format: TieredStorageFormat) -> Self {
         Self {
+            reader: OnceCell::<TieredStorageReader>::new(),
             format: Some(format),
             path: path.into(),
         }
+    }
+
+    /// Creates a new read-only instance of TieredStorage from the
+    /// specified path.
+    pub fn new_readonly(path: impl Into<PathBuf>) -> TieredStorageResult<Self> {
+        let path = path.into();
+        Ok(Self {
+            reader: OnceCell::with_value(TieredStorageReader::new_from_path(&path)?),
+            format: None,
+            path,
+        })
     }
 
     /// Returns the path to this TieredStorage.
@@ -66,6 +81,11 @@ impl TieredStorage {
     }
 
     /// Writes the specified accounts into this TieredStorage.
+    ///
+    /// Note that this function can only be called once per a TieredStorage
+    /// instance.  TieredStorageError::AttemptToUpdateReadOnly will be returned
+    /// if this function is invoked more than once on the same TieredStorage
+    /// instance.
     pub fn write_accounts<
         'a,
         'b,
@@ -77,12 +97,39 @@ impl TieredStorage {
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
         skip: usize,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
-        // self.format must be Some as write_accounts can only be called on a
-        // TieredStorage instance created via new_writable() where it format
-        // field is required.
-        assert!(self.format.is_some());
-        let writer = TieredStorageWriter::new(&self.path, self.format.as_ref().unwrap())?;
-        writer.write_accounts(accounts, skip)
+        if self.is_read_only() {
+            return Err(TieredStorageError::AttemptToUpdateReadOnly(
+                self.path.to_path_buf(),
+            ));
+        }
+
+        let result = {
+            // self.format must be Some as write_accounts can only be called on a
+            // TieredStorage instance created via new_writable() where its format
+            // field is required.
+            let writer = TieredStorageWriter::new(&self.path, self.format.as_ref().unwrap())?;
+            writer.write_accounts(accounts, skip)
+        };
+
+        // panic here if self.reader.get() is not None as self.reader can only be
+        // None since we have passed `is_read_only()` check previously, indicating
+        // self.reader is not yet set.
+        self.reader
+            .set(TieredStorageReader::new_from_path(&self.path)?)
+            .unwrap();
+
+        result
+    }
+
+    /// Returns the underlying reader of the TieredStorage.  None will be
+    /// returned if it's is_read_only() returns false.
+    pub fn reader(&self) -> Option<&TieredStorageReader> {
+        self.reader.get()
+    }
+
+    /// Returns true if the TieredStorage instance is read-only.
+    pub fn is_read_only(&self) -> bool {
+        self.reader.get().is_some()
     }
 
     /// Returns the size of the underlying accounts file.
@@ -104,17 +151,21 @@ mod tests {
         footer::{TieredStorageFooter, TieredStorageMagicNumber},
         hot::HOT_FORMAT,
         solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
-        tempfile::NamedTempFile,
+        tempfile::tempdir,
     };
 
-    #[test]
-    fn test_new_footer_only() {
-        let path = NamedTempFile::new().unwrap().path().to_path_buf();
+    impl TieredStorage {
+        fn footer(&self) -> Option<&TieredStorageFooter> {
+            self.reader.get().map(|r| r.footer())
+        }
+    }
 
-        let tiered_storage = TieredStorage::new_writable(path.clone(), HOT_FORMAT.clone());
-        assert_eq!(tiered_storage.path(), path);
-        assert_eq!(tiered_storage.file_size().unwrap(), 0);
-
+    /// Simply invoke write_accounts with empty vector to allow the tiered storage
+    /// to persist non-account blocks such as footer, index block, etc.
+    fn write_zero_accounts(
+        tiered_storage: &TieredStorage,
+        expected_result: TieredStorageResult<Vec<StoredAccountInfo>>,
+    ) {
         let slot_ignored = Slot::MAX;
         let account_refs = Vec::<(&Pubkey, &AccountSharedData)>::new();
         let account_data = (slot_ignored, account_refs.as_slice());
@@ -126,14 +177,79 @@ mod tests {
             );
 
         let result = tiered_storage.write_accounts(&storable_accounts, 0);
-        // Expect the result to be TieredStorageError::Unsupported as the feature
-        // is not yet fully supported, but we can still check its partial results
-        // in the test.
-        assert!(result.is_err());
+
+        match (&result, &expected_result) {
+            (
+                Err(TieredStorageError::AttemptToUpdateReadOnly(_)),
+                Err(TieredStorageError::AttemptToUpdateReadOnly(_)),
+            ) => {}
+            (Err(TieredStorageError::Unsupported()), Err(TieredStorageError::Unsupported())) => {}
+            // we don't expect error type mis-match or other error types here
+            _ => {
+                panic!("actual: {result:?}, expected: {expected_result:?}");
+            }
+        };
+
+        assert!(tiered_storage.is_read_only());
         assert_eq!(
             tiered_storage.file_size().unwrap() as usize,
             std::mem::size_of::<TieredStorageFooter>()
                 + std::mem::size_of::<TieredStorageMagicNumber>()
+        );
+    }
+
+    #[test]
+    fn test_new_meta_file_only() {
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = tempdir().unwrap();
+        let tiered_storage_path = temp_dir.path().join("test_new_meta_file_only");
+
+        {
+            let tiered_storage =
+                TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
+            assert!(!tiered_storage.is_read_only());
+            assert_eq!(tiered_storage.path(), tiered_storage_path);
+            assert_eq!(tiered_storage.file_size().unwrap(), 0);
+
+            // Expect the result to be TieredStorageError::Unsupported as the feature
+            // is not yet fully supported, but we can still check its partial results
+            // in the test.
+            write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
+        }
+
+        let tiered_storage_readonly = TieredStorage::new_readonly(&tiered_storage_path).unwrap();
+        let footer = tiered_storage_readonly.footer().unwrap();
+        assert!(tiered_storage_readonly.is_read_only());
+        assert_eq!(tiered_storage_readonly.reader().unwrap().num_accounts(), 0);
+        assert_eq!(footer.account_meta_format, HOT_FORMAT.account_meta_format);
+        assert_eq!(footer.owners_block_format, HOT_FORMAT.owners_block_format);
+        assert_eq!(footer.account_index_format, HOT_FORMAT.account_index_format);
+        assert_eq!(footer.account_block_format, HOT_FORMAT.account_block_format);
+        assert_eq!(
+            tiered_storage_readonly.file_size().unwrap() as usize,
+            std::mem::size_of::<TieredStorageFooter>()
+                + std::mem::size_of::<TieredStorageMagicNumber>()
+        );
+    }
+
+    #[test]
+    fn test_write_accounts_twice() {
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = tempdir().unwrap();
+        let tiered_storage_path = temp_dir.path().join("test_write_accounts_twice");
+
+        let tiered_storage = TieredStorage::new_writable(&tiered_storage_path, HOT_FORMAT.clone());
+        // Expect the result to be TieredStorageError::Unsupported as the feature
+        // is not yet fully supported, but we can still check its partial results
+        // in the test.
+        write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
+        // Expect AttemptToUpdateReadOnly error as write_accounts can only
+        // be invoked once.
+        write_zero_accounts(
+            &tiered_storage,
+            Err(TieredStorageError::AttemptToUpdateReadOnly(
+                tiered_storage_path,
+            )),
         );
     }
 }

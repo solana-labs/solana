@@ -1859,7 +1859,7 @@ impl<'a> ProcessBlockStore<'a> {
 
             if let Some(hard_fork_restart_slot) = maybe_cluster_restart_with_hard_fork(
                 self.config,
-                self.bank_forks.read().unwrap().root_bank().slot(),
+                self.bank_forks.read().unwrap().root(),
             ) {
                 // reconciliation attempt 2 of 2 with hard fork
                 // this should be #2 because hard fork root > tower root in almost all cases
