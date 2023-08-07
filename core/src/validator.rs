@@ -1068,8 +1068,13 @@ impl Validator {
         if config.wen_restart {
             config.turbine_disabled.swap(true, Ordering::Relaxed);
             last_vote = process_blockstore.last_vote();
+            let last_vote_slots = match &last_vote {
+                Some(vote) => Some(vote.slots().clone()),
+                None => None,
+            };
             node.info
                 .set_shred_version((node.info.shred_version() + 1) % 0xffff);
+            warn!("wen_restart configured, turbine disabled, last_vote {:?}, shred_version now {}", last_vote_slots, node.info.shred_version());
         }
 
         let poh_service = PohService::new(
@@ -1180,6 +1185,7 @@ impl Validator {
         // repair and restart don't need to produce new blocks but it does need
         // repair and replay, just not voting. So we need TVU, but not TPU.
         if config.wen_restart {
+            info!("Waiting for wen_restart to finish");
             match wait_for_wen_restart(
                 last_vote,
                 blockstore.clone(),
@@ -1205,6 +1211,7 @@ impl Validator {
                     cluster_info
                         .my_contact_info()
                         .set_shred_version(new_shred_version);
+                    info!("wen_restart finished, shred_version now {}", new_shred_version);
                     ()
                 }
                 Err(e) => return Err(format!("wait_for_wen_restart failed: {e:?}")),
