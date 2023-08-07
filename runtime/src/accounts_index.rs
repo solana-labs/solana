@@ -1260,7 +1260,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             .collect()
     }
 
-    pub fn purge_exact<'a, C>(
+    /// returns true if, after this fn call:
+    /// accounts index entry for `pubkey` has an empty slot list
+    /// or `pubkey` does not exist in accounts index
+    pub(crate) fn purge_exact<'a, C>(
         &'a self,
         pubkey: &Pubkey,
         slots_to_purge: &'a C,
