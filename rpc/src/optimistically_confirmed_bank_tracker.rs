@@ -124,9 +124,9 @@ impl OptimisticallyConfirmedBankTracker {
 
     fn recv_notification(
         receiver: &Receiver<BankNotification>,
-        bank_forks: &Arc<RwLock<BankForks>>,
-        optimistically_confirmed_bank: &Arc<RwLock<OptimisticallyConfirmedBank>>,
-        subscriptions: &Arc<RpcSubscriptions>,
+        bank_forks: &RwLock<BankForks>,
+        optimistically_confirmed_bank: &RwLock<OptimisticallyConfirmedBank>,
+        subscriptions: &RpcSubscriptions,
         pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
         last_notified_confirmed_slot: &mut Slot,
         highest_confirmed_slot: &mut Slot,
@@ -168,8 +168,8 @@ impl OptimisticallyConfirmedBankTracker {
     }
 
     fn notify_or_defer(
-        subscriptions: &Arc<RpcSubscriptions>,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        subscriptions: &RpcSubscriptions,
+        bank_forks: &RwLock<BankForks>,
         bank: &Arc<Bank>,
         last_notified_confirmed_slot: &mut Slot,
         pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
@@ -195,8 +195,8 @@ impl OptimisticallyConfirmedBankTracker {
     }
 
     fn notify_or_defer_confirmed_banks(
-        subscriptions: &Arc<RpcSubscriptions>,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        subscriptions: &RpcSubscriptions,
+        bank_forks: &RwLock<BankForks>,
         bank: &Arc<Bank>,
         slot_threshold: Slot,
         last_notified_confirmed_slot: &mut Slot,
@@ -251,9 +251,9 @@ impl OptimisticallyConfirmedBankTracker {
 
     pub fn process_notification(
         notification: BankNotification,
-        bank_forks: &Arc<RwLock<BankForks>>,
-        optimistically_confirmed_bank: &Arc<RwLock<OptimisticallyConfirmedBank>>,
-        subscriptions: &Arc<RpcSubscriptions>,
+        bank_forks: &RwLock<BankForks>,
+        optimistically_confirmed_bank: &RwLock<OptimisticallyConfirmedBank>,
+        subscriptions: &RpcSubscriptions,
         pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
         last_notified_confirmed_slot: &mut Slot,
         highest_confirmed_slot: &mut Slot,
