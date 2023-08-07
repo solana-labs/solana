@@ -310,6 +310,14 @@ pub struct RpcContactInfo {
     pub shred_version: Option<u16>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcGossipCrdsValue {
+    pub signature: String,
+    // base64 encoded CRDS data
+    pub data: String,
+}
+
 /// Map of leader base58 identity pubkeys to the slot indices relative to the first epoch slot
 pub type RpcLeaderSchedule = HashMap<String, Vec<usize>>;
 

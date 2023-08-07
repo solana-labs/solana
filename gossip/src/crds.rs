@@ -416,8 +416,7 @@ impl Crds {
         self.table.is_empty()
     }
 
-    #[cfg(test)]
-    pub(crate) fn values(&self) -> impl Iterator<Item = &VersionedCrdsValue> {
+    pub fn values(&self) -> impl Iterator<Item = &VersionedCrdsValue> {
         self.table.values()
     }
 

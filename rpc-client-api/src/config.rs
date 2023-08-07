@@ -338,3 +338,32 @@ pub struct RpcContextConfig {
     pub commitment: Option<CommitmentConfig>,
     pub min_context_slot: Option<Slot>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RpcCrdsLabel {
+    LegacyContactInfo,
+    Vote,
+    LowestSlot,
+    LegacySnapshotHashes,
+    AccountsHashes,
+    EpochSlots,
+    LegacyVersion,
+    Version,
+    NodeInstance,
+    DuplicateShred,
+    SnapshotHashes,
+    ContactInfo,
+}
+
+impl Default for RpcCrdsLabel {
+    fn default() -> Self {
+        RpcCrdsLabel::ContactInfo
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcGossipCrdsValuesConfig {
+    pub label_filter: Option<RpcCrdsLabel>,
+}

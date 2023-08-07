@@ -3261,10 +3261,12 @@ pub mod rpc_accounts_scan {
 // Full RPC interface that an API node is expected to provide
 // (rpc_minimal should also be provided by an API node)
 pub mod rpc_full {
+    use solana_gossip::crds_value::CrdsData;
     use {
         super::*,
         solana_sdk::message::{SanitizedVersionedMessage, VersionedMessage},
     };
+
     #[rpc]
     pub trait Full {
         type Metadata;
@@ -3279,6 +3281,13 @@ pub mod rpc_full {
 
         #[rpc(meta, name = "getClusterNodes")]
         fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
+
+        #[rpc(meta, name = "getGossipCrdsValues")]
+        fn get_gossip_crds_values(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcGossipCrdsValuesConfig>,
+        ) -> Result<Vec<RpcGossipCrdsValue>>;
 
         #[rpc(meta, name = "getRecentPerformanceSamples")]
         fn get_recent_performance_samples(
@@ -3500,6 +3509,65 @@ pub mod rpc_full {
                     }
                 })
                 .collect())
+        }
+
+        fn get_gossip_crds_values(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcGossipCrdsValuesConfig>,
+        ) -> Result<Vec<RpcGossipCrdsValue>> {
+            debug!("get_gossip_crds_values rpc request received");
+            let filter = config.map(|c| c.label_filter).unwrap_or(None);
+
+            let crds_values: Vec<_> = meta
+                .cluster_info
+                .gossip
+                .crds
+                .read()
+                .unwrap()
+                .values()
+                .filter(|v| match filter {
+                    None => true,
+                    Some(RpcCrdsLabel::ContactInfo) => {
+                        matches!(v.value.data, CrdsData::ContactInfo(..))
+                    }
+                    Some(RpcCrdsLabel::LegacyContactInfo) => {
+                        matches!(v.value.data, CrdsData::LegacyContactInfo(..))
+                    }
+                    Some(RpcCrdsLabel::Vote) => matches!(v.value.data, CrdsData::Vote(..)),
+                    Some(RpcCrdsLabel::LowestSlot) => {
+                        matches!(v.value.data, CrdsData::LowestSlot(..))
+                    }
+                    Some(RpcCrdsLabel::LegacySnapshotHashes) => {
+                        matches!(v.value.data, CrdsData::LegacySnapshotHashes(..))
+                    }
+                    Some(RpcCrdsLabel::AccountsHashes) => {
+                        matches!(v.value.data, CrdsData::AccountsHashes(..))
+                    }
+                    Some(RpcCrdsLabel::EpochSlots) => {
+                        matches!(v.value.data, CrdsData::EpochSlots(..))
+                    }
+                    Some(RpcCrdsLabel::LegacyVersion) => {
+                        matches!(v.value.data, CrdsData::LegacyVersion(..))
+                    }
+                    Some(RpcCrdsLabel::Version) => matches!(v.value.data, CrdsData::Version(..)),
+                    Some(RpcCrdsLabel::NodeInstance) => {
+                        matches!(v.value.data, CrdsData::NodeInstance(..))
+                    }
+                    Some(RpcCrdsLabel::DuplicateShred) => {
+                        matches!(v.value.data, CrdsData::DuplicateShred(..))
+                    }
+                    Some(RpcCrdsLabel::SnapshotHashes) => {
+                        matches!(v.value.data, CrdsData::SnapshotHashes(..))
+                    }
+                })
+                .map(|v| RpcGossipCrdsValue {
+                    signature: v.value.signature.to_string(),
+                    data: BASE64_STANDARD
+                        .encode(&serialize(&v.value.data).expect("serializable CRDS data")),
+                })
+                .collect();
+            Ok(crds_values)
         }
 
         fn get_signature_statuses(
