@@ -1174,7 +1174,7 @@ startnode)
   nodeIndex=
   wenRestart=
   if [[ -z $wen_restart ]]; then
-    wenRestart="--wen_restart"
+    wenRestart=true
   fi
   getNodeType
   startNode "$nodeAddress" "$nodeType" "$nodeIndex" "$wenRestart"
