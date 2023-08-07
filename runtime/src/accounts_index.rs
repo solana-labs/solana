@@ -1402,7 +1402,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                                     PROVIDE_ENTRY_IN_CALLBACK.then_some(locked_entry),
                                 )
                             } else {
-                                unsafe { std::mem::transmute(AVOID_CALLBACK_RESULT as u8) }
+                                unsafe { std::mem::transmute(AVOID_CALLBACK_RESULT) }
                             };
 
                         cache = match result {
