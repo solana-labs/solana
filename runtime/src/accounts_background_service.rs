@@ -711,7 +711,7 @@ impl AccountsBackgroundService {
                 .rc
                 .accounts
                 .accounts_db
-                .bank_drop_callback_enabled();
+                .enable_bank_drop_callback();
             root_bank.set_callback(Some(Box::new(SendDroppedBankCallback::new(
                 pruned_banks_sender,
             ))));

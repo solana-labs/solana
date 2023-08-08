@@ -88,9 +88,9 @@ use {
         nonce_info::{NonceInfo, NoncePartial},
         partitioned_rewards::PartitionedEpochRewardsConfig,
         rent_collector::{CollectedInfo, RentCollector},
-        rent_debits::{RentDebits, RewardInfo},
+        rent_debits::RentDebits,
         sorted_storages::SortedStorages,
-        stake_rewards::StakeReward,
+        stake_rewards::{RewardInfo, StakeReward},
         storable_accounts::StorableAccounts,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_results::{

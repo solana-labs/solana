@@ -4,7 +4,7 @@ use {
         geyser_plugin_manager::GeyserPluginManager,
     },
     log::*,
-    solana_accounts_db::rent_debits::RewardInfo,
+    solana_accounts_db::stake_rewards::RewardInfo,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
         ReplicaBlockInfoV2, ReplicaBlockInfoVersions,
     },

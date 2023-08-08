@@ -1108,21 +1108,9 @@ fn check_deserialize_file_consumed(
 pub fn create_all_accounts_run_and_snapshot_dirs(
     account_paths: &[PathBuf],
 ) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
-    let mut run_dirs = Vec::with_capacity(account_paths.len());
-    let mut snapshot_dirs = Vec::with_capacity(account_paths.len());
-    for account_path in account_paths {
-        // create the run/ and snapshot/ sub directories for each account_path
-        let (run_dir, snapshot_dir) =
-            create_accounts_run_and_snapshot_dirs(account_path).map_err(|err| {
-                SnapshotError::IoWithSource(
-                    err,
-                    "Unable to create account run and snapshot directories",
-                )
-            })?;
-        run_dirs.push(run_dir);
-        snapshot_dirs.push(snapshot_dir);
-    }
-    Ok((run_dirs, snapshot_dirs))
+    accounts_db::create_all_accounts_run_and_snapshot_dirs(account_paths).map_err(|err| {
+        SnapshotError::IoWithSource(err, "Unable to create account run and snapshot directories")
+    })
 }
 
 /// Return account path from the appendvec path after checking its format.

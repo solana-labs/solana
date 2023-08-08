@@ -11,7 +11,7 @@ const SUBMIT_INTERVAL: Duration = Duration::from_secs(60);
 ///
 /// Used to record the stats and submit the datapoints.
 #[derive(Debug)]
-pub struct StatsManager {
+pub(super) struct StatsManager {
     stats: Stats,
     previous_submit: Instant,
 }
@@ -19,7 +19,7 @@ pub struct StatsManager {
 impl StatsManager {
     /// Make a new StatsManager
     #[must_use]
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             stats: Stats::default(),
             previous_submit: Instant::now(),
@@ -28,7 +28,7 @@ impl StatsManager {
 
     /// Record stats from this iteration, and maybe submit the datapoints based on how long it has
     /// been since the previous submission.
-    pub fn record_and_maybe_submit(&mut self, runtime: Duration) {
+    pub(super) fn record_and_maybe_submit(&mut self, runtime: Duration) {
         self.stats.record(runtime);
         self.maybe_submit();
     }

@@ -1,6 +1,6 @@
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
-    solana_accounts_db::rent_debits::RewardInfo,
+    solana_accounts_db::stake_rewards::RewardInfo,
     solana_ledger::blockstore::Blockstore,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     solana_transaction_status::Reward,

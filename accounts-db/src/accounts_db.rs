@@ -1237,6 +1237,23 @@ pub fn create_accounts_run_and_snapshot_dirs(
     Ok((run_path, snapshot_path))
 }
 
+/// For all account_paths, create the run/ and snapshot/ sub directories.
+/// If an account_path directory does not exist, create it.
+/// It returns (account_run_paths, account_snapshot_paths) or error
+pub fn create_all_accounts_run_and_snapshot_dirs(
+    account_paths: &[PathBuf],
+) -> std::io::Result<(Vec<PathBuf>, Vec<PathBuf>)> {
+    let mut run_dirs = Vec::with_capacity(account_paths.len());
+    let mut snapshot_dirs = Vec::with_capacity(account_paths.len());
+    for account_path in account_paths {
+        // create the run/ and snapshot/ sub directories for each account_path
+        let (run_dir, snapshot_dir) = create_accounts_run_and_snapshot_dirs(account_path)?;
+        run_dirs.push(run_dir);
+        snapshot_dirs.push(snapshot_dir);
+    }
+    Ok((run_dirs, snapshot_dirs))
+}
+
 /// Delete the files and subdirectories in a directory.
 /// This is useful if the process does not have permission
 /// to delete the top level directory it might be able to
@@ -5717,7 +5734,7 @@ impl AccountsDb {
         self.storage.insert(slot, store)
     }
 
-    pub fn bank_drop_callback_enabled(&self) {
+    pub fn enable_bank_drop_callback(&self) {
         self.is_bank_drop_callback_enabled
             .store(true, Ordering::Release);
     }

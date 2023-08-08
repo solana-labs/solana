@@ -967,7 +967,7 @@ fn test_snapshots_with_background_services(
         .rc
         .accounts
         .accounts_db
-        .bank_drop_callback_enabled();
+        .enable_bank_drop_callback();
     let callback = SendDroppedBankCallback::new(pruned_banks_sender);
     for bank in bank_forks.read().unwrap().banks().values() {
         bank.set_callback(Some(Box::new(callback.clone())));

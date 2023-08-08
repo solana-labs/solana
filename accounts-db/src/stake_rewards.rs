@@ -1,12 +1,22 @@
 //! Code for stake and vote rewards
 
 use {
-    crate::{
-        accounts_db::IncludeSlotInHash, rent_debits::RewardInfo,
-        storable_accounts::StorableAccounts,
+    crate::{accounts_db::IncludeSlotInHash, storable_accounts::StorableAccounts},
+    solana_sdk::{
+        account::AccountSharedData, clock::Slot, pubkey::Pubkey, reward_type::RewardType,
     },
-    solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
 };
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample, Clone, Copy)]
+pub struct RewardInfo {
+    pub reward_type: RewardType,
+    /// Reward amount
+    pub lamports: i64,
+    /// Account balance in lamports after `lamports` was applied
+    pub post_balance: u64,
+    /// Vote account commission when the reward was credited, only present for voting and staking rewards
+    pub commission: Option<u8>,
+}
 
 #[derive(AbiExample, Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct StakeReward {
@@ -50,7 +60,6 @@ use {
     solana_sdk::{
         account::WritableAccount,
         rent::Rent,
-        reward_type::RewardType,
         signature::{Keypair, Signer},
     },
     solana_stake_program::stake_state,
