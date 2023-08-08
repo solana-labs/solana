@@ -345,7 +345,6 @@ startBootstrapLeader() {
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
          \"$genesisOptions\" \
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAccountsDbSkipShrink $maybeSkipRequireTower\" \
-         \"$maybeWenRestart\" \
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$maybeFullRpc\" \
@@ -354,6 +353,7 @@ startBootstrapLeader() {
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
          \"$enableUdp\" \
+         \"$maybeWenRestart\" \
       "
 
   ) >> "$logFile" 2>&1 || {
