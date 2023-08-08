@@ -1287,6 +1287,7 @@ pub(crate) mod tests {
         solana_runtime::{
             commitment::BlockCommitment,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            prioritization_fee_cache::PrioritizationFeeCache,
         },
         solana_sdk::{
             commitment_config::CommitmentConfig,
@@ -2032,6 +2033,7 @@ pub(crate) mod tests {
             &mut highest_confirmed_slot,
             &mut highest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
 
         // a closure to reduce code duplications in building expected responses:
@@ -2083,6 +2085,7 @@ pub(crate) mod tests {
             &mut highest_confirmed_slot,
             &mut highest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
 
         let response = receiver.recv();
@@ -2204,6 +2207,7 @@ pub(crate) mod tests {
             &mut highest_confirmed_slot,
             &mut highest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
 
         // The following should panic
@@ -2321,6 +2325,7 @@ pub(crate) mod tests {
             &mut highest_confirmed_slot,
             &mut highest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
 
         // a closure to reduce code duplications in building expected responses:
@@ -2374,6 +2379,7 @@ pub(crate) mod tests {
             &mut highest_confirmed_slot,
             &mut highest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
 
         let response = receiver.recv();
@@ -2809,6 +2815,7 @@ pub(crate) mod tests {
             &mut highest_confirmed_slot,
             &mut highest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
 
         // Now, notify the frozen bank and ensure its notifications are processed
@@ -2823,6 +2830,7 @@ pub(crate) mod tests {
             &mut highest_confirmed_slot,
             &mut highest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
 
         let response = receiver0.recv();
@@ -2874,6 +2882,7 @@ pub(crate) mod tests {
             &mut highest_confirmed_slot,
             &mut highest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
         let response = receiver1.recv();
         let expected = json!({
