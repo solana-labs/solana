@@ -641,7 +641,7 @@ deploy() {
       SECONDS=0
       pids=()
     else
-      startNode "$ipAddress" "$nodeType" "$nodeIndex"
+      startNode "$ipAddress" "$nodeType" "$nodeIndex" false
 
       # Stagger additional node start time. If too many nodes start simultaneously
       # the bootstrap node gets more rsync requests from the additional nodes than
