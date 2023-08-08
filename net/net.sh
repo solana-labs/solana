@@ -345,6 +345,7 @@ startBootstrapLeader() {
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
          \"$genesisOptions\" \
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAccountsDbSkipShrink $maybeSkipRequireTower\" \
+         \"$maybeWenRestart\" \
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$maybeFullRpc\" \
@@ -353,7 +354,6 @@ startBootstrapLeader() {
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
          \"$enableUdp\" \
-         \"$wenRestart\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -823,7 +823,7 @@ maybeDisableAirdrops=""
 maybeWaitForSupermajority=""
 maybeAccountsDbSkipShrink=""
 maybeSkipRequireTower=""
-wenRestart=false
+maybeWenRestart=""
 debugBuild=false
 profileBuild=false
 doBuild=true
@@ -974,8 +974,8 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --skip-require-tower ]]; then
       maybeSkipRequireTower="$1"
       shift 1
-    elif [[ $1 = --wen_restart ]]; then
-      wenRestart=true
+    elif [[ $1 = --wen-restart ]]; then
+      maybeWenRestart="$1"
       shift 1
     elif [[ $1 = --client-type ]]; then
       clientType=$2

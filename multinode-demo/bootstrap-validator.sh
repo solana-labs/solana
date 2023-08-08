@@ -21,6 +21,7 @@ fi
 
 no_restart=0
 maybeRequireTower=true
+maybeWenRestart=false
 
 args=()
 while [[ -n $1 ]]; do
@@ -106,6 +107,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --log-messages-bytes-limit ]]; then
       args+=("$1" "$2")
       shift 2
+    elif [[ $1 == --wen-restart ]]; then
+      maybeWenRestart=true
+      shift
     else
       echo "Unknown argument: $1"
       $program --help
@@ -132,6 +136,10 @@ ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-validator
 
 if [[ $maybeRequireTower = true ]]; then
   args+=(--require-tower)
+fi
+
+if [[ $maybeWenRestart = true ]]; then
+  args+=(--wen-restart)
 fi
 
 args+=(
