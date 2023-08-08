@@ -315,7 +315,7 @@ startBootstrapLeader() {
   declare ipAddress=$1
   declare nodeIndex="$2"
   declare logFile="$3"
-  declare wenRestart=$4
+  declare maybeWenRestart=$4
 
   echo "--- Starting bootstrap validator: $ipAddress"
   echo "start log: $logFile"
