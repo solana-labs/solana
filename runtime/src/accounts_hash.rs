@@ -143,15 +143,12 @@ pub struct HashStats {
     pub hash_time_total_us: u64,
     pub sort_time_total_us: u64,
     pub hash_total: usize,
-    pub unreduced_entries: usize,
     pub num_snapshot_storage: usize,
     pub scan_chunks: usize,
     pub num_slots: usize,
     pub num_dirty_slots: usize,
     pub collect_snapshots_us: u64,
     pub storage_sort_us: u64,
-    pub min_bin_size: usize,
-    pub max_bin_size: usize,
     pub storage_size_quartiles: StorageSizeQuartileStats,
     pub oldest_root: Slot,
     pub roots_older_than_epoch: AtomicUsize,
@@ -201,14 +198,11 @@ impl HashStats {
             ("sort_us", self.sort_time_total_us, i64),
             ("hash_total", self.hash_total, i64),
             ("storage_sort_us", self.storage_sort_us, i64),
-            ("unreduced_entries", self.unreduced_entries, i64),
             ("collect_snapshots_us", self.collect_snapshots_us, i64),
             ("num_snapshot_storage", self.num_snapshot_storage, i64),
             ("scan_chunks", self.scan_chunks, i64),
             ("num_slots", self.num_slots, i64),
             ("num_dirty_slots", self.num_dirty_slots, i64),
-            ("min_bin_size", self.min_bin_size, i64),
-            ("max_bin_size", self.max_bin_size, i64),
             ("storage_size_min", self.storage_size_quartiles[0], i64),
             (
                 "storage_size_quartile_1",
@@ -787,32 +781,27 @@ impl AccountsHasher {
         //      vec: individual hashes in pubkey order, 1 hash per
         // b. lamports
         let mut zeros = Measure::start("eliminate zeros");
-        let min_max_sum_entries_hashes = Mutex::new((usize::MAX, usize::MIN, 0u64, 0usize, 0usize));
+        let sum = Mutex::new(0u64);
+        let hash_total = AtomicUsize::default();
         let hashes: Vec<_> = (0..max_bin)
             .into_par_iter()
             .map(|bin| {
                 let (hashes_file, lamports_bin) =
                     self.de_dup_accounts_in_parallel(sorted_data_by_pubkey, bin, max_bin, stats);
                 {
-                    let mut lock = min_max_sum_entries_hashes.lock().unwrap();
-                    let (min, max, mut lamports_sum, entries, mut hash_total) = *lock;
-                    lamports_sum = Self::checked_cast_for_capitalization(
-                        lamports_sum as u128 + lamports_bin as u128,
+                    hash_total.fetch_add(hashes_file.count(), Ordering::Relaxed);
+                    let mut lamports_sum = sum.lock().unwrap();
+                    *lamports_sum = Self::checked_cast_for_capitalization(
+                        *lamports_sum as u128 + lamports_bin as u128,
                     );
-                    hash_total += hashes_file.count();
-                    *lock = (min, max, lamports_sum, entries, hash_total);
                 }
                 hashes_file
             })
             .collect();
         zeros.stop();
         stats.zeros_time_total_us += zeros.as_us();
-        let (min, max, lamports_sum, entries, hash_total) =
-            min_max_sum_entries_hashes.into_inner().unwrap();
-        stats.min_bin_size = min;
-        stats.max_bin_size = max;
-        stats.unreduced_entries += entries;
-        stats.hash_total += hash_total;
+        let lamports_sum = sum.into_inner().unwrap();
+        stats.hash_total += hash_total.load(Ordering::Relaxed);
         (hashes, lamports_sum)
     }
 
