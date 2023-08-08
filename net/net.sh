@@ -823,7 +823,7 @@ maybeDisableAirdrops=""
 maybeWaitForSupermajority=""
 maybeAccountsDbSkipShrink=""
 maybeSkipRequireTower=""
-wenRestart=""
+wenRestart=false
 debugBuild=false
 profileBuild=false
 doBuild=true
@@ -1172,7 +1172,6 @@ startnode)
   fi
   nodeType=
   nodeIndex=
-  wenRestart=
   if [[ -z $wen_restart ]]; then
     wenRestart=true
   fi
