@@ -59,7 +59,6 @@ use {
         contains::Contains,
         epoch_accounts_hash::EpochAccountsHashManager,
         partitioned_rewards::{PartitionedEpochRewardsConfig, TestPartitionedEpochRewards},
-        pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
         sorted_storages::SortedStorages,
@@ -488,7 +487,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     test_partitioned_epoch_rewards: TestPartitionedEpochRewards::None,
 };
 
-pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
+pub type BinnedHashData = Vec<CalculateHashIntermediate>;
 
 struct LoadAccountsIndexForShrink<'a, T: ShrinkCollectRefs<'a>> {
     /// all alive accounts
@@ -2326,8 +2325,6 @@ type GenerateIndexAccountsMap<'a> = HashMap<Pubkey, StoredAccountMeta<'a>>;
 
 /// called on a struct while scanning append vecs
 trait AppendVecScan: Send + Sync + Clone {
-    /// return true if this pubkey should be included
-    fn filter(&mut self, pubkey: &Pubkey) -> bool;
     /// set current slot of the scan
     fn set_slot(&mut self, slot: Slot);
     /// found `account` in the append vec
@@ -2348,36 +2345,25 @@ struct ScanState<'a> {
     current_slot: Slot,
     /// accumulated results
     accum: BinnedHashData,
-    bin_calculator: &'a PubkeyBinCalculator24,
-    bin_range: &'a Range<usize>,
     config: &'a CalcAccountsHashConfig<'a>,
     mismatch_found: Arc<AtomicU64>,
     filler_account_suffix: Option<&'a Pubkey>,
     range: usize,
     sort_time: Arc<AtomicU64>,
-    pubkey_to_bin_index: usize,
 }
 
 impl<'a> AppendVecScan for ScanState<'a> {
     fn set_slot(&mut self, slot: Slot) {
         self.current_slot = slot;
     }
-    fn filter(&mut self, pubkey: &Pubkey) -> bool {
-        self.pubkey_to_bin_index = self.bin_calculator.bin_from_pubkey(pubkey);
-        self.bin_range.contains(&self.pubkey_to_bin_index)
-    }
     fn init_accum(&mut self, count: usize) {
-        if self.accum.is_empty() {
-            self.accum.append(&mut vec![Vec::new(); count]);
+        // need good initial estimate to avoid repeated re-allocation while scanning
+        if self.accum.is_empty() && self.accum.capacity() < count {
+            self.accum = Vec::with_capacity(count);
         }
     }
     fn found_account(&mut self, loaded_account: &LoadedAccount) {
         let pubkey = loaded_account.pubkey();
-        assert!(self.bin_range.contains(&self.pubkey_to_bin_index)); // get rid of this once we have confidence
-
-        // when we are scanning with bin ranges, we don't need to use exact bin numbers. Subtract to make first bin we care about at index 0.
-        self.pubkey_to_bin_index -= self.bin_range.start;
-
         let balance = loaded_account.lamports();
         let mut loaded_hash = loaded_account.loaded_hash();
 
@@ -2402,7 +2388,7 @@ impl<'a> AppendVecScan for ScanState<'a> {
         }
         let source_item = CalculateHashIntermediate::new(loaded_hash, balance, *pubkey);
         self.init_accum(self.range);
-        self.accum[self.pubkey_to_bin_index].push(source_item);
+        self.accum.push(source_item);
     }
     fn scanning_complete(self) -> BinnedHashData {
         let (result, timing) = AccountsDb::sort_slot_storage_scan(self.accum);
@@ -7070,11 +7056,10 @@ impl AccountsDb {
     where
         S: AppendVecScan,
     {
-        storage.accounts.account_iter().for_each(|account| {
-            if scanner.filter(account.pubkey()) {
-                scanner.found_account(&LoadedAccount::Stored(account))
-            }
-        });
+        storage
+            .accounts
+            .account_iter()
+            .for_each(|account| scanner.found_account(&LoadedAccount::Stored(account)));
     }
 
     fn update_old_slot_stats(&self, stats: &HashStats, storage: Option<&Arc<AccountStorageEntry>>) {
@@ -7229,12 +7214,17 @@ impl AccountsDb {
 
                 let mut init_accum = true;
                 // load from cache failed, so create the cache file for this chunk
+
+                let count = snapshot_storages
+                    .iter_range(&range_this_chunk)
+                    .filter_map(|(_, storage)| storage.map(|storage| storage.count()))
+                    .sum::<usize>();
+
                 for (slot, storage) in snapshot_storages.iter_range(&range_this_chunk) {
                     let ancient = slot < oldest_non_ancient_slot;
                     let (_, scan_us) = measure_us!(if let Some(storage) = storage {
                         if init_accum {
-                            let range = bin_range.end - bin_range.start;
-                            scanner.init_accum(range);
+                            scanner.init_accum(count);
                             init_accum = false;
                         }
                         scanner.set_slot(slot);
@@ -7255,7 +7245,7 @@ impl AccountsDb {
                     .then(|| {
                         let r = scanner.scanning_complete();
                         assert!(!file_name.is_empty());
-                        (!r.is_empty() && r.iter().any(|b| !b.is_empty())).then(|| {
+                        (!r.is_empty()).then(|| {
                             // error if we can't write this
                             cache_hash_data.save(&file_name, &r).unwrap();
                             cache_hash_data.load_map(&file_name).unwrap()
@@ -7517,7 +7507,6 @@ impl AccountsDb {
     ) -> Result<Vec<CacheHashDataFile>, AccountsHashVerificationError> {
         let _guard = self.active_stats.activate(ActiveStatItem::HashScan);
 
-        let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
         stats.num_snapshot_storage = storages.storage_count();
@@ -7529,14 +7518,11 @@ impl AccountsDb {
         let scanner = ScanState {
             current_slot: Slot::default(),
             accum: BinnedHashData::default(),
-            bin_calculator: &bin_calculator,
             config,
             mismatch_found: mismatch_found.clone(),
             filler_account_suffix,
             range,
-            bin_range,
             sort_time: sort_time.clone(),
-            pubkey_to_bin_index: 0,
         };
 
         let result = self.scan_account_storage_no_bank(
@@ -7564,22 +7550,17 @@ impl AccountsDb {
         Ok(result)
     }
 
-    fn sort_slot_storage_scan(accum: BinnedHashData) -> (BinnedHashData, u64) {
+    fn sort_slot_storage_scan(mut accum: BinnedHashData) -> (BinnedHashData, u64) {
         let time = AtomicU64::new(0);
         (
-            accum
-                .into_iter()
-                .map(|mut items| {
-                    let mut sort_time = Measure::start("sort");
-                    {
-                        // sort_by vs unstable because slot and write_version are already in order
-                        items.sort_by(AccountsHasher::compare_two_hash_entries);
-                    }
-                    sort_time.stop();
-                    time.fetch_add(sort_time.as_us(), Ordering::Relaxed);
-                    items
-                })
-                .collect(),
+            {
+                let mut sort_time = Measure::start("sort");
+                // sort_by vs unstable because slot and write_version are already in order
+                accum.par_sort_by(AccountsHasher::compare_two_hash_entries);
+                sort_time.stop();
+                time.fetch_add(sort_time.as_us(), Ordering::Relaxed);
+                accum
+            },
             time.load(Ordering::Relaxed),
         )
     }
@@ -9842,6 +9823,7 @@ pub mod tests {
             append_vec::{test_utils::TempFile, AppendVecStoredAccountMeta},
             cache_hash_data_stats::CacheHashDataStats,
             inline_spl_token,
+            pubkey_bins::PubkeyBinCalculator24,
             secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
         },
         assert_matches::assert_matches,
@@ -10372,7 +10354,7 @@ pub mod tests {
             );
             assert_eq!(
                 convert_to_slice(&[result2]),
-                expected,
+                vec![expected.clone()],
                 "bins: {bins}, start_bin_index: {start_bin_index}"
             );
         }
@@ -10555,7 +10537,7 @@ pub mod tests {
                 include_slot_in_hash,
             )
             .unwrap();
-        assert_scan(result, vec![vec![raw_expected.clone()]], bins, 0, bins);
+        assert_scan(result, vec![raw_expected.clone()], bins, 0, bins);
 
         let bins = 2;
         let accounts_db = AccountsDb::new_single_for_tests();
@@ -10577,7 +10559,7 @@ pub mod tests {
         expected[0].push(raw_expected[1].clone());
         expected[bins - 1].push(raw_expected[2].clone());
         expected[bins - 1].push(raw_expected[3].clone());
-        assert_scan(result, vec![expected], bins, 0, bins);
+        assert_scan(result, expected, bins, 0, bins);
 
         let bins = 4;
         let accounts_db = AccountsDb::new_single_for_tests();
@@ -10599,7 +10581,7 @@ pub mod tests {
         expected[1].push(raw_expected[1].clone());
         expected[2].push(raw_expected[2].clone());
         expected[bins - 1].push(raw_expected[3].clone());
-        assert_scan(result, vec![expected], bins, 0, bins);
+        assert_scan(result, expected, bins, 0, bins);
 
         let bins = 256;
         let accounts_db = AccountsDb::new_single_for_tests();
@@ -10621,7 +10603,7 @@ pub mod tests {
         expected[127].push(raw_expected[1].clone());
         expected[128].push(raw_expected[2].clone());
         expected[bins - 1].push(raw_expected.last().unwrap().clone());
-        assert_scan(result, vec![expected], bins, 0, bins);
+        assert_scan(result, expected, bins, 0, bins);
     }
 
     #[test]
@@ -10652,7 +10634,7 @@ pub mod tests {
             )
             .unwrap();
 
-        assert_scan(result, vec![vec![raw_expected]], bins, 0, bins);
+        assert_scan(result, vec![raw_expected], bins, 0, bins);
     }
 
     #[test]
@@ -10681,7 +10663,7 @@ pub mod tests {
         let mut expected = vec![Vec::new(); half_bins];
         expected[0].push(raw_expected[0].clone());
         expected[0].push(raw_expected[1].clone());
-        assert_scan(result, vec![expected], bins, 0, half_bins);
+        assert_scan(result, expected, bins, 0, half_bins);
 
         // just the second bin of 2
         let accounts_db = AccountsDb::new_single_for_tests();
@@ -10703,7 +10685,7 @@ pub mod tests {
         let starting_bin_index = 0;
         expected[starting_bin_index].push(raw_expected[2].clone());
         expected[starting_bin_index].push(raw_expected[3].clone());
-        assert_scan(result, vec![expected], bins, 1, bins - 1);
+        assert_scan(result, expected, bins, 1, bins - 1);
 
         // 1 bin at a time of 4
         let bins = 4;
@@ -10725,7 +10707,7 @@ pub mod tests {
                 .unwrap();
             let mut expected = vec![Vec::new(); 1];
             expected[0].push(expected_item.clone());
-            assert_scan(result, vec![expected], bins, bin, 1);
+            assert_scan(result, expected, bins, bin, 1);
         }
 
         let bins = 256;
@@ -10875,9 +10857,6 @@ pub mod tests {
     }
 
     impl AppendVecScan for TestScan {
-        fn filter(&mut self, _pubkey: &Pubkey) -> bool {
-            true
-        }
         fn set_slot(&mut self, slot: Slot) {
             self.current_slot = slot;
         }
@@ -10886,11 +10865,11 @@ pub mod tests {
             self.calls.fetch_add(1, Ordering::Relaxed);
             assert_eq!(loaded_account.pubkey(), &self.pubkey);
             assert_eq!(self.slot_expected, self.current_slot);
-            self.accum.push(vec![CalculateHashIntermediate::new(
+            self.accum.push(CalculateHashIntermediate::new(
                 Hash::default(),
                 self.value_to_use_for_lamports,
                 self.pubkey,
-            )]);
+            ));
         }
         fn scanning_complete(self) -> BinnedHashData {
             self.accum
@@ -10943,11 +10922,11 @@ pub mod tests {
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_scan(
             result,
-            vec![vec![vec![CalculateHashIntermediate::new(
+            vec![vec![CalculateHashIntermediate::new(
                 Hash::default(),
                 expected,
                 pubkey,
-            )]]],
+            )]],
             1,
             0,
             1,
@@ -11045,11 +11024,7 @@ pub mod tests {
         let accum = test_scan.scanning_complete();
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_eq!(
-            accum
-                .iter()
-                .flatten()
-                .map(|a| a.lamports)
-                .collect::<Vec<_>>(),
+            accum.iter().map(|a| a.lamports).collect::<Vec<_>>(),
             vec![expected]
         );
     }
@@ -11134,11 +11109,7 @@ pub mod tests {
         let accum = scanner.scanning_complete();
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_eq!(
-            accum
-                .iter()
-                .flatten()
-                .map(|a| a.lamports)
-                .collect::<Vec<_>>(),
+            accum.iter().map(|a| a.lamports).collect::<Vec<_>>(),
             vec![lamports]
         );
     }
@@ -11157,9 +11128,6 @@ pub mod tests {
         fn set_slot(&mut self, slot: Slot) {
             self.current_slot = slot;
         }
-        fn filter(&mut self, _pubkey: &Pubkey) -> bool {
-            true
-        }
         fn init_accum(&mut self, _count: usize) {}
         fn found_account(&mut self, loaded_account: &LoadedAccount) {
             self.calls.fetch_add(1, Ordering::Relaxed);
@@ -11171,11 +11139,11 @@ pub mod tests {
             } else {
                 assert_eq!(self.accum.len(), 1);
             }
-            self.accum.push(vec![CalculateHashIntermediate {
+            self.accum.push(CalculateHashIntermediate {
                 hash: Hash::default(),
                 lamports: loaded_account.lamports(),
                 pubkey: Pubkey::default(),
-            }]);
+            });
         }
         fn scanning_complete(self) -> BinnedHashData {
             self.accum

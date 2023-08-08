@@ -285,7 +285,7 @@ impl CacheHashData {
     pub fn save(
         &self,
         file_name: impl AsRef<Path>,
-        data: &SavedTypeSlice,
+        data: &[EntryType],
     ) -> Result<(), std::io::Error> {
         let mut stats = CacheHashDataStats::default();
         let result = self.save_internal(file_name, data, &mut stats);
@@ -296,7 +296,7 @@ impl CacheHashData {
     fn save_internal(
         &self,
         file_name: impl AsRef<Path>,
-        data: &SavedTypeSlice,
+        data: &[EntryType],
         stats: &mut CacheHashDataStats,
     ) -> Result<(), std::io::Error> {
         let mut m = Measure::start("save");
@@ -305,11 +305,7 @@ impl CacheHashData {
         let _ignored = remove_file(&cache_path);
         let cell_size = std::mem::size_of::<EntryType>() as u64;
         let mut m1 = Measure::start("create save");
-        let entries = data
-            .iter()
-            .map(|x: &Vec<EntryType>| x.len())
-            .collect::<Vec<_>>();
-        let entries = entries.iter().sum::<usize>();
+        let entries = data.len();
         let capacity = cell_size * (entries as u64) + std::mem::size_of::<Header>() as u64;
 
         let mmap = CacheHashDataFile::new_map(&cache_path, capacity)?;
@@ -329,12 +325,10 @@ impl CacheHashData {
 
         let mut m2 = Measure::start("write_to_mmap");
         let mut i = 0;
-        data.iter().for_each(|x| {
-            x.iter().for_each(|item| {
-                let d = cache_file.get_mut(i as u64);
-                i += 1;
-                *d = item.clone();
-            })
+        data.iter().for_each(|item| {
+            let d = cache_file.get_mut(i as u64);
+            i += 1;
+            *d = item.clone();
         });
         assert_eq!(i, entries);
         m2.stop();
@@ -348,7 +342,7 @@ impl CacheHashData {
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, rand::Rng};
+    use {super::*, crate::pubkey_bins::PubkeyBinCalculator24, rand::Rng};
 
     #[test]
     fn test_read_write() {
@@ -365,13 +359,14 @@ pub mod tests {
             let bin_calculator = PubkeyBinCalculator24::new(bins);
             let num_points = 5;
             let (data, _total_points) = generate_test_data(num_points, bins, &bin_calculator);
-            for passes in [1, 2] {
+            for passes in [1] {
+                // only support 1 pass now
                 let bins_per_pass = bins / passes;
                 if bins_per_pass == 0 {
                     continue; // illegal test case
                 }
                 for pass in 0..passes {
-                    for flatten_data in [true, false] {
+                    for flatten_data in [true] {
                         let mut data_this_pass = if flatten_data {
                             vec![vec![], vec![]]
                         } else {
@@ -388,7 +383,12 @@ pub mod tests {
                         }
                         let cache = CacheHashData::new(cache_dir.clone());
                         let file_name = PathBuf::from("test");
-                        cache.save(&file_name, &data_this_pass).unwrap();
+                        cache
+                            .save(
+                                &file_name,
+                                &data_this_pass.iter().flatten().cloned().collect::<Vec<_>>(),
+                            )
+                            .unwrap();
                         cache.get_cache_files();
                         assert_eq!(
                             cache
