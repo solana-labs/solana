@@ -975,10 +975,10 @@ impl RepairWeight {
 
 #[cfg(test)]
 mod test {
-    use solana_accounts_db::contains::Contains;
     use {
         super::*,
         itertools::Itertools,
+        solana_accounts_db::contains::Contains,
         solana_ledger::{
             blockstore::{make_chaining_slot_entries, Blockstore},
             get_tmp_ledger_path,

@@ -13,7 +13,6 @@ use {
     bincode::{self, config::Options, Error},
     log::*,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
-    solana_accounts_db::epoch_accounts_hash::EpochAccountsHash,
     solana_accounts_db::{
         account_storage::meta::StoredMetaWriteVersion,
         accounts::Accounts,
@@ -26,6 +25,7 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         blockhash_queue::BlockhashQueue,
+        epoch_accounts_hash::EpochAccountsHash,
         rent_collector::RentCollector,
     },
     solana_measure::measure::Measure,

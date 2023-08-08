@@ -33,7 +33,6 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-use solana_accounts_db::stake_rewards::StakeReward;
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
@@ -91,6 +90,7 @@ use {
         rent_collector::{CollectedInfo, RentCollector},
         rent_debits::{RentDebits, RewardInfo},
         sorted_storages::SortedStorages,
+        stake_rewards::StakeReward,
         storable_accounts::StorableAccounts,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_results::{

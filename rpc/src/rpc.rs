@@ -4618,7 +4618,6 @@ pub fn populate_blockstore_for_tests(
 
 #[cfg(test)]
 pub mod tests {
-    use solana_accounts_db::{inline_spl_token, inline_spl_token_2022};
     use {
         super::{
             rpc_accounts::*, rpc_accounts_scan::*, rpc_bank::*, rpc_deprecated_v1_9::*,
@@ -4634,6 +4633,7 @@ pub mod tests {
         jsonrpc_core::{futures, ErrorCode, MetaIoHandler, Output, Response, Value},
         jsonrpc_core_client::transports::local,
         serde::de::DeserializeOwned,
+        solana_accounts_db::{inline_spl_token, inline_spl_token_2022},
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_entry::entry::next_versioned_entry,
         solana_gossip::socketaddr,

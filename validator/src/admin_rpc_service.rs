@@ -861,13 +861,12 @@ pub fn load_staked_nodes_overrides(
 
 #[cfg(test)]
 mod tests {
-    use solana_accounts_db::inline_spl_token;
     use {
         super::*,
         rand::{distributions::Uniform, thread_rng, Rng},
         serde_json::Value,
         solana_accounts_db::{
-            accounts_index::AccountSecondaryIndexes,
+            accounts_index::AccountSecondaryIndexes, inline_spl_token,
             secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
         },
         solana_core::consensus::tower_storage::NullTowerStorage,

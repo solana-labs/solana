@@ -1,5 +1,6 @@
 use {
     crate::{
+        serde_snapshot::SnapshotStreams,
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
@@ -20,7 +21,7 @@ use {
     solana_accounts_db::{
         account_storage::AccountStorageMap,
         accounts_db::{
-            create_accounts_run_and_snapshot_dirs, AccountStorageEntry, AtomicAppendVecId,
+            self, create_accounts_run_and_snapshot_dirs, AccountStorageEntry, AtomicAppendVecId,
         },
         accounts_file::AccountsFileError,
         append_vec::AppendVec,
@@ -41,7 +42,7 @@ use {
         path::{Path, PathBuf},
         process::ExitStatus,
         str::FromStr,
-        sync::{atomic::AtomicU32, Arc},
+        sync::{atomic::AtomicU32, Arc, Mutex},
         thread::{Builder, JoinHandle},
     },
     tar::{self, Archive},
@@ -51,10 +52,7 @@ use {
 
 mod archive_format;
 pub mod snapshot_storage_rebuilder;
-use crate::serde_snapshot::SnapshotStreams;
 pub use archive_format::*;
-use solana_accounts_db::accounts_db;
-use std::sync::Mutex;
 
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
 pub const SNAPSHOT_VERSION_FILENAME: &str = "version";

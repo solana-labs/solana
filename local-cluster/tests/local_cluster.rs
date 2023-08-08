@@ -1,5 +1,4 @@
 #![allow(clippy::integer_arithmetic)]
-use solana_accounts_db::accounts_db::create_accounts_run_and_snapshot_dirs;
 use {
     assert_matches::assert_matches,
     common::*,
@@ -7,7 +6,9 @@ use {
     gag::BufferRedirect,
     log::*,
     serial_test::serial,
-    solana_accounts_db::hardened_unpack::open_genesis_config,
+    solana_accounts_db::{
+        accounts_db::create_accounts_run_and_snapshot_dirs, hardened_unpack::open_genesis_config,
+    },
     solana_client::thin_client::ThinClient,
     solana_core::{
         consensus::{

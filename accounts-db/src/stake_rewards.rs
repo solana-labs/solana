@@ -5,17 +5,7 @@ use {
         accounts_db::IncludeSlotInHash, rent_debits::RewardInfo,
         storable_accounts::StorableAccounts,
     },
-    rand::Rng,
-    solana_sdk::{
-        account::{AccountSharedData, WritableAccount},
-        clock::Slot,
-        pubkey::Pubkey,
-        rent::Rent,
-        reward_type::RewardType,
-        signature::{Keypair, Signer},
-    },
-    solana_stake_program::stake_state,
-    solana_vote_program::vote_state,
+    solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
 };
 
 #[derive(AbiExample, Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -53,6 +43,19 @@ impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward], I
         self.2
     }
 }
+
+#[cfg(feature = "dev-context-only-utils")]
+use {
+    rand::Rng,
+    solana_sdk::{
+        account::WritableAccount,
+        rent::Rent,
+        reward_type::RewardType,
+        signature::{Keypair, Signer},
+    },
+    solana_stake_program::stake_state,
+    solana_vote_program::vote_state,
+};
 
 // These functions/fields are only usable from a dev context (i.e. tests and benches)
 #[cfg(feature = "dev-context-only-utils")]

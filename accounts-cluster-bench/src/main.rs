@@ -701,9 +701,9 @@ fn main() {
 
 #[cfg(test)]
 pub mod test {
-    use solana_accounts_db::inline_spl_token;
     use {
         super::*,
+        solana_accounts_db::inline_spl_token,
         solana_core::validator::ValidatorConfig,
         solana_faucet::faucet::run_local_faucet,
         solana_local_cluster::{

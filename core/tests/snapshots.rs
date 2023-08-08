@@ -1,6 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
 
-use solana_runtime::accounts_background_service::SendDroppedBankCallback;
 use {
     crate::snapshot_utils::create_tmp_accounts_dir_for_tests,
     crossbeam_channel::unbounded,
@@ -21,7 +20,7 @@ use {
     solana_runtime::{
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
-            PrunedBanksRequestHandler, SnapshotRequestHandler,
+            PrunedBanksRequestHandler, SendDroppedBankCallback, SnapshotRequestHandler,
         },
         bank::Bank,
         bank_forks::BankForks,

@@ -33,9 +33,9 @@ use {
         accounts_hash::{
             AccountsDeltaHash, AccountsHash, AccountsHashEnum, AccountsHasher,
             CalcAccountsHashConfig, CalculateHashIntermediate, HashStats, IncrementalAccountsHash,
+            SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash,
             ZeroLamportAccounts,
         },
-        accounts_hash::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
         accounts_index::{
             AccountIndexGetResult, AccountMapEntry, AccountSecondaryIndexes, AccountsIndex,
             AccountsIndexConfig, AccountsIndexRootsStats, AccountsIndexScanResult, DiskIndexValue,

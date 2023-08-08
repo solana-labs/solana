@@ -1,4 +1,3 @@
-use solana_accounts_db::transaction_results::TransactionResults;
 use {
     crate::{
         bank::Bank,
@@ -6,6 +5,7 @@ use {
         vote_parser,
         vote_sender_types::ReplayVoteSender,
     },
+    solana_accounts_db::transaction_results::TransactionResults,
     solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::SanitizedTransaction},
 };
 
