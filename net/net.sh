@@ -507,6 +507,7 @@ restartNode() {
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
+  rm "validator-$ipAddress.log"
   ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
   pids+=("$pid")
 }
