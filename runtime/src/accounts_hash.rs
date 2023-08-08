@@ -1,6 +1,7 @@
 use {
     crate::{
         accounts_db::{AccountStorageEntry, IncludeSlotInHash, PUBKEY_BINS_FOR_CALCULATING_HASHES},
+        active_stats::{ActiveStatItem, ActiveStats},
         ancestors::Ancestors,
         pubkey_bins::PubkeyBinCalculator24,
         rent_collector::RentCollector,
@@ -447,14 +448,15 @@ impl CumulativeOffsets {
 }
 
 #[derive(Debug)]
-pub struct AccountsHasher {
+pub struct AccountsHasher<'a> {
     pub filler_account_suffix: Option<Pubkey>,
     pub zero_lamport_accounts: ZeroLamportAccounts,
     /// The directory where temporary cache files are put
     pub dir_for_temp_cache_files: PathBuf,
+    pub(crate) active_stats: &'a ActiveStats,
 }
 
-impl AccountsHasher {
+impl<'a> AccountsHasher<'a> {
     /// true if it is possible that there are filler accounts present
     pub fn filler_accounts_enabled(&self) -> bool {
         self.filler_account_suffix.is_some()
@@ -561,7 +563,7 @@ impl AccountsHasher {
 
     // This function is designed to allow hashes to be located in multiple, perhaps multiply deep vecs.
     // The caller provides a function to return a slice from the source data.
-    pub fn compute_merkle_root_from_slices<'a, F, T>(
+    pub fn compute_merkle_root_from_slices<'b, F, T>(
         total_hashes: usize,
         fanout: usize,
         max_levels_per_pass: Option<usize>,
@@ -570,8 +572,8 @@ impl AccountsHasher {
     ) -> (Hash, Vec<Hash>)
     where
         // returns a slice of hashes starting at the given overall index
-        F: Fn(usize) -> &'a [T] + std::marker::Sync,
-        T: Borrow<Hash> + std::marker::Sync + 'a,
+        F: Fn(usize) -> &'b [T] + std::marker::Sync,
+        T: Borrow<Hash> + std::marker::Sync + 'b,
     {
         if total_hashes == 0 {
             return (Hasher::default().result(), vec![]);
@@ -780,6 +782,8 @@ impl AccountsHasher {
         // a. vec: PUBKEY_BINS_FOR_CALCULATING_HASHES in pubkey order
         //      vec: individual hashes in pubkey order, 1 hash per
         // b. lamports
+        let _ = self.active_stats.activate(ActiveStatItem::HashDeDup);
+
         let mut zeros = Measure::start("eliminate zeros");
         let sum = Mutex::new(0u64);
         let hash_total = AtomicUsize::default();
@@ -810,15 +814,15 @@ impl AccountsHasher {
     ///   updates `first_items` to point to the next pubkey
     /// or removes the entire pubkey division entries (for `min_index`) if the referenced pubkey is the last entry in the same `bin`
     ///     removed from: `first_items`, `indexes`, and `first_item_pubkey_division`
-    fn get_item<'a>(
+    fn get_item<'b>(
         min_index: usize,
         bin: usize,
         first_items: &mut Vec<Pubkey>,
-        sorted_data_by_pubkey: &[&'a [CalculateHashIntermediate]],
+        sorted_data_by_pubkey: &[&'b [CalculateHashIntermediate]],
         indexes: &mut Vec<usize>,
         first_item_to_pubkey_division: &mut Vec<usize>,
         binner: &PubkeyBinCalculator24,
-    ) -> &'a CalculateHashIntermediate {
+    ) -> &'b CalculateHashIntermediate {
         let first_item = first_items[min_index];
         let key = &first_item;
         let division_index = first_item_to_pubkey_division[min_index];
@@ -1085,6 +1089,7 @@ impl AccountsHasher {
 
         let cumulative = CumulativeHashesFromFiles::from_files(hashes);
 
+        let _ = self.active_stats.activate(ActiveStatItem::HashMerkleTree);
         let mut hash_time = Measure::start("hash");
         let (hash, _) = Self::compute_merkle_root_from_slices(
             cumulative.total_count(),
@@ -1147,12 +1152,17 @@ pub struct AccountsDeltaHash(pub Hash);
 pub mod tests {
     use {super::*, itertools::Itertools, std::str::FromStr, tempfile::tempdir};
 
-    impl AccountsHasher {
+    lazy_static! {
+        static ref ACTIVE_STATS: ActiveStats = ActiveStats::default();
+    }
+
+    impl<'a> AccountsHasher<'a> {
         fn new(dir_for_temp_cache_files: PathBuf) -> Self {
             Self {
                 filler_account_suffix: None,
                 zero_lamport_accounts: ZeroLamportAccounts::Excluded,
                 dir_for_temp_cache_files,
+                active_stats: &ACTIVE_STATS,
             }
         }
     }

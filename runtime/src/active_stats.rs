@@ -9,6 +9,9 @@ pub struct ActiveStats {
     shrink: AtomicUsize,
     hash: AtomicUsize,
     flush: AtomicUsize,
+    hash_scan: AtomicUsize,
+    hash_dedup: AtomicUsize,
+    hash_merkle: AtomicUsize,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -18,6 +21,9 @@ pub enum ActiveStatItem {
     SquashAncient,
     Hash,
     Flush,
+    HashScan,
+    HashDeDup,
+    HashMerkleTree,
 }
 
 /// sole purpose is to handle 'drop' so that stat is decremented when self is dropped
@@ -54,6 +60,9 @@ impl ActiveStats {
             ActiveStatItem::SquashAncient => &self.squash_ancient,
             ActiveStatItem::Hash => &self.hash,
             ActiveStatItem::Flush => &self.flush,
+            ActiveStatItem::HashDeDup => &self.hash_dedup,
+            ActiveStatItem::HashMerkleTree => &self.hash_merkle,
+            ActiveStatItem::HashScan => &self.hash_scan,
         };
         let value = modify_stat(stat);
         match item {
@@ -66,6 +75,15 @@ impl ActiveStats {
             }
             ActiveStatItem::Hash => datapoint_info!("accounts_db_active", ("hash", value, i64)),
             ActiveStatItem::Flush => datapoint_info!("accounts_db_active", ("flush", value, i64)),
+            ActiveStatItem::HashDeDup => {
+                datapoint_info!("accounts_db_active", ("hash_dedup", value, i64))
+            }
+            ActiveStatItem::HashMerkleTree => {
+                datapoint_info!("accounts_db_active", ("hash_merkle_tree", value, i64))
+            }
+            ActiveStatItem::HashScan => {
+                datapoint_info!("accounts_db_active", ("hash_scan", value, i64))
+            }
         };
     }
 }
