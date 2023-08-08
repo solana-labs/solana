@@ -40,6 +40,7 @@ Operate a configured testnet
  logs         - Fetch remote logs from each network node
  startnode    - Start an individual node (previously stopped with stopNode)
  stopnode     - Stop an individual node
+ restartnode  - Stop then start an individual node with new binary and arg, keep all snapshots.
  startclients - Start client nodes only
  prepare      - Prepare software deployment. (Build/download the software release)
  update       - Deploy a new software update to the cluster
@@ -140,10 +141,10 @@ Operate a configured testnet
                                         given platform (multiple platforms may be specified)
                                         (-t option must be supplied as well)
 
- startnode/stopnode-specific options:
+ startnode/stopnode/restartnode-specific options:
    -i [ip address]                    - IP Address of the node to start or stop
 
- startnode-specific options:
+ restartnode-specific options:
    --wen_restart                      - Apply Wen restart during startNode.
 
  startclients-specific options:
@@ -383,6 +384,79 @@ startNode() {
   fi
 
   echo "--- Starting $nodeType: $ipAddress"
+  echo "start log: $logFile"
+  (
+    set -x
+    startCommon "$ipAddress"
+
+    if [[ $nodeType = blockstreamer ]] && [[ -n $letsEncryptDomainName ]]; then
+      #
+      # Create/renew TLS certificate
+      #
+      declare localArchive=~/letsencrypt-"$letsEncryptDomainName".tgz
+      if [[ -r "$localArchive" ]]; then
+        timeout 30s scp "${sshOptions[@]}" "$localArchive" "$ipAddress:letsencrypt.tgz"
+      fi
+      ssh "${sshOptions[@]}" -n "$ipAddress" \
+        "sudo -H /certbot-restore.sh $letsEncryptDomainName maintainers@solanalabs.com"
+      rm -f letsencrypt.tgz
+      timeout 30s scp "${sshOptions[@]}" "$ipAddress:/letsencrypt.tgz" letsencrypt.tgz
+      test -s letsencrypt.tgz # Ensure non-empty before overwriting $localArchive
+      cp letsencrypt.tgz "$localArchive"
+    fi
+
+    ssh "${sshOptions[@]}" -n "$ipAddress" \
+      "./solana/net/remote/remote-node.sh \
+         $deployMethod \
+         $nodeType \
+         $entrypointIp \
+         $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]})) \
+         \"$RUST_LOG\" \
+         $skipSetup \
+         $failOnValidatorBootupFailure \
+         \"$remoteExternalPrimordialAccountsFile\" \
+         \"$maybeDisableAirdrops\" \
+         \"$internalNodesStakeLamports\" \
+         \"$internalNodesLamports\" \
+         $nodeIndex \
+         ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
+         \"$genesisOptions\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAccountsDbSkipShrink $maybeSkipRequireTower\" \
+         \"$gpuMode\" \
+         \"$maybeWarpSlot\" \
+         \"$maybeFullRpc\" \
+         \"$waitForNodeInit\" \
+         \"$extraPrimordialStakes\" \
+         \"$TMPFS_ACCOUNTS\" \
+         \"$disableQuic\" \
+         \"$enableUdp\" \
+         \"$wenRestart\" \
+      "
+  ) >> "$logFile" 2>&1 &
+  declare pid=$!
+  ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
+  pids+=("$pid")
+}
+
+restartNode() {
+  declare ipAddress=$1
+  declare nodeType=$2
+  declare nodeIndex="$3"
+  declare wenRestart=$4
+
+  declare logFile="$netLogDir/validator-$ipAddress.log"
+
+  if [[ -z $nodeType ]]; then
+    echo nodeType not specified
+    exit 1
+  fi
+
+  if [[ -z $nodeIndex ]]; then
+    echo nodeIndex not specified
+    exit 1
+  fi
+
+  echo "--- Restarting $nodeType: $ipAddress"
   echo "start log: $logFile"
   (
     set -x
@@ -1172,11 +1246,21 @@ startnode)
   fi
   nodeType=
   nodeIndex=
+  getNodeType
+  startNode "$nodeAddress" "$nodeType" "$nodeIndex" false
+  ;;
+restartnode)
+  if [[ -z $nodeAddress ]]; then
+    usage "node address (-i) not specified"
+    exit 1
+  fi
+  nodeType=
+  nodeIndex=
   if [[ -z $wen_restart ]]; then
     wenRestart=true
   fi
   getNodeType
-  startNode "$nodeAddress" "$nodeType" "$nodeIndex" "$wenRestart"
+  restartNode "$nodeAddress" "$nodeType" "$nodeIndex" "$wenRestart"
   ;;
 startclients)
   startClients
