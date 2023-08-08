@@ -77,6 +77,14 @@ pub fn restore_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
     Tower::restore(&file_tower_storage, node_pubkey).ok()
 }
 
+pub fn remove_tower_if_exists(tower_path: &Path, node_pubkey: &Pubkey) {
+    let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
+    let filename = file_tower_storage.filename(node_pubkey);
+    if filename.exists() {
+        fs::remove_file(file_tower_storage.filename(node_pubkey)).unwrap();
+    }
+}
+
 pub fn remove_tower(tower_path: &Path, node_pubkey: &Pubkey) {
     let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
     fs::remove_file(file_tower_storage.filename(node_pubkey)).unwrap();
@@ -120,17 +128,18 @@ pub fn purge_slots_with_count(blockstore: &Blockstore, start_slot: Slot, slot_co
 pub fn wait_for_last_vote_in_tower_to_land_in_ledger(
     ledger_path: &Path,
     node_pubkey: &Pubkey,
-) -> Slot {
-    let (last_vote, _) = last_vote_in_tower(ledger_path, node_pubkey).unwrap();
-    loop {
-        // We reopen in a loop to make sure we get updates
-        let blockstore = open_blockstore(ledger_path);
-        if blockstore.is_full(last_vote) {
-            break;
+) -> Option<Slot> {
+    last_vote_in_tower(ledger_path, node_pubkey).map(|(last_vote, _)| {
+        loop {
+            // We reopen in a loop to make sure we get updates
+            let blockstore = open_blockstore(ledger_path);
+            if blockstore.is_full(last_vote) {
+                break;
+            }
+            sleep(Duration::from_millis(100));
         }
-        sleep(Duration::from_millis(100));
-    }
-    last_vote
+        last_vote
+    })
 }
 
 pub fn copy_blocks(end_slot: Slot, source: &Blockstore, dest: &Blockstore) {
@@ -390,40 +399,66 @@ pub fn run_cluster_partition<C>(
     on_partition_resolved(&mut cluster, &mut context);
 }
 
+pub struct ValidatorTestConfig {
+    pub validator_keypair: Arc<Keypair>,
+    pub validator_config: ValidatorConfig,
+    pub in_genesis: bool,
+}
+
 pub fn test_faulty_node(
     faulty_node_type: BroadcastStageType,
     node_stakes: Vec<u64>,
+    validator_test_configs: Option<Vec<ValidatorTestConfig>>,
+    custom_leader_schedule: Option<FixedSchedule>,
 ) -> (LocalCluster, Vec<Arc<Keypair>>) {
-    solana_logger::setup_with_default("solana_local_cluster=info");
     let num_nodes = node_stakes.len();
-    let mut validator_keys = Vec::with_capacity(num_nodes);
-    validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
+    let validator_keys = validator_test_configs
+        .as_ref()
+        .map(|configs| {
+            configs
+                .iter()
+                .map(|config| (config.validator_keypair.clone(), config.in_genesis))
+                .collect()
+        })
+        .unwrap_or_else(|| {
+            let mut validator_keys = Vec::with_capacity(num_nodes);
+            validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
+            validator_keys
+        });
+
     assert_eq!(node_stakes.len(), num_nodes);
     assert_eq!(validator_keys.len(), num_nodes);
 
-    // Use a fixed leader schedule so that only the faulty node gets leader slots.
-    let validator_to_slots = vec![(
-        validator_keys[0].0.as_ref().pubkey(),
-        solana_sdk::clock::DEFAULT_DEV_SLOTS_PER_EPOCH as usize,
-    )];
-    let leader_schedule = create_custom_leader_schedule(validator_to_slots.into_iter());
-    let fixed_leader_schedule = Some(FixedSchedule {
-        leader_schedule: Arc::new(leader_schedule),
+    let fixed_leader_schedule = custom_leader_schedule.unwrap_or_else(|| {
+        // Use a fixed leader schedule so that only the faulty node gets leader slots.
+        let validator_to_slots = vec![(
+            validator_keys[0].0.as_ref().pubkey(),
+            solana_sdk::clock::DEFAULT_DEV_SLOTS_PER_EPOCH as usize,
+        )];
+        let leader_schedule = create_custom_leader_schedule(validator_to_slots.into_iter());
+        FixedSchedule {
+            leader_schedule: Arc::new(leader_schedule),
+        }
     });
 
-    let error_validator_config = ValidatorConfig {
-        broadcast_stage_type: faulty_node_type,
-        fixed_leader_schedule: fixed_leader_schedule.clone(),
-        ..ValidatorConfig::default_for_test()
-    };
-    let mut validator_configs = Vec::with_capacity(num_nodes);
+    let mut validator_configs = validator_test_configs
+        .map(|configs| {
+            configs
+                .into_iter()
+                .map(|config| config.validator_config)
+                .collect()
+        })
+        .unwrap_or_else(|| {
+            let mut configs = Vec::with_capacity(num_nodes);
+            configs.resize_with(num_nodes, ValidatorConfig::default_for_test);
+            configs
+        });
 
     // First validator is the bootstrap leader with the malicious broadcast logic.
-    validator_configs.push(error_validator_config);
-    validator_configs.resize_with(num_nodes, || ValidatorConfig {
-        fixed_leader_schedule: fixed_leader_schedule.clone(),
-        ..ValidatorConfig::default_for_test()
-    });
+    validator_configs[0].broadcast_stage_type = faulty_node_type;
+    for config in &mut validator_configs {
+        config.fixed_leader_schedule = Some(fixed_leader_schedule.clone());
+    }
 
     let mut cluster_config = ClusterConfig {
         cluster_lamports: 10_000,
