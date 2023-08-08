@@ -1528,6 +1528,9 @@ pub struct AccountsStats {
     store_find_existing: AtomicU64,
     dropped_stores: AtomicU64,
     store_uncleaned_update: AtomicU64,
+    handle_dead_keys_us: AtomicU64,
+    purge_exact_us: AtomicU64,
+    purge_exact_count: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -2841,18 +2844,30 @@ impl AccountsDb {
         let mut reclaims = Vec::new();
         let mut dead_keys = Vec::new();
 
-        for (pubkey, slots_set) in pubkey_to_slot_set {
+        let mut purge_exact_count = 0;
+        let (_, purge_exact_us) = measure_us!(for (pubkey, slots_set) in pubkey_to_slot_set {
+            purge_exact_count += 1;
             let is_empty = self
                 .accounts_index
                 .purge_exact(pubkey, slots_set, &mut reclaims);
             if is_empty {
                 dead_keys.push(pubkey);
             }
-        }
+        });
 
-        let pubkeys_removed_from_accounts_index = self
+        let (pubkeys_removed_from_accounts_index, handle_dead_keys_us) = measure_us!(self
             .accounts_index
-            .handle_dead_keys(&dead_keys, &self.account_indexes);
+            .handle_dead_keys(&dead_keys, &self.account_indexes));
+
+        self.stats
+            .purge_exact_count
+            .fetch_add(purge_exact_count, Ordering::Relaxed);
+        self.stats
+            .handle_dead_keys_us
+            .fetch_add(handle_dead_keys_us, Ordering::Relaxed);
+        self.stats
+            .purge_exact_us
+            .fetch_add(purge_exact_us, Ordering::Relaxed);
         (reclaims, pubkeys_removed_from_accounts_index)
     }
 
@@ -8461,6 +8476,21 @@ impl AccountsDb {
                 (
                     "calc_stored_meta_us",
                     self.stats.calc_stored_meta.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "handle_dead_keys_us",
+                    self.stats.handle_dead_keys_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "purge_exact_us",
+                    self.stats.purge_exact_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "purge_exact_count",
+                    self.stats.purge_exact_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
             );
