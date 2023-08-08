@@ -179,7 +179,7 @@ impl StakesCache {
 /// [`Stakes<Delegation>`] is equivalent to the old code and is used for backward
 /// compatibility in [`crate::bank::BankFieldsToDeserialize`].
 /// But banks cache [`Stakes<StakeAccount>`] which includes the entire stake
-/// account and StakeState deserialized from the account. Doing so, will remove
+/// account and StakeStateWithFlags deserialized from the account. Doing so, will remove
 /// the need to load the stake account from accounts-db when working with
 /// stake-delegations.
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]

@@ -6,7 +6,7 @@ use {
         account_utils::StateMut,
         instruction::InstructionError,
         pubkey::Pubkey,
-        stake::state::{Delegation, StakeState},
+        stake::state::{Delegation, StakeStateWithFlags},
     },
     std::marker::PhantomData,
     thiserror::Error,
@@ -19,7 +19,7 @@ use {
 #[derive(Clone, Debug, Default)]
 pub struct StakeAccount<T> {
     account: AccountSharedData,
-    stake_state: StakeState,
+    stake_state: StakeStateWithFlags,
     _phantom: PhantomData<T>,
 }
 
@@ -29,7 +29,7 @@ pub enum Error {
     #[error(transparent)]
     InstructionError(#[from] InstructionError),
     #[error("Invalid delegation: {0:?}")]
-    InvalidDelegation(Box<StakeState>),
+    InvalidDelegation(Box<StakeStateWithFlags>),
     #[error("Invalid stake account owner: {0}")]
     InvalidOwner(/*owner:*/ Pubkey),
 }
@@ -41,7 +41,7 @@ impl<T> StakeAccount<T> {
     }
 
     #[inline]
-    pub(crate) fn stake_state(&self) -> &StakeState {
+    pub(crate) fn stake_state(&self) -> &StakeStateWithFlags {
         &self.stake_state
     }
 }
@@ -61,7 +61,7 @@ impl TryFrom<AccountSharedData> for StakeAccount<Delegation> {
         if account.owner() != &solana_stake_program::id() {
             return Err(Error::InvalidOwner(*account.owner()));
         }
-        let stake_state: StakeState = account.state()?;
+        let stake_state: StakeStateWithFlags = account.state()?;
         if stake_state.delegation().is_none() {
             return Err(Error::InvalidDelegation(Box::new(stake_state)));
         }
@@ -73,7 +73,7 @@ impl TryFrom<AccountSharedData> for StakeAccount<Delegation> {
     }
 }
 
-impl<T> From<StakeAccount<T>> for (AccountSharedData, StakeState) {
+impl<T> From<StakeAccount<T>> for (AccountSharedData, StakeStateWithFlags) {
     #[inline]
     fn from(stake_account: StakeAccount<T>) -> Self {
         (stake_account.account, stake_account.stake_state)
@@ -102,7 +102,7 @@ impl AbiExample for StakeAccount<Delegation> {
             },
         };
         let stake_state =
-            StakeState::Stake(Meta::example(), Stake::example(), StakeFlags::example());
+            StakeStateWithFlags::Stake(Meta::example(), Stake::example(), StakeFlags::example());
         let mut account = Account::example();
         account.data.resize(200, 0u8);
         account.owner = solana_stake_program::id();

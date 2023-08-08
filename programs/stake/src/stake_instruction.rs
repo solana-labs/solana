@@ -467,7 +467,7 @@ mod tests {
             config,
             stake_state::{
                 authorized_from, create_stake_history_from_delegations, from, new_stake,
-                stake_from, Delegation, Meta, Stake, StakeState,
+                stake_from, Delegation, Meta, Stake, StakeStateWithFlags,
             },
         },
         assert_matches::assert_matches,
@@ -626,8 +626,8 @@ mod tests {
         )
     }
 
-    fn just_stake(meta: Meta, stake: u64) -> StakeState {
-        StakeState::Stake(
+    fn just_stake(meta: Meta, stake: u64) -> StakeStateWithFlags {
+        StakeStateWithFlags::Stake(
             meta,
             Stake {
                 delegation: Delegation {
@@ -909,7 +909,7 @@ mod tests {
         let config_address = stake_config::id();
         #[allow(deprecated)]
         let config_account = config::create_account(0, &stake_config::Config::default());
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let withdrawal_amount = rent_exempt_reserve + minimum_delegation;
 
@@ -1175,7 +1175,7 @@ mod tests {
         let rent = Rent::default();
         let rent_address = rent::id();
         let rent_account = create_account_shared_data_for_test(&rent);
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
 
         // Test InitializeChecked with non-signing withdrawer
@@ -1191,7 +1191,7 @@ mod tests {
         // Test InitializeChecked with withdrawer signer
         let stake_account = AccountSharedData::new(
             rent_exempt_reserve + minimum_delegation,
-            StakeState::size_of(),
+            StakeStateWithFlags::size_of(),
             &id(),
         );
         process_instruction(
@@ -1260,8 +1260,8 @@ mod tests {
         // Test AuthorizeChecked with authority signer
         let stake_account = AccountSharedData::new_data_with_space(
             42,
-            &StakeState::Initialized(Meta::auto(&authorized_address)),
-            StakeState::size_of(),
+            &StakeStateWithFlags::Initialized(Meta::auto(&authorized_address)),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -1376,8 +1376,8 @@ mod tests {
         // Test AuthorizeCheckedWithSeed with authority signer
         let stake_account = AccountSharedData::new_data_with_space(
             42,
-            &StakeState::Initialized(Meta::auto(&address_with_seed)),
-            StakeState::size_of(),
+            &StakeStateWithFlags::Initialized(Meta::auto(&address_with_seed)),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -1483,8 +1483,8 @@ mod tests {
         // Test SetLockupChecked with lockup custodian signer
         let stake_account = AccountSharedData::new_data_with_space(
             42,
-            &StakeState::Initialized(Meta::auto(&withdrawer)),
-            StakeState::size_of(),
+            &StakeStateWithFlags::Initialized(Meta::auto(&withdrawer)),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -1524,10 +1524,11 @@ mod tests {
     #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_stake_initialize(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let stake_lamports = rent_exempt_reserve;
         let stake_address = solana_sdk::pubkey::new_rand();
-        let stake_account = AccountSharedData::new(stake_lamports, StakeState::size_of(), &id());
+        let stake_account =
+            AccountSharedData::new(stake_lamports, StakeStateWithFlags::size_of(), &id());
         let custodian_address = solana_sdk::pubkey::new_rand();
         let lockup = Lockup {
             epoch: 1,
@@ -1567,7 +1568,7 @@ mod tests {
         // check that we see what we expect
         assert_eq!(
             from(&accounts[0]).unwrap(),
-            StakeState::Initialized(Meta {
+            StakeStateWithFlags::Initialized(Meta {
                 authorized: Authorized::auto(&stake_address),
                 rent_exempt_reserve,
                 lockup,
@@ -1603,7 +1604,7 @@ mod tests {
 
         // incorrect account sizes
         let stake_account =
-            AccountSharedData::new(stake_lamports, StakeState::size_of() + 1, &id());
+            AccountSharedData::new(stake_lamports, StakeStateWithFlags::size_of() + 1, &id());
         transaction_accounts[0] = (stake_address, stake_account);
         process_instruction(
             Arc::clone(&feature_set),
@@ -1614,7 +1615,7 @@ mod tests {
         );
 
         let stake_account =
-            AccountSharedData::new(stake_lamports, StakeState::size_of() - 1, &id());
+            AccountSharedData::new(stake_lamports, StakeStateWithFlags::size_of() - 1, &id());
         transaction_accounts[0] = (stake_address, stake_account);
         process_instruction(
             Arc::clone(&feature_set),
@@ -1635,8 +1636,8 @@ mod tests {
         let stake_lamports = 42;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::default(),
-            StakeState::size_of(),
+            &StakeStateWithFlags::default(),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -1693,8 +1694,8 @@ mod tests {
         // should pass
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Initialized(Meta::auto(&stake_address)),
-            StakeState::size_of(),
+            &StakeStateWithFlags::Initialized(Meta::auto(&stake_address)),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -1723,7 +1724,9 @@ mod tests {
             Ok(()),
         );
         transaction_accounts[0] = (stake_address, accounts[0].clone());
-        if let StakeState::Initialized(Meta { authorized, .. }) = from(&accounts[0]).unwrap() {
+        if let StakeStateWithFlags::Initialized(Meta { authorized, .. }) =
+            from(&accounts[0]).unwrap()
+        {
             assert_eq!(authorized.staker, authority_address);
             assert_eq!(authorized.withdrawer, authority_address);
         } else {
@@ -1757,7 +1760,9 @@ mod tests {
             instruction_accounts.clone(),
             Ok(()),
         );
-        if let StakeState::Initialized(Meta { authorized, .. }) = from(&accounts[0]).unwrap() {
+        if let StakeStateWithFlags::Initialized(Meta { authorized, .. }) =
+            from(&accounts[0]).unwrap()
+        {
             assert_eq!(authorized.staker, authority_address_2);
         } else {
             panic!();
@@ -1798,7 +1803,10 @@ mod tests {
             instruction_accounts.clone(),
             Ok(()),
         );
-        assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
+        assert_eq!(
+            from(&accounts[0]).unwrap(),
+            StakeStateWithFlags::Uninitialized
+        );
 
         // Test that withdrawal to account fails without authorized withdrawer
         instruction_accounts[4].is_signer = false;
@@ -1821,8 +1829,8 @@ mod tests {
         let stake_lamports = 42;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Initialized(Meta::auto(&stake_address)),
-            StakeState::size_of(),
+            &StakeStateWithFlags::Initialized(Meta::auto(&stake_address)),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -1942,8 +1950,8 @@ mod tests {
         let stake_lamports = 42;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Initialized(Meta::auto(&stake_address)),
-            StakeState::size_of(),
+            &StakeStateWithFlags::Initialized(Meta::auto(&stake_address)),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -2059,8 +2067,8 @@ mod tests {
         let stake_lamports = minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Initialized(Meta::auto(&stake_address)),
-            StakeState::size_of(),
+            &StakeStateWithFlags::Initialized(Meta::auto(&stake_address)),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -2273,14 +2281,14 @@ mod tests {
         let stake_address = solana_sdk::pubkey::new_rand();
         let mut stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Initialized(Meta {
+            &StakeStateWithFlags::Initialized(Meta {
                 authorized: Authorized {
                     staker: stake_address,
                     withdrawer: stake_address,
                 },
                 ..Meta::default()
             }),
-            StakeState::size_of(),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -2483,7 +2491,7 @@ mod tests {
         );
 
         // verify that non-stakes fail delegate()
-        let stake_state = StakeState::RewardsPool;
+        let stake_state = StakeStateWithFlags::RewardsPool;
         stake_account.set_state(&stake_state).unwrap();
         transaction_accounts[0] = (stake_address, stake_account);
         process_instruction(
@@ -2501,7 +2509,7 @@ mod tests {
     fn test_redelegate_consider_balance_changes(feature_set: Arc<FeatureSet>) {
         let mut clock = Clock::default();
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let initial_lamports = 4242424242;
         let stake_lamports = rent_exempt_reserve + initial_lamports;
         let recipient_address = solana_sdk::pubkey::new_rand();
@@ -2512,11 +2520,11 @@ mod tests {
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Initialized(Meta {
+            &StakeStateWithFlags::Initialized(Meta {
                 rent_exempt_reserve,
                 ..Meta::auto(&authority_address)
             }),
-            StakeState::size_of(),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -2712,8 +2720,8 @@ mod tests {
         let split_to_address = solana_sdk::pubkey::new_rand();
         let split_to_account = AccountSharedData::new_data_with_space(
             0,
-            &StakeState::Uninitialized,
-            StakeState::size_of(),
+            &StakeStateWithFlags::Uninitialized,
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -2744,13 +2752,13 @@ mod tests {
         let feature_set = Arc::new(feature_set);
 
         for state in [
-            StakeState::Initialized(Meta::auto(&stake_address)),
+            StakeStateWithFlags::Initialized(Meta::auto(&stake_address)),
             just_stake(Meta::auto(&stake_address), stake_lamports),
         ] {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 &state,
-                StakeState::size_of(),
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
@@ -2781,10 +2789,10 @@ mod tests {
 
             assert_eq!(from(&accounts[0]).unwrap(), from(&accounts[1]).unwrap());
             match state {
-                StakeState::Initialized(_meta) => {
+                StakeStateWithFlags::Initialized(_meta) => {
                     assert_eq!(from(&accounts[0]).unwrap(), state);
                 }
-                StakeState::Stake(_meta, _stake, _) => {
+                StakeStateWithFlags::Stake(_meta, _stake, _) => {
                     let stake_0 = from(&accounts[0]).unwrap().stake();
                     assert_eq!(stake_0.unwrap().delegation.stake, stake_lamports / 2);
                 }
@@ -2795,8 +2803,8 @@ mod tests {
         // should fail, fake owner of destination
         let split_to_account = AccountSharedData::new_data_with_space(
             0,
-            &StakeState::Uninitialized,
-            StakeState::size_of(),
+            &StakeStateWithFlags::Uninitialized,
+            StakeStateWithFlags::size_of(),
             &solana_sdk::pubkey::new_rand(),
         )
         .unwrap();
@@ -2822,8 +2830,8 @@ mod tests {
         let stake_lamports = minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Uninitialized,
-            StakeState::size_of(),
+            &StakeStateWithFlags::Uninitialized,
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -2912,7 +2920,10 @@ mod tests {
             Ok(()),
         );
         assert_eq!(accounts[0].lamports(), 0);
-        assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
+        assert_eq!(
+            from(&accounts[0]).unwrap(),
+            StakeStateWithFlags::Uninitialized
+        );
 
         // initialize stake
         let lockup = Lockup {
@@ -3057,14 +3068,17 @@ mod tests {
             Ok(()),
         );
         assert_eq!(accounts[0].lamports(), 0);
-        assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
+        assert_eq!(
+            from(&accounts[0]).unwrap(),
+            StakeStateWithFlags::Uninitialized
+        );
 
         // overflow
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let stake_account = AccountSharedData::new_data_with_space(
             1_000_000_000,
-            &StakeState::Initialized(Meta {
+            &StakeStateWithFlags::Initialized(Meta {
                 rent_exempt_reserve,
                 authorized: Authorized {
                     staker: authority_address,
@@ -3072,7 +3086,7 @@ mod tests {
                 },
                 lockup: Lockup::default(),
             }),
-            StakeState::size_of(),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -3090,8 +3104,8 @@ mod tests {
         // should fail, invalid state
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::RewardsPool,
-            StakeState::size_of(),
+            &StakeStateWithFlags::RewardsPool,
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -3116,8 +3130,8 @@ mod tests {
         let total_lamports = stake_lamports + 33;
         let stake_account = AccountSharedData::new_data_with_space(
             total_lamports,
-            &StakeState::Initialized(Meta::auto(&stake_address)),
-            StakeState::size_of(),
+            &StakeStateWithFlags::Initialized(Meta::auto(&stake_address)),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -3258,8 +3272,8 @@ mod tests {
         };
         let stake_account = AccountSharedData::new_data_with_space(
             total_lamports,
-            &StakeState::Initialized(meta),
-            StakeState::size_of(),
+            &StakeStateWithFlags::Initialized(meta),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -3328,15 +3342,18 @@ mod tests {
             instruction_accounts.clone(),
             Ok(()),
         );
-        assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
+        assert_eq!(
+            from(&accounts[0]).unwrap(),
+            StakeStateWithFlags::Uninitialized
+        );
 
         // should pass, custodian is the same as the withdraw authority
         instruction_accounts[5].pubkey = stake_address;
         meta.lockup.custodian = stake_address;
         let stake_account_self_as_custodian = AccountSharedData::new_data_with_space(
             total_lamports,
-            &StakeState::Initialized(meta),
-            StakeState::size_of(),
+            &StakeStateWithFlags::Initialized(meta),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -3348,7 +3365,10 @@ mod tests {
             instruction_accounts.clone(),
             Ok(()),
         );
-        assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
+        assert_eq!(
+            from(&accounts[0]).unwrap(),
+            StakeStateWithFlags::Uninitialized
+        );
         transaction_accounts[0] = (stake_address, stake_account);
 
         // should pass, lockup has expired
@@ -3362,7 +3382,10 @@ mod tests {
             instruction_accounts,
             Ok(()),
         );
-        assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
+        assert_eq!(
+            from(&accounts[0]).unwrap(),
+            StakeStateWithFlags::Uninitialized
+        );
     }
 
     #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
@@ -3373,16 +3396,16 @@ mod tests {
         let custodian_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = 7 * minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports + rent_exempt_reserve,
-            &StakeState::Initialized(Meta {
+            &StakeStateWithFlags::Initialized(Meta {
                 rent_exempt_reserve,
                 ..Meta::auto(&stake_address)
             }),
-            StakeState::size_of(),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -3471,8 +3494,8 @@ mod tests {
         let stake_lamports = minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Initialized(Meta::auto(&stake_address)),
-            StakeState::size_of(),
+            &StakeStateWithFlags::Initialized(Meta::auto(&stake_address)),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -3604,8 +3627,8 @@ mod tests {
         let stake_lamports = minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Uninitialized,
-            StakeState::size_of(),
+            &StakeStateWithFlags::Uninitialized,
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -3888,7 +3911,7 @@ mod tests {
     #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_initialize_minimum_balance(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let stake_address = solana_sdk::pubkey::new_rand();
         let instruction_data = serialize(&StakeInstruction::Initialize(
             Authorized::auto(&stake_address),
@@ -3914,7 +3937,8 @@ mod tests {
                 Err(InstructionError::InsufficientFunds),
             ),
         ] {
-            let stake_account = AccountSharedData::new(lamports, StakeState::size_of(), &id());
+            let stake_account =
+                AccountSharedData::new(lamports, StakeStateWithFlags::size_of(), &id());
             process_instruction(
                 Arc::clone(&feature_set),
                 &instruction_data,
@@ -3931,7 +3955,7 @@ mod tests {
     /// Ensure that `delegate()` respects the minimum delegation requirements
     /// - Assert 1: delegating an amount equal-to the minimum succeeds
     /// - Assert 2: delegating an amount less-than the minimum fails
-    /// Also test both asserts above over both StakeState::{Initialized and Stake}, since the logic
+    /// Also test both asserts above over both StakeStateWithFlags::{Initialized and Stake}, since the logic
     /// is slightly different for the variants.
     ///
     /// NOTE: Even though new stake accounts must have a minimum balance that is at least
@@ -3945,7 +3969,7 @@ mod tests {
     fn test_delegate_minimum_stake_delegation(feature_set: Arc<FeatureSet>) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let stake_address = solana_sdk::pubkey::new_rand();
         let meta = Meta {
             rent_exempt_reserve,
@@ -3990,13 +4014,13 @@ mod tests {
             ),
         ] {
             for stake_state in &[
-                StakeState::Initialized(meta),
+                StakeStateWithFlags::Initialized(meta),
                 just_stake(meta, *stake_delegation),
             ] {
                 let stake_account = AccountSharedData::new_data_with_space(
                     stake_delegation + rent_exempt_reserve,
                     stake_state,
-                    StakeState::size_of(),
+                    StakeStateWithFlags::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -4047,7 +4071,7 @@ mod tests {
     fn test_split_minimum_stake_delegation(feature_set: Arc<FeatureSet>) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let source_address = Pubkey::new_unique();
         let source_meta = Meta {
             rent_exempt_reserve,
@@ -4056,8 +4080,8 @@ mod tests {
         let dest_address = Pubkey::new_unique();
         let dest_account = AccountSharedData::new_data_with_space(
             0,
-            &StakeState::Uninitialized,
-            StakeState::size_of(),
+            &StakeStateWithFlags::Uninitialized,
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -4095,7 +4119,7 @@ mod tests {
             // accounts' *final* balance
             let mut source_starting_balance = source_reserve + dest_reserve;
             for (delegation, source_stake_state) in &[
-                (0, StakeState::Initialized(source_meta)),
+                (0, StakeStateWithFlags::Initialized(source_meta)),
                 (
                     minimum_delegation,
                     just_stake(
@@ -4108,7 +4132,7 @@ mod tests {
                 let source_account = AccountSharedData::new_data_with_space(
                     source_starting_balance,
                     source_stake_state,
-                    StakeState::size_of(),
+                    StakeStateWithFlags::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -4140,7 +4164,7 @@ mod tests {
     fn test_split_full_amount_minimum_stake_delegation(feature_set: Arc<FeatureSet>) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let source_address = Pubkey::new_unique();
         let source_meta = Meta {
             rent_exempt_reserve,
@@ -4149,8 +4173,8 @@ mod tests {
         let dest_address = Pubkey::new_unique();
         let dest_account = AccountSharedData::new_data_with_space(
             0,
-            &StakeState::Uninitialized,
-            StakeState::size_of(),
+            &StakeStateWithFlags::Uninitialized,
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -4174,7 +4198,7 @@ mod tests {
             ),
         ] {
             for (stake_delegation, source_stake_state) in &[
-                (0, StakeState::Initialized(source_meta)),
+                (0, StakeStateWithFlags::Initialized(source_meta)),
                 (
                     minimum_delegation,
                     just_stake(source_meta, minimum_delegation),
@@ -4183,7 +4207,7 @@ mod tests {
                 let source_account = AccountSharedData::new_data_with_space(
                     stake_delegation + reserve,
                     source_stake_state,
-                    StakeState::size_of(),
+                    StakeStateWithFlags::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -4210,7 +4234,7 @@ mod tests {
     #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_initialized_split_destination_minimum_balance(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let source_address = Pubkey::new_unique();
         let destination_address = Pubkey::new_unique();
         let instruction_accounts = vec![
@@ -4270,15 +4294,15 @@ mod tests {
             };
             let source_account = AccountSharedData::new_data_with_space(
                 source_balance,
-                &StakeState::Initialized(source_meta),
-                StakeState::size_of(),
+                &StakeStateWithFlags::Initialized(source_meta),
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
             let destination_account = AccountSharedData::new_data_with_space(
                 destination_starting_balance,
-                &StakeState::Uninitialized,
-                StakeState::size_of(),
+                &StakeStateWithFlags::Uninitialized,
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
@@ -4309,7 +4333,7 @@ mod tests {
     ) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let source_address = Pubkey::new_unique();
         let destination_address = Pubkey::new_unique();
         let instruction_accounts = vec![
@@ -4401,14 +4425,14 @@ mod tests {
             let source_account = AccountSharedData::new_data_with_space(
                 source_balance,
                 &just_stake(source_meta, source_stake_delegation),
-                StakeState::size_of(),
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
             let destination_account = AccountSharedData::new_data_with_space(
                 destination_starting_balance,
-                &StakeState::Uninitialized,
-                StakeState::size_of(),
+                &StakeStateWithFlags::Uninitialized,
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
@@ -4423,15 +4447,20 @@ mod tests {
                 instruction_accounts.clone(),
                 expected_result.clone(),
             );
-            // For the expected OK cases, when the source's StakeState is Stake, then the
-            // destination's StakeState *must* also end up as Stake as well.  Additionally,
+            // For the expected OK cases, when the source's StakeStateWithFlags is Stake, then the
+            // destination's StakeStateWithFlags *must* also end up as Stake as well.  Additionally,
             // check to ensure the destination's delegation amount is correct.  If the
             // destination is already rent exempt, then the destination's stake delegation
             // *must* equal the split amount. Otherwise, the split amount must first be used to
             // make the destination rent exempt, and then the leftover lamports are delegated.
             if expected_result.is_ok() {
-                assert_matches!(accounts[0].state().unwrap(), StakeState::Stake(_, _, _));
-                if let StakeState::Stake(_, destination_stake, _) = accounts[1].state().unwrap() {
+                assert_matches!(
+                    accounts[0].state().unwrap(),
+                    StakeStateWithFlags::Stake(_, _, _)
+                );
+                if let StakeStateWithFlags::Stake(_, destination_stake, _) =
+                    accounts[1].state().unwrap()
+                {
                     let destination_initial_rent_deficit =
                         rent_exempt_reserve.saturating_sub(destination_starting_balance);
                     let expected_destination_stake_delegation =
@@ -4442,7 +4471,7 @@ mod tests {
                     );
                     assert!(destination_stake.delegation.stake >= minimum_delegation,);
                 } else {
-                    panic!("destination state must be StakeStake::Stake after successful split when source is also StakeState::Stake!");
+                    panic!("destination state must be StakeStake::Stake after successful split when source is also StakeStateWithFlags::Stake!");
                 }
             }
         }
@@ -4457,7 +4486,7 @@ mod tests {
     fn test_withdraw_minimum_stake_delegation(feature_set: Arc<FeatureSet>) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let stake_address = solana_sdk::pubkey::new_rand();
         let meta = Meta {
             rent_exempt_reserve,
@@ -4500,14 +4529,14 @@ mod tests {
             ),
         ] {
             for (stake_delegation, stake_state) in &[
-                (0, StakeState::Initialized(meta)),
+                (0, StakeStateWithFlags::Initialized(meta)),
                 (minimum_delegation, just_stake(meta, minimum_delegation)),
             ] {
                 let rewards_balance = 123;
                 let stake_account = AccountSharedData::new_data_with_space(
                     stake_delegation + rent_exempt_reserve + rewards_balance,
                     stake_state,
-                    StakeState::size_of(),
+                    StakeStateWithFlags::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -4567,11 +4596,11 @@ mod tests {
         let feature_set = feature_set_all_enabled();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_account = AccountSharedData::new(
             rent_exempt_reserve + minimum_delegation,
-            StakeState::size_of(),
+            StakeStateWithFlags::size_of(),
             &id(),
         );
         let vote_address = solana_sdk::pubkey::new_rand();
@@ -4740,22 +4769,22 @@ mod tests {
     #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_source_uninitialized(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Uninitialized,
-            StakeState::size_of(),
+            &StakeStateWithFlags::Uninitialized,
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
         let split_to_address = solana_sdk::pubkey::new_rand();
         let split_to_account = AccountSharedData::new_data_with_space(
             0,
-            &StakeState::Uninitialized,
-            StakeState::size_of(),
+            &StakeStateWithFlags::Uninitialized,
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -4845,7 +4874,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &just_stake(Meta::auto(&stake_address), stake_lamports),
-            StakeState::size_of(),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -4864,14 +4893,14 @@ mod tests {
         ];
 
         for split_to_state in &[
-            StakeState::Initialized(Meta::default()),
-            StakeState::Stake(Meta::default(), Stake::default(), StakeFlags::default()),
-            StakeState::RewardsPool,
+            StakeStateWithFlags::Initialized(Meta::default()),
+            StakeStateWithFlags::Stake(Meta::default(), Stake::default(), StakeFlags::default()),
+            StakeStateWithFlags::RewardsPool,
         ] {
             let split_to_account = AccountSharedData::new_data_with_space(
                 0,
                 split_to_state,
-                StakeState::size_of(),
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
@@ -4893,7 +4922,7 @@ mod tests {
     #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_more_than_staked(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -4906,15 +4935,15 @@ mod tests {
                 },
                 stake_lamports / 2 - 1,
             ),
-            StakeState::size_of(),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
         let split_to_address = solana_sdk::pubkey::new_rand();
         let split_to_account = AccountSharedData::new_data_with_space(
             0,
-            &StakeState::Uninitialized,
-            StakeState::size_of(),
+            &StakeStateWithFlags::Uninitialized,
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -4950,14 +4979,14 @@ mod tests {
     #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_with_rent(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_address = solana_sdk::pubkey::new_rand();
         let split_to_address = solana_sdk::pubkey::new_rand();
         let split_to_account = AccountSharedData::new_data_with_space(
             0,
-            &StakeState::Uninitialized,
-            StakeState::size_of(),
+            &StakeStateWithFlags::Uninitialized,
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -4981,7 +5010,7 @@ mod tests {
 
         // test splitting both an Initialized stake and a Staked stake
         for (minimum_balance, state) in &[
-            (rent_exempt_reserve, StakeState::Initialized(meta)),
+            (rent_exempt_reserve, StakeStateWithFlags::Initialized(meta)),
             (
                 rent_exempt_reserve + minimum_delegation,
                 just_stake(meta, minimum_delegation * 2 + rent_exempt_reserve),
@@ -4991,7 +5020,7 @@ mod tests {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 state,
-                StakeState::size_of(),
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
@@ -5033,10 +5062,10 @@ mod tests {
             );
 
             // verify no stake leakage in the case of a stake
-            if let StakeState::Stake(meta, stake, stake_flags) = state {
+            if let StakeStateWithFlags::Stake(meta, stake, stake_flags) = state {
                 assert_eq!(
                     accounts[1].state(),
-                    Ok(StakeState::Stake(
+                    Ok(StakeStateWithFlags::Stake(
                         *meta,
                         Stake {
                             delegation: Delegation {
@@ -5059,7 +5088,7 @@ mod tests {
     #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_to_account_with_rent_exempt_reserve(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -5072,7 +5101,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &state,
-            StakeState::size_of(),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -5103,8 +5132,8 @@ mod tests {
         for initial_balance in split_lamport_balances {
             let split_to_account = AccountSharedData::new_data_with_space(
                 initial_balance,
-                &StakeState::Uninitialized,
-                StakeState::size_of(),
+                &StakeStateWithFlags::Uninitialized,
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
@@ -5137,11 +5166,11 @@ mod tests {
                 stake_lamports + initial_balance,
             );
 
-            if let StakeState::Stake(meta, stake, stake_flags) = state {
+            if let StakeStateWithFlags::Stake(meta, stake, stake_flags) = state {
                 let expected_stake =
                     stake_lamports / 2 - (rent_exempt_reserve.saturating_sub(initial_balance));
                 assert_eq!(
-                    Ok(StakeState::Stake(
+                    Ok(StakeStateWithFlags::Stake(
                         meta,
                         Stake {
                             delegation: Delegation {
@@ -5162,7 +5191,7 @@ mod tests {
                         + initial_balance.saturating_sub(rent_exempt_reserve),
                 );
                 assert_eq!(
-                    Ok(StakeState::Stake(
+                    Ok(StakeStateWithFlags::Stake(
                         meta,
                         Stake {
                             delegation: Delegation {
@@ -5184,8 +5213,9 @@ mod tests {
     #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_from_larger_sized_account(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
-        let source_larger_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
-        let split_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let source_larger_rent_exempt_reserve =
+            rent.minimum_balance(StakeStateWithFlags::size_of() + 100);
+        let split_rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = (source_larger_rent_exempt_reserve + minimum_delegation) * 2;
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -5198,7 +5228,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &state,
-            StakeState::size_of() + 100,
+            StakeStateWithFlags::size_of() + 100,
             &id(),
         )
         .unwrap();
@@ -5229,8 +5259,8 @@ mod tests {
         for initial_balance in split_lamport_balances {
             let split_to_account = AccountSharedData::new_data_with_space(
                 initial_balance,
-                &StakeState::Uninitialized,
-                StakeState::size_of(),
+                &StakeStateWithFlags::Uninitialized,
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
@@ -5263,7 +5293,7 @@ mod tests {
                 stake_lamports + initial_balance
             );
 
-            if let StakeState::Stake(meta, stake, stake_flags) = state {
+            if let StakeStateWithFlags::Stake(meta, stake, stake_flags) = state {
                 let expected_split_meta = Meta {
                     authorized: Authorized::auto(&stake_address),
                     rent_exempt_reserve: split_rent_exempt_reserve,
@@ -5273,7 +5303,7 @@ mod tests {
                     - (split_rent_exempt_reserve.saturating_sub(initial_balance));
 
                 assert_eq!(
-                    Ok(StakeState::Stake(
+                    Ok(StakeStateWithFlags::Stake(
                         expected_split_meta,
                         Stake {
                             delegation: Delegation {
@@ -5293,7 +5323,7 @@ mod tests {
                         + initial_balance.saturating_sub(split_rent_exempt_reserve)
                 );
                 assert_eq!(
-                    Ok(StakeState::Stake(
+                    Ok(StakeStateWithFlags::Stake(
                         meta,
                         Stake {
                             delegation: Delegation {
@@ -5315,8 +5345,9 @@ mod tests {
     #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_from_smaller_sized_account(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
-        let source_smaller_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
-        let split_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
+        let source_smaller_rent_exempt_reserve =
+            rent.minimum_balance(StakeStateWithFlags::size_of());
+        let split_rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of() + 100);
         let stake_lamports = split_rent_exempt_reserve + 1;
         let stake_address = solana_sdk::pubkey::new_rand();
         let meta = Meta {
@@ -5328,7 +5359,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &state,
-            StakeState::size_of(),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -5356,8 +5387,8 @@ mod tests {
         for initial_balance in split_lamport_balances {
             let split_to_account = AccountSharedData::new_data_with_space(
                 initial_balance,
-                &StakeState::Uninitialized,
-                StakeState::size_of() + 100,
+                &StakeStateWithFlags::Uninitialized,
+                StakeStateWithFlags::size_of() + 100,
                 &id(),
             )
             .unwrap();
@@ -5392,7 +5423,7 @@ mod tests {
     #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_100_percent_of_source(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = rent_exempt_reserve + minimum_delegation;
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -5404,8 +5435,8 @@ mod tests {
         let split_to_address = solana_sdk::pubkey::new_rand();
         let split_to_account = AccountSharedData::new_data_with_space(
             0,
-            &StakeState::Uninitialized,
-            StakeState::size_of(),
+            &StakeStateWithFlags::Uninitialized,
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -5424,13 +5455,13 @@ mod tests {
 
         // test splitting both an Initialized stake and a Staked stake
         for state in &[
-            StakeState::Initialized(meta),
+            StakeStateWithFlags::Initialized(meta),
             just_stake(meta, stake_lamports - rent_exempt_reserve),
         ] {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 &state,
-                StakeState::size_of(),
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
@@ -5456,13 +5487,13 @@ mod tests {
             );
 
             match state {
-                StakeState::Initialized(_) => {
+                StakeStateWithFlags::Initialized(_) => {
                     assert_eq!(Ok(*state), accounts[1].state());
-                    assert_eq!(Ok(StakeState::Uninitialized), accounts[0].state());
+                    assert_eq!(Ok(StakeStateWithFlags::Uninitialized), accounts[0].state());
                 }
-                StakeState::Stake(meta, stake, stake_flags) => {
+                StakeStateWithFlags::Stake(meta, stake, stake_flags) => {
                     assert_eq!(
-                        Ok(StakeState::Stake(
+                        Ok(StakeStateWithFlags::Stake(
                             *meta,
                             Stake {
                                 delegation: Delegation {
@@ -5475,7 +5506,7 @@ mod tests {
                         )),
                         accounts[1].state()
                     );
-                    assert_eq!(Ok(StakeState::Uninitialized), accounts[0].state());
+                    assert_eq!(Ok(StakeStateWithFlags::Uninitialized), accounts[0].state());
                 }
                 _ => unreachable!(),
             }
@@ -5487,7 +5518,7 @@ mod tests {
     #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_100_percent_of_source_to_account_with_lamports(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = rent_exempt_reserve + minimum_delegation;
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -5500,7 +5531,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &state,
-            StakeState::size_of(),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -5531,8 +5562,8 @@ mod tests {
         for initial_balance in split_lamport_balances {
             let split_to_account = AccountSharedData::new_data_with_space(
                 initial_balance,
-                &StakeState::Uninitialized,
-                StakeState::size_of(),
+                &StakeStateWithFlags::Uninitialized,
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
@@ -5557,9 +5588,9 @@ mod tests {
                 stake_lamports + initial_balance
             );
 
-            if let StakeState::Stake(meta, stake, stake_flags) = state {
+            if let StakeStateWithFlags::Stake(meta, stake, stake_flags) = state {
                 assert_eq!(
-                    Ok(StakeState::Stake(
+                    Ok(StakeStateWithFlags::Stake(
                         meta,
                         Stake {
                             delegation: Delegation {
@@ -5572,7 +5603,7 @@ mod tests {
                     )),
                     accounts[1].state()
                 );
-                assert_eq!(Ok(StakeState::Uninitialized), accounts[0].state());
+                assert_eq!(Ok(StakeStateWithFlags::Uninitialized), accounts[0].state());
             }
         }
     }
@@ -5582,8 +5613,8 @@ mod tests {
     #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_rent_exemptness(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
-        let source_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
-        let split_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let source_rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of() + 100);
+        let split_rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = source_rent_exempt_reserve + minimum_delegation;
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -5607,21 +5638,21 @@ mod tests {
         ];
 
         for state in &[
-            StakeState::Initialized(meta),
+            StakeStateWithFlags::Initialized(meta),
             just_stake(meta, stake_lamports - source_rent_exempt_reserve),
         ] {
             // Test that splitting to a larger account fails
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 &state,
-                StakeState::size_of(),
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
             let split_to_account = AccountSharedData::new_data_with_space(
                 0,
-                &StakeState::Uninitialized,
-                StakeState::size_of() + 10000,
+                &StakeStateWithFlags::Uninitialized,
+                StakeStateWithFlags::size_of() + 10000,
                 &id(),
             )
             .unwrap();
@@ -5643,14 +5674,14 @@ mod tests {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 &state,
-                StakeState::size_of() + 100,
+                StakeStateWithFlags::size_of() + 100,
                 &id(),
             )
             .unwrap();
             let split_to_account = AccountSharedData::new_data_with_space(
                 0,
-                &StakeState::Uninitialized,
-                StakeState::size_of(),
+                &StakeStateWithFlags::Uninitialized,
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
@@ -5674,20 +5705,20 @@ mod tests {
                 ..Meta::default()
             };
             match state {
-                StakeState::Initialized(_) => {
+                StakeStateWithFlags::Initialized(_) => {
                     assert_eq!(
-                        Ok(StakeState::Initialized(expected_split_meta)),
+                        Ok(StakeStateWithFlags::Initialized(expected_split_meta)),
                         accounts[1].state()
                     );
-                    assert_eq!(Ok(StakeState::Uninitialized), accounts[0].state());
+                    assert_eq!(Ok(StakeStateWithFlags::Uninitialized), accounts[0].state());
                 }
-                StakeState::Stake(_meta, stake, stake_flags) => {
+                StakeStateWithFlags::Stake(_meta, stake, stake_flags) => {
                     // Expected stake should reflect original stake amount so that extra lamports
                     // from the rent_exempt_reserve inequality do not magically activate
                     let expected_stake = stake_lamports - source_rent_exempt_reserve;
 
                     assert_eq!(
-                        Ok(StakeState::Stake(
+                        Ok(StakeStateWithFlags::Stake(
                             expected_split_meta,
                             Stake {
                                 delegation: Delegation {
@@ -5704,7 +5735,7 @@ mod tests {
                         accounts[1].lamports(),
                         expected_stake + source_rent_exempt_reserve,
                     );
-                    assert_eq!(Ok(StakeState::Uninitialized), accounts[0].state());
+                    assert_eq!(Ok(StakeStateWithFlags::Uninitialized), accounts[0].state());
                 }
                 _ => unreachable!(),
             }
@@ -5749,24 +5780,24 @@ mod tests {
         ];
 
         for state in &[
-            StakeState::Initialized(meta),
+            StakeStateWithFlags::Initialized(meta),
             just_stake(meta, stake_lamports),
         ] {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 state,
-                StakeState::size_of(),
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
             for merge_from_state in &[
-                StakeState::Initialized(meta),
+                StakeStateWithFlags::Initialized(meta),
                 just_stake(meta, stake_lamports),
             ] {
                 let merge_from_account = AccountSharedData::new_data_with_space(
                     stake_lamports,
                     merge_from_state,
-                    StakeState::size_of(),
+                    StakeStateWithFlags::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -5813,10 +5844,13 @@ mod tests {
 
                 // check state
                 match state {
-                    StakeState::Initialized(meta) => {
-                        assert_eq!(accounts[0].state(), Ok(StakeState::Initialized(*meta)),);
+                    StakeStateWithFlags::Initialized(meta) => {
+                        assert_eq!(
+                            accounts[0].state(),
+                            Ok(StakeStateWithFlags::Initialized(*meta)),
+                        );
                     }
-                    StakeState::Stake(meta, stake, stake_flags) => {
+                    StakeStateWithFlags::Stake(meta, stake, stake_flags) => {
                         let expected_stake = stake.delegation.stake
                             + merge_from_state
                                 .stake()
@@ -5827,7 +5861,7 @@ mod tests {
                                 });
                         assert_eq!(
                             accounts[0].state(),
-                            Ok(StakeState::Stake(
+                            Ok(StakeStateWithFlags::Stake(
                                 *meta,
                                 Stake {
                                     delegation: Delegation {
@@ -5842,7 +5876,7 @@ mod tests {
                     }
                     _ => unreachable!(),
                 }
-                assert_eq!(accounts[1].state(), Ok(StakeState::Uninitialized));
+                assert_eq!(accounts[1].state(), Ok(StakeStateWithFlags::Uninitialized));
             }
         }
     }
@@ -5854,7 +5888,7 @@ mod tests {
         let stake_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let stake_amount = 4242424242;
         let stake_lamports = rent_exempt_reserve + stake_amount;
         let meta = Meta {
@@ -5871,8 +5905,8 @@ mod tests {
         };
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Stake(meta, stake, StakeFlags::empty()),
-            StakeState::size_of(),
+            &StakeStateWithFlags::Stake(meta, stake, StakeFlags::empty()),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -5963,24 +5997,24 @@ mod tests {
         ];
 
         for state in &[
-            StakeState::Initialized(Meta::auto(&authorized_address)),
+            StakeStateWithFlags::Initialized(Meta::auto(&authorized_address)),
             just_stake(Meta::auto(&authorized_address), stake_lamports),
         ] {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 state,
-                StakeState::size_of(),
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
             for merge_from_state in &[
-                StakeState::Initialized(Meta::auto(&wrong_authorized_address)),
+                StakeStateWithFlags::Initialized(Meta::auto(&wrong_authorized_address)),
                 just_stake(Meta::auto(&wrong_authorized_address), stake_lamports),
             ] {
                 let merge_from_account = AccountSharedData::new_data_with_space(
                     stake_lamports,
                     merge_from_state,
-                    StakeState::size_of(),
+                    StakeStateWithFlags::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -6061,23 +6095,26 @@ mod tests {
         ];
 
         for state in &[
-            StakeState::Uninitialized,
-            StakeState::RewardsPool,
-            StakeState::Initialized(Meta::auto(&authorized_address)),
+            StakeStateWithFlags::Uninitialized,
+            StakeStateWithFlags::RewardsPool,
+            StakeStateWithFlags::Initialized(Meta::auto(&authorized_address)),
             just_stake(Meta::auto(&authorized_address), stake_lamports),
         ] {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 state,
-                StakeState::size_of(),
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap();
-            for merge_from_state in &[StakeState::Uninitialized, StakeState::RewardsPool] {
+            for merge_from_state in &[
+                StakeStateWithFlags::Uninitialized,
+                StakeStateWithFlags::RewardsPool,
+            ] {
                 let merge_from_account = AccountSharedData::new_data_with_space(
                     stake_lamports,
                     merge_from_state,
-                    StakeState::size_of(),
+                    StakeStateWithFlags::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -6121,14 +6158,14 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &just_stake(Meta::auto(&authorized_address), stake_lamports),
-            StakeState::size_of(),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
         let merge_from_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &just_stake(Meta::auto(&authorized_address), stake_lamports),
-            StakeState::size_of(),
+            StakeStateWithFlags::size_of(),
             &solana_sdk::pubkey::new_rand(),
         )
         .unwrap();
@@ -6191,7 +6228,7 @@ mod tests {
         let authorized_address = solana_sdk::pubkey::new_rand();
         let base_lamports = 4242424242;
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let stake_amount = base_lamports;
         let stake_lamports = rent_exempt_reserve + stake_amount;
         let merge_from_amount = base_lamports;
@@ -6210,8 +6247,8 @@ mod tests {
         };
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Stake(meta, stake, StakeFlags::empty()),
-            StakeState::size_of(),
+            &StakeStateWithFlags::Stake(meta, stake, StakeFlags::empty()),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -6226,8 +6263,8 @@ mod tests {
         };
         let merge_from_account = AccountSharedData::new_data_with_space(
             merge_from_lamports,
-            &StakeState::Stake(meta, merge_from_stake, StakeFlags::empty()),
-            StakeState::size_of(),
+            &StakeStateWithFlags::Stake(meta, merge_from_stake, StakeFlags::empty()),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -6306,7 +6343,7 @@ mod tests {
                 if expected_result.is_ok() {
                     assert_eq!(
                         accounts[1 - iteration].state(),
-                        Ok(StakeState::Uninitialized)
+                        Ok(StakeStateWithFlags::Uninitialized)
                     );
                 }
             }
@@ -6405,7 +6442,11 @@ mod tests {
                 };
                 transaction_accounts[0]
                     .1
-                    .set_state(&StakeState::Stake(meta, stake, StakeFlags::empty()))
+                    .set_state(&StakeStateWithFlags::Stake(
+                        meta,
+                        stake,
+                        StakeFlags::empty(),
+                    ))
                     .unwrap();
             }
             if clock.epoch == merge_from_deactivation_epoch {
@@ -6419,7 +6460,7 @@ mod tests {
                 };
                 transaction_accounts[1]
                     .1
-                    .set_state(&StakeState::Stake(
+                    .set_state(&StakeStateWithFlags::Stake(
                         meta,
                         merge_from_stake,
                         StakeFlags::empty(),
@@ -6518,7 +6559,8 @@ mod tests {
         let rent_account = create_account_shared_data_for_test(&rent);
 
         let good_stake_address = Pubkey::new_unique();
-        let good_stake_account = AccountSharedData::new(u64::MAX, StakeState::size_of(), &id());
+        let good_stake_account =
+            AccountSharedData::new(u64::MAX, StakeStateWithFlags::size_of(), &id());
         let good_instruction = instruction::initialize(
             &good_stake_address,
             &Authorized::auto(&good_stake_address),
@@ -6586,7 +6628,7 @@ mod tests {
         let vote_address = Pubkey::new_unique();
         let stake_address = Pubkey::new_unique();
 
-        let initial_stake_state = StakeState::Stake(
+        let initial_stake_state = StakeStateWithFlags::Stake(
             Meta::default(),
             new_stake(
                 1, /* stake */
@@ -6600,7 +6642,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             1, /* lamports */
             &initial_stake_state,
-            StakeState::size_of(),
+            StakeStateWithFlags::size_of(),
             &id(),
         )
         .unwrap();
@@ -6785,7 +6827,7 @@ mod tests {
         let mut unrelated_stake_account = stake_account.clone();
         assert_ne!(unrelated_vote_address, vote_address);
         unrelated_stake_account
-            .serialize_data(&StakeState::Stake(
+            .serialize_data(&StakeStateWithFlags::Stake(
                 Meta::default(),
                 new_stake(
                     1, /* stake */
@@ -6852,7 +6894,7 @@ mod tests {
 
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
         let stake_history = StakeHistory::default();
         let current_epoch = 100;
 
@@ -6872,7 +6914,7 @@ mod tests {
 
         let prepare_stake_account = |activation_epoch, expected_stake_activation_status| {
             let initial_stake_delegation = minimum_delegation + rent_exempt_reserve;
-            let initial_stake_state = StakeState::Stake(
+            let initial_stake_state = StakeStateWithFlags::Stake(
                 Meta {
                     authorized: Authorized {
                         staker: authorized_staker,
@@ -6907,7 +6949,7 @@ mod tests {
             AccountSharedData::new_data_with_space(
                 rent_exempt_reserve + initial_stake_delegation, /* lamports */
                 &initial_stake_state,
-                StakeState::size_of(),
+                StakeStateWithFlags::size_of(),
                 &id(),
             )
             .unwrap()
@@ -6999,7 +7041,7 @@ mod tests {
         //
         let stake_account = prepare_stake_account(0 /*activation_epoch*/, None);
         let uninitialized_stake_account =
-            AccountSharedData::new(0 /* lamports */, StakeState::size_of(), &id());
+            AccountSharedData::new(0 /* lamports */, StakeStateWithFlags::size_of(), &id());
 
         let _ = process_instruction_redelegate(
             &stake_address,
@@ -7027,7 +7069,9 @@ mod tests {
         );
 
         assert_eq!(output_accounts[0].lamports(), rent_exempt_reserve);
-        if let StakeState::Stake(meta, stake, _) = output_accounts[0].deserialize_data().unwrap() {
+        if let StakeStateWithFlags::Stake(meta, stake, _) =
+            output_accounts[0].deserialize_data().unwrap()
+        {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
             assert_eq!(
                 stake.delegation.stake,
@@ -7042,7 +7086,9 @@ mod tests {
             output_accounts[1].lamports(),
             minimum_delegation + rent_exempt_reserve
         );
-        if let StakeState::Stake(meta, stake, _) = output_accounts[1].deserialize_data().unwrap() {
+        if let StakeStateWithFlags::Stake(meta, stake, _) =
+            output_accounts[1].deserialize_data().unwrap()
+        {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
             assert_eq!(stake.delegation.stake, minimum_delegation);
             assert_eq!(stake.delegation.activation_epoch, current_epoch);
@@ -7172,8 +7218,11 @@ mod tests {
         //
         // Success: `uninitialized_stake_account` starts with 42 extra lamports
         //
-        let uninitialized_stake_account_with_extra_lamports =
-            AccountSharedData::new(42 /* lamports */, StakeState::size_of(), &id());
+        let uninitialized_stake_account_with_extra_lamports = AccountSharedData::new(
+            42, /* lamports */
+            StakeStateWithFlags::size_of(),
+            &id(),
+        );
         let output_accounts = process_instruction_redelegate(
             &stake_address,
             &stake_account,
@@ -7190,7 +7239,9 @@ mod tests {
             output_accounts[1].lamports(),
             minimum_delegation + rent_exempt_reserve + 42
         );
-        if let StakeState::Stake(meta, stake, _) = output_accounts[1].deserialize_data().unwrap() {
+        if let StakeStateWithFlags::Stake(meta, stake, _) =
+            output_accounts[1].deserialize_data().unwrap()
+        {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
             assert_eq!(stake.delegation.stake, minimum_delegation + 42);
             assert_eq!(stake.delegation.activation_epoch, current_epoch);
@@ -7204,12 +7255,12 @@ mod tests {
         //
         let mut stake_account_over_allocated =
             prepare_stake_account(0 /*activation_epoch:*/, None);
-        if let StakeState::Stake(mut meta, stake, stake_flags) =
+        if let StakeStateWithFlags::Stake(mut meta, stake, stake_flags) =
             stake_account_over_allocated.deserialize_data().unwrap()
         {
             meta.rent_exempt_reserve += 42;
             stake_account_over_allocated
-                .set_state(&StakeState::Stake(meta, stake, stake_flags))
+                .set_state(&StakeStateWithFlags::Stake(meta, stake, stake_flags))
                 .unwrap();
         }
         stake_account_over_allocated
@@ -7232,7 +7283,9 @@ mod tests {
         );
 
         assert_eq!(output_accounts[0].lamports(), rent_exempt_reserve + 42);
-        if let StakeState::Stake(meta, _stake, _) = output_accounts[0].deserialize_data().unwrap() {
+        if let StakeStateWithFlags::Stake(meta, _stake, _) =
+            output_accounts[0].deserialize_data().unwrap()
+        {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve + 42);
         } else {
             panic!("Invalid output_accounts[0] data");
@@ -7241,7 +7294,9 @@ mod tests {
             output_accounts[1].lamports(),
             minimum_delegation + rent_exempt_reserve,
         );
-        if let StakeState::Stake(meta, stake, _) = output_accounts[1].deserialize_data().unwrap() {
+        if let StakeStateWithFlags::Stake(meta, stake, _) =
+            output_accounts[1].deserialize_data().unwrap()
+        {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
             assert_eq!(stake.delegation.stake, minimum_delegation);
         } else {
@@ -7260,7 +7315,7 @@ mod tests {
             &uninitialized_stake_address,
             &AccountSharedData::new(
                 0, /* lamports */
-                StakeState::size_of(),
+                StakeStateWithFlags::size_of(),
                 &Pubkey::new_unique(), // <-- Invalid program id
             ),
             Err(InstructionError::IncorrectProgramId),
@@ -7276,7 +7331,11 @@ mod tests {
             &new_vote_address,
             &new_vote_account,
             &uninitialized_stake_address,
-            &AccountSharedData::new(0 /* lamports */, StakeState::size_of() - 1, &id()), // <-- size too small
+            &AccountSharedData::new(
+                0, /* lamports */
+                StakeStateWithFlags::size_of() - 1,
+                &id(),
+            ), // <-- size too small
             Err(InstructionError::InvalidAccountData),
         );
 
@@ -7290,7 +7349,11 @@ mod tests {
             &new_vote_address,
             &new_vote_account,
             &uninitialized_stake_address,
-            &AccountSharedData::new(0 /* lamports */, StakeState::size_of() + 1, &id()), // <-- size too large
+            &AccountSharedData::new(
+                0, /* lamports */
+                StakeStateWithFlags::size_of() + 1,
+                &id(),
+            ), // <-- size too large
             Err(InstructionError::InvalidAccountData),
         );
 
@@ -7379,7 +7442,7 @@ mod tests {
 
         let mut deactivating_stake_account =
             prepare_stake_account(0 /*activation_epoch:*/, None);
-        if let StakeState::Stake(meta, mut stake, _stake_flags) =
+        if let StakeStateWithFlags::Stake(meta, mut stake, _stake_flags) =
             deactivating_stake_account.deserialize_data().unwrap()
         {
             stake.deactivate(current_epoch).unwrap();
@@ -7397,7 +7460,11 @@ mod tests {
             );
 
             deactivating_stake_account
-                .set_state(&StakeState::Stake(meta, stake, StakeFlags::empty()))
+                .set_state(&StakeStateWithFlags::Stake(
+                    meta,
+                    stake,
+                    StakeFlags::empty(),
+                ))
                 .unwrap();
         }
         let _ = process_instruction_redelegate(
@@ -7416,7 +7483,7 @@ mod tests {
         //          (less than `minimum_delegation + rent_exempt_reserve`)
         //
         let mut stake_account_too_few_lamports = stake_account.clone();
-        if let StakeState::Stake(meta, mut stake, stake_flags) =
+        if let StakeStateWithFlags::Stake(meta, mut stake, stake_flags) =
             stake_account_too_few_lamports.deserialize_data().unwrap()
         {
             stake.delegation.stake -= 1;
@@ -7425,7 +7492,7 @@ mod tests {
                 minimum_delegation + rent_exempt_reserve - 1
             );
             stake_account_too_few_lamports
-                .set_state(&StakeState::Stake(meta, stake, stake_flags))
+                .set_state(&StakeStateWithFlags::Stake(meta, stake, stake_flags))
                 .unwrap();
         } else {
             panic!("Invalid stake_account");

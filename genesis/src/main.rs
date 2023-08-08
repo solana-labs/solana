@@ -31,7 +31,7 @@ use {
         rent::Rent,
         signature::{Keypair, Signer},
         signer::keypair::read_keypair_file,
-        stake::state::StakeState,
+        stake::state::StakeStateWithFlags,
         system_program, timing,
     },
     solana_stake_program::stake_state,
@@ -141,7 +141,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .to_string();
     // stake account
     let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
-        .max(rent.minimum_balance(StakeState::size_of()))
+        .max(rent.minimum_balance(StakeStateWithFlags::size_of()))
         .to_string();
 
     let default_target_tick_duration =
@@ -444,7 +444,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_validator_stake_lamports = rent_exempt_check(
         &matches,
         "bootstrap_validator_stake_lamports",
-        rent.minimum_balance(StakeState::size_of()),
+        rent.minimum_balance(StakeStateWithFlags::size_of()),
     )?;
 
     let bootstrap_stake_authorized_pubkey =

@@ -74,7 +74,7 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         shred_version::compute_shred_version,
-        stake::{self, state::StakeState},
+        stake::{self, state::StakeStateWithFlags},
         system_program,
         transaction::{
             MessageHash, SanitizedTransaction, SimpleAddressLoader, VersionedTransaction,
@@ -1293,7 +1293,7 @@ fn main() {
         .max(VoteState::get_rent_exempt_reserve(&rent))
         .to_string();
     let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
-        .max(rent.minimum_balance(StakeState::size_of()))
+        .max(rent.minimum_balance(StakeStateWithFlags::size_of()))
         .to_string();
     let default_graph_vote_account_mode = GraphVoteAccountMode::default();
 
@@ -2768,7 +2768,7 @@ fn main() {
                     value_t_or_exit!(arg_matches, "bootstrap_validator_lamports", u64);
                 let bootstrap_validator_stake_lamports =
                     value_t_or_exit!(arg_matches, "bootstrap_validator_stake_lamports", u64);
-                let minimum_stake_lamports = rent.minimum_balance(StakeState::size_of());
+                let minimum_stake_lamports = rent.minimum_balance(StakeStateWithFlags::size_of());
                 if bootstrap_validator_stake_lamports < minimum_stake_lamports {
                     eprintln!(
                         "Error: insufficient --bootstrap-validator-stake-lamports. \
@@ -2996,7 +2996,9 @@ fn main() {
                                 .unwrap()
                                 .into_iter()
                             {
-                                if let Ok(StakeState::Stake(meta, stake, _)) = account.state() {
+                                if let Ok(StakeStateWithFlags::Stake(meta, stake, _)) =
+                                    account.state()
+                                {
                                     if vote_accounts_to_destake
                                         .contains(&stake.delegation.voter_pubkey)
                                     {
@@ -3006,7 +3008,9 @@ fn main() {
                                                 address, stake.delegation.voter_pubkey,
                                             );
                                         }
-                                        account.set_state(&StakeState::Initialized(meta)).unwrap();
+                                        account
+                                            .set_state(&StakeStateWithFlags::Initialized(meta))
+                                            .unwrap();
                                         bank.store_account(&address, &account);
                                     }
                                 }

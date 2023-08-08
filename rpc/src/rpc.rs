@@ -68,7 +68,7 @@ use {
         message::SanitizedMessage,
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Keypair, Signature, Signer},
-        stake::state::{StakeActivationStatus, StakeState},
+        stake::state::{StakeActivationStatus, StakeStateWithFlags},
         stake_history::StakeHistory,
         system_instruction,
         sysvar::stake_history,
@@ -1731,7 +1731,7 @@ impl JsonRpcRequestProcessor {
         let stake_account = bank
             .get_account(pubkey)
             .ok_or_else(|| Error::invalid_params("Invalid param: account not found".to_string()))?;
-        let stake_state: StakeState = stake_account
+        let stake_state: StakeStateWithFlags = stake_account
             .state()
             .map_err(|_| Error::invalid_params("Invalid param: not a stake account".to_string()))?;
         let delegation = stake_state.delegation();

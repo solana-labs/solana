@@ -14,7 +14,7 @@ A separate Stake account \(created by a staker\) names a Vote account to which t
 
 Any number of Stake accounts can delegate to a single Vote account without an interactive action from the identity controlling the Vote account or submitting votes to the account.
 
-The total stake allocated to a Vote account can be calculated by the sum of all the Stake accounts that have the Vote account pubkey as the `StakeState::Stake::voter_pubkey`.
+The total stake allocated to a Vote account can be calculated by the sum of all the Stake accounts that have the Vote account pubkey as the `StakeStateWithFlags::Stake::voter_pubkey`.
 
 ## Vote and Stake accounts
 
@@ -62,13 +62,13 @@ Updates the account with a new authorized voter or withdrawer, according to the 
 - `account[1]` - RO - `sysvar::slot_hashes` A list of some N most recent slots and their hashes for the vote to be verified against.
 - `account[2]` - RO - `sysvar::clock` The current network time, expressed in slots, epochs.
 
-### StakeState
+### StakeStateWithFlags
 
-A StakeState takes one of four forms, StakeState::Uninitialized, StakeState::Initialized, StakeState::Stake, and StakeState::RewardsPool. Only the first three forms are used in staking, but only StakeState::Stake is interesting. All RewardsPools are created at genesis.
+A StakeStateWithFlags takes one of four forms, StakeStateWithFlags::Uninitialized, StakeStateWithFlags::Initialized, StakeStateWithFlags::Stake, and StakeStateWithFlags::RewardsPool. Only the first three forms are used in staking, but only StakeStateWithFlags::Stake is interesting. All RewardsPools are created at genesis.
 
-### StakeState::Stake
+### StakeStateWithFlags::Stake
 
-StakeState::Stake is the current delegation preference of the **staker** and contains the following state information:
+StakeStateWithFlags::Stake is the current delegation preference of the **staker** and contains the following state information:
 
 - Account::lamports - The lamports available for staking.
 - `stake` - the staked amount \(subject to warmup and cooldown\) for generating rewards, always less than or equal to Account::lamports.
@@ -79,7 +79,7 @@ StakeState::Stake is the current delegation preference of the **staker** and con
 - `authorized_staker` - the pubkey of the entity that must sign delegation, activation, and deactivation transactions.
 - `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's address, and the authorized staker.
 
-### StakeState::RewardsPool
+### StakeStateWithFlags::RewardsPool
 
 To avoid a single network-wide lock or contention in redemption, 256 RewardsPools are part of genesis under pre-determined keys, each with std::u64::MAX credits to be able to satisfy redemptions according to point value.
 
@@ -87,9 +87,9 @@ The Stakes and the RewardsPool are accounts that are owned by the same `Stake` p
 
 ### StakeInstruction::DelegateStake
 
-The Stake account is moved from Initialized to StakeState::Stake form, or from a deactivated (i.e. fully cooled-down) StakeState::Stake to activated StakeState::Stake. This is how stakers choose the vote account and validator node to which their stake account lamports are delegated. The transaction must be signed by the stake's `authorized_staker`.
+The Stake account is moved from Initialized to StakeStateWithFlags::Stake form, or from a deactivated (i.e. fully cooled-down) StakeStateWithFlags::Stake to activated StakeStateWithFlags::Stake. This is how stakers choose the vote account and validator node to which their stake account lamports are delegated. The transaction must be signed by the stake's `authorized_staker`.
 
-- `account[0]` - RW - The StakeState::Stake instance. `StakeState::Stake::credits_observed` is initialized to `VoteState::credits`, `StakeState::Stake::voter_pubkey` is initialized to `account[1]`. If this is the initial delegation of stake, `StakeState::Stake::stake` is initialized to the account's balance in lamports, `StakeState::Stake::activated` is initialized to the current Bank epoch, and `StakeState::Stake::deactivated` is initialized to std::u64::MAX
+- `account[0]` - RW - The StakeStateWithFlags::Stake instance. `StakeStateWithFlags::Stake::credits_observed` is initialized to `VoteState::credits`, `StakeStateWithFlags::Stake::voter_pubkey` is initialized to `account[1]`. If this is the initial delegation of stake, `StakeStateWithFlags::Stake::stake` is initialized to the account's balance in lamports, `StakeStateWithFlags::Stake::activated` is initialized to the current Bank epoch, and `StakeStateWithFlags::Stake::deactivated` is initialized to std::u64::MAX
 - `account[1]` - R - The VoteState instance.
 - `account[2]` - R - sysvar::clock account, carries information about current Bank epoch.
 - `account[3]` - R - sysvar::stakehistory account, carries information about stake history.
@@ -99,25 +99,25 @@ The Stake account is moved from Initialized to StakeState::Stake form, or from a
 
 Updates the account with a new authorized staker or withdrawer, according to the StakeAuthorize parameter \(`Staker` or `Withdrawer`\). The transaction must be by signed by the Stakee account's current `authorized_staker` or `authorized_withdrawer`. Any stake lock-up must have expired, or the lock-up custodian must also sign the transaction.
 
-- `account[0]` - RW - The StakeState.
+- `account[0]` - RW - The StakeStateWithFlags.
 
-  `StakeState::authorized_staker` or `authorized_withdrawer` is set to to `Pubkey`.
+  `StakeStateWithFlags::authorized_staker` or `authorized_withdrawer` is set to to `Pubkey`.
 
 ### StakeInstruction::Deactivate
 
 A staker may wish to withdraw from the network. To do so he must first deactivate his stake, and wait for cooldown.
 The transaction must be signed by the stake's `authorized_staker`.
 
-- `account[0]` - RW - The StakeState::Stake instance that is deactivating.
+- `account[0]` - RW - The StakeStateWithFlags::Stake instance that is deactivating.
 - `account[1]` - R - sysvar::clock account from the Bank that carries current epoch.
 
-StakeState::Stake::deactivated is set to the current epoch + cooldown. The account's stake will ramp down to zero by that epoch, and Account::lamports will be available for withdrawal.
+StakeStateWithFlags::Stake::deactivated is set to the current epoch + cooldown. The account's stake will ramp down to zero by that epoch, and Account::lamports will be available for withdrawal.
 
 ### StakeInstruction::Withdraw\(u64\)
 
 Lamports build up over time in a Stake account and any excess over activated stake can be withdrawn. The transaction must be signed by the stake's `authorized_withdrawer`.
 
-- `account[0]` - RW - The StakeState::Stake from which to withdraw.
+- `account[0]` - RW - The StakeStateWithFlags::Stake from which to withdraw.
 - `account[1]` - RW - Account that should be credited with the withdrawn lamports.
 - `account[2]` - R - sysvar::clock account from the Bank that carries current epoch, to calculate stake.
 - `account[3]` - R - sysvar::stake_history account from the Bank that carries stake warmup/cooldown history.
