@@ -1271,9 +1271,11 @@ restartnode)
   fi
   nodeType=
   nodeIndex=
+  skipSetup=true
   if [[ -z $wen_restart ]]; then
     wenRestart=true
   fi
+  prepareDeploy
   getNodeType
   restartNode "$nodeAddress" "$nodeType" "$nodeIndex" "$wenRestart"
   ;;
