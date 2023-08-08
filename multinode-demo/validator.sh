@@ -47,6 +47,7 @@ EOF
 }
 
 maybeRequireTower=true
+maybeWenRestart=false
 
 positional_args=()
 while [[ -n $1 ]]; do
@@ -185,6 +186,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --skip-require-tower ]]; then
       maybeRequireTower=false
       shift
+    elif [[ $1 == --wen-restart ]]; then
+      maybeWenRestart=true
+      shift
     elif [[ $1 = -h ]]; then
       usage "$@"
     else
@@ -268,6 +272,11 @@ default_arg --allow-private-addr
 if [[ $maybeRequireTower = true ]]; then
   default_arg --require-tower
 fi
+
+if [[ $maybeWenRestart == true ]]; then
+  default_arg --wen-restart
+fi
+
 
 if [[ -n $SOLANA_CUDA ]]; then
   program=$solana_validator_cuda
