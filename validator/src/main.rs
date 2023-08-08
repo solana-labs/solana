@@ -1374,7 +1374,7 @@ pub fn main() {
         },
         staked_nodes_overrides: staked_nodes_overrides.clone(),
         replay_slots_concurrently: matches.is_present("replay_slots_concurrently"),
-        wen_restart: matches.value_of("wen_restart").unwrap_or("false") == "true",
+        wen_restart: matches.is_present("wen_restart"),
         ..ValidatorConfig::default()
     };
 
