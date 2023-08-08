@@ -12,7 +12,9 @@ use {
     crate::rpc_subscriptions::RpcSubscriptions,
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     solana_rpc_client_api::response::{SlotTransactionStats, SlotUpdate},
-    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_runtime::{
+        bank::Bank, bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
+    },
     solana_sdk::{clock::Slot, timing::timestamp},
     std::{
         collections::HashSet,
@@ -92,6 +94,7 @@ impl OptimisticallyConfirmedBankTracker {
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
         subscriptions: Arc<RpcSubscriptions>,
         slot_notification_subscribers: Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
+        prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Self {
         let mut pending_optimistically_confirmed_banks = HashSet::new();
         let mut last_notified_confirmed_slot: Slot = 0;
@@ -114,6 +117,7 @@ impl OptimisticallyConfirmedBankTracker {
                     &mut highest_confirmed_slot,
                     &mut newest_root_slot,
                     &slot_notification_subscribers,
+                    &prioritization_fee_cache,
                 ) {
                     break;
                 }
@@ -122,6 +126,7 @@ impl OptimisticallyConfirmedBankTracker {
         Self { thread_hdl }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn recv_notification(
         receiver: &Receiver<BankNotification>,
         bank_forks: &RwLock<BankForks>,
@@ -132,6 +137,7 @@ impl OptimisticallyConfirmedBankTracker {
         highest_confirmed_slot: &mut Slot,
         newest_root_slot: &mut Slot,
         slot_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
+        prioritization_fee_cache: &PrioritizationFeeCache,
     ) -> Result<(), RecvTimeoutError> {
         let notification = receiver.recv_timeout(Duration::from_secs(1))?;
         Self::process_notification(
@@ -144,6 +150,7 @@ impl OptimisticallyConfirmedBankTracker {
             highest_confirmed_slot,
             newest_root_slot,
             slot_notification_subscribers,
+            prioritization_fee_cache,
         );
         Ok(())
     }
@@ -249,6 +256,7 @@ impl OptimisticallyConfirmedBankTracker {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn process_notification(
         notification: BankNotification,
         bank_forks: &RwLock<BankForks>,
@@ -259,6 +267,7 @@ impl OptimisticallyConfirmedBankTracker {
         highest_confirmed_slot: &mut Slot,
         newest_root_slot: &mut Slot,
         slot_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
+        prioritization_fee_cache: &PrioritizationFeeCache,
     ) {
         debug!("received bank notification: {:?}", notification);
         match notification {
@@ -298,6 +307,9 @@ impl OptimisticallyConfirmedBankTracker {
                     slot,
                     timestamp: timestamp(),
                 });
+
+                // finalize block's minimum prioritization fee cache for this bank
+                prioritization_fee_cache.finalize_priority_fee(slot);
             }
             BankNotification::Frozen(bank) => {
                 let frozen_slot = bank.slot();
@@ -457,6 +469,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 2);
         assert_eq!(highest_confirmed_slot, 2);
@@ -472,6 +485,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 2);
         assert_eq!(highest_confirmed_slot, 2);
@@ -487,6 +501,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 2);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 1);
@@ -507,6 +522,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 3);
         assert_eq!(highest_confirmed_slot, 3);
@@ -526,6 +542,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 3);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 1);
@@ -553,6 +570,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &subscribers,
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 5);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
@@ -571,6 +589,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &subscribers,
+            &PrioritizationFeeCache::default(),
         );
 
         assert_eq!(newest_root_slot, 5);
@@ -600,6 +619,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 5);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
@@ -621,6 +641,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &subscribers,
+            &PrioritizationFeeCache::default(),
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 7);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
@@ -638,6 +659,7 @@ mod tests {
             &mut highest_confirmed_slot,
             &mut newest_root_slot,
             &subscribers,
+            &PrioritizationFeeCache::default(),
         );
 
         assert_eq!(newest_root_slot, 7);

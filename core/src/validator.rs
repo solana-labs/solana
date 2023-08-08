@@ -988,6 +988,7 @@ impl Validator {
                     optimistically_confirmed_bank,
                     rpc_subscriptions.clone(),
                     confirmed_bank_subscribers,
+                    prioritization_fee_cache.clone(),
                 )),
                 Some(BankNotificationSenderConfig {
                     sender: bank_notification_sender,
