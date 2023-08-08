@@ -8662,28 +8662,23 @@ impl AccountsDb {
     }
 
     pub fn add_root(&self, slot: Slot) -> AccountsAddRootTiming {
-        let mut index_time = Measure::start("index_add_root");
-        self.accounts_index.add_root(slot);
-        index_time.stop();
-        let mut cache_time = Measure::start("cache_add_root");
-        self.accounts_cache.add_root(slot);
-        cache_time.stop();
-        let mut store_time = Measure::start("store_add_root");
-        // We would not expect this slot to be shrinking right now, but other slots may be.
-        // But, even if it was, we would just mark a store id as dirty unnecessarily and that is ok.
-        // So, allow shrinking to be in progress.
-        if let Some(store) = self
+        let (_, index_time) = measure_us!(self.accounts_index.add_root(slot));
+        let (_, cache_time) = measure_us!(self.accounts_cache.add_root(slot));
+        let (_, store_time) = measure_us!(self
             .storage
             .get_slot_storage_entry_shrinking_in_progress_ok(slot)
-        {
-            self.dirty_stores.insert(slot, store);
-        }
-        store_time.stop();
+            .map_or((), |store| {
+                // We would not expect this slot to be shrinking right now, but other slots may be.
+                // But, even if it was, we would just mark a store id as dirty unnecessarily and that is ok.
+                // So, allow shrinking to be in progress.
+                self.dirty_stores.insert(slot, store);
+                ()
+            }));
 
         AccountsAddRootTiming {
-            index_us: index_time.as_us(),
-            cache_us: cache_time.as_us(),
-            store_us: store_time.as_us(),
+            index_us: index_time,
+            cache_us: cache_time,
+            store_us: store_time,
         }
     }
 
