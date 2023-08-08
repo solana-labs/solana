@@ -2,6 +2,7 @@ use {
     clap::{value_t, value_t_or_exit, values_t_or_exit, ArgMatches},
     crossbeam_channel::unbounded,
     log::*,
+    solana_accounts_db::hardened_unpack::open_genesis_config,
     solana_core::{
         accounts_hash_verifier::AccountsHashVerifier, validator::BlockVerificationMethod,
     },
@@ -26,7 +27,6 @@ use {
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
         bank_forks::BankForks,
-        hardened_unpack::open_genesis_config,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{

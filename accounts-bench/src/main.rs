@@ -5,8 +5,7 @@ extern crate log;
 use {
     clap::{crate_description, crate_name, value_t, App, Arg},
     rayon::prelude::*,
-    solana_measure::measure::Measure,
-    solana_runtime::{
+    solana_accounts_db::{
         accounts::Accounts,
         accounts_db::{
             test_utils::{create_test_accounts, update_accounts_bench},
@@ -16,6 +15,7 @@ use {
         ancestors::Ancestors,
         rent_collector::RentCollector,
     },
+    solana_measure::measure::Measure,
     solana_sdk::{
         genesis_config::ClusterType, pubkey::Pubkey, sysvar::epoch_schedule::EpochSchedule,
     },

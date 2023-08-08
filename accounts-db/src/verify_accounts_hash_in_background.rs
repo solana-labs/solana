@@ -12,9 +12,9 @@ use {
 };
 
 #[derive(Debug)]
-pub(crate) struct VerifyAccountsHashInBackground {
+pub struct VerifyAccountsHashInBackground {
     /// true when verification has completed or never had to run in background
-    pub(crate) verified: Arc<AtomicBool>,
+    pub verified: Arc<AtomicBool>,
     /// enable waiting for verification to become complete
     complete: Arc<WaitableCondvar>,
     /// thread doing verification
@@ -39,14 +39,14 @@ impl Default for VerifyAccountsHashInBackground {
 
 impl VerifyAccountsHashInBackground {
     /// start the bg thread to do the verification
-    pub(crate) fn start(&self, start: impl FnOnce() -> JoinHandle<bool>) {
+    pub fn start(&self, start: impl FnOnce() -> JoinHandle<bool>) {
         // note that we're not verified before
         self.verified.store(false, Ordering::Release);
         *self.thread.lock().unwrap() = Some(start());
     }
 
     /// notify that the bg process has completed
-    pub(crate) fn background_finished(&self) {
+    pub fn background_finished(&self) {
         self.complete.notify_all();
         self.background_completed.store(true, Ordering::Release);
     }
@@ -54,7 +54,7 @@ impl VerifyAccountsHashInBackground {
     /// notify that verification was completed successfully
     /// This can occur because it completed in the background
     /// or if the verification was run in the foreground.
-    pub(crate) fn verification_complete(&self) {
+    pub fn verification_complete(&self) {
         self.verified.store(true, Ordering::Release);
     }
 
@@ -76,7 +76,7 @@ impl VerifyAccountsHashInBackground {
     /// return true if bg hash verification is complete
     /// return false if bg hash verification has not completed yet
     /// if hash verification failed, a panic will occur
-    pub(crate) fn check_complete(&self) -> bool {
+    pub fn check_complete(&self) -> bool {
         if self.verified.load(Ordering::Acquire) {
             // already completed
             return true;
@@ -95,7 +95,7 @@ impl VerifyAccountsHashInBackground {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+pub mod tests {
     use {super::*, std::thread::Builder};
 
     #[test]

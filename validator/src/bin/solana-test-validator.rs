@@ -3,6 +3,7 @@ use {
     crossbeam_channel::unbounded,
     itertools::Itertools,
     log::*,
+    solana_accounts_db::accounts_index::{AccountIndex, AccountSecondaryIndexes},
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of, value_of},
         input_validators::normalize_to_url_if_moniker,
@@ -14,7 +15,6 @@ use {
         rpc_pubsub_service::PubSubConfig,
     },
     solana_rpc_client::rpc_client::RpcClient,
-    solana_runtime::accounts_index::{AccountIndex, AccountSecondaryIndexes},
     solana_sdk::{
         account::AccountSharedData,
         clock::Slot,

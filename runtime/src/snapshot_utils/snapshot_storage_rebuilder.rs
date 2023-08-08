@@ -4,14 +4,9 @@ use {
     super::{
         get_io_error, snapshot_version_from_file, SnapshotError, SnapshotFrom, SnapshotVersion,
     },
-    crate::{
-        account_storage::{AccountStorageMap, AccountStorageReference},
-        accounts_db::{AccountStorageEntry, AccountsDb, AppendVecId, AtomicAppendVecId},
-        append_vec::AppendVec,
-        serde_snapshot::{
-            self, reconstruct_single_storage, remap_and_reconstruct_single_storage,
-            snapshot_storage_lengths_from_fields, SerdeStyle, SerializedAppendVecId,
-        },
+    crate::serde_snapshot::{
+        self, reconstruct_single_storage, remap_and_reconstruct_single_storage,
+        snapshot_storage_lengths_from_fields, SerdeStyle, SerializedAppendVecId,
     },
     crossbeam_channel::{select, unbounded, Receiver, Sender},
     dashmap::DashMap,
@@ -21,6 +16,11 @@ use {
         ThreadPool, ThreadPoolBuilder,
     },
     regex::Regex,
+    solana_accounts_db::{
+        account_storage::{AccountStorageMap, AccountStorageReference},
+        accounts_db::{AccountStorageEntry, AccountsDb, AppendVecId, AtomicAppendVecId},
+        append_vec::AppendVec,
+    },
     solana_sdk::clock::Slot,
     std::{
         collections::HashMap,
@@ -464,8 +464,8 @@ pub(crate) fn get_slot_and_append_vec_id(filename: &str) -> (Slot, usize) {
 #[cfg(test)]
 mod tests {
     use {
-        super::*,
-        crate::{append_vec::AppendVec, snapshot_utils::SNAPSHOT_VERSION_FILENAME},
+        super::*, crate::snapshot_utils::SNAPSHOT_VERSION_FILENAME,
+        solana_accounts_db::append_vec::AppendVec,
     };
 
     #[test]

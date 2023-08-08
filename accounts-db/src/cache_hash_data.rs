@@ -23,7 +23,7 @@ pub struct Header {
     count: usize,
 }
 
-pub(crate) struct CacheHashDataFile {
+pub struct CacheHashDataFile {
     cell_size: u64,
     mmap: MmapMut,
     capacity: u64,
@@ -31,13 +31,13 @@ pub(crate) struct CacheHashDataFile {
 
 impl CacheHashDataFile {
     /// return a slice of a reference to all the cache hash data from the mmapped file
-    pub(crate) fn get_cache_hash_data(&self) -> &[EntryType] {
+    pub fn get_cache_hash_data(&self) -> &[EntryType] {
         self.get_slice(0)
     }
 
     #[cfg(test)]
     /// Populate 'accumulator' from entire contents of the cache file.
-    pub(crate) fn load_all(
+    pub fn load_all(
         &self,
         accumulator: &mut SavedType,
         start_bin_index: usize,
@@ -196,7 +196,7 @@ impl CacheHashData {
 
     #[cfg(test)]
     /// load from 'file_name' into 'accumulator'
-    pub(crate) fn load(
+    pub fn load(
         &self,
         file_name: impl AsRef<Path>,
         accumulator: &mut SavedType,
@@ -213,7 +213,7 @@ impl CacheHashData {
     }
 
     /// map 'file_name' into memory
-    pub(crate) fn load_map(
+    pub fn load_map(
         &self,
         file_name: impl AsRef<Path>,
     ) -> Result<CacheHashDataFile, std::io::Error> {

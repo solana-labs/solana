@@ -2,11 +2,11 @@ use {
     crate::transaction_notifier_interface::TransactionNotifierLock,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     itertools::izip,
+    solana_accounts_db::transaction_results::{DurableNonceFee, TransactionExecutionDetails},
     solana_ledger::{
         blockstore::Blockstore,
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
-    solana_runtime::transaction_results::{DurableNonceFee, TransactionExecutionDetails},
     solana_transaction_status::{
         extract_and_fmt_memos, InnerInstruction, InnerInstructions, Reward, TransactionStatusMeta,
     },
@@ -225,12 +225,12 @@ pub(crate) mod tests {
         crossbeam_channel::unbounded,
         dashmap::DashMap,
         solana_account_decoder::parse_token::token_amount_to_ui_amount,
-        solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path},
-        solana_runtime::{
-            bank::{Bank, TransactionBalancesSet},
+        solana_accounts_db::{
             nonce_info::{NonceFull, NoncePartial},
             rent_debits::RentDebits,
         },
+        solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path},
+        solana_runtime::bank::{Bank, TransactionBalancesSet},
         solana_sdk::{
             account_utils::StateMut,
             clock::Slot,

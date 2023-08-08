@@ -4,6 +4,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
+    solana_accounts_db::inline_spl_token,
     solana_clap_utils::{
         hidden_unless_forced, input_parsers::pubkey_of, input_validators::is_url_or_moniker,
     },
@@ -11,7 +12,6 @@ use {
     solana_client::transaction_executor::TransactionExecutor,
     solana_gossip::gossip_service::discover,
     solana_rpc_client::rpc_client::RpcClient,
-    solana_runtime::inline_spl_token,
     solana_sdk::{
         commitment_config::CommitmentConfig,
         hash::Hash,
@@ -703,6 +703,7 @@ fn main() {
 pub mod test {
     use {
         super::*,
+        solana_accounts_db::inline_spl_token,
         solana_core::validator::ValidatorConfig,
         solana_faucet::faucet::run_local_faucet,
         solana_local_cluster::{

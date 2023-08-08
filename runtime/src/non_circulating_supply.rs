@@ -1,9 +1,7 @@
 use {
-    crate::{
-        accounts_index::{AccountIndex, IndexKey, ScanConfig, ScanResult},
-        bank::Bank,
-    },
+    crate::bank::Bank,
     log::*,
+    solana_accounts_db::accounts_index::{AccountIndex, IndexKey, ScanConfig, ScanResult},
     solana_sdk::{
         account::ReadableAccount,
         pubkey::Pubkey,

@@ -1,7 +1,7 @@
 use {
     clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg},
     log::*,
-    solana_runtime::{account_storage::meta::StoredAccountMeta, append_vec::AppendVec},
+    solana_accounts_db::{account_storage::meta::StoredAccountMeta, append_vec::AppendVec},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         hash::Hash,

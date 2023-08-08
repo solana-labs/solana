@@ -12,10 +12,10 @@ pub mod meta;
 #[derive(Clone, Debug)]
 pub struct AccountStorageReference {
     /// the single storage for a given slot
-    pub(crate) storage: Arc<AccountStorageEntry>,
+    pub storage: Arc<AccountStorageEntry>,
     /// id can be read from 'storage', but it is an atomic read.
     /// id will never change while a storage is held, so we store it separately here for faster runtime lookup in 'get_account_storage_entry'
-    pub(crate) id: AppendVecId,
+    pub id: AppendVecId,
 }
 
 pub type AccountStorageMap = DashMap<Slot, AccountStorageReference>;
@@ -74,7 +74,7 @@ impl AccountStorage {
 
     /// return the append vec for 'slot' if it exists
     /// This is only ever called when shrink is not possibly running and there is a max of 1 append vec per slot.
-    pub(crate) fn get_slot_storage_entry(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
+    pub fn get_slot_storage_entry(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
         assert!(self.no_shrink_in_progress());
         self.get_slot_storage_entry_shrinking_in_progress_ok(slot)
     }
@@ -100,7 +100,7 @@ impl AccountStorage {
     }
 
     /// initialize the storage map to 'all_storages'
-    pub(crate) fn initialize(&mut self, all_storages: AccountStorageMap) {
+    pub fn initialize(&mut self, all_storages: AccountStorageMap) {
         assert!(self.map.is_empty());
         assert!(self.no_shrink_in_progress());
         self.map.extend(all_storages.into_iter())
@@ -208,7 +208,7 @@ impl<'a> Iterator for AccountStorageIter<'a> {
 /// exists while there is a shrink in progress
 /// keeps track of the 'new_store' being created and the 'old_store' being replaced.
 #[derive(Debug)]
-pub(crate) struct ShrinkInProgress<'a> {
+pub struct ShrinkInProgress<'a> {
     storage: &'a AccountStorage,
     /// old store which will be shrunk and replaced
     old_store: Arc<AccountStorageEntry>,
@@ -244,7 +244,7 @@ impl<'a> Drop for ShrinkInProgress<'a> {
 }
 
 impl<'a> ShrinkInProgress<'a> {
-    pub(crate) fn new_storage(&self) -> &Arc<AccountStorageEntry> {
+    pub fn new_storage(&self) -> &Arc<AccountStorageEntry> {
         &self.new_store
     }
     pub(crate) fn old_storage(&self) -> &Arc<AccountStorageEntry> {

@@ -203,7 +203,7 @@ pub struct StorableAccountsBySlot<'a> {
 impl<'a> StorableAccountsBySlot<'a> {
     #[allow(dead_code)]
     /// each element of slots_and_accounts is (source slot, accounts moving FROM source slot)
-    pub(crate) fn new(
+    pub fn new(
         target_slot: Slot,
         slots_and_accounts: &'a [(Slot, &'a [&'a StoredAccountMeta<'a>])],
         include_slot_in_hash: IncludeSlotInHash,

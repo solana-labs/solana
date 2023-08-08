@@ -16,16 +16,16 @@ use {
 #[derive(PartialEq, Eq, Debug)]
 pub struct TieredReadableAccount<'accounts_file, M: TieredAccountMeta> {
     /// TieredAccountMeta
-    pub(crate) meta: &'accounts_file M,
+    pub meta: &'accounts_file M,
     /// The address of the account
-    pub(crate) address: &'accounts_file Pubkey,
+    pub address: &'accounts_file Pubkey,
     /// The address of the account owner
-    pub(crate) owner: &'accounts_file Pubkey,
+    pub owner: &'accounts_file Pubkey,
     /// The index for accessing the account inside its belonging AccountsFile
-    pub(crate) index: usize,
+    pub index: usize,
     /// The account block that contains this account.  Note that this account
     /// block may be shared with other accounts.
-    pub(crate) account_block: &'accounts_file [u8],
+    pub account_block: &'accounts_file [u8],
 }
 
 impl<'accounts_file, M: TieredAccountMeta> TieredReadableAccount<'accounts_file, M> {

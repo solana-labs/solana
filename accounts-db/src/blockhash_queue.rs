@@ -124,7 +124,7 @@ impl BlockhashQueue {
         })
     }
 
-    pub(crate) fn get_max_age(&self) -> usize {
+    pub fn get_max_age(&self) -> usize {
         self.max_age
     }
 }

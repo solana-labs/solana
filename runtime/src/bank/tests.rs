@@ -7,14 +7,7 @@ use {
         *,
     },
     crate::{
-        accounts::{AccountAddressFilter, RewardInterval},
         accounts_background_service::{PrunedBanksRequestHandler, SendDroppedBankCallback},
-        accounts_db::{AccountShrinkThreshold, DEFAULT_ACCOUNTS_SHRINK_RATIO},
-        accounts_index::{
-            AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ITER_BATCH_SIZE,
-        },
-        accounts_partition::{self, PartitionIndex, RentPayingAccountsByPartition},
-        ancestors::Ancestors,
         bank_client::BankClient,
         epoch_rewards_hasher::hash_rewards_into_partitions,
         genesis_utils::{
@@ -22,18 +15,27 @@ use {
             create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
             genesis_sysvar_and_builtin_program_lamports, GenesisConfigInfo, ValidatorVoteKeypairs,
         },
-        inline_spl_token,
-        nonce_info::NonceFull,
-        partitioned_rewards::TestPartitionedEpochRewards,
-        rent_collector::RENT_EXEMPT_RENT_EPOCH,
         status_cache::MAX_CACHE_ENTRIES,
-        transaction_error_metrics::TransactionErrorMetrics,
     },
     crossbeam_channel::{bounded, unbounded},
     itertools::Itertools,
     rand::Rng,
     rayon::ThreadPoolBuilder,
     serde::{Deserialize, Serialize},
+    solana_accounts_db::{
+        accounts::{AccountAddressFilter, RewardInterval},
+        accounts_db::{AccountShrinkThreshold, DEFAULT_ACCOUNTS_SHRINK_RATIO},
+        accounts_index::{
+            AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ITER_BATCH_SIZE,
+        },
+        accounts_partition::{self, PartitionIndex, RentPayingAccountsByPartition},
+        ancestors::Ancestors,
+        inline_spl_token,
+        nonce_info::NonceFull,
+        partitioned_rewards::TestPartitionedEpochRewards,
+        rent_collector::RENT_EXEMPT_RENT_EPOCH,
+        transaction_error_metrics::TransactionErrorMetrics,
+    },
     solana_logger,
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget, MAX_COMPUTE_UNIT_LIMIT},
@@ -122,52 +124,6 @@ use {
     },
     test_case::test_case,
 };
-
-impl StakeReward {
-    pub fn new_random() -> Self {
-        let mut rng = rand::thread_rng();
-
-        let rent = Rent::free();
-
-        let validator_pubkey = solana_sdk::pubkey::new_rand();
-        let validator_stake_lamports = 20;
-        let validator_staking_keypair = Keypair::new();
-        let validator_voting_keypair = Keypair::new();
-
-        let validator_vote_account = vote_state::create_account(
-            &validator_voting_keypair.pubkey(),
-            &validator_pubkey,
-            10,
-            validator_stake_lamports,
-        );
-
-        let validator_stake_account = stake_state::create_account(
-            &validator_staking_keypair.pubkey(),
-            &validator_voting_keypair.pubkey(),
-            &validator_vote_account,
-            &rent,
-            validator_stake_lamports,
-        );
-
-        Self {
-            stake_pubkey: Pubkey::new_unique(),
-            stake_reward_info: RewardInfo {
-                reward_type: RewardType::Staking,
-                lamports: rng.gen_range(1, 200),
-                post_balance: 0,  /* unused atm */
-                commission: None, /* unused atm */
-            },
-
-            stake_account: validator_stake_account,
-        }
-    }
-
-    pub fn credit(&mut self, amount: u64) {
-        self.stake_reward_info.lamports = amount as i64;
-        self.stake_reward_info.post_balance += amount;
-        self.stake_account.checked_add_lamports(amount).unwrap();
-    }
-}
 
 impl VoteReward {
     pub fn new_random() -> Self {

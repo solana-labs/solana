@@ -12,9 +12,9 @@ edition = { workspace = true }
 clap = { workspace = true }
 log = { workspace = true }
 rayon = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-logger = { workspace = true }
 solana-measure = { workspace = true }
-solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-version = { workspace = true }
 

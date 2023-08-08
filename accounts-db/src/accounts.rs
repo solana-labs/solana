@@ -84,7 +84,7 @@ pub struct AccountLocks {
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub(crate) enum RewardInterval {
+pub enum RewardInterval {
     /// the slot within the epoch is INSIDE the reward distribution interval
     InsideInterval,
     /// the slot within the epoch is OUTSIDE the reward distribution interval
@@ -216,11 +216,11 @@ impl Accounts {
         ))
     }
 
-    pub(crate) fn new_empty(accounts_db: AccountsDb) -> Self {
+    pub fn new_empty(accounts_db: AccountsDb) -> Self {
         Self::new(Arc::new(accounts_db))
     }
 
-    pub(crate) fn new(accounts_db: Arc<AccountsDb>) -> Self {
+    pub fn new(accounts_db: Arc<AccountsDb>) -> Self {
         Self {
             accounts_db,
             account_locks: Mutex::new(AccountLocks::default()),
@@ -694,7 +694,7 @@ impl Accounts {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn load_accounts(
+    pub fn load_accounts(
         &self,
         ancestors: &Ancestors,
         txs: &[SanitizedTransaction],
@@ -1306,7 +1306,7 @@ impl Accounts {
     /// Store the accounts into the DB
     // allow(clippy) needed for various gating flags
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn store_cached(
+    pub fn store_cached(
         &self,
         slot: Slot,
         txs: &[SanitizedTransaction],

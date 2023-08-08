@@ -1,16 +1,17 @@
 use {
     crate::{
-        accounts::Accounts,
-        accounts_db::{AccountStorageEntry, IncludeSlotInHash, INCLUDE_SLOT_IN_HASH_TESTS},
-        accounts_hash::{AccountsHash, AccountsHashEnum},
         bank::Bank,
-        epoch_accounts_hash::EpochAccountsHash,
-        rent_collector::RentCollector,
         snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
         snapshot_hash::SnapshotHash,
         snapshot_utils::{self, ArchiveFormat, BankSnapshotInfo, SnapshotVersion},
     },
     log::*,
+    solana_accounts_db::{
+        accounts::Accounts,
+        accounts_db::{AccountStorageEntry, IncludeSlotInHash, INCLUDE_SLOT_IN_HASH_TESTS},
+        accounts_hash::{AccountsHash, AccountsHashEnum},
+        epoch_accounts_hash::EpochAccountsHash,
+    },
     solana_sdk::{clock::Slot, feature_set, sysvar::epoch_schedule::EpochSchedule},
     std::{
         path::{Path, PathBuf},
@@ -21,6 +22,7 @@ use {
 
 mod compare;
 pub use compare::*;
+use solana_accounts_db::rent_collector::RentCollector;
 
 /// This struct packages up fields to send from AccountsBackgroundService to AccountsHashVerifier
 pub struct AccountsPackage {

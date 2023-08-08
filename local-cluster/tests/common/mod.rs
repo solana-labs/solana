@@ -1,6 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     log::*,
+    solana_accounts_db::accounts_db::create_accounts_run_and_snapshot_dirs,
     solana_core::{
         consensus::{tower_storage::FileTowerStorage, Tower, SWITCH_FORK_THRESHOLD},
         validator::{is_snapshot_config_valid, ValidatorConfig},
@@ -21,7 +22,6 @@ use {
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
         snapshot_bank_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL, snapshot_config::SnapshotConfig,
-        snapshot_utils::create_accounts_run_and_snapshot_dirs,
     },
     solana_sdk::{
         account::AccountSharedData,

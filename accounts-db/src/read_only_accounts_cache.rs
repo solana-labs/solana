@@ -27,7 +27,7 @@ struct ReadOnlyAccountCacheEntry {
 }
 
 #[derive(Debug)]
-pub(crate) struct ReadOnlyAccountsCache {
+pub struct ReadOnlyAccountsCache {
     cache: DashMap<ReadOnlyCacheKey, ReadOnlyAccountCacheEntry>,
     // When an item is first entered into the cache, it is added to the end of
     // the queue. Also each time an entry is looked up from the cache it is
@@ -44,7 +44,7 @@ pub(crate) struct ReadOnlyAccountsCache {
 }
 
 impl ReadOnlyAccountsCache {
-    pub(crate) fn new(max_data_size: usize) -> Self {
+    pub fn new(max_data_size: usize) -> Self {
         Self {
             max_data_size,
             cache: DashMap::default(),
@@ -102,7 +102,7 @@ impl ReadOnlyAccountsCache {
         CACHE_ENTRY_SIZE + account.data().len()
     }
 
-    pub(crate) fn store(&self, pubkey: Pubkey, slot: Slot, account: AccountSharedData) {
+    pub fn store(&self, pubkey: Pubkey, slot: Slot, account: AccountSharedData) {
         let key = (pubkey, slot);
         let account_size = self.account_size(&account);
         self.data_size.fetch_add(account_size, Ordering::Relaxed);
@@ -138,7 +138,7 @@ impl ReadOnlyAccountsCache {
         self.evicts.fetch_add(num_evicts, Ordering::Relaxed);
     }
 
-    pub(crate) fn remove(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
+    pub fn remove(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
         let (_, entry) = self.cache.remove(&(pubkey, slot))?;
         // self.queue should be modified only after removing the entry from the
         // cache, so that this is still safe if another thread writes to the
@@ -149,11 +149,11 @@ impl ReadOnlyAccountsCache {
         Some(entry.account)
     }
 
-    pub(crate) fn cache_len(&self) -> usize {
+    pub fn cache_len(&self) -> usize {
         self.cache.len()
     }
 
-    pub(crate) fn data_size(&self) -> usize {
+    pub fn data_size(&self) -> usize {
         self.data_size.load(Ordering::Relaxed)
     }
 

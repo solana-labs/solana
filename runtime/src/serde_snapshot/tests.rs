@@ -2,23 +2,6 @@
 mod serde_snapshot_tests {
     use {
         crate::{
-            account_storage::{AccountStorageMap, AccountStorageReference},
-            accounts::Accounts,
-            accounts_db::{
-                get_temp_accounts_paths,
-                test_utils::create_test_accounts,
-                tests::{
-                    assert_load_account, assert_not_load_account, check_accounts, check_storage,
-                    create_account, linear_ancestors, modify_accounts,
-                },
-                AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AtomicAppendVecId,
-                VerifyAccountsHashAndLamportsConfig,
-            },
-            accounts_file::{AccountsFile, AccountsFileError},
-            accounts_hash::AccountsHash,
-            accounts_index::AccountSecondaryIndexes,
-            ancestors::Ancestors,
-            rent_collector::RentCollector,
             serde_snapshot::{
                 newer, reconstruct_accountsdb_from_fields, SerdeStyle, SerializableAccountsDb,
                 SnapshotAccountsDbFields, TypeContext,
@@ -28,6 +11,20 @@ mod serde_snapshot_tests {
         bincode::{serialize_into, Error},
         log::info,
         rand::{thread_rng, Rng},
+        solana_accounts_db::{
+            account_storage::{AccountStorageMap, AccountStorageReference},
+            accounts::Accounts,
+            accounts_db::{
+                get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
+                AccountStorageEntry, AccountsDb, AtomicAppendVecId,
+                VerifyAccountsHashAndLamportsConfig,
+            },
+            accounts_file::{AccountsFile, AccountsFileError},
+            accounts_hash::AccountsHash,
+            accounts_index::AccountSecondaryIndexes,
+            ancestors::Ancestors,
+            rent_collector::RentCollector,
+        },
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
             clock::Slot,
@@ -44,6 +41,14 @@ mod serde_snapshot_tests {
         },
         tempfile::TempDir,
     };
+
+    fn linear_ancestors(end_slot: u64) -> Ancestors {
+        let mut ancestors: Ancestors = vec![(0, 0)].into_iter().collect();
+        for i in 1..end_slot {
+            ancestors.insert(i, (i - 1) as usize);
+        }
+        ancestors
+    }
 
     fn context_accountsdb_from_stream<'a, C, R>(
         stream: &mut BufReader<R>,
@@ -72,7 +77,7 @@ mod serde_snapshot_tests {
             None,
             AccountShrinkThreshold::default(),
             false,
-            Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            Some(solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             Arc::default(),
             None,
@@ -302,7 +307,7 @@ mod serde_snapshot_tests {
         let db = reconstruct_accounts_db_via_serialization(&db, new_root);
 
         // Check root account exists
-        assert_load_account(&db, new_root, key2, 1);
+        db.assert_load_account(new_root, key2, 1);
 
         // Check purged account stays gone
         let unrooted_slot_ancestors = vec![(unrooted_slot, 1)].into_iter().collect();
@@ -319,21 +324,21 @@ mod serde_snapshot_tests {
             let mut pubkeys: Vec<Pubkey> = vec![];
 
             // Create 100 accounts in slot 0
-            crate::accounts_db::tests::create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
+            accounts.create_account(&mut pubkeys, 0, 100, 0, 0);
             if pass == 0 {
                 accounts.add_root_and_flush_write_cache(0);
-                check_storage(&accounts, 0, 100);
+                accounts.check_storage(0, 100);
                 accounts.clean_accounts_for_tests();
-                check_accounts(&accounts, &pubkeys, 0, 100, 1);
+                accounts.check_accounts(&pubkeys, 0, 100, 1);
                 // clean should have done nothing
                 continue;
             }
 
             // do some updates to those accounts and re-check
-            modify_accounts(&accounts, &pubkeys, 0, 100, 2);
+            accounts.modify_accounts(&pubkeys, 0, 100, 2);
             accounts.add_root_and_flush_write_cache(0);
-            check_storage(&accounts, 0, 100);
-            check_accounts(&accounts, &pubkeys, 0, 100, 2);
+            accounts.check_storage(0, 100);
+            accounts.check_accounts(&pubkeys, 0, 100, 2);
             accounts.calculate_accounts_delta_hash(0);
 
             let mut pubkeys1: Vec<Pubkey> = vec![];
@@ -342,7 +347,7 @@ mod serde_snapshot_tests {
             let latest_slot = 1;
 
             // Modify the first 10 of the accounts from slot 0 in slot 1
-            modify_accounts(&accounts, &pubkeys, latest_slot, 10, 3);
+            accounts.modify_accounts(&pubkeys, latest_slot, 10, 3);
             // Overwrite account 30 from slot 0 with lamports=0 into slot 1.
             // Slot 1 should now have 10 + 1 = 11 accounts
             let account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
@@ -350,18 +355,18 @@ mod serde_snapshot_tests {
 
             // Create 10 new accounts in slot 1, should now have 11 + 10 = 21
             // accounts
-            create_account(&accounts, &mut pubkeys1, latest_slot, 10, 0, 0);
+            accounts.create_account(&mut pubkeys1, latest_slot, 10, 0, 0);
 
             accounts.calculate_accounts_delta_hash(latest_slot);
             accounts.add_root_and_flush_write_cache(latest_slot);
-            check_storage(&accounts, 1, 21);
+            accounts.check_storage(1, 21);
 
             // CREATE SLOT 2
             let latest_slot = 2;
             let mut pubkeys2: Vec<Pubkey> = vec![];
 
             // Modify first 20 of the accounts from slot 0 in slot 2
-            modify_accounts(&accounts, &pubkeys, latest_slot, 20, 4);
+            accounts.modify_accounts(&pubkeys, latest_slot, 20, 4);
             accounts.clean_accounts_for_tests();
             // Overwrite account 31 from slot 0 with lamports=0 into slot 2.
             // Slot 2 should now have 20 + 1 = 21 accounts
@@ -370,11 +375,11 @@ mod serde_snapshot_tests {
 
             // Create 10 new accounts in slot 2. Slot 2 should now have
             // 21 + 10 = 31 accounts
-            create_account(&accounts, &mut pubkeys2, latest_slot, 10, 0, 0);
+            accounts.create_account(&mut pubkeys2, latest_slot, 10, 0, 0);
 
             accounts.calculate_accounts_delta_hash(latest_slot);
             accounts.add_root_and_flush_write_cache(latest_slot);
-            check_storage(&accounts, 2, 31);
+            accounts.check_storage(2, 31);
 
             let ancestors = linear_ancestors(latest_slot);
             accounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false);
@@ -383,11 +388,11 @@ mod serde_snapshot_tests {
             // The first 20 accounts of slot 0 have been updated in slot 2, as well as
             // accounts 30 and  31 (overwritten with zero-lamport accounts in slot 1 and
             // slot 2 respectively), so only 78 accounts are left in slot 0's storage entries.
-            check_storage(&accounts, 0, 78);
+            accounts.check_storage(0, 78);
             // 10 of the 21 accounts have been modified in slot 2, so only 11
             // accounts left in slot 1.
-            check_storage(&accounts, 1, 11);
-            check_storage(&accounts, 2, 31);
+            accounts.check_storage(1, 11);
+            accounts.check_storage(2, 31);
 
             let daccounts = reconstruct_accounts_db_via_serialization(&accounts, latest_slot);
 
@@ -412,11 +417,11 @@ mod serde_snapshot_tests {
             daccounts.print_count_and_status("daccounts");
 
             // Don't check the first 35 accounts which have not been modified on slot 0
-            check_accounts(&daccounts, &pubkeys[35..], 0, 65, 37);
-            check_accounts(&daccounts, &pubkeys1, 1, 10, 1);
-            check_storage(&daccounts, 0, 100);
-            check_storage(&daccounts, 1, 21);
-            check_storage(&daccounts, 2, 31);
+            daccounts.check_accounts(&pubkeys[35..], 0, 65, 37);
+            daccounts.check_accounts(&pubkeys1, 1, 10, 1);
+            daccounts.check_storage(0, 100);
+            daccounts.check_storage(1, 21);
+            daccounts.check_storage(2, 31);
 
             assert_eq!(
                 daccounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,),
@@ -462,7 +467,7 @@ mod serde_snapshot_tests {
         }
         accounts.add_root_and_flush_write_cache(current_slot);
 
-        assert_load_account(&accounts, current_slot, pubkey, zero_lamport);
+        accounts.assert_load_account(current_slot, pubkey, zero_lamport);
 
         accounts.print_accounts_stats("accounts");
 
@@ -481,7 +486,7 @@ mod serde_snapshot_tests {
 
         accounts.print_accounts_stats("reconstructed");
 
-        assert_load_account(&accounts, current_slot, pubkey, zero_lamport);
+        accounts.assert_load_account(current_slot, pubkey, zero_lamport);
     }
 
     fn with_chained_zero_lamport_accounts<F>(f: F)
@@ -534,10 +539,10 @@ mod serde_snapshot_tests {
 
         accounts.print_accounts_stats("post_f");
 
-        assert_load_account(&accounts, current_slot, pubkey, some_lamport);
-        assert_load_account(&accounts, current_slot, purged_pubkey1, 0);
-        assert_load_account(&accounts, current_slot, purged_pubkey2, 0);
-        assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
+        accounts.assert_load_account(current_slot, pubkey, some_lamport);
+        accounts.assert_load_account(current_slot, purged_pubkey1, 0);
+        accounts.assert_load_account(current_slot, purged_pubkey2, 0);
+        accounts.assert_load_account(current_slot, dummy_pubkey, dummy_lamport);
 
         let ancestors = Ancestors::default();
         let epoch_schedule = EpochSchedule::default();
@@ -636,9 +641,9 @@ mod serde_snapshot_tests {
         accounts.clean_accounts_for_tests();
         accounts.print_count_and_status("after purge zero");
 
-        assert_load_account(&accounts, current_slot, pubkey, old_lamport);
-        assert_load_account(&accounts, current_slot, purged_pubkey1, 0);
-        assert_load_account(&accounts, current_slot, purged_pubkey2, 0);
+        accounts.assert_load_account(current_slot, pubkey, old_lamport);
+        accounts.assert_load_account(current_slot, purged_pubkey1, 0);
+        accounts.assert_load_account(current_slot, purged_pubkey2, 0);
     }
 
     #[test]
@@ -731,9 +736,9 @@ mod serde_snapshot_tests {
         accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root(current_slot);
 
-        assert_load_account(&accounts, current_slot, pubkey1, zero_lamport);
-        assert_load_account(&accounts, current_slot, pubkey2, old_lamport);
-        assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
+        accounts.assert_load_account(current_slot, pubkey1, zero_lamport);
+        accounts.assert_load_account(current_slot, pubkey2, old_lamport);
+        accounts.assert_load_account(current_slot, dummy_pubkey, dummy_lamport);
 
         // At this point, there is no index entries for A and B
         // If step C and step D should be purged, snapshot restore would cause
@@ -752,9 +757,9 @@ mod serde_snapshot_tests {
 
         info!("pubkey: {}", pubkey1);
         accounts.print_accounts_stats("pre_clean");
-        assert_load_account(&accounts, current_slot, pubkey1, zero_lamport);
-        assert_load_account(&accounts, current_slot, pubkey2, old_lamport);
-        assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
+        accounts.assert_load_account(current_slot, pubkey1, zero_lamport);
+        accounts.assert_load_account(current_slot, pubkey2, old_lamport);
+        accounts.assert_load_account(current_slot, dummy_pubkey, dummy_lamport);
 
         // F: Finally, make Step A cleanable
         current_slot += 1;
@@ -770,9 +775,9 @@ mod serde_snapshot_tests {
         accounts.clean_accounts_for_tests();
 
         // Ensure pubkey2 is cleaned from the index finally
-        assert_not_load_account(&accounts, current_slot, pubkey1);
-        assert_load_account(&accounts, current_slot, pubkey2, old_lamport);
-        assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
+        accounts.assert_not_load_account(current_slot, pubkey1);
+        accounts.assert_load_account(current_slot, pubkey2, old_lamport);
+        accounts.assert_load_account(current_slot, dummy_pubkey, dummy_lamport);
     }
 
     #[test]
