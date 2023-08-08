@@ -2284,7 +2284,7 @@ pub fn make_min_priority_thread_pool() -> ThreadPool {
         .unwrap()
 }
 
-#[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl solana_frozen_abi::abi_example::AbiExample for AccountsDb {
     fn example() -> Self {
         let accounts_db = AccountsDb::new_single_for_tests();
