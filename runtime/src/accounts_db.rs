@@ -8840,27 +8840,29 @@ impl AccountsDb {
         }
     }
 
-    fn filler_unique_id_bytes() -> usize {
+    const fn filler_unique_id_bytes() -> usize {
         std::mem::size_of::<u32>()
     }
 
-    fn filler_rent_partition_prefix_bytes() -> usize {
+    const fn filler_rent_partition_prefix_bytes() -> usize {
         std::mem::size_of::<u64>()
     }
 
-    fn filler_prefix_bytes() -> usize {
+    const fn filler_prefix_bytes() -> usize {
         Self::filler_unique_id_bytes() + Self::filler_rent_partition_prefix_bytes()
     }
+
+    const FILLER_PREFIX_BYTES: usize = Self::filler_prefix_bytes();
 
     pub fn is_filler_account_helper(
         pubkey: &Pubkey,
         filler_account_suffix: Option<&Pubkey>,
     ) -> bool {
-        let offset = Self::filler_prefix_bytes();
         filler_account_suffix
             .as_ref()
             .map(|filler_account_suffix| {
-                pubkey.as_ref()[offset..] == filler_account_suffix.as_ref()[offset..]
+                pubkey.as_ref()[Self::FILLER_PREFIX_BYTES..]
+                    == filler_account_suffix.as_ref()[Self::FILLER_PREFIX_BYTES..]
             })
             .unwrap_or_default()
     }
