@@ -783,6 +783,8 @@ impl TestValidator {
         );
         genesis_config.epoch_schedule = config
             .epoch_schedule
+            .as_ref()
+            .cloned()
             .unwrap_or_else(EpochSchedule::without_warmup);
 
         if let Some(ticks_per_slot) = config.ticks_per_slot {

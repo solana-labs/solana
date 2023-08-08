@@ -40,13 +40,13 @@ pub struct LeaderScheduleCache {
 
 impl LeaderScheduleCache {
     pub fn new_from_bank(bank: &Bank) -> Self {
-        Self::new(*bank.epoch_schedule(), bank)
+        Self::new(bank.epoch_schedule().clone(), bank)
     }
 
     pub fn new(epoch_schedule: EpochSchedule, root_bank: &Bank) -> Self {
         let cache = Self {
             cached_schedules: RwLock::new((HashMap::new(), VecDeque::new())),
-            epoch_schedule,
+            epoch_schedule: epoch_schedule.clone(),
             max_epoch: RwLock::new(0),
             max_schedules: CacheCapacity::default(),
             fixed_schedule: None,
