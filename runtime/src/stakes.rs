@@ -136,22 +136,6 @@ impl StakesCache {
         stakes.activate_epoch(next_epoch, thread_pool, new_rate_activation_epoch)
     }
 
-<<<<<<< HEAD
-=======
-    pub(crate) fn update_stake_accounts(
-        &self,
-        thread_pool: &ThreadPool,
-        stake_rewards: &[StakeReward],
-        new_rate_activation_epoch: Option<Epoch>,
-    ) {
-        self.0.write().unwrap().update_stake_accounts(
-            thread_pool,
-            stake_rewards,
-            new_rate_activation_epoch,
-        )
-    }
-
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
     pub(crate) fn handle_invalid_keys(
         &self,
         invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
@@ -293,8 +277,12 @@ impl Stakes<StakeAccount> {
         &self.stake_history
     }
 
-<<<<<<< HEAD
-    fn activate_epoch(&mut self, next_epoch: Epoch, thread_pool: &ThreadPool) {
+    fn activate_epoch(
+        &mut self,
+        next_epoch: Epoch,
+        thread_pool: &ThreadPool,
+        new_rate_activation_epoch: Option<Epoch>,
+    ) {
         type StakesHashMap = HashMap</*voter:*/ Pubkey, /*stake:*/ u64>;
         fn merge(mut acc: StakesHashMap, other: StakesHashMap) -> StakesHashMap {
             if acc.len() < other.len() {
@@ -305,14 +293,6 @@ impl Stakes<StakeAccount> {
             }
             acc
         }
-=======
-    fn activate_epoch(
-        &mut self,
-        next_epoch: Epoch,
-        thread_pool: &ThreadPool,
-        new_rate_activation_epoch: Option<Epoch>,
-    ) {
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
         let stake_delegations: Vec<_> = self.stake_delegations.values().collect();
         // Wrap up the prev epoch by adding new stake history entry for the
         // prev epoch.
@@ -333,14 +313,17 @@ impl Stakes<StakeAccount> {
         self.epoch = next_epoch;
         // Refresh the stake distribution of vote accounts for the next epoch,
         // using new stake history.
-<<<<<<< HEAD
         let delegated_stakes = thread_pool.install(|| {
             stake_delegations
                 .par_iter()
                 .fold(HashMap::default, |mut delegated_stakes, stake_account| {
                     let delegation = stake_account.delegation();
                     let entry = delegated_stakes.entry(delegation.voter_pubkey).or_default();
-                    *entry += delegation.stake(self.epoch, Some(&self.stake_history));
+                    *entry += delegation.stake(
+                        self.epoch,
+                        Some(&self.stake_history),
+                        new_rate_activation_epoch,
+                    );
                     delegated_stakes
                 })
                 .reduce(HashMap::default, merge)
@@ -356,16 +339,6 @@ impl Stakes<StakeAccount> {
                 (vote_pubkey, (delegated_stake, vote_account.clone()))
             })
             .collect();
-=======
-        self.vote_accounts = refresh_vote_accounts(
-            thread_pool,
-            self.epoch,
-            &self.vote_accounts,
-            &stake_delegations,
-            &self.stake_history,
-            new_rate_activation_epoch,
-        );
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
     }
 
     /// Sum the stakes that point to the given voter_pubkey
@@ -472,42 +445,6 @@ impl Stakes<StakeAccount> {
         }
     }
 
-<<<<<<< HEAD
-=======
-    fn update_stake_accounts(
-        &mut self,
-        thread_pool: &ThreadPool,
-        stake_rewards: &[StakeReward],
-        new_rate_activation_epoch: Option<Epoch>,
-    ) {
-        let stake_delegations: Vec<_> = thread_pool.install(|| {
-            stake_rewards
-                .into_par_iter()
-                .filter_map(|stake_reward| {
-                    let stake_account = StakeAccount::try_from(stake_reward.stake_account.clone());
-                    Some((stake_reward.stake_pubkey, stake_account.ok()?))
-                })
-                .collect()
-        });
-        self.stake_delegations = std::mem::take(&mut self.stake_delegations)
-            .into_iter()
-            .chain(stake_delegations)
-            .collect::<HashMap<Pubkey, StakeAccount>>()
-            .into_iter()
-            .filter(|(_, account)| account.lamports() != 0u64)
-            .collect();
-        let stake_delegations: Vec<_> = self.stake_delegations.values().collect();
-        self.vote_accounts = refresh_vote_accounts(
-            thread_pool,
-            self.epoch,
-            &self.vote_accounts,
-            &stake_delegations,
-            &self.stake_history,
-            new_rate_activation_epoch,
-        );
-    }
-
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
     pub(crate) fn stake_delegations(&self) -> &ImHashMap<Pubkey, StakeAccount> {
         &self.stake_delegations
     }
@@ -615,51 +552,6 @@ pub(crate) mod serde_stakes_enum_compat {
     }
 }
 
-<<<<<<< HEAD
-=======
-fn refresh_vote_accounts(
-    thread_pool: &ThreadPool,
-    epoch: Epoch,
-    vote_accounts: &VoteAccounts,
-    stake_delegations: &[&StakeAccount],
-    stake_history: &StakeHistory,
-    new_rate_activation_epoch: Option<Epoch>,
-) -> VoteAccounts {
-    type StakesHashMap = HashMap</*voter:*/ Pubkey, /*stake:*/ u64>;
-    fn merge(mut stakes: StakesHashMap, other: StakesHashMap) -> StakesHashMap {
-        if stakes.len() < other.len() {
-            return merge(other, stakes);
-        }
-        for (pubkey, stake) in other {
-            *stakes.entry(pubkey).or_default() += stake;
-        }
-        stakes
-    }
-    let stake_history = Some(stake_history.deref());
-    let delegated_stakes = thread_pool.install(|| {
-        stake_delegations
-            .par_iter()
-            .fold(HashMap::default, |mut delegated_stakes, stake_account| {
-                let delegation = stake_account.delegation();
-                let entry = delegated_stakes.entry(delegation.voter_pubkey).or_default();
-                *entry += delegation.stake(epoch, stake_history, new_rate_activation_epoch);
-                delegated_stakes
-            })
-            .reduce(HashMap::default, merge)
-    });
-    vote_accounts
-        .iter()
-        .map(|(&vote_pubkey, vote_account)| {
-            let delegated_stake = delegated_stakes
-                .get(&vote_pubkey)
-                .copied()
-                .unwrap_or_default();
-            (vote_pubkey, (delegated_stake, vote_account.clone()))
-        })
-        .collect()
-}
-
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
 #[cfg(test)]
 pub(crate) mod tests {
     use {

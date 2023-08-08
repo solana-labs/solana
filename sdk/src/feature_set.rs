@@ -665,8 +665,6 @@ pub mod checked_arithmetic_in_fee_validation {
     solana_sdk::declare_id!("5Pecy6ie6XGm22pc9d4P9W5c31BugcFBuy6hsP2zkETv");
 }
 
-<<<<<<< HEAD
-=======
 pub mod last_restart_slot_sysvar {
     solana_sdk::declare_id!("HooKD5NC9QNxk25QuzCssB8ecrEzGt6eXEPBUxWp1LaR");
 }
@@ -686,7 +684,6 @@ pub mod reduce_stake_warmup_cooldown {
     }
 }
 
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -848,11 +845,8 @@ lazy_static! {
         (vote_state_add_vote_latency::id(), "replace Lockout with LandedVote (including vote latency) in vote state #31264"),
         (checked_arithmetic_in_fee_validation::id(), "checked arithmetic in fee validation #31273"),
         (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
-<<<<<<< HEAD
-=======
         (last_restart_slot_sysvar::id(), "enable new sysvar last_restart_slot"),
         (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

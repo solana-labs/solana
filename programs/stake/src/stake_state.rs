@@ -15,14 +15,10 @@ use {
         account_utils::StateMut,
         clock::{Clock, Epoch},
         feature_set::{
-<<<<<<< HEAD
-            self, clean_up_delegation_errors, stake_allow_zero_undelegated_amount,
-            stake_merge_with_unmatched_credits_observed, stake_split_uses_rent_sysvar, FeatureSet,
-=======
             self, clean_up_delegation_errors,
             reduce_stake_warmup_cooldown::NewWarmupCooldownRateEpoch,
-            stake_merge_with_unmatched_credits_observed, FeatureSet,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
+            stake_allow_zero_undelegated_amount, stake_merge_with_unmatched_credits_observed,
+            stake_split_uses_rent_sysvar, FeatureSet,
         },
         instruction::{checked_add, InstructionError},
         pubkey::Pubkey,
@@ -191,11 +187,8 @@ fn redeem_stake_rewards(
     vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-<<<<<<< HEAD
     credits_auto_rewind: bool,
-=======
     new_rate_activation_epoch: Option<Epoch>,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
 ) -> Option<(u64, u64)> {
     if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
         inflation_point_calc_tracer(&InflationPointCalculationEvent::CreditsObserved(
@@ -210,11 +203,8 @@ fn redeem_stake_rewards(
         vote_state,
         stake_history,
         inflation_point_calc_tracer.as_ref(),
-<<<<<<< HEAD
         credits_auto_rewind,
-=======
         new_rate_activation_epoch,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
     )
     .map(|calculated_stake_rewards| {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
@@ -244,12 +234,9 @@ fn calculate_stake_points(
         vote_state,
         stake_history,
         inflation_point_calc_tracer,
-<<<<<<< HEAD
         true, // this is safe because this flag shouldn't affect the
-              // `points` field of the returned struct in any way
-=======
+        // `points` field of the returned struct in any way
         new_rate_activation_epoch,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
     )
     .points
 }
@@ -269,11 +256,8 @@ fn calculate_stake_points_and_credits(
     new_vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-<<<<<<< HEAD
     credits_auto_rewind: bool,
-=======
     new_rate_activation_epoch: Option<Epoch>,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
 ) -> CalculatedStakePoints {
     let credits_in_stake = stake.credits_observed;
     let credits_in_vote = new_vote_state.credits();
@@ -395,11 +379,8 @@ fn calculate_stake_rewards(
     vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-<<<<<<< HEAD
     credits_auto_rewind: bool,
-=======
     new_rate_activation_epoch: Option<Epoch>,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
 ) -> Option<CalculatedStakeRewards> {
     // ensure to run to trigger (optional) inflation_point_calc_tracer
     let CalculatedStakePoints {
@@ -411,11 +392,8 @@ fn calculate_stake_rewards(
         vote_state,
         stake_history,
         inflation_point_calc_tracer.as_ref(),
-<<<<<<< HEAD
         credits_auto_rewind,
-=======
         new_rate_activation_epoch,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
     );
 
     // Drive credits_observed forward unconditionally when rewards are disabled
@@ -1060,11 +1038,8 @@ pub fn withdraw(
     stake_history: &StakeHistory,
     withdraw_authority_index: IndexOfAccount,
     custodian_index: Option<IndexOfAccount>,
-<<<<<<< HEAD
     feature_set: &FeatureSet,
-=======
     new_rate_activation_epoch: Option<Epoch>,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
 ) -> Result<(), InstructionError> {
     let withdraw_authority_pubkey = transaction_context.get_key_of_account_at_index(
         instruction_context
@@ -1624,11 +1599,8 @@ pub fn redeem_rewards(
     point_value: &PointValue,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-<<<<<<< HEAD
     credits_auto_rewind: bool,
-=======
     new_rate_activation_epoch: Option<Epoch>,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
 ) -> Result<(u64, u64), InstructionError> {
     if let StakeState::Stake(meta, mut stake) = stake_state {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
@@ -1654,11 +1626,8 @@ pub fn redeem_rewards(
             vote_state,
             stake_history,
             inflation_point_calc_tracer,
-<<<<<<< HEAD
             credits_auto_rewind,
-=======
             new_rate_activation_epoch,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
         ) {
             stake_account.checked_add_lamports(stakers_reward)?;
             stake_account.set_state(&StakeState::Stake(meta, stake))?;
@@ -2627,11 +2596,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
 
@@ -2652,11 +2618,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
 
@@ -2693,11 +2656,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
 
@@ -2735,11 +2695,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
 
@@ -2764,11 +2721,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
 
@@ -2790,11 +2744,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
 
@@ -2819,11 +2770,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
 
@@ -2846,11 +2794,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
 
@@ -2875,11 +2820,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
 
@@ -2898,11 +2840,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
         vote_state.commission = 99;
@@ -2918,11 +2857,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
 
@@ -2945,11 +2881,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
 
@@ -2972,11 +2905,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
 
@@ -2986,11 +2916,14 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: false,
             },
-<<<<<<< HEAD
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
-=======
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), None)
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
+            calculate_stake_points_and_credits(
+                &stake,
+                &vote_state,
+                None,
+                null_tracer(),
+                true,
+                None
+            )
         );
 
         // credits_observed is auto-rewinded when vote_state credits are assumed to have been
@@ -3003,7 +2936,14 @@ mod tests {
                 new_credits_observed: 1000,
                 force_credits_update_with_skipped_reward: false,
             },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), false)
+            calculate_stake_points_and_credits(
+                &stake,
+                &vote_state,
+                None,
+                null_tracer(),
+                false,
+                None
+            )
         );
         // this is new behavior 1; return the post-recreation rewinded credits from the vote account
         assert_eq!(
@@ -3012,11 +2952,14 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: true,
             },
-<<<<<<< HEAD
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
-=======
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), None)
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
+            calculate_stake_points_and_credits(
+                &stake,
+                &vote_state,
+                None,
+                null_tracer(),
+                true,
+                None
+            )
         );
         // this is new behavior 2; don't hint when credits both from stake and vote are identical
         stake.credits_observed = 4;
@@ -3026,11 +2969,14 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: false,
             },
-<<<<<<< HEAD
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
-=======
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), None)
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
+            calculate_stake_points_and_credits(
+                &stake,
+                &vote_state,
+                None,
+                null_tracer(),
+                true,
+                None
+            )
         );
 
         // get rewards and credits observed when not the activation epoch
@@ -3053,11 +2999,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
 
@@ -3081,11 +3024,8 @@ mod tests {
                 &vote_state,
                 None,
                 null_tracer(),
-<<<<<<< HEAD
                 true,
-=======
                 None,
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
             )
         );
     }

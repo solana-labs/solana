@@ -5,9 +5,7 @@ use {
         clock::{Clock, Epoch, UnixTimestamp},
         instruction::InstructionError,
         pubkey::Pubkey,
-        stake::{
-            instruction::{LockupArgs, StakeError},
-        },
+        stake::instruction::{LockupArgs, StakeError},
         stake_history::{StakeHistory, StakeHistoryEntry},
     },
     borsh::{maybestd::io, BorshDeserialize, BorshSchema, BorshSerialize},

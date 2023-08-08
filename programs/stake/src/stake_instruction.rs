@@ -86,203 +86,7 @@ declare_process_instruction!(process_instruction, 750, |invoke_context| {
                 .feature_set
                 .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
 
-<<<<<<< HEAD
             if require_custodian_for_locked_stake_authorize {
-=======
-        let signers = instruction_context.get_signers(transaction_context)?;
-        match limited_deserialize(data) {
-            Ok(StakeInstruction::Initialize(authorized, lockup)) => {
-                let mut me = get_stake_account()?;
-                let rent =
-                    get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-                initialize(&mut me, &authorized, &lockup, &rent)
-            }
-            Ok(StakeInstruction::Authorize(authorized_pubkey, stake_authorize)) => {
-                let mut me = get_stake_account()?;
-                let require_custodian_for_locked_stake_authorize = invoke_context
-                    .feature_set
-                    .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
-
-                if require_custodian_for_locked_stake_authorize {
-                    let clock = get_sysvar_with_account_check::clock(
-                        invoke_context,
-                        instruction_context,
-                        1,
-                    )?;
-                    instruction_context.check_number_of_instruction_accounts(3)?;
-                    let custodian_pubkey =
-                        get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
-
-                    authorize(
-                        &mut me,
-                        &signers,
-                        &authorized_pubkey,
-                        stake_authorize,
-                        require_custodian_for_locked_stake_authorize,
-                        &clock,
-                        custodian_pubkey,
-                    )
-                } else {
-                    authorize(
-                        &mut me,
-                        &signers,
-                        &authorized_pubkey,
-                        stake_authorize,
-                        require_custodian_for_locked_stake_authorize,
-                        &Clock::default(),
-                        None,
-                    )
-                }
-            }
-            Ok(StakeInstruction::AuthorizeWithSeed(args)) => {
-                let mut me = get_stake_account()?;
-                instruction_context.check_number_of_instruction_accounts(2)?;
-                let require_custodian_for_locked_stake_authorize = invoke_context
-                    .feature_set
-                    .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
-                if require_custodian_for_locked_stake_authorize {
-                    let clock = get_sysvar_with_account_check::clock(
-                        invoke_context,
-                        instruction_context,
-                        2,
-                    )?;
-                    let custodian_pubkey =
-                        get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
-
-                    authorize_with_seed(
-                        transaction_context,
-                        instruction_context,
-                        &mut me,
-                        1,
-                        &args.authority_seed,
-                        &args.authority_owner,
-                        &args.new_authorized_pubkey,
-                        args.stake_authorize,
-                        require_custodian_for_locked_stake_authorize,
-                        &clock,
-                        custodian_pubkey,
-                    )
-                } else {
-                    authorize_with_seed(
-                        transaction_context,
-                        instruction_context,
-                        &mut me,
-                        1,
-                        &args.authority_seed,
-                        &args.authority_owner,
-                        &args.new_authorized_pubkey,
-                        args.stake_authorize,
-                        require_custodian_for_locked_stake_authorize,
-                        &Clock::default(),
-                        None,
-                    )
-                }
-            }
-            Ok(StakeInstruction::DelegateStake) => {
-                let me = get_stake_account()?;
-                instruction_context.check_number_of_instruction_accounts(2)?;
-                let clock =
-                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-                let stake_history = get_sysvar_with_account_check::stake_history(
-                    invoke_context,
-                    instruction_context,
-                    3,
-                )?;
-                instruction_context.check_number_of_instruction_accounts(5)?;
-                drop(me);
-                if !invoke_context
-                    .feature_set
-                    .is_active(&feature_set::reduce_stake_warmup_cooldown::id())
-                {
-                    // Post feature activation, remove both the feature gate code and the config completely in the interface
-                    let config_account = instruction_context
-                        .try_borrow_instruction_account(transaction_context, 4)?;
-                    #[allow(deprecated)]
-                    if !config::check_id(config_account.get_key()) {
-                        return Err(InstructionError::InvalidArgument);
-                    }
-                    config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
-                }
-                delegate(
-                    invoke_context,
-                    transaction_context,
-                    instruction_context,
-                    0,
-                    1,
-                    &clock,
-                    &stake_history,
-                    &signers,
-                    &invoke_context.feature_set,
-                )
-            }
-            Ok(StakeInstruction::Split(lamports)) => {
-                let me = get_stake_account()?;
-                instruction_context.check_number_of_instruction_accounts(2)?;
-                drop(me);
-                split(
-                    invoke_context,
-                    transaction_context,
-                    instruction_context,
-                    0,
-                    lamports,
-                    1,
-                    &signers,
-                )
-            }
-            Ok(StakeInstruction::Merge) => {
-                let me = get_stake_account()?;
-                instruction_context.check_number_of_instruction_accounts(2)?;
-                let clock =
-                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-                let stake_history = get_sysvar_with_account_check::stake_history(
-                    invoke_context,
-                    instruction_context,
-                    3,
-                )?;
-                drop(me);
-                merge(
-                    invoke_context,
-                    transaction_context,
-                    instruction_context,
-                    0,
-                    1,
-                    &clock,
-                    &stake_history,
-                    &signers,
-                )
-            }
-            Ok(StakeInstruction::Withdraw(lamports)) => {
-                let me = get_stake_account()?;
-                instruction_context.check_number_of_instruction_accounts(2)?;
-                let clock =
-                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-                let stake_history = get_sysvar_with_account_check::stake_history(
-                    invoke_context,
-                    instruction_context,
-                    3,
-                )?;
-                instruction_context.check_number_of_instruction_accounts(5)?;
-                drop(me);
-                withdraw(
-                    transaction_context,
-                    instruction_context,
-                    0,
-                    lamports,
-                    1,
-                    &clock,
-                    &stake_history,
-                    4,
-                    if instruction_context.get_number_of_instruction_accounts() >= 6 {
-                        Some(5)
-                    } else {
-                        None
-                    },
-                    new_warmup_cooldown_rate_epoch(invoke_context),
-                )
-            }
-            Ok(StakeInstruction::Deactivate) => {
-                let mut me = get_stake_account()?;
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
                 instruction_context.check_number_of_instruction_accounts(3)?;
@@ -363,13 +167,19 @@ declare_process_instruction!(process_instruction, 750, |invoke_context| {
             )?;
             instruction_context.check_number_of_instruction_accounts(5)?;
             drop(me);
-            let config_account =
-                instruction_context.try_borrow_instruction_account(transaction_context, 4)?;
-            if !config::check_id(config_account.get_key()) {
-                return Err(InstructionError::InvalidArgument);
+            if !invoke_context
+                .feature_set
+                .is_active(&feature_set::reduce_stake_warmup_cooldown::id())
+            {
+                // Post feature activation, remove both the feature gate code and the config completely in the interface
+                let config_account =
+                    instruction_context.try_borrow_instruction_account(transaction_context, 4)?;
+                #[allow(deprecated)]
+                if !config::check_id(config_account.get_key()) {
+                    return Err(InstructionError::InvalidArgument);
+                }
+                config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
             }
-            let config = config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
-            drop(config_account);
             delegate(
                 invoke_context,
                 transaction_context,
@@ -378,7 +188,6 @@ declare_process_instruction!(process_instruction, 750, |invoke_context| {
                 1,
                 &clock,
                 &stake_history,
-                &config,
                 &signers,
                 &invoke_context.feature_set,
             )
@@ -446,6 +255,7 @@ declare_process_instruction!(process_instruction, 750, |invoke_context| {
                     None
                 },
                 &invoke_context.feature_set,
+                new_warmup_cooldown_rate_epoch(invoke_context),
             )
         }
         Ok(StakeInstruction::Deactivate) => {
@@ -618,7 +428,6 @@ declare_process_instruction!(process_instruction, 750, |invoke_context| {
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }
-<<<<<<< HEAD
         }
         Ok(StakeInstruction::Redelegate) => {
             let mut me = get_stake_account()?;
@@ -627,48 +436,19 @@ declare_process_instruction!(process_instruction, 750, |invoke_context| {
                 .is_active(&feature_set::stake_redelegate_instruction::id())
             {
                 instruction_context.check_number_of_instruction_accounts(3)?;
-                let config_account =
-                    instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
-                if !config::check_id(config_account.get_key()) {
-                    return Err(InstructionError::InvalidArgument);
-=======
-            Ok(StakeInstruction::Redelegate) => {
-                let mut me = get_stake_account()?;
-                if invoke_context
+                if !invoke_context
                     .feature_set
-                    .is_active(&feature_set::stake_redelegate_instruction::id())
+                    .is_active(&feature_set::reduce_stake_warmup_cooldown::id())
                 {
-                    instruction_context.check_number_of_instruction_accounts(3)?;
-                    if !invoke_context
-                        .feature_set
-                        .is_active(&feature_set::reduce_stake_warmup_cooldown::id())
-                    {
-                        // Post feature activation, remove both the feature gate code and the config completely in the interface
-                        let config_account = instruction_context
-                            .try_borrow_instruction_account(transaction_context, 3)?;
-                        #[allow(deprecated)]
-                        if !config::check_id(config_account.get_key()) {
-                            return Err(InstructionError::InvalidArgument);
-                        }
-                        config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
+                    // Post feature activation, remove both the feature gate code and the config completely in the interface
+                    let config_account = instruction_context
+                        .try_borrow_instruction_account(transaction_context, 3)?;
+                    #[allow(deprecated)]
+                    if !config::check_id(config_account.get_key()) {
+                        return Err(InstructionError::InvalidArgument);
                     }
-                    redelegate(
-                        invoke_context,
-                        transaction_context,
-                        instruction_context,
-                        &mut me,
-                        1,
-                        2,
-                        &signers,
-                    )
-                } else {
-                    Err(InstructionError::InvalidInstructionData)
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
-                }
-                let config =
                     config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
-                drop(config_account);
-
+                }
                 redelegate(
                     invoke_context,
                     transaction_context,
@@ -676,7 +456,6 @@ declare_process_instruction!(process_instruction, 750, |invoke_context| {
                     &mut me,
                     1,
                     2,
-                    &config,
                     &signers,
                 )
             } else {
@@ -743,14 +522,9 @@ mod tests {
                     set_lockup_checked, AuthorizeCheckedWithSeedArgs, AuthorizeWithSeedArgs,
                     LockupArgs, StakeError,
                 },
-<<<<<<< HEAD
-                state::{Authorized, Lockup, StakeActivationStatus, StakeAuthorize},
-=======
-                stake_flags::StakeFlags,
                 state::{
                     warmup_cooldown_rate, Authorized, Lockup, StakeActivationStatus, StakeAuthorize,
                 },
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
                 MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION,
             },
             stake_history::{StakeHistory, StakeHistoryEntry},
@@ -790,7 +564,7 @@ mod tests {
     /// The "old old" behavior is both before the stake minimum delegation was raised *and* before
     /// undelegated stake accounts could have zero lamports beyond rent
     fn feature_set_old_old_behavior() -> Arc<FeatureSet> {
-        let mut feature_set = feature_set_old_behavior();
+        let mut feature_set = feature_set_old_warmup_cooldown_no_minimum_delegation();
         Arc::get_mut(&mut feature_set)
             .unwrap()
             .deactivate(&feature_set::stake_allow_zero_undelegated_amount::id());
@@ -4829,23 +4603,19 @@ mod tests {
     /// 3. Deactives the delegation
     /// 4. Withdraws from the account such that the ending balance is *below* rent + minimum delegation
     /// 5. Re-delegates, now with less than the minimum delegation, but it still succeeds
-<<<<<<< HEAD
     //
     // The "old old" behavior relies on `validate_delegated_amount()` *not* checking if the
     // stake amount meets the minimum delegation.  Once the
     // `stake_allow_zero_undelegated_amount` feature is activated, `the expected_result`
     // parameter can be removed and consolidated.
     #[test_case(feature_set_old_old_behavior(), Ok(()); "old_old_behavior")]
-    #[test_case(feature_set_new_behavior(), Err(StakeError::InsufficientDelegation.into()); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(), Err(StakeError::InsufficientDelegation.into()); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(), Err(StakeError::InsufficientDelegation.into()); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(), Err(StakeError::InsufficientDelegation.into()); "all_enabled")]
     fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation(
         feature_set: Arc<FeatureSet>,
         expected_result: Result<(), InstructionError>,
     ) {
-=======
-    #[test]
-    fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation() {
-        let feature_set = feature_set_all_enabled();
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -6776,7 +6546,6 @@ mod tests {
     //
     // The GetMinimumDelegation instruction does not take any accounts; so when it was added,
     // `process_instruction()` needed to be updated to *not* need a stake account passed in, which
-<<<<<<< HEAD
     // changes the error *ordering* conditions.  These changes shall only occur when the
     // `add_get_minimum_delegation_instruction_to_stake_program` feature is enabled, and this test
     // ensures it.
@@ -6794,14 +6563,9 @@ mod tests {
     // disabled | bad         | some    || Err InvalidInstructionData
     // disabled | good        | none    || Err NotEnoughAccountKeys
     // disabled | bad         | none    || Err NotEnoughAccountKeys
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
-=======
-    // changes the error *ordering* conditions.
     #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
     #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
     #[test_case(feature_set_all_enabled(); "all_enabled")]
->>>>>>> fa3506631a (stake: deprecate on chain warmup/cooldown rate and config (#32723))
     fn test_stake_process_instruction_error_ordering(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
         let rent_address = rent::id();
