@@ -444,6 +444,7 @@ restartNode() {
   declare nodeIndex="$3"
   declare wenRestart=$4
 
+  initLogDir
   declare logFile="$netLogDir/validator-$ipAddress.log"
 
   if [[ -z $nodeType ]]; then
@@ -457,10 +458,24 @@ restartNode() {
   fi
 
   echo "--- Restarting $nodeType: $ipAddress"
+  echo "--- Stopping node: $ipAddress"
+  echo "stop log: $logFile"
+  syncScripts "$ipAddress"
+  (
+    # Since cleanup.sh does a pkill, we cannot pass the command directly,
+    # otherwise the process which is doing the killing will be killed because
+    # the script itself will match the pkill pattern
+    set -x
+    # shellcheck disable=SC2029 # It's desired that PS4 be expanded on the client side
+    ssh "${sshOptions[@]}" "$ipAddress" "PS4=\"$PS4\" ./solana/net/remote/cleanup.sh"
+  ) >> "$logFile" 2>&1 &
+
+  declare pid=$!
+  wait $pid || true
+
   echo "start log: $logFile"
   (
     set -x
-    startCommon "$ipAddress"
 
     if [[ $nodeType = blockstreamer ]] && [[ -n $letsEncryptDomainName ]]; then
       #
@@ -507,7 +522,6 @@ restartNode() {
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
-  rm "validator-$ipAddress.log"
   ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
   pids+=("$pid")
 }
