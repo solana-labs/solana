@@ -927,6 +927,7 @@ impl ClusterInfo {
         } else {
             crds_value::MAX_LAST_VOTED_FORK_SLOTS
         };
+        let last_vote_slot = update[0];
         let current_slots: Vec<_> = {
             let gossip_crds =
                 self.time_gossip_read_lock("lookup_epoch_slots", &self.stats.epoch_slots_lookup);
@@ -981,7 +982,8 @@ impl ClusterInfo {
                 let data = if is_epoch_slot {
                     CrdsData::EpochSlots(ix, slots)
                 } else {
-                    CrdsData::LastVotedForkSlots(ix, slots, update[0], last_vote_bankhash.unwrap())
+                    info!("wen_restart pushed {} remaining {}", ix, update.len());
+                    CrdsData::LastVotedForkSlots(ix, slots, last_vote_slot, last_vote_bankhash.unwrap())
                 };
                 let entry = CrdsValue::new_signed(data, &keypair);
                 entries.push(entry);

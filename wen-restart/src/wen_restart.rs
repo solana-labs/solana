@@ -88,9 +88,13 @@ pub fn wen_restart(
     for _ in 0..MAX_SLOTS_ON_VOTED_FORKS {
         match blockstore.meta(slot) {
             Ok(Some(slot_meta)) => {
-                let parent_slot = slot_meta.parent_slot.unwrap();
-                last_voted_fork.push(parent_slot);
-                slot = parent_slot;
+                match slot_meta.parent_slot {
+                    Some(parent_slot) => {
+                        last_voted_fork.push(parent_slot);
+                        slot = parent_slot;        
+                    },
+                    None => break,
+                };
             }
             _ => break,
         }
