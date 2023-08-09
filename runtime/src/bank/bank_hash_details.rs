@@ -1,6 +1,7 @@
 //! Container to capture information relevant to computing a bank hash
 
 use {
+    super::Bank,
     base64::{prelude::BASE64_STANDARD, Engine},
     serde::{
         de::{self, Deserialize, Deserializer},
@@ -50,6 +51,47 @@ impl BankHashDetails {
             last_blockhash: last_blockhash.to_string(),
             accounts,
         }
+    }
+}
+
+impl TryFrom<&Bank> for BankHashDetails {
+    type Error = String;
+
+    fn try_from(bank: &Bank) -> Result<Self, Self::Error> {
+        let slot = bank.slot();
+        if !bank.is_frozen() {
+            return Err(format!(
+                "Bank {slot} must be frozen in order to get bank hash details"
+            ));
+        }
+
+        // This bank is frozen; as a result, we know that the state has been
+        // hashed which means the delta hash is Some(). So, .unwrap() is safe
+        let accounts_delta_hash = bank
+            .rc
+            .accounts
+            .accounts_db
+            .get_accounts_delta_hash(slot)
+            .unwrap()
+            .0;
+        let mut accounts = bank
+            .rc
+            .accounts
+            .accounts_db
+            .get_pubkey_hash_account_for_slot(slot);
+        // get_pubkey_hash_account_for_slot() returns an arbitrary ordering;
+        // sort by pubkey to match the ordering used for accounts delta hash
+        accounts.sort_by_key(|(pubkey, _, _)| *pubkey);
+
+        Ok(Self::new(
+            slot,
+            bank.hash(),
+            bank.parent_hash(),
+            accounts_delta_hash,
+            bank.signature_count(),
+            bank.last_blockhash(),
+            BankHashAccounts(accounts),
+        ))
     }
 }
 

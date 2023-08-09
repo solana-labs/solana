@@ -218,7 +218,7 @@ struct VerifyAccountsHashConfig {
 
 mod address_lookup_table;
 mod bank_hash_details;
-use bank_hash_details::{BankHashAccounts, BankHashDetails};
+use bank_hash_details::{BankHashDetails};
 mod builtin_programs;
 pub mod epoch_accounts_hash_utils;
 mod metrics;
@@ -8218,13 +8218,9 @@ impl Bank {
     /// Output the components that comprise bank hash
     // TODO: maybe give ledger-tool a unique path so it can bypass path.exists() check?
     pub fn write_hash_details_file(&self) {
-        let slot = self.slot();
-        // Only allow generating (and thus comparing) results on frozen (complete) banks
-        if !self.is_frozen() {
-            warn!("Cannot write bank hash details for non-frozen bank {slot}");
-            return;
-        }
+        let details = BankHashDetails::try_from(self).unwrap();
 
+        let slot = self.slot();
         let hash = self.hash();
         let file_name = format!("{slot}-{hash}.json");
         let parent_dir = self
@@ -8241,40 +8237,13 @@ impl Bank {
         }
         info!("writing details of bank {} to {}", slot, path.display());
 
-        // This bank is frozen; as a result, we know that the state has been
-        // hashed which means the delta hash is Some(). So, .unwrap() is safe
-        let accounts_delta_hash = self
-            .rc
-            .accounts
-            .accounts_db
-            .get_accounts_delta_hash(slot)
-            .unwrap()
-            .0;
-        let mut accounts = self
-            .rc
-            .accounts
-            .accounts_db
-            .get_pubkey_hash_account_for_slot(slot);
-        // Sort by pubkey get_accounts_for_slot() returns an arbitrary ordering
-        accounts.sort_by_key(|(pubkey, _, _)| *pubkey);
-
-        let output = BankHashDetails::new(
-            slot,
-            hash,
-            self.parent_hash(),
-            accounts_delta_hash,
-            self.signature_count(),
-            self.last_blockhash(),
-            BankHashAccounts(accounts),
-        );
-
         // std::fs::write may fail (depending on platform) if the full directory
         // path does not exist. So, call std::fs_create_dir_all first.
         // https://doc.rust-lang.org/std/fs/fn.write.html
         _ = std::fs::create_dir_all(parent_dir);
         match std::fs::File::create(path) {
             Ok(file) => {
-                let _ = serde_json::to_writer_pretty(file, &output);
+                let _ = serde_json::to_writer_pretty(file, &details);
             }
             Err(err) => {
                 warn!("Unable to create bank hash file: {err}");
