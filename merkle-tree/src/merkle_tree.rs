@@ -1,4 +1,4 @@
-use {std::cmp::max, solana_program::hash::{hashv, Hash}};
+use solana_program::hash::{hashv, Hash};
 
 // We need to discern between leaf and intermediate nodes to prevent trivial second
 // pre-image attacks.
@@ -145,7 +145,7 @@ impl MerkleTree {
         *a = hash;
     }
 
-    pub fn append_nodes(&mut self, nodes: Vec<Hash>,) {
+    fn append_nodes(&mut self, nodes: Vec<Hash>,) {
         let mut leaf_count = self.leaf_count;
         for mut node in nodes {
             let tmp = &mut node;
@@ -158,9 +158,6 @@ impl MerkleTree {
                 cursor >>= 1;
             }
         
-            unsafe {
-                self.nodes.set_len(max(layer + 1, self.nodes.len()));
-            }
             self.nodes[layer] = *tmp;
             
         }
@@ -176,12 +173,10 @@ impl MerkleTree {
         }
     }
 
-    pub fn commit_finish(&mut self) -> Hash {
+    fn commit_finish(&mut self) -> Hash {
         let leaf_count = self.leaf_count;
         let root_idx: usize = Self::private_depth(leaf_count) - 1;
-        unsafe {
-            self.nodes.set_len(max(root_idx + 1, self.nodes.len()))
-        }
+
         if !leaf_count.is_power_of_two() {
             let mut layer = leaf_count.trailing_zeros() as usize;
             let mut layer_count = leaf_count >> layer;
@@ -208,11 +203,13 @@ impl MerkleTree {
     }
 
     pub fn merkle_root<T: AsRef<[u8]>>(items: &[T]) -> Hash {
-        let cap = MerkleTree::calculate_vec_capacity(items.len());
         let mut mt = MerkleTree {
             leaf_count: 0,
-            nodes: Vec::with_capacity(cap),
+            nodes: Vec::with_capacity(63),
         };
+        unsafe{
+            mt.nodes.set_len(63);
+        }
 
         let hashes = items.iter().map(|item| {
             let item = item.as_ref();
