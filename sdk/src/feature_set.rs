@@ -665,10 +665,6 @@ pub mod checked_arithmetic_in_fee_validation {
     solana_sdk::declare_id!("5Pecy6ie6XGm22pc9d4P9W5c31BugcFBuy6hsP2zkETv");
 }
 
-pub mod last_restart_slot_sysvar {
-    solana_sdk::declare_id!("HooKD5NC9QNxk25QuzCssB8ecrEzGt6eXEPBUxWp1LaR");
-}
-
 pub mod reduce_stake_warmup_cooldown {
     use solana_program::{epoch_schedule::EpochSchedule, stake_history::Epoch};
     solana_sdk::declare_id!("GwtDQBghCTBgmX2cpEGNPxTEBUTQRaDMGTr5qychdGMj");
@@ -845,7 +841,6 @@ lazy_static! {
         (vote_state_add_vote_latency::id(), "replace Lockout with LandedVote (including vote latency) in vote state #31264"),
         (checked_arithmetic_in_fee_validation::id(), "checked arithmetic in fee validation #31273"),
         (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
-        (last_restart_slot_sysvar::id(), "enable new sysvar last_restart_slot"),
         (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]

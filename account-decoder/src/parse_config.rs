@@ -8,9 +8,7 @@ use {
     solana_config_program::{get_config_data, ConfigKeys},
     solana_sdk::{
         pubkey::Pubkey,
-        stake::config::{
-            Config as StakeConfig, {self as stake_config},
-        },
+        stake::config::{self as stake_config, Config as StakeConfig},
     },
 };
 
