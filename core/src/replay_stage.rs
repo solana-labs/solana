@@ -1500,7 +1500,7 @@ impl ReplayStage {
                     let bank = w_bank_forks
                         .remove(*slot)
                         .expect("BankForks should not have been purged yet");
-                    bank.write_hash_details_file();
+                    let _ = bank.write_hash_details_file();
                     ((*slot, bank.bank_id()), bank)
                 })
                 .unzip()

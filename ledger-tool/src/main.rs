@@ -2681,7 +2681,7 @@ fn main() {
                 }
                 if write_bank_file {
                     let working_bank = bank_forks.read().unwrap().working_bank();
-                    working_bank.write_hash_details_file();
+                    let _ = working_bank.write_hash_details_file();
                 }
                 exit_signal.store(true, Ordering::Relaxed);
                 system_monitor_service.join().unwrap();

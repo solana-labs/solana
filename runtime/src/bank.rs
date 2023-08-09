@@ -218,7 +218,7 @@ struct VerifyAccountsHashConfig {
 
 mod address_lookup_table;
 mod bank_hash_details;
-use bank_hash_details::{BankHashDetails};
+use bank_hash_details::BankHashDetails;
 mod builtin_programs;
 pub mod epoch_accounts_hash_utils;
 mod metrics;
@@ -8216,12 +8216,11 @@ impl Bank {
     }
 
     /// Output the components that comprise bank hash
-    // TODO: maybe give ledger-tool a unique path so it can bypass path.exists() check?
-    pub fn write_hash_details_file(&self) {
-        let details = BankHashDetails::try_from(self).unwrap();
+    pub fn write_hash_details_file(&self) -> std::result::Result<(), String> {
+        let details = BankHashDetails::try_from(self)?;
 
-        let slot = self.slot();
-        let hash = self.hash();
+        let slot = details.slot;
+        let hash = &details.bank_hash;
         let file_name = format!("{slot}-{hash}.json");
         let parent_dir = self
             .rc
@@ -8232,23 +8231,23 @@ impl Bank {
         let path = parent_dir.join(file_name);
         // A file with the same name implies the same hash for this slot. Skip
         // rewriting a duplicate file in this scenario
-        if path.exists() {
-            return;
-        }
-        info!("writing details of bank {} to {}", slot, path.display());
+        if !path.exists() {
+            info!("writing details of bank {} to {}", slot, path.display());
 
-        // std::fs::write may fail (depending on platform) if the full directory
-        // path does not exist. So, call std::fs_create_dir_all first.
-        // https://doc.rust-lang.org/std/fs/fn.write.html
-        _ = std::fs::create_dir_all(parent_dir);
-        match std::fs::File::create(path) {
-            Ok(file) => {
-                let _ = serde_json::to_writer_pretty(file, &details);
-            }
-            Err(err) => {
-                warn!("Unable to create bank hash file: {err}");
+            // std::fs::write may fail (depending on platform) if the full directory
+            // path does not exist. So, call std::fs_create_dir_all first.
+            // https://doc.rust-lang.org/std/fs/fn.write.html
+            _ = std::fs::create_dir_all(parent_dir);
+            match std::fs::File::create(path) {
+                Ok(file) => {
+                    let _ = serde_json::to_writer_pretty(file, &details);
+                }
+                Err(err) => {
+                    return Err(format!("Unable to create bank hash file: {err}"));
+                }
             }
         }
+        Ok(())
     }
 }
 
