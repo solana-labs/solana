@@ -1,5 +1,5 @@
 use {
-    crate::{args::*, ledger_utils::*},
+    crate::{args::*, canonicalize_ledger_path, ledger_utils::*},
     clap::{value_t, App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
     serde::{Deserialize, Serialize},
@@ -162,13 +162,11 @@ impl ProgramSubCommand for App<'_, '_> {
         .subcommand(
             SubCommand::with_name("cfg")
                 .about("generates Control Flow Graph of the program.")
-                .arg(&max_genesis_arg)
                 .arg(&program_arg)
         )
         .subcommand(
             SubCommand::with_name("disassemble")
                 .about("dumps disassembled code of the program.")
-                .arg(&max_genesis_arg)
                 .arg(&program_arg)
         )
         .subcommand(
@@ -435,7 +433,8 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
         ("run", Some(arg_matches)) => arg_matches,
         _ => unreachable!(),
     };
-    let bank = load_blockstore(ledger_path, matches);
+    let ledger_path = canonicalize_ledger_path(ledger_path);
+    let bank = load_blockstore(&ledger_path, matches);
     let loader_id = bpf_loader_upgradeable::id();
     let mut transaction_accounts = Vec::new();
     let mut instruction_accounts = Vec::new();
