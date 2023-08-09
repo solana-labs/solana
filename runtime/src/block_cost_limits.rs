@@ -35,6 +35,7 @@ lazy_static! {
         (feature::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
         (incinerator::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
         (native_loader::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
+        #[allow(deprecated)]
         (solana_sdk::stake::config::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
         (solana_sdk::stake::program::id(), COMPUTE_UNIT_TO_US_RATIO * 25),
         (solana_config_program::id(), COMPUTE_UNIT_TO_US_RATIO * 15),

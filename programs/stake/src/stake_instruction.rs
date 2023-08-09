@@ -3,7 +3,8 @@ use {
         config,
         stake_state::{
             authorize, authorize_with_seed, deactivate, deactivate_delinquent, delegate,
-            initialize, merge, redelegate, set_lockup, split, withdraw,
+            initialize, merge, new_warmup_cooldown_rate_epoch, redelegate, set_lockup, split,
+            withdraw,
         },
     },
     log::*,
@@ -166,13 +167,19 @@ declare_process_instruction!(process_instruction, 750, |invoke_context| {
             )?;
             instruction_context.check_number_of_instruction_accounts(5)?;
             drop(me);
-            let config_account =
-                instruction_context.try_borrow_instruction_account(transaction_context, 4)?;
-            if !config::check_id(config_account.get_key()) {
-                return Err(InstructionError::InvalidArgument);
+            if !invoke_context
+                .feature_set
+                .is_active(&feature_set::reduce_stake_warmup_cooldown::id())
+            {
+                // Post feature activation, remove both the feature gate code and the config completely in the interface
+                let config_account =
+                    instruction_context.try_borrow_instruction_account(transaction_context, 4)?;
+                #[allow(deprecated)]
+                if !config::check_id(config_account.get_key()) {
+                    return Err(InstructionError::InvalidArgument);
+                }
+                config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
             }
-            let config = config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
-            drop(config_account);
             delegate(
                 invoke_context,
                 transaction_context,
@@ -181,7 +188,6 @@ declare_process_instruction!(process_instruction, 750, |invoke_context| {
                 1,
                 &clock,
                 &stake_history,
-                &config,
                 &signers,
                 &invoke_context.feature_set,
             )
@@ -249,6 +255,7 @@ declare_process_instruction!(process_instruction, 750, |invoke_context| {
                     None
                 },
                 &invoke_context.feature_set,
+                new_warmup_cooldown_rate_epoch(invoke_context),
             )
         }
         Ok(StakeInstruction::Deactivate) => {
@@ -429,15 +436,19 @@ declare_process_instruction!(process_instruction, 750, |invoke_context| {
                 .is_active(&feature_set::stake_redelegate_instruction::id())
             {
                 instruction_context.check_number_of_instruction_accounts(3)?;
-                let config_account =
-                    instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
-                if !config::check_id(config_account.get_key()) {
-                    return Err(InstructionError::InvalidArgument);
-                }
-                let config =
+                if !invoke_context
+                    .feature_set
+                    .is_active(&feature_set::reduce_stake_warmup_cooldown::id())
+                {
+                    // Post feature activation, remove both the feature gate code and the config completely in the interface
+                    let config_account = instruction_context
+                        .try_borrow_instruction_account(transaction_context, 3)?;
+                    #[allow(deprecated)]
+                    if !config::check_id(config_account.get_key()) {
+                        return Err(InstructionError::InvalidArgument);
+                    }
                     config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
-                drop(config_account);
-
+                }
                 redelegate(
                     invoke_context,
                     transaction_context,
@@ -445,7 +456,6 @@ declare_process_instruction!(process_instruction, 750, |invoke_context| {
                     &mut me,
                     1,
                     2,
-                    &config,
                     &signers,
                 )
             } else {
@@ -481,9 +491,12 @@ declare_process_instruction!(process_instruction, 750, |invoke_context| {
 mod tests {
     use {
         super::*,
-        crate::stake_state::{
-            authorized_from, create_stake_history_from_delegations, from, new_stake, stake_from,
-            Delegation, Meta, Stake, StakeState,
+        crate::{
+            config,
+            stake_state::{
+                authorized_from, create_stake_history_from_delegations, from, new_stake,
+                stake_from, Delegation, Meta, Stake, StakeState,
+            },
         },
         assert_matches::assert_matches,
         bincode::serialize,
@@ -497,7 +510,8 @@ mod tests {
             },
             account_utils::StateMut,
             clock::{Epoch, UnixTimestamp},
-            feature_set::FeatureSet,
+            epoch_schedule::EpochSchedule,
+            feature_set::{reduce_stake_warmup_cooldown::NewWarmupCooldownRateEpoch, FeatureSet},
             instruction::{AccountMeta, Instruction},
             pubkey::Pubkey,
             rent::Rent,
@@ -508,12 +522,14 @@ mod tests {
                     set_lockup_checked, AuthorizeCheckedWithSeedArgs, AuthorizeWithSeedArgs,
                     LockupArgs, StakeError,
                 },
-                state::{Authorized, Lockup, StakeActivationStatus, StakeAuthorize},
+                state::{
+                    warmup_cooldown_rate, Authorized, Lockup, StakeActivationStatus, StakeAuthorize,
+                },
                 MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION,
             },
             stake_history::{StakeHistory, StakeHistoryEntry},
             system_program,
-            sysvar::{clock, rent, rewards, stake_history},
+            sysvar::{clock, epoch_schedule, rent, rewards, stake_history},
         },
         solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
         std::{
@@ -525,14 +541,20 @@ mod tests {
         test_case::test_case,
     };
 
-    /// The "new" behavior enables all features
-    fn feature_set_new_behavior() -> Arc<FeatureSet> {
+    fn feature_set_all_enabled() -> Arc<FeatureSet> {
         Arc::new(FeatureSet::all_enabled())
     }
 
-    /// The "old" behavior is before the stake minimum delegation was raised
-    fn feature_set_old_behavior() -> Arc<FeatureSet> {
-        let mut feature_set = feature_set_new_behavior();
+    /// With stake minimum delegation but 25% warmup/cooldown
+    fn feature_set_old_warmup_cooldown() -> Arc<FeatureSet> {
+        let mut feature_set = FeatureSet::all_enabled();
+        feature_set.deactivate(&feature_set::reduce_stake_warmup_cooldown::id());
+        Arc::new(feature_set)
+    }
+
+    /// No stake minimum delegation and 25% warmup/cooldown
+    fn feature_set_old_warmup_cooldown_no_minimum_delegation() -> Arc<FeatureSet> {
+        let mut feature_set = feature_set_old_warmup_cooldown();
         Arc::get_mut(&mut feature_set)
             .unwrap()
             .deactivate(&feature_set::stake_raise_minimum_delegation_to_1_sol::id());
@@ -542,7 +564,7 @@ mod tests {
     /// The "old old" behavior is both before the stake minimum delegation was raised *and* before
     /// undelegated stake accounts could have zero lamports beyond rent
     fn feature_set_old_old_behavior() -> Arc<FeatureSet> {
-        let mut feature_set = feature_set_old_behavior();
+        let mut feature_set = feature_set_old_warmup_cooldown_no_minimum_delegation();
         Arc::get_mut(&mut feature_set)
             .unwrap()
             .deactivate(&feature_set::stake_allow_zero_undelegated_amount::id());
@@ -606,6 +628,8 @@ mod tests {
             .map(|meta| meta.pubkey)
             .collect();
         pubkeys.insert(clock::id());
+        pubkeys.insert(epoch_schedule::id());
+        #[allow(deprecated)]
         let transaction_accounts = pubkeys
             .iter()
             .map(|pubkey| {
@@ -619,6 +643,8 @@ mod tests {
                         create_account_shared_data_for_test(&StakeHistory::default())
                     } else if stake_config::check_id(pubkey) {
                         config::create_account(0, &stake_config::Config::default())
+                    } else if epoch_schedule::check_id(pubkey) {
+                        create_account_shared_data_for_test(&EpochSchedule::default())
                     } else if rent::check_id(pubkey) {
                         create_account_shared_data_for_test(&Rent::default())
                     } else if *pubkey == invalid_stake_state_pubkey() {
@@ -655,8 +681,9 @@ mod tests {
         )
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_stake_process_instruction(feature_set: Arc<FeatureSet>) {
         process_instruction_as_one_arg(
             Arc::clone(&feature_set),
@@ -772,8 +799,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_spoofed_stake_accounts(feature_set: Arc<FeatureSet>) {
         process_instruction_as_one_arg(
             Arc::clone(&feature_set),
@@ -900,8 +928,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_stake_process_instruction_decode_bail(feature_set: Arc<FeatureSet>) {
         // these will not call stake_state, have bogus contents
         let stake_address = Pubkey::new_unique();
@@ -917,7 +946,9 @@ mod tests {
         let vote_account = AccountSharedData::new(0, 0, &solana_vote_program::id());
         let clock_address = clock::id();
         let clock_account = create_account_shared_data_for_test(&clock::Clock::default());
+        #[allow(deprecated)]
         let config_address = stake_config::id();
+        #[allow(deprecated)]
         let config_account = config::create_account(0, &stake_config::Config::default());
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
@@ -1166,8 +1197,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_stake_checked_instructions(feature_set: Arc<FeatureSet>) {
         let stake_address = Pubkey::new_unique();
         let staker = Pubkey::new_unique();
@@ -1528,8 +1560,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_stake_initialize(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -1633,8 +1666,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_authorize(feature_set: Arc<FeatureSet>) {
         let authority_address = solana_sdk::pubkey::new_rand();
         let authority_address_2 = solana_sdk::pubkey::new_rand();
@@ -1660,6 +1694,10 @@ mod tests {
             (
                 stake_history::id(),
                 create_account_shared_data_for_test(&StakeHistory::default()),
+            ),
+            (
+                epoch_schedule::id(),
+                create_account_shared_data_for_test(&EpochSchedule::default()),
             ),
         ];
         let mut instruction_accounts = vec![
@@ -1814,8 +1852,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_authorize_override(feature_set: Arc<FeatureSet>) {
         let authority_address = solana_sdk::pubkey::new_rand();
         let mallory_address = solana_sdk::pubkey::new_rand();
@@ -1933,8 +1972,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_authorize_with_seed(feature_set: Arc<FeatureSet>) {
         let authority_base_address = solana_sdk::pubkey::new_rand();
         let authority_address = solana_sdk::pubkey::new_rand();
@@ -2050,8 +2090,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_authorize_delegated_stake(feature_set: Arc<FeatureSet>) {
         let authority_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -2071,6 +2112,7 @@ mod tests {
         let mut vote_account_2 =
             vote_state::create_account(&vote_address_2, &solana_sdk::pubkey::new_rand(), 0, 100);
         vote_account_2.set_state(&VoteState::default()).unwrap();
+        #[allow(deprecated)]
         let mut transaction_accounts = vec![
             (stake_address, stake_account),
             (vote_address, vote_account),
@@ -2091,7 +2133,12 @@ mod tests {
                 stake_config::id(),
                 config::create_account(0, &stake_config::Config::default()),
             ),
+            (
+                epoch_schedule::id(),
+                create_account_shared_data_for_test(&EpochSchedule::default()),
+            ),
         ];
+        #[allow(deprecated)]
         let mut instruction_accounts = vec![
             AccountMeta {
                 pubkey: stake_address,
@@ -2241,8 +2288,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_stake_delegate(feature_set: Arc<FeatureSet>) {
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
@@ -2281,6 +2329,7 @@ mod tests {
             epoch: 1,
             ..Clock::default()
         };
+        #[allow(deprecated)]
         let mut transaction_accounts = vec![
             (stake_address, stake_account.clone()),
             (vote_address, vote_account),
@@ -2294,7 +2343,12 @@ mod tests {
                 stake_config::id(),
                 config::create_account(0, &stake_config::Config::default()),
             ),
+            (
+                epoch_schedule::id(),
+                create_account_shared_data_for_test(&EpochSchedule::default()),
+            ),
         ];
+        #[allow(deprecated)]
         let mut instruction_accounts = vec![
             AccountMeta {
                 pubkey: stake_address,
@@ -2482,8 +2536,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_redelegate_consider_balance_changes(feature_set: Arc<FeatureSet>) {
         let mut clock = Clock::default();
         let rent = Rent::default();
@@ -2506,6 +2561,7 @@ mod tests {
             &id(),
         )
         .unwrap();
+        #[allow(deprecated)]
         let mut transaction_accounts = vec![
             (stake_address, stake_account),
             (vote_address, vote_account),
@@ -2523,7 +2579,12 @@ mod tests {
                 stake_config::id(),
                 config::create_account(0, &stake_config::Config::default()),
             ),
+            (
+                epoch_schedule::id(),
+                create_account_shared_data_for_test(&EpochSchedule::default()),
+            ),
         ];
+        #[allow(deprecated)]
         let delegate_instruction_accounts = vec![
             AccountMeta {
                 pubkey: stake_address,
@@ -2682,8 +2743,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split(feature_set: Arc<FeatureSet>) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
@@ -2789,8 +2851,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_withdraw_stake(feature_set: Arc<FeatureSet>) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let authority_address = solana_sdk::pubkey::new_rand();
@@ -2811,6 +2874,7 @@ mod tests {
         vote_account
             .set_state(&VoteStateVersions::new_current(VoteState::default()))
             .unwrap();
+        #[allow(deprecated)]
         let mut transaction_accounts = vec![
             (stake_address, stake_account),
             (vote_address, vote_account),
@@ -2835,6 +2899,10 @@ mod tests {
             (
                 stake_config::id(),
                 config::create_account(0, &stake_config::Config::default()),
+            ),
+            (
+                epoch_schedule::id(),
+                create_account_shared_data_for_test(&EpochSchedule::default()),
             ),
         ];
         let mut instruction_accounts = vec![
@@ -2927,6 +2995,7 @@ mod tests {
         );
 
         // Stake some lamports (available lamports for withdrawals will reduce to zero)
+        #[allow(deprecated)]
         let accounts = process_instruction(
             Arc::clone(&feature_set),
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
@@ -3077,8 +3146,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_withdraw_stake_before_warmup(feature_set: Arc<FeatureSet>) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -3102,6 +3172,7 @@ mod tests {
             epoch: 16,
             ..Clock::default()
         };
+        #[allow(deprecated)]
         let mut transaction_accounts = vec![
             (stake_address, stake_account),
             (vote_address, vote_account),
@@ -3114,6 +3185,10 @@ mod tests {
             (
                 stake_config::id(),
                 config::create_account(0, &stake_config::Config::default()),
+            ),
+            (
+                epoch_schedule::id(),
+                create_account_shared_data_for_test(&EpochSchedule::default()),
             ),
         ];
         let instruction_accounts = vec![
@@ -3145,6 +3220,7 @@ mod tests {
         ];
 
         // Stake some lamports (available lamports for withdrawals will reduce to zero)
+        #[allow(deprecated)]
         let accounts = process_instruction(
             Arc::clone(&feature_set),
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
@@ -3185,6 +3261,7 @@ mod tests {
             None,
             0..clock.epoch,
             &[stake_from(&accounts[0]).unwrap().delegation],
+            None,
         );
         transaction_accounts[4] = (
             stake_history::id(),
@@ -3204,8 +3281,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_withdraw_lockup(feature_set: Arc<FeatureSet>) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let custodian_address = solana_sdk::pubkey::new_rand();
@@ -3235,6 +3313,10 @@ mod tests {
             (
                 stake_history::id(),
                 create_account_shared_data_for_test(&StakeHistory::default()),
+            ),
+            (
+                epoch_schedule::id(),
+                create_account_shared_data_for_test(&EpochSchedule::default()),
             ),
         ];
         let mut instruction_accounts = vec![
@@ -3324,8 +3406,9 @@ mod tests {
         assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_withdraw_rent_exempt(feature_set: Arc<FeatureSet>) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let custodian_address = solana_sdk::pubkey::new_rand();
@@ -3355,6 +3438,10 @@ mod tests {
             (
                 stake_history::id(),
                 create_account_shared_data_for_test(&StakeHistory::default()),
+            ),
+            (
+                epoch_schedule::id(),
+                create_account_shared_data_for_test(&EpochSchedule::default()),
             ),
         ];
         let instruction_accounts = vec![
@@ -3416,8 +3503,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_deactivate(feature_set: Arc<FeatureSet>) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
@@ -3435,6 +3523,7 @@ mod tests {
         vote_account
             .set_state(&VoteStateVersions::new_current(VoteState::default()))
             .unwrap();
+        #[allow(deprecated)]
         let mut transaction_accounts = vec![
             (stake_address, stake_account),
             (vote_address, vote_account),
@@ -3449,6 +3538,10 @@ mod tests {
             (
                 stake_config::id(),
                 config::create_account(0, &stake_config::Config::default()),
+            ),
+            (
+                epoch_schedule::id(),
+                create_account_shared_data_for_test(&EpochSchedule::default()),
             ),
         ];
         let mut instruction_accounts = vec![
@@ -3485,6 +3578,7 @@ mod tests {
         );
 
         // Staking
+        #[allow(deprecated)]
         let accounts = process_instruction(
             Arc::clone(&feature_set),
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
@@ -3540,8 +3634,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_set_lockup(feature_set: Arc<FeatureSet>) {
         let custodian_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
@@ -3567,6 +3662,7 @@ mod tests {
             custodian: Some(custodian_address),
         }))
         .unwrap();
+        #[allow(deprecated)]
         let mut transaction_accounts = vec![
             (stake_address, stake_account),
             (vote_address, vote_account),
@@ -3587,6 +3683,10 @@ mod tests {
             (
                 stake_config::id(),
                 config::create_account(0, &stake_config::Config::default()),
+            ),
+            (
+                epoch_schedule::id(),
+                create_account_shared_data_for_test(&EpochSchedule::default()),
             ),
         ];
         let mut instruction_accounts = vec![
@@ -3667,6 +3767,7 @@ mod tests {
         );
 
         // Staking
+        #[allow(deprecated)]
         let accounts = process_instruction(
             Arc::clone(&feature_set),
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
@@ -3823,8 +3924,9 @@ mod tests {
     /// Ensure that `initialize()` respects the minimum balance requirements
     /// - Assert 1: accounts with a balance equal-to the rent exemption initialize OK
     /// - Assert 2: accounts with a balance less-than the rent exemption do not initialize
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_initialize_minimum_balance(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -3878,8 +3980,9 @@ mod tests {
     /// withdrawing below the minimum delegation, then re-delegating successfully (see
     /// `test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation()` for
     /// more information.)
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_delegate_minimum_stake_delegation(feature_set: Arc<FeatureSet>) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
@@ -3892,6 +3995,7 @@ mod tests {
         let vote_address = solana_sdk::pubkey::new_rand();
         let vote_account =
             vote_state::create_account(&vote_address, &solana_sdk::pubkey::new_rand(), 0, 100);
+        #[allow(deprecated)]
         let instruction_accounts = vec![
             AccountMeta {
                 pubkey: stake_address,
@@ -3937,6 +4041,7 @@ mod tests {
                     &id(),
                 )
                 .unwrap();
+                #[allow(deprecated)]
                 process_instruction(
                     Arc::clone(&feature_set),
                     &serialize(&StakeInstruction::DelegateStake).unwrap(),
@@ -3954,6 +4059,10 @@ mod tests {
                         (
                             stake_config::id(),
                             config::create_account(0, &stake_config::Config::default()),
+                        ),
+                        (
+                            epoch_schedule::id(),
+                            create_account_shared_data_for_test(&EpochSchedule::default()),
                         ),
                     ],
                     instruction_accounts.clone(),
@@ -3973,8 +4082,9 @@ mod tests {
     ///  EQ     | LT   | Err
     ///  LT     | EQ   | Err
     ///  LT     | LT   | Err
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_minimum_stake_delegation(feature_set: Arc<FeatureSet>) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
@@ -4065,8 +4175,9 @@ mod tests {
     ///             delegation is OK
     /// - Assert 2: splitting the full amount from an account that has less than the minimum
     ///             delegation is not OK
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_full_amount_minimum_stake_delegation(feature_set: Arc<FeatureSet>) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
@@ -4135,8 +4246,9 @@ mod tests {
     /// Ensure that `split()` correctly handles prefunded destination accounts from
     /// initialized stakes.  When a destination account already has funds, ensure
     /// the minimum split amount reduces accordingly.
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_initialized_split_destination_minimum_balance(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -4229,8 +4341,9 @@ mod tests {
     /// Ensure that `split()` correctly handles prefunded destination accounts from staked stakes.
     /// When a destination account already has funds, ensure the minimum split amount reduces
     /// accordingly.
-    #[test_case(feature_set_old_behavior(), &[Ok(()), Ok(())]; "old_behavior")]
-    #[test_case(feature_set_new_behavior(), &[ Err(StakeError::InsufficientDelegation.into()), Err(StakeError::InsufficientDelegation.into()) ] ; "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(), &[Ok(()), Ok(())]; "old_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown(), &[ Err(StakeError::InsufficientDelegation.into()), Err(StakeError::InsufficientDelegation.into()) ] ; "new_behavior")]
+    #[test_case(feature_set_all_enabled(), &[Err(StakeError::InsufficientDelegation.into()), Err(StakeError::InsufficientDelegation.into())]; "all_enabled")]
     fn test_staked_split_destination_minimum_balance(
         feature_set: Arc<FeatureSet>,
         expected_results: &[Result<(), InstructionError>],
@@ -4379,8 +4492,9 @@ mod tests {
     /// Ensure that `withdraw()` respects the minimum delegation requirements
     /// - Assert 1: withdrawing so remaining stake is equal-to the minimum is OK
     /// - Assert 2: withdrawing so remaining stake is less-than the minimum is not OK
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_withdraw_minimum_stake_delegation(feature_set: Arc<FeatureSet>) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
@@ -4440,6 +4554,7 @@ mod tests {
                 .unwrap();
                 let withdraw_amount =
                     (starting_stake_delegation + rewards_balance) - ending_stake_delegation;
+                #[allow(deprecated)]
                 process_instruction(
                     Arc::clone(&feature_set),
                     &serialize(&StakeInstruction::Withdraw(withdraw_amount)).unwrap(),
@@ -4464,6 +4579,10 @@ mod tests {
                         (
                             stake_config::id(),
                             config::create_account(0, &stake_config::Config::default()),
+                        ),
+                        (
+                            epoch_schedule::id(),
+                            create_account_shared_data_for_test(&EpochSchedule::default()),
                         ),
                     ],
                     instruction_accounts.clone(),
@@ -4490,7 +4609,9 @@ mod tests {
     // `stake_allow_zero_undelegated_amount` feature is activated, `the expected_result`
     // parameter can be removed and consolidated.
     #[test_case(feature_set_old_old_behavior(), Ok(()); "old_old_behavior")]
-    #[test_case(feature_set_new_behavior(), Err(StakeError::InsufficientDelegation.into()); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(), Err(StakeError::InsufficientDelegation.into()); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(), Err(StakeError::InsufficientDelegation.into()); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(), Err(StakeError::InsufficientDelegation.into()); "all_enabled")]
     fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation(
         feature_set: Arc<FeatureSet>,
         expected_result: Result<(), InstructionError>,
@@ -4509,6 +4630,7 @@ mod tests {
             vote_state::create_account(&vote_address, &solana_sdk::pubkey::new_rand(), 0, 100);
         let recipient_address = solana_sdk::pubkey::new_rand();
         let mut clock = Clock::default();
+        #[allow(deprecated)]
         let mut transaction_accounts = vec![
             (stake_address, stake_account),
             (vote_address, vote_account),
@@ -4525,8 +4647,13 @@ mod tests {
                 stake_config::id(),
                 config::create_account(0, &stake_config::Config::default()),
             ),
+            (
+                epoch_schedule::id(),
+                create_account_shared_data_for_test(&EpochSchedule::default()),
+            ),
             (rent::id(), create_account_shared_data_for_test(&rent)),
         ];
+        #[allow(deprecated)]
         let instruction_accounts = vec![
             AccountMeta {
                 pubkey: stake_address,
@@ -4659,8 +4786,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_source_uninitialized(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -4759,8 +4887,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_split_not_uninitialized(feature_set: Arc<FeatureSet>) {
         let stake_lamports = 42;
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -4810,8 +4939,9 @@ mod tests {
         }
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_more_than_staked(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -4866,8 +4996,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_with_rent(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -4973,8 +5104,9 @@ mod tests {
         }
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_to_account_with_rent_exempt_reserve(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -5095,8 +5227,9 @@ mod tests {
         }
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_from_larger_sized_account(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
         let source_larger_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
@@ -5223,8 +5356,9 @@ mod tests {
         }
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_from_smaller_sized_account(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
         let source_smaller_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -5299,8 +5433,9 @@ mod tests {
         }
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_100_percent_of_source(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -5392,8 +5527,9 @@ mod tests {
         }
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_100_percent_of_source_to_account_with_lamports(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -5485,8 +5621,9 @@ mod tests {
         }
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_split_rent_exemptness(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
         let source_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
@@ -5617,8 +5754,9 @@ mod tests {
         }
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_merge(feature_set: Arc<FeatureSet>) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
@@ -5687,6 +5825,10 @@ mod tests {
                         stake_history::id(),
                         create_account_shared_data_for_test(&StakeHistory::default()),
                     ),
+                    (
+                        epoch_schedule::id(),
+                        create_account_shared_data_for_test(&EpochSchedule::default()),
+                    ),
                 ];
 
                 // Authorized staker signature required...
@@ -5747,8 +5889,9 @@ mod tests {
         }
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_merge_self_fails(feature_set: Arc<FeatureSet>) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
@@ -5824,8 +5967,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_merge_incorrect_authorized_staker(feature_set: Arc<FeatureSet>) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
@@ -5895,6 +6039,10 @@ mod tests {
                         stake_history::id(),
                         create_account_shared_data_for_test(&StakeHistory::default()),
                     ),
+                    (
+                        epoch_schedule::id(),
+                        create_account_shared_data_for_test(&EpochSchedule::default()),
+                    ),
                 ];
 
                 instruction_accounts[4].pubkey = wrong_authorized_address;
@@ -5918,8 +6066,9 @@ mod tests {
         }
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_merge_invalid_account_data(feature_set: Arc<FeatureSet>) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
@@ -5986,6 +6135,10 @@ mod tests {
                         stake_history::id(),
                         create_account_shared_data_for_test(&StakeHistory::default()),
                     ),
+                    (
+                        epoch_schedule::id(),
+                        create_account_shared_data_for_test(&EpochSchedule::default()),
+                    ),
                 ];
 
                 process_instruction(
@@ -5999,8 +6152,9 @@ mod tests {
         }
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_merge_fake_stake_source(feature_set: Arc<FeatureSet>) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
@@ -6070,8 +6224,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_merge_active_stake(feature_set: Arc<FeatureSet>) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
@@ -6140,6 +6295,10 @@ mod tests {
                 stake_history::id(),
                 create_account_shared_data_for_test(&stake_history),
             ),
+            (
+                epoch_schedule::id(),
+                create_account_shared_data_for_test(&EpochSchedule::default()),
+            ),
         ];
         let instruction_accounts = vec![
             AccountMeta {
@@ -6203,14 +6362,20 @@ mod tests {
             Ok(()),
         );
 
+        let new_warmup_cooldown_rate_epoch =
+            feature_set.new_warmup_cooldown_rate_epoch(&EpochSchedule::default());
+
         // both activating fails
         loop {
             clock.epoch += 1;
             if clock.epoch == merge_from_activation_epoch {
                 activating += merge_from_amount;
             }
-            let delta =
-                activating.min((effective as f64 * stake.delegation.warmup_cooldown_rate) as u64);
+            let delta = activating.min(
+                (effective as f64
+                    * warmup_cooldown_rate(clock.epoch, new_warmup_cooldown_rate_epoch))
+                    as u64,
+            );
             effective += delta;
             activating -= delta;
             stake_history.add(
@@ -6226,8 +6391,18 @@ mod tests {
                 stake_history::id(),
                 create_account_shared_data_for_test(&stake_history),
             );
-            if stake_amount == stake.stake(clock.epoch, Some(&stake_history))
-                && merge_from_amount == merge_from_stake.stake(clock.epoch, Some(&stake_history))
+            if stake_amount
+                == stake.stake(
+                    clock.epoch,
+                    Some(&stake_history),
+                    new_warmup_cooldown_rate_epoch,
+                )
+                && merge_from_amount
+                    == merge_from_stake.stake(
+                        clock.epoch,
+                        Some(&stake_history),
+                        new_warmup_cooldown_rate_epoch,
+                    )
             {
                 break;
             }
@@ -6254,8 +6429,11 @@ mod tests {
         // active/deactivating and deactivating/inactive mismatches fail
         loop {
             clock.epoch += 1;
-            let delta =
-                deactivating.min((effective as f64 * stake.delegation.warmup_cooldown_rate) as u64);
+            let delta = deactivating.min(
+                (effective as f64
+                    * warmup_cooldown_rate(clock.epoch, new_warmup_cooldown_rate_epoch))
+                    as u64,
+            );
             effective -= delta;
             deactivating -= delta;
             if clock.epoch == stake_deactivation_epoch {
@@ -6299,8 +6477,16 @@ mod tests {
                 stake_history::id(),
                 create_account_shared_data_for_test(&stake_history),
             );
-            if 0 == stake.stake(clock.epoch, Some(&stake_history))
-                && 0 == merge_from_stake.stake(clock.epoch, Some(&stake_history))
+            if 0 == stake.stake(
+                clock.epoch,
+                Some(&stake_history),
+                new_warmup_cooldown_rate_epoch,
+            ) && 0
+                == merge_from_stake.stake(
+                    clock.epoch,
+                    Some(&stake_history),
+                    new_warmup_cooldown_rate_epoch,
+                )
             {
                 break;
             }
@@ -6321,8 +6507,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_stake_get_minimum_delegation(feature_set: Arc<FeatureSet>) {
         let stake_address = Pubkey::new_unique();
         let stake_account = create_default_stake_account();
@@ -6376,8 +6563,9 @@ mod tests {
     // disabled | bad         | some    || Err InvalidInstructionData
     // disabled | good        | none    || Err NotEnoughAccountKeys
     // disabled | bad         | none    || Err NotEnoughAccountKeys
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_stake_process_instruction_error_ordering(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
         let rent_address = rent::id();
@@ -6478,8 +6666,9 @@ mod tests {
         }
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_deactivate_delinquent(feature_set: Arc<FeatureSet>) {
         let reference_vote_address = Pubkey::new_unique();
         let vote_address = Pubkey::new_unique();
@@ -6492,7 +6681,6 @@ mod tests {
                 &vote_address,
                 &VoteState::default(),
                 1, /* activation_epoch */
-                &stake_config::Config::default(),
             ),
         );
 
@@ -6694,7 +6882,6 @@ mod tests {
                     &unrelated_vote_address,
                     &VoteState::default(),
                     1, /* activation_epoch */
-                    &stake_config::Config::default(),
                 ),
             ))
             .unwrap();
@@ -6746,8 +6933,9 @@ mod tests {
         );
     }
 
-    #[test_case(feature_set_old_behavior(); "old_behavior")]
-    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    #[test_case(feature_set_old_warmup_cooldown_no_minimum_delegation(); "old_warmup_cooldown_no_min_delegation")]
+    #[test_case(feature_set_old_warmup_cooldown(); "old_warmup_cooldown")]
+    #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_redelegate(feature_set: Arc<FeatureSet>) {
         let feature_set = Arc::new(feature_set);
 
@@ -6787,7 +6975,6 @@ mod tests {
                     &vote_address,
                     &VoteState::default(),
                     activation_epoch,
-                    &stake_config::Config::default(),
                 ),
             );
 
@@ -6797,7 +6984,11 @@ mod tests {
                     initial_stake_state
                         .delegation()
                         .unwrap()
-                        .stake_activating_and_deactivating(current_epoch, Some(&stake_history))
+                        .stake_activating_and_deactivating(
+                            current_epoch,
+                            Some(&stake_history),
+                            None
+                        )
                 );
             }
 
@@ -6827,6 +7018,7 @@ mod tests {
              uninitialized_stake_address: &Pubkey,
              uninitialized_stake_account: &AccountSharedData,
              expected_result| {
+                #[allow(deprecated)]
                 process_instruction(
                     Arc::clone(&feature_set),
                     &serialize(&StakeInstruction::Redelegate).unwrap(),
@@ -6853,6 +7045,10 @@ mod tests {
                                 epoch: current_epoch,
                                 ..Clock::default()
                             }),
+                        ),
+                        (
+                            epoch_schedule::id(),
+                            create_account_shared_data_for_test(&EpochSchedule::default()),
                         ),
                     ],
                     vec![
@@ -7000,6 +7196,7 @@ mod tests {
             ),
         ];
         for (deactivated_stake_account, expected_result) in deactivated_stake_accounts {
+            #[allow(deprecated)]
             process_instruction(
                 Arc::clone(&feature_set),
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
@@ -7022,6 +7219,10 @@ mod tests {
                             epoch: current_epoch,
                             ..Clock::default()
                         }),
+                    ),
+                    (
+                        epoch_schedule::id(),
+                        create_account_shared_data_for_test(&EpochSchedule::default()),
                     ),
                 ],
                 vec![
@@ -7290,9 +7491,11 @@ mod tests {
                     activating: 0,
                     deactivating: minimum_delegation + rent_exempt_reserve,
                 },
-                stake
-                    .delegation
-                    .stake_activating_and_deactivating(current_epoch, Some(&stake_history))
+                stake.delegation.stake_activating_and_deactivating(
+                    current_epoch,
+                    Some(&stake_history),
+                    None
+                )
             );
 
             deactivating_stake_account

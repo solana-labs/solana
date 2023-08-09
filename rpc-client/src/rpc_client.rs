@@ -28,17 +28,18 @@ use {
         UiAccount, UiAccountEncoding,
     },
     solana_rpc_client_api::{
-        client_error::Result as ClientResult,
+        client_error::{Error as ClientError, ErrorKind, Result as ClientResult},
         config::{RpcAccountInfoConfig, *},
         request::{RpcRequest, TokenAccountsFilter},
         response::*,
     },
     solana_sdk::{
-        account::Account,
+        account::{Account, ReadableAccount},
         clock::{Epoch, Slot, UnixTimestamp},
         commitment_config::CommitmentConfig,
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
+        feature::Feature,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
         message::{v0, Message as LegacyMessage},
@@ -4025,6 +4026,18 @@ impl RpcClient {
 
     pub fn get_transport_stats(&self) -> RpcTransportStats {
         (self.rpc_client.as_ref()).get_transport_stats()
+    }
+
+    pub fn get_feature_activation_slot(&self, feature_id: &Pubkey) -> ClientResult<Option<Slot>> {
+        self.get_account(feature_id)
+            .and_then(|feature_account| {
+                bincode::deserialize(feature_account.data()).map_err(|_| {
+                    ClientError::from(ErrorKind::Custom(
+                        "Failed to deserialize feature account".to_string(),
+                    ))
+                })
+            })
+            .map(|feature: Feature| feature.activated_at)
     }
 
     fn invoke<T, F: std::future::Future<Output = ClientResult<T>>>(&self, f: F) -> ClientResult<T> {

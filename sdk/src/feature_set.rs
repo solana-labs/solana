@@ -665,6 +665,21 @@ pub mod checked_arithmetic_in_fee_validation {
     solana_sdk::declare_id!("5Pecy6ie6XGm22pc9d4P9W5c31BugcFBuy6hsP2zkETv");
 }
 
+pub mod reduce_stake_warmup_cooldown {
+    use solana_program::{epoch_schedule::EpochSchedule, stake_history::Epoch};
+    solana_sdk::declare_id!("GwtDQBghCTBgmX2cpEGNPxTEBUTQRaDMGTr5qychdGMj");
+
+    pub trait NewWarmupCooldownRateEpoch {
+        fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch>;
+    }
+    impl NewWarmupCooldownRateEpoch for super::FeatureSet {
+        fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch> {
+            self.activated_slot(&id())
+                .map(|slot| epoch_schedule.get_epoch(slot))
+        }
+    }
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -826,6 +841,7 @@ lazy_static! {
         (vote_state_add_vote_latency::id(), "replace Lockout with LandedVote (including vote latency) in vote state #31264"),
         (checked_arithmetic_in_fee_validation::id(), "checked arithmetic in fee validation #31273"),
         (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
+        (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

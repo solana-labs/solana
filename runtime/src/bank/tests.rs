@@ -4227,7 +4227,7 @@ fn test_bank_epoch_vote_accounts() {
         // epoch_stakes are a snapshot at the leader_schedule_slot_offset boundary
         //   in the prior epoch (0 in this case)
         assert_eq!(
-            leader_stake.stake(0, None),
+            leader_stake.stake(0, None, None),
             vote_accounts.unwrap().get(&leader_vote_account).unwrap().0
         );
 
@@ -4243,7 +4243,7 @@ fn test_bank_epoch_vote_accounts() {
 
     assert!(child.epoch_vote_accounts(epoch).is_some());
     assert_eq!(
-        leader_stake.stake(child.epoch(), None),
+        leader_stake.stake(child.epoch(), None, None),
         child
             .epoch_vote_accounts(epoch)
             .unwrap()
@@ -4261,7 +4261,7 @@ fn test_bank_epoch_vote_accounts() {
     );
     assert!(child.epoch_vote_accounts(epoch).is_some());
     assert_eq!(
-        leader_stake.stake(child.epoch(), None),
+        leader_stake.stake(child.epoch(), None, None),
         child
             .epoch_vote_accounts(epoch)
             .unwrap()

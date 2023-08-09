@@ -66,6 +66,10 @@ pub struct UiConfigKey {
     pub signer: bool,
 }
 
+#[deprecated(
+    since = "1.16.7",
+    note = "Please use `solana_sdk::stake::state::warmup_cooldown_rate()` instead"
+)]
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiStakeConfig {

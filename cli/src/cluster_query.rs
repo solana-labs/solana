@@ -2,6 +2,7 @@ use {
     crate::{
         cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
         compute_unit_price::WithComputeUnitPrice,
+        feature::get_feature_activation_epoch,
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
     clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
@@ -43,6 +44,7 @@ use {
         clock::{self, Clock, Slot},
         commitment_config::CommitmentConfig,
         epoch_schedule::Epoch,
+        feature_set,
         hash::Hash,
         message::Message,
         native_token::lamports_to_sol,
@@ -1800,6 +1802,8 @@ pub fn process_show_stakes(
     let stake_history = from_account(&stake_history_account).ok_or_else(|| {
         CliError::RpcRequestError("Failed to deserialize stake history".to_string())
     })?;
+    let new_rate_activation_epoch =
+        get_feature_activation_epoch(rpc_client, &feature_set::reduce_stake_warmup_cooldown::id())?;
 
     let mut stake_accounts: Vec<CliKeyedStakeState> = vec![];
     for (stake_pubkey, stake_account) in all_stake_accounts {
@@ -1815,6 +1819,7 @@ pub fn process_show_stakes(
                                 use_lamports_unit,
                                 &stake_history,
                                 &clock,
+                                new_rate_activation_epoch,
                             ),
                         });
                     }
@@ -1833,6 +1838,7 @@ pub fn process_show_stakes(
                                 use_lamports_unit,
                                 &stake_history,
                                 &clock,
+                                new_rate_activation_epoch,
                             ),
                         });
                     }
