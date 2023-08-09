@@ -44,28 +44,23 @@ const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) a
 // If `Random` the compute-unit-price is determined by generating a random number in the range
 // 0..MAX_RANDOM_COMPUTE_UNIT_PRICE then multiplying by COMPUTE_UNIT_PRICE_MULTIPLIER.
 // If `Fixed` the compute-unit-price is the value of the `compute-unit-price` parameter.
-// It also sets transaction's compute-unit to TRANSFER_TRANSACTION_COMPUTE_UNIT. Therefore the
-// max additional cost is:
-// `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE * COMPUTE_UNIT_PRICE_MULTIPLIER / 1_000_000`
-const MAX_RANDOM_COMPUTE_UNIT_PRICE: u64 = 50;
-const COMPUTE_UNIT_PRICE_MULTIPLIER: u64 = 1_000;
+// Therefore the maximum possible prioritization fee is either the fixed price or max random price
+// * `TRANSFER_TRANSACTION_COMPUTE_UNIT / MICRO_LAMPORTS_PER_LAMPORT`.
 const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 600; // 1 transfer is plus 3 compute_budget ixs
-/// calculate maximum possible prioritization fee, if `use-randomized-compute-unit-price` is
-/// enabled, round to nearest lamports.
+/// calculate maximum possible prioritization fee, round to nearest lamport.
 pub fn max_lamports_for_prioritization(compute_unit_price: &Option<ComputeUnitPrice>) -> u64 {
     let Some(compute_unit_price) = compute_unit_price else {
         return 0;
     };
 
     let compute_unit_price = match compute_unit_price {
-        ComputeUnitPrice::Random => (MAX_RANDOM_COMPUTE_UNIT_PRICE as u128)
-            .saturating_mul(COMPUTE_UNIT_PRICE_MULTIPLIER as u128),
-        ComputeUnitPrice::Fixed(compute_unit_price) => *compute_unit_price as u128,
+        ComputeUnitPrice::Random { max, .. } => *max,
+        ComputeUnitPrice::Fixed(compute_unit_price) => *compute_unit_price,
     };
 
     const MICRO_LAMPORTS_PER_LAMPORT: u64 = 1_000_000;
     let micro_lamport_fee: u128 =
-        compute_unit_price.saturating_mul(TRANSFER_TRANSACTION_COMPUTE_UNIT as u128);
+        (compute_unit_price as u128).saturating_mul(TRANSFER_TRANSACTION_COMPUTE_UNIT as u128);
     let fee = micro_lamport_fee
         .saturating_add(MICRO_LAMPORTS_PER_LAMPORT.saturating_sub(1) as u128)
         .saturating_div(MICRO_LAMPORTS_PER_LAMPORT as u128);
@@ -536,16 +531,10 @@ fn generate_system_txs(
 
     if let Some(compute_unit_price) = compute_unit_price {
         let compute_unit_prices = match compute_unit_price {
-            ComputeUnitPrice::Random => {
+            ComputeUnitPrice::Random { min, max } => {
                 let mut rng = rand::thread_rng();
-                let range = Uniform::from(0..MAX_RANDOM_COMPUTE_UNIT_PRICE);
-                (0..pairs.len())
-                    .map(|_| {
-                        range
-                            .sample(&mut rng)
-                            .saturating_mul(COMPUTE_UNIT_PRICE_MULTIPLIER)
-                    })
-                    .collect()
+                let range = Uniform::from(*min..=*max);
+                (0..pairs.len()).map(|_| range.sample(&mut rng)).collect()
             }
             ComputeUnitPrice::Fixed(compute_unit_price) => vec![*compute_unit_price; pairs.len()],
         };

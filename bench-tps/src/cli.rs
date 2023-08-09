@@ -46,7 +46,7 @@ pub struct InstructionPaddingConfig {
 #[derive(Debug, PartialEq)]
 pub enum ComputeUnitPrice {
     Fixed(u64),
-    Random,
+    Random { min: u64, max: u64 },
 }
 
 /// Holds the configuration for a single run of the benchmark
@@ -348,9 +348,14 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
         .arg(
             Arg::with_name("use_randomized_compute_unit_price")
                 .long("use-randomized-compute-unit-price")
-                .takes_value(false)
-                .conflicts_with("compute_unit_price")
-                .help("Sets random compute-unit-price in range [0..100] to transfer transactions"),
+                .takes_value(true)
+                .min_values(0)
+                .max_values(2)
+                .value_names(&["MIN MAX"]) // cannot separate arg names because then clap will require 2 values
+                .validator(|s| is_within_range(s, 0..))
+                .help("Sets randomized compute-unit-price range for transfer transactions. \
+                       If no range is provided, the default range is used. [0, 50]."),
+
         )
         .arg(
             Arg::with_name("use_durable_nonce")
@@ -537,8 +542,32 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         ));
     }
 
-    if matches.is_present("use_randomized_compute_unit_price") {
-        args.compute_unit_price = Some(ComputeUnitPrice::Random);
+    if let Some(values) = matches.values_of("use_randomized_compute_unit_price") {
+        let values: Vec<_> = values.collect();
+
+        let (min, max) = if values.is_empty() {
+            (0, 50)
+        } else {
+            if values.len() != 2 {
+                return Err("use-randomized-compute-unit-price requires 2 values for the range");
+            }
+            (
+                values[0]
+                    .parse()
+                    .map_err(|_| "can't parse min-compute-unit-price")?,
+                values[1]
+                    .parse()
+                    .map_err(|_| "can't parse max-compute-unit-price")?,
+            )
+        };
+
+        if min > max {
+            return Err(
+                "min-compute-unit-price must be less than or equal to max-compute-unit-price",
+            );
+        }
+
+        args.compute_unit_price = Some(ComputeUnitPrice::Random { min, max });
     }
 
     if matches.is_present("use_durable_nonce") {
