@@ -119,6 +119,7 @@ pub fn wen_restart(
             if epoch_stakes_map.has_missing_epochs() {
                 epoch_stakes_map.update_bank(my_bank_forks.highest_frozen_bank());
             }
+            info!("wen_restart aggregating RestartLastVotedForkSlots currently {}", 1.0 - not_active_percentage);
             if not_active_percentage < 1.0 - OPTIMISTIC_CONFIRMED_THRESHOLD {
                 break;
             }
