@@ -4579,19 +4579,9 @@ fn test_vote_refresh_outside_slothash() {
     // Copy A's ledger to B but truncate any blocks past the common ancestor.
     {
         info!("Copying A's ledger to B");
-        std::fs::remove_dir_all(&b_info.info.ledger_path).unwrap();
-        let mut opt = fs_extra::dir::CopyOptions::new();
-        opt.copy_inside = true;
-        fs_extra::dir::copy(&a_ledger_path, &b_ledger_path, &opt).unwrap();
-
-        // remove A's tower in B's new copied ledger
-        info!("Removing A's tower in B's ledger dir");
-        remove_tower(&b_ledger_path, &a_pubkey);
-
-        // Get rid of any slots past common_ancestor_slot
-        info!("Removing extra slots from B's blockstore");
-        let blockstore = open_blockstore(&b_ledger_path);
-        purge_slots_with_count(&blockstore, common_ancestor_slot + 1, 100);
+        let blockstore_a= open_blockstore(&a_ledger_path);
+        let blockstore_b = open_blockstore(&b_ledger_path);
+        copy_blocks(common_ancestor_slot, &blockstore_a, &blockstore_b);
     }
 
     info!("Run A on majority fork until it creates its own fork");
