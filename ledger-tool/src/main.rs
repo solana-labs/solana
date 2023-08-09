@@ -2172,6 +2172,8 @@ fn main() {
 
     if let ("bigtable", Some(arg_matches)) = matches.subcommand() {
         bigtable_process_command(&ledger_path, arg_matches)
+    } else if let ("program", Some(arg_matches)) = matches.subcommand() {
+        program(&ledger_path, arg_matches)
     } else {
         let ledger_path = canonicalize_ledger_path(&ledger_path);
 
@@ -4197,9 +4199,6 @@ fn main() {
                 if let Err(err) = print_blockstore_file_metadata(&blockstore, &sst_file_name) {
                     eprintln!("{err}");
                 }
-            }
-            ("program", Some(arg_matches)) => {
-                program(&ledger_path, arg_matches);
             }
             ("", _) => {
                 eprintln!("{}", matches.usage());
