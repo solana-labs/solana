@@ -54,6 +54,7 @@ mod tests {
         std::mem::{align_of, size_of},
     };
 
+    #[allow(clippy::integer_arithmetic)]
     #[test]
     fn test_memory_layout() {
         assert_eq!(offset_of!(StableInstruction, accounts), 0);

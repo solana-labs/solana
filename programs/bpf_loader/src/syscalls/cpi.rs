@@ -1,9 +1,11 @@
 use {
     super::*,
     crate::declare_syscall,
-    solana_sdk::syscalls::{
-        MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
+    solana_sdk::{
         stable_layout::stable_instruction::StableInstruction,
+        syscalls::{
+            MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
+        },
     },
 };
 
@@ -86,7 +88,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
     ) -> Result<StableInstruction, EbpfError<BpfError>> {
-        let ix = translate_type::<Instruction>(
+        let ix = translate_type::<StableInstruction>(
             memory_mapping,
             addr,
             invoke_context.get_check_aligned(),
