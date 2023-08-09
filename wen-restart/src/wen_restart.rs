@@ -119,10 +119,6 @@ pub fn wen_restart(
             if epoch_stakes_map.has_missing_epochs() {
                 epoch_stakes_map.update_bank(my_bank_forks.highest_frozen_bank());
             }
-            info!("wen_restart aggregating RestartLastVotedForkSlots currently {}", 1.0 - not_active_percentage);
-            if not_active_percentage < 1.0 - OPTIMISTIC_CONFIRMED_THRESHOLD {
-                break;
-            }
             let filtered_slots: Vec<Slot> = new_slots
                 .into_iter()
                 .map(|(slot, _)| slot)
@@ -134,7 +130,11 @@ pub fn wen_restart(
                 }
             }
         }
-        sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
+        info!("wen_restart aggregating RestartLastVotedForkSlots currently {}", 1.0 - not_active_percentage);
+        if not_active_percentage < 1.0 - OPTIMISTIC_CONFIRMED_THRESHOLD {
+            break;
+        }
+    sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
     }
     let my_selected_slot;
     let my_selected_hash;
