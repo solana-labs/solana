@@ -4514,7 +4514,7 @@ fn test_vote_refresh_outside_slothash() {
     .map(|s| Arc::new(Keypair::from_base58_string(s)))
     .collect::<Vec<_>>();
     let (leader_schedule, validator_keys) =
-        create_custom_leader_schedule_with_random_keys(&[4, 8, 0]);
+        create_custom_leader_schedule_with_random_keys(&[12, 4, 0]);
     let mut default_config = ValidatorConfig::default_for_test();
     default_config.fixed_leader_schedule = Some(FixedSchedule {
         leader_schedule: Arc::new(leader_schedule),
@@ -4576,8 +4576,7 @@ fn test_vote_refresh_outside_slothash() {
         sleep(Duration::from_millis(100));
     }
 
-    // Keep A running, but setup B so that it thinks it has voted up until common ancestor (but
-    // doesn't know anything past that)
+    // Copy A's ledger to B but truncate any blocks past the common ancestor.
     {
         info!("Copying A's ledger to B");
         std::fs::remove_dir_all(&b_info.info.ledger_path).unwrap();
