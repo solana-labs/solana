@@ -183,17 +183,16 @@ impl MerkleTree {
             let mut tmp = self.nodes[layer];
 
             while layer_count > 1 {
-                if (layer_count & 1) != 0 {
+                tmp = if (layer_count & 1) != 0 {
                     let arg1 = &tmp;
                     let arg2 = &tmp;
-                    let hash = hash_intermediate!(arg1, arg2);
-                    tmp = hash;
+                    hash_intermediate!(arg1, arg2)
                 }
                 else {
-                    let arg1 = &self.nodes[layer];
-                    let hash = hash_intermediate!(tmp, arg1);
-                    tmp = hash;
-                }
+                    let arg1 = &tmp;
+                    let arg2 = &self.nodes[layer];
+                    hash_intermediate!(arg1, arg2)
+                };
                 layer+=1; 
                 layer_count = (layer_count+1) >> 1;
             }
