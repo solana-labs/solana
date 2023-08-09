@@ -484,7 +484,7 @@ impl ReplayStage {
         ledger_signal_receiver: Receiver<bool>,
         duplicate_slots_receiver: DuplicateSlotReceiver,
         poh_recorder: Arc<RwLock<PohRecorder>>,
-        maybe_process_blockstore: Option<ProcessBlockStore>,
+        prev_tower: Tower,
         vote_tracker: Arc<VoteTracker>,
         cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
@@ -503,14 +503,7 @@ impl ReplayStage {
         banking_tracer: Arc<BankingTracer>,
         popular_pruned_forks_receiver: PopularPrunedForksReceiver,
     ) -> Result<Self, String> {
-        let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
-            let tower = process_blockstore.process_to_create_tower()?;
-            info!("Tower state: {:?}", tower);
-            tower
-        } else {
-            warn!("creating default tower....");
-            Tower::default()
-        };
+        let mut tower = prev_tower;
 
         let ReplayStageConfig {
             vote_account,

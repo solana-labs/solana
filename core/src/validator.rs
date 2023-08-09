@@ -1064,17 +1064,14 @@ impl Validator {
             && !config.no_wait_for_vote_to_start_leader
             && !config.wen_restart;
 
-        let mut last_vote = None;
+        let tower = process_blockstore.process_to_create_tower()?;
+        let last_vote = tower.last_vote();
         if config.wen_restart {
             config.turbine_disabled.swap(true, Ordering::Relaxed);
-            last_vote = process_blockstore.last_vote();
-            let last_vote_slots = match &last_vote {
-                Some(vote) => Some(vote.slots().clone()),
-                None => None,
-            };
             node.info
                 .set_shred_version((node.info.shred_version() + 1) % 0xffff);
-            warn!("wen_restart configured, turbine disabled, last_vote {:?}, shred_version now {}", last_vote_slots, node.info.shred_version());
+            assert!(!last_vote.is_empty(), "wen_restart needs to know the last vote");
+            warn!("wen_restart configured, turbine disabled, last_vote {:?}, shred_version now {}", last_vote.slots(), node.info.shred_version());
         }
 
         let poh_service = PohService::new(
@@ -1144,7 +1141,7 @@ impl Validator {
             ledger_signal_receiver,
             &rpc_subscriptions,
             &poh_recorder,
-            Some(process_blockstore),
+            tower,
             config.tower_storage.clone(),
             &leader_schedule_cache,
             exit.clone(),
@@ -2212,7 +2209,7 @@ fn wait_for_supermajority(
 }
 
 fn wait_for_wen_restart(
-    last_vote: Option<vote_state::VoteTransaction>,
+    last_vote: vote_state::VoteTransaction,
     blockstore: Arc<Blockstore>,
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
@@ -2220,18 +2217,15 @@ fn wait_for_wen_restart(
     accounts_background_request_sender: AbsRequestSender,
     snapshot_config: &SnapshotConfig,
 ) -> Result<Slot, Box<dyn std::error::Error>> {
-    match last_vote {
-        Some(vote_tx) => wen_restart(
-            vote_tx,
-            blockstore,
-            cluster_info,
-            bank_forks,
-            restart_slots_to_repair_sender,
-            accounts_background_request_sender,
-            snapshot_config,
-        ),
-        None => panic!("No last vote for wen_restart"),
-    }
+    wen_restart(
+        last_vote,
+        blockstore,
+        cluster_info,
+        bank_forks,
+        restart_slots_to_repair_sender,
+        accounts_background_request_sender,
+        snapshot_config,
+    )
 }
 
 // Get the activated stake percentage (based on the provided bank) that is visible in gossip
