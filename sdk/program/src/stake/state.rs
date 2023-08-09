@@ -436,7 +436,7 @@ impl Default for Delegation {
             stake: 0,
             activation_epoch: 0,
             deactivation_epoch: std::u64::MAX,
-            warmup_cooldown_rate: 0.0,
+            warmup_cooldown_rate: DEFAULT_WARMUP_COOLDOWN_RATE,
         }
     }
 }
