@@ -968,6 +968,9 @@ impl ClusterInfo {
         };
         let mut entries = Vec::default();
         let keypair = self.keypair();
+        if is_epoch_slot {
+            info!("wen_restart pushing LastVotedForkSlots {} {}", last_vote_slot, update.len());
+        }
         while !update.is_empty() {
             let ix = epoch_slot_index % max_entries;
             let now = timestamp();
