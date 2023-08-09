@@ -3,6 +3,7 @@
 use {
     super::Bank,
     base64::{prelude::BASE64_STANDARD, Engine},
+    log::*,
     serde::{
         de::{self, Deserialize, Deserializer},
         ser::{Serialize, SerializeSeq, Serializer},
@@ -160,6 +161,41 @@ impl<'de> Deserialize<'de> for BankHashAccounts {
         let pubkey_hash_accounts = pubkey_hash_accounts?;
         Ok(BankHashAccounts(pubkey_hash_accounts))
     }
+}
+
+/// Output the components that comprise bank hash
+pub fn write_bank_hash_details_file(bank: &Bank) -> std::result::Result<(), String> {
+    let details = BankHashDetails::try_from(bank)?;
+
+    let slot = details.slot;
+    let hash = &details.bank_hash;
+    let file_name = format!("{slot}-{hash}.json");
+    let parent_dir = bank
+        .rc
+        .accounts
+        .accounts_db
+        .get_base_working_path()
+        .join("bank_hash_details");
+    let path = parent_dir.join(file_name);
+    // A file with the same name implies the same hash for this slot. Skip
+    // rewriting a duplicate file in this scenario
+    if !path.exists() {
+        info!("writing details of bank {} to {}", slot, path.display());
+
+        // std::fs::write may fail (depending on platform) if the full directory
+        // path does not exist. So, call std::fs_create_dir_all first.
+        // https://doc.rust-lang.org/std/fs/fn.write.html
+        _ = std::fs::create_dir_all(parent_dir);
+        let file = std::fs::File::create(&path).map_err(|err| {
+            format!(
+                "Unable to create bank hash file at {}: {err}",
+                path.display()
+            )
+        })?;
+        serde_json::to_writer_pretty(file, &details)
+            .map_err(|err| format!("Unable to write bank hash file contents: {err}"))?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

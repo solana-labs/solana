@@ -7881,7 +7881,7 @@ impl AccountsDb {
     }
 
     /// Return all of the accounts for a given slot
-    pub(crate) fn get_pubkey_hash_account_for_slot(
+    pub fn get_pubkey_hash_account_for_slot(
         &self,
         slot: Slot,
     ) -> Vec<(Pubkey, Hash, AccountSharedData)> {

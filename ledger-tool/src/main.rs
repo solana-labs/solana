@@ -50,7 +50,7 @@ use {
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
-        bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
+        bank::{bank_hash_details, Bank, RewardCalculationEvent, TotalAccountsStats},
         bank_forks::BankForks,
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
@@ -2681,7 +2681,7 @@ fn main() {
                 }
                 if write_bank_file {
                     let working_bank = bank_forks.read().unwrap().working_bank();
-                    let _ = working_bank.write_hash_details_file();
+                    let _ = bank_hash_details::write_bank_hash_details_file(&working_bank);
                 }
                 exit_signal.store(true, Ordering::Relaxed);
                 system_monitor_service.join().unwrap();
