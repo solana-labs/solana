@@ -139,26 +139,22 @@ impl MerkleTree {
         self.nodes.iter().last()
     }
 
-    fn private_merge(a: &mut Hash, b: &Hash) {
-        //todo: verify and implement jump's fancy avx implementation
-        let hash = hash_intermediate!(a, b);
-        *a = hash;
-    }
-
     fn append_nodes(&mut self, nodes: Vec<Hash>,) {
         let mut leaf_count = self.leaf_count;
         for mut node in nodes {
-            let tmp = &mut node;
             let mut layer: usize = 0;
             leaf_count += 1;
             let mut cursor = leaf_count;
             while (cursor & 1) == 0 {
-                Self::private_merge(tmp, &self.nodes[layer]);
+                let arg1 = &node;
+                let arg2 = &self.nodes[layer];
+                //todo: verify and implement jump's fancy avx implementation
+                node = hash_intermediate!(arg1, arg2);
                 layer += 1;
                 cursor >>= 1;
             }
         
-            self.nodes[layer] = *tmp;
+            self.nodes[layer] = node;
             
         }
         self.leaf_count = leaf_count;
