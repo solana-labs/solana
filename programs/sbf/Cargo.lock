@@ -5890,6 +5890,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-sbf-rust-remaining-compute-units"
+version = "1.17.0"
+dependencies = [
+ "solana-program",
+ "solana-program-runtime",
+ "solana-program-test",
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-sbf-rust-ro-account_modify"
 version = "1.17.0"
 dependencies = [

@@ -130,6 +130,8 @@ pub struct ComputeBudget {
     /// of compute units consumed to call poseidon syscall for a given number
     /// of inputs.
     pub poseidon_cost_coefficient_c: u64,
+    /// Number of compute units consumed for accessing the remaining compute units.
+    pub get_remaining_compute_units_cost: u64,
 }
 
 impl Default for ComputeBudget {
@@ -181,6 +183,7 @@ impl ComputeBudget {
             loaded_accounts_data_size_limit: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
             poseidon_cost_coefficient_a: 61,
             poseidon_cost_coefficient_c: 542,
+            get_remaining_compute_units_cost: 100,
         }
     }
 
