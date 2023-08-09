@@ -4482,7 +4482,7 @@ fn test_slot_hash_expiry() {
 
 // This tests vote refreshes on votes that are too old to be in slot hash history. Such votes
 // will never land, so we should instead send a new vote for the tip of the heaviest fork
-// descending from the old vote. We should send vote at the tip of the current fork.
+// descending from the old vote. 
 // It creates validators A, B, and C, (C is only needed for stake distribution), then do this:
 // 1. kill B and C, let A run for a while to create its own fork A
 // 2. kill A, copy ledger of A to B so B has everything until the common ancestor, restart B and
