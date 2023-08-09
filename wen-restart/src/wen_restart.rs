@@ -110,6 +110,7 @@ pub fn wen_restart(
     let mut epoch_stakes_map = EpochStakesMap::new(root_bank.clone());
     let mut last_voted_fork_slots_aggregate = LastVotedForkSlotsAggregate::new(root_bank.slot());
     // Aggregate LastVotedForkSlots until seeing this message from 80% of the validators.
+    info!("wen_restart aggregating RestartLastVotedForkSlots");
     loop {
         let last_voted_fork_slots = cluster_info.get_last_voted_fork_slots(&mut cursor);
         let (slots_to_repair, not_active_percentage) =
@@ -134,11 +135,12 @@ pub fn wen_restart(
         if not_active_percentage < 1.0 - OPTIMISTIC_CONFIRMED_THRESHOLD {
             break;
         }
-    sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
+        sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
     }
     let my_selected_slot;
     let my_selected_hash;
     // Now wait until all necessary blocks are frozen.
+    info!("wen_restart waiting for all slots frozen");
     loop {
         let my_bank_forks = bank_forks.read().unwrap();
         if epoch_stakes_map.has_missing_epochs() {
@@ -166,6 +168,7 @@ pub fn wen_restart(
     let mut heaviest_fork_aggregate =
         HeaviestForkAggregate::new(cluster_info.id(), my_selected_slot, my_selected_hash);
     cursor = Cursor::default();
+    info!("wen_restart aggregating HeaviestFork");
     loop {
         let heaviest_fork_list = cluster_info.get_heaviest_fork(&mut cursor);
         if heaviest_fork_aggregate.aggregate(heaviest_fork_list, &mut epoch_stakes_map) > 0.8 {
@@ -177,6 +180,7 @@ pub fn wen_restart(
         }
         sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
     }
+    info!("wen_restart set_root and generate snapshot {}", my_selected_slot);
     restart_slots_to_repair_sender.send(None)?;
     let mut my_bank_forks = bank_forks.write().unwrap();
     my_bank_forks.set_root(
@@ -190,6 +194,7 @@ pub fn wen_restart(
             .iter()
             .any(|archive_info| archive_info.slot() == my_selected_slot)
         {
+            info!("wen_restart snapshot generated {}", my_selected_slot);
             break;
         }
         sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
