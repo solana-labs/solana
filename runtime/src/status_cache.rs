@@ -1,8 +1,8 @@
 use {
-    crate::ancestors::Ancestors,
     log::*,
     rand::{thread_rng, Rng},
     serde::Serialize,
+    solana_accounts_db::ancestors::Ancestors,
     solana_sdk::{
         clock::{Slot, MAX_RECENT_BLOCKHASHES},
         hash::Hash,

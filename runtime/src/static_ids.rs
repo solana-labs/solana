@@ -1,5 +1,6 @@
 use {
-    crate::{inline_spl_associated_token_account, inline_spl_token, inline_spl_token_2022},
+    crate::inline_spl_associated_token_account,
+    solana_accounts_db::{inline_spl_token, inline_spl_token_2022},
     solana_sdk::pubkey::Pubkey,
 };
 

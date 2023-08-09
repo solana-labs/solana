@@ -32,6 +32,9 @@ use {
         ThreadPool,
     },
     rocksdb::{DBRawIterator, LiveFile},
+    solana_accounts_db::hardened_unpack::{
+        unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+    },
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
     solana_metrics::{
@@ -39,10 +42,7 @@ use {
         poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     },
     solana_rayon_threadlimit::get_max_thread_count,
-    solana_runtime::{
-        bank::Bank,
-        hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
-    },
+    solana_runtime::bank::Bank,
     solana_sdk::{
         clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND},
         genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE},

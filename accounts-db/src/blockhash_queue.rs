@@ -16,7 +16,7 @@ struct HashAge {
 }
 
 /// Low memory overhead, so can be cloned for every checkpoint
-#[frozen_abi(digest = "J66ssCYGtWdQu5oyJxFKFeZY86nUjThBdBeXQYuRPDvE")]
+#[frozen_abi(digest = "8upYCMG37Awf4FGQ5kKtZARHP1QfD2GMpQCPnwCCsxhu")]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample)]
 pub struct BlockhashQueue {
     /// index of last hash to be registered
@@ -124,7 +124,7 @@ impl BlockhashQueue {
         })
     }
 
-    pub(crate) fn get_max_age(&self) -> usize {
+    pub fn get_max_age(&self) -> usize {
         self.max_age
     }
 }

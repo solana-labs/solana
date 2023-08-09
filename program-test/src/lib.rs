@@ -8,6 +8,7 @@ use {
     base64::{prelude::BASE64_STANDARD, Engine},
     chrono_humanize::{Accuracy, HumanTime, Tense},
     log::*,
+    solana_accounts_db::epoch_accounts_hash::EpochAccountsHash,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
     solana_bpf_loader_program::serialization::serialize_parameters,
@@ -20,7 +21,6 @@ use {
         bank::Bank,
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
-        epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
     },
@@ -1118,7 +1118,7 @@ impl ProgramTestContext {
                 &Pubkey::default(),
                 pre_warp_slot,
                 // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
-                solana_runtime::accounts_db::CalcAccountsHashDataSource::IndexForTests,
+                solana_accounts_db::accounts_db::CalcAccountsHashDataSource::IndexForTests,
             ))
         };
 

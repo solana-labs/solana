@@ -14,9 +14,9 @@ use {
 // Eager rent collection repeats in cyclic manner.
 // Each cycle is composed of <partition_count> number of tiny pubkey subranges
 // to scan, which is always multiple of the number of slots in epoch.
-pub(crate) type PartitionIndex = u64;
+pub type PartitionIndex = u64;
 type PartitionsPerCycle = u64;
-pub(crate) type Partition = (PartitionIndex, PartitionIndex, PartitionsPerCycle);
+pub type Partition = (PartitionIndex, PartitionIndex, PartitionsPerCycle);
 type RentCollectionCycleParams = (
     Epoch,
     SlotCount,
@@ -43,7 +43,7 @@ fn partition_index_from_slot_index(
     slot_index_in_epoch + epoch_index_in_cycle * slot_count_per_epoch
 }
 
-pub(crate) fn get_partition_from_slot_indexes(
+pub fn get_partition_from_slot_indexes(
     cycle_params: RentCollectionCycleParams,
     start_slot_index: SlotIndex,
     end_slot_index: SlotIndex,
@@ -100,8 +100,9 @@ pub(crate) fn get_partition_from_slot_indexes(
 
 /// used only by filler accounts in debug path
 /// previous means slot - 1, not parent
-#[cfg(test)]
-pub(crate) fn variable_cycle_partition_from_previous_slot(
+// These functions/fields are only usable from a dev context (i.e. tests and benches)
+#[cfg(feature = "dev-context-only-utils")]
+pub fn variable_cycle_partition_from_previous_slot(
     epoch_schedule: &EpochSchedule,
     slot: Slot,
 ) -> Partition {
@@ -137,7 +138,7 @@ pub(crate) fn variable_cycle_partition_from_previous_slot(
 /// 1. 'pubkey_range_from_partition'
 /// 2. 'partition_from_pubkey'
 /// 3. this function
-pub(crate) fn get_partition_end_indexes(partition: &Partition) -> Vec<PartitionIndex> {
+pub fn get_partition_end_indexes(partition: &Partition) -> Vec<PartitionIndex> {
     if partition.0 == partition.1 && partition.0 == 0 {
         // special case for start=end=0. ie. (0, 0, N). This returns [0]
         vec![0]
@@ -149,7 +150,7 @@ pub(crate) fn get_partition_end_indexes(partition: &Partition) -> Vec<PartitionI
     }
 }
 
-pub(crate) fn rent_single_epoch_collection_cycle_params(
+pub fn rent_single_epoch_collection_cycle_params(
     epoch: Epoch,
     slot_count_per_epoch: SlotCount,
 ) -> RentCollectionCycleParams {
@@ -163,7 +164,7 @@ pub(crate) fn rent_single_epoch_collection_cycle_params(
     )
 }
 
-pub(crate) fn rent_multi_epoch_collection_cycle_params(
+pub fn rent_multi_epoch_collection_cycle_params(
     epoch: Epoch,
     slot_count_per_epoch: SlotCount,
     first_normal_epoch: Epoch,
@@ -180,7 +181,7 @@ pub(crate) fn rent_multi_epoch_collection_cycle_params(
     )
 }
 
-pub(crate) fn get_partitions(
+pub fn get_partitions(
     slot: Slot,
     parent_slot: Slot,
     slot_count_in_two_day: SlotCount,
@@ -221,7 +222,7 @@ pub(crate) fn get_partitions(
 // start_index..=end_index. But it has some exceptional cases, including
 // this important and valid one:
 //   0..=0: the first partition in the new epoch when crossing epochs
-pub(crate) fn pubkey_range_from_partition(
+pub fn pubkey_range_from_partition(
     (start_index, end_index, partition_count): Partition,
 ) -> RangeInclusive<Pubkey> {
     assert!(start_index <= end_index);
@@ -336,14 +337,14 @@ pub(crate) fn pubkey_range_from_partition(
     start_pubkey_final..=end_pubkey_final
 }
 
-pub(crate) fn prefix_from_pubkey(pubkey: &Pubkey) -> u64 {
+pub fn prefix_from_pubkey(pubkey: &Pubkey) -> u64 {
     const PREFIX_SIZE: usize = mem::size_of::<u64>();
     u64::from_be_bytes(pubkey.as_ref()[0..PREFIX_SIZE].try_into().unwrap())
 }
 
 /// This is the inverse of pubkey_range_from_partition.
 /// return the lowest end_index which would contain this pubkey
-pub(crate) fn partition_from_pubkey(
+pub fn partition_from_pubkey(
     pubkey: &Pubkey,
     partition_count: PartitionsPerCycle,
 ) -> PartitionIndex {

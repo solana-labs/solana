@@ -6,22 +6,22 @@ use solana_sdk::clock::Slot;
 #[derive(Debug)]
 /// Configuration options for partitioned epoch rewards.
 /// This struct allows various forms of testing, especially prior to feature activation.
-pub(crate) struct PartitionedEpochRewardsConfig {
+pub struct PartitionedEpochRewardsConfig {
     /// Number of blocks for reward calculation and storing vote accounts.
     /// Distributing rewards to stake accounts begins AFTER this many blocks.
     /// Normally, this will be 1.
     /// if force_one_slot_partitioned_rewards, this will be 0 (ie. we take 0 blocks just for reward calculation)
-    pub(crate) reward_calculation_num_blocks: Slot,
+    pub reward_calculation_num_blocks: Slot,
     /// number of stake accounts to store in one block during partitioned reward interval
     /// normally, this is a number tuned for reasonable performance, such as 4096 accounts/block
     /// if force_one_slot_partitioned_rewards, this will usually be u64::MAX so that all stake accounts are written in the first block
-    pub(crate) stake_account_stores_per_block: Slot,
+    pub stake_account_stores_per_block: Slot,
     /// if true, end of epoch bank rewards will force using partitioned rewards distribution.
     /// see `set_test_enable_partitioned_rewards`
-    pub(crate) test_enable_partitioned_rewards: bool,
+    pub test_enable_partitioned_rewards: bool,
     /// if true, end of epoch non-partitioned bank rewards will test the partitioned rewards distribution vote and stake accounts
     /// This has a significant performance impact on the first slot in each new epoch.
-    pub(crate) test_compare_partitioned_epoch_rewards: bool,
+    pub test_compare_partitioned_epoch_rewards: bool,
 }
 
 impl Default for PartitionedEpochRewardsConfig {
@@ -55,7 +55,7 @@ pub enum TestPartitionedEpochRewards {
 
 #[allow(dead_code)]
 impl PartitionedEpochRewardsConfig {
-    pub(crate) fn new(test: TestPartitionedEpochRewards) -> Self {
+    pub fn new(test: TestPartitionedEpochRewards) -> Self {
         match test {
             TestPartitionedEpochRewards::None => Self::default(),
             TestPartitionedEpochRewards::CompareResults => {

@@ -16,6 +16,7 @@ crossbeam-channel = { workspace = true }
 log = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-cli-output = { workspace = true }
 solana-client = { workspace = true }
 solana-core = { workspace = true }

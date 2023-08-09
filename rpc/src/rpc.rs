@@ -1,5 +1,4 @@
 //! The `rpc` module implements the Solana RPC interface.
-
 use {
     crate::{
         max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -13,6 +12,12 @@ use {
     solana_account_decoder::{
         parse_token::{is_known_spl_token_id, token_amount_to_ui_amount, UiTokenAmount},
         UiAccount, UiAccountEncoding, UiDataSliceConfig, MAX_BASE58_BYTES,
+    },
+    solana_accounts_db::{
+        accounts::AccountAddressFilter,
+        accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig},
+        inline_spl_token::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
+        inline_spl_token_2022::{self, ACCOUNTTYPE_ACCOUNT},
     },
     solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_entry::entry::Entry,
@@ -42,13 +47,9 @@ use {
         response::{Response as RpcResponse, *},
     },
     solana_runtime::{
-        accounts::AccountAddressFilter,
-        accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig},
         bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
-        inline_spl_token::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
-        inline_spl_token_2022::{self, ACCOUNTTYPE_ACCOUNT},
         non_circulating_supply::calculate_non_circulating_supply,
         prioritization_fee_cache::PrioritizationFeeCache,
         snapshot_config::SnapshotConfig,
@@ -4632,6 +4633,7 @@ pub mod tests {
         jsonrpc_core::{futures, ErrorCode, MetaIoHandler, Output, Response, Value},
         jsonrpc_core_client::transports::local,
         serde::de::DeserializeOwned,
+        solana_accounts_db::{inline_spl_token, inline_spl_token_2022},
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_entry::entry::next_versioned_entry,
         solana_gossip::socketaddr,
@@ -4650,8 +4652,7 @@ pub mod tests {
         },
         solana_runtime::{
             accounts_background_service::AbsRequestSender, bank::BankTestConfig,
-            commitment::BlockCommitment, inline_spl_token,
-            non_circulating_supply::non_circulating_accounts,
+            commitment::BlockCommitment, non_circulating_supply::non_circulating_accounts,
         },
         solana_sdk::{
             account::{Account, WritableAccount},

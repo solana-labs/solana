@@ -94,7 +94,7 @@ pub struct InMemAccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<
     bucket: Option<Arc<BucketApi<(Slot, U)>>>,
 
     // pubkey ranges that this bin must hold in the cache while the range is present in this vec
-    pub(crate) cache_ranges_held: CacheRangesHeld,
+    pub cache_ranges_held: CacheRangesHeld,
     // incremented each time stop_evictions is changed
     stop_evictions_changes: AtomicU64,
     // true while ranges are being manipulated. Used to keep an async flush from removing things while a range is being held.
@@ -322,7 +322,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
 
     /// lookup 'pubkey' in index (in_mem or disk).
     /// call 'callback' whether found or not
-    pub(crate) fn get_internal<RT>(
+    pub fn get_internal<RT>(
         &self,
         pubkey: &K,
         // return true if item should be added to in_mem cache
@@ -545,7 +545,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
     /// the new item.
     /// if 'other_slot' is some, then also remove any entries in the slot list that are at 'other_slot'
     /// return resulting len of slot list
-    pub(crate) fn lock_and_update_slot_list(
+    pub fn lock_and_update_slot_list(
         current: &AccountMapEntryInner<T>,
         new_value: (Slot, T),
         other_slot: Option<Slot>,
@@ -920,7 +920,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         self.stop_evictions_changes.load(Ordering::Acquire)
     }
 
-    pub(crate) fn flush(&self, can_advance_age: bool) {
+    pub fn flush(&self, can_advance_age: bool) {
         if let Some(flush_guard) = FlushGuard::lock(&self.flushing_active) {
             self.flush_internal(&flush_guard, can_advance_age)
         }
@@ -1089,7 +1089,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
     /// duplicate pubkeys have a slot list with len > 1
     /// These were collected for this bin when we did batch inserts in the bg flush threads.
     /// Insert these into the in-mem index, then return the duplicate (Slot, Pubkey)
-    pub(crate) fn populate_and_retrieve_duplicate_keys_from_startup(&self) -> Vec<(Slot, Pubkey)> {
+    pub fn populate_and_retrieve_duplicate_keys_from_startup(&self) -> Vec<(Slot, Pubkey)> {
         // in order to return accurate and complete duplicates, we must have nothing left remaining to insert
         assert!(self.startup_info.insert.lock().unwrap().is_empty());
 

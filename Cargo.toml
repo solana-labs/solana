@@ -3,6 +3,7 @@ members = [
     "account-decoder",
     "accounts-bench",
     "accounts-cluster-bench",
+    "accounts-db",
     "banking-bench",
     "banks-client",
     "banks-interface",
@@ -293,6 +294,7 @@ socket2 = "0.5.3"
 soketto = "0.7"
 solana_rbpf = "=0.6.0"
 solana-account-decoder = { path = "account-decoder", version = "=1.17.0" }
+solana-accounts-db = { path = "accounts-db", version = "=1.17.0" }
 solana-address-lookup-table-program = { path = "programs/address-lookup-table", version = "=1.17.0" }
 solana-banks-client = { path = "banks-client", version = "=1.17.0" }
 solana-banks-interface = { path = "banks-interface", version = "=1.17.0" }

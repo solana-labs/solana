@@ -37,6 +37,7 @@ serde = { workspace = true }
 serde_bytes = { workspace = true }
 sha2 = { workspace = true }
 solana-account-decoder = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-cost-model = { workspace = true }
 solana-entry = { workspace = true }

@@ -5,6 +5,7 @@ use {
     base64::{prelude::BASE64_STANDARD, Engine},
     clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches},
     itertools::Itertools,
+    solana_accounts_db::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     solana_clap_utils::{
         input_parsers::{
             cluster_type_of, pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime,
@@ -16,7 +17,6 @@ use {
     solana_entry::poh::compute_hashes_per_tick,
     solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account},
     solana_ledger::{blockstore::create_new_ledger, blockstore_options::LedgerColumnOptions},
-    solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         bpf_loader_upgradeable::UpgradeableLoaderState,

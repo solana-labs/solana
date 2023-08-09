@@ -1,6 +1,6 @@
 use {
     clap::{value_t, values_t_or_exit, ArgMatches},
-    solana_runtime::{
+    solana_accounts_db::{
         accounts_db::{AccountsDb, AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb},
         partitioned_rewards::TestPartitionedEpochRewards,

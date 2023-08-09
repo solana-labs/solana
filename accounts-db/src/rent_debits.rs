@@ -1,11 +1,11 @@
 use {
-    crate::bank::RewardInfo,
+    crate::stake_rewards::RewardInfo,
     solana_sdk::{pubkey::Pubkey, reward_type::RewardType},
     std::collections::HashMap,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct RentDebit {
+pub struct RentDebit {
     rent_collected: u64,
     post_balance: u64,
 }
@@ -27,16 +27,22 @@ impl RentDebit {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RentDebits(HashMap<Pubkey, RentDebit>);
 impl RentDebits {
-    pub(crate) fn get_account_rent_debit(&self, address: &Pubkey) -> u64 {
+    pub fn get_account_rent_debit(&self, address: &Pubkey) -> u64 {
         self.0
             .get(address)
             .map(|r| r.rent_collected)
             .unwrap_or_default()
     }
 
-    #[cfg(test)]
-    pub(crate) fn len(&self) -> usize {
+    // These functions/fields are only usable from a dev context (i.e. tests and benches)
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     pub fn insert(&mut self, address: &Pubkey, rent_collected: u64, post_balance: u64) {

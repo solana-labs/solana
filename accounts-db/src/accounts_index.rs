@@ -449,7 +449,7 @@ pub struct RootsTracker {
     /// Constructed during load from snapshots.
     /// Updated every time we add a new root or clean/shrink an append vec into irrelevancy.
     /// Range is approximately the last N slots where N is # slots per epoch.
-    pub(crate) alive_roots: RollingBitField,
+    pub alive_roots: RollingBitField,
     uncleaned_roots: HashSet<Slot>,
     previous_uncleaned_roots: HashSet<Slot>,
 }
@@ -677,7 +677,7 @@ pub struct AccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
-    pub(crate) roots_tracker: RwLock<RootsTracker>,
+    pub roots_tracker: RwLock<RootsTracker>,
     ongoing_scan_roots: RwLock<BTreeMap<Slot, u64>>,
     // Each scan has some latest slot `S` that is the tip of the fork the scan
     // is iterating over. The unique id of that slot `S` is recorded here (note we don't use
@@ -1420,7 +1420,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
 
     /// Get an account
     /// The latest account that appears in `ancestors` or `roots` is returned.
-    pub(crate) fn get(
+    pub fn get(
         &self,
         pubkey: &Pubkey,
         ancestors: Option<&Ancestors>,
@@ -1996,7 +1996,8 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         self.roots_tracker.read().unwrap().uncleaned_roots.len()
     }
 
-    #[cfg(test)]
+    // These functions/fields are only usable from a dev context (i.e. tests and benches)
+    #[cfg(feature = "dev-context-only-utils")]
     // filter any rooted entries and return them along with a bool that indicates
     // if this account has no more entries. Note this does not update the secondary
     // indexes!
@@ -2007,6 +2008,34 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             (reclaims, slot_list.is_empty())
         })
         .unwrap()
+    }
+}
+
+// These functions/fields are only usable from a dev context (i.e. tests and benches)
+#[cfg(feature = "dev-context-only-utils")]
+impl<T: IndexValue> AccountIndexGetResult<T> {
+    pub fn unwrap(self) -> (ReadAccountMapEntry<T>, usize) {
+        match self {
+            AccountIndexGetResult::Found(lock, size) => (lock, size),
+            _ => {
+                panic!("trying to unwrap AccountIndexGetResult with non-Success result");
+            }
+        }
+    }
+
+    pub fn is_none(&self) -> bool {
+        !self.is_some()
+    }
+
+    pub fn is_some(&self) -> bool {
+        matches!(self, AccountIndexGetResult::Found(_lock, _size))
+    }
+
+    pub fn map<V, F: FnOnce((ReadAccountMapEntry<T>, usize)) -> V>(self, f: F) -> Option<V> {
+        match self {
+            AccountIndexGetResult::Found(lock, size) => Some(f((lock, size))),
+            _ => None,
+        }
     }
 }
 
@@ -2042,32 +2071,6 @@ pub mod tests {
         AccountSecondaryIndexes {
             indexes: account_indexes,
             keys: None,
-        }
-    }
-
-    impl<T: IndexValue> AccountIndexGetResult<T> {
-        pub fn unwrap(self) -> (ReadAccountMapEntry<T>, usize) {
-            match self {
-                AccountIndexGetResult::Found(lock, size) => (lock, size),
-                _ => {
-                    panic!("trying to unwrap AccountIndexGetResult with non-Success result");
-                }
-            }
-        }
-
-        pub fn is_none(&self) -> bool {
-            !self.is_some()
-        }
-
-        pub fn is_some(&self) -> bool {
-            matches!(self, AccountIndexGetResult::Found(_lock, _size))
-        }
-
-        pub fn map<V, F: FnOnce((ReadAccountMapEntry<T>, usize)) -> V>(self, f: F) -> Option<V> {
-            match self {
-                AccountIndexGetResult::Found(lock, size) => Some(f((lock, size))),
-                _ => None,
-            }
         }
     }
 

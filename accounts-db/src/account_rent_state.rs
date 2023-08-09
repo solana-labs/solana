@@ -10,7 +10,7 @@ use {
 };
 
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum RentState {
+pub enum RentState {
     /// account.lamports == 0
     Uninitialized,
     /// 0 < account.lamports < rent-exempt-minimum
@@ -23,7 +23,7 @@ pub(crate) enum RentState {
 }
 
 impl RentState {
-    pub(crate) fn from_account(account: &AccountSharedData, rent: &Rent) -> Self {
+    pub fn from_account(account: &AccountSharedData, rent: &Rent) -> Self {
         if account.lamports() == 0 {
             Self::Uninitialized
         } else if rent.is_exempt(account.lamports(), account.data().len()) {
@@ -36,7 +36,7 @@ impl RentState {
         }
     }
 
-    pub(crate) fn transition_allowed_from(&self, pre_rent_state: &RentState) -> bool {
+    pub fn transition_allowed_from(&self, pre_rent_state: &RentState) -> bool {
         match self {
             Self::Uninitialized | Self::RentExempt => true,
             Self::RentPaying {
@@ -73,7 +73,7 @@ pub(crate) fn submit_rent_state_metrics(pre_rent_state: &RentState, post_rent_st
     }
 }
 
-pub(crate) fn check_rent_state(
+pub fn check_rent_state(
     pre_rent_state: Option<&RentState>,
     post_rent_state: Option<&RentState>,
     transaction_context: &TransactionContext,

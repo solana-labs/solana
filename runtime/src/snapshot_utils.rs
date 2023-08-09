@@ -1,15 +1,6 @@
 use {
     crate::{
-        account_storage::AccountStorageMap,
-        accounts_db::{AccountStorageEntry, AtomicAppendVecId},
-        accounts_file::AccountsFileError,
-        append_vec::AppendVec,
-        hardened_unpack::{
-            streaming_unpack_snapshot, unpack_snapshot, ParallelSelector, UnpackError,
-            UnpackedAppendVecMap,
-        },
         serde_snapshot::SnapshotStreams,
-        shared_buffer_reader::{SharedBuffer, SharedBufferReader},
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
@@ -27,6 +18,19 @@ use {
     log::*,
     rayon::prelude::*,
     regex::Regex,
+    solana_accounts_db::{
+        account_storage::AccountStorageMap,
+        accounts_db::{
+            self, create_accounts_run_and_snapshot_dirs, AccountStorageEntry, AtomicAppendVecId,
+        },
+        accounts_file::AccountsFileError,
+        append_vec::AppendVec,
+        hardened_unpack::{
+            streaming_unpack_snapshot, unpack_snapshot, ParallelSelector, UnpackError,
+            UnpackedAppendVecMap,
+        },
+        shared_buffer_reader::{SharedBuffer, SharedBufferReader},
+    },
     solana_measure::{measure, measure::Measure},
     solana_sdk::{clock::Slot, hash::Hash},
     std::{
@@ -38,7 +42,7 @@ use {
         path::{Path, PathBuf},
         process::ExitStatus,
         str::FromStr,
-        sync::{atomic::AtomicU32, Arc},
+        sync::{atomic::AtomicU32, Arc, Mutex},
         thread::{Builder, JoinHandle},
     },
     tar::{self, Archive},
@@ -49,7 +53,6 @@ use {
 mod archive_format;
 pub mod snapshot_storage_rebuilder;
 pub use archive_format::*;
-use std::sync::Mutex;
 
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
 pub const SNAPSHOT_VERSION_FILENAME: &str = "version";
@@ -482,25 +485,8 @@ pub fn create_and_canonicalize_directories(directories: &[PathBuf]) -> Result<Ve
 /// This is useful if the process does not have permission
 /// to delete the top level directory it might be able to
 /// delete the contents of that directory.
-pub fn delete_contents_of_path(path: impl AsRef<Path>) {
-    match fs_err::read_dir(path.as_ref()) {
-        Err(err) => {
-            warn!("Failed to delete contents: {err}")
-        }
-        Ok(dir_entries) => {
-            for entry in dir_entries.flatten() {
-                let sub_path = entry.path();
-                let result = if sub_path.is_dir() {
-                    fs_err::remove_dir_all(&sub_path)
-                } else {
-                    fs_err::remove_file(&sub_path)
-                };
-                if let Err(err) = result {
-                    warn!("Failed to delete contents: {err}");
-                }
-            }
-        }
-    }
+pub(crate) fn delete_contents_of_path(path: impl AsRef<Path>) {
+    accounts_db::delete_contents_of_path(path)
 }
 
 /// Moves and asynchronously deletes the contents of a directory to avoid blocking on it.
@@ -753,7 +739,7 @@ pub fn archive_snapshot_package(
     for storage in snapshot_package.snapshot_storages.iter() {
         storage.flush()?;
         let storage_path = storage.get_path();
-        let output_path = staging_accounts_dir.join(crate::append_vec::AppendVec::file_name(
+        let output_path = staging_accounts_dir.join(AppendVec::file_name(
             storage.slot(),
             storage.append_vec_id(),
         ));
@@ -1116,55 +1102,15 @@ fn check_deserialize_file_consumed(
     Ok(())
 }
 
-/// To allow generating a bank snapshot directory with full state information, we need to
-/// hardlink account appendvec files from the runtime operation directory to a snapshot
-/// hardlink directory.  This is to create the run/ and snapshot sub directories for an
-/// account_path provided by the user.  These two sub directories are on the same file
-/// system partition to allow hard-linking.
-pub fn create_accounts_run_and_snapshot_dirs(
-    account_dir: impl AsRef<Path>,
-) -> std::io::Result<(PathBuf, PathBuf)> {
-    let run_path = account_dir.as_ref().join("run");
-    let snapshot_path = account_dir.as_ref().join("snapshot");
-    if (!run_path.is_dir()) || (!snapshot_path.is_dir()) {
-        // If the "run/" or "snapshot" sub directories do not exist, the directory may be from
-        // an older version for which the appendvec files are at this directory.  Clean up
-        // them first.
-        // This will be done only once when transitioning from an old image without run directory
-        // to this new version using run and snapshot directories.
-        // The run/ content cleanup will be done at a later point.  The snapshot/ content persists
-        // across the process boot, and will be purged by the account_background_service.
-        if fs_err::remove_dir_all(&account_dir).is_err() {
-            delete_contents_of_path(&account_dir);
-        }
-        fs_err::create_dir_all(&run_path)?;
-        fs_err::create_dir_all(&snapshot_path)?;
-    }
-
-    Ok((run_path, snapshot_path))
-}
-
 /// For all account_paths, create the run/ and snapshot/ sub directories.
 /// If an account_path directory does not exist, create it.
 /// It returns (account_run_paths, account_snapshot_paths) or error
 pub fn create_all_accounts_run_and_snapshot_dirs(
     account_paths: &[PathBuf],
 ) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
-    let mut run_dirs = Vec::with_capacity(account_paths.len());
-    let mut snapshot_dirs = Vec::with_capacity(account_paths.len());
-    for account_path in account_paths {
-        // create the run/ and snapshot/ sub directories for each account_path
-        let (run_dir, snapshot_dir) =
-            create_accounts_run_and_snapshot_dirs(account_path).map_err(|err| {
-                SnapshotError::IoWithSource(
-                    err,
-                    "Unable to create account run and snapshot directories",
-                )
-            })?;
-        run_dirs.push(run_dir);
-        snapshot_dirs.push(snapshot_dir);
-    }
-    Ok((run_dirs, snapshot_dirs))
+    accounts_db::create_all_accounts_run_and_snapshot_dirs(account_paths).map_err(|err| {
+        SnapshotError::IoWithSource(err, "Unable to create account run and snapshot directories")
+    })
 }
 
 /// Return account path from the appendvec path after checking its format.

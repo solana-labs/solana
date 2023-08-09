@@ -89,36 +89,42 @@ impl Ancestors {
         self.ancestors.max_exclusive().saturating_sub(1)
     }
 }
+
+// These functions/fields are only usable from a dev context (i.e. tests and benches)
+#[cfg(feature = "dev-context-only-utils")]
+impl std::iter::FromIterator<(Slot, usize)> for Ancestors {
+    fn from_iter<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = (Slot, usize)>,
+    {
+        let mut data = Vec::new();
+        for i in iter {
+            data.push(i);
+        }
+        Ancestors::from(data)
+    }
+}
+
+#[cfg(feature = "dev-context-only-utils")]
+impl From<Vec<(Slot, usize)>> for Ancestors {
+    fn from(source: Vec<(Slot, usize)>) -> Ancestors {
+        Ancestors::from(source.into_iter().map(|(slot, _)| slot).collect::<Vec<_>>())
+    }
+}
+
+#[cfg(feature = "dev-context-only-utils")]
+impl Ancestors {
+    pub fn insert(&mut self, slot: Slot, _size: usize) {
+        self.ancestors.insert(slot);
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use {
         super::*, crate::contains::Contains, log::*, solana_measure::measure::Measure,
         std::collections::HashSet,
     };
-
-    impl std::iter::FromIterator<(Slot, usize)> for Ancestors {
-        fn from_iter<I>(iter: I) -> Self
-        where
-            I: IntoIterator<Item = (Slot, usize)>,
-        {
-            let mut data = Vec::new();
-            for i in iter {
-                data.push(i);
-            }
-            Ancestors::from(data)
-        }
-    }
-
-    impl From<Vec<(Slot, usize)>> for Ancestors {
-        fn from(source: Vec<(Slot, usize)>) -> Ancestors {
-            Ancestors::from(source.into_iter().map(|(slot, _)| slot).collect::<Vec<_>>())
-        }
-    }
-    impl Ancestors {
-        pub fn insert(&mut self, slot: Slot, _size: usize) {
-            self.ancestors.insert(slot);
-        }
-    }
 
     #[test]
     fn test_ancestors_permutations() {

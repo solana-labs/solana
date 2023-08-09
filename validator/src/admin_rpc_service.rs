@@ -9,6 +9,7 @@ use {
     jsonrpc_server_utils::tokio,
     log::*,
     serde::{de::Deserializer, Deserialize, Serialize},
+    solana_accounts_db::accounts_index::AccountIndex,
     solana_core::{
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         consensus::{tower_storage::TowerStorage, Tower},
@@ -18,7 +19,6 @@ use {
     solana_gossip::contact_info::{ContactInfo, Protocol, SOCKET_ADDR_UNSPECIFIED},
     solana_rpc::rpc::verify_pubkey,
     solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
-    solana_runtime::accounts_index::AccountIndex,
     solana_sdk::{
         exit::Exit,
         pubkey::Pubkey,
@@ -865,16 +865,17 @@ mod tests {
         super::*,
         rand::{distributions::Uniform, thread_rng, Rng},
         serde_json::Value,
+        solana_accounts_db::{
+            accounts_index::AccountSecondaryIndexes, inline_spl_token,
+            secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
+        },
         solana_core::consensus::tower_storage::NullTowerStorage,
         solana_gossip::cluster_info::ClusterInfo,
         solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
         solana_rpc::rpc::create_validator_exit,
         solana_runtime::{
-            accounts_index::AccountSecondaryIndexes,
             bank::{Bank, BankTestConfig},
             bank_forks::BankForks,
-            inline_spl_token,
-            secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
         },
         solana_sdk::{
             account::{Account, AccountSharedData},

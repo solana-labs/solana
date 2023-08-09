@@ -16,6 +16,10 @@ use {
     },
     serde_json::json,
     solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
+    solana_accounts_db::{
+        accounts::Accounts, accounts_db::CalcAccountsHashDataSource, accounts_index::ScanConfig,
+        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+    },
     solana_clap_utils::{
         hidden_unless_forced,
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
@@ -46,12 +50,8 @@ use {
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
-        accounts::Accounts,
-        accounts_db::CalcAccountsHashDataSource,
-        accounts_index::ScanConfig,
         bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
         bank_forks::BankForks,
-        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils,
@@ -2292,7 +2292,7 @@ fn main() {
                 create_new_ledger(
                     &output_directory,
                     &genesis_config,
-                    solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+                    solana_accounts_db::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
                     LedgerColumnOptions::default(),
                 )
                 .unwrap_or_else(|err| {
