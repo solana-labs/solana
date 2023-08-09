@@ -1,10 +1,8 @@
 //! config for staking
 //!  carries variables that the stake program cares about
 
-use {
-    super::state::{DEFAULT_SLASH_PENALTY, DEFAULT_WARMUP_COOLDOWN_RATE},
-    serde_derive::{Deserialize, Serialize},
-};
+pub use super::state::{DEFAULT_SLASH_PENALTY, DEFAULT_WARMUP_COOLDOWN_RATE};
+use serde_derive::{Deserialize, Serialize};
 
 // stake config ID
 crate::declare_deprecated_id!("StakeConfig11111111111111111111111111111111");
