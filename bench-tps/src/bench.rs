@@ -40,9 +40,10 @@ use {
 // The point at which transactions become "too old", in seconds.
 const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) as u64;
 
-// Add prioritization fee to transfer transactions, when `--use-randomized-compute-unit-price`
-// is used, compute-unit-price is randomly generated in range of (0..MAX_COMPUTE_UNIT_PRICE)
-// multiplies by COMPUTE_UNIT_PRICE_MULTIPLIER;
+// Add prioritization fee to transfer transactions, if `compute_unit_price` is set.
+// If `Random` the compute-unit-price is determined by generating a random number in the range
+// 0..MAX_RANDOM_COMPUTE_UNIT_PRICE then multiplying by COMPUTE_UNIT_PRICE_MULTIPLIER.
+// If `Fixed` the compute-unit-price is the value of the `compute-unit-price` parameter.
 // It also sets transaction's compute-unit to TRANSFER_TRANSACTION_COMPUTE_UNIT. Therefore the
 // max additional cost is:
 // `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE * COMPUTE_UNIT_PRICE_MULTIPLIER / 1_000_000`
@@ -57,14 +58,14 @@ pub fn max_lamports_for_prioritization(compute_unit_price: &Option<ComputeUnitPr
     };
 
     let compute_unit_price = match compute_unit_price {
-        ComputeUnitPrice::Random => MAX_RANDOM_COMPUTE_UNIT_PRICE,
-        ComputeUnitPrice::Fixed(compute_unit_price) => *compute_unit_price,
+        ComputeUnitPrice::Random => (MAX_RANDOM_COMPUTE_UNIT_PRICE as u128)
+            .saturating_mul(COMPUTE_UNIT_PRICE_MULTIPLIER as u128),
+        ComputeUnitPrice::Fixed(compute_unit_price) => *compute_unit_price as u128,
     };
 
     const MICRO_LAMPORTS_PER_LAMPORT: u64 = 1_000_000;
-    let micro_lamport_fee: u128 = (compute_unit_price as u128)
-        .saturating_mul(COMPUTE_UNIT_PRICE_MULTIPLIER as u128)
-        .saturating_mul(TRANSFER_TRANSACTION_COMPUTE_UNIT as u128);
+    let micro_lamport_fee: u128 =
+        compute_unit_price.saturating_mul(TRANSFER_TRANSACTION_COMPUTE_UNIT as u128);
     let fee = micro_lamport_fee
         .saturating_add(MICRO_LAMPORTS_PER_LAMPORT.saturating_sub(1) as u128)
         .saturating_div(MICRO_LAMPORTS_PER_LAMPORT as u128);
