@@ -6,13 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 and follows a [Backwards Compatability Policy](https://docs.solana.com/developing/backwards-compatibility)
 
-Release channels have their own copy of this changelog:
-* [edge - v1.17](#edge-channel)
-* [beta - v1.16](https://github.com/solana-labs/solana/blob/v1.16/CHANGELOG.md)
-* [stable - v1.14](https://github.com/solana-labs/solana/blob/v1.14/CHANGELOG.md)
-
-<a name="edge-channel"></a>
-## [1.17.0] - Unreleased
+## [1.16.8] - Unreleased
 * Changes
   * Added a changelog.
 * Upgrade Notes
