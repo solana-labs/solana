@@ -1934,7 +1934,8 @@ pub mod test {
         );
         assert_eq!(
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 100, 10000),
-            (delta / (100_f64)) as usize + QUIC_MIN_STAKED_CONCURRENT_STREAMS
+            ((delta / (100_f64)) as usize + QUIC_MIN_STAKED_CONCURRENT_STREAMS)
+                .min(QUIC_MAX_STAKED_CONCURRENT_STREAMS)
         );
         assert_eq!(
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 0, 10000),
