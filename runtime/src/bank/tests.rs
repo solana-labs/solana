@@ -8003,42 +8003,55 @@ fn test_compute_active_feature_set() {
     assert!(feature_set.is_active(&test_feature));
 }
 
+fn set_up_account_with_bank(bank: &mut Bank, pubkey: &Pubkey, lamports: u64) -> AccountSharedData {
+    let new_account = AccountSharedData::from(Account {
+        lamports,
+        ..Account::default()
+    });
+    bank.store_account_and_update_capitalization(pubkey, &new_account);
+    assert_eq!(bank.get_balance(pubkey), lamports);
+    new_account
+}
+
 #[test]
 fn test_program_replacement() {
     let mut bank = create_simple_test_bank(0);
 
-    // Setup original program account
+    // Setup original program accounts
     let old_address = Pubkey::new_unique();
-    let new_address = Pubkey::new_unique();
-    bank.store_account_and_update_capitalization(
-        &old_address,
-        &AccountSharedData::from(Account {
-            lamports: 100,
-            ..Account::default()
-        }),
-    );
-    assert_eq!(bank.get_balance(&old_address), 100);
+    set_up_account_with_bank(&mut bank, &old_address, 100);
 
-    // Setup new program account
-    let new_program_account = AccountSharedData::from(Account {
-        lamports: 123,
-        ..Account::default()
-    });
-    bank.store_account_and_update_capitalization(&new_address, &new_program_account);
-    assert_eq!(bank.get_balance(&new_address), 123);
+    let (old_data_address, _) =
+        Pubkey::find_program_address(&[old_address.as_ref()], &bpf_loader_upgradeable::id());
+    set_up_account_with_bank(&mut bank, &old_data_address, 102);
+
+    // Setup new program accounts
+    let new_address = Pubkey::new_unique();
+    let new_program_account = set_up_account_with_bank(&mut bank, &new_address, 123);
+
+    let (new_data_address, _) =
+        Pubkey::find_program_address(&[new_address.as_ref()], &bpf_loader_upgradeable::id());
+    let new_program_data_account = set_up_account_with_bank(&mut bank, &new_data_address, 125);
 
     let original_capitalization = bank.capitalization();
 
     bank.replace_program_account(&old_address, &new_address, "bank-apply_program_replacement");
 
-    // New program account is now empty
+    // New program accounts are now empty
     assert_eq!(bank.get_balance(&new_address), 0);
+    assert_eq!(bank.get_balance(&new_data_address), 0);
 
     // Old program account holds the new program account
     assert_eq!(bank.get_account(&old_address), Some(new_program_account));
 
-    // Lamports in the old token account were burnt
-    assert_eq!(bank.capitalization(), original_capitalization - 100);
+    // Old program data account holds the new program data account
+    assert_eq!(
+        bank.get_account(&old_data_address),
+        Some(new_program_data_account)
+    );
+
+    // Lamports in the old token accounts were burnt
+    assert_eq!(bank.capitalization(), original_capitalization - 100 - 102);
 }
 
 fn min_rent_exempt_balance_for_sysvars(bank: &Bank, sysvar_ids: &[Pubkey]) -> u64 {

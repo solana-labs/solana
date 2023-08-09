@@ -8204,32 +8204,46 @@ impl Bank {
         new_address: &Pubkey,
         datapoint_name: &'static str,
     ) {
-        if let Some(old_account) = self.get_account_with_fixed_root(old_address) {
-            if let Some(new_account) = self.get_account_with_fixed_root(new_address) {
-                datapoint_info!(datapoint_name, ("slot", self.slot, i64));
+        let program_data_address = |address: &Pubkey| {
+            Pubkey::find_program_address(&[address.as_ref()], &bpf_loader_upgradeable::id()).0
+        };
+        let maybe_replace_program_account =
+            |old_address: &Pubkey, new_address: &Pubkey, is_program: bool| {
+                if let Some(old_account) = self.get_account_with_fixed_root(old_address) {
+                    if let Some(new_account) = self.get_account_with_fixed_root(new_address) {
+                        datapoint_info!(datapoint_name, ("slot", self.slot, i64));
 
-                // Burn lamports in the old account
-                self.capitalization
-                    .fetch_sub(old_account.lamports(), Relaxed);
+                        // Burn lamports in the old account
+                        self.capitalization
+                            .fetch_sub(old_account.lamports(), Relaxed);
 
-                // Transfer new account to old account
-                self.store_account(old_address, &new_account);
+                        // Transfer new account to old account
+                        self.store_account(old_address, &new_account);
 
-                // Clear new account
-                self.store_account(new_address, &AccountSharedData::default());
+                        // Clear new account
+                        self.store_account(new_address, &AccountSharedData::default());
 
-                // Unload a program from the bank's cache
-                self.loaded_programs_cache
-                    .write()
-                    .unwrap()
-                    .remove_programs([*old_address].into_iter());
+                        // Unload a program from the bank's cache
+                        if is_program {
+                            self.loaded_programs_cache
+                                .write()
+                                .unwrap()
+                                .remove_programs([*old_address].into_iter());
+                        }
 
-                self.calculate_and_update_accounts_data_size_delta_off_chain(
-                    old_account.data().len(),
-                    new_account.data().len(),
-                );
-            }
-        }
+                        self.calculate_and_update_accounts_data_size_delta_off_chain(
+                            old_account.data().len(),
+                            new_account.data().len(),
+                        );
+                    }
+                }
+            };
+        maybe_replace_program_account(
+            &program_data_address(old_address),
+            &program_data_address(new_address),
+            false, /* is_program */
+        );
+        maybe_replace_program_account(old_address, new_address, true /* is_program */);
     }
 
     /// Get all the accounts for this bank and calculate stats
