@@ -8,7 +8,7 @@ use {
         stake::{self, state::StakeStateV2},
     },
     solana_stake_program::stake_state,
-    std::{collections::HashSet},
+    std::collections::HashSet,
 };
 
 pub struct NonCirculatingSupply {

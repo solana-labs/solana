@@ -14,9 +14,7 @@ use {
         saturating_add_assign,
         transaction::{self, SanitizedTransaction, TransactionError},
     },
-    std::sync::{
-        atomic::{AtomicU64, Ordering},
-    },
+    std::sync::atomic::{AtomicU64, Ordering},
 };
 
 // QosService is local to each banking thread, each instance of QosService provides services to

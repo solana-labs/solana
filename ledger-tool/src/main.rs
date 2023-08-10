@@ -2930,8 +2930,11 @@ fn main() {
                             || bootstrap_validator_pubkeys.is_some();
 
                         if child_bank_required {
-                            let mut child_bank =
-                                Bank::new_from_parent(bank.clone(), bank.collector_id(), bank.slot() + 1);
+                            let mut child_bank = Bank::new_from_parent(
+                                bank.clone(),
+                                bank.collector_id(),
+                                bank.slot() + 1,
+                            );
 
                             if let Ok(rent_burn_percentage) = rent_burn_percentage {
                                 child_bank.set_rent_burn_percentage(rent_burn_percentage);
