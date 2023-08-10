@@ -652,7 +652,7 @@ fn process_loader_upgradeable_instruction(
                 .iter()
                 .map(|seeds| Pubkey::create_program_address(*seeds, caller_program_id))
                 .collect::<Result<Vec<Pubkey>, solana_sdk::pubkey::PubkeyError>>()?;
-            invoke_context.native_invoke(instruction.into(), signers.as_slice())?;
+            invoke_context.native_invoke(instruction, signers.as_slice())?;
 
             // Load and verify the program bits
             let executor = create_executor(
@@ -1146,8 +1146,7 @@ fn process_loader_upgradeable_instruction(
                 )?;
 
                 invoke_context.native_invoke(
-                    system_instruction::transfer(&payer_key, &programdata_key, required_payment)
-                        .into(),
+                    system_instruction::transfer(&payer_key, &programdata_key, required_payment),
                     &[],
                 )?;
             }

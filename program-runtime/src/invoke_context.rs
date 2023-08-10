@@ -20,12 +20,11 @@ use {
             cap_accounts_data_len, enable_early_verification_of_account_modifications, FeatureSet,
         },
         hash::Hash,
-        instruction::{AccountMeta, InstructionError},
+        instruction::{AccountMeta, Instruction, InstructionError},
         native_loader,
         pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
-        stable_layout::stable_instruction::StableInstruction,
         transaction_context::{InstructionAccount, TransactionAccount, TransactionContext},
     },
     std::{
@@ -564,7 +563,7 @@ impl<'a> InvokeContext<'a> {
     /// Entrypoint for a cross-program invocation from a builtin program
     pub fn native_invoke(
         &mut self,
-        instruction: StableInstruction,
+        instruction: Instruction,
         signers: &[Pubkey],
     ) -> Result<(), InstructionError> {
         let (instruction_accounts, program_indices) =
@@ -584,7 +583,7 @@ impl<'a> InvokeContext<'a> {
     #[allow(clippy::type_complexity)]
     pub fn prepare_instruction(
         &mut self,
-        instruction: &StableInstruction,
+        instruction: &Instruction,
         signers: &[Pubkey],
     ) -> Result<(Vec<InstructionAccount>, Vec<usize>), InstructionError> {
         // Finds the index of each account in the instruction by its pubkey.
@@ -1112,7 +1111,7 @@ mod tests {
         super::*,
         crate::compute_budget,
         serde::{Deserialize, Serialize},
-        solana_sdk::{account::WritableAccount, instruction::Instruction},
+        solana_sdk::account::WritableAccount,
     };
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -1232,7 +1231,7 @@ mod tests {
                     assert_eq!(result, Err(InstructionError::UnbalancedInstruction));
                     result?;
                     invoke_context
-                        .native_invoke(inner_instruction.into(), &[])
+                        .native_invoke(inner_instruction, &[])
                         .and(invoke_context.pop())?;
                 }
                 MockInstruction::UnbalancedPop => instruction_context
@@ -1385,7 +1384,7 @@ mod tests {
             let inner_instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let result = invoke_context
-                .native_invoke(inner_instruction.into(), &[])
+                .native_invoke(inner_instruction, &[])
                 .and(invoke_context.pop());
             assert_eq!(result, case.1);
         }
@@ -1405,7 +1404,6 @@ mod tests {
                 },
                 metas.clone(),
             );
-            let inner_instruction = StableInstruction::from(inner_instruction);
             let (inner_instruction_accounts, program_indices) = invoke_context
                 .prepare_instruction(&inner_instruction, &[])
                 .unwrap();

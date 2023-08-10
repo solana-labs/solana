@@ -41,7 +41,7 @@ use {
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
-            AccountMeta, InstructionError, ProcessedSiblingInstruction,
+            AccountMeta, Instruction, InstructionError, ProcessedSiblingInstruction,
             TRANSACTION_LEVEL_STACK_HEIGHT,
         },
         keccak, native_loader,
@@ -2073,9 +2073,7 @@ mod tests {
             bpf_loader,
             fee_calculator::FeeCalculator,
             hash::hashv,
-            instruction::Instruction,
             program::check_type_assumptions,
-            stable_layout::stable_instruction::StableInstruction,
             sysvar::{clock::Clock, epoch_schedule::EpochSchedule, rent::Rent},
             transaction_context::TransactionContext,
         },
@@ -2193,12 +2191,11 @@ mod tests {
             &"foobar",
             vec![AccountMeta::new(solana_sdk::pubkey::new_rand(), false)],
         );
-        let instruction = StableInstruction::from(instruction);
         let addr = &instruction as *const _ as u64;
         let mut memory_region = MemoryRegion {
             host_addr: addr,
             vm_addr: 0x100000000,
-            len: std::mem::size_of::<StableInstruction>() as u64,
+            len: std::mem::size_of::<Instruction>() as u64,
             vm_gap_shift: 63,
             is_writable: false,
         };
@@ -2208,13 +2205,13 @@ mod tests {
         )
         .unwrap();
         let translated_instruction =
-            translate_type::<StableInstruction>(&memory_mapping, 0x100000000, true).unwrap();
+            translate_type::<Instruction>(&memory_mapping, 0x100000000, true).unwrap();
         assert_eq!(instruction, *translated_instruction);
         memory_region.len = 1;
         memory_mapping
             .replace_region::<BpfError>(1, memory_region)
             .unwrap();
-        assert!(translate_type::<StableInstruction>(&memory_mapping, 0x100000000, true).is_err());
+        assert!(translate_type::<Instruction>(&memory_mapping, 0x100000000, true).is_err());
     }
 
     #[test]

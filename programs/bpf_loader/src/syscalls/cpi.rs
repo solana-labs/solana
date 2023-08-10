@@ -1,11 +1,8 @@
 use {
     super::*,
     crate::declare_syscall,
-    solana_sdk::{
-        stable_layout::stable_instruction::StableInstruction,
-        syscalls::{
-            MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
-        },
+    solana_sdk::syscalls::{
+        MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
     },
 };
 
@@ -30,7 +27,7 @@ trait SyscallInvokeSigned<'a, 'b> {
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<StableInstruction, EbpfError<BpfError>>;
+    ) -> Result<Instruction, EbpfError<BpfError>>;
     fn translate_accounts<'c>(
         &'c self,
         instruction_accounts: &[InstructionAccount],
@@ -87,8 +84,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<StableInstruction, EbpfError<BpfError>> {
-        let ix = translate_type::<StableInstruction>(
+    ) -> Result<Instruction, EbpfError<BpfError>> {
+        let ix = translate_type::<Instruction>(
             memory_mapping,
             addr,
             invoke_context.get_check_aligned(),
@@ -124,11 +121,10 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
             invoke_context.get_check_size(),
         )?
         .to_vec();
-
-        Ok(StableInstruction {
-            accounts: accounts.into(),
-            data: data.into(),
+        Ok(Instruction {
             program_id: ix.program_id,
+            accounts,
+            data,
         })
     }
 
@@ -398,7 +394,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<StableInstruction, EbpfError<BpfError>> {
+    ) -> Result<Instruction, EbpfError<BpfError>> {
         let ix_c = translate_type::<SolInstruction>(
             memory_mapping,
             addr,
@@ -458,10 +454,10 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             })
             .collect::<Result<Vec<AccountMeta>, EbpfError<BpfError>>>()?;
 
-        Ok(StableInstruction {
-            accounts: accounts.into(),
-            data: data.into(),
+        Ok(Instruction {
             program_id: *program_id,
+            accounts,
+            data,
         })
     }
 
