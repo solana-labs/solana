@@ -78,12 +78,12 @@ pub fn create_native_loader_transactions(
         .collect()
 }
 
-fn sync_bencher(bank: &Arc<Bank>, _bank_client: &BankClient, transactions: &[Transaction]) {
+fn sync_bencher(bank: &Bank, _bank_client: &BankClient, transactions: &[Transaction]) {
     let results = bank.process_transactions(transactions.iter());
     assert!(results.iter().all(Result::is_ok));
 }
 
-fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &[Transaction]) {
+fn async_bencher(bank: &Bank, bank_client: &BankClient, transactions: &[Transaction]) {
     for transaction in transactions.iter().cloned() {
         bank_client.async_send_transaction(transaction).unwrap();
     }
@@ -113,7 +113,7 @@ fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &[Tra
 #[allow(clippy::type_complexity)]
 fn do_bench_transactions(
     bencher: &mut Bencher,
-    bench_work: &dyn Fn(&Arc<Bank>, &BankClient, &[Transaction]),
+    bench_work: &dyn Fn(&Bank, &BankClient, &[Transaction]),
     create_transactions: &dyn Fn(&BankClient, &Keypair) -> Vec<Transaction>,
 ) {
     solana_logger::setup();

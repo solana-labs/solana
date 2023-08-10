@@ -1214,7 +1214,8 @@ pub fn create_snapshot_dirs_for_tests(
     // loop to create the banks at slot 1 to num_total
     for _ in 0..num_total {
         // prepare the bank
-        bank = Arc::new(Bank::new_from_parent(&bank, &collecter_id, bank.slot() + 1));
+        let slot = bank.slot() + 1;
+        bank = Arc::new(Bank::new_from_parent(bank, &collecter_id, slot));
         bank.fill_bank_with_ticks_for_tests();
         bank.squash();
         bank.force_flush_accounts_cache();

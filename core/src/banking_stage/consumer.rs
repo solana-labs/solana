@@ -688,7 +688,7 @@ impl Consumer {
     /// * `transactions` - a batch of transactions deserialized from packets
     /// * `pending_indexes` - identifies which indexes in the `transactions` list are still pending
     fn filter_pending_packets_from_pending_txs(
-        bank: &Arc<Bank>,
+        bank: &Bank,
         transactions: &[SanitizedTransaction],
         pending_indexes: &[usize],
     ) -> Vec<usize> {

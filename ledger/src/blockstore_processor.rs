@@ -1372,7 +1372,7 @@ fn process_next_slots(
         // handles any partials
         if next_meta.is_full() {
             let next_bank = Bank::new_from_parent(
-                bank,
+                bank.clone(),
                 &leader_schedule_cache
                     .slot_leader_at(*next_slot, Some(bank))
                     .unwrap(),

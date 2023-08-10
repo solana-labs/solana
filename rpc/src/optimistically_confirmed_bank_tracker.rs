@@ -177,7 +177,7 @@ impl OptimisticallyConfirmedBankTracker {
     fn notify_or_defer(
         subscriptions: &RpcSubscriptions,
         bank_forks: &RwLock<BankForks>,
-        bank: &Arc<Bank>,
+        bank: &Bank,
         last_notified_confirmed_slot: &mut Slot,
         pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
         slot_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
@@ -204,13 +204,13 @@ impl OptimisticallyConfirmedBankTracker {
     fn notify_or_defer_confirmed_banks(
         subscriptions: &RpcSubscriptions,
         bank_forks: &RwLock<BankForks>,
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         slot_threshold: Slot,
         last_notified_confirmed_slot: &mut Slot,
         pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
         slot_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
     ) {
-        for confirmed_bank in bank.clone().parents_inclusive().iter().rev() {
+        for confirmed_bank in bank.parents_inclusive().iter().rev() {
             if confirmed_bank.slot() > slot_threshold {
                 debug!(
                     "Calling notify_or_defer for confirmed_bank {:?}",
@@ -286,7 +286,7 @@ impl OptimisticallyConfirmedBankTracker {
                         Self::notify_or_defer_confirmed_banks(
                             subscriptions,
                             bank_forks,
-                            &bank,
+                            bank,
                             *highest_confirmed_slot,
                             last_notified_confirmed_slot,
                             pending_optimistically_confirmed_banks,
@@ -343,7 +343,7 @@ impl OptimisticallyConfirmedBankTracker {
                     Self::notify_or_defer_confirmed_banks(
                         subscriptions,
                         bank_forks,
-                        &bank,
+                        bank.clone(),
                         *last_notified_confirmed_slot,
                         last_notified_confirmed_slot,
                         pending_optimistically_confirmed_banks,

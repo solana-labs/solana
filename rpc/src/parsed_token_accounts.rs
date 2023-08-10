@@ -15,7 +15,7 @@ use {
 };
 
 pub fn get_parsed_token_account(
-    bank: Arc<Bank>,
+    bank: &Bank,
     pubkey: &Pubkey,
     account: AccountSharedData,
 ) -> UiAccount {
@@ -72,7 +72,7 @@ where
 
 /// Analyze a mint Pubkey that may be the native_mint and get the mint-account owner (token
 /// program_id) and decimals
-pub fn get_mint_owner_and_decimals(bank: &Arc<Bank>, mint: &Pubkey) -> Result<(Pubkey, u8)> {
+pub fn get_mint_owner_and_decimals(bank: &Bank, mint: &Pubkey) -> Result<(Pubkey, u8)> {
     if mint == &spl_token::native_mint::id() {
         Ok((spl_token::id(), spl_token::native_mint::DECIMALS))
     } else {

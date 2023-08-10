@@ -1950,7 +1950,7 @@ impl ReplayStage {
             };
 
             let tpu_bank = Self::new_bank_from_parent_with_notify(
-                &parent,
+                parent.clone(),
                 poh_slot,
                 root_slot,
                 my_pubkey,
@@ -1973,7 +1973,7 @@ impl ReplayStage {
 
     #[allow(clippy::too_many_arguments)]
     fn replay_blockstore_into_bank(
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         blockstore: &Blockstore,
         replay_stats: &RwLock<ReplaySlotStats>,
         replay_progress: &RwLock<ConfirmationProgress>,
@@ -1992,7 +1992,7 @@ impl ReplayStage {
         // will break!
         blockstore_processor::confirm_slot(
             blockstore,
-            bank,
+            &bank,
             &mut w_replay_stats,
             &mut w_replay_progress,
             false,
@@ -2563,7 +2563,7 @@ impl ReplayStage {
                         return replay_result;
                     }
 
-                    let bank = &bank_forks.read().unwrap().get(bank_slot).unwrap();
+                    let bank = bank_forks.read().unwrap().get(bank_slot).unwrap();
                     let parent_slot = bank.parent_slot();
                     let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
                         let stats = progress_lock
@@ -2575,11 +2575,11 @@ impl ReplayStage {
                             stats.num_dropped_blocks_on_fork + new_dropped_blocks;
                         (num_blocks_on_fork, num_dropped_blocks_on_fork)
                     };
-                    let prev_leader_slot = progress_lock.get_bank_prev_leader_slot(bank);
+                    let prev_leader_slot = progress_lock.get_bank_prev_leader_slot(&bank);
 
                     let bank_progress = progress_lock.entry(bank.slot()).or_insert_with(|| {
                         ForkProgress::new_from_bank(
-                            bank,
+                            &bank,
                             my_pubkey,
                             &vote_account.clone(),
                             prev_leader_slot,
@@ -2651,9 +2651,9 @@ impl ReplayStage {
             debug!("bank_slot {:?} is marked dead", bank_slot);
             replay_result.is_slot_dead = true;
         } else {
-            let bank = &bank_forks.read().unwrap().get(bank_slot).unwrap();
+            let bank = bank_forks.read().unwrap().get(bank_slot).unwrap();
             let parent_slot = bank.parent_slot();
-            let prev_leader_slot = progress.get_bank_prev_leader_slot(bank);
+            let prev_leader_slot = progress.get_bank_prev_leader_slot(&bank);
             let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
                 let stats = progress
                     .get(&parent_slot)
@@ -2667,7 +2667,7 @@ impl ReplayStage {
 
             let bank_progress = progress.entry(bank.slot()).or_insert_with(|| {
                 ForkProgress::new_from_bank(
-                    bank,
+                    &bank,
                     my_pubkey,
                     &vote_account.clone(),
                     prev_leader_slot,
@@ -3200,7 +3200,7 @@ impl ReplayStage {
     }
 
     fn select_forks_failed_switch_threshold(
-        reset_bank: Option<&Arc<Bank>>,
+        reset_bank: Option<&Bank>,
         progress: &ProgressMap,
         tower: &mut Tower,
         heaviest_bank_slot: Slot,
@@ -3345,7 +3345,7 @@ impl ReplayStage {
                 SwitchForkDecision::FailedSwitchThreshold(switch_proof_stake, total_stake) => {
                     let reset_bank = heaviest_bank_on_same_voted_fork;
                     let final_switch_fork_decision = Self::select_forks_failed_switch_threshold(
-                        reset_bank,
+                        reset_bank.map(|bank| bank.as_ref()),
                         progress,
                         tower,
                         heaviest_bank.slot(),
@@ -3785,15 +3785,14 @@ impl ReplayStage {
         for (parent_slot, children) in next_slots {
             let parent_bank = frozen_banks
                 .get(&parent_slot)
-                .expect("missing parent in bank forks")
-                .clone();
+                .expect("missing parent in bank forks");
             for child_slot in children {
                 if forks.get(child_slot).is_some() || new_banks.get(&child_slot).is_some() {
                     trace!("child already active or frozen {}", child_slot);
                     continue;
                 }
                 let leader = leader_schedule_cache
-                    .slot_leader_at(child_slot, Some(&parent_bank))
+                    .slot_leader_at(child_slot, Some(parent_bank))
                     .unwrap();
                 info!(
                     "new fork:{} parent:{} root:{}",
@@ -3802,7 +3801,7 @@ impl ReplayStage {
                     forks.root()
                 );
                 let child_bank = Self::new_bank_from_parent_with_notify(
-                    &parent_bank,
+                    parent_bank.clone(),
                     child_slot,
                     forks.root(),
                     &leader,
@@ -3849,7 +3848,7 @@ impl ReplayStage {
     }
 
     fn new_bank_from_parent_with_notify(
-        parent: &Arc<Bank>,
+        parent: Arc<Bank>,
         slot: u64,
         root_slot: u64,
         leader: &Pubkey,
@@ -4666,7 +4665,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_replay_commitment_cache() {
-        fn leader_vote(vote_slot: Slot, bank: &Arc<Bank>, pubkey: &Pubkey) {
+        fn leader_vote(vote_slot: Slot, bank: &Bank, pubkey: &Pubkey) {
             let mut leader_vote_account = bank.get_account(pubkey).unwrap();
             let mut vote_state = vote_state::from(&leader_vote_account).unwrap();
             vote_state::process_slot_vote_unchecked(&mut vote_state, vote_slot);
@@ -7281,7 +7280,7 @@ pub(crate) mod tests {
 
     #[allow(clippy::too_many_arguments)]
     fn send_vote_in_new_bank(
-        parent_bank: &Arc<Bank>,
+        parent_bank: &Bank,
         my_slot: Slot,
         my_vote_keypair: &[Arc<Keypair>],
         tower: &mut Tower,

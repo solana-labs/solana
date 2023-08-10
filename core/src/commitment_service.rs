@@ -487,7 +487,7 @@ mod tests {
 
     #[test]
     fn test_highest_super_majority_root_advance() {
-        fn get_vote_account_root_slot(vote_pubkey: Pubkey, bank: &Arc<Bank>) -> Slot {
+        fn get_vote_account_root_slot(vote_pubkey: Pubkey, bank: &Bank) -> Slot {
             let vote_account = bank.get_vote_account(&vote_pubkey).unwrap();
             let slot = vote_account
                 .vote_state()

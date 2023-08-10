@@ -308,11 +308,10 @@ impl BankClient {
         }
     }
 
-    pub fn new_shared(bank: &Arc<Bank>) -> Self {
+    pub fn new_shared(bank: Arc<Bank>) -> Self {
         let (transaction_sender, transaction_receiver) = unbounded();
         let transaction_sender = Mutex::new(transaction_sender);
         let thread_bank = bank.clone();
-        let bank = bank.clone();
         Builder::new()
             .name("solBankClient".to_string())
             .spawn(move || Self::run(&thread_bank, transaction_receiver))
@@ -324,7 +323,7 @@ impl BankClient {
     }
 
     pub fn new(bank: Bank) -> Self {
-        Self::new_shared(&Arc::new(bank))
+        Self::new_shared(Arc::new(bank))
     }
 
     pub fn set_sysvar_for_tests<T: Sysvar + SysvarId>(&self, sysvar: &T) {
@@ -333,7 +332,7 @@ impl BankClient {
 
     pub fn advance_slot(&mut self, by: u64, collector_id: &Pubkey) -> Option<Arc<Bank>> {
         self.bank = Arc::new(Bank::new_from_parent(
-            &self.bank,
+            self.bank.clone(),
             collector_id,
             self.bank.slot().checked_add(by)?,
         ));

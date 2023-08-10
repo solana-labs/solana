@@ -1444,7 +1444,7 @@ impl Validator {
     }
 }
 
-fn active_vote_account_exists_in_bank(bank: &Arc<Bank>, vote_account: &Pubkey) -> bool {
+fn active_vote_account_exists_in_bank(bank: &Bank, vote_account: &Pubkey) -> bool {
     if let Some(account) = &bank.get_account(vote_account) {
         if let Some(vote_state) = vote_state::from(account) {
             return !vote_state.votes.is_empty();
@@ -1922,7 +1922,7 @@ fn maybe_warp_slot(
         root_bank.force_flush_accounts_cache();
 
         bank_forks.insert(Bank::warp_from_parent(
-            &root_bank,
+            root_bank,
             &Pubkey::default(),
             warp_slot,
             solana_accounts_db::accounts_db::CalcAccountsHashDataSource::Storages,

@@ -71,7 +71,7 @@ pub struct BankStart {
 }
 
 impl BankStart {
-    fn get_working_bank_if_not_expired(&self) -> Option<&Arc<Bank>> {
+    fn get_working_bank_if_not_expired(&self) -> Option<&Bank> {
         if self.should_working_bank_still_be_processing_txs() {
             Some(&self.working_bank)
         } else {
@@ -249,7 +249,7 @@ pub enum PohRecorderBank {
 }
 
 impl PohRecorderBank {
-    pub fn bank(&self) -> &Arc<Bank> {
+    pub fn bank(&self) -> &Bank {
         match self {
             PohRecorderBank::WorkingBank(bank_start) => &bank_start.working_bank,
             PohRecorderBank::LastResetBank(last_reset_bank) => last_reset_bank,
@@ -1024,7 +1024,7 @@ impl PohRecorder {
     // if it's still processing transactions
     pub fn get_working_bank_if_not_expired<'a>(
         bank_start: &Option<&'a BankStart>,
-    ) -> Option<&'a Arc<Bank>> {
+    ) -> Option<&'a Bank> {
         bank_start
             .as_ref()
             .and_then(|bank_start| bank_start.get_working_bank_if_not_expired())
@@ -1039,7 +1039,7 @@ impl PohRecorder {
 }
 
 pub fn create_test_recorder(
-    bank: &Arc<Bank>,
+    bank: Arc<Bank>,
     blockstore: Arc<Blockstore>,
     poh_config: Option<PohConfig>,
     leader_schedule_cache: Option<Arc<LeaderScheduleCache>>,
@@ -1051,7 +1051,7 @@ pub fn create_test_recorder(
 ) {
     let leader_schedule_cache = match leader_schedule_cache {
         Some(provided_cache) => provided_cache,
-        None => Arc::new(LeaderScheduleCache::new_from_bank(bank)),
+        None => Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
     };
     let exit = Arc::new(AtomicBool::new(false));
     let poh_config = poh_config.unwrap_or_default();

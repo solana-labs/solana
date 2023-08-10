@@ -611,7 +611,7 @@ fn store_accounts_for_rent_test(
     }
 }
 
-fn create_child_bank_for_rent_test(root_bank: &Arc<Bank>, genesis_config: &GenesisConfig) -> Bank {
+fn create_child_bank_for_rent_test(root_bank: &Bank, genesis_config: &GenesisConfig) -> Bank {
     let mut bank = Bank::new_from_parent(
         root_bank,
         &Pubkey::default(),
@@ -1902,7 +1902,7 @@ fn test_rent_eager_collect_rent_in_partition() {
     );
 }
 
-fn new_from_parent_next_epoch(parent: &Arc<Bank>, epochs: Epoch) -> Bank {
+fn new_from_parent_next_epoch(parent: &Bank, epochs: Epoch) -> Bank {
     let mut slot = parent.slot();
     let mut epoch = parent.epoch();
     for _ in 0..epochs {
@@ -3413,7 +3413,7 @@ fn test_bank_pay_to_self() {
         .unwrap();
 }
 
-fn new_from_parent(parent: &Arc<Bank>) -> Bank {
+fn new_from_parent(parent: &Bank) -> Bank {
     Bank::new_from_parent(parent, &Pubkey::default(), parent.slot() + 1)
 }
 

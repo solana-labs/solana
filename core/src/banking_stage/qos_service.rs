@@ -16,7 +16,6 @@ use {
     },
     std::sync::{
         atomic::{AtomicU64, Ordering},
-        Arc,
     },
 };
 
@@ -137,7 +136,7 @@ impl QosService {
     pub fn update_costs<'a>(
         transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
         transaction_committed_status: Option<&Vec<CommitTransactionDetails>>,
-        bank: &Arc<Bank>,
+        bank: &Bank,
     ) {
         if let Some(transaction_committed_status) = transaction_committed_status {
             Self::update_committed_transaction_costs(
@@ -152,7 +151,7 @@ impl QosService {
     pub fn remove_costs<'a>(
         transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
         transaction_committed_status: Option<&Vec<CommitTransactionDetails>>,
-        bank: &Arc<Bank>,
+        bank: &Bank,
     ) {
         match transaction_committed_status {
             Some(transaction_committed_status) => Self::remove_uncommitted_transaction_costs(
@@ -167,7 +166,7 @@ impl QosService {
     fn remove_uncommitted_transaction_costs<'a>(
         transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
         transaction_committed_status: &Vec<CommitTransactionDetails>,
-        bank: &Arc<Bank>,
+        bank: &Bank,
     ) {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         transaction_cost_results
@@ -186,7 +185,7 @@ impl QosService {
     fn update_committed_transaction_costs<'a>(
         transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
         transaction_committed_status: &Vec<CommitTransactionDetails>,
-        bank: &Arc<Bank>,
+        bank: &Bank,
     ) {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         transaction_cost_results
@@ -206,7 +205,7 @@ impl QosService {
 
     fn remove_transaction_costs<'a>(
         transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
-        bank: &Arc<Bank>,
+        bank: &Bank,
     ) {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         transaction_cost_results.for_each(|tx_cost| {

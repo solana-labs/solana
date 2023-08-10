@@ -338,7 +338,7 @@ impl JsonRpcRequestProcessor {
 
     // Useful for unit testing
     pub fn new_from_bank(
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         socket_addr_space: SocketAddrSpace,
         connection_cache: Arc<ConnectionCache>,
     ) -> Self {
@@ -373,6 +373,7 @@ impl JsonRpcRequestProcessor {
             exit.clone(),
         );
 
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         Self {
             config: JsonRpcConfig::default(),
             snapshot_config: None,
@@ -396,11 +397,11 @@ impl JsonRpcRequestProcessor {
             transaction_sender: Arc::new(Mutex::new(sender)),
             bigtable_ledger_storage: None,
             optimistically_confirmed_bank: Arc::new(RwLock::new(OptimisticallyConfirmedBank {
-                bank: bank.clone(),
+                bank,
             })),
             largest_accounts_cache: Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             max_slots: Arc::new(MaxSlots::default()),
-            leader_schedule_cache: Arc::new(LeaderScheduleCache::new_from_bank(bank)),
+            leader_schedule_cache,
             max_complete_transaction_status_slot: Arc::new(AtomicU64::default()),
             max_complete_rewards_slot: Arc::new(AtomicU64::default()),
             prioritization_fee_cache: Arc::new(PrioritizationFeeCache::default()),
@@ -1433,7 +1434,7 @@ impl JsonRpcRequestProcessor {
     fn get_transaction_status(
         &self,
         signature: Signature,
-        bank: &Arc<Bank>,
+        bank: &Bank,
     ) -> Option<TransactionStatus> {
         let (slot, status) = bank.get_signature_status_slot(&signature)?;
 
@@ -1987,7 +1988,7 @@ impl JsonRpcRequestProcessor {
     /// Use a set of filters to get an iterator of keyed program accounts from a bank
     fn get_filtered_program_accounts(
         &self,
-        bank: &Arc<Bank>,
+        bank: &Bank,
         program_id: &Pubkey,
         mut filters: Vec<RpcFilterType>,
     ) -> RpcCustomResult<Vec<(Pubkey, AccountSharedData)>> {
@@ -2037,7 +2038,7 @@ impl JsonRpcRequestProcessor {
     /// Get an iterator of spl-token accounts by owner address
     fn get_filtered_spl_token_accounts_by_owner(
         &self,
-        bank: &Arc<Bank>,
+        bank: &Bank,
         program_id: &Pubkey,
         owner_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
@@ -2088,7 +2089,7 @@ impl JsonRpcRequestProcessor {
     /// Get an iterator of spl-token accounts by mint address
     fn get_filtered_spl_token_accounts_by_mint(
         &self,
-        bank: &Arc<Bank>,
+        bank: &Bank,
         program_id: &Pubkey,
         mint_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
@@ -2280,7 +2281,7 @@ pub(crate) fn check_is_at_least_confirmed(commitment: CommitmentConfig) -> Resul
 }
 
 fn get_encoded_account(
-    bank: &Arc<Bank>,
+    bank: &Bank,
     pubkey: &Pubkey,
     encoding: UiAccountEncoding,
     data_slice: Option<UiDataSliceConfig>,
@@ -2290,7 +2291,7 @@ fn get_encoded_account(
             let response = if is_known_spl_token_id(account.owner())
                 && encoding == UiAccountEncoding::JsonParsed
             {
-                get_parsed_token_account(bank.clone(), pubkey, account)
+                get_parsed_token_account(&bank, pubkey, account)
             } else {
                 encode_account(&account, pubkey, encoding, data_slice)?
             };
@@ -2441,7 +2442,7 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
 /// Analyze a passed Pubkey that may be a Token program id or Mint address to determine the program
 /// id and optional Mint
 fn get_token_program_id_and_mint(
-    bank: &Arc<Bank>,
+    bank: &Bank,
     token_account_filter: TokenAccountsFilter,
 ) -> Result<(Pubkey, Option<Pubkey>)> {
     match token_account_filter {

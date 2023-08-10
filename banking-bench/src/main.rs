@@ -417,7 +417,7 @@ fn main() {
         );
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let (exit, poh_recorder, poh_service, signal_receiver) =
-            create_test_recorder(&bank, blockstore.clone(), None, Some(leader_schedule_cache));
+            create_test_recorder(bank.clone(), blockstore.clone(), None, Some(leader_schedule_cache));
         let (banking_tracer, tracer_thread) =
             BankingTracer::new(matches.is_present("trace_banking").then_some((
                 &blockstore.banking_trace_path(),
@@ -528,7 +528,8 @@ fn main() {
                 poh_time.stop();
 
                 let mut new_bank_time = Measure::start("new_bank");
-                let new_bank = Bank::new_from_parent(&bank, &collector, bank.slot() + 1);
+                let new_slot = bank.slot() + 1;
+                let new_bank = Bank::new_from_parent(bank, &collector, new_slot);
                 new_bank_time.stop();
 
                 let mut insert_time = Measure::start("insert_time");
