@@ -7,7 +7,12 @@ use {
         },
         storable_accounts::StorableAccounts,
         tiered_storage::{
-            error::TieredStorageError, file::TieredStorageFile, footer::TieredStorageFooter,
+            byte_block::ByteBlockWriter,
+            error::TieredStorageError,
+            file::TieredStorageFile,
+            footer::TieredStorageFooter,
+            hot::HotAccountMeta,
+            meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
             TieredStorageFormat, TieredStorageResult,
         },
     },
@@ -51,18 +56,47 @@ impl<'format> TieredStorageWriter<'format> {
     ///
     /// The function currently only supports HotAccountMeta, and will
     /// be extended to cover more TieredAccountMeta in future PRs.
-    fn write_single_account<T: ReadableAccount + Sync>(
+    fn write_single_account<T: TieredAccountMeta, U: ReadableAccount + Sync>(
         &self,
-        _account: Option<&T>,
-        _account_hash: &Hash,
-        _write_version: StoredMetaWriteVersion,
+        account: Option<&U>,
+        account_hash: &Hash,
+        write_version: StoredMetaWriteVersion,
         footer: &mut TieredStorageFooter,
-    ) -> TieredStorageResult<()> {
+    ) -> TieredStorageResult<usize> {
+        let (lamports, rent_epoch, account_data) = get_account_fields(account);
+
+        let optional_fields =
+            AccountMetaOptionalFields::new_from_fields(rent_epoch, account_hash, write_version);
+
+        let flags = AccountMetaFlags::new_from(&optional_fields);
+        let meta = T::new()
+            .with_lamports(lamports)
+            .with_account_data_size(account_data.len() as u64)
+            .with_account_data_padding(((8 - (account_data.len() % 8)) % 8).try_into().unwrap())
+            .with_flags(&flags);
+
+        // writes the account in the following format:
+        //  +------------------+
+        //  | account meta     |
+        //  | account data     |
+        //  | padding (if any) |
+        //  | optional fields  |
+        //  +------------------+
+        let mut writer = ByteBlockWriter::new(footer.account_block_format);
+        writer.write_type(&meta)?;
+        writer.write(account_data)?;
+        if meta.account_data_padding() > 0 {
+            writer.write(&PADDING[0..meta.account_data_padding() as usize])?;
+        }
+        writer.write_optional_fields(&optional_fields)?;
+        let account_block = writer.finish()?;
+
+        self.storage.write_bytes(&account_block)?;
         footer.account_entry_count += 1;
 
-        // TODO(yhchiang): implementation will be included in separate PRs.
-
-        Ok(())
+        // For now it only supports HotAccountMeta, so the intra-block offset
+        // is always zero.
+        Ok(account_block.len())
     }
 
     pub fn write_accounts<
@@ -84,12 +118,23 @@ impl<'format> TieredStorageWriter<'format> {
             ..TieredStorageFooter::default()
         };
 
+        let mut cursor: usize = 0;
         let len = accounts.accounts.len();
         for i in skip..len {
             let (account, _, hash, write_version) = accounts.get(i);
 
-            self.write_single_account(account, hash, write_version, &mut footer)?;
+            let stored_size = self.write_single_account::<HotAccountMeta, T>(
+                account,
+                hash,
+                write_version,
+                &mut footer,
+            )?;
+            // advance the cursor with the stored size
+            cursor += stored_size;
         }
+
+        footer.account_index_offset = cursor as u64;
+        // TODO(yhchiang): index block will be included in a separate PR.
 
         footer.write_footer_block(&self.storage)?;
 

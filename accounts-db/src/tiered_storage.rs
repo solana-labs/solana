@@ -157,7 +157,7 @@ mod tests {
         super::*,
         crate::account_storage::meta::{StoredMeta, StoredMetaWriteVersion},
         footer::{TieredStorageFooter, TieredStorageMagicNumber},
-        hot::HOT_FORMAT,
+        hot::{HotAccountMeta, HOT_FORMAT},
         solana_sdk::{
             account::{Account, AccountSharedData},
             clock::Slot,
@@ -379,6 +379,15 @@ mod tests {
     }
 
     /// Verify the generated tiered storage in the test.
+    ///
+    /// The expected layout of a tiered-storage instance is:
+    ///
+    /// +------------------------------+
+    /// | account blocks (meta + data) |
+    /// | account index block          |
+    /// | account owners block         |
+    /// | footer                       |
+    /// +------------------------------+
     fn verify_hot_storage<
         'a,
         'b,
@@ -393,6 +402,25 @@ mod tests {
         let reader = tiered_storage.reader().unwrap();
         assert_eq!(reader.num_accounts(), expected_accounts.len());
 
+        // compute the expected account block size which will determine
+        // the offset of account index block
+        let mut expected_account_blocks_size = 0;
+        let num_accounts = expected_accounts.accounts.len();
+
+        // compute the total size of all optional fields
+        for i in 0..num_accounts {
+            let (account, _, hash, write_version) = expected_accounts.get(i);
+            // the size with padding
+            expected_account_blocks_size += ((account.unwrap().data().len() + 7) / 8) * 8;
+
+            expected_account_blocks_size += optional_size(hash, Hash::default());
+            expected_account_blocks_size += optional_size(&write_version, u64::MAX);
+            expected_account_blocks_size += optional_size(&account.unwrap().rent_epoch(), u64::MAX);
+        }
+        expected_account_blocks_size += num_accounts * std::mem::size_of::<HotAccountMeta>();
+
+        let account_index_offset = expected_account_blocks_size as u64;
+
         let footer = reader.footer();
         let expected_footer = TieredStorageFooter {
             account_meta_format: expected_format.account_meta_format,
@@ -400,6 +428,7 @@ mod tests {
             account_index_format: expected_format.account_index_format,
             account_block_format: expected_format.account_block_format,
             account_entry_count: expected_accounts.len() as u32,
+            account_index_offset,
             // Hash is not yet implemented, so we bypass the check
             hash: footer.hash,
             ..TieredStorageFooter::default()
