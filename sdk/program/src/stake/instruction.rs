@@ -8,7 +8,7 @@ use {
         pubkey::Pubkey,
         stake::{
             program::id,
-            state::{Authorized, Lockup, StakeAuthorize, StakeStateWithFlags},
+            state::{Authorized, Lockup, StakeAuthorize, StakeStateV2},
         },
         system_instruction, sysvar,
     },
@@ -364,7 +364,7 @@ pub fn create_account_with_seed(
             base,
             seed,
             lamports,
-            StakeStateWithFlags::size_of() as u64,
+            StakeStateV2::size_of() as u64,
             &id(),
         ),
         initialize(stake_pubkey, authorized, lockup),
@@ -383,7 +383,7 @@ pub fn create_account(
             from_pubkey,
             stake_pubkey,
             lamports,
-            StakeStateWithFlags::size_of() as u64,
+            StakeStateV2::size_of() as u64,
             &id(),
         ),
         initialize(stake_pubkey, authorized, lockup),
@@ -405,7 +405,7 @@ pub fn create_account_with_seed_checked(
             base,
             seed,
             lamports,
-            StakeStateWithFlags::size_of() as u64,
+            StakeStateV2::size_of() as u64,
             &id(),
         ),
         initialize_checked(stake_pubkey, authorized),
@@ -423,7 +423,7 @@ pub fn create_account_checked(
             from_pubkey,
             stake_pubkey,
             lamports,
-            StakeStateWithFlags::size_of() as u64,
+            StakeStateV2::size_of() as u64,
             &id(),
         ),
         initialize_checked(stake_pubkey, authorized),
@@ -452,7 +452,7 @@ pub fn split(
     split_stake_pubkey: &Pubkey,
 ) -> Vec<Instruction> {
     vec![
-        system_instruction::allocate(split_stake_pubkey, StakeStateWithFlags::size_of() as u64),
+        system_instruction::allocate(split_stake_pubkey, StakeStateV2::size_of() as u64),
         system_instruction::assign(split_stake_pubkey, &id()),
         _split(
             stake_pubkey,
@@ -476,7 +476,7 @@ pub fn split_with_seed(
             split_stake_pubkey,
             base,
             seed,
-            StakeStateWithFlags::size_of() as u64,
+            StakeStateV2::size_of() as u64,
             &id(),
         ),
         _split(
@@ -796,10 +796,7 @@ pub fn redelegate(
     uninitialized_stake_pubkey: &Pubkey,
 ) -> Vec<Instruction> {
     vec![
-        system_instruction::allocate(
-            uninitialized_stake_pubkey,
-            StakeStateWithFlags::size_of() as u64,
-        ),
+        system_instruction::allocate(uninitialized_stake_pubkey, StakeStateV2::size_of() as u64),
         system_instruction::assign(uninitialized_stake_pubkey, &id()),
         _redelegate(
             stake_pubkey,
@@ -823,7 +820,7 @@ pub fn redelegate_with_seed(
             uninitialized_stake_pubkey,
             base,
             seed,
-            StakeStateWithFlags::size_of() as u64,
+            StakeStateV2::size_of() as u64,
             &id(),
         ),
         _redelegate(

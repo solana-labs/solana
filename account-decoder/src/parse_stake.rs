@@ -6,24 +6,24 @@ use {
     bincode::deserialize,
     solana_sdk::{
         clock::{Epoch, UnixTimestamp},
-        stake::state::{Authorized, Delegation, Lockup, Meta, Stake, StakeStateWithFlags},
+        stake::state::{Authorized, Delegation, Lockup, Meta, Stake, StakeStateV2},
     },
 };
 
 pub fn parse_stake(data: &[u8]) -> Result<StakeAccountType, ParseAccountError> {
-    let stake_state: StakeStateWithFlags = deserialize(data)
+    let stake_state: StakeStateV2 = deserialize(data)
         .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::Stake))?;
     let parsed_account = match stake_state {
-        StakeStateWithFlags::Uninitialized => StakeAccountType::Uninitialized,
-        StakeStateWithFlags::Initialized(meta) => StakeAccountType::Initialized(UiStakeAccount {
+        StakeStateV2::Uninitialized => StakeAccountType::Uninitialized,
+        StakeStateV2::Initialized(meta) => StakeAccountType::Initialized(UiStakeAccount {
             meta: meta.into(),
             stake: None,
         }),
-        StakeStateWithFlags::Stake(meta, stake, _) => StakeAccountType::Delegated(UiStakeAccount {
+        StakeStateV2::Stake(meta, stake, _) => StakeAccountType::Delegated(UiStakeAccount {
             meta: meta.into(),
             stake: Some(stake.into()),
         }),
-        StakeStateWithFlags::RewardsPool => StakeAccountType::RewardsPool,
+        StakeStateV2::RewardsPool => StakeAccountType::RewardsPool,
     };
     Ok(parsed_account)
 }
@@ -146,7 +146,7 @@ mod test {
     #[test]
     #[allow(deprecated)]
     fn test_parse_stake() {
-        let stake_state = StakeStateWithFlags::Uninitialized;
+        let stake_state = StakeStateV2::Uninitialized;
         let stake_data = serialize(&stake_state).unwrap();
         assert_eq!(
             parse_stake(&stake_data).unwrap(),
@@ -167,7 +167,7 @@ mod test {
             lockup,
         };
 
-        let stake_state = StakeStateWithFlags::Initialized(meta);
+        let stake_state = StakeStateV2::Initialized(meta);
         let stake_data = serialize(&stake_state).unwrap();
         assert_eq!(
             parse_stake(&stake_data).unwrap(),
@@ -200,7 +200,7 @@ mod test {
             credits_observed: 10,
         };
 
-        let stake_state = StakeStateWithFlags::Stake(meta, stake, StakeFlags::empty());
+        let stake_state = StakeStateV2::Stake(meta, stake, StakeFlags::empty());
         let stake_data = serialize(&stake_state).unwrap();
         assert_eq!(
             parse_stake(&stake_data).unwrap(),
@@ -230,7 +230,7 @@ mod test {
             })
         );
 
-        let stake_state = StakeStateWithFlags::RewardsPool;
+        let stake_state = StakeStateV2::RewardsPool;
         let stake_data = serialize(&stake_state).unwrap();
         assert_eq!(
             parse_stake(&stake_data).unwrap(),

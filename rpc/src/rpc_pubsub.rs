@@ -635,7 +635,7 @@ mod tests {
             signature::{Keypair, Signer},
             stake::{
                 self, instruction as stake_instruction,
-                state::{Authorized, Lockup, StakeAuthorize, StakeStateWithFlags},
+                state::{Authorized, Lockup, StakeAuthorize, StakeStateV2},
             },
             system_instruction, system_program, system_transaction,
             transaction::{self, Transaction},
@@ -907,7 +907,7 @@ mod tests {
         let balance = {
             let bank = bank_forks.read().unwrap().working_bank();
             let rent = &bank.rent_collector().rent;
-            rent.minimum_balance(StakeStateWithFlags::size_of())
+            rent.minimum_balance(StakeStateV2::size_of())
         };
 
         let tx = system_transaction::transfer(&alice, &from.pubkey(), balance, blockhash);
