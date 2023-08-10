@@ -150,6 +150,11 @@ When setting the commission, only integer values in the set [0-100] are accepted
 The integer represents the number of percentage points for the commission, so
 creating an account with `--commission 10` will set a 10% commission.
 
+Note that validators can only update their commission during the first half of
+any epoch. This prevents validators from stealing delegator rewards by setting a
+low commission, increasing it right before the end of the epoch, and then
+changing it back after reward distribution.
+
 ## Key Rotation
 
 Rotating the vote account authority keys requires special handling when dealing
