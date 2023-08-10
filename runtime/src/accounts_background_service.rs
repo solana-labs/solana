@@ -873,7 +873,7 @@ mod test {
         let mut genesis_config_info = create_genesis_config(10);
         genesis_config_info.genesis_config.epoch_schedule =
             EpochSchedule::custom(SLOTS_PER_EPOCH, SLOTS_PER_EPOCH, false);
-        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
         bank.set_startup_verification_complete();
         // Need to set the EAH to Valid so that `Bank::new_from_parent()` doesn't panic during
         // freeze when parent is in the EAH calculation window.
@@ -905,12 +905,13 @@ mod test {
         // Also, incremental snapshots before slot 240 (the first full snapshot handled), will
         // actually be AHV since the last full snapshot slot will be `None`.  This is expected and
         // fine; but maybe unexpected for a reader/debugger without this additional context.
-        let mut make_banks = |num_banks| {
+        let make_banks = |mut bank: Arc<Bank>, num_banks| {
             for _ in 0..num_banks {
+                let slot = bank.slot() + 1;
                 bank = Arc::new(Bank::new_from_parent(
-                    &bank,
+                    bank,
                     &Pubkey::new_unique(),
-                    bank.slot() + 1,
+                    slot,
                 ));
 
                 // Since we're not using `BankForks::set_root()`, we have to handle sending the
@@ -925,7 +926,7 @@ mod test {
                 }
             }
         };
-        make_banks(303);
+        make_banks(bank.clone(), 303);
 
         // Ensure the EAH is handled 1st
         let (snapshot_request, accounts_package_type, ..) = snapshot_request_handler
@@ -988,7 +989,7 @@ mod test {
         //
         // This test differs from the one above by having an older full snapshot request that must
         // be handled before the new epoch accounts hash request.
-        make_banks(240);
+        make_banks(bank.clone(), 240);
 
         // Ensure the full snapshot is handled 1st
         let (snapshot_request, accounts_package_type, ..) = snapshot_request_handler
