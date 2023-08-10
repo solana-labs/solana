@@ -2564,27 +2564,21 @@ pub fn process_delegate_stake(
                 )))?;
 
         let activated_stake = rpc_vote_account.activated_stake;
-        let sanity_check_result = if activated_stake == 0 {
+        let root_slot = rpc_vote_account.root_slot;
+        let min_root_slot = rpc_client
+            .get_slot()
+            .map(|slot| slot.saturating_sub(DELINQUENT_VALIDATOR_SLOT_DISTANCE))?;
+        let sanity_check_result = if root_slot >= min_root_slot || activated_stake == 0 {
             Ok(())
+        } else if root_slot == 0 {
+            Err(CliError::BadParameter(
+                "Unable to delegate. Vote account has no root slot".to_string(),
+            ))
         } else {
-            let root_slot = rpc_vote_account.root_slot;
-            if root_slot == 0 {
-                Err(CliError::BadParameter(
-                    "Unable to delegate. Vote account has no root slot".to_string(),
-                ))
-            } else {
-                let min_root_slot = rpc_client
-                    .get_slot()?
-                    .saturating_sub(DELINQUENT_VALIDATOR_SLOT_DISTANCE);
-                if root_slot < min_root_slot {
-                    Err(CliError::DynamicProgramError(format!(
-                        "Unable to delegate.  Vote account appears delinquent \
-                                 because its current root slot, {root_slot}, is less than {min_root_slot}"
-                    )))
-                } else {
-                    Ok(())
-                }
-            }
+            Err(CliError::DynamicProgramError(format!(
+                "Unable to delegate.  Vote account appears delinquent \
+                 because its current root slot, {root_slot}, is less than {min_root_slot}"
+            )))
         };
 
         if let Err(err) = &sanity_check_result {
