@@ -4029,15 +4029,22 @@ impl RpcClient {
     }
 
     pub fn get_feature_activation_slot(&self, feature_id: &Pubkey) -> ClientResult<Option<Slot>> {
-        self.get_account(feature_id)
-            .and_then(|feature_account| {
-                bincode::deserialize(feature_account.data()).map_err(|_| {
-                    ClientError::from(ErrorKind::Custom(
-                        "Failed to deserialize feature account".to_string(),
-                    ))
-                })
+        self.get_account_with_commitment(feature_id, self.commitment())
+            .and_then(|maybe_feature_account| {
+                maybe_feature_account
+                    .value
+                    .map(|feature_account| {
+                        bincode::deserialize(feature_account.data()).map_err(|_| {
+                            ClientError::from(ErrorKind::Custom(
+                                "Failed to deserialize feature account".to_string(),
+                            ))
+                        })
+                    })
+                    .transpose()
             })
-            .map(|feature: Feature| feature.activated_at)
+            .map(|maybe_feature: Option<Feature>| {
+                maybe_feature.and_then(|feature| feature.activated_at)
+            })
     }
 
     fn invoke<T, F: std::future::Future<Output = ClientResult<T>>>(&self, f: F) -> ClientResult<T> {
