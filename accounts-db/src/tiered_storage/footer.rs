@@ -22,6 +22,8 @@ pub const FOOTER_TAIL_SIZE: usize = 24;
 /// The ending 8 bytes of a valid tiered account storage file.
 pub const FOOTER_MAGIC_NUMBER: u64 = 0x502A2AB5; // SOLALABS -> SOLANA LABS
 
+pub const DEFAULT_ACCOUNT_BLOCK_SIZE: u64 = 4096;
+
 #[derive(Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct TieredStorageMagicNumber(pub u64);
@@ -153,7 +155,7 @@ impl Default for TieredStorageFooter {
             account_block_format: AccountBlockFormat::default(),
             account_entry_count: 0,
             account_meta_entry_size: 0,
-            account_block_size: 0,
+            account_block_size: DEFAULT_ACCOUNT_BLOCK_SIZE,
             owner_count: 0,
             owner_entry_size: 0,
             account_index_offset: 0,
