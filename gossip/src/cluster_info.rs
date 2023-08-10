@@ -969,7 +969,11 @@ impl ClusterInfo {
         let mut entries = Vec::default();
         let keypair = self.keypair();
         if is_epoch_slot {
-            info!("wen_restart pushing LastVotedForkSlots {} {}", last_vote_slot, update.len());
+            info!(
+                "wen_restart pushing LastVotedForkSlots {} {}",
+                last_vote_slot,
+                update.len()
+            );
         }
         while !update.is_empty() {
             let ix = epoch_slot_index % max_entries;
@@ -986,7 +990,12 @@ impl ClusterInfo {
                     CrdsData::EpochSlots(ix, slots)
                 } else {
                     info!("wen_restart pushed {} remaining {}", ix, update.len());
-                    CrdsData::LastVotedForkSlots(ix, slots, last_vote_slot, last_vote_bankhash.unwrap())
+                    CrdsData::LastVotedForkSlots(
+                        ix,
+                        slots,
+                        last_vote_slot,
+                        last_vote_bankhash.unwrap(),
+                    )
                 };
                 let entry = CrdsValue::new_signed(data, &keypair);
                 entries.push(entry);

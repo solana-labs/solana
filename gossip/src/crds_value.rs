@@ -162,7 +162,7 @@ pub(crate) fn new_rand_timestamp<R: Rng>(rng: &mut R) -> u64 {
 impl CrdsData {
     /// New random CrdsData for tests and benchmarks.
     fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> CrdsData {
-        let kind = rng.gen_range(0, 7);
+        let kind = rng.gen_range(0, 9);
         // TODO: Implement other kinds of CrdsData here.
         // TODO: Assign ranges to each arm proportional to their frequency in
         // the mainnet crds table.

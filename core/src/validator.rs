@@ -1070,8 +1070,15 @@ impl Validator {
             config.turbine_disabled.swap(true, Ordering::Relaxed);
             node.info
                 .set_shred_version((node.info.shred_version() + 1) % 0xffff);
-            assert!(!last_vote.is_empty(), "wen_restart needs to know the last vote");
-            warn!("wen_restart configured, turbine disabled, last_vote {:?}, shred_version now {}", last_vote.slots(), node.info.shred_version());
+            assert!(
+                !last_vote.is_empty(),
+                "wen_restart needs to know the last vote"
+            );
+            warn!(
+                "wen_restart configured, turbine disabled, last_vote {:?}, shred_version now {}",
+                last_vote.slots(),
+                node.info.shred_version()
+            );
         }
 
         let poh_service = PohService::new(
@@ -1208,7 +1215,10 @@ impl Validator {
                     cluster_info
                         .my_contact_info()
                         .set_shred_version(new_shred_version);
-                    info!("wen_restart finished, shred_version now {}", new_shred_version);
+                    info!(
+                        "wen_restart finished, shred_version now {}",
+                        new_shred_version
+                    );
                     ()
                 }
                 Err(e) => return Err(format!("wait_for_wen_restart failed: {e:?}")),

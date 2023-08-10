@@ -1147,6 +1147,8 @@ mod tests {
         usize, // number of nodes
         usize, // number of votes
         usize, // number of epoch slots
+        usize, // number of last voted fork slots
+        usize, // number of heaviest forks
     ) {
         let size = crds.table.len();
         let since = if size == 0 || rng.gen() {
@@ -1176,6 +1178,60 @@ mod tests {
             match value.value.data {
                 CrdsData::EpochSlots(_, _) => (),
                 _ => panic!("not an epoch-slot!"),
+            }
+        }
+        let num_last_voted_fork_slots = crds
+            .table
+            .values()
+            .filter(|v| v.ordinal >= since)
+            .filter(|v| matches!(v.value.data, CrdsData::LastVotedForkSlots(_, _, _, _)))
+            .count();
+        let mut cursor = Cursor(since);
+        assert_eq!(
+            num_last_voted_fork_slots,
+            crds.get_last_voted_fork_slots(&mut cursor).count()
+        );
+        assert_eq!(
+            cursor.0,
+            crds.last_voted_fork_slots
+                .iter()
+                .last()
+                .map(|(k, _)| k + 1)
+                .unwrap_or_default()
+                .max(since)
+        );
+        for value in crds.get_last_voted_fork_slots(&mut Cursor(since)) {
+            assert!(value.ordinal >= since);
+            match value.value.data {
+                CrdsData::LastVotedForkSlots(_, _, _, _) => (),
+                _ => panic!("not a last-voted-fork-slot!"),
+            }
+        }
+        let num_heaviest_forks = crds
+            .table
+            .values()
+            .filter(|v| v.ordinal >= since)
+            .filter(|v| matches!(v.value.data, CrdsData::HeaviestFork(_, _, _)))
+            .count();
+        let mut cursor = Cursor(since);
+        assert_eq!(
+            num_heaviest_forks,
+            crds.get_heaviest_fork(&mut cursor).count()
+        );
+        assert_eq!(
+            cursor.0,
+            crds.heaviest_fork
+                .iter()
+                .last()
+                .map(|(k, _)| k + 1)
+                .unwrap_or_default()
+                .max(since)
+        );
+        for value in crds.get_heaviest_fork(&mut Cursor(since)) {
+            assert!(value.ordinal >= since);
+            match value.value.data {
+                CrdsData::HeaviestFork(_, _, _) => (),
+                _ => panic!("not a heaviest-fork!"),
             }
         }
         let num_votes = crds
@@ -1238,6 +1294,16 @@ mod tests {
             .values()
             .filter(|v| matches!(v.value.data, CrdsData::EpochSlots(_, _)))
             .count();
+        let num_last_voted_fork_slots = crds
+            .table
+            .values()
+            .filter(|v| matches!(v.value.data, CrdsData::LastVotedForkSlots(_, _, _, _)))
+            .count();
+        let num_heaviest_forks = crds
+            .table
+            .values()
+            .filter(|v| matches!(v.value.data, CrdsData::HeaviestFork(_, _, _)))
+            .count();
         assert_eq!(
             crds.table.len(),
             crds.get_entries(&mut Cursor::default()).count()
@@ -1247,6 +1313,15 @@ mod tests {
         assert_eq!(
             num_epoch_slots,
             crds.get_epoch_slots(&mut Cursor::default()).count()
+        );
+        assert_eq!(
+            num_last_voted_fork_slots,
+            crds.get_last_voted_fork_slots(&mut Cursor::default())
+                .count()
+        );
+        assert_eq!(
+            num_heaviest_forks,
+            crds.get_heaviest_fork(&mut Cursor::default()).count()
         );
         for vote in crds.get_votes(&mut Cursor::default()) {
             match vote.value.data {
@@ -1260,7 +1335,25 @@ mod tests {
                 _ => panic!("not an epoch-slot!"),
             }
         }
-        (num_nodes, num_votes, num_epoch_slots)
+        for last_voted_fork_slots in crds.get_last_voted_fork_slots(&mut Cursor::default()) {
+            match last_voted_fork_slots.value.data {
+                CrdsData::LastVotedForkSlots(_, _, _, _) => (),
+                _ => panic!("not a last-voted-fork-slot!"),
+            }
+        }
+        for heaviest_fork in crds.get_heaviest_fork(&mut Cursor::default()) {
+            match heaviest_fork.value.data {
+                CrdsData::HeaviestFork(_, _, _) => (),
+                _ => panic!("not a heaviest-fork!"),
+            }
+        }
+        (
+            num_nodes,
+            num_votes,
+            num_epoch_slots,
+            num_last_voted_fork_slots,
+            num_heaviest_forks,
+        )
     }
 
     #[test]
@@ -1286,11 +1379,20 @@ mod tests {
         assert!(crds.table.len() > 200);
         assert_eq!(crds.num_purged() + crds.table.len(), 4096);
         assert!(num_inserts > crds.table.len());
-        let (num_nodes, num_votes, num_epoch_slots) = check_crds_value_indices(&mut rng, &crds);
+        let (num_nodes, num_votes, num_epoch_slots, num_last_voted_fork_slots, num_heaviest_forks) =
+            check_crds_value_indices(&mut rng, &crds);
         assert!(num_nodes * 3 < crds.table.len());
         assert!(num_nodes > 100, "num nodes: {num_nodes}");
         assert!(num_votes > 100, "num votes: {num_votes}");
         assert!(num_epoch_slots > 100, "num epoch slots: {num_epoch_slots}");
+        assert!(
+            num_last_voted_fork_slots > 100,
+            "num last voted fork slots: {num_last_voted_fork_slots}"
+        );
+        assert!(
+            num_heaviest_forks > 100,
+            "num heaviest forks: {num_heaviest_forks}"
+        );
         // Remove values one by one and assert that nodes indices stay valid.
         while !crds.table.is_empty() {
             let index = rng.gen_range(0, crds.table.len());

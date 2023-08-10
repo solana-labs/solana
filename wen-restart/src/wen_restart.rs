@@ -91,8 +91,8 @@ pub fn wen_restart(
                 match slot_meta.parent_slot {
                     Some(parent_slot) => {
                         last_voted_fork.push(parent_slot);
-                        slot = parent_slot;        
-                    },
+                        slot = parent_slot;
+                    }
                     None => break,
                 };
             }
@@ -131,7 +131,10 @@ pub fn wen_restart(
                 }
             }
         }
-        info!("wen_restart aggregating RestartLastVotedForkSlots currently {}", 1.0 - not_active_percentage);
+        info!(
+            "wen_restart aggregating RestartLastVotedForkSlots currently {}",
+            1.0 - not_active_percentage
+        );
         if not_active_percentage < 1.0 - OPTIMISTIC_CONFIRMED_THRESHOLD {
             break;
         }
@@ -180,7 +183,10 @@ pub fn wen_restart(
         }
         sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
     }
-    info!("wen_restart set_root and generate snapshot {}", my_selected_slot);
+    info!(
+        "wen_restart set_root and generate snapshot {}",
+        my_selected_slot
+    );
     restart_slots_to_repair_sender.send(None)?;
     let mut my_bank_forks = bank_forks.write().unwrap();
     my_bank_forks.set_root(
