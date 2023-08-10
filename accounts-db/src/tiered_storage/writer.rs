@@ -12,6 +12,7 @@ use {
             file::TieredStorageFile,
             footer::TieredStorageFooter,
             hot::HotAccountMeta,
+            index::AccountIndexWriterEntry,
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
             TieredStorageFormat, TieredStorageResult,
         },
@@ -120,8 +121,9 @@ impl<'format> TieredStorageWriter<'format> {
 
         let mut cursor: usize = 0;
         let len = accounts.accounts.len();
+        let mut index_entries = Vec::<AccountIndexWriterEntry<'a>>::new();
         for i in skip..len {
-            let (account, _, hash, write_version) = accounts.get(i);
+            let (account, address, hash, write_version) = accounts.get(i);
 
             let stored_size = self.write_single_account::<HotAccountMeta, T>(
                 account,
@@ -129,12 +131,24 @@ impl<'format> TieredStorageWriter<'format> {
                 write_version,
                 &mut footer,
             )?;
+            index_entries.push(AccountIndexWriterEntry {
+                address,
+                block_offset: cursor as u64,
+                // Currently only support one account per one logical account
+                // block so its intra_block_offset is always 0.
+                intra_block_offset: 0,
+            });
             // advance the cursor with the stored size
             cursor += stored_size;
         }
 
         footer.account_index_offset = cursor as u64;
-        // TODO(yhchiang): index block will be included in a separate PR.
+        cursor += footer
+            .account_index_format
+            .write_index_block(&self.storage, &index_entries)?;
+
+        footer.owners_offset = cursor as u64;
+        // TODO(yhchiang): owners block will be included in a separate PR.
 
         footer.write_footer_block(&self.storage)?;
 

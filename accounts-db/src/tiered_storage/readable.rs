@@ -119,4 +119,13 @@ impl TieredStorageReader {
             Self::Hot(hot) => hot.num_accounts(),
         }
     }
+
+    /// Returns the address of the account associated with the specified index.
+    ///
+    /// Note that this function takes an index instead of a multiplied_index.
+    pub(crate) fn account_address(&self, index: usize) -> TieredStorageResult<&Pubkey> {
+        match self {
+            Self::Hot(hot) => hot.account_address(index),
+        }
+    }
 }

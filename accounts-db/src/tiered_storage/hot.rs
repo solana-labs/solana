@@ -16,7 +16,7 @@ use {
     },
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
-    solana_sdk::{hash::Hash, stake_history::Epoch},
+    solana_sdk::{hash::Hash, pubkey::Pubkey, stake_history::Epoch},
     std::{fs::OpenOptions, option::Option, path::Path},
 };
 
@@ -232,6 +232,15 @@ impl HotStorageReader {
     /// accounts file.
     pub fn num_accounts(&self) -> usize {
         self.footer.account_entry_count as usize
+    }
+
+    /// Returns the address of the account associated with the specified index.
+    ///
+    /// Note that this function takes an index instead of a multiplied_index.
+    pub(crate) fn account_address(&self, index: usize) -> TieredStorageResult<&Pubkey> {
+        self.footer
+            .account_index_format
+            .get_account_address(&self.mmap, &self.footer, index)
     }
 }
 

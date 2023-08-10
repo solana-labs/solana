@@ -420,6 +420,10 @@ mod tests {
         expected_account_blocks_size += num_accounts * std::mem::size_of::<HotAccountMeta>();
 
         let account_index_offset = expected_account_blocks_size as u64;
+        // owners block locates right after the account index block
+        // checking this will verifies the size of the account index block.
+        let owners_offset = account_index_offset
+            + (expected_format.account_index_format.entry_size() * num_accounts) as u64;
 
         let footer = reader.footer();
         let expected_footer = TieredStorageFooter {
@@ -429,13 +433,18 @@ mod tests {
             account_block_format: expected_format.account_block_format,
             account_entry_count: expected_accounts.len() as u32,
             account_index_offset,
+            owners_offset,
             // Hash is not yet implemented, so we bypass the check
             hash: footer.hash,
             ..TieredStorageFooter::default()
         };
 
-        // TODO(yhchiang): verify account meta and data once the reader side
-        // is implemented in a separate PR.
+        for i in 0..num_accounts {
+            let (_, address, _, _) = expected_accounts.get(i);
+            assert_eq!(reader.account_address(i).unwrap(), address);
+            // TODO(yhchiang): verify account meta and data once the reader side
+            // is implemented in a separate PR.
+        }
 
         assert_eq!(*footer, expected_footer);
     }
