@@ -27,14 +27,14 @@ struct ReadOnlyAccountCacheEntry {
 }
 
 #[derive(Default, Debug)]
-struct ReadOnlyCacheStat {
+struct ReadOnlyCacheStats {
     hits: AtomicU64,
     misses: AtomicU64,
     evicts: AtomicU64,
     load_us: AtomicU64,
 }
 
-impl ReadOnlyCacheStat {
+impl ReadOnlyCacheStats {
     fn reset(&self) {
         self.hits.store(0, Ordering::Relaxed);
         self.misses.store(0, Ordering::Relaxed);
@@ -65,7 +65,7 @@ pub struct ReadOnlyAccountsCache {
     data_size: AtomicUsize,
 
     // Performance statistics
-    stat: ReadOnlyCacheStat,
+    stats: ReadOnlyCacheStats,
 }
 
 impl ReadOnlyAccountsCache {
@@ -75,7 +75,7 @@ impl ReadOnlyAccountsCache {
             cache: DashMap::default(),
             queue: Mutex::<IndexList<ReadOnlyCacheKey>>::default(),
             data_size: AtomicUsize::default(),
-            stat: ReadOnlyCacheStat::default(),
+            stats: ReadOnlyCacheStats::default(),
         }
     }
 
@@ -85,7 +85,7 @@ impl ReadOnlyAccountsCache {
         self.cache.clear();
         self.queue.lock().unwrap().clear();
         self.data_size.store(0, Ordering::Relaxed);
-        self.stat.reset();
+        self.stats.reset();
     }
 
     /// true if pubkey is in cache at slot
@@ -97,7 +97,7 @@ impl ReadOnlyAccountsCache {
         let (account, load_us) = measure_us!({
             let key = (pubkey, slot);
             let Some(entry) = self.cache.get(&key) else {
-                self.stat.misses.fetch_add(1, Ordering::Relaxed);
+                self.stats.misses.fetch_add(1, Ordering::Relaxed);
                 return None;
             };
             // Move the entry to the end of the queue.
@@ -110,10 +110,10 @@ impl ReadOnlyAccountsCache {
             }
             let account = entry.account.clone();
             drop(entry);
-            self.stat.hits.fetch_add(1, Ordering::Relaxed);
+            self.stats.hits.fetch_add(1, Ordering::Relaxed);
             Some(account)
         });
-        self.stat.load_us.fetch_add(load_us, Ordering::Relaxed);
+        self.stats.load_us.fetch_add(load_us, Ordering::Relaxed);
         account
     }
 
@@ -154,7 +154,7 @@ impl ReadOnlyAccountsCache {
             num_evicts += 1;
             self.remove(pubkey, slot);
         }
-        self.stat.evicts.fetch_add(num_evicts, Ordering::Relaxed);
+        self.stats.evicts.fetch_add(num_evicts, Ordering::Relaxed);
     }
 
     pub fn remove(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
@@ -177,7 +177,7 @@ impl ReadOnlyAccountsCache {
     }
 
     pub(crate) fn get_and_reset_stats(&self) -> (u64, u64, u64, u64) {
-        self.stat.get_and_reset_stats()
+        self.stats.get_and_reset_stats()
     }
 }
 
