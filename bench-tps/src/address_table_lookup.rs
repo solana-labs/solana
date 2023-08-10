@@ -81,7 +81,9 @@ fn build_extend_lookup_table_tx(
     recent_blockhash: Hash,
 ) -> Transaction {
     // generates random addresses to populate lookup table account
-    let addresses = (0..num_addresses).map(|_| Pubkey::new_unique()).collect_vec();
+    let addresses = (0..num_addresses)
+        .map(|_| Pubkey::new_unique())
+        .collect_vec();
     let extend_lookup_table_ix = extend_lookup_table(
         *lookup_table_address,
         funding_key.pubkey(),       // authority

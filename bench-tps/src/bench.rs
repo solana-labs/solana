@@ -84,6 +84,12 @@ struct KeypairChunks<'a> {
     dest: Vec<VecDeque<&'a Keypair>>,
 }
 
+/// Accounts pubkeys needed to construct instruction that uses ATL
+struct AtlInstructionAccounts {
+    lookup_table_account: AddressLookupTableAccount,
+    noop_program_id: Pubkey,
+}
+
 impl<'a> KeypairChunks<'a> {
     /// Split input slice of keypairs into two sets of chunks of given size
     fn new(keypairs: &'a [Keypair], chunk_size: usize) -> Self {
@@ -126,7 +132,7 @@ struct TransactionChunkGenerator<'a, 'b, T: ?Sized> {
     reclaim_lamports_back_to_source_account: bool,
     use_randomized_compute_unit_price: bool,
     instruction_padding_config: Option<InstructionPaddingConfig>,
-    lookup_table_address: Option<(Pubkey, Pubkey)>,
+    atl_instruction_accounts: Option<AtlInstructionAccounts>,
 }
 
 impl<'a, 'b, T> TransactionChunkGenerator<'a, 'b, T>
@@ -141,7 +147,7 @@ where
         use_randomized_compute_unit_price: bool,
         instruction_padding_config: Option<InstructionPaddingConfig>,
         num_conflict_groups: Option<usize>,
-        lookup_table_address: Option<(Pubkey, Pubkey)>,
+        atl_instruction_accounts: Option<AtlInstructionAccounts>,
     ) -> Self {
         let account_chunks = if let Some(num_conflict_groups) = num_conflict_groups {
             KeypairChunks::new_with_conflict_groups(gen_keypairs, chunk_size, num_conflict_groups)
@@ -159,7 +165,7 @@ where
             reclaim_lamports_back_to_source_account: false,
             use_randomized_compute_unit_price,
             instruction_padding_config,
-            lookup_table_address,
+            atl_instruction_accounts,
         }
     }
 
@@ -172,33 +178,6 @@ where
             tx_count, self.reclaim_lamports_back_to_source_account, blockhash
         );
         let signing_start = Instant::now();
-
-        let address_lookup_table_account =
-            self.lookup_table_address
-                .map(|(lookup_table_address, sbf_program_id)| {
-                    let lookup_table_account = self
-                        .client
-                        .get_account_with_commitment(
-                            &lookup_table_address,
-                            CommitmentConfig::processed(),
-                        )
-                        .unwrap();
-                    info!("==== {:?}", lookup_table_account);
-                    let lookup_table =
-                        AddressLookupTable::deserialize(&lookup_table_account.data).unwrap();
-                    info!("==== {:?}", lookup_table);
-                    (
-                        AddressLookupTableAccount {
-                            key: lookup_table_address,
-                            addresses: lookup_table.addresses.to_vec(),
-                        },
-                        sbf_program_id,
-                    )
-                });
-        info!(
-            "==== address_lookup_table_account {:?}",
-            address_lookup_table_account
-        );
 
         let source_chunk = &self.account_chunks.source[self.chunk_index];
         let dest_chunk = &self.account_chunks.dest[self.chunk_index];
@@ -223,7 +202,7 @@ where
                 blockhash.unwrap(),
                 &self.instruction_padding_config,
                 self.use_randomized_compute_unit_price,
-                &address_lookup_table_account,
+                &self.atl_instruction_accounts,
             )
         };
 
@@ -423,15 +402,31 @@ where
     } = config;
 
     // if --load_accounts_from_address_lookup_table is used, creates Lookup Table account,
-    //     then extend it with spepcified number of account.
-    // All bench transfer transactions will include a `sbf_program_id` instruction to load
+    //     then extend it with requested number of accounts.
+    // All bench transfer transactions will include a `noop_program_id` instruction to load
     //     specified number of accounts from Lookup Table account as writable accounts.
-    let lookup_table_address =
-        load_accounts_from_address_lookup_table.map(|(sbf_program_id, number_of_accounts)| {
-            let lookup_table_account =
-                create_address_lookup_table_account(client.clone(), &id, number_of_accounts)
-                    .unwrap();
-            (lookup_table_account, sbf_program_id)
+    let alt_instruction_accounts =
+        load_accounts_from_address_lookup_table.map(|lookup_table_config| {
+            let lookup_table_account_address = create_address_lookup_table_account(
+                client.clone(),
+                &id,
+                lookup_table_config.number_addresses,
+            )
+            .unwrap();
+            let lookup_table_account = client
+                .get_account_with_commitment(
+                    &lookup_table_account_address,
+                    CommitmentConfig::processed(),
+                )
+                .unwrap();
+            let lookup_table = AddressLookupTable::deserialize(&lookup_table_account.data).unwrap();
+            AtlInstructionAccounts {
+                lookup_table_account: AddressLookupTableAccount {
+                    key: lookup_table_account_address,
+                    addresses: lookup_table.addresses.to_vec(),
+                },
+                noop_program_id: lookup_table_config.noop_program_id,
+            }
         });
 
     assert!(gen_keypairs.len() >= 2 * tx_count);
@@ -443,7 +438,7 @@ where
         use_randomized_compute_unit_price,
         instruction_padding_config,
         num_conflict_groups,
-        lookup_table_address,
+        alt_instruction_accounts,
     );
 
     let first_tx_count = loop {
@@ -570,7 +565,7 @@ fn generate_system_txs(
     blockhash: &Hash,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
     use_randomized_compute_unit_price: bool,
-    address_lookup_table_account: &Option<(AddressLookupTableAccount, Pubkey)>,
+    atl_instruction_accounts: &Option<AtlInstructionAccounts>,
 ) -> Vec<TimestampedTransaction> {
     let pairs: Vec<_> = if !reclaim {
         source.iter().zip(dest.iter()).collect()
@@ -602,7 +597,7 @@ fn generate_system_txs(
                         *blockhash,
                         instruction_padding_config,
                         Some(**compute_unit_price),
-                        address_lookup_table_account,
+                        atl_instruction_accounts,
                     ),
                     Some(timestamp()),
                 )
@@ -620,7 +615,7 @@ fn generate_system_txs(
                         *blockhash,
                         instruction_padding_config,
                         None,
-                        address_lookup_table_account,
+                        atl_instruction_accounts,
                     ),
                     Some(timestamp()),
                 )
@@ -636,7 +631,7 @@ fn transfer_with_compute_unit_price_and_padding(
     recent_blockhash: Hash,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
     compute_unit_price: Option<u64>,
-    address_lookup_table_account: &Option<(AddressLookupTableAccount, Pubkey)>,
+    atl_instruction_accounts: &Option<AtlInstructionAccounts>,
 ) -> VersionedTransaction {
     let from_pubkey = from_keypair.pubkey();
     let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
@@ -664,19 +659,19 @@ fn transfer_with_compute_unit_price_and_padding(
         ),
     ]);
 
-    let versioned_message = if let Some((address_lookup_table_account, sbf_program_id)) =
-        address_lookup_table_account
-    {
-        let address_lookup_table_account_clone = address_lookup_table_account.clone();
+    let versioned_message = if let Some(atl_instruction_accounts) = atl_instruction_accounts {
+        let address_lookup_table_account_clone =
+            atl_instruction_accounts.lookup_table_account.clone();
         let address_lookup_table_accounts = vec![address_lookup_table_account_clone];
 
-        let account_metas: Vec<_> = address_lookup_table_account
+        let account_metas: Vec<_> = atl_instruction_accounts
+            .lookup_table_account
             .addresses
             .iter()
             .map(|pubkey| AccountMeta::new(*pubkey, false))
             .collect();
         instructions.extend_from_slice(&[Instruction::new_with_bincode(
-            *sbf_program_id,
+            atl_instruction_accounts.noop_program_id,
             &(),
             account_metas,
         )]);
@@ -697,12 +692,7 @@ fn transfer_with_compute_unit_price_and_padding(
             &recent_blockhash,
         ))
     };
-    let versioned_transaction =
-        VersionedTransaction::try_new(versioned_message, &[from_keypair]).unwrap();
-
-    info!("==== versioned_transaction {:?}", versioned_transaction);
-
-    versioned_transaction
+    VersionedTransaction::try_new(versioned_message, &[from_keypair]).unwrap()
 }
 
 fn get_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
@@ -793,7 +783,7 @@ fn nonced_transfer_with_padding(
             TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
         ),
     ]);
-    let versioned_nonce_transaction = VersionedTransaction::try_new(
+    VersionedTransaction::try_new(
         VersionedMessage::Legacy(Message::new_with_nonce(
             instructions,
             Some(&from_pubkey),
@@ -802,15 +792,7 @@ fn nonced_transfer_with_padding(
         )),
         &[from_keypair],
     )
-    .unwrap();
-
-    info!(
-        "==== versioned_nonce_transaction {:?}",
-        versioned_nonce_transaction
-    );
-
-    // TODO - need to sign the tx with `nonce_hash`?
-    versioned_nonce_transaction
+    .unwrap()
 }
 
 fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(

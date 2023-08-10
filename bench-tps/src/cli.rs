@@ -44,6 +44,15 @@ pub struct InstructionPaddingConfig {
     pub data_size: u32,
 }
 
+#[derive(Eq, PartialEq, Debug)]
+pub struct LookupTableConfig {
+    // program_id of `noop` program in test cluster; bench-tps uses `noop` program to
+    // load accounts from ALT
+    pub noop_program_id: Pubkey,
+    // number of addresses (up to 256) to be added to ATL for `noop` to load
+    pub number_addresses: usize,
+}
+
 /// Holds the configuration for a single run of the benchmark
 #[derive(PartialEq, Debug)]
 pub struct Config {
@@ -75,7 +84,7 @@ pub struct Config {
     pub num_conflict_groups: Option<usize>,
     pub bind_address: IpAddr,
     pub client_node_id: Option<Keypair>,
-    pub load_accounts_from_address_lookup_table: Option<(Pubkey, usize)>,
+    pub load_accounts_from_address_lookup_table: Option<LookupTableConfig>,
 }
 
 impl Eq for Config {}
@@ -388,18 +397,18 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
         .arg(
             Arg::with_name("load_accounts_from_address_lookup_table")
                 .long("load-accounts-from-address-lookup-table")
-                .value_names(&["SBF_PROGRAM_PUBKEY", "NUMBER_OF_ACCOUNTS_TO_LOAD"])
+                .value_names(&["NOOP_PROGRAM_PUBKEY", "NUMBER_OF_ACCOUNTS_TO_LOAD"])
                 .takes_value(true)
                 .number_of_values(2)
-                .multiple(true)
+                .multiple(false)
                 .help(
-                    "Specify a SBF program to load number of accounts from ATL in bench-tps Transfer transaction; \
-                     When thhis argument is used, bench-tps creates a address-lookup account with NUMBER_OF_ACCOUNTS_TO_LOAD\
-                         accounts in test cluster, then sends VersionedTransaction with V0 message includes a instruction\
-                         that load all accounts from ATL by program of SBF_PROGRAM_PUBKEY; \
-                     Otherwise, bench-tps creates VersionedTransaction with LegacyMessage without using ATL;\
-                     1st parameter is a pubkey string of SBF program to be used;\
-                     2nd parameter is the number of accounts to be loaded by the SBF program from ATL.",
+                    "Uses `noop` SBF program to load number of accounts from ATL in bench-tps Transfer transaction; \
+                     When this argument is used, bench-tps creates a address-lookup account with NUMBER_OF_ACCOUNTS_TO_LOAD \
+                     accounts in test cluster, then sends VersionedTransaction with V0 message includes a instruction \
+                     that load all accounts from ATL by `noop` program of NOOP_PROGRAM_PUBKEY; \
+                     Otherwise, bench-tps creates VersionedTransaction with LegacyMessage without using ATL; \
+                     1st parameter is a pubkey string of `noop` program to be used, which must have been deployed to test cluster; \
+                     2nd parameter is the number of accounts [0..256] to be loaded by the `noop` program from ATL.",
                 ),
         )
 }
@@ -578,16 +587,17 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     }
 
     if let Some(values) = matches.values_of("load_accounts_from_address_lookup_table") {
-        for (sbf_program_pubkey_string, number_of_accounts) in values.into_iter().tuples() {
-            let sbf_program_pubkey = sbf_program_pubkey_string
+        for (noop_program_pubkey_string, number_of_accounts) in values.into_iter().tuples() {
+            let noop_program_id = noop_program_pubkey_string
                 .parse::<Pubkey>()
                 .map_err(|_| "Can't parse pubkey string")?;
-            let parsed_number_of_accounts = number_of_accounts
+            let number_addresses = number_of_accounts
                 .parse()
                 .map_err(|_| "Can't parse number-of-accounts-from-address-lookup-table")?;
-            // NOTE - can support multiple ATL IXs later, for now, only use one such ix.
-            args.load_accounts_from_address_lookup_table =
-                Some((sbf_program_pubkey, parsed_number_of_accounts));
+            args.load_accounts_from_address_lookup_table = Some(LookupTableConfig {
+                noop_program_id,
+                number_addresses,
+            });
         }
     }
 
