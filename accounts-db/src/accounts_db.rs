@@ -7523,7 +7523,7 @@ impl AccountsDb {
         config: &CalcAccountsHashConfig<'_>,
         filler_account_suffix: Option<&Pubkey>,
     ) -> Result<Vec<CacheHashDataFile>, AccountsHashVerificationError> {
-        let _ = self.active_stats.activate(ActiveStatItem::HashScan);
+        let _guard = self.active_stats.activate(ActiveStatItem::HashScan);
 
         let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
