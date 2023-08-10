@@ -4234,6 +4234,74 @@ RPC Enabled Nodes: 1"#;
     }
 
     #[test]
+    fn test_push_last_voted_fork_slots() {
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
+        let slots = cluster_info.get_last_voted_fork_slots(&mut Cursor::default());
+        assert!(slots.is_empty());
+        let mut update: Vec<Slot> = vec![0];
+        for i in 0..81 {
+            for j in 0..1000 {
+                update.push(i * 1050 + j);
+            }
+        }
+        cluster_info.push_last_voted_fork_slots(&update, Hash::default());
+
+        let mut cursor = Cursor::default();
+        let slots = cluster_info.get_last_voted_fork_slots(&mut cursor);
+        assert_eq!(slots.len(), 2);
+        assert_eq!(slots[0].1.to_slots(0).len(), 42468);
+        assert_eq!(slots[1].1.to_slots(0).len(), 38532);
+
+        let slots = cluster_info.get_last_voted_fork_slots(&mut cursor);
+        assert!(slots.is_empty());
+
+        // Test with different shred versions.
+        let mut rng = rand::thread_rng();
+        let node_pubkey = Pubkey::new_unique();
+        let mut node = LegacyContactInfo::new_rand(&mut rng, Some(node_pubkey));
+        node.set_shred_version(42);
+        let epoch_slots = EpochSlots::new_rand(&mut rng, Some(node_pubkey));
+        let entries = vec![
+            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(node)),
+            CrdsValue::new_unsigned(CrdsData::LastVotedForkSlots(
+                0,
+                epoch_slots,
+                0,
+                Hash::default(),
+            )),
+        ];
+        {
+            let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
+            for entry in entries {
+                assert!(gossip_crds
+                    .insert(entry, /*now=*/ 0, GossipRoute::LocalMessage)
+                    .is_ok());
+            }
+        }
+        // Should exclude other node's last-voted-fork-slot because of different
+        // shred-version.
+        let slots = cluster_info.get_last_voted_fork_slots(&mut Cursor::default());
+        assert_eq!(slots.len(), 2);
+        assert_eq!(slots[0].1.from, cluster_info.id());
+        assert_eq!(slots[1].1.from, cluster_info.id());
+        // Match shred versions.
+        {
+            let mut node = cluster_info.my_contact_info.write().unwrap();
+            node.set_shred_version(42);
+        }
+        cluster_info.push_self();
+        cluster_info.flush_push_queue();
+        // Should now include both epoch slots.
+        let slots = cluster_info.get_last_voted_fork_slots(&mut Cursor::default());
+        assert_eq!(slots.len(), 3);
+        assert_eq!(slots[0].1.from, cluster_info.id());
+        assert_eq!(slots[1].1.from, cluster_info.id());
+        assert_eq!(slots[2].1.from, node_pubkey);
+    }
+
+    #[test]
     fn test_append_entrypoint_to_pulls() {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let node_keypair = Arc::new(Keypair::new());
