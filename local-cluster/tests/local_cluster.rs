@@ -4579,7 +4579,7 @@ fn test_vote_refresh_outside_slothash() {
     // Copy A's ledger to B but truncate any blocks past the common ancestor.
     {
         info!("Copying A's ledger to B");
-        let blockstore_a= open_blockstore(&a_ledger_path);
+        let blockstore_a = open_blockstore(&a_ledger_path);
         let blockstore_b = open_blockstore(&b_ledger_path);
         copy_blocks(common_ancestor_slot, &blockstore_a, &blockstore_b);
     }
