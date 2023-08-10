@@ -88,14 +88,14 @@ impl SlotCacheInner {
                 .fetch_add(data_len, Ordering::Relaxed);
 
             let old_len = old.account.data().len() as u64;
-            let grow = old_len.saturating_sub(data_len);
+            let grow = data_len.saturating_sub(old_len);
             if grow > 0 {
                 self.size.fetch_add(grow, Ordering::Relaxed);
                 self.total_size.fetch_add(grow, Ordering::Relaxed);
             } else {
-                let shrink = data_len.saturating_sub(old_len);
+                let shrink = old_len.saturating_sub(data_len);
                 if shrink > 0 {
-                    self.size.fetch_add(shrink, Ordering::Relaxed);
+                    self.size.fetch_sub(shrink, Ordering::Relaxed);
                     self.total_size.fetch_sub(shrink, Ordering::Relaxed);
                 }
             }
