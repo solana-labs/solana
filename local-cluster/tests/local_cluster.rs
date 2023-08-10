@@ -4497,9 +4497,12 @@ fn test_slot_hash_expiry() {
 #[serial]
 fn test_vote_refresh_outside_slothash() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
-    solana_sdk::slot_hashes::set_entries_for_tests_only(8);
+    const MAX_SLOT_HASHES: Slot = 8;
+    solana_sdk::slot_hashes::set_entries_for_tests_only(MAX_SLOT_HASHES.try_into().unwrap());
 
     let slots_per_epoch = 2048;
+    // A has more stake than others, but less than 38% switch proof threshold, so B wants
+    // to switch but could not. C is only added to divide stake better.
     let node_stakes = vec![
         37 * DEFAULT_NODE_STAKE,
         35 * DEFAULT_NODE_STAKE,
@@ -4513,8 +4516,13 @@ fn test_vote_refresh_outside_slothash() {
     .iter()
     .map(|s| Arc::new(Keypair::from_base58_string(s)))
     .collect::<Vec<_>>();
-    let (leader_schedule, validator_keys) =
-        create_custom_leader_schedule_with_random_keys(&[12, 4, 0]);
+    let num_a_leader_slots = 12;
+    let num_b_leader_slots = 4;
+    let (leader_schedule, validator_keys) = create_custom_leader_schedule_with_random_keys(&[
+        num_a_leader_slots,
+        num_b_leader_slots,
+        0,
+    ]);
     let mut default_config = ValidatorConfig::default_for_test();
     default_config.fixed_leader_schedule = Some(FixedSchedule {
         leader_schedule: Arc::new(leader_schedule),
@@ -4549,7 +4557,7 @@ fn test_vote_refresh_outside_slothash() {
     };
     let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
 
-    let mut common_ancestor_slot = 8;
+    let common_ancestor_slot: u64 = num_a_leader_slots as u64 - 1;
 
     let a_ledger_path = cluster.ledger_path(&a_pubkey);
     let b_ledger_path = cluster.ledger_path(&b_pubkey);
@@ -4560,13 +4568,18 @@ fn test_vote_refresh_outside_slothash() {
     cluster.exit_node(&c_pubkey);
 
     // Let A run for a while until we get to the common ancestor
-    info!("Letting A run until common_ancestor_slot");
+    info!("Run A on majority fork until it creates its own fork");
     let now = Instant::now();
+    let mut last_vote_on_a;
     loop {
-        let last_vote = wait_for_last_vote_in_tower_to_land_in_ledger(&a_ledger_path, &a_pubkey);
-        if last_vote >= common_ancestor_slot {
-            common_ancestor_slot = last_vote;
-            info!("common_ancestor_slot: {}", common_ancestor_slot);
+        last_vote_on_a = wait_for_last_vote_in_tower_to_land_in_ledger(&a_ledger_path, &a_pubkey);
+        if last_vote_on_a >= common_ancestor_slot {
+            let blockstore = open_blockstore(&a_ledger_path);
+            info!(
+                "A majority fork: {:?} common_ancestor_slot: {}",
+                AncestorIterator::new(last_vote_on_a, &blockstore).collect::<Vec<Slot>>(),
+                common_ancestor_slot,
+            );
             break;
         }
         assert!(
@@ -4584,27 +4597,6 @@ fn test_vote_refresh_outside_slothash() {
         copy_blocks(common_ancestor_slot, &blockstore_a, &blockstore_b);
     }
 
-    info!("Run A on majority fork until it creates its own fork");
-    let mut last_vote_on_a;
-    // Keep A running for a while longer so A has its own fork.
-    let now = Instant::now();
-    loop {
-        last_vote_on_a = wait_for_last_vote_in_tower_to_land_in_ledger(&a_ledger_path, &a_pubkey);
-        if last_vote_on_a > common_ancestor_slot + 3 {
-            let blockstore = open_blockstore(&a_ledger_path);
-            info!(
-                "A majority fork: {:?}",
-                AncestorIterator::new(last_vote_on_a, &blockstore).collect::<Vec<Slot>>()
-            );
-            break;
-        }
-        assert!(
-            now.elapsed() < Duration::from_secs(10),
-            "validator not creating blocks fast enough"
-        );
-        sleep(Duration::from_millis(100));
-    }
-
     // Kill A and restart B with voting. B should now fork off
     info!("Killing A");
     let a_info = cluster.exit_node(&a_pubkey);
@@ -4619,7 +4611,7 @@ fn test_vote_refresh_outside_slothash() {
     loop {
         sleep(Duration::from_millis(200));
         let (last_vote, _) = last_vote_in_tower(&b_ledger_path, &b_pubkey).unwrap();
-        if last_vote > common_ancestor_slot + 3 {
+        if last_vote > (2 * num_a_leader_slots + num_b_leader_slots) as u64 {
             break;
         }
         assert!(
@@ -4664,9 +4656,10 @@ fn test_vote_refresh_outside_slothash() {
     );
 
     let now = Instant::now();
+    let mut vote_on_b;
     loop {
         sleep(Duration::from_millis(500));
-        let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
+        vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
         if vote_on_b > last_vote_on_b {
             info!(
                 "B has voted again: {} last vote {} elapsed time {:?}",
@@ -4681,9 +4674,14 @@ fn test_vote_refresh_outside_slothash() {
             "B hasn't voted after a long time"
         );
     }
-    let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
-    // check that B has voted past last voted slot.
-    assert!(vote_on_b > last_vote_on_b);
+    // check that there are no votes in B's tower between last_vote and
+    // last_vote + MAX_SLOT_HASHES.
+    let tower_slots = restore_tower(&b_ledger_path, &b_pubkey)
+        .unwrap()
+        .tower_slots();
+    assert!(tower_slots
+        .into_iter()
+        .all(|slot| { slot <= last_vote_on_b || slot > last_vote_on_b + MAX_SLOT_HASHES }));
     // check that B is voting on its own fork, not on A's fork. Reopen blockstore to refresh.
     let blockstore = open_blockstore(&b_ledger_path);
     let mut ancestors = AncestorIterator::new(vote_on_b, &blockstore);
