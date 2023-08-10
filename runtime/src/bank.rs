@@ -8129,6 +8129,7 @@ impl Bank {
             feature_set::switch_to_new_elf_parser::id(),
             feature_set::bpf_account_data_direct_mapping::id(),
             feature_set::enable_alt_bn128_syscall::id(),
+            feature_set::enable_alt_bn128_compression_syscall::id(),
             feature_set::enable_big_mod_exp_syscall::id(),
             feature_set::blake3_syscall_enabled::id(),
             feature_set::curve25519_syscall_enabled::id(),
