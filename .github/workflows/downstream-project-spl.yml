@@ -18,7 +18,7 @@ on:
       - "cargo-build-sbf"
       - "cargo-test-sbf"
       - "ci/downstream-projects/run-spl.sh"
-      - ".github/workflows/downstream-project.yml"
+      - ".github/workflows/downstream-project-spl.yml"
 
 env:
   SHELL: /bin/bash
