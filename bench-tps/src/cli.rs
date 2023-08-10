@@ -1,9 +1,8 @@
 use {
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
-    itertools::Itertools,
     solana_clap_utils::{
         hidden_unless_forced,
-        input_validators::{is_keypair, is_url, is_url_or_moniker, is_within_range},
+        input_validators::{is_keypair, is_pubkey, is_url, is_url_or_moniker, is_within_range},
     },
     solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_sdk::{
@@ -395,21 +394,25 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .help("File containing the node identity (keypair) of a validator with active stake. This allows communicating with network using staked connection"),
         )
         .arg(
-            Arg::with_name("load_accounts_from_address_lookup_table")
-                .long("load-accounts-from-address-lookup-table")
-                .value_names(&["NOOP_PROGRAM_PUBKEY", "NUMBER_OF_ACCOUNTS_TO_LOAD"])
+            Arg::with_name("alt_instruction_program_id")
+                .long("alt-instruction-program-id")
+                .value_name("ALT_INSTRUCTION_PROGRAM_ID")
                 .takes_value(true)
-                .number_of_values(2)
-                .multiple(false)
-                .help(
-                    "Uses `noop` SBF program to load number of accounts from ATL in bench-tps Transfer transaction; \
-                     When this argument is used, bench-tps creates a address-lookup account with NUMBER_OF_ACCOUNTS_TO_LOAD \
-                     accounts in test cluster, then sends VersionedTransaction with V0 message includes a instruction \
-                     that load all accounts from ATL by `noop` program of NOOP_PROGRAM_PUBKEY; \
-                     Otherwise, bench-tps creates VersionedTransaction with LegacyMessage without using ATL; \
-                     1st parameter is a pubkey string of `noop` program to be used, which must have been deployed to test cluster; \
-                     2nd parameter is the number of accounts [0..256] to be loaded by the `noop` program from ATL.",
-                ),
+                .requires("alt_instruction_load_accounts_count")
+                .validator(is_pubkey)
+                .help("If program id of deployed SBF progrem, for example `noop`, is provided; bench transfer transactions \
+                       will include an additional instruction to use the program to load number of accounts from an \
+                       address lookup table account."
+                )
+        )
+        .arg(
+            Arg::with_name("alt_instruction_load_accounts_count")
+                .long("alt-instruction-load-accounts-count")
+                .value_name("ALT_INSTRUCTION_LOAD_ACCOUNTS_COUNT")
+                .takes_value(true)
+                .requires("alt_instruction_program_id")
+                .validator(|n| is_within_range(n, 0..256))
+                .help("The number of accounts are loaded from address lookup table account by program identified as `alt_instruction_program_id`")
         )
 }
 
@@ -586,19 +589,19 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         args.client_node_id = Some(client_node_id);
     }
 
-    if let Some(values) = matches.values_of("load_accounts_from_address_lookup_table") {
-        for (noop_program_pubkey_string, number_of_accounts) in values.into_iter().tuples() {
-            let noop_program_id = noop_program_pubkey_string
-                .parse::<Pubkey>()
-                .map_err(|_| "Can't parse pubkey string")?;
-            let number_addresses = number_of_accounts
-                .parse()
-                .map_err(|_| "Can't parse number-of-accounts-from-address-lookup-table")?;
-            args.load_accounts_from_address_lookup_table = Some(LookupTableConfig {
-                noop_program_id,
-                number_addresses,
-            });
-        }
+    if let Some(alt_instruction_program_id) = matches.value_of("alt_instruction_program_id") {
+        let alt_instruction_load_accounts_count = matches
+            .value_of("alt_instruction_load_accounts_count")
+            .unwrap()
+            .parse()
+            .map_err(|_| "Can't parse alt_instruction_load_accounts_count")?;
+        let alt_instruction_program_id = alt_instruction_program_id
+            .parse::<Pubkey>()
+            .map_err(|_| "Can't parse pubkey alt_instruction_program_id")?;
+        args.load_accounts_from_address_lookup_table = Some(LookupTableConfig {
+            noop_program_id: alt_instruction_program_id,
+            number_addresses: alt_instruction_load_accounts_count,
+        });
     }
 
     Ok(args)
