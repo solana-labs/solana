@@ -157,7 +157,7 @@ mod tests {
         super::*,
         crate::account_storage::meta::{StoredMeta, StoredMetaWriteVersion},
         footer::{TieredStorageFooter, TieredStorageMagicNumber},
-        hot::HOT_FORMAT,
+        hot::{HotAccountMeta, HOT_FORMAT},
         solana_accounts_db::rent_collector::RENT_EXEMPT_RENT_EPOCH,
         solana_sdk::{
             account::{Account, AccountSharedData},
@@ -364,7 +364,7 @@ mod tests {
         let storable_accounts =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
                 &account_data,
-                hashes,
+                hashes.clone(),
                 write_versions,
             );
 
@@ -373,17 +373,55 @@ mod tests {
         let tiered_storage = TieredStorage::new_writable(tiered_storage_path, format.clone());
         _ = tiered_storage.write_accounts(&storable_accounts, 0);
 
-        verify_hot_storage(&tiered_storage, &accounts, format);
+        verify_hot_storage(&tiered_storage, &accounts, &hashes, format);
+    }
+
+    fn optional_size<T: std::cmp::PartialEq>(value: &T, default_value: T) -> usize {
+        if *value != default_value {
+            std::mem::size_of::<T>()
+        } else {
+            0
+        }
     }
 
     /// Verify the generated tiered storage in the test.
+    ///
+    /// The expected layout of a tiered-storage instance is:
+    ///
+    /// +------------------------------+
+    /// | account blocks (meta + data) |
+    /// | account index block          |
+    /// | account owners block         |
+    /// | footer                       |
+    /// +------------------------------+
     fn verify_hot_storage(
         tiered_storage: &TieredStorage,
         expected_accounts: &[(StoredMeta, AccountSharedData)],
+        expected_hashes: &[Hash],
         expected_format: TieredStorageFormat,
     ) {
         let reader = tiered_storage.reader().unwrap();
         assert_eq!(reader.num_accounts(), expected_accounts.len());
+
+        // compute the expected account block size which will determine
+        // the offset of account index block
+        let mut expected_account_blocks_size = 0;
+        let num_accounts = expected_accounts.len();
+
+        // compute the total size of all optional fields
+        for i in 0..num_accounts {
+            let meta = &expected_accounts[i].0;
+            let account = &expected_accounts[i].1;
+            // the size with padding
+            expected_account_blocks_size += ((account.data().len() + 7) / 8) * 8;
+
+            expected_account_blocks_size += optional_size(&expected_hashes[i], Hash::default());
+            expected_account_blocks_size += optional_size(&meta.write_version_obsolete, u64::MAX);
+            expected_account_blocks_size += optional_size(&account.rent_epoch(), u64::MAX);
+        }
+        expected_account_blocks_size += num_accounts * std::mem::size_of::<HotAccountMeta>();
+
+        let account_index_offset = expected_account_blocks_size as u64;
 
         let footer = reader.footer();
         let expected_footer = TieredStorageFooter {
@@ -392,6 +430,7 @@ mod tests {
             account_index_format: expected_format.account_index_format,
             account_block_format: expected_format.account_block_format,
             account_entry_count: expected_accounts.len() as u32,
+            account_index_offset,
             // Hash is not yet implemented, so we bypass the check
             hash: footer.hash,
             ..TieredStorageFooter::default()
