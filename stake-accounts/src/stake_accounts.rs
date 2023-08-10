@@ -289,7 +289,7 @@ mod tests {
             client::SyncClient,
             genesis_config::create_genesis_config,
             signature::{Keypair, Signer},
-            stake::state::StakeStateWithFlags,
+            stake::state::StakeStateV2,
         },
         solana_stake_program::stake_state,
     };
@@ -297,8 +297,7 @@ mod tests {
     fn create_bank(lamports: u64) -> (Bank, Keypair, u64, u64) {
         let (genesis_config, mint_keypair) = create_genesis_config(lamports);
         let bank = Bank::new_for_tests(&genesis_config);
-        let stake_rent =
-            bank.get_minimum_balance_for_rent_exemption(StakeStateWithFlags::size_of());
+        let stake_rent = bank.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of());
         let system_rent = bank.get_minimum_balance_for_rent_exemption(0);
         (bank, mint_keypair, stake_rent, system_rent)
     }

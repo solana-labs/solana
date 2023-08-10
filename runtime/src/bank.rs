@@ -176,7 +176,7 @@ use {
         },
     },
     solana_stake_program::stake_state::{
-        self, InflationPointCalculationEvent, PointValue, StakeStateWithFlags,
+        self, InflationPointCalculationEvent, PointValue, StakeStateV2,
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
     solana_vote_program::vote_state::VoteState,
@@ -3090,7 +3090,7 @@ impl Bank {
 
                     let delegation = stake_account.delegation();
                     let (mut stake_account, stake_state) =
-                        <(AccountSharedData, StakeStateWithFlags)>::from(stake_account);
+                        <(AccountSharedData, StakeStateV2)>::from(stake_account);
                     let vote_pubkey = delegation.voter_pubkey;
                     let Some(vote_account) = get_vote_account(&vote_pubkey) else {
                         return None;
@@ -3221,7 +3221,7 @@ impl Bank {
                         }
                     });
                     let (mut stake_account, stake_state) =
-                        <(AccountSharedData, StakeStateWithFlags)>::from(stake_account);
+                        <(AccountSharedData, StakeStateV2)>::from(stake_account);
                     let redeemed = stake_state::redeem_rewards(
                         rewarded_epoch,
                         stake_state,

@@ -98,7 +98,7 @@ use {
         },
         transaction_context::{TransactionAccount, TransactionContext},
     },
-    solana_stake_program::stake_state::{self, StakeStateWithFlags},
+    solana_stake_program::stake_state::{self, StakeStateV2},
     solana_vote_program::{
         vote_instruction,
         vote_state::{
@@ -4373,7 +4373,7 @@ fn test_bank_cloned_stake_delegations() {
     let (vote_balance, stake_balance) = {
         let rent = &bank.rent_collector().rent;
         let vote_rent_exempt_reserve = rent.minimum_balance(VoteState::size_of());
-        let stake_rent_exempt_reserve = rent.minimum_balance(StakeStateWithFlags::size_of());
+        let stake_rent_exempt_reserve = rent.minimum_balance(StakeStateV2::size_of());
         let minimum_delegation = solana_stake_program::get_minimum_delegation(&bank.feature_set);
         (
             vote_rent_exempt_reserve,

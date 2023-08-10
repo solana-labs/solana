@@ -18,7 +18,7 @@ use {
         signature::{Keypair, Signer},
         stake::{
             instruction as stake_instruction,
-            state::{Authorized, Lockup, StakeActivationStatus, StakeStateWithFlags},
+            state::{Authorized, Lockup, StakeActivationStatus, StakeStateV2},
         },
         system_instruction, system_program,
         sysvar::{
@@ -271,7 +271,7 @@ async fn stake_rewards_from_warp() {
         .expect("account exists")
         .unwrap();
 
-    let stake_state: StakeStateWithFlags = deserialize(&account.data).unwrap();
+    let stake_state: StakeStateV2 = deserialize(&account.data).unwrap();
     let stake_history: StakeHistory = deserialize(&stake_history_account.data).unwrap();
     let clock: Clock = deserialize(&clock_account.data).unwrap();
     let stake = stake_state.stake().unwrap();
@@ -387,7 +387,7 @@ async fn stake_rewards_filter_bench_core(num_stake_accounts: u64) {
         .expect("account exists")
         .unwrap();
 
-    let stake_state: StakeStateWithFlags = deserialize(&account.data).unwrap();
+    let stake_state: StakeStateV2 = deserialize(&account.data).unwrap();
     let stake_history: StakeHistory = deserialize(&stake_history_account.data).unwrap();
     let clock: Clock = deserialize(&clock_account.data).unwrap();
     let stake = stake_state.stake().unwrap();
@@ -409,7 +409,7 @@ async fn check_credits_observed(
         .await
         .unwrap()
         .unwrap();
-    let stake_state: StakeStateWithFlags = deserialize(&stake_account.data).unwrap();
+    let stake_state: StakeStateV2 = deserialize(&stake_account.data).unwrap();
     assert_eq!(
         stake_state.stake().unwrap().credits_observed,
         expected_credits
@@ -465,7 +465,7 @@ async fn stake_merge_immediately_after_activation() {
         .await
         .unwrap()
         .unwrap();
-    let stake_state: StakeStateWithFlags = deserialize(&stake_account.data).unwrap();
+    let stake_state: StakeStateV2 = deserialize(&stake_account.data).unwrap();
     assert_eq!(stake_state.stake().unwrap().credits_observed, 300);
     assert!(stake_account.lamports > stake_lamports);
 
@@ -476,7 +476,7 @@ async fn stake_merge_immediately_after_activation() {
         .await
         .unwrap()
         .unwrap();
-    let stake_state: StakeStateWithFlags = deserialize(&stake_account.data).unwrap();
+    let stake_state: StakeStateV2 = deserialize(&stake_account.data).unwrap();
     assert_eq!(stake_state.stake().unwrap().credits_observed, 300);
     assert_eq!(stake_account.lamports, stake_lamports);
 
