@@ -8,6 +8,7 @@ use {
         de::{self, Deserialize, Deserializer},
         ser::{Serialize, SerializeSeq, Serializer},
     },
+    solana_accounts_db::accounts_hash::AccountsDeltaHash,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
         clock::{Epoch, Slot},
@@ -68,13 +69,12 @@ impl TryFrom<&Bank> for BankHashDetails {
 
         // This bank is frozen; as a result, we know that the state has been
         // hashed which means the delta hash is Some(). So, .unwrap() is safe
-        let accounts_delta_hash = bank
+        let AccountsDeltaHash(accounts_delta_hash) = bank
             .rc
             .accounts
             .accounts_db
             .get_accounts_delta_hash(slot)
-            .unwrap()
-            .0;
+            .unwrap();
         let mut accounts = bank
             .rc
             .accounts
@@ -91,14 +91,16 @@ impl TryFrom<&Bank> for BankHashDetails {
             accounts_delta_hash,
             bank.signature_count(),
             bank.last_blockhash(),
-            BankHashAccounts(accounts),
+            BankHashAccounts { accounts },
         ))
     }
 }
 
 // Wrap the Vec<...> so we can implement custom Serialize/Deserialize traits on the wrapper type
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct BankHashAccounts(pub Vec<(Pubkey, Hash, AccountSharedData)>);
+pub(crate) struct BankHashAccounts {
+    pub accounts: Vec<(Pubkey, Hash, AccountSharedData)>,
+}
 
 #[derive(Deserialize, Serialize)]
 /// Used as an intermediate for serializing and deserializing account fields
@@ -118,8 +120,8 @@ impl Serialize for BankHashAccounts {
     where
         S: Serializer,
     {
-        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
-        for (pubkey, hash, account) in self.0.iter() {
+        let mut seq = serializer.serialize_seq(Some(self.accounts.len()))?;
+        for (pubkey, hash, account) in self.accounts.iter() {
             let temp = TempAccount {
                 pubkey: pubkey.to_string(),
                 hash: hash.to_string(),
@@ -159,7 +161,9 @@ impl<'de> Deserialize<'de> for BankHashAccounts {
             })
             .collect();
         let pubkey_hash_accounts = pubkey_hash_accounts?;
-        Ok(BankHashAccounts(pubkey_hash_accounts))
+        Ok(BankHashAccounts {
+            accounts: pubkey_hash_accounts,
+        })
     }
 }
 
@@ -218,7 +222,9 @@ pub mod tests {
         });
         let account_pubkey = Pubkey::new_unique();
         let account_hash = hash("account".as_bytes());
-        let accounts = BankHashAccounts(vec![(account_pubkey, account_hash, account)]);
+        let accounts = BankHashAccounts {
+            accounts: vec![(account_pubkey, account_hash, account)],
+        };
 
         let bank_hash = hash("bank".as_bytes());
         let parent_bank_hash = hash("parent_bank".as_bytes());
