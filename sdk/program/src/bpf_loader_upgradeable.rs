@@ -3,10 +3,10 @@
 //! The upgradeable BPF loader is responsible for deploying, upgrading, and
 //! executing BPF programs. The upgradeable loader allows a program's authority
 //! to update the program at any time. This ability break's the "code is law"
-//! contract the usually enforces the policy that once a program is on-chain it
-//! becomes immutable. Because of this, care should be taken before executing
-//! upgradeable programs which still have a functioning authority. For more
-//! information refer to the [`loader_upgradeable_instruction`] module.
+//! contract that once a program is on-chain it is immutable. Because of this, 
+//! care should be taken before executing upgradeable programs which still have 
+//! a functioning authority. For more information refer to the 
+//! [`loader_upgradeable_instruction`] module.
 //!
 //! The `solana program deploy` CLI command uses the
 //! upgradeable BPF loader. Calling `solana program deploy --final` deploys a
