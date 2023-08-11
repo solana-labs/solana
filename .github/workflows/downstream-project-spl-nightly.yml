@@ -16,3 +16,11 @@ jobs:
     uses: ./.github/workflows/downstream-project-spl.yml
     with:
       branch: ${{ matrix.branch }}
+
+  error_reporting:
+    needs:
+      - main
+    if: failure()
+    uses: ./.github/workflows/error-reporting.yml
+    secrets:
+      WEBHOOK: ${{ secrets.SLACK_ERROR_REPORTING_WEBHOOK }}
