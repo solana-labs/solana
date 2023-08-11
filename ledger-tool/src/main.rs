@@ -1667,8 +1667,9 @@ fn main() {
                 Arg::with_name("write_bank_file")
                     .long("write-bank-file")
                     .takes_value(false)
-                    .help("After verifying the ledger, write a file with that contains the \
-                        information that went into computing the final bank's bank hash"),
+                    .help("After verifying the ledger, write a file that contains the information \
+                        that went into computing the completed bank's bank hash. The file will be \
+                        written within <LEDGER_DIR>/bank_hash_details/"),
             )
         ).subcommand(
             SubCommand::with_name("graph")
