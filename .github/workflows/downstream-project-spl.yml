@@ -19,6 +19,12 @@ on:
       - "cargo-test-sbf"
       - "ci/downstream-projects/run-spl.sh"
       - ".github/workflows/downstream-project-spl.yml"
+  workflow_call:
+    inputs:
+      branch:
+        required: false
+        type: string
+        default: "master"
 
 env:
   SHELL: /bin/bash

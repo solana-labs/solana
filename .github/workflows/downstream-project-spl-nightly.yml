@@ -4,11 +4,6 @@ on:
   schedule:
     - cron: "0 3 * * *"
 
-env:
-  SHELL: /bin/bash
-  SCCACHE_GHA_ENABLED: "true"
-  RUSTC_WRAPPER: "sccache"
-
 jobs:
   main:
     strategy:
@@ -18,19 +13,6 @@ jobs:
           - master
           - v1.14
           - v1.16
-
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: ${{ matrix.branch }}
-
-      - uses: mozilla-actions/sccache-action@v0.0.3
-
-      # Get more space on a runner
-      - run: |
-          sudo docker rmi $(docker image ls -aq)
-          sudo rm -rf /usr/local/lib/android
-
-      - run: |
-          ci/downstream-projects/run-spl.sh
+    uses: ./.github/workflows/downstream-project-spl.yml
+    with:
+      branch: ${{ matrix.branch }}
