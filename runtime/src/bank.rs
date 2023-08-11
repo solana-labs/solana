@@ -4775,12 +4775,12 @@ impl Bank {
         let mut executed_units = 0u64;
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::new_from_tx_batch_cache(
             self.slot,
-            &programs_loaded_for_tx_batch,
+            programs_loaded_for_tx_batch,
         );
         let mut programs_updated_only_for_global_cache =
             LoadedProgramsForTxBatch::new_from_tx_batch_cache(
                 self.slot,
-                &programs_loaded_for_tx_batch,
+                programs_loaded_for_tx_batch,
             );
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
