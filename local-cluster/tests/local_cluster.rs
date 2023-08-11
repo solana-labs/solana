@@ -4630,11 +4630,15 @@ fn test_vote_refresh_outside_slothash() {
     info!("Kill B");
     b_info = cluster.exit_node(&b_pubkey);
 
+    let (last_vote, _) = last_vote_in_tower(&b_ledger_path, &b_pubkey).unwrap();
+    assert_eq!(last_vote, last_vote_on_b);
+
     info!("Resolve the partition");
     {
         // Here we let B know about the missing blocks that A had produced on its partition
         let a_blockstore = open_blockstore(&a_ledger_path);
         let b_blockstore = open_blockstore(&b_ledger_path);
+        purge_slots_with_count(&b_blockstore, last_vote_on_b + 1, 100);
         copy_blocks(last_vote_on_a, &a_blockstore, &b_blockstore);
     }
 
