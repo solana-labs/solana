@@ -65,7 +65,9 @@ use {
         use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     solana_measure::measure::Measure,
-    solana_metrics::{datapoint_info, poh_timing_point::PohTimingSender},
+    solana_metrics::{
+        datapoint_info, metrics::metrics_config_sanity_check, poh_timing_point::PohTimingSender,
+    },
     solana_poh::{
         poh_recorder::PohRecorder,
         poh_service::{self, PohService},
@@ -234,6 +236,7 @@ pub struct ValidatorConfig {
     pub no_os_network_stats_reporting: bool,
     pub no_os_cpu_stats_reporting: bool,
     pub no_os_disk_stats_reporting: bool,
+    pub no_metrics_sanity_check: bool,
     pub poh_pinned_cpu_core: usize,
     pub poh_hashes_per_batch: u64,
     pub process_ledger_before_services: bool,
@@ -301,6 +304,7 @@ impl Default for ValidatorConfig {
             no_os_network_stats_reporting: true,
             no_os_cpu_stats_reporting: true,
             no_os_disk_stats_reporting: true,
+            no_metrics_sanity_check: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
             process_ledger_before_services: false,
@@ -1250,10 +1254,16 @@ impl Validator {
             config.generator_config.clone(),
         );
 
+        let cluster_type = bank_forks.read().unwrap().root_bank().cluster_type();
+        if !config.no_metrics_sanity_check {
+            metrics_config_sanity_check(cluster_type).map_err(|e| e.to_string())?;
+        }
+
         datapoint_info!(
             "validator-new",
             ("id", id.to_string(), String),
-            ("version", solana_version::version!(), String)
+            ("version", solana_version::version!(), String),
+            ("cluster_type", cluster_type as u32, i64),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;

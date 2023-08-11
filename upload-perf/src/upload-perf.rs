@@ -14,7 +14,7 @@ fn get_last_metrics(metric: &str, db: &str, name: &str, branch: &str) -> Result<
         r#"SELECT last("{metric}") FROM "{db}"."autogen"."{name}" WHERE "branch"='{branch}'"#
     );
 
-    let response = solana_metrics::query(&query)?;
+    let response = solana_metrics::query(&query).map_err(|e| e.to_string())?;
 
     match serde_json::from_str(&response) {
         Result::Ok(v) => {
