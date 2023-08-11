@@ -130,17 +130,12 @@ transactionV0.sign([payer]);
 
 // send and confirm the transaction
 // (NOTE: There is NOT an array of Signers here; see the note below...)
-const txid = await web3.sendAndConfirmTransaction(connection, transactionV0);
+const txid = await connection.sendTransaction(transactionV0);
 
 console.log(
   `Transaction: https://explorer.solana.com/tx/${txid}?cluster=devnet`,
 );
 ```
-
-> NOTE:
-> When sending a `VersionedTransaction` to the cluster, it must be signed BEFORE calling the
-> `sendAndConfirmTransaction` method. If you pass an array of `Signer`
-> (like with `legacy` transactions) the method will trigger an error!
 
 ## More Resources
 
