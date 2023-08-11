@@ -105,7 +105,7 @@ pub(crate) struct BankHashAccounts {
 #[derive(Deserialize, Serialize)]
 /// Used as an intermediate for serializing and deserializing account fields
 /// into a human readable format.
-struct TempAccount {
+struct SerdeAccount {
     pubkey: String,
     hash: String,
     owner: String,
@@ -122,7 +122,7 @@ impl Serialize for BankHashAccounts {
     {
         let mut seq = serializer.serialize_seq(Some(self.accounts.len()))?;
         for (pubkey, hash, account) in self.accounts.iter() {
-            let temp = TempAccount {
+            let temp = SerdeAccount {
                 pubkey: pubkey.to_string(),
                 hash: hash.to_string(),
                 owner: account.owner().to_string(),
@@ -142,7 +142,7 @@ impl<'de> Deserialize<'de> for BankHashAccounts {
     where
         D: Deserializer<'de>,
     {
-        let temp_accounts: Vec<TempAccount> = Deserialize::deserialize(deserializer)?;
+        let temp_accounts: Vec<SerdeAccount> = Deserialize::deserialize(deserializer)?;
         let pubkey_hash_accounts: Result<Vec<_>, _> = temp_accounts
             .into_iter()
             .map(|temp_account| {
