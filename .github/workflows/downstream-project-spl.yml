@@ -28,15 +28,47 @@ env:
 jobs:
   main:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        program:
+          - instruction-padding/program
+          - token/program
+          - token/program-2022
+          - token/program-2022-test
+          - associated-token-account/program
+          - token-upgrade/program
+          - feature-proposal/program
+          - governance/addin-mock/program
+          - governance/program
+          - memo/program
+          - name-service/program
+          - stake-pool/program
+          - stake-pool/single-pool
     steps:
       - uses: actions/checkout@v3
 
+      - shell: bash
+        run: |
+          .github/scripts/purge-ubuntu-runner.sh
+
       - uses: mozilla-actions/sccache-action@v0.0.3
 
-      # Get more space on a runner
-      - run: |
-          sudo docker rmi $(docker image ls -aq)
-          sudo rm -rf /usr/local/lib/android
+      - shell: bash
+        run: |
+          source ci/downstream-projects/common.sh
 
-      - run: |
-          ci/downstream-projects/run-spl.sh
+          git clone https://github.com/solana-labs/solana-program-library.git spl
+          cp "$SOLANA_DIR"/rust-toolchain.toml spl/
+          cd spl
+
+          project_used_solana_version=$(sed -nE 's/solana-sdk = \"[>=<~]*(.*)\"/\1/p' <"token/program/Cargo.toml")
+          echo "used solana version: $project_used_solana_version"
+          if semverGT "$project_used_solana_version" "$SOLANA_VER"; then
+            echo "skip"
+            return
+          fi
+
+          ./patch.crates-io.sh "$SOLANA_DIR"
+
+          $CARGO_BUILD_SBF
+          $CARGO_TEST_SBF --manifest-path ${{ matrix.program }}/Cargo.toml
