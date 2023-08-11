@@ -617,9 +617,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
-version = "2.3.3"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "630be753d4e58660abd17930c71b647fe46c27ea6b63cc59e1e3851406972e42"
+checksum = "b4682ae6287fcf752ecaabbfcc7b6f9b72aa33933dc23a554d853aea8eea8635"
 dependencies = [
  "serde",
 ]
@@ -4562,7 +4562,7 @@ version = "0.38.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac5ffa1efe7548069688cd7028f32591853cd7b5b756d41bcffd2353e4fc75b4"
 dependencies = [
- "bitflags 2.3.3",
+ "bitflags 2.4.0",
  "errno",
  "libc",
  "linux-raw-sys",
@@ -6182,7 +6182,7 @@ version = "1.17.0"
 dependencies = [
  "assert_matches",
  "bincode",
- "bitflags 2.3.3",
+ "bitflags 2.4.0",
  "bs58",
  "byteorder",
  "chrono",
@@ -6533,7 +6533,7 @@ dependencies = [
  "assert_matches",
  "base64 0.21.2",
  "bincode",
- "bitflags 2.3.3",
+ "bitflags 2.4.0",
  "blake3",
  "borsh 0.10.3",
  "borsh 0.9.3",
@@ -6948,7 +6948,7 @@ dependencies = [
  "assert_matches",
  "base64 0.21.2",
  "bincode",
- "bitflags 2.3.3",
+ "bitflags 2.4.0",
  "borsh 0.10.3",
  "bs58",
  "bytemuck",
