@@ -4956,7 +4956,7 @@ pub mod tests {
             let mut parent_bank = self.bank_forks.read().unwrap().working_bank();
             for (i, root) in roots.iter().enumerate() {
                 let new_bank =
-                    Bank::new_from_parent(&parent_bank, parent_bank.collector_id(), *root);
+                    Bank::new_from_parent(parent_bank.clone(), parent_bank.collector_id(), *root);
                 parent_bank = self.bank_forks.write().unwrap().insert(new_bank);
                 let parent = if i > 0 { roots[i - 1] } else { 0 };
                 fill_blockstore_slot_with_ticks(
@@ -4969,7 +4969,7 @@ pub mod tests {
             }
             self.blockstore.set_roots(roots.iter()).unwrap();
             let new_bank = Bank::new_from_parent(
-                &parent_bank,
+                parent_bank.clone(),
                 parent_bank.collector_id(),
                 roots.iter().max().unwrap() + 1,
             );
@@ -5000,7 +5000,7 @@ pub mod tests {
                 .write()
                 .unwrap()
                 .insert(Bank::new_from_parent(
-                    &parent_bank,
+                    parent_bank,
                     &Pubkey::default(),
                     slot,
                 ));
@@ -5057,7 +5057,7 @@ pub mod tests {
             .unwrap();
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let request_processor = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -5076,7 +5076,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -5108,7 +5108,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -5235,7 +5235,7 @@ pub mod tests {
 
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -6381,7 +6381,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -8295,13 +8295,13 @@ pub mod tests {
 
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let bank1 = bank_forks.read().unwrap().get(1).unwrap();
-        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
+        let bank2 = Bank::new_from_parent(bank1, &Pubkey::default(), 2);
         bank_forks.write().unwrap().insert(bank2);
         let bank2 = bank_forks.read().unwrap().get(2).unwrap();
-        let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), 3);
+        let bank3 = Bank::new_from_parent(bank2, &Pubkey::default(), 3);
         bank_forks.write().unwrap().insert(bank3);
 
         let optimistically_confirmed_bank =

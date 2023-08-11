@@ -457,7 +457,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
     // Try and finalize the program now that sol_alloc_free is re-enabled
     assert!(bank.process_transaction(&finalize_tx).is_ok());
     let new_slot = bank.slot() + 1;
-    let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), new_slot);
+    let mut bank = Bank::new_from_parent(Arc::new(bank), &Pubkey::default(), new_slot);
 
     // invoke the program
     assert!(bank.process_transaction(&invoke_tx).is_ok());

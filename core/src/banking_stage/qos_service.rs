@@ -596,6 +596,7 @@ mod tests {
             system_transaction,
         },
         solana_vote_program::vote_transaction,
+        std::sync::Arc,
     };
 
     #[test]

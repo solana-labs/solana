@@ -2554,7 +2554,7 @@ mod tests {
 
         // bank=1, wait=0, should pass, bank is past the wait slot
         let bank_forks = RwLock::new(BankForks::new(Bank::new_from_parent(
-            &bank_forks.read().unwrap().root_bank(),
+            bank_forks.read().unwrap().root_bank(),
             &Pubkey::default(),
             1,
         )));
