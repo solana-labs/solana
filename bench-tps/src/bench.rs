@@ -406,12 +406,13 @@ where
     // All bench transfer transactions will include a `alt_instruction_program_id` instruction to load
     //     specified number of accounts from Lookup Table account as writable accounts.
     let alt_instruction_accounts = alt_instruction_config.map(|alt_instruction_config| {
-        let lookup_table_account_address = create_address_lookup_table_account(
-            client.clone(),
-            &id,
-            alt_instruction_config.alt_instruction_load_accounts_count,
-        )
-        .unwrap();
+        // there are 5 accounts already in transaction: signer, 2 for transfer, compute budget and
+        // sbf program, need to deduct them from alt size.
+        const MIN_ACCOUNTS_COUNT: usize = 5;
+        let alt_size =
+            alt_instruction_config.alt_instruction_load_accounts_count - MIN_ACCOUNTS_COUNT;
+        let lookup_table_account_address =
+            create_address_lookup_table_account(client.clone(), &id, alt_size).unwrap();
         let lookup_table_account = client
             .get_account_with_commitment(
                 &lookup_table_account_address,
