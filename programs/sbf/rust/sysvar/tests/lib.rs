@@ -27,10 +27,10 @@ async fn test_sysvars() {
     );
 
     let epoch_rewards = epoch_rewards::EpochRewards {
-            total_rewards: 100,
-            distributed_rewards: 50,
-            distribution_complete_block_height: 42,
-        };
+        total_rewards: 100,
+        distributed_rewards: 50,
+        distribution_complete_block_height: 42,
+    };
     program_test.add_sysvar_account(epoch_rewards::id(), &epoch_rewards);
     let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
 
