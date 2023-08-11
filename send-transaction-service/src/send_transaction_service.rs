@@ -888,7 +888,11 @@ mod test {
             .transfer(1, &mint_keypair, &mint_keypair.pubkey())
             .unwrap();
 
-        let working_bank = Arc::new(Bank::new_from_parent(root_bank.clone(), &Pubkey::default(), 2));
+        let working_bank = Arc::new(Bank::new_from_parent(
+            root_bank.clone(),
+            &Pubkey::default(),
+            2,
+        ));
 
         let non_rooted_signature = working_bank
             .transfer(2, &mint_keypair, &mint_keypair.pubkey())
@@ -1159,7 +1163,11 @@ mod test {
             AccountSharedData::new_data(43, &nonce_state, &system_program::id()).unwrap();
         root_bank.store_account(&nonce_address, &nonce_account);
 
-        let working_bank = Arc::new(Bank::new_from_parent(root_bank.clone(), &Pubkey::default(), 2));
+        let working_bank = Arc::new(Bank::new_from_parent(
+            root_bank.clone(),
+            &Pubkey::default(),
+            2,
+        ));
         let non_rooted_signature = working_bank
             .transfer(2, &mint_keypair, &mint_keypair.pubkey())
             .unwrap();

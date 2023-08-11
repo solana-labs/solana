@@ -2187,11 +2187,7 @@ mod tests {
         // make some banks, do some transactions, ensure there's some zero-lamport accounts
         for _ in 0..5 {
             let slot = bank.slot() + 1;
-            bank = Arc::new(Bank::new_from_parent(
-                bank,
-                &Pubkey::new_unique(),
-                slot,
-            ));
+            bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), slot));
             do_transfers(&bank);
         }
 
@@ -2217,11 +2213,7 @@ mod tests {
         // make more banks, do more transactions, ensure there's more zero-lamport accounts
         for _ in 0..5 {
             let slot = bank.slot() + 1;
-            bank = Arc::new(Bank::new_from_parent(
-                bank,
-                &Pubkey::new_unique(),
-                slot,
-            ));
+            bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), slot));
             do_transfers(&bank);
         }
 

@@ -7166,11 +7166,8 @@ pub(crate) mod tests {
             let mut parent_bank = bank2.clone();
             for _ in 0..MAX_PROCESSING_AGE {
                 let slot = parent_bank.slot() + 1;
-                parent_bank = Arc::new(Bank::new_from_parent(
-                    parent_bank,
-                    &Pubkey::default(),
-                    slot,
-                ));
+                parent_bank =
+                    Arc::new(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot));
                 parent_bank.fill_bank_with_ticks_for_tests();
                 parent_bank.freeze();
             }
@@ -7394,7 +7391,8 @@ pub(crate) mod tests {
         // Add a new fork starting from 0 with bigger slot number, we assume it has a bigger
         // weight, but we cannot switch because of lockout.
         let other_fork_slot = 1;
-        let other_fork_bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), other_fork_slot);
+        let other_fork_bank =
+            Bank::new_from_parent(bank0.clone(), &Pubkey::default(), other_fork_slot);
         other_fork_bank.fill_bank_with_ticks_for_tests();
         other_fork_bank.freeze();
         progress.entry(other_fork_slot).or_insert_with(|| {

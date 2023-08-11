@@ -835,8 +835,10 @@ mod tests {
             // Clock::unix_timestamp from Bank::unix_timestamp_from_genesis()
             let update_timestamp_case = slot == slots_in_epoch;
 
-            let child1 = Bank::new_from_parent(bank_forks0[slot - 1].clone(), &Pubkey::default(), slot);
-            let child2 = Bank::new_from_parent(bank_forks1[slot - 1].clone(), &Pubkey::default(), slot);
+            let child1 =
+                Bank::new_from_parent(bank_forks0[slot - 1].clone(), &Pubkey::default(), slot);
+            let child2 =
+                Bank::new_from_parent(bank_forks1[slot - 1].clone(), &Pubkey::default(), slot);
 
             if update_timestamp_case {
                 for child in &[&child1, &child2] {

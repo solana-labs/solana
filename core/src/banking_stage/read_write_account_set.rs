@@ -184,11 +184,7 @@ mod tests {
 
         let slot = bank.slot() + 1;
         (
-            Arc::new(Bank::new_from_parent(
-                bank,
-                &Pubkey::new_unique(),
-                slot,
-            )),
+            Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), slot)),
             address_table_key,
         )
     }

@@ -35,20 +35,12 @@ use {
 fn next_epoch_and_n_slots(bank: Arc<Bank>, mut n: usize) -> Arc<Bank> {
     bank.squash();
     let slot = bank.get_slots_in_epoch(bank.epoch()) + bank.slot();
-    let mut bank = Arc::new(Bank::new_from_parent(
-        bank,
-        &Pubkey::default(),
-        slot,
-    ));
+    let mut bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
 
     while n > 0 {
         bank.squash();
         let slot = bank.slot() + 1;
-        bank = Arc::new(Bank::new_from_parent(
-            bank,
-            &Pubkey::default(),
-            slot,
-        ));
+        bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
         n -= 1;
     }
 
@@ -67,11 +59,7 @@ fn fill_epoch_with_votes(
     while bank.epoch() != old_epoch + 1 {
         bank.squash();
         let slot = bank.slot() + 1;
-        bank = Arc::new(Bank::new_from_parent(
-            bank,
-            &Pubkey::default(),
-            slot,
-        ));
+        bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
 
         let bank_client = BankClient::new_shared(bank.clone());
         let parent = bank.parent().unwrap();

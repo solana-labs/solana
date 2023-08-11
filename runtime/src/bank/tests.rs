@@ -1752,11 +1752,7 @@ fn test_rent_eager_under_fixed_cycle_for_development() {
     assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (3, 1));
     assert_eq!(bank.rent_collection_partitions(), vec![(224, 225, 432_000)]);
 
-    bank = Arc::new(Bank::new_from_parent(
-        bank,
-        &Pubkey::default(),
-        432_000 - 2,
-    ));
+    bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), 432_000 - 2));
     bank = Arc::new(new_from_parent(bank));
     assert_eq!(
         bank.rent_collection_partitions(),
@@ -11702,20 +11698,12 @@ fn test_accounts_data_size_and_rent_collection() {
         activate_all_features(&mut genesis_config);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let slot = bank.slot() + bank.slot_count_per_normal_epoch();
-        let bank = Arc::new(Bank::new_from_parent(
-            bank,
-            &Pubkey::default(),
-            slot,
-        ));
+        let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
 
         // make another bank so that any reclaimed accounts from the previous bank do not impact
         // this test
         let slot = bank.slot() + bank.slot_count_per_normal_epoch();
-        let bank = Arc::new(Bank::new_from_parent(
-            bank,
-            &Pubkey::default(),
-            slot,
-        ));
+        let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
 
         // Store an account into the bank that is rent-paying and has data
         let data_size = 123;
@@ -11781,11 +11769,7 @@ fn test_accounts_data_size_from_genesis() {
     // Create accounts over a number of banks and ensure the accounts data size remains correct
     for _ in 0..10 {
         let slot = bank.slot() + 1;
-        bank = Arc::new(Bank::new_from_parent(
-            bank,
-            &Pubkey::default(),
-            slot,
-        ));
+        bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
 
         // Store an account into the bank that is rent-exempt and has data
         let data_size = rand::thread_rng().gen_range(3333, 4444);
@@ -12212,11 +12196,7 @@ fn test_bank_verify_accounts_hash_with_base() {
     // make some banks, do some transactions, ensure there's some zero-lamport accounts
     for _ in 0..2 {
         let slot = bank.slot() + 1;
-        bank = Arc::new(Bank::new_from_parent(
-            bank,
-            &Pubkey::new_unique(),
-            slot,
-        ));
+        bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), slot));
         do_transfers(&bank);
     }
 
@@ -12230,11 +12210,7 @@ fn test_bank_verify_accounts_hash_with_base() {
     // make more banks, do more transactions, ensure there's more zero-lamport accounts
     for _ in 0..2 {
         let slot = bank.slot() + 1;
-        bank = Arc::new(Bank::new_from_parent(
-            bank,
-            &Pubkey::new_unique(),
-            slot,
-        ));
+        bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), slot));
         do_transfers(&bank);
     }
 

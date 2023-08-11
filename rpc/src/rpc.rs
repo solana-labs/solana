@@ -4999,11 +4999,7 @@ pub mod tests {
                 .bank_forks
                 .write()
                 .unwrap()
-                .insert(Bank::new_from_parent(
-                    parent_bank,
-                    &Pubkey::default(),
-                    slot,
-                ));
+                .insert(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot));
 
             let new_block_commitment = BlockCommitmentCache::new(
                 HashMap::new(),

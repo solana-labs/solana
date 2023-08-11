@@ -908,11 +908,7 @@ mod test {
         let make_banks = |mut bank: Arc<Bank>, num_banks| {
             for _ in 0..num_banks {
                 let slot = bank.slot() + 1;
-                bank = Arc::new(Bank::new_from_parent(
-                    bank,
-                    &Pubkey::new_unique(),
-                    slot,
-                ));
+                bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), slot));
 
                 // Since we're not using `BankForks::set_root()`, we have to handle sending the
                 // correct snapshot requests ourself.

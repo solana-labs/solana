@@ -218,7 +218,8 @@ fn run_bank_forks_snapshot_n<F>(
         accounts_package_sender,
     };
     for slot in 1..=last_slot {
-        let mut bank = Bank::new_from_parent(bank_forks.get(slot - 1).unwrap(), &Pubkey::default(), slot);
+        let mut bank =
+            Bank::new_from_parent(bank_forks.get(slot - 1).unwrap(), &Pubkey::default(), slot);
         f(&mut bank, mint_keypair);
         let bank = bank_forks.insert(bank);
         // Set root to make sure we don't end up with too many account storage entries
@@ -729,7 +730,8 @@ fn test_bank_forks_incremental_snapshot(
     for slot in 1..=LAST_SLOT {
         // Make a new bank and perform some transactions
         let bank = {
-            let bank = Bank::new_from_parent(bank_forks.get(slot - 1).unwrap(), &Pubkey::default(), slot);
+            let bank =
+                Bank::new_from_parent(bank_forks.get(slot - 1).unwrap(), &Pubkey::default(), slot);
 
             let key = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(mint_keypair, &key, 1, bank.last_blockhash());

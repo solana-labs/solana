@@ -969,13 +969,10 @@ mod tests {
         // Check `keys` and `epoch_authorized_voters` are purged when new
         // root bank moves to the next epoch
         let current_epoch = bank.epoch();
-        let new_epoch_slot = bank.epoch_schedule()
+        let new_epoch_slot = bank
+            .epoch_schedule()
             .get_first_slot_in_epoch(current_epoch + 1);
-        let new_epoch_bank = Bank::new_from_parent(
-            bank,
-            &Pubkey::default(),
-            new_epoch_slot,
-        );
+        let new_epoch_bank = Bank::new_from_parent(bank, &Pubkey::default(), new_epoch_slot);
         vote_tracker.progress_with_new_root_bank(&new_epoch_bank);
     }
 

@@ -3754,11 +3754,7 @@ pub mod tests {
             i += 1;
 
             let slot = bank.slot() + thread_rng().gen_range(1, 3);
-            bank = Arc::new(Bank::new_from_parent(
-                bank,
-                &Pubkey::default(),
-                slot,
-            ));
+            bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
         }
     }
 

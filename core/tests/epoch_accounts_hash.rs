@@ -602,11 +602,11 @@ fn test_epoch_accounts_hash_and_warping() {
         CalcAccountsHashDataSource::Storages,
     ));
     let slot = bank.slot().checked_add(1).unwrap();
-    let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
-        bank,
-        &Pubkey::default(),
-        slot,
-    ));
+    let bank =
+        bank_forks
+            .write()
+            .unwrap()
+            .insert(Bank::new_from_parent(bank, &Pubkey::default(), slot));
     bank_forks.write().unwrap().set_root(
         bank.slot(),
         &test_environment
@@ -637,11 +637,11 @@ fn test_epoch_accounts_hash_and_warping() {
         CalcAccountsHashDataSource::Storages,
     ));
     let slot = bank.slot().checked_add(1).unwrap();
-    let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
-        bank,
-        &Pubkey::default(),
-        slot,
-    ));
+    let bank =
+        bank_forks
+            .write()
+            .unwrap()
+            .insert(Bank::new_from_parent(bank, &Pubkey::default(), slot));
     bank_forks.write().unwrap().set_root(
         bank.slot(),
         &test_environment
