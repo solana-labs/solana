@@ -115,18 +115,6 @@ macro_rules! deploy_program {
     ($invoke_context:expr, $program_id:expr, $loader_key:expr,
      $account_size:expr, $slot:expr, $drop:expr, $new_programdata:expr $(,)?) => {{
         let mut load_program_metrics = LoadProgramMetrics::default();
-        let mut register_syscalls_time = Measure::start("register_syscalls_time");
-        let program_runtime_environment = create_program_runtime_environment_v1(
-            &$invoke_context.feature_set,
-            $invoke_context.get_compute_budget(),
-            true, /* deployment */
-            false, /* debugging_features */
-        ).map_err(|e| {
-            ic_msg!($invoke_context, "Failed to register syscalls: {}", e);
-            InstructionError::ProgramEnvironmentSetupFailure
-        })?;
-        register_syscalls_time.stop();
-        load_program_metrics.register_syscalls_us = register_syscalls_time.as_us();
         let executor = load_program_from_bytes(
             &$invoke_context.feature_set,
             $invoke_context.get_log_collector(),
@@ -135,7 +123,7 @@ macro_rules! deploy_program {
             $loader_key,
             $account_size,
             $slot,
-            Arc::new(program_runtime_environment),
+            $invoke_context.programs_modified_by_tx.program_runtime_environment_v1.clone(),
         )?;
         if let Some(old_entry) = find_program_in_cache($invoke_context, &$program_id) {
             executor.tx_usage_counter.store(
