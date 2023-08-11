@@ -134,7 +134,7 @@ fn do_bench_transactions(
     bank.add_mockup_builtin(Pubkey::from(BUILTIN_PROGRAM_ID), process_instruction);
     bank.add_builtin_account("solana_noop_program", &Pubkey::from(NOOP_PROGRAM_ID), false);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let bank_client = BankClient::new_shared(bank.clone());
     let transactions = create_transactions(&bank_client, &mint_keypair);
 
     // Do once to fund accounts, load modules, etc...
@@ -189,7 +189,7 @@ fn bench_bank_update_recent_blockhashes(bencher: &mut Bencher) {
     // Prime blockhash_queue
     for i in 0..(MAX_RECENT_BLOCKHASHES + 1) {
         bank = Arc::new(Bank::new_from_parent(
-            &bank,
+            bank,
             &Pubkey::default(),
             (i + 1) as u64,
         ));
