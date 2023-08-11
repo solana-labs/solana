@@ -68,7 +68,7 @@ fn get_state_mut(data: &mut [u8]) -> Result<&mut LoaderV4State, InstructionError
     }
 }
 
-pub fn create_program_runtime_v2_environment<'a>(
+pub fn create_program_runtime_environment_v2<'a>(
     compute_budget: &ComputeBudget,
     debugging_features: bool,
 ) -> BuiltinProgram<InvokeContext<'a>> {
@@ -118,7 +118,7 @@ pub fn load_program_from_account(
         .ok_or(InstructionError::AccountDataTooSmall)?;
     let loaded_program = LoadedProgram::new(
         &loader_v4::id(),
-        Arc::new(create_program_runtime_v2_environment(
+        Arc::new(create_program_runtime_environment_v2(
             compute_budget,
             debugging_features,
         )),
