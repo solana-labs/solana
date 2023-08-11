@@ -1256,7 +1256,7 @@ impl Validator {
 
         let cluster_type = bank_forks.read().unwrap().root_bank().cluster_type();
         if !config.no_metrics_sanity_check {
-            metrics_config_sanity_check(cluster_type).map_err(|e| e.to_string())?;
+            metrics_config_sanity_check(cluster_type)?;
         }
 
         datapoint_info!(

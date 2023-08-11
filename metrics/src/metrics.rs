@@ -36,6 +36,12 @@ pub enum MetricsError {
     DbMismatch(String),
 }
 
+impl From<MetricsError> for String {
+    fn from(error: MetricsError) -> Self {
+        error.to_string()
+    }
+}
+
 impl From<&CounterPoint> for DataPoint {
     fn from(counter_point: &CounterPoint) -> Self {
         let mut point = Self::new(counter_point.name);
