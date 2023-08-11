@@ -367,13 +367,32 @@ pub struct LoadedProgramsForTxBatch {
     /// LoadedProgram is the corresponding program entry valid for the slot in which a transaction is being executed.
     entries: HashMap<Pubkey, Arc<LoadedProgram>>,
     slot: Slot,
+    /// Runtime environment reference from LoadedProgram cache
+    pub program_runtime_environment_v1: Arc<BuiltinProgram<InvokeContext<'static>>>,
+    /// RuntimeV2 environment reference from LoadedProgram cache
+    pub program_runtime_environment_v2: Arc<BuiltinProgram<InvokeContext<'static>>>,
 }
 
 impl LoadedProgramsForTxBatch {
-    pub fn new(slot: Slot) -> Self {
+    pub fn new_from_cache(slot: Slot, loaded_programs_cache: &LoadedPrograms) -> Self {
         Self {
             entries: HashMap::new(),
             slot,
+            program_runtime_environment_v1: loaded_programs_cache
+                .program_runtime_environment_v1
+                .clone(),
+            program_runtime_environment_v2: loaded_programs_cache
+                .program_runtime_environment_v2
+                .clone(),
+        }
+    }
+
+    pub fn new_from_tx_batch_cache(slot: Slot, tx_batch_cache: &LoadedProgramsForTxBatch) -> Self {
+        Self {
+            entries: HashMap::new(),
+            slot,
+            program_runtime_environment_v1: tx_batch_cache.program_runtime_environment_v1.clone(),
+            program_runtime_environment_v2: tx_batch_cache.program_runtime_environment_v2.clone(),
         }
     }
 
@@ -654,6 +673,8 @@ impl LoadedPrograms {
             LoadedProgramsForTxBatch {
                 entries: found,
                 slot: working_slot.current_slot(),
+                program_runtime_environment_v1: self.program_runtime_environment_v1.clone(),
+                program_runtime_environment_v2: self.program_runtime_environment_v2.clone(),
             },
             missing,
         )
