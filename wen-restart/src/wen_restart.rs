@@ -104,11 +104,14 @@ pub fn wen_restart(
         last_voted_slot,
         last_voted_fork.len()
     );
+    last_voted_fork.sort();
     cluster_info.push_last_voted_fork_slots(&last_voted_fork, last_vote.hash());
     let root_bank = bank_forks.read().unwrap().root_bank();
     let mut cursor = Cursor::default();
     let mut epoch_stakes_map = EpochStakesMap::new(root_bank.clone());
-    let mut last_voted_fork_slots_aggregate = LastVotedForkSlotsAggregate::new(root_bank.slot());
+    let my_pubkey = cluster_info.id();
+    let mut last_voted_fork_slots_aggregate = LastVotedForkSlotsAggregate::new(
+        root_bank.slot(), &last_voted_fork, &my_pubkey);
     // Aggregate LastVotedForkSlots until seeing this message from 80% of the validators.
     info!("wen_restart aggregating RestartLastVotedForkSlots");
     loop {
@@ -169,7 +172,7 @@ pub fn wen_restart(
     }
     // Aggregate heaviest fork and sanity check.
     let mut heaviest_fork_aggregate =
-        HeaviestForkAggregate::new(cluster_info.id(), my_selected_slot, my_selected_hash);
+        HeaviestForkAggregate::new(my_pubkey, my_selected_slot, my_selected_hash);
     cursor = Cursor::default();
     info!("wen_restart aggregating HeaviestFork");
     loop {

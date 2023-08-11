@@ -16,11 +16,23 @@ pub struct LastVotedForkSlotsAggregate {
 }
 
 impl LastVotedForkSlotsAggregate {
-    pub(crate) fn new(root_slot: Slot) -> Self {
+    pub(crate) fn new(
+        root_slot: Slot,
+        my_slots: &[Slot],
+        my_pubkey: &Pubkey,
+    ) -> Self {
+        let mut slots_aggregate = BTreeMap::new();
+        let mut active_peers = HashSet::new();
+        for slot in my_slots {
+            let mut new_set = HashSet::new();
+            new_set.insert(my_pubkey.clone());
+            slots_aggregate.insert(*slot, new_set);
+        }
+        active_peers.insert(*my_pubkey);
         Self {
             root_slot,
-            slots_aggregate: BTreeMap::new(),
-            active_peers: HashSet::new(),
+            slots_aggregate,
+            active_peers,
         }
     }
 
