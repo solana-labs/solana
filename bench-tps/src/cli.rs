@@ -411,7 +411,7 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .value_name("ALT_INSTRUCTION_LOAD_ACCOUNTS_COUNT")
                 .takes_value(true)
                 .requires("alt_instruction_program_id")
-                .validator(|n| is_within_range(n, 0..256))
+                .validator(|n| is_within_range(n, 0..=256))
                 .help("The number of accounts are loaded from address lookup table account by program identified as `alt_instruction_program_id`")
         )
 }
