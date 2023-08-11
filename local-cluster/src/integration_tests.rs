@@ -1,5 +1,21 @@
-#![allow(clippy::integer_arithmetic)]
+//! Code used by the integration tests in the `local-cluster/tests` folder.
+//!
+//! According to the cargo documentation, integration tests are compiled as individual crates.
+//!
+//!   https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-directory
+//!
+//! Putting shared code into the `tests/` folder, causes it to be recompiled for every test, rather
+//! than being compiled once when it is part of the main crate.  And, at the same time, unused code
+//! analysis is broken, as it is literally included.  If a shared function is not used in one of the
+//! integration tests, it will be flagged as unused, when compiling this test crate.
+
 use {
+    crate::{
+        cluster::{Cluster, ClusterValidatorInfo},
+        cluster_tests,
+        local_cluster::{ClusterConfig, LocalCluster},
+        validator_configs::*,
+    },
     log::*,
     solana_accounts_db::accounts_db::create_accounts_run_and_snapshot_dirs,
     solana_core::{
@@ -12,12 +28,6 @@ use {
         blockstore::{Blockstore, PurgeType},
         blockstore_options::{AccessType, BlockstoreOptions},
         leader_schedule::{FixedSchedule, LeaderSchedule},
-    },
-    solana_local_cluster::{
-        cluster::{Cluster, ClusterValidatorInfo},
-        cluster_tests,
-        local_cluster::{ClusterConfig, LocalCluster},
-        validator_configs::*,
     },
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
@@ -33,6 +43,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_turbine::broadcast_stage::BroadcastStageType,
+    static_assertions,
     std::{
         collections::HashSet,
         fs, iter,
@@ -163,7 +174,6 @@ pub fn ms_for_n_slots(num_blocks: u64, ticks_per_slot: u64) -> u64 {
         / DEFAULT_TICKS_PER_SLOT
 }
 
-#[allow(clippy::assertions_on_constants)]
 pub fn run_kill_partition_switch_threshold<C>(
     stakes_to_kill: &[(usize, usize)],
     alive_stakes: &[(usize, usize)],
@@ -175,7 +185,7 @@ pub fn run_kill_partition_switch_threshold<C>(
 ) {
     // Needs to be at least 1/3 or there will be no overlap
     // with the confirmation supermajority 2/3
-    assert!(SWITCH_FORK_THRESHOLD >= 1f64 / 3f64);
+    static_assertions::const_assert!(SWITCH_FORK_THRESHOLD >= 1f64 / 3f64);
     info!(
         "stakes_to_kill: {:?}, alive_stakes: {:?}",
         stakes_to_kill, alive_stakes
