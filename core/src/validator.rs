@@ -65,7 +65,9 @@ use {
         use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     solana_measure::measure::Measure,
-    solana_metrics::{datapoint_info, poh_timing_point::PohTimingSender},
+    solana_metrics::{
+        datapoint_info, metrics::metrics_config_sanity_check, poh_timing_point::PohTimingSender,
+    },
     solana_poh::{
         poh_recorder::PohRecorder,
         poh_service::{self, PohService},
@@ -1250,10 +1252,14 @@ impl Validator {
             config.generator_config.clone(),
         );
 
+        let cluster_type = bank_forks.read().unwrap().root_bank().cluster_type();
+        metrics_config_sanity_check(cluster_type)?;
+
         datapoint_info!(
             "validator-new",
             ("id", id.to_string(), String),
-            ("version", solana_version::version!(), String)
+            ("version", solana_version::version!(), String),
+            ("cluster_type", cluster_type as u32, i64),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
