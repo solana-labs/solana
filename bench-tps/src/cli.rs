@@ -44,12 +44,12 @@ pub struct InstructionPaddingConfig {
 }
 
 #[derive(Eq, PartialEq, Debug)]
-pub struct LookupTableConfig {
-    // program_id of `noop` program in test cluster; bench-tps uses `noop` program to
+pub struct AltInstructionConfig {
+    // program_id of a sbf program deployed in test cluster, such as `noop`, to
     // load accounts from ALT
-    pub noop_program_id: Pubkey,
-    // number of addresses (up to 256) to be added to ATL for `noop` to load
-    pub number_addresses: usize,
+    pub alt_instruction_program_id: Pubkey,
+    // number of addresses (up to 256) to be added to ATL for program to load
+    pub alt_instruction_load_accounts_count: usize,
 }
 
 /// Holds the configuration for a single run of the benchmark
@@ -83,7 +83,7 @@ pub struct Config {
     pub num_conflict_groups: Option<usize>,
     pub bind_address: IpAddr,
     pub client_node_id: Option<Keypair>,
-    pub load_accounts_from_address_lookup_table: Option<LookupTableConfig>,
+    pub alt_instruction_config: Option<AltInstructionConfig>,
 }
 
 impl Eq for Config {}
@@ -119,7 +119,7 @@ impl Default for Config {
             num_conflict_groups: None,
             bind_address: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             client_node_id: None,
-            load_accounts_from_address_lookup_table: None,
+            alt_instruction_config: None,
         }
     }
 }
@@ -598,9 +598,9 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         let alt_instruction_program_id = alt_instruction_program_id
             .parse::<Pubkey>()
             .map_err(|_| "Can't parse pubkey alt_instruction_program_id")?;
-        args.load_accounts_from_address_lookup_table = Some(LookupTableConfig {
-            noop_program_id: alt_instruction_program_id,
-            number_addresses: alt_instruction_load_accounts_count,
+        args.alt_instruction_config = Some(AltInstructionConfig {
+            alt_instruction_program_id,
+            alt_instruction_load_accounts_count,
         });
     }
 

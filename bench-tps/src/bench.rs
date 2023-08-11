@@ -85,9 +85,9 @@ struct KeypairChunks<'a> {
 }
 
 /// Accounts pubkeys needed to construct instruction that uses ATL
-struct AtlInstructionAccounts {
+struct AltInstructionAccounts {
     lookup_table_account: AddressLookupTableAccount,
-    noop_program_id: Pubkey,
+    alt_instruction_program_id: Pubkey,
 }
 
 impl<'a> KeypairChunks<'a> {
@@ -132,7 +132,7 @@ struct TransactionChunkGenerator<'a, 'b, T: ?Sized> {
     reclaim_lamports_back_to_source_account: bool,
     use_randomized_compute_unit_price: bool,
     instruction_padding_config: Option<InstructionPaddingConfig>,
-    atl_instruction_accounts: Option<AtlInstructionAccounts>,
+    alt_instruction_accounts: Option<AltInstructionAccounts>,
 }
 
 impl<'a, 'b, T> TransactionChunkGenerator<'a, 'b, T>
@@ -147,7 +147,7 @@ where
         use_randomized_compute_unit_price: bool,
         instruction_padding_config: Option<InstructionPaddingConfig>,
         num_conflict_groups: Option<usize>,
-        atl_instruction_accounts: Option<AtlInstructionAccounts>,
+        alt_instruction_accounts: Option<AltInstructionAccounts>,
     ) -> Self {
         let account_chunks = if let Some(num_conflict_groups) = num_conflict_groups {
             KeypairChunks::new_with_conflict_groups(gen_keypairs, chunk_size, num_conflict_groups)
@@ -165,7 +165,7 @@ where
             reclaim_lamports_back_to_source_account: false,
             use_randomized_compute_unit_price,
             instruction_padding_config,
-            atl_instruction_accounts,
+            alt_instruction_accounts,
         }
     }
 
@@ -202,7 +202,7 @@ where
                 blockhash.unwrap(),
                 &self.instruction_padding_config,
                 self.use_randomized_compute_unit_price,
-                &self.atl_instruction_accounts,
+                &self.alt_instruction_accounts,
             )
         };
 
@@ -397,37 +397,36 @@ where
         use_durable_nonce,
         instruction_padding_config,
         num_conflict_groups,
-        load_accounts_from_address_lookup_table,
+        alt_instruction_config,
         ..
     } = config;
 
-    // if --load_accounts_from_address_lookup_table is used, creates Lookup Table account,
+    // if --alt_instruction_load_accounts_count is used, creates Lookup Table account,
     //     then extend it with requested number of accounts.
-    // All bench transfer transactions will include a `noop_program_id` instruction to load
+    // All bench transfer transactions will include a `alt_instruction_program_id` instruction to load
     //     specified number of accounts from Lookup Table account as writable accounts.
-    let alt_instruction_accounts =
-        load_accounts_from_address_lookup_table.map(|lookup_table_config| {
-            let lookup_table_account_address = create_address_lookup_table_account(
-                client.clone(),
-                &id,
-                lookup_table_config.number_addresses,
+    let alt_instruction_accounts = alt_instruction_config.map(|alt_instruction_config| {
+        let lookup_table_account_address = create_address_lookup_table_account(
+            client.clone(),
+            &id,
+            alt_instruction_config.alt_instruction_load_accounts_count,
+        )
+        .unwrap();
+        let lookup_table_account = client
+            .get_account_with_commitment(
+                &lookup_table_account_address,
+                CommitmentConfig::processed(),
             )
             .unwrap();
-            let lookup_table_account = client
-                .get_account_with_commitment(
-                    &lookup_table_account_address,
-                    CommitmentConfig::processed(),
-                )
-                .unwrap();
-            let lookup_table = AddressLookupTable::deserialize(&lookup_table_account.data).unwrap();
-            AtlInstructionAccounts {
-                lookup_table_account: AddressLookupTableAccount {
-                    key: lookup_table_account_address,
-                    addresses: lookup_table.addresses.to_vec(),
-                },
-                noop_program_id: lookup_table_config.noop_program_id,
-            }
-        });
+        let lookup_table = AddressLookupTable::deserialize(&lookup_table_account.data).unwrap();
+        AltInstructionAccounts {
+            lookup_table_account: AddressLookupTableAccount {
+                key: lookup_table_account_address,
+                addresses: lookup_table.addresses.to_vec(),
+            },
+            alt_instruction_program_id: alt_instruction_config.alt_instruction_program_id,
+        }
+    });
 
     assert!(gen_keypairs.len() >= 2 * tx_count);
     let chunk_generator = TransactionChunkGenerator::new(
@@ -565,7 +564,7 @@ fn generate_system_txs(
     blockhash: &Hash,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
     use_randomized_compute_unit_price: bool,
-    atl_instruction_accounts: &Option<AtlInstructionAccounts>,
+    alt_instruction_accounts: &Option<AltInstructionAccounts>,
 ) -> Vec<TimestampedTransaction> {
     let pairs: Vec<_> = if !reclaim {
         source.iter().zip(dest.iter()).collect()
@@ -597,7 +596,7 @@ fn generate_system_txs(
                         *blockhash,
                         instruction_padding_config,
                         Some(**compute_unit_price),
-                        atl_instruction_accounts,
+                        alt_instruction_accounts,
                     ),
                     Some(timestamp()),
                 )
@@ -615,7 +614,7 @@ fn generate_system_txs(
                         *blockhash,
                         instruction_padding_config,
                         None,
-                        atl_instruction_accounts,
+                        alt_instruction_accounts,
                     ),
                     Some(timestamp()),
                 )
@@ -631,7 +630,7 @@ fn transfer_with_compute_unit_price_and_padding(
     recent_blockhash: Hash,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
     compute_unit_price: Option<u64>,
-    atl_instruction_accounts: &Option<AtlInstructionAccounts>,
+    alt_instruction_accounts: &Option<AltInstructionAccounts>,
 ) -> VersionedTransaction {
     let from_pubkey = from_keypair.pubkey();
     let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
@@ -659,19 +658,19 @@ fn transfer_with_compute_unit_price_and_padding(
         ),
     ]);
 
-    let versioned_message = if let Some(atl_instruction_accounts) = atl_instruction_accounts {
+    let versioned_message = if let Some(alt_instruction_accounts) = alt_instruction_accounts {
         let address_lookup_table_account_clone =
-            atl_instruction_accounts.lookup_table_account.clone();
+            alt_instruction_accounts.lookup_table_account.clone();
         let address_lookup_table_accounts = vec![address_lookup_table_account_clone];
 
-        let account_metas: Vec<_> = atl_instruction_accounts
+        let account_metas: Vec<_> = alt_instruction_accounts
             .lookup_table_account
             .addresses
             .iter()
-            .map(|pubkey| AccountMeta::new(*pubkey, false))
+            .map(|pubkey| AccountMeta::new_readonly(*pubkey, false))
             .collect();
         instructions.extend_from_slice(&[Instruction::new_with_bincode(
-            atl_instruction_accounts.noop_program_id,
+            alt_instruction_accounts.alt_instruction_program_id,
             &(),
             account_metas,
         )]);
