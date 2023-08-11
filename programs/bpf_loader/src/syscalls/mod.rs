@@ -142,7 +142,7 @@ macro_rules! register_feature_gated_function {
     };
 }
 
-pub fn create_program_runtime_environment<'a>(
+pub fn create_program_runtime_environment_v1<'a>(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,
     reject_deployment_of_broken_elfs: bool,

@@ -99,7 +99,7 @@ use {
             TransactionResults,
         },
     },
-    solana_bpf_loader_program::syscalls::create_program_runtime_environment,
+    solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
     solana_cost_model::cost_tracker::CostTracker,
     solana_measure::{measure, measure::Measure, measure_us},
     solana_perf::perf_libs,
@@ -7996,7 +7996,7 @@ impl Bank {
                 .iter()
                 .any(|key| new_feature_activations.contains(key))
         {
-            let program_runtime_environment_v1 = create_program_runtime_environment(
+            let program_runtime_environment_v1 = create_program_runtime_environment_v1(
                 &self.feature_set,
                 &self.runtime_config.compute_budget.unwrap_or_default(),
                 false, /* deployment */
@@ -8009,6 +8009,17 @@ impl Bank {
             {
                 loaded_programs_cache.program_runtime_environment_v1 =
                     Arc::new(program_runtime_environment_v1);
+            }
+            let program_runtime_environment_v2 =
+                solana_loader_v4_program::create_program_runtime_environment_v2(
+                    &self.runtime_config.compute_budget.unwrap_or_default(),
+                    false, /* debugging_features */
+                );
+            if *loaded_programs_cache.program_runtime_environment_v2
+                != program_runtime_environment_v2
+            {
+                loaded_programs_cache.program_runtime_environment_v2 =
+                    Arc::new(program_runtime_environment_v2);
             }
             loaded_programs_cache.prune_feature_set_transition();
         }

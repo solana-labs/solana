@@ -14,7 +14,7 @@ use {
     byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
     solana_bpf_loader_program::{
         create_vm, serialization::serialize_parameters,
-        syscalls::create_program_runtime_environment,
+        syscalls::create_program_runtime_environment_v1,
     },
     solana_measure::measure::Measure,
     solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
@@ -90,7 +90,7 @@ macro_rules! with_mock_invoke_context {
 fn bench_program_create_executable(bencher: &mut Bencher) {
     let elf = load_program_from_file("bench_alu");
 
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &FeatureSet::default(),
         &ComputeBudget::default(),
         true,
@@ -118,7 +118,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let elf = load_program_from_file("bench_alu");
     with_mock_invoke_context!(invoke_context, bpf_loader::id(), 10000001);
 
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
@@ -237,7 +237,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
     let direct_mapping = invoke_context
         .feature_set
         .is_active(&bpf_account_data_direct_mapping::id());
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
@@ -299,7 +299,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     )
     .unwrap();
 
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,

@@ -355,6 +355,8 @@ pub struct LoadedPrograms {
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
     /// Globally shared RBPF config and syscall registry
     pub program_runtime_environment_v1: Arc<BuiltinProgram<InvokeContext<'static>>>,
+    /// Globally shared RBPF config and syscall registry for runtime V2
+    pub program_runtime_environment_v2: Arc<BuiltinProgram<InvokeContext<'static>>>,
     latest_root: Slot,
     pub stats: Stats,
 }
@@ -501,7 +503,16 @@ impl LoadedPrograms {
                     }
                     LoadedProgramType::Unloaded(environment)
                     | LoadedProgramType::FailedVerification(environment)
-                        if Arc::ptr_eq(environment, &self.program_runtime_environment_v1) =>
+                        if Arc::ptr_eq(environment, &self.program_runtime_environment_v1)
+                            || Arc::ptr_eq(environment, &self.program_runtime_environment_v2) =>
+                    {
+                        true
+                    }
+                    LoadedProgramType::Typed(program)
+                        if Arc::ptr_eq(
+                            program.get_loader(),
+                            &self.program_runtime_environment_v2,
+                        ) =>
                     {
                         true
                     }

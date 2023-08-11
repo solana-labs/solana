@@ -6,7 +6,7 @@ use {
     serde_json::Result,
     solana_bpf_loader_program::{
         create_vm, load_program_from_bytes, serialization::serialize_parameters,
-        syscalls::create_program_runtime_environment,
+        syscalls::create_program_runtime_environment_v1,
     },
     solana_clap_utils::input_parsers::pubkeys_of,
     solana_ledger::{
@@ -346,7 +346,7 @@ fn load_program<'a>(
         ..LoadProgramMetrics::default()
     };
     let account_size = contents.len();
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &invoke_context.feature_set,
         invoke_context.get_compute_budget(),
         false, /* deployment */
