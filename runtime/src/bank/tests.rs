@@ -8730,7 +8730,7 @@ fn test_remove_unrooted_scan_then_recreate_same_slot_before_scan() {
          pubkeys_to_modify,
          program_id,
          starting_lamports| {
-            let mut prev_bank = bank0.clone();
+            let mut prev_bank = bank0;
             loop {
                 let start = Instant::now();
                 let (bank_at_fork_tip, slots_on_fork, ancestors) = setup_banks_on_fork_to_remove(

@@ -591,7 +591,7 @@ mod tests {
 
         // Banks <= root do not get added to pending list, even if not frozen
         let bank5 = bank_forks.read().unwrap().get(5).unwrap();
-        let bank6 = Bank::new_from_parent(bank5.clone(), &Pubkey::default(), 6);
+        let bank6 = Bank::new_from_parent(bank5, &Pubkey::default(), 6);
         bank_forks.write().unwrap().insert(bank6);
         let bank5 = bank_forks.read().unwrap().get(5).unwrap();
         let bank7 = Bank::new_from_parent(bank5, &Pubkey::default(), 7);

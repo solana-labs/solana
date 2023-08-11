@@ -46,7 +46,7 @@ impl LeaderBankNotifier {
         *state = SlotAndBankWithStatus {
             status: Status::InProgress,
             slot: Some(bank.slot()),
-            bank: Arc::downgrade(&bank),
+            bank: Arc::downgrade(bank),
         };
         drop(state);
 

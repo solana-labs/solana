@@ -20,7 +20,7 @@ pub fn get_parsed_token_account(
     account: AccountSharedData,
 ) -> UiAccount {
     let additional_data = get_token_account_mint(account.data())
-        .and_then(|mint_pubkey| get_mint_owner_and_decimals(&bank, &mint_pubkey).ok())
+        .and_then(|mint_pubkey| get_mint_owner_and_decimals(bank, &mint_pubkey).ok())
         .map(|(_, decimals)| AccountAdditionalData {
             spl_token_decimals: Some(decimals),
         });

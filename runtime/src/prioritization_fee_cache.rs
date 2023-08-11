@@ -569,7 +569,7 @@ mod tests {
         let collector = solana_sdk::pubkey::new_rand();
         let bank1 = Arc::new(Bank::new_from_parent(bank.clone(), &collector, 1));
         let bank2 = Arc::new(Bank::new_from_parent(bank.clone(), &collector, 2));
-        let bank3 = Arc::new(Bank::new_from_parent(bank.clone(), &collector, 3));
+        let bank3 = Arc::new(Bank::new_from_parent(bank, &collector, 3));
 
         let mut prioritization_fee_cache = PrioritizationFeeCache::default();
 

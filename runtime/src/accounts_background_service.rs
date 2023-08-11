@@ -985,7 +985,7 @@ mod test {
         //
         // This test differs from the one above by having an older full snapshot request that must
         // be handled before the new epoch accounts hash request.
-        make_banks(bank.clone(), 240);
+        make_banks(bank, 240);
 
         // Ensure the full snapshot is handled 1st
         let (snapshot_request, accounts_package_type, ..) = snapshot_request_handler

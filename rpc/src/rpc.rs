@@ -2291,7 +2291,7 @@ fn get_encoded_account(
             let response = if is_known_spl_token_id(account.owner())
                 && encoding == UiAccountEncoding::JsonParsed
             {
-                get_parsed_token_account(&bank, pubkey, account)
+                get_parsed_token_account(bank, pubkey, account)
             } else {
                 encode_account(&account, pubkey, encoding, data_slice)?
             };
