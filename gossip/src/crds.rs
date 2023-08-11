@@ -99,7 +99,7 @@ pub enum GossipRoute {
     PushMessage,
 }
 
-type CrdsCountsArray = [usize; 12];
+type CrdsCountsArray = [usize; 14];
 
 pub(crate) struct CrdsDataStats {
     pub(crate) counts: CrdsCountsArray,
