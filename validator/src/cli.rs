@@ -557,12 +557,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Disable reporting of OS disk statistics.")
         )
         .arg(
-            Arg::with_name("no_metrics_sanity_check")
-                .long("no-metrics-sanity-check")
-                .hidden(hidden_unless_forced())
-                .help("Bypass metrics configuration sanity check.")
-        )
-        .arg(
             Arg::with_name("snapshot_version")
                 .long("snapshot-version")
                 .value_name("SNAPSHOT_VERSION")
