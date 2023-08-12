@@ -1283,3 +1283,29 @@ pub fn run(
         }
     }
 }
+
+pub fn list(config_file: &str) -> Result<(), String> {
+    let config = Config::load(config_file)?;
+
+    let entries = fs::read_dir(&config.releases_dir);
+    if entries.is_err() {
+        return Err("please make sure your config is set up properly".to_string());
+    }
+
+    for entry in entries.unwrap() {
+        let entry_path = entry.unwrap().path();
+        let dir_name = entry_path.file_name().unwrap().to_string_lossy();
+        let current_version =
+            load_release_version(&config.active_release_dir().join("version.yml"))?.channel;
+
+        if entry_path.is_dir() {
+            if current_version.contains(dir_name.as_ref()) {
+                println!("{}\t(current)", dir_name);
+                continue; //skip this item
+            }
+
+            println!("{}", dir_name);
+        }
+    }
+    Ok(())
+}
