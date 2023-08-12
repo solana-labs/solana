@@ -1649,6 +1649,9 @@ pub mod test_utils {
             false, /* debugging_features */
         );
         let program_runtime_environment = Arc::new(program_runtime_environment.unwrap());
+        invoke_context
+            .programs_modified_by_tx
+            .program_runtime_environment_v1 = program_runtime_environment.clone();
         let num_accounts = invoke_context.transaction_context.get_number_of_accounts();
         for index in 0..num_accounts {
             let account = invoke_context
@@ -1692,7 +1695,8 @@ mod tests {
         super::*,
         rand::Rng,
         solana_program_runtime::{
-            invoke_context::mock_process_instruction, with_mock_invoke_context,
+            compute_budget::ComputeBudget, invoke_context::mock_process_instruction,
+            with_mock_invoke_context,
         },
         solana_rbpf::{
             elf::SBPFVersion,
@@ -2513,6 +2517,15 @@ mod tests {
             instruction_accounts: Vec<AccountMeta>,
             expected_result: Result<(), InstructionError>,
         ) -> Vec<AccountSharedData> {
+            let program_runtime_environment = Arc::new(
+                create_program_runtime_environment_v1(
+                    &FeatureSet::all_enabled(),
+                    &ComputeBudget::default(),
+                    false, /* deployment */
+                    false, /* debugging_features */
+                )
+                .expect("Failed to create the runtime environment"),
+            );
             let instruction_data =
                 bincode::serialize(&UpgradeableLoaderInstruction::Upgrade).unwrap();
             mock_process_instruction(
@@ -2523,7 +2536,11 @@ mod tests {
                 instruction_accounts,
                 expected_result,
                 super::process_instruction,
-                |_invoke_context| {},
+                |invoke_context| {
+                    invoke_context
+                        .programs_modified_by_tx
+                        .program_runtime_environment_v1 = program_runtime_environment.clone();
+                },
                 |_invoke_context| {},
             )
         }
@@ -4071,7 +4088,7 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
         let program = LoadedProgram {
-            program: LoadedProgramType::Unloaded(env),
+            program: LoadedProgramType::Unloaded(env.clone()),
             account_size: 0,
             deployment_slot: 0,
             effective_slot: 0,
@@ -4079,6 +4096,9 @@ mod tests {
             tx_usage_counter: AtomicU64::new(100),
             ix_usage_counter: AtomicU64::new(100),
         };
+        invoke_context
+            .programs_modified_by_tx
+            .program_runtime_environment_v1 = env;
         invoke_context
             .programs_modified_by_tx
             .replenish(program_id, Arc::new(program));
@@ -4111,7 +4131,7 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
         let program = LoadedProgram {
-            program: LoadedProgramType::Unloaded(env),
+            program: LoadedProgramType::Unloaded(env.clone()),
             account_size: 0,
             deployment_slot: 0,
             effective_slot: 0,
@@ -4119,6 +4139,9 @@ mod tests {
             tx_usage_counter: AtomicU64::new(100),
             ix_usage_counter: AtomicU64::new(100),
         };
+        invoke_context
+            .programs_modified_by_tx
+            .program_runtime_environment_v1 = env;
         invoke_context
             .programs_modified_by_tx
             .replenish(program_id, Arc::new(program));
