@@ -18,6 +18,8 @@
 //! tracks the number of commits to the entire data store. So the latest
 //! commit for each slot entry would be indexed.
 
+#[cfg(feature = "dev-context-only-utils")]
+use qualifier_attr::fn_qualifiers;
 use {
     crate::{
         account_info::{AccountInfo, StorageLocation},
@@ -7898,6 +7900,7 @@ impl AccountsDb {
     /// Set the accounts delta hash for `slot` in the `accounts_delta_hashes` map
     ///
     /// returns the previous accounts delta hash for `slot`
+    #[cfg_attr(feature = "dev-context-only-utils", fn_qualifiers(pub))]
     fn set_accounts_delta_hash(
         &self,
         slot: Slot,
@@ -9579,14 +9582,6 @@ impl AccountsDb {
 
     pub fn accounts_delta_hashes(&self) -> &Mutex<HashMap<Slot, AccountsDeltaHash>> {
         &self.accounts_delta_hashes
-    }
-
-    pub fn set_accounts_delta_hash_for_tests(
-        &self,
-        slot: Slot,
-        accounts_delta_hash: AccountsDeltaHash,
-    ) {
-        self.set_accounts_delta_hash(slot, accounts_delta_hash);
     }
 
     pub fn accounts_hashes(&self) -> &Mutex<HashMap<Slot, (AccountsHash, /*capitalization*/ u64)>> {

@@ -3632,6 +3632,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "qualifier_attr"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a696aef893ed46a96ed81163ef58856b2da620c2eb4b38623253ad215c600b1d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.28",
+]
+
+[[package]]
 name = "quinn"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4560,6 +4571,7 @@ dependencies = [
  "once_cell",
  "ouroboros",
  "percentage",
+ "qualifier_attr",
  "rand 0.7.3",
  "rayon",
  "regex",
