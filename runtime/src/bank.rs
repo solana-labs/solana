@@ -2116,6 +2116,16 @@ impl Bank {
             .is_active(&feature_set::last_restart_slot_sysvar::id());
 
         if feature_flag {
+            // First, see what the currently stored last restart slot is. This
+            // account may not exist yet if the feature was just activated.
+            let current_last_restart_slot = self
+                .get_account(&sysvar::last_restart_slot::id())
+                .and_then(|account| {
+                    let lrs: Option<LastRestartSlot> = from_account(&account);
+                    lrs
+                })
+                .map(|account| account.last_restart_slot);
+
             let last_restart_slot = {
                 let slot = self.slot;
                 let hard_forks_r = self.hard_forks.read().unwrap();
@@ -2129,12 +2139,16 @@ impl Bank {
                     .map(|(slot, _)| *slot)
                     .unwrap_or(0)
             };
-            self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
-                create_account(
-                    &LastRestartSlot { last_restart_slot },
-                    self.inherit_specially_retained_account_fields(account),
-                )
-            });
+
+            // Only need to write if the last restart has changed
+            if current_last_restart_slot != Some(last_restart_slot) {
+                self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
+                    create_account(
+                        &LastRestartSlot { last_restart_slot },
+                        self.inherit_specially_retained_account_fields(account),
+                    )
+                });
+            }
         }
     }
 
