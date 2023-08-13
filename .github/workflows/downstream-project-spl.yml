@@ -32,24 +32,29 @@ env:
   RUSTC_WRAPPER: "sccache"
 
 jobs:
-  main:
+  cargo-build-sbf:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        program:
-          - instruction-padding/program
-          - token/program
-          - token/program-2022
-          - token/program-2022-test
-          - associated-token-account/program
-          - token-upgrade/program
-          - feature-proposal/program
-          - governance/addin-mock/program
-          - governance/program
-          - memo/program
-          - name-service/program
-          - stake-pool/program
-          - stake-pool/single-pool
+        programs:
+          - [token/program]
+          - [
+              instruction-padding/program,
+              token/program-2022,
+              token/program-2022-test,
+            ]
+          - [
+              associated-token-account/program,
+              associated-token-account/program-test,
+            ]
+          - [token-upgrade/program]
+          - [feature-proposal/program]
+          - [governance/addin-mock/program, governance/program]
+          - [memo/program]
+          - [name-service/program]
+          - [stake-pool/program]
+          - [stake-pool/single-pool]
+
     steps:
       - uses: actions/checkout@v3
 
@@ -61,20 +66,11 @@ jobs:
 
       - shell: bash
         run: |
-          source ci/downstream-projects/common.sh
+          source .github/scripts/downstream-project-spl-common.sh
 
-          git clone https://github.com/solana-labs/solana-program-library.git spl
-          cp "$SOLANA_DIR"/rust-toolchain.toml spl/
-          cd spl
+          programStr="${{ tojson(matrix.programs) }}"
+          IFS=', ' read -ra programs <<<"${programStr//[\[\]$'\n'$'\r' ]/}"
 
-          project_used_solana_version=$(sed -nE 's/solana-sdk = \"[>=<~]*(.*)\"/\1/p' <"token/program/Cargo.toml")
-          echo "used solana version: $project_used_solana_version"
-          if semverGT "$project_used_solana_version" "$SOLANA_VER"; then
-            echo "skip"
-            return
-          fi
-
-          ./patch.crates-io.sh "$SOLANA_DIR"
-
-          $CARGO_BUILD_SBF
-          $CARGO_TEST_SBF --manifest-path ${{ matrix.program }}/Cargo.toml
+          for program in "${programs[@]}"; do
+            $CARGO_TEST_SBF --manifest-path "$program"/Cargo.toml
+          done
