@@ -14,6 +14,9 @@ pub enum TieredStorageError {
     #[error("UnknownFormat: the tiered storage format is unavailable for file {0}")]
     UnknownFormat(PathBuf),
 
+    #[error("InvalidAccountBlockOffset: account block offset {0} must be smaller than account_index_offset {1}")]
+    InvalidAccountBlockOffset(u64, u64),
+
     #[error("Unsupported: the feature is not yet supported")]
     Unsupported(),
 }
