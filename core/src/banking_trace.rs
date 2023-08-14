@@ -63,10 +63,10 @@ pub struct BankingTracer {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct TimedTracedEvent(std::time::SystemTime, TracedEvent);
+pub struct TimedTracedEvent(pub std::time::SystemTime, pub TracedEvent);
 
 #[derive(Serialize, Deserialize, Debug)]
-enum TracedEvent {
+pub enum TracedEvent {
     PacketBatch(ChannelLabel, BankingPacketBatch),
     BlockAndBankHash(Slot, Hash, Hash),
 }
@@ -77,6 +77,17 @@ pub enum ChannelLabel {
     TpuVote,
     GossipVote,
     Dummy,
+}
+
+impl std::fmt::Display for ChannelLabel {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            ChannelLabel::NonVote => write!(f, "NonVote"),
+            ChannelLabel::TpuVote => write!(f, "TpuVote"),
+            ChannelLabel::GossipVote => write!(f, "GossipVote"),
+            ChannelLabel::Dummy => write!(f, "Dummy"),
+        }
+    }
 }
 
 struct RollingConditionGrouped {

@@ -587,6 +587,8 @@ dependencies = [
 name = "banking-trace-tool"
 version = "0.1.0"
 dependencies = [
+ "bincode",
+ "chrono",
  "clap 4.3.21",
  "solana-core",
 ]
