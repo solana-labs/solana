@@ -1120,7 +1120,6 @@ checkPremptibleInstances
 
 case $command in
 restart)
-  echo "sup"
   prepareDeploy
   stop
   deploy
