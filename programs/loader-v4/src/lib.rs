@@ -664,6 +664,49 @@ mod tests {
         std::{fs::File, io::Read, path::Path},
     };
 
+    pub fn load_all_invoked_programs(invoke_context: &mut InvokeContext) {
+        let mut load_program_metrics = LoadProgramMetrics::default();
+        let num_accounts = invoke_context.transaction_context.get_number_of_accounts();
+        for index in 0..num_accounts {
+            let account = invoke_context
+                .transaction_context
+                .get_account_at_index(index)
+                .expect("Failed to get the account")
+                .borrow();
+
+            let owner = account.owner();
+            if loader_v4::check_id(owner) {
+                let pubkey = invoke_context
+                    .transaction_context
+                    .get_key_of_account_at_index(index)
+                    .expect("Failed to get account key");
+
+                if let Some(programdata) =
+                    account.data().get(LoaderV4State::program_data_offset()..)
+                {
+                    if let Ok(loaded_program) = LoadedProgram::new(
+                        &loader_v4::id(),
+                        invoke_context
+                            .programs_modified_by_tx
+                            .program_runtime_environment_v2
+                            .clone(),
+                        0,
+                        0,
+                        None,
+                        programdata,
+                        account.data().len(),
+                        &mut load_program_metrics,
+                    ) {
+                        invoke_context.programs_modified_by_tx.set_slot_for_tests(0);
+                        invoke_context
+                            .programs_modified_by_tx
+                            .replenish(*pubkey, Arc::new(loaded_program));
+                    }
+                }
+            }
+        }
+    }
+
     fn process_instruction(
         program_indices: Vec<IndexOfAccount>,
         instruction_data: &[u8],
@@ -689,7 +732,14 @@ mod tests {
             instruction_accounts,
             expected_result,
             super::process_instruction,
-            |_invoke_context| {},
+            |invoke_context| {
+                invoke_context
+                    .programs_modified_by_tx
+                    .program_runtime_environment_v2 = Arc::new(
+                    create_program_runtime_environment_v2(&ComputeBudget::default(), false),
+                );
+                load_all_invoked_programs(invoke_context);
+            },
             |_invoke_context| {},
         )
     }
@@ -1460,7 +1510,7 @@ mod tests {
                 load_program_account_from_elf(false, None, "rodata"),
             ),
             (
-                program_address,
+                Pubkey::new_unique(),
                 load_program_account_from_elf(true, None, "invalid"),
             ),
         ];
