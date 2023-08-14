@@ -1,10 +1,14 @@
-use std::process::exit;
-
 use {
     chrono::{DateTime, Utc},
     clap::{Parser, ValueEnum},
     solana_core::banking_trace::{TimedTracedEvent, TracedEvent},
-    std::path::{Path, PathBuf},
+    std::{
+        fs::File,
+        io::Read,
+        path::{Path, PathBuf},
+        process::exit,
+        time::SystemTime,
+    },
 };
 
 #[derive(Parser)]
@@ -24,29 +28,74 @@ enum TraceToolMode {
 }
 
 fn main() {
-    let Args { path, mode: _mode } = Args::parse();
+    let Args { path, mode } = Args::parse();
 
     if !path.is_dir() {
         eprintln!("Error: {} is not a directory", path.display());
         exit(1);
     }
 
-    for index in 0.. {
-        let event_filename = if index == 0 {
-            "events".to_owned()
-        } else {
-            format!("events.{index}")
-        };
-        let event_file = path.join(event_filename);
-        if !event_file.exists() {
-            break;
-        }
-        println!("Reading events from {}:", event_file.display());
-        read_event_file(&event_file).unwrap();
+    let event_file_paths = get_event_file_paths(&path);
+    let result = match mode {
+        TraceToolMode::Log => log_event_files(&event_file_paths),
+    };
+
+    if let Err(err) = result {
+        eprintln!("Error: {}", err);
+        exit(1);
     }
 }
 
-fn read_event_file(path: impl AsRef<Path>) -> std::io::Result<()> {
+/// Get event file paths ordered by first timestamp.
+fn get_event_file_paths(path: impl AsRef<Path>) -> Vec<PathBuf> {
+    let mut event_file_paths = get_event_file_paths_unordered(path);
+    event_file_paths.sort_by_key(|event_filepath| {
+        read_first_timestamp(event_filepath).unwrap_or_else(|err| {
+            eprintln!(
+                "Error reading first timestamp from {}: {}",
+                event_filepath.display(),
+                err
+            );
+            exit(1);
+        })
+    });
+    event_file_paths
+}
+
+fn get_event_file_paths_unordered(path: impl AsRef<Path>) -> Vec<PathBuf> {
+    (0..)
+        .map(|index| {
+            let event_filename = if index == 0 {
+                "events".to_owned()
+            } else {
+                format!("events.{index}")
+            };
+            path.as_ref().join(event_filename)
+        })
+        .take_while(|event_filepath| event_filepath.exists())
+        .collect()
+}
+
+fn read_first_timestamp(path: impl AsRef<Path>) -> std::io::Result<SystemTime> {
+    const SYSTEM_TIME_BYTES: usize = core::mem::size_of::<SystemTime>();
+    let mut buffer = [0u8; SYSTEM_TIME_BYTES];
+
+    let mut file = File::open(path)?;
+    file.read_exact(&mut buffer)?;
+
+    let system_time = bincode::deserialize(&buffer).unwrap();
+    Ok(system_time)
+}
+
+fn log_event_files(event_file_paths: &[PathBuf]) -> std::io::Result<()> {
+    for event_file_path in event_file_paths {
+        println!("Logging events from {}:", event_file_path.display());
+        log_event_file(&event_file_path)?;
+    }
+    Ok(())
+}
+
+fn log_event_file(path: impl AsRef<Path>) -> std::io::Result<()> {
     let data = std::fs::read(path)?;
 
     // Deserialize events from the buffer
@@ -56,7 +105,7 @@ fn read_event_file(path: impl AsRef<Path>) -> std::io::Result<()> {
             Ok(event) => {
                 // Update the offset to the next event
                 offset += bincode::serialized_size(&event).unwrap() as usize;
-                handle_event(event);
+                log_event(event);
             }
             Err(_) => {
                 eprintln!("Error deserializing event at offset {}", offset);
@@ -68,7 +117,7 @@ fn read_event_file(path: impl AsRef<Path>) -> std::io::Result<()> {
     Ok(())
 }
 
-fn handle_event(TimedTracedEvent(timestamp, event): TimedTracedEvent) {
+fn log_event(TimedTracedEvent(timestamp, event): TimedTracedEvent) {
     let utc = DateTime::<Utc>::from(timestamp);
 
     match event {
