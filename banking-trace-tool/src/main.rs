@@ -2,7 +2,10 @@ use {
     chrono::{DateTime, Utc},
     clap::{Parser, ValueEnum},
     histogram::Histogram,
-    solana_core::banking_trace::{ChannelLabel, TimedTracedEvent, TracedEvent},
+    solana_core::{
+        banking_stage::immutable_deserialized_packet::ImmutableDeserializedPacket,
+        banking_trace::{ChannelLabel, TimedTracedEvent, TracedEvent},
+    },
     std::{
         fs::File,
         io::Read,
@@ -30,6 +33,8 @@ enum TraceToolMode {
     NonVoteLog,
     /// Collect metrics on packet batches and counts for NonVote packets.
     NonVoteCountMetrics,
+    /// Deserialize transactions and collect the transactions w/ timestamps.
+    TransactionLog,
 }
 
 impl std::fmt::Display for TraceToolMode {
@@ -38,6 +43,7 @@ impl std::fmt::Display for TraceToolMode {
             TraceToolMode::SimpleLog => write!(f, "simple-log"),
             TraceToolMode::NonVoteLog => write!(f, "non-vote-log"),
             TraceToolMode::NonVoteCountMetrics => write!(f, "non-vote-count-metrics"),
+            TraceToolMode::TransactionLog => write!(f, "transaction-log"),
         }
     }
 }
@@ -55,6 +61,9 @@ fn main() {
         TraceToolMode::SimpleLog => process_event_files(&event_file_paths, &mut simple_logger),
         TraceToolMode::NonVoteLog => process_event_files(&event_file_paths, &mut non_vote_logger),
         TraceToolMode::NonVoteCountMetrics => non_vote_count_metrics(&event_file_paths),
+        TraceToolMode::TransactionLog => {
+            process_event_files(&event_file_paths, &mut transaction_logger)
+        }
     };
 
     if let Err(err) = result {
@@ -189,6 +198,52 @@ fn non_vote_logger(TimedTracedEvent(timestamp, event): TimedTracedEvent) {
             .map(|batch| batch.len())
             .sum::<usize>();
         println!("{utc}: recv {label} num_batches: {num_batches} num_packets: {num_packets}");
+    }
+}
+
+fn transaction_logger(TimedTracedEvent(timestamp, event): TimedTracedEvent) {
+    let TracedEvent::PacketBatch(label, banking_packet_batch) = event else {
+        return;
+    };
+
+    if !matches!(label, ChannelLabel::NonVote) {
+        return;
+    }
+
+    let utc = DateTime::<Utc>::from(timestamp);
+    for packet in banking_packet_batch.0.iter().flatten() {
+        let Ok(packet) = ImmutableDeserializedPacket::new(packet.clone()) else {
+            continue;
+        };
+
+        if packet
+            .transaction()
+            .get_message()
+            .message
+            .address_table_lookups()
+            .is_some()
+        {
+            static mut LOOKUP_TABLES_COUNT: usize = 0;
+            // SAFETY: Single-threaded
+            unsafe {
+                println!("{utc}: skipping due to lookup tables - {LOOKUP_TABLES_COUNT}");
+                LOOKUP_TABLES_COUNT += 1;
+            }
+        }
+        let priority = packet.priority();
+        let message = &packet.transaction().get_message().message;
+        let keys = message.static_account_keys();
+        let writable_accounts = keys
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| message.is_maybe_writable(*index))
+            .collect::<Vec<_>>();
+        let readable_accounts = keys
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !message.is_maybe_writable(*index))
+            .collect::<Vec<_>>();
+        println!("{utc}: priority: {priority} writable_accounts: {writable_accounts:?} readable_accounts: {readable_accounts:?}");
     }
 }
 

@@ -53,7 +53,7 @@ mod decision_maker;
 mod forward_packet_batches_by_accounts;
 mod forward_worker;
 mod forwarder;
-mod immutable_deserialized_packet;
+pub mod immutable_deserialized_packet;
 mod latest_unprocessed_votes;
 mod leader_slot_timing_metrics;
 mod multi_iterator_scanner;
