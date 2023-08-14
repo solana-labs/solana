@@ -6,14 +6,26 @@ use {
 };
 
 pub fn do_count_metrics(event_file_paths: &[PathBuf]) -> std::io::Result<()> {
-    let mut total_batches = 0;
-    let mut total_packets = 0;
-    let mut batch_count_histogram = Histogram::new();
-    let mut non_zero_batch_count_histogram = Histogram::new();
-    let mut batch_length_histogram = Histogram::new();
-    let mut packet_count_histogram = Histogram::new();
+    let mut collector = CountMetricsCollector::default();
+    let mut metric_collector = |event| collector.handle_event(event);
+    process_event_files(event_file_paths, &mut metric_collector)?;
+    collector.report();
 
-    let mut metric_collector = |TimedTracedEvent(_, event): TimedTracedEvent| {
+    Ok(())
+}
+
+#[derive(Default)]
+struct CountMetricsCollector {
+    total_batches: usize,
+    total_packets: usize,
+    batch_count_histogram: Histogram,
+    non_zero_batch_count_histogram: Histogram,
+    batch_length_histogram: Histogram,
+    packet_count_histogram: Histogram,
+}
+
+impl CountMetricsCollector {
+    pub fn handle_event(&mut self, TimedTracedEvent(_, event): TimedTracedEvent) {
         let TracedEvent::PacketBatch(label, banking_packet_batch) = event else {
             return;
         };
@@ -25,38 +37,37 @@ pub fn do_count_metrics(event_file_paths: &[PathBuf]) -> std::io::Result<()> {
         let packet_batches = &banking_packet_batch.0;
 
         let num_batches = packet_batches.len();
-        batch_count_histogram.increment(num_batches as u64).unwrap();
+        self.batch_count_histogram
+            .increment(num_batches as u64)
+            .unwrap();
         if num_batches > 0 {
-            non_zero_batch_count_histogram
+            self.non_zero_batch_count_histogram
                 .increment(num_batches as u64)
                 .unwrap();
             let mut num_packets = 0;
             for batch in packet_batches {
                 num_packets += batch.len();
-                batch_length_histogram
+                self.batch_length_histogram
                     .increment(batch.len() as u64)
                     .unwrap();
             }
-            packet_count_histogram
+            self.packet_count_histogram
                 .increment(num_packets as u64)
                 .unwrap();
 
-            total_batches += num_batches;
-            total_packets += num_packets;
+            self.total_batches += num_batches;
+            self.total_packets += num_packets;
         }
-    };
+    }
 
-    process_event_files(event_file_paths, &mut metric_collector)?;
-
-    println!("total_batches: {}", total_batches);
-    println!("total_packets: {}", total_packets);
-
-    pretty_print_histogram("batch_count", &batch_count_histogram);
-    pretty_print_histogram("non-zero batch_count", &non_zero_batch_count_histogram);
-    pretty_print_histogram("batch_length", &batch_length_histogram);
-    pretty_print_histogram("packet_count", &packet_count_histogram);
-
-    Ok(())
+    fn report(&self) {
+        println!("total_batches: {}", self.total_batches);
+        println!("total_packets: {}", self.total_packets);
+        pretty_print_histogram("batch_count", &self.batch_count_histogram);
+        pretty_print_histogram("non-zero batch_count", &self.non_zero_batch_count_histogram);
+        pretty_print_histogram("batch_length", &self.batch_length_histogram);
+        pretty_print_histogram("packet_count", &self.packet_count_histogram);
+    }
 }
 
 fn pretty_print_histogram(name: &str, histogram: &Histogram) {
