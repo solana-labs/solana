@@ -1,7 +1,7 @@
 use {
     chrono::{DateTime, Utc},
     clap::{Parser, ValueEnum},
-    solana_core::banking_trace::{TimedTracedEvent, TracedEvent},
+    solana_core::banking_trace::{ChannelLabel, TimedTracedEvent, TracedEvent},
     std::{
         fs::File,
         io::Read,
@@ -25,12 +25,15 @@ struct Args {
 enum TraceToolMode {
     /// Log ticks and packet batch labels/counts with timestamps.
     SimpleLog,
+    /// Log only non-vote packet batches and counts with timestamps.
+    NonVoteLog,
 }
 
 impl std::fmt::Display for TraceToolMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TraceToolMode::SimpleLog => write!(f, "simple-log"),
+            TraceToolMode::NonVoteLog => write!(f, "non-vote-log"),
         }
     }
 }
@@ -45,7 +48,8 @@ fn main() {
 
     let event_file_paths = get_event_file_paths(&path);
     let result = match mode {
-        TraceToolMode::SimpleLog => log_event_files(&event_file_paths),
+        TraceToolMode::SimpleLog => process_event_files(&event_file_paths, &simple_logger),
+        TraceToolMode::NonVoteLog => process_event_files(&event_file_paths, &non_vote_logger),
     };
 
     if let Err(err) = result {
@@ -95,15 +99,21 @@ fn read_first_timestamp(path: impl AsRef<Path>) -> std::io::Result<SystemTime> {
     Ok(system_time)
 }
 
-fn log_event_files(event_file_paths: &[PathBuf]) -> std::io::Result<()> {
+fn process_event_files(
+    event_file_paths: &[PathBuf],
+    handler_fn: &impl Fn(TimedTracedEvent),
+) -> std::io::Result<()> {
     for event_file_path in event_file_paths {
-        println!("Logging events from {}:", event_file_path.display());
-        log_event_file(&event_file_path)?;
+        println!("Processing events from {}:", event_file_path.display());
+        process_event_file(&event_file_path, handler_fn)?;
     }
     Ok(())
 }
 
-fn log_event_file(path: impl AsRef<Path>) -> std::io::Result<()> {
+fn process_event_file(
+    path: impl AsRef<Path>,
+    handler_fn: &impl Fn(TimedTracedEvent),
+) -> std::io::Result<()> {
     let data = std::fs::read(path)?;
 
     // Deserialize events from the buffer
@@ -113,11 +123,16 @@ fn log_event_file(path: impl AsRef<Path>) -> std::io::Result<()> {
             Ok(event) => {
                 // Update the offset to the next event
                 offset += bincode::serialized_size(&event).unwrap() as usize;
-                log_event(event);
+                handler_fn(event);
             }
-            Err(_) => {
-                eprintln!("Error deserializing event at offset {}", offset);
-                break;
+            Err(err) => {
+                eprintln!(
+                    "Error deserializing event at offset {}. File size {}. Error: {:?}",
+                    offset,
+                    data.len(),
+                    err,
+                );
+                return Ok(()); // TODO: Return an error
             }
         }
     }
@@ -125,21 +140,49 @@ fn log_event_file(path: impl AsRef<Path>) -> std::io::Result<()> {
     Ok(())
 }
 
-fn log_event(TimedTracedEvent(timestamp, event): TimedTracedEvent) {
+fn simple_logger(TimedTracedEvent(timestamp, event): TimedTracedEvent) {
     let utc = DateTime::<Utc>::from(timestamp);
-
     match event {
         TracedEvent::PacketBatch(label, banking_packet_batch) => {
-            let packets = &banking_packet_batch.0;
-            let num_packets = packets.len();
+            let packet_batches = &banking_packet_batch.0;
+            let num_batches = packet_batches.len();
 
             // ignores tracer stats
-            if num_packets > 0 {
-                println!("{utc}: recv {label} {num_packets}");
+            if num_batches > 0 {
+                let num_packets = packet_batches
+                    .iter()
+                    .map(|batch| batch.len())
+                    .sum::<usize>();
+                println!(
+                    "{utc}: recv {label} num_batches: {num_batches} num_packets: {num_packets}"
+                );
             }
         }
         TracedEvent::BlockAndBankHash(slot, blockhash, bankhash) => {
             println!("{utc}: tick {slot} {blockhash} {bankhash}");
         }
+    }
+}
+
+fn non_vote_logger(TimedTracedEvent(timestamp, event): TimedTracedEvent) {
+    let TracedEvent::PacketBatch(label, banking_packet_batch) = event else {
+        return;
+    };
+
+    if !matches!(label, ChannelLabel::NonVote) {
+        return;
+    }
+
+    let packet_batches = &banking_packet_batch.0;
+    let num_batches = packet_batches.len();
+
+    // ignores tracer stats
+    if num_batches > 0 {
+        let utc = DateTime::<Utc>::from(timestamp);
+        let num_packets = packet_batches
+            .iter()
+            .map(|batch| batch.len())
+            .sum::<usize>();
+        println!("{utc}: recv {label} num_batches: {num_batches} num_packets: {num_packets}");
     }
 }
