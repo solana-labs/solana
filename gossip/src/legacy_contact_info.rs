@@ -27,8 +27,7 @@ pub struct LegacyContactInfo {
     tvu: SocketAddr,
     /// TVU over QUIC protocol.
     tvu_quic: SocketAddr,
-    /// address to send repair responses to
-    repair: SocketAddr,
+    unused: SocketAddr,
     /// transactions address
     tpu: SocketAddr,
     /// address to forward unprocessed transactions to
@@ -124,7 +123,7 @@ impl Default for LegacyContactInfo {
             gossip: socketaddr_any!(),
             tvu: socketaddr_any!(),
             tvu_quic: socketaddr_any!(),
-            repair: socketaddr_any!(),
+            unused: socketaddr_any!(),
             tpu: socketaddr_any!(),
             tpu_forwards: socketaddr_any!(),
             tpu_vote: socketaddr_any!(),
@@ -144,7 +143,7 @@ impl LegacyContactInfo {
             gossip: socketaddr!(Ipv4Addr::LOCALHOST, 1234),
             tvu: socketaddr!(Ipv4Addr::LOCALHOST, 1235),
             tvu_quic: socketaddr!(Ipv4Addr::LOCALHOST, 1236),
-            repair: socketaddr!(Ipv4Addr::LOCALHOST, 1237),
+            unused: socketaddr!(Ipv4Addr::LOCALHOST, 1237),
             tpu: socketaddr!(Ipv4Addr::LOCALHOST, 1238),
             tpu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1239),
             tpu_vote: socketaddr!(Ipv4Addr::LOCALHOST, 1240),
@@ -206,7 +205,6 @@ impl LegacyContactInfo {
 
     get_socket!(gossip);
     get_socket!(tvu, tvu_quic);
-    get_socket!(repair);
     get_socket!(@quic tpu);
     get_socket!(@quic tpu_forwards);
     get_socket!(tpu_vote);
@@ -274,7 +272,7 @@ impl TryFrom<&ContactInfo> for LegacyContactInfo {
             gossip: unwrap_socket!(gossip),
             tvu: unwrap_socket!(tvu, Protocol::UDP),
             tvu_quic: unwrap_socket!(tvu, Protocol::QUIC),
-            repair: unwrap_socket!(repair),
+            unused: SOCKET_ADDR_UNSPECIFIED,
             tpu: unwrap_socket!(tpu, Protocol::UDP),
             tpu_forwards: unwrap_socket!(tpu_forwards, Protocol::UDP),
             tpu_vote: unwrap_socket!(tpu_vote),
