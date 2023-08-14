@@ -1,11 +1,7 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
 use {
-    crate::{
-        stake_account,
-        stake_history::StakeHistory,
-        vote_account::{VoteAccount, VoteAccounts},
-    },
+    crate::{stake_account, stake_history::StakeHistory},
     dashmap::DashMap,
     im::HashMap as ImHashMap,
     log::error,
@@ -20,6 +16,7 @@ use {
         stake::state::{Delegation, StakeActivationStatus},
         vote::state::VoteStateVersions,
     },
+    solana_vote::vote_account::{VoteAccount, VoteAccounts},
     std::{
         collections::{HashMap, HashSet},
         ops::{Add, Deref},

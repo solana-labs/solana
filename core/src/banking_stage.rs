@@ -27,11 +27,9 @@ use {
     solana_measure::{measure, measure_us},
     solana_perf::{data_budget::DataBudget, packet::PACKETS_PER_BATCH},
     solana_poh::poh_recorder::PohRecorder,
-    solana_runtime::{
-        bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
-        vote_sender_types::ReplayVoteSender,
-    },
+    solana_runtime::{bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache},
     solana_sdk::timing::AtomicInterval,
+    solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         cmp, env,
         sync::{
