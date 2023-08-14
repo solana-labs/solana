@@ -26,7 +26,6 @@ pub const SOCKET_ADDR_UNSPECIFIED: SocketAddr =
     SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), /*port:*/ 0u16);
 
 const SOCKET_TAG_GOSSIP: u8 = 0;
-const SOCKET_TAG_REPAIR: u8 = 1;
 const SOCKET_TAG_RPC: u8 = 2;
 const SOCKET_TAG_RPC_PUBSUB: u8 = 3;
 const SOCKET_TAG_SERVE_REPAIR: u8 = 4;
@@ -223,7 +222,6 @@ impl ContactInfo {
     }
 
     get_socket!(gossip, SOCKET_TAG_GOSSIP);
-    get_socket!(repair, SOCKET_TAG_REPAIR);
     get_socket!(rpc, SOCKET_TAG_RPC);
     get_socket!(rpc_pubsub, SOCKET_TAG_RPC_PUBSUB);
     get_socket!(serve_repair, SOCKET_TAG_SERVE_REPAIR);
@@ -237,7 +235,6 @@ impl ContactInfo {
     get_socket!(tvu, SOCKET_TAG_TVU, SOCKET_TAG_TVU_QUIC);
 
     set_socket!(set_gossip, SOCKET_TAG_GOSSIP);
-    set_socket!(set_repair, SOCKET_TAG_REPAIR);
     set_socket!(set_rpc, SOCKET_TAG_RPC);
     set_socket!(set_rpc_pubsub, SOCKET_TAG_RPC_PUBSUB);
     set_socket!(set_serve_repair, SOCKET_TAG_SERVE_REPAIR);
@@ -365,7 +362,6 @@ impl ContactInfo {
         node.set_gossip((Ipv4Addr::LOCALHOST, 8000)).unwrap();
         node.set_tvu((Ipv4Addr::LOCALHOST, 8001)).unwrap();
         node.set_tvu_quic((Ipv4Addr::LOCALHOST, 8002)).unwrap();
-        node.set_repair((Ipv4Addr::LOCALHOST, 8007)).unwrap();
         node.set_tpu((Ipv4Addr::LOCALHOST, 8003)).unwrap(); // quic: 8009
         node.set_tpu_forwards((Ipv4Addr::LOCALHOST, 8004)).unwrap(); // quic: 8010
         node.set_tpu_vote((Ipv4Addr::LOCALHOST, 8005)).unwrap();
@@ -389,7 +385,6 @@ impl ContactInfo {
         node.set_gossip((addr, port + 1)).unwrap();
         node.set_tvu((addr, port + 2)).unwrap();
         node.set_tvu_quic((addr, port + 3)).unwrap();
-        node.set_repair((addr, port + 4)).unwrap();
         node.set_tpu((addr, port)).unwrap(); // quic: port + 6
         node.set_tpu_forwards((addr, port + 5)).unwrap(); // quic: port + 11
         node.set_tpu_vote((addr, port + 7)).unwrap();
@@ -732,7 +727,6 @@ mod tests {
                 }
             }
             assert_eq!(node.gossip().ok().as_ref(), sockets.get(&SOCKET_TAG_GOSSIP));
-            assert_eq!(node.repair().ok().as_ref(), sockets.get(&SOCKET_TAG_REPAIR));
             assert_eq!(node.rpc().ok().as_ref(), sockets.get(&SOCKET_TAG_RPC));
             assert_eq!(
                 node.rpc_pubsub().ok().as_ref(),
@@ -817,7 +811,6 @@ mod tests {
     fn cross_verify_with_legacy(node: &ContactInfo) {
         let old = LegacyContactInfo::try_from(node).unwrap();
         assert_eq!(old.gossip().unwrap(), node.gossip().unwrap());
-        assert_eq!(old.repair().unwrap(), node.repair().unwrap());
         assert_eq!(old.rpc().unwrap(), node.rpc().unwrap());
         assert_eq!(old.rpc_pubsub().unwrap(), node.rpc_pubsub().unwrap());
         assert_eq!(old.serve_repair().unwrap(), node.serve_repair().unwrap());
