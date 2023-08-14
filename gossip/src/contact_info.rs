@@ -29,6 +29,7 @@ const SOCKET_TAG_GOSSIP: u8 = 0;
 const SOCKET_TAG_RPC: u8 = 2;
 const SOCKET_TAG_RPC_PUBSUB: u8 = 3;
 const SOCKET_TAG_SERVE_REPAIR: u8 = 4;
+const SOCKET_TAG_SERVE_REPAIR_QUIC: u8 = 1;
 const SOCKET_TAG_TPU: u8 = 5;
 const SOCKET_TAG_TPU_FORWARDS: u8 = 6;
 const SOCKET_TAG_TPU_FORWARDS_QUIC: u8 = 7;
@@ -224,7 +225,11 @@ impl ContactInfo {
     get_socket!(gossip, SOCKET_TAG_GOSSIP);
     get_socket!(rpc, SOCKET_TAG_RPC);
     get_socket!(rpc_pubsub, SOCKET_TAG_RPC_PUBSUB);
-    get_socket!(serve_repair, SOCKET_TAG_SERVE_REPAIR);
+    get_socket!(
+        serve_repair,
+        SOCKET_TAG_SERVE_REPAIR,
+        SOCKET_TAG_SERVE_REPAIR_QUIC
+    );
     get_socket!(tpu, SOCKET_TAG_TPU, SOCKET_TAG_TPU_QUIC);
     get_socket!(
         tpu_forwards,
@@ -238,6 +243,7 @@ impl ContactInfo {
     set_socket!(set_rpc, SOCKET_TAG_RPC);
     set_socket!(set_rpc_pubsub, SOCKET_TAG_RPC_PUBSUB);
     set_socket!(set_serve_repair, SOCKET_TAG_SERVE_REPAIR);
+    set_socket!(set_serve_repair_quic, SOCKET_TAG_SERVE_REPAIR_QUIC);
     set_socket!(set_tpu, SOCKET_TAG_TPU, SOCKET_TAG_TPU_QUIC);
     set_socket!(
         set_tpu_forwards,
@@ -248,7 +254,11 @@ impl ContactInfo {
     set_socket!(set_tvu, SOCKET_TAG_TVU);
     set_socket!(set_tvu_quic, SOCKET_TAG_TVU_QUIC);
 
-    remove_socket!(remove_serve_repair, SOCKET_TAG_SERVE_REPAIR);
+    remove_socket!(
+        remove_serve_repair,
+        SOCKET_TAG_SERVE_REPAIR,
+        SOCKET_TAG_SERVE_REPAIR_QUIC
+    );
     remove_socket!(remove_tpu, SOCKET_TAG_TPU, SOCKET_TAG_TPU_QUIC);
     remove_socket!(
         remove_tpu_forwards,
@@ -370,6 +380,8 @@ impl ContactInfo {
         node.set_rpc_pubsub((Ipv4Addr::LOCALHOST, DEFAULT_RPC_PUBSUB_PORT))
             .unwrap();
         node.set_serve_repair((Ipv4Addr::LOCALHOST, 8008)).unwrap();
+        node.set_serve_repair_quic((Ipv4Addr::LOCALHOST, 8006))
+            .unwrap();
         node
     }
 
@@ -392,6 +404,7 @@ impl ContactInfo {
         node.set_rpc_pubsub((addr, DEFAULT_RPC_PUBSUB_PORT))
             .unwrap();
         node.set_serve_repair((addr, port + 8)).unwrap();
+        node.set_serve_repair_quic((addr, port + 4)).unwrap();
         node
     }
 }
@@ -733,8 +746,12 @@ mod tests {
                 sockets.get(&SOCKET_TAG_RPC_PUBSUB)
             );
             assert_eq!(
-                node.serve_repair().ok().as_ref(),
+                node.serve_repair(Protocol::UDP).ok().as_ref(),
                 sockets.get(&SOCKET_TAG_SERVE_REPAIR)
+            );
+            assert_eq!(
+                node.serve_repair(Protocol::QUIC).ok().as_ref(),
+                sockets.get(&SOCKET_TAG_SERVE_REPAIR_QUIC)
             );
             assert_eq!(
                 node.tpu(Protocol::UDP).ok().as_ref(),
@@ -813,7 +830,14 @@ mod tests {
         assert_eq!(old.gossip().unwrap(), node.gossip().unwrap());
         assert_eq!(old.rpc().unwrap(), node.rpc().unwrap());
         assert_eq!(old.rpc_pubsub().unwrap(), node.rpc_pubsub().unwrap());
-        assert_eq!(old.serve_repair().unwrap(), node.serve_repair().unwrap());
+        assert_eq!(
+            old.serve_repair(Protocol::QUIC).unwrap(),
+            node.serve_repair(Protocol::QUIC).unwrap()
+        );
+        assert_eq!(
+            old.serve_repair(Protocol::UDP).unwrap(),
+            node.serve_repair(Protocol::UDP).unwrap()
+        );
         assert_eq!(
             old.tpu(Protocol::QUIC).unwrap(),
             node.tpu(Protocol::QUIC).unwrap()

@@ -869,7 +869,7 @@ mod test {
         },
         solana_gossip::{
             cluster_info::{ClusterInfo, Node},
-            contact_info::ContactInfo,
+            contact_info::{ContactInfo, Protocol},
         },
         solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path, shred::Nonce},
         solana_runtime::{accounts_background_service::AbsRequestSender, bank_forks::BankForks},
@@ -1400,7 +1400,7 @@ mod test {
             nonce,
         );
         if let Ok(request_bytes) = request_bytes {
-            let socket = responder_info.serve_repair().unwrap();
+            let socket = responder_info.serve_repair(Protocol::UDP).unwrap();
             let _ = ancestor_hashes_request_socket.send_to(&request_bytes, socket);
         }
     }
@@ -1470,7 +1470,7 @@ mod test {
         let packet = &mut response_packet[0];
         packet
             .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair().unwrap());
+            .set_socket_addr(&responder_info.serve_repair(Protocol::UDP).unwrap());
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,
@@ -1511,7 +1511,7 @@ mod test {
         let packet = &mut response_packet[0];
         packet
             .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair().unwrap());
+            .set_socket_addr(&responder_info.serve_repair(Protocol::UDP).unwrap());
         let AncestorRequestDecision {
             slot,
             request_type,
@@ -1571,7 +1571,7 @@ mod test {
         let packet = &mut response_packet[0];
         packet
             .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair().unwrap());
+            .set_socket_addr(&responder_info.serve_repair(Protocol::UDP).unwrap());
         let AncestorRequestDecision {
             slot,
             request_type,
@@ -1947,7 +1947,7 @@ mod test {
         let packet = &mut response_packet[0];
         packet
             .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair().unwrap());
+            .set_socket_addr(&responder_info.serve_repair(Protocol::UDP).unwrap());
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,
@@ -2010,7 +2010,7 @@ mod test {
         let packet = &mut response_packet[0];
         packet
             .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair().unwrap());
+            .set_socket_addr(&responder_info.serve_repair(Protocol::UDP).unwrap());
         let AncestorRequestDecision {
             slot,
             request_type,

@@ -18,7 +18,7 @@ use {
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
-        legacy_contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo},
+        contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo, Protocol},
         ping_pong::{self, PingCache, Pong},
         weighted_shuffle::WeightedShuffle,
     },
@@ -214,7 +214,7 @@ pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
 #[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize, strum_macros::Display)]
-#[frozen_abi(digest = "7vZyACjc13qQYWUsqWbdidLXR3uNXpmqUZaKeV3gKuY2")]
+#[frozen_abi(digest = "3VzVe3kMrG6ijkVPyCGeJVA9hQjWcFEZbAQPc5Zizrjm")]
 pub enum RepairProtocol {
     LegacyWindowIndex(LegacyContactInfo, Slot, u64),
     LegacyHighestWindowIndex(LegacyContactInfo, Slot, u64),
@@ -350,7 +350,7 @@ impl RepairPeers {
             .iter()
             .zip(weights)
             .filter_map(|(peer, &weight)| {
-                let addr = peer.serve_repair().ok()?;
+                let addr = peer.serve_repair(Protocol::UDP).ok()?;
                 Some(((*peer.pubkey(), addr), weight))
             })
             .unzip();
@@ -1078,7 +1078,7 @@ impl ServeRepair {
             .shuffle(&mut rand::thread_rng())
             .map(|i| index[i])
             .filter_map(|i| {
-                let addr = repair_peers[i].serve_repair().ok()?;
+                let addr = repair_peers[i].serve_repair(Protocol::UDP).ok()?;
                 Some((*repair_peers[i].pubkey(), addr))
             })
             .take(get_ancestor_hash_repair_sample_size())
@@ -1102,7 +1102,10 @@ impl ServeRepair {
             .unzip();
         let k = WeightedIndex::new(weights)?.sample(&mut rand::thread_rng());
         let n = index[k];
-        Ok((*repair_peers[n].pubkey(), repair_peers[n].serve_repair()?))
+        Ok((
+            *repair_peers[n].pubkey(),
+            repair_peers[n].serve_repair(Protocol::UDP)?,
+        ))
     }
 
     pub(crate) fn map_repair_request(
@@ -1930,8 +1933,8 @@ mod tests {
                 &identity_keypair,
             )
             .unwrap();
-        assert_eq!(nxt.serve_repair().unwrap(), serve_repair_addr);
-        assert_eq!(rv.0, nxt.serve_repair().unwrap());
+        assert_eq!(nxt.serve_repair(Protocol::UDP).unwrap(), serve_repair_addr);
+        assert_eq!(rv.0, nxt.serve_repair(Protocol::UDP).unwrap());
 
         let serve_repair_addr2 = socketaddr!([127, 0, 0, 2], 1243);
         let mut nxt = ContactInfo::new(
