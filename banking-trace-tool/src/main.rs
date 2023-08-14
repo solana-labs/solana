@@ -1,6 +1,6 @@
 use {
     chrono::{DateTime, Utc},
-    clap::{Parser, ValueEnum},
+    clap::{Parser, Subcommand, ValueEnum},
     histogram::Histogram,
     process::process_event_files,
     solana_core::{
@@ -25,11 +25,11 @@ struct Args {
     #[clap(short, long)]
     path: PathBuf,
     /// The mode to run the trace tool in.
-    #[clap(short, long, default_value_t = TraceToolMode::SimpleLog)]
+    #[command(subcommand)]
     mode: TraceToolMode,
 }
 
-#[derive(Copy, Clone, ValueEnum, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug, Subcommand)]
 enum TraceToolMode {
     /// Log ticks and packet batch labels/counts with timestamps.
     SimpleLog,
