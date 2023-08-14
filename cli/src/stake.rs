@@ -32,7 +32,9 @@ use {
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
-        request::DELINQUENT_VALIDATOR_SLOT_DISTANCE, response::RpcInflationReward,
+        config::RpcGetVoteAccountsConfig,
+        request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+        response::{RpcInflationReward, RpcVoteAccountStatus},
     },
     solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
@@ -57,7 +59,6 @@ use {
         sysvar::{clock, stake_history},
         transaction::Transaction,
     },
-    solana_vote_program::vote_state::VoteState,
     std::{ops::Deref, sync::Arc},
 };
 
@@ -2543,38 +2544,41 @@ pub fn process_delegate_stake(
     if !sign_only {
         // Sanity check the vote account to ensure it is attached to a validator that has recently
         // voted at the tip of the ledger
-        let vote_account_data = rpc_client
-            .get_account(vote_account_pubkey)
-            .map_err(|err| {
-                CliError::RpcRequestError(format!(
-                    "Vote account not found: {vote_account_pubkey}. error: {err}",
-                ))
-            })?
-            .data;
+        let get_vote_accounts_config = RpcGetVoteAccountsConfig {
+            vote_pubkey: Some(vote_account_pubkey.to_string()),
+            keep_unstaked_delinquents: Some(true),
+            commitment: Some(rpc_client.commitment()),
+            ..RpcGetVoteAccountsConfig::default()
+        };
+        let RpcVoteAccountStatus {
+            current,
+            delinquent,
+        } = rpc_client.get_vote_accounts_with_config(get_vote_accounts_config)?;
+        // filter should return at most one result
+        let rpc_vote_account =
+            current
+                .get(0)
+                .or_else(|| delinquent.get(0))
+                .ok_or(CliError::RpcRequestError(format!(
+                    "Vote account not found: {vote_account_pubkey}"
+                )))?;
 
-        let vote_state = VoteState::deserialize(&vote_account_data).map_err(|_| {
-            CliError::RpcRequestError(
-                "Account data could not be deserialized to vote state".to_string(),
-            )
-        })?;
-
-        let sanity_check_result = match vote_state.root_slot {
-            None => Err(CliError::BadParameter(
+        let activated_stake = rpc_vote_account.activated_stake;
+        let root_slot = rpc_vote_account.root_slot;
+        let min_root_slot = rpc_client
+            .get_slot()
+            .map(|slot| slot.saturating_sub(DELINQUENT_VALIDATOR_SLOT_DISTANCE))?;
+        let sanity_check_result = if root_slot >= min_root_slot || activated_stake == 0 {
+            Ok(())
+        } else if root_slot == 0 {
+            Err(CliError::BadParameter(
                 "Unable to delegate. Vote account has no root slot".to_string(),
-            )),
-            Some(root_slot) => {
-                let min_root_slot = rpc_client
-                    .get_slot()?
-                    .saturating_sub(DELINQUENT_VALIDATOR_SLOT_DISTANCE);
-                if root_slot < min_root_slot {
-                    Err(CliError::DynamicProgramError(format!(
-                        "Unable to delegate.  Vote account appears delinquent \
-                                 because its current root slot, {root_slot}, is less than {min_root_slot}"
-                    )))
-                } else {
-                    Ok(())
-                }
-            }
+            ))
+        } else {
+            Err(CliError::DynamicProgramError(format!(
+                "Unable to delegate.  Vote account appears delinquent \
+                 because its current root slot, {root_slot}, is less than {min_root_slot}"
+            )))
         };
 
         if let Err(err) = &sanity_check_result {

@@ -68,17 +68,10 @@ fn get_state_mut(data: &mut [u8]) -> Result<&mut LoaderV4State, InstructionError
     }
 }
 
-pub fn load_program_from_account(
-    _feature_set: &FeatureSet,
+pub fn create_program_runtime_environment_v2<'a>(
     compute_budget: &ComputeBudget,
-    log_collector: Option<Rc<RefCell<LogCollector>>>,
-    program: &BorrowedAccount,
     debugging_features: bool,
-) -> Result<(Arc<LoadedProgram>, LoadProgramMetrics), InstructionError> {
-    let mut load_program_metrics = LoadProgramMetrics {
-        program_id: program.get_key().to_string(),
-        ..LoadProgramMetrics::default()
-    };
+) -> BuiltinProgram<InvokeContext<'a>> {
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
@@ -104,7 +97,20 @@ pub fn load_program_from_account(
         aligned_memory_mapping: true,
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
-    let loader = BuiltinProgram::new_loader(config);
+    BuiltinProgram::new_loader(config)
+}
+
+pub fn load_program_from_account(
+    _feature_set: &FeatureSet,
+    compute_budget: &ComputeBudget,
+    log_collector: Option<Rc<RefCell<LogCollector>>>,
+    program: &BorrowedAccount,
+    debugging_features: bool,
+) -> Result<(Arc<LoadedProgram>, LoadProgramMetrics), InstructionError> {
+    let mut load_program_metrics = LoadProgramMetrics {
+        program_id: program.get_key().to_string(),
+        ..LoadProgramMetrics::default()
+    };
     let state = get_state(program.get_data())?;
     let programdata = program
         .get_data()
@@ -112,7 +118,10 @@ pub fn load_program_from_account(
         .ok_or(InstructionError::AccountDataTooSmall)?;
     let loaded_program = LoadedProgram::new(
         &loader_v4::id(),
-        Arc::new(loader),
+        Arc::new(create_program_runtime_environment_v2(
+            compute_budget,
+            debugging_features,
+        )),
         state.slot,
         state.slot.saturating_add(1),
         None,

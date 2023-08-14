@@ -18,6 +18,8 @@
 //! tracks the number of commits to the entire data store. So the latest
 //! commit for each slot entry would be indexed.
 
+#[cfg(feature = "dev-context-only-utils")]
+use qualifier_attr::fn_qualifiers;
 use {
     crate::{
         account_info::{AccountInfo, StorageLocation},
@@ -2336,8 +2338,6 @@ trait AppendVecScan: Send + Sync + Clone {
     fn scanning_complete(self) -> BinnedHashData;
     /// initialize accumulator
     fn init_accum(&mut self, count: usize);
-    fn get_accum(&mut self) -> BinnedHashData;
-    fn set_accum(&mut self, accum: BinnedHashData);
 }
 
 #[derive(Clone)]
@@ -2410,12 +2410,6 @@ impl<'a> AppendVecScan for ScanState<'a> {
         let (result, timing) = AccountsDb::sort_slot_storage_scan(self.accum);
         self.sort_time.fetch_add(timing, Ordering::Relaxed);
         result
-    }
-    fn get_accum(&mut self) -> BinnedHashData {
-        std::mem::take(&mut self.accum)
-    }
-    fn set_accum(&mut self, accum: BinnedHashData) {
-        self.accum = accum;
     }
 }
 
@@ -7906,6 +7900,7 @@ impl AccountsDb {
     /// Set the accounts delta hash for `slot` in the `accounts_delta_hashes` map
     ///
     /// returns the previous accounts delta hash for `slot`
+    #[cfg_attr(feature = "dev-context-only-utils", fn_qualifiers(pub))]
     fn set_accounts_delta_hash(
         &self,
         slot: Slot,
@@ -9589,14 +9584,6 @@ impl AccountsDb {
         &self.accounts_delta_hashes
     }
 
-    pub fn set_accounts_delta_hash_for_tests(
-        &self,
-        slot: Slot,
-        accounts_delta_hash: AccountsDeltaHash,
-    ) {
-        self.set_accounts_delta_hash(slot, accounts_delta_hash);
-    }
-
     pub fn accounts_hashes(&self) -> &Mutex<HashMap<Slot, (AccountsHash, /*capitalization*/ u64)>> {
         &self.accounts_hashes
     }
@@ -10890,12 +10877,6 @@ pub mod tests {
             self.current_slot = slot;
         }
         fn init_accum(&mut self, _count: usize) {}
-        fn get_accum(&mut self) -> BinnedHashData {
-            std::mem::take(&mut self.accum)
-        }
-        fn set_accum(&mut self, accum: BinnedHashData) {
-            self.accum = accum;
-        }
         fn found_account(&mut self, loaded_account: &LoadedAccount) {
             self.calls.fetch_add(1, Ordering::Relaxed);
             assert_eq!(loaded_account.pubkey(), &self.pubkey);
@@ -11193,12 +11174,6 @@ pub mod tests {
         }
         fn scanning_complete(self) -> BinnedHashData {
             self.accum
-        }
-        fn get_accum(&mut self) -> BinnedHashData {
-            std::mem::take(&mut self.accum)
-        }
-        fn set_accum(&mut self, accum: BinnedHashData) {
-            self.accum = accum;
         }
     }
 

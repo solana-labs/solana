@@ -15,7 +15,7 @@ cargoNightly="$(readlink -f "./cargo") nightly"
 
 scripts/increment-cargo-version.sh check
 
-if [ -n "$CI" ] ; then
+if ! [ -v SOLANA_CI_ALLOW_STALE_CARGO_LOCK ] ; then
 # Disallow uncommitted Cargo.lock changes
 (
   _ scripts/cargo-for-all-lock-files.sh tree >/dev/null

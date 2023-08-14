@@ -352,10 +352,7 @@ mod tests {
             bank.rc
                 .accounts
                 .accounts_db
-                .set_accounts_delta_hash_for_tests(
-                    bank.slot(),
-                    AccountsDeltaHash(Hash::new_unique()),
-                );
+                .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
             bank.rc
                 .accounts
                 .accounts_db
@@ -546,7 +543,7 @@ mod tests {
         bank.rc
             .accounts
             .accounts_db
-            .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+            .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
         bank.rc
             .accounts
             .accounts_db
@@ -628,10 +625,7 @@ mod tests {
             bank.rc
                 .accounts
                 .accounts_db
-                .set_accounts_delta_hash_for_tests(
-                    bank.slot(),
-                    AccountsDeltaHash(Hash::new_unique()),
-                );
+                .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
             bank.rc
                 .accounts
                 .accounts_db
