@@ -30,17 +30,16 @@ pub struct Ed25519SignatureOffsets {
 }
 
 pub fn new_ed25519_instruction(keypair: &ed25519_dalek::Keypair, message: &[u8]) -> Instruction {
-    let signature = keypair.sign(message).to_bytes();
-    let pubkey = keypair.public.to_bytes();
-
-    pairless_ed25519_instruction(pubkey, signature, message)
+    new_ed25519_instruction_unchecked(&keypair.public, &keypair.sign(message), message)
 }
 
-pub fn pairless_ed25519_instruction(
-    pubkey: [u8; 32],
-    signature: [u8; 64],
+pub fn new_ed25519_instruction_unchecked(
+    pubkey: &ed25519_dalek::PublicKey,
+    signature: &ed25519_dalek::Signature,
     message: &[u8],
 ) -> Instruction {
+    let pubkey = pubkey.as_bytes();
+    let signature = signature.as_bytes();
     assert_eq!(pubkey.len(), PUBKEY_SERIALIZED_SIZE);
     assert_eq!(signature.len(), SIGNATURE_SERIALIZED_SIZE);
 
@@ -73,7 +72,7 @@ pub fn pairless_ed25519_instruction(
 
     debug_assert_eq!(instruction_data.len(), public_key_offset);
 
-    instruction_data.extend_from_slice(&pubkey);
+    instruction_data.extend_from_slice(pubkey);
 
     debug_assert_eq!(instruction_data.len(), signature_offset);
 
@@ -187,7 +186,6 @@ fn get_data_slice<'a>(
 
 #[cfg(test)]
 pub mod test {
-    use ed25519_dalek::Signer as DalekSigner;
     use {
         super::*,
         crate::{
@@ -197,6 +195,7 @@ pub mod test {
             signature::{Keypair, Signer},
             transaction::Transaction,
         },
+        ed25519_dalek::Signer as DalekSigner,
         rand::{thread_rng, Rng},
     };
 
@@ -352,13 +351,34 @@ pub mod test {
         );
     }
 
+    fn new_ed25519_instruction_invalid(
+        mut instruction: Instruction,
+        mint_keypair: &Keypair,
+    ) -> Transaction {
+        let index = loop {
+            let index = thread_rng().gen_range(0, instruction.data.len());
+            // byte 1 is not used, so this would not cause the verify to fail
+            if index != 1 {
+                break index;
+            }
+        };
+
+        instruction.data[index] = instruction.data[index].wrapping_add(12);
+        Transaction::new_signed_with_payer(
+            &[instruction],
+            Some(&mint_keypair.pubkey()),
+            &[mint_keypair],
+            Hash::default(),
+        )
+    }
+
     #[test]
     fn test_ed25519() {
         solana_logger::setup();
 
         let privkey = ed25519_dalek::Keypair::generate(&mut thread_rng());
         let message_arr = b"hello";
-        let mut instruction = new_ed25519_instruction(&privkey, message_arr);
+        let instruction = new_ed25519_instruction(&privkey, message_arr);
         let mint_keypair = Keypair::new();
         let feature_set = FeatureSet::all_enabled();
 
@@ -371,21 +391,7 @@ pub mod test {
 
         assert!(tx.verify_precompiles(&feature_set).is_ok());
 
-        let index = loop {
-            let index = thread_rng().gen_range(0, instruction.data.len());
-            // byte 1 is not used, so this would not cause the verify to fail
-            if index != 1 {
-                break index;
-            }
-        };
-
-        instruction.data[index] = instruction.data[index].wrapping_add(12);
-        let tx = Transaction::new_signed_with_payer(
-            &[instruction],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair],
-            Hash::default(),
-        );
+        let tx = new_ed25519_instruction_invalid(instruction, &mint_keypair);
         assert!(tx.verify_precompiles(&feature_set).is_err());
     }
 
@@ -396,8 +402,7 @@ pub mod test {
         let privkey = ed25519_dalek::Keypair::generate(&mut thread_rng());
         let message_arr = b"hello";
         let sig = privkey.sign(message_arr);
-        let mut instruction =
-            pairless_ed25519_instruction(privkey.public.to_bytes(), sig.to_bytes(), message_arr);
+        let instruction = new_ed25519_instruction_unchecked(&privkey.public, &sig, message_arr);
         let mint_keypair = Keypair::new();
         let feature_set = FeatureSet::all_enabled();
 
@@ -410,21 +415,7 @@ pub mod test {
 
         assert!(tx.verify_precompiles(&feature_set).is_ok());
 
-        let index = loop {
-            let index = thread_rng().gen_range(0, instruction.data.len());
-            // byte 1 is not used, so this would not cause the verify to fail
-            if index != 1 {
-                break index;
-            }
-        };
-
-        instruction.data[index] = instruction.data[index].wrapping_add(12);
-        let tx = Transaction::new_signed_with_payer(
-            &[instruction],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair],
-            Hash::default(),
-        );
+        let tx = new_ed25519_instruction_invalid(instruction, &mint_keypair);
         assert!(tx.verify_precompiles(&feature_set).is_err());
     }
 }
