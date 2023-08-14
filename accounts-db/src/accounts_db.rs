@@ -7205,6 +7205,15 @@ impl AccountsDb {
         );
         let splitter = SplitAncientStorages::new(oldest_non_ancient_slot, snapshot_storages);
 
+        let slots_per_epoch = config
+            .rent_collector
+            .epoch_schedule
+            .get_slots_in_epoch(config.rent_collector.epoch);
+        let one_epoch_old = snapshot_storages
+            .range()
+            .end
+            .saturating_sub(slots_per_epoch);
+
         stats.scan_chunks = splitter.chunk_count;
         (0..splitter.chunk_count)
             .into_par_iter()
@@ -7212,15 +7221,6 @@ impl AccountsDb {
                 let mut scanner = scanner.clone();
 
                 let range_this_chunk = splitter.get_slot_range(chunk)?;
-
-                let slots_per_epoch = config
-                    .rent_collector
-                    .epoch_schedule
-                    .get_slots_in_epoch(config.rent_collector.epoch);
-                let one_epoch_old = snapshot_storages
-                    .range()
-                    .end
-                    .saturating_sub(slots_per_epoch);
 
                 let file_name = {
                     let mut load_from_cache = true;
