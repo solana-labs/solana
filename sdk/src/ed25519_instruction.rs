@@ -391,7 +391,7 @@ pub mod test {
     }
 
     #[test]
-    fn test_pairless_ed25519() {
+    fn test_unchecked_ed25519() {
         solana_logger::setup();
 
         let privkey = ed25519_dalek::Keypair::generate(&mut thread_rng());
