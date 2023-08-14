@@ -74,8 +74,8 @@ macro_rules! impl_var_int {
                 let mut shift = 0u32;
                 while shift < <$type>::BITS {
                     let Some(byte) = seq.next_element::<u8>()? else {
-                        return Err(A::Error::custom("Invalid Sequence"));
-                    };
+                                return Err(A::Error::custom("Invalid Sequence"));
+                            };
                     out |= ((byte & 0x7F) as Self) << shift;
                     if byte & 0x80 == 0 {
                         // Last byte should not have been truncated when it was
