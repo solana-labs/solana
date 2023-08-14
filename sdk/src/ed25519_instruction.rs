@@ -351,10 +351,7 @@ pub mod test {
         );
     }
 
-    fn new_ed25519_instruction_invalid(
-        mut instruction: Instruction,
-        mint_keypair: &Keypair,
-    ) -> Transaction {
+    fn invalidate_ed25519_instruction(instruction: &mut Instruction) {
         let index = loop {
             let index = thread_rng().gen_range(0, instruction.data.len());
             // byte 1 is not used, so this would not cause the verify to fail
@@ -364,10 +361,13 @@ pub mod test {
         };
 
         instruction.data[index] = instruction.data[index].wrapping_add(12);
+    }
+
+    fn create_and_sign(instruction: &Instruction, signer_keypair: &Keypair) -> Transaction {
         Transaction::new_signed_with_payer(
-            &[instruction],
-            Some(&mint_keypair.pubkey()),
-            &[mint_keypair],
+            &[instruction.clone()],
+            Some(&signer_keypair.pubkey()),
+            &[signer_keypair],
             Hash::default(),
         )
     }
@@ -378,20 +378,15 @@ pub mod test {
 
         let privkey = ed25519_dalek::Keypair::generate(&mut thread_rng());
         let message_arr = b"hello";
-        let instruction = new_ed25519_instruction(&privkey, message_arr);
-        let mint_keypair = Keypair::new();
+        let mut instruction = new_ed25519_instruction(&privkey, message_arr);
+        let tx_signer_keypair = Keypair::new();
         let feature_set = FeatureSet::all_enabled();
 
-        let tx = Transaction::new_signed_with_payer(
-            &[instruction.clone()],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair],
-            Hash::default(),
-        );
-
+        let tx = create_and_sign(&instruction, &tx_signer_keypair);
         assert!(tx.verify_precompiles(&feature_set).is_ok());
 
-        let tx = new_ed25519_instruction_invalid(instruction, &mint_keypair);
+        invalidate_ed25519_instruction(&mut instruction);
+        let tx = create_and_sign(&instruction, &tx_signer_keypair);
         assert!(tx.verify_precompiles(&feature_set).is_err());
     }
 
@@ -402,20 +397,15 @@ pub mod test {
         let privkey = ed25519_dalek::Keypair::generate(&mut thread_rng());
         let message_arr = b"hello";
         let sig = privkey.sign(message_arr);
-        let instruction = new_ed25519_instruction_unchecked(&privkey.public, &sig, message_arr);
-        let mint_keypair = Keypair::new();
+        let mut instruction = new_ed25519_instruction_unchecked(&privkey.public, &sig, message_arr);
+        let tx_signer_keypair = Keypair::new();
         let feature_set = FeatureSet::all_enabled();
 
-        let tx = Transaction::new_signed_with_payer(
-            &[instruction.clone()],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair],
-            Hash::default(),
-        );
-
+        let tx = create_and_sign(&instruction, &tx_signer_keypair);
         assert!(tx.verify_precompiles(&feature_set).is_ok());
 
-        let tx = new_ed25519_instruction_invalid(instruction, &mint_keypair);
+        invalidate_ed25519_instruction(&mut instruction);
+        let tx = create_and_sign(&instruction, &tx_signer_keypair);
         assert!(tx.verify_precompiles(&feature_set).is_err());
     }
 }
