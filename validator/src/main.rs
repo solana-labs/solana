@@ -1308,6 +1308,15 @@ pub fn main() {
                 .help("Number of threads to use for servicing RPC requests"),
         )
         .arg(
+            Arg::with_name("max_rpc_request_payload_size")
+                .long("max-rpc-request-payload-size")
+                .value_name("NUMBER")
+                .validator(is_parsable::<usize>)
+                .takes_value(true)
+                .required(false)
+                .help("Maximum payload size of RPC requests"),
+        )
+        .arg(
             Arg::with_name("rpc_niceness_adj")
                 .long("rpc-niceness-adjustment")
                 .value_name("ADJUSTMENT")
@@ -2628,6 +2637,7 @@ pub fn main() {
             rpc_niceness_adj: value_t_or_exit!(matches, "rpc_niceness_adj", i8),
             account_indexes: account_indexes.clone(),
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
+            max_request_payload_size: value_t!(matches, "max_rpc_request_payload_size", usize).ok(),
         },
         geyser_plugin_config_files,
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
