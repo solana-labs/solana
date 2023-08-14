@@ -1,6 +1,9 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    crate::{args::*, bigtable::*, ledger_path::*, ledger_utils::*, output::*, program::*, prioritization_fee_output::*},
+    crate::{
+        args::*, bigtable::*, ledger_path::*, ledger_utils::*, output::*,
+        prioritization_fee_output::*, program::*,
+    },
     chrono::{DateTime, Utc},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
@@ -107,8 +110,8 @@ mod bigtable;
 mod ledger_path;
 mod ledger_utils;
 mod output;
-mod program;
 mod prioritization_fee_output;
+mod program;
 
 #[derive(PartialEq, Eq)]
 enum LedgerOutputMethod {
@@ -980,7 +983,6 @@ fn print_local_fee_market_by_slot(
                     MessageHash::Compute,
                     None,
                     SimpleAddressLoader::Disabled,
-                    true, // require_static_program_ids
                 )
                 .map_err(|err| {
                     warn!("Failed to sanitize transaction: {:?}", err);
@@ -4266,8 +4268,9 @@ fn main() {
                 let blockstore = open_blockstore(
                     &ledger_path,
                     AccessType::Secondary,
-                    wal_recovery_mode,
+                    None,
                     force_update_to_open,
+                    enforce_ulimit_nofile,
                 );
 
                 let mut slots: Vec<u64> = vec![];

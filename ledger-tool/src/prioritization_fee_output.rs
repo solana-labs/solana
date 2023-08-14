@@ -74,7 +74,7 @@ impl PriorityFeeBySlot {
         sanitized_transaction: &SanitizedTransaction,
     ) {
         let is_vote = sanitized_transaction.is_simple_vote_transaction();
-        let priority_details = sanitized_transaction.get_transaction_priority_details();
+        let priority_details = sanitized_transaction.get_transaction_priority_details(false); // round compute unit price is not enabled
         let account_locks = sanitized_transaction.get_account_locks(256); // hardcode to avoid using `bank` here
         if priority_details.is_none() || account_locks.is_err() {
             println!(
