@@ -94,7 +94,7 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
-            self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
+            self, clean_orphaned_account_snapshot_dirs, get_incremental_snapshot_archives, move_and_async_delete_path_contents,
         },
     },
     solana_sdk::{
@@ -111,7 +111,7 @@ use {
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     solana_vote_program::vote_state,
-    solana_wen_restart::wen_restart::{wen_restart, RestartSlotsToRepairSender},
+    solana_wen_restart::wen_restart::wen_restart,
     std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
@@ -1191,23 +1191,41 @@ impl Validator {
         // repair and replay, just not voting. So we need TVU, but not TPU.
         if config.wen_restart {
             info!("Waiting for wen_restart to finish");
-            match wait_for_wen_restart(
+            match wen_restart(
                 last_vote,
                 blockstore.clone(),
                 cluster_info.clone(),
                 bank_forks.clone(),
                 restart_slots_to_repair_sender,
-                accounts_background_request_sender,
-                &config.snapshot_config,
             ) {
                 Ok(new_root_slot) => {
-                    config.turbine_disabled.swap(false, Ordering::Relaxed);
+                    info!(
+                        "wen_restart set_root and generate snapshot {}",
+                        new_root_slot
+                    );
+                    bank_forks.write().unwrap().set_root(
+                        new_root_slot,
+                        &accounts_background_request_sender,
+                        None,
+                        true,
+                    );
                     let working_bank = bank_forks.read().unwrap().working_bank();
                     working_bank
                         .hard_forks()
                         .write()
                         .unwrap()
                         .register(new_root_slot);
+                    loop {
+                        if get_incremental_snapshot_archives(&config.snapshot_config.incremental_snapshot_archives_dir)
+                            .iter()
+                            .any(|archive_info| archive_info.slot() == new_root_slot)
+                        {
+                            info!("wen_restart snapshot generated {}", new_root_slot);
+                            break;
+                        }
+                        sleep(Duration::from_millis(100));
+                    }
+                    config.turbine_disabled.swap(false, Ordering::Relaxed);
                     let new_shred_version = compute_shred_version(
                         &genesis_config.hash(),
                         Some(&working_bank.hard_forks().read().unwrap()),
@@ -2211,26 +2229,6 @@ fn wait_for_supermajority(
             Ok(true)
         }
     }
-}
-
-fn wait_for_wen_restart(
-    last_vote: vote_state::VoteTransaction,
-    blockstore: Arc<Blockstore>,
-    cluster_info: Arc<ClusterInfo>,
-    bank_forks: Arc<RwLock<BankForks>>,
-    restart_slots_to_repair_sender: RestartSlotsToRepairSender,
-    accounts_background_request_sender: AbsRequestSender,
-    snapshot_config: &SnapshotConfig,
-) -> Result<Slot, Box<dyn std::error::Error>> {
-    wen_restart(
-        last_vote,
-        blockstore,
-        cluster_info,
-        bank_forks,
-        restart_slots_to_repair_sender,
-        accounts_background_request_sender,
-        snapshot_config,
-    )
 }
 
 // Get the activated stake percentage (based on the provided bank) that is visible in gossip

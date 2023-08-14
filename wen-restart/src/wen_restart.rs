@@ -9,11 +9,7 @@ use {
     log::*,
     solana_gossip::{cluster_info::ClusterInfo, crds::Cursor},
     solana_ledger::blockstore::Blockstore,
-    solana_runtime::{
-        accounts_background_service::AbsRequestSender, bank_forks::BankForks,
-        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
-        snapshot_utils::get_incremental_snapshot_archives,
-    },
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::{clock::Slot, hash::Hash},
     solana_vote_program::vote_state::VoteTransaction,
     std::{
@@ -78,8 +74,6 @@ pub fn wen_restart(
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
     restart_slots_to_repair_sender: RestartSlotsToRepairSender,
-    accounts_background_request_sender: AbsRequestSender,
-    snapshot_config: &SnapshotConfig,
 ) -> Result<Slot, Box<dyn std::error::Error>> {
     // repair and restart option does not work without last voted slot.
     let last_voted_slot = last_vote.last_voted_slot().unwrap();
@@ -182,28 +176,6 @@ pub fn wen_restart(
                 "Success, agreed on {} {}",
                 my_selected_slot, my_selected_hash
             );
-            break;
-        }
-        sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
-    }
-    info!(
-        "wen_restart set_root and generate snapshot {}",
-        my_selected_slot
-    );
-    restart_slots_to_repair_sender.send(None)?;
-    let mut my_bank_forks = bank_forks.write().unwrap();
-    my_bank_forks.set_root(
-        my_selected_slot,
-        &accounts_background_request_sender,
-        None,
-        true,
-    );
-    loop {
-        if get_incremental_snapshot_archives(&snapshot_config.incremental_snapshot_archives_dir)
-            .iter()
-            .any(|archive_info| archive_info.slot() == my_selected_slot)
-        {
-            info!("wen_restart snapshot generated {}", my_selected_slot);
             break;
         }
         sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
