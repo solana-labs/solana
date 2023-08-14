@@ -1,3 +1,5 @@
+use std::process::exit;
+
 use {
     chrono::{DateTime, Utc},
     clap::{Parser, ValueEnum},
@@ -23,6 +25,11 @@ enum TraceToolMode {
 
 fn main() {
     let Args { path, mode: _mode } = Args::parse();
+
+    if !path.is_dir() {
+        eprintln!("Error: {} is not a directory", path.display());
+        exit(1);
+    }
 
     for index in 0.. {
         let event_filename = if index == 0 {
