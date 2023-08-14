@@ -5,6 +5,7 @@ members = [
     "accounts-cluster-bench",
     "accounts-db",
     "banking-bench",
+    "banking-trace-tool",
     "banks-client",
     "banks-interface",
     "banks-server",
@@ -109,9 +110,7 @@ members = [
     "zk-token-sdk",
 ]
 
-exclude = [
-    "programs/sbf",
-]
+exclude = ["programs/sbf"]
 
 # This prevents a Travis CI error when building for Windows.
 resolver = "2"
@@ -213,7 +212,9 @@ indexmap = "2.0.0"
 indicatif = "0.17.6"
 Inflector = "0.11.4"
 itertools = "0.10.5"
-jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"] }
+jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = [
+    "unprefixed_malloc_on_supported_platforms",
+] }
 js-sys = "0.3.64"
 json5 = "0.4.1"
 jsonrpc-core = "18.0.0"
