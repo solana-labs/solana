@@ -2406,10 +2406,10 @@ impl<'a> AppendVecScan for ScanState<'a> {
         self.init_accum(self.range);
         self.accum[self.pubkey_to_bin_index].push(source_item);
     }
-    fn scanning_complete(self) -> BinnedHashData {
-        let (result, timing) = AccountsDb::sort_slot_storage_scan(self.accum);
+    fn scanning_complete(mut self) -> BinnedHashData {
+        let timing = AccountsDb::sort_slot_storage_scan(&mut self.accum);
         self.sort_time.fetch_add(timing, Ordering::Relaxed);
-        result
+        self.accum
     }
 }
 
@@ -7054,7 +7054,7 @@ impl AccountsDb {
         debug_verify: bool,
         is_startup: bool,
     ) -> (AccountsHash, u64) {
-        self.update_accounts_hash(
+        self.update_accounts_hash_with_verify(
             CalcAccountsHashDataSource::IndexForTests,
             debug_verify,
             slot,
@@ -7373,7 +7373,7 @@ impl AccountsDb {
 
     /// run the accounts hash calculation and store the results
     #[allow(clippy::too_many_arguments)]
-    pub fn update_accounts_hash(
+    pub fn update_accounts_hash_with_verify(
         &self,
         data_source: CalcAccountsHashDataSource,
         debug_verify: bool,
@@ -7405,6 +7405,22 @@ impl AccountsDb {
             .unwrap(); // unwrap here will never fail since check_hash = false
         self.set_accounts_hash(slot, (accounts_hash, total_lamports));
         (accounts_hash, total_lamports)
+    }
+
+    /// Calculate the full accounts hash for `storages` and save the results at `slot`
+    pub fn update_accounts_hash(
+        &self,
+        config: &CalcAccountsHashConfig<'_>,
+        storages: &SortedStorages<'_>,
+        slot: Slot,
+        stats: HashStats,
+    ) -> Result<(AccountsHash, /*capitalization*/ u64), AccountsHashVerificationError> {
+        let accounts_hash = self.calculate_accounts_hash_from_storages(config, storages, stats)?;
+        let old_accounts_hash = self.set_accounts_hash(slot, accounts_hash);
+        if let Some(old_accounts_hash) = old_accounts_hash {
+            warn!("Accounts hash was already set for slot {slot}! old: {old_accounts_hash:?}, new: {accounts_hash:?}");
+        }
+        Ok(accounts_hash)
     }
 
     /// Calculate the incremental accounts hash for `storages` and save the results at `slot`
@@ -7566,24 +7582,17 @@ impl AccountsDb {
         Ok(result)
     }
 
-    fn sort_slot_storage_scan(accum: BinnedHashData) -> (BinnedHashData, u64) {
+    fn sort_slot_storage_scan(accum: &mut BinnedHashData) -> u64 {
         let time = AtomicU64::new(0);
-        (
-            accum
-                .into_iter()
-                .map(|mut items| {
-                    let mut sort_time = Measure::start("sort");
-                    {
-                        // sort_by vs unstable because slot and write_version are already in order
-                        items.sort_by(AccountsHasher::compare_two_hash_entries);
-                    }
-                    sort_time.stop();
-                    time.fetch_add(sort_time.as_us(), Ordering::Relaxed);
-                    items
-                })
-                .collect(),
-            time.load(Ordering::Relaxed),
-        )
+        accum.iter_mut().for_each(|items| {
+            let mut sort_time = Measure::start("sort");
+            // sort_by vs unstable because slot and write_version are already in order
+            items.sort_by(AccountsHasher::compare_two_hash_entries);
+            sort_time.stop();
+            time.fetch_add(sort_time.as_us(), Ordering::Relaxed);
+        });
+
+        time.load(Ordering::Relaxed)
     }
 
     /// normal code path returns the common cache path
