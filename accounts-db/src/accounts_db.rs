@@ -2417,6 +2417,13 @@ impl<'a> AppendVecScan for ScanState<'a> {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PubkeyHashAccount {
+    pub pubkey: Pubkey,
+    pub hash: Hash,
+    pub account: AccountSharedData,
+}
+
 impl AccountsDb {
     pub const ACCOUNTS_HASH_CACHE_DIR: &str = "accounts_hash_cache";
 
@@ -7881,23 +7888,18 @@ impl AccountsDb {
     }
 
     /// Return all of the accounts for a given slot
-    pub fn get_pubkey_hash_account_for_slot(
-        &self,
-        slot: Slot,
-    ) -> Vec<(Pubkey, Hash, AccountSharedData)> {
-        type ScanResult = ScanStorageResult<
-            (Pubkey, Hash, AccountSharedData),
-            DashMap<Pubkey, (Hash, AccountSharedData)>,
-        >;
+    pub fn get_pubkey_hash_account_for_slot(&self, slot: Slot) -> Vec<PubkeyHashAccount> {
+        type ScanResult =
+            ScanStorageResult<PubkeyHashAccount, DashMap<Pubkey, (Hash, AccountSharedData)>>;
         let scan_result: ScanResult = self.scan_account_storage(
             slot,
             |loaded_account: LoadedAccount| {
                 // Cache only has one version per key, don't need to worry about versioning
-                Some((
-                    *loaded_account.pubkey(),
-                    loaded_account.loaded_hash(),
-                    loaded_account.take_account(),
-                ))
+                Some(PubkeyHashAccount {
+                    pubkey: *loaded_account.pubkey(),
+                    hash: loaded_account.loaded_hash(),
+                    account: loaded_account.take_account(),
+                })
             },
             |accum: &DashMap<Pubkey, (Hash, AccountSharedData)>, loaded_account: LoadedAccount| {
                 // Storage may have duplicates so only keep the latest version for each key
@@ -7912,7 +7914,11 @@ impl AccountsDb {
             ScanStorageResult::Cached(cached_result) => cached_result,
             ScanStorageResult::Stored(stored_result) => stored_result
                 .into_iter()
-                .map(|(pubkey, (hash, account))| (pubkey, hash, account))
+                .map(|(pubkey, (hash, account))| PubkeyHashAccount {
+                    pubkey,
+                    hash,
+                    account,
+                })
                 .collect(),
         }
     }

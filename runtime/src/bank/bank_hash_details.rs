@@ -8,7 +8,7 @@ use {
         de::{self, Deserialize, Deserializer},
         ser::{Serialize, SerializeSeq, Serializer},
     },
-    solana_accounts_db::accounts_hash::AccountsDeltaHash,
+    solana_accounts_db::{accounts_db::PubkeyHashAccount, accounts_hash::AccountsDeltaHash},
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
         clock::{Epoch, Slot},
@@ -82,7 +82,7 @@ impl TryFrom<&Bank> for BankHashDetails {
             .get_pubkey_hash_account_for_slot(slot);
         // get_pubkey_hash_account_for_slot() returns an arbitrary ordering;
         // sort by pubkey to match the ordering used for accounts delta hash
-        accounts.sort_by_key(|(pubkey, _, _)| *pubkey);
+        accounts.sort_by_key(|account| account.pubkey);
 
         Ok(Self::new(
             slot,
@@ -99,7 +99,7 @@ impl TryFrom<&Bank> for BankHashDetails {
 // Wrap the Vec<...> so we can implement custom Serialize/Deserialize traits on the wrapper type
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct BankHashAccounts {
-    pub accounts: Vec<(Pubkey, Hash, AccountSharedData)>,
+    pub accounts: Vec<PubkeyHashAccount>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -121,7 +121,12 @@ impl Serialize for BankHashAccounts {
         S: Serializer,
     {
         let mut seq = serializer.serialize_seq(Some(self.accounts.len()))?;
-        for (pubkey, hash, account) in self.accounts.iter() {
+        for PubkeyHashAccount {
+            pubkey,
+            hash,
+            account,
+        } in self.accounts.iter()
+        {
             let temp = SerdeAccount {
                 pubkey: pubkey.to_string(),
                 hash: hash.to_string(),
@@ -157,7 +162,11 @@ impl<'de> Deserialize<'de> for BankHashAccounts {
                     executable: temp_account.executable,
                     rent_epoch: temp_account.rent_epoch,
                 });
-                Ok((pubkey, hash, account))
+                Ok(PubkeyHashAccount {
+                    pubkey,
+                    hash,
+                    account,
+                })
             })
             .collect();
         let pubkey_hash_accounts = pubkey_hash_accounts?;
@@ -223,7 +232,11 @@ pub mod tests {
         let account_pubkey = Pubkey::new_unique();
         let account_hash = hash("account".as_bytes());
         let accounts = BankHashAccounts {
-            accounts: vec![(account_pubkey, account_hash, account)],
+            accounts: vec![PubkeyHashAccount {
+                pubkey: account_pubkey,
+                hash: account_hash,
+                account,
+            }],
         };
 
         let bank_hash = hash("bank".as_bytes());
