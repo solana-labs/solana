@@ -46,7 +46,10 @@ impl Signature {
         pubkey_bytes: &[u8],
         message_bytes: &[u8],
     ) -> Result<(), ed25519_dalek::SignatureError> {
-        let publickey = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes)?;
+        let mut publickey_bytes: [u8; ed25519_dalek::PUBLIC_KEY_LENGTH] =
+            [0u8; ed25519_dalek::PUBLIC_KEY_LENGTH];
+        publickey_bytes.copy_from_slice(pubkey_bytes);
+        let publickey = ed25519_dalek::VerifyingKey::from_bytes(&publickey_bytes)?;
         let signature = self.0.as_slice().try_into()?;
         publickey.verify_strict(message_bytes, &signature)
     }

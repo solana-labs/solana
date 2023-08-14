@@ -89,6 +89,7 @@ js-sys = { workspace = true }
 [dev-dependencies]
 anyhow = { workspace = true }
 curve25519-dalek = { workspace = true }
+ed25519-dalek = { workspace = true, features = ["rand_core"] }
 hex = { workspace = true }
 static_assertions = { workspace = true }
 tiny-bip39 = { workspace = true }
