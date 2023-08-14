@@ -1132,6 +1132,7 @@ impl Validator {
         let (restart_slots_to_repair_sender, restart_slots_to_repair_receiver) =
             crossbeam_channel::unbounded::<Option<Vec<Slot>>>();
         let tvu_shred_version = Arc::new(RwLock::new(node.info.shred_version()));
+        let in_wen_restart = Arc::new(AtomicBool::new(config.wen_restart));
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -1183,7 +1184,7 @@ impl Validator {
             &prioritization_fee_cache,
             banking_tracer.clone(),
             restart_slots_to_repair_receiver,
-            config.wen_restart,
+            in_wen_restart.clone(),
         )?;
 
         // repair and restart don't need to produce new blocks but it does need
@@ -1219,6 +1220,7 @@ impl Validator {
                         "wen_restart finished, shred_version now {}",
                         new_shred_version
                     );
+                    in_wen_restart.swap(false, Ordering::Relaxed);
                     ()
                 }
                 Err(e) => return Err(format!("wait_for_wen_restart failed: {e:?}")),
@@ -1908,13 +1910,6 @@ impl<'a> ProcessBlockStore<'a> {
     pub(crate) fn process_to_create_tower(mut self) -> Result<Tower, String> {
         self.process()?;
         Ok(self.tower.unwrap())
-    }
-
-    pub(crate) fn last_vote(&self) -> Option<vote_state::VoteTransaction> {
-        match &self.tower {
-            Some(tower) => Some(tower.last_vote()),
-            None => None,
-        }
     }
 }
 

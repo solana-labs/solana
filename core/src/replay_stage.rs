@@ -29,7 +29,6 @@ use {
         rewards_recorder_service::{RewardsMessage, RewardsRecorderSender},
         tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
-        validator::ProcessBlockStore,
         voting_service::VoteOp,
         window_service::DuplicateSlotReceiver,
     },
@@ -502,6 +501,7 @@ impl ReplayStage {
         dumped_slots_sender: DumpedSlotsSender,
         banking_tracer: Arc<BankingTracer>,
         popular_pruned_forks_receiver: PopularPrunedForksReceiver,
+        in_wen_restart: Arc<AtomicBool>,
     ) -> Result<Self, String> {
         let mut tower = prev_tower;
 
@@ -1045,6 +1045,7 @@ impl ReplayStage {
                         &banking_tracer,
                         has_new_vote_been_rooted,
                         transaction_status_sender.is_some(),
+                        in_wen_restart.load(Ordering::Relaxed),
                     );
 
                     let poh_bank = poh_recorder.read().unwrap().bank();
@@ -1815,6 +1816,7 @@ impl ReplayStage {
         banking_tracer: &Arc<BankingTracer>,
         has_new_vote_been_rooted: bool,
         track_transaction_indexes: bool,
+        in_wen_restart: bool,
     ) {
         // all the individual calls to poh_recorder.read() are designed to
         // increase granularity, decrease contention
@@ -1859,6 +1861,11 @@ impl ReplayStage {
         );
 
         if let Some(next_leader) = leader_schedule_cache.slot_leader_at(poh_slot, Some(&parent)) {
+            if in_wen_restart {
+                info!("In wen_restart, skipping my leader slot");
+                return;
+            }
+
             if !has_new_vote_been_rooted {
                 info!("Haven't landed a vote, so skipping my leader slot");
                 return;

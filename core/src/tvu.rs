@@ -24,7 +24,6 @@ use {
         shred_fetch_stage::ShredFetchStage,
         sigverify_shreds,
         tower_storage::TowerStorage,
-        validator::ProcessBlockStore,
         voting_service::VotingService,
         warm_quic_cache_service::WarmQuicCacheService,
         window_service::WindowService,
@@ -140,8 +139,8 @@ impl Tvu {
         connection_cache: &Arc<ConnectionCache>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         banking_tracer: Arc<BankingTracer>,
-        wen_restart_receiver: RestartSlotsToRepairReceiver,
-        in_wen_restart: bool,
+        wen_restart_repair_receiver: RestartSlotsToRepairReceiver,
+        in_wen_restart: Arc<AtomicBool>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
@@ -208,8 +207,8 @@ impl Tvu {
                 repair_whitelist: tvu_config.repair_whitelist,
                 cluster_info: cluster_info.clone(),
                 cluster_slots: cluster_slots.clone(),
-                wen_restart_receiver,
-                in_wen_restart: Arc::new(AtomicBool::new(in_wen_restart)),
+                wen_restart_repair_receiver,
+                in_wen_restart: in_wen_restart.clone(),
             };
             WindowService::new(
                 blockstore.clone(),
@@ -312,6 +311,7 @@ impl Tvu {
             dumped_slots_sender,
             banking_tracer,
             popular_pruned_forks_receiver,
+            in_wen_restart,
         )?;
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {

@@ -207,7 +207,7 @@ pub struct RepairInfo {
     pub repair_validators: Option<HashSet<Pubkey>>,
     // Validators which should be given priority when serving
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
-    pub wen_restart_receiver: RestartSlotsToRepairReceiver,
+    pub wen_restart_repair_receiver: RestartSlotsToRepairReceiver,
     pub in_wen_restart: Arc<AtomicBool>,
 }
 
@@ -386,15 +386,11 @@ impl RepairService {
                 add_votes_elapsed.stop();
 
                 if repair_info.in_wen_restart.load(Ordering::Relaxed) {
-                    repair_info
-                        .wen_restart_receiver
-                        .try_iter()
-                        .for_each(|new_slots_option| {
-                            if new_slots_option.is_none() {
-                                repair_info.in_wen_restart.swap(false, Ordering::Relaxed);
-                            }
+                    repair_info.wen_restart_repair_receiver.try_iter().for_each(
+                        |new_slots_option| {
                             repair_weight.update_slots_to_repair_for_wen_restart(new_slots_option);
-                        })
+                        },
+                    )
                 }
                 let repairs = repair_weight.get_best_weighted_repairs(
                     blockstore,

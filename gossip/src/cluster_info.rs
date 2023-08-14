@@ -968,7 +968,7 @@ impl ClusterInfo {
         };
         let mut entries = Vec::default();
         let keypair = self.keypair();
-        if is_epoch_slot {
+        if !is_epoch_slot {
             info!(
                 "wen_restart pushing LastVotedForkSlots {} {}",
                 last_vote_slot,

@@ -110,8 +110,8 @@ pub fn wen_restart(
     let mut cursor = Cursor::default();
     let mut epoch_stakes_map = EpochStakesMap::new(root_bank.clone());
     let my_pubkey = cluster_info.id();
-    let mut last_voted_fork_slots_aggregate = LastVotedForkSlotsAggregate::new(
-        root_bank.slot(), &last_voted_fork, &my_pubkey);
+    let mut last_voted_fork_slots_aggregate =
+        LastVotedForkSlotsAggregate::new(root_bank.slot(), &last_voted_fork, &my_pubkey);
     // Aggregate LastVotedForkSlots until seeing this message from 80% of the validators.
     info!("wen_restart aggregating RestartLastVotedForkSlots");
     loop {
