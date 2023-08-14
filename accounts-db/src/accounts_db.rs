@@ -7054,7 +7054,7 @@ impl AccountsDb {
         debug_verify: bool,
         is_startup: bool,
     ) -> (AccountsHash, u64) {
-        self.update_accounts_hash(
+        self.update_accounts_hash_with_verify(
             CalcAccountsHashDataSource::IndexForTests,
             debug_verify,
             slot,
@@ -7373,7 +7373,7 @@ impl AccountsDb {
 
     /// run the accounts hash calculation and store the results
     #[allow(clippy::too_many_arguments)]
-    pub fn update_accounts_hash(
+    pub fn update_accounts_hash_with_verify(
         &self,
         data_source: CalcAccountsHashDataSource,
         debug_verify: bool,
@@ -7405,6 +7405,22 @@ impl AccountsDb {
             .unwrap(); // unwrap here will never fail since check_hash = false
         self.set_accounts_hash(slot, (accounts_hash, total_lamports));
         (accounts_hash, total_lamports)
+    }
+
+    /// Calculate the full accounts hash for `storages` and save the results at `slot`
+    pub fn update_accounts_hash(
+        &self,
+        config: &CalcAccountsHashConfig<'_>,
+        storages: &SortedStorages<'_>,
+        slot: Slot,
+        stats: HashStats,
+    ) -> Result<(AccountsHash, /*capitalization*/ u64), AccountsHashVerificationError> {
+        let accounts_hash = self.calculate_accounts_hash_from_storages(config, storages, stats)?;
+        let old_accounts_hash = self.set_accounts_hash(slot, accounts_hash);
+        if let Some(old_accounts_hash) = old_accounts_hash {
+            warn!("Accounts hash was already set for slot {slot}! old: {old_accounts_hash:?}, new: {accounts_hash:?}");
+        }
+        Ok(accounts_hash)
     }
 
     /// Calculate the incremental accounts hash for `storages` and save the results at `slot`
