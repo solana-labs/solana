@@ -9,4 +9,5 @@ edition = "2021"
 bincode = { workspace = true }
 chrono = { workspace = true }
 clap = { version = "4.3.11", features = ["derive"] }
+histogram = { workspace = true }
 solana-core = { workspace = true }

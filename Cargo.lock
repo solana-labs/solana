@@ -590,6 +590,7 @@ dependencies = [
  "bincode",
  "chrono",
  "clap 4.3.21",
+ "histogram",
  "solana-core",
 ]
 

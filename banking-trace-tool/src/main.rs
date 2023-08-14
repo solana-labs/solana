@@ -1,6 +1,7 @@
 use {
     chrono::{DateTime, Utc},
     clap::{Parser, ValueEnum},
+    histogram::Histogram,
     solana_core::banking_trace::{ChannelLabel, TimedTracedEvent, TracedEvent},
     std::{
         fs::File,
@@ -27,6 +28,8 @@ enum TraceToolMode {
     SimpleLog,
     /// Log only non-vote packet batches and counts with timestamps.
     NonVoteLog,
+    /// Collect metrics on packet batches and counts for NonVote packets.
+    NonVoteCountMetrics,
 }
 
 impl std::fmt::Display for TraceToolMode {
@@ -34,6 +37,7 @@ impl std::fmt::Display for TraceToolMode {
         match self {
             TraceToolMode::SimpleLog => write!(f, "simple-log"),
             TraceToolMode::NonVoteLog => write!(f, "non-vote-log"),
+            TraceToolMode::NonVoteCountMetrics => write!(f, "non-vote-count-metrics"),
         }
     }
 }
@@ -48,8 +52,9 @@ fn main() {
 
     let event_file_paths = get_event_file_paths(&path);
     let result = match mode {
-        TraceToolMode::SimpleLog => process_event_files(&event_file_paths, &simple_logger),
-        TraceToolMode::NonVoteLog => process_event_files(&event_file_paths, &non_vote_logger),
+        TraceToolMode::SimpleLog => process_event_files(&event_file_paths, &mut simple_logger),
+        TraceToolMode::NonVoteLog => process_event_files(&event_file_paths, &mut non_vote_logger),
+        TraceToolMode::NonVoteCountMetrics => non_vote_count_metrics(&event_file_paths),
     };
 
     if let Err(err) = result {
@@ -101,7 +106,7 @@ fn read_first_timestamp(path: impl AsRef<Path>) -> std::io::Result<SystemTime> {
 
 fn process_event_files(
     event_file_paths: &[PathBuf],
-    handler_fn: &impl Fn(TimedTracedEvent),
+    handler_fn: &mut impl FnMut(TimedTracedEvent),
 ) -> std::io::Result<()> {
     for event_file_path in event_file_paths {
         println!("Processing events from {}:", event_file_path.display());
@@ -112,7 +117,7 @@ fn process_event_files(
 
 fn process_event_file(
     path: impl AsRef<Path>,
-    handler_fn: &impl Fn(TimedTracedEvent),
+    handler_fn: &mut impl FnMut(TimedTracedEvent),
 ) -> std::io::Result<()> {
     let data = std::fs::read(path)?;
 
@@ -185,4 +190,75 @@ fn non_vote_logger(TimedTracedEvent(timestamp, event): TimedTracedEvent) {
             .sum::<usize>();
         println!("{utc}: recv {label} num_batches: {num_batches} num_packets: {num_packets}");
     }
+}
+
+fn non_vote_count_metrics(event_file_paths: &[PathBuf]) -> std::io::Result<()> {
+    let mut total_batches = 0;
+    let mut total_packets = 0;
+    let mut batch_count_histogram = Histogram::new();
+    let mut non_zero_batch_count_histogram = Histogram::new();
+    let mut batch_length_histogram = Histogram::new();
+    let mut packet_count_histogram = Histogram::new();
+
+    let mut metric_collector = |TimedTracedEvent(_, event): TimedTracedEvent| {
+        let TracedEvent::PacketBatch(label, banking_packet_batch) = event else {
+            return;
+        };
+
+        if !matches!(label, ChannelLabel::NonVote) {
+            return;
+        }
+
+        let packet_batches = &banking_packet_batch.0;
+
+        let num_batches = packet_batches.len();
+        batch_count_histogram.increment(num_batches as u64).unwrap();
+        if num_batches > 0 {
+            non_zero_batch_count_histogram
+                .increment(num_batches as u64)
+                .unwrap();
+            let mut num_packets = 0;
+            for batch in packet_batches {
+                num_packets += batch.len();
+                batch_length_histogram
+                    .increment(batch.len() as u64)
+                    .unwrap();
+            }
+            packet_count_histogram
+                .increment(num_packets as u64)
+                .unwrap();
+
+            total_batches += num_batches;
+            total_packets += num_packets;
+        }
+    };
+
+    for event_file_path in event_file_paths {
+        println!("Processing events from {}:", event_file_path.display());
+        process_event_file(&event_file_path, &mut metric_collector)?;
+    }
+
+    println!("total_batches: {}", total_batches);
+    println!("total_packets: {}", total_packets);
+
+    pretty_print_histogram("batch_count", &batch_count_histogram);
+    pretty_print_histogram("non-zero batch_count", &non_zero_batch_count_histogram);
+    pretty_print_histogram("batch_length", &batch_length_histogram);
+    pretty_print_histogram("packet_count", &packet_count_histogram);
+
+    Ok(())
+}
+
+fn pretty_print_histogram(name: &str, histogram: &Histogram) {
+    print!("{name}: [");
+
+    const PERCENTILES: &[f64] = &[5.0, 10.0, 25.0, 50.0, 75.0, 90.0, 95.0, 99.0, 99.9];
+    for percentile in PERCENTILES.into_iter().copied() {
+        print!(
+            "{}: {}, ",
+            percentile,
+            histogram.percentile(percentile).unwrap()
+        );
+    }
+    println!("]");
 }
