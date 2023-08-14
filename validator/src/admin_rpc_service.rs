@@ -72,7 +72,7 @@ pub struct AdminRpcContactInfo {
     pub gossip: SocketAddr,
     pub tvu: SocketAddr,
     pub tvu_quic: SocketAddr,
-    pub repair: SocketAddr,
+    pub unused: SocketAddr,
     pub tpu: SocketAddr,
     pub tpu_forwards: SocketAddr,
     pub tpu_vote: SocketAddr,
@@ -104,7 +104,7 @@ impl From<ContactInfo> for AdminRpcContactInfo {
             gossip: unwrap_socket!(gossip),
             tvu: unwrap_socket!(tvu, Protocol::UDP),
             tvu_quic: unwrap_socket!(tvu, Protocol::QUIC),
-            repair: unwrap_socket!(repair),
+            unused: SOCKET_ADDR_UNSPECIFIED,
             tpu: unwrap_socket!(tpu, Protocol::UDP),
             tpu_forwards: unwrap_socket!(tpu_forwards, Protocol::UDP),
             tpu_vote: unwrap_socket!(tpu_vote),
@@ -122,7 +122,6 @@ impl Display for AdminRpcContactInfo {
         writeln!(f, "Gossip: {}", self.gossip)?;
         writeln!(f, "TVU: {}", self.tvu)?;
         writeln!(f, "TVU QUIC: {}", self.tvu_quic)?;
-        writeln!(f, "Repair: {}", self.repair)?;
         writeln!(f, "TPU: {}", self.tpu)?;
         writeln!(f, "TPU Forwards: {}", self.tpu_forwards)?;
         writeln!(f, "TPU Votes: {}", self.tpu_vote)?;
