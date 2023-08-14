@@ -17,14 +17,22 @@ struct Args {
     #[clap(short, long)]
     path: PathBuf,
     /// The mode to run the trace tool in.
-    #[clap(short, long, default_value = "log")]
+    #[clap(short, long, default_value_t = TraceToolMode::SimpleLog)]
     mode: TraceToolMode,
 }
 
 #[derive(Copy, Clone, ValueEnum, PartialEq, Debug)]
 enum TraceToolMode {
-    /// Simply log the events to stdout.
-    Log,
+    /// Log ticks and packet batch labels/counts with timestamps.
+    SimpleLog,
+}
+
+impl std::fmt::Display for TraceToolMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TraceToolMode::SimpleLog => write!(f, "simple-log"),
+        }
+    }
 }
 
 fn main() {
@@ -37,7 +45,7 @@ fn main() {
 
     let event_file_paths = get_event_file_paths(&path);
     let result = match mode {
-        TraceToolMode::Log => log_event_files(&event_file_paths),
+        TraceToolMode::SimpleLog => log_event_files(&event_file_paths),
     };
 
     if let Err(err) = result {
