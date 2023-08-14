@@ -32,6 +32,10 @@ impl SanitizedVersionedTransaction {
     pub fn get_message(&self) -> &SanitizedVersionedMessage {
         &self.message
     }
+
+    pub fn get_signatures(&self) -> &[Signature] {
+        &self.signatures
+    }
 }
 
 #[cfg(test)]

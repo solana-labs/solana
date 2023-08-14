@@ -2,6 +2,7 @@ use {
     chrono::{DateTime, Utc},
     clap::{Parser, ValueEnum},
     histogram::Histogram,
+    process::process_event_files,
     solana_core::{
         banking_stage::immutable_deserialized_packet::ImmutableDeserializedPacket,
         banking_trace::{ChannelLabel, TimedTracedEvent, TracedEvent},
@@ -14,6 +15,9 @@ use {
         time::SystemTime,
     },
 };
+
+mod process;
+mod slot_priority_tracker;
 
 #[derive(Parser)]
 struct Args {
@@ -35,6 +39,8 @@ enum TraceToolMode {
     NonVoteCountMetrics,
     /// Deserialize transactions and collect the transactions w/ timestamps.
     TransactionLog,
+    /// Slot priority tracker.
+    SlotPriorityTracker,
 }
 
 impl std::fmt::Display for TraceToolMode {
@@ -44,6 +50,7 @@ impl std::fmt::Display for TraceToolMode {
             TraceToolMode::NonVoteLog => write!(f, "non-vote-log"),
             TraceToolMode::NonVoteCountMetrics => write!(f, "non-vote-count-metrics"),
             TraceToolMode::TransactionLog => write!(f, "transaction-log"),
+            TraceToolMode::SlotPriorityTracker => write!(f, "slot-priority-tracker"),
         }
     }
 }
@@ -64,6 +71,7 @@ fn main() {
         TraceToolMode::TransactionLog => {
             process_event_files(&event_file_paths, &mut transaction_logger)
         }
+        TraceToolMode::SlotPriorityTracker => slot_priority_tracker::run(&event_file_paths),
     };
 
     if let Err(err) = result {
@@ -111,47 +119,6 @@ fn read_first_timestamp(path: impl AsRef<Path>) -> std::io::Result<SystemTime> {
 
     let system_time = bincode::deserialize(&buffer).unwrap();
     Ok(system_time)
-}
-
-fn process_event_files(
-    event_file_paths: &[PathBuf],
-    handler_fn: &mut impl FnMut(TimedTracedEvent),
-) -> std::io::Result<()> {
-    for event_file_path in event_file_paths {
-        println!("Processing events from {}:", event_file_path.display());
-        process_event_file(&event_file_path, handler_fn)?;
-    }
-    Ok(())
-}
-
-fn process_event_file(
-    path: impl AsRef<Path>,
-    handler_fn: &mut impl FnMut(TimedTracedEvent),
-) -> std::io::Result<()> {
-    let data = std::fs::read(path)?;
-
-    // Deserialize events from the buffer
-    let mut offset = 0;
-    while offset < data.len() {
-        match bincode::deserialize::<TimedTracedEvent>(&data[offset..]) {
-            Ok(event) => {
-                // Update the offset to the next event
-                offset += bincode::serialized_size(&event).unwrap() as usize;
-                handler_fn(event);
-            }
-            Err(err) => {
-                eprintln!(
-                    "Error deserializing event at offset {}. File size {}. Error: {:?}",
-                    offset,
-                    data.len(),
-                    err,
-                );
-                return Ok(()); // TODO: Return an error
-            }
-        }
-    }
-
-    Ok(())
 }
 
 fn simple_logger(TimedTracedEvent(timestamp, event): TimedTracedEvent) {
@@ -231,7 +198,9 @@ fn transaction_logger(TimedTracedEvent(timestamp, event): TimedTracedEvent) {
             }
         }
         let priority = packet.priority();
-        let message = &packet.transaction().get_message().message;
+        let transaction = packet.transaction();
+        let signature = transaction.get_signatures().first().unwrap();
+        let message = &transaction.get_message().message;
         let keys = message.static_account_keys();
         let writable_accounts = keys
             .iter()
@@ -243,7 +212,7 @@ fn transaction_logger(TimedTracedEvent(timestamp, event): TimedTracedEvent) {
             .enumerate()
             .filter(|(index, _)| !message.is_maybe_writable(*index))
             .collect::<Vec<_>>();
-        println!("{utc}: priority: {priority} writable_accounts: {writable_accounts:?} readable_accounts: {readable_accounts:?}");
+        println!("{utc}: signature: {signature} priority: {priority} writable_accounts: {writable_accounts:?} readable_accounts: {readable_accounts:?}");
     }
 }
 
@@ -288,10 +257,7 @@ fn non_vote_count_metrics(event_file_paths: &[PathBuf]) -> std::io::Result<()> {
         }
     };
 
-    for event_file_path in event_file_paths {
-        println!("Processing events from {}:", event_file_path.display());
-        process_event_file(&event_file_path, &mut metric_collector)?;
-    }
+    process_event_files(event_file_paths, &mut metric_collector)?;
 
     println!("total_batches: {}", total_batches);
     println!("total_packets: {}", total_packets);

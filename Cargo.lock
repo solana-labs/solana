@@ -585,13 +585,14 @@ dependencies = [
 
 [[package]]
 name = "banking-trace-tool"
-version = "0.1.0"
+version = "1.17.0"
 dependencies = [
  "bincode",
  "chrono",
  "clap 4.3.21",
  "histogram",
  "solana-core",
+ "solana-sdk",
 ]
 
 [[package]]

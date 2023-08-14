@@ -1,7 +1,13 @@
 [package]
 name = "banking-trace-tool"
-version = "0.1.0"
-edition = "2021"
+description = "Blockchain, Rebuilt for Scale"
+documentation = "https://docs.rs/banking-trace-tool"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -11,3 +17,4 @@ chrono = { workspace = true }
 clap = { version = "4.3.11", features = ["derive"] }
 histogram = { workspace = true }
 solana-core = { workspace = true }
+solana-sdk = { workspace = true }
