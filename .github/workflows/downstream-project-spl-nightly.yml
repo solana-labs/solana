@@ -11,8 +11,6 @@ jobs:
       matrix:
         branch:
           - master
-          - v1.14
-          - v1.16
     uses: ./.github/workflows/downstream-project-spl.yml
     with:
       branch: ${{ matrix.branch }}
