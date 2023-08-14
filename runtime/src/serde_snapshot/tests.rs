@@ -239,7 +239,7 @@ mod serde_snapshot_tests {
         let accounts_hash = AccountsHash(Hash::new_unique());
         accounts
             .accounts_db
-            .set_accounts_hash_for_tests(slot, accounts_hash);
+            .set_accounts_hash(slot, (accounts_hash, u64::default()));
 
         let mut writer = Cursor::new(vec![]);
         accountsdb_to_stream(
