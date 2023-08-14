@@ -36,7 +36,7 @@ impl LastVotedForkSlotsAggregate {
         &mut self,
         last_voted_fork_slots: Vec<(EpochSlotsIndex, EpochSlots, Slot, Hash)>,
         epoch_stakes_map: &mut EpochStakesMap,
-    ) -> (Option<SlotsToRepairList>, f64) {
+    ) -> (Option<SlotsToRepairList>, f64, usize) {
         let node_stakes = epoch_stakes_map.epoch_stakes(None);
         let mut changed_slots = HashSet::new();
         last_voted_fork_slots
@@ -100,9 +100,9 @@ impl LastVotedForkSlotsAggregate {
                     }
                 })
                 .collect::<Vec<(Slot, f64)>>();
-            (Some(slots_to_repair), not_active_percenage)
+            (Some(slots_to_repair), not_active_percenage, self.active_peers.len())
         } else {
-            (None, not_active_percenage)
+            (None, not_active_percenage, self.active_peers.len())
         }
     }
 }

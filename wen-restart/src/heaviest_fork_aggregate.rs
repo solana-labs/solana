@@ -26,7 +26,7 @@ impl HeaviestForkAggregate {
         &mut self,
         heaviest_fork_list: Vec<(Slot, Hash, Percent)>,
         epoch_stakes_map: &mut EpochStakesMap,
-    ) -> f64 {
+    ) -> (f64, usize) {
         let node_stakes = epoch_stakes_map.epoch_stakes(None);
         let total_epoch_stake = node_stakes.total_stake();
         heaviest_fork_list
@@ -48,6 +48,6 @@ impl HeaviestForkAggregate {
             })
             .reduce(|a, b| a + b)
             .unwrap();
-        return total_active_stake as f64 / total_epoch_stake as f64;
+        return (total_active_stake as f64 / total_epoch_stake as f64, self.active_peers.len());
     }
 }

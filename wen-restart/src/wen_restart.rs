@@ -110,7 +110,7 @@ pub fn wen_restart(
     info!("wen_restart aggregating RestartLastVotedForkSlots");
     loop {
         let last_voted_fork_slots = cluster_info.get_last_voted_fork_slots(&mut cursor);
-        let (slots_to_repair, not_active_percentage) =
+        let (slots_to_repair, not_active_percentage, active_peers) =
             last_voted_fork_slots_aggregate.aggregate(last_voted_fork_slots, &mut epoch_stakes_map);
         if let Some(new_slots) = slots_to_repair {
             let my_bank_forks = bank_forks.read().unwrap();
@@ -129,7 +129,8 @@ pub fn wen_restart(
             }
         }
         info!(
-            "wen_restart aggregating RestartLastVotedForkSlots currently {}",
+            "wen_restart aggregating RestartLastVotedForkSlots currently {} peers total stake percentage {}",
+            active_peers,
             1.0 - not_active_percentage
         );
         if not_active_percentage < 1.0 - OPTIMISTIC_CONFIRMED_THRESHOLD {
@@ -146,16 +147,17 @@ pub fn wen_restart(
         if epoch_stakes_map.has_missing_epochs() {
             epoch_stakes_map.update_bank(my_bank_forks.highest_frozen_bank());
         }
-        let (slots_to_repair, not_active_percentage) =
+        let (slots_to_repair, not_active_percentage, _) =
             last_voted_fork_slots_aggregate.aggregate(Vec::default(), &mut epoch_stakes_map);
         let new_slots = slots_to_repair.unwrap();
         let all_slots_frozen =
             my_bank_forks.are_all_slots_frozen(new_slots.iter().map(|(s, _)| s).collect());
         if all_slots_frozen {
+            info!("wen_restart all slots frozen");
             if let Some((slot, hash, percent)) =
                 select_heaviest_fork(new_slots, my_bank_forks, not_active_percentage)
             {
-                info!("New Heaviest_Fork message {} {} {}", slot, hash, percent);
+                info!("wen_restart selected HeaviestFork {} {} {}", slot, hash, percent);
                 cluster_info.push_heaviest_fork(slot, hash, percent);
                 my_selected_slot = slot;
                 my_selected_hash = hash;
@@ -171,7 +173,9 @@ pub fn wen_restart(
     info!("wen_restart aggregating HeaviestFork");
     loop {
         let heaviest_fork_list = cluster_info.get_heaviest_fork(&mut cursor);
-        if heaviest_fork_aggregate.aggregate(heaviest_fork_list, &mut epoch_stakes_map) > 0.8 {
+        let (current_percentage, active_peers) = heaviest_fork_aggregate.aggregate(heaviest_fork_list, &mut epoch_stakes_map);
+        info!("wen_restart aggregating HeaviestFork {} peers total percentage {}", active_peers, current_percentage);
+        if current_percentage > 0.8 {
             info!(
                 "Success, agreed on {} {}",
                 my_selected_slot, my_selected_hash
