@@ -2406,10 +2406,10 @@ impl<'a> AppendVecScan for ScanState<'a> {
         self.init_accum(self.range);
         self.accum[self.pubkey_to_bin_index].push(source_item);
     }
-    fn scanning_complete(self) -> BinnedHashData {
-        let (result, timing) = AccountsDb::sort_slot_storage_scan(self.accum);
+    fn scanning_complete(mut self) -> BinnedHashData {
+        let timing = AccountsDb::sort_slot_storage_scan(&mut self.accum);
         self.sort_time.fetch_add(timing, Ordering::Relaxed);
-        result
+        self.accum
     }
 }
 
@@ -7566,24 +7566,17 @@ impl AccountsDb {
         Ok(result)
     }
 
-    fn sort_slot_storage_scan(accum: BinnedHashData) -> (BinnedHashData, u64) {
+    fn sort_slot_storage_scan(accum: &mut BinnedHashData) -> u64 {
         let time = AtomicU64::new(0);
-        (
-            accum
-                .into_iter()
-                .map(|mut items| {
-                    let mut sort_time = Measure::start("sort");
-                    {
-                        // sort_by vs unstable because slot and write_version are already in order
-                        items.sort_by(AccountsHasher::compare_two_hash_entries);
-                    }
-                    sort_time.stop();
-                    time.fetch_add(sort_time.as_us(), Ordering::Relaxed);
-                    items
-                })
-                .collect(),
-            time.load(Ordering::Relaxed),
-        )
+        accum.iter_mut().for_each(|items| {
+            let mut sort_time = Measure::start("sort");
+            // sort_by vs unstable because slot and write_version are already in order
+            items.sort_by(AccountsHasher::compare_two_hash_entries);
+            sort_time.stop();
+            time.fetch_add(sort_time.as_us(), Ordering::Relaxed);
+        });
+
+        time.load(Ordering::Relaxed)
     }
 
     /// normal code path returns the common cache path
