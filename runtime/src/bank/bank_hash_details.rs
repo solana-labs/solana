@@ -115,28 +115,59 @@ struct SerdeAccount {
     data: String,
 }
 
+impl From<&PubkeyHashAccount> for SerdeAccount {
+    fn from(pubkey_hash_account: &PubkeyHashAccount) -> Self {
+        let PubkeyHashAccount {
+            pubkey,
+            hash,
+            account,
+        } = pubkey_hash_account;
+        Self {
+            pubkey: pubkey.to_string(),
+            hash: hash.to_string(),
+            owner: account.owner().to_string(),
+            lamports: account.lamports(),
+            rent_epoch: account.rent_epoch(),
+            executable: account.executable(),
+            data: BASE64_STANDARD.encode(account.data()),
+        }
+    }
+}
+
+impl TryFrom<SerdeAccount> for PubkeyHashAccount {
+    type Error = String;
+
+    fn try_from(temp_account: SerdeAccount) -> Result<Self, Self::Error> {
+        let pubkey = Pubkey::from_str(&temp_account.pubkey).map_err(|err| err.to_string())?;
+        let hash = Hash::from_str(&temp_account.hash).map_err(|err| err.to_string())?;
+
+        let account = AccountSharedData::from(Account {
+            lamports: temp_account.lamports,
+            data: BASE64_STANDARD
+                .decode(temp_account.data)
+                .map_err(|err| err.to_string())?,
+            owner: Pubkey::from_str(&temp_account.owner).map_err(|err| err.to_string())?,
+            executable: temp_account.executable,
+            rent_epoch: temp_account.rent_epoch,
+        });
+
+        Ok(Self {
+            pubkey,
+            hash,
+            account,
+        })
+    }
+}
+
 impl Serialize for BankHashAccounts {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         let mut seq = serializer.serialize_seq(Some(self.accounts.len()))?;
-        for PubkeyHashAccount {
-            pubkey,
-            hash,
-            account,
-        } in self.accounts.iter()
-        {
-            let temp = SerdeAccount {
-                pubkey: pubkey.to_string(),
-                hash: hash.to_string(),
-                owner: account.owner().to_string(),
-                lamports: account.lamports(),
-                rent_epoch: account.rent_epoch(),
-                executable: account.executable(),
-                data: BASE64_STANDARD.encode(account.data()),
-            };
-            seq.serialize_element(&temp)?;
+        for account in self.accounts.iter() {
+            let temp_account = SerdeAccount::from(account);
+            seq.serialize_element(&temp_account)?;
         }
         seq.end()
     }
@@ -150,26 +181,9 @@ impl<'de> Deserialize<'de> for BankHashAccounts {
         let temp_accounts: Vec<SerdeAccount> = Deserialize::deserialize(deserializer)?;
         let pubkey_hash_accounts: Result<Vec<_>, _> = temp_accounts
             .into_iter()
-            .map(|temp_account| {
-                let pubkey = Pubkey::from_str(&temp_account.pubkey).map_err(de::Error::custom)?;
-                let hash = Hash::from_str(&temp_account.hash).map_err(de::Error::custom)?;
-                let account = AccountSharedData::from(Account {
-                    lamports: temp_account.lamports,
-                    data: BASE64_STANDARD
-                        .decode(temp_account.data)
-                        .map_err(de::Error::custom)?,
-                    owner: Pubkey::from_str(&temp_account.owner).map_err(de::Error::custom)?,
-                    executable: temp_account.executable,
-                    rent_epoch: temp_account.rent_epoch,
-                });
-                Ok(PubkeyHashAccount {
-                    pubkey,
-                    hash,
-                    account,
-                })
-            })
+            .map(PubkeyHashAccount::try_from)
             .collect();
-        let pubkey_hash_accounts = pubkey_hash_accounts?;
+        let pubkey_hash_accounts = pubkey_hash_accounts.map_err(de::Error::custom)?;
         Ok(BankHashAccounts {
             accounts: pubkey_hash_accounts,
         })
