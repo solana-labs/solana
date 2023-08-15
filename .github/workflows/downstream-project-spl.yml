@@ -32,6 +32,26 @@ env:
   RUSTC_WRAPPER: "sccache"
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - shell: bash
+        run: |
+          .github/scripts/purge-ubuntu-runner.sh
+
+      - uses: mozilla-actions/sccache-action@v0.0.3
+
+      - shell: bash
+        run: |
+          source .github/scripts/downstream-project-spl-common.sh
+
+          sudo apt update
+          sudo apt install libudev-dev binutils-dev libunwind-dev -y
+
+          cargo check
+
   build-and-test:
     runs-on: ubuntu-latest
     steps:
