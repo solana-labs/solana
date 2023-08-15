@@ -99,12 +99,7 @@ use {
             TransactionResults,
         },
     },
-<<<<<<< HEAD
-    serde_json::json,
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
-=======
-    solana_bpf_loader_program::syscalls::create_program_runtime_environment,
->>>>>>> 53b2802e53 (Rework scan function and type to aggregate data)
     solana_cost_model::cost_tracker::CostTracker,
     solana_measure::{measure, measure::Measure, measure_us},
     solana_perf::perf_libs,
