@@ -149,11 +149,11 @@ pub fn wen_restart(
         let (slots_to_repair, not_active_percentage, _) =
             last_voted_fork_slots_aggregate.aggregate(Vec::default(), &mut epoch_stakes_map);
         let new_slots = slots_to_repair.unwrap();
-        let not_frozen_slots: Vec<(u64, f64)> = new_slots.iter().filter(|(slot, _)| {
-            my_bank_forks.get(*slot).map(|bank| bank.is_frozen()) != Some(true)
-        }).map(|(slot, weight)| (slot.clone(), weight.clone())).collect();
-        info!("wen_restart waiting for all slots frozen, slots to repair {:?}", not_frozen_slots);
-        if not_frozen_slots.is_empty() {
+        let filtered_slots: Vec<u64> = new_slots.iter().filter(|(slot, _)| {
+            my_bank_forks.bank_hash(slot.clone()).is_none()
+        }).map(|(slot, _)| slot.clone()).collect();
+        info!("wen_restart waiting for all slots frozen, slots to repair {:?}", &filtered_slots);
+        if filtered_slots.is_empty() {
             info!("wen_restart all slots frozen");
             if let Some((slot, hash, percent)) =
                 select_heaviest_fork(new_slots, my_bank_forks, not_active_percentage)
@@ -164,6 +164,8 @@ pub fn wen_restart(
                 my_selected_hash = hash;
                 break;
             }
+        } else if let Err(err) = restart_slots_to_repair_sender.send(Some(filtered_slots)) {
+            error!("Unable to send slots {:?}", err);
         }
         sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
     }
