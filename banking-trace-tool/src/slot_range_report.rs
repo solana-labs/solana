@@ -5,7 +5,7 @@ use {
         banking_trace::{BankingPacketBatch, ChannelLabel, TimedTracedEvent, TracedEvent},
     },
     solana_sdk::clock::Slot,
-    std::{path::PathBuf, time::SystemTime},
+    std::path::PathBuf,
 };
 
 pub fn do_log_slot_range(
@@ -79,21 +79,14 @@ impl SlotRangeCollector {
         }
     }
 
-    fn handle_event(&mut self, TimedTracedEvent(timestamp, event): TimedTracedEvent) {
+    fn handle_event(&mut self, TimedTracedEvent(_, event): TimedTracedEvent) {
         match event {
-            TracedEvent::PacketBatch(label, packets) => {
-                self.handle_packets(timestamp, label, packets)
-            }
-            TracedEvent::BlockAndBankHash(slot, _, _) => self.handle_slot(timestamp, slot),
+            TracedEvent::PacketBatch(label, packets) => self.handle_packets(label, packets),
+            TracedEvent::BlockAndBankHash(slot, _, _) => self.handle_slot(slot),
         }
     }
 
-    fn handle_packets(
-        &mut self,
-        timestamp: SystemTime,
-        label: ChannelLabel,
-        banking_packet_batch: BankingPacketBatch,
-    ) {
+    fn handle_packets(&mut self, label: ChannelLabel, banking_packet_batch: BankingPacketBatch) {
         if !matches!(label, ChannelLabel::NonVote) {
             return;
         }
@@ -110,7 +103,7 @@ impl SlotRangeCollector {
         self.pending_packets.extend(packets);
     }
 
-    fn handle_slot(&mut self, timestamp: SystemTime, slot: Slot) {
+    fn handle_slot(&mut self, slot: Slot) {
         if slot < self.start || slot > self.end {
             self.pending_packets.clear();
             return;

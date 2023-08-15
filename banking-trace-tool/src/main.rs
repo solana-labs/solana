@@ -1,6 +1,7 @@
 use {
     clap::{Args, Parser, Subcommand},
     count_metrics::do_count_metrics,
+    leader_priority_heatmap::do_leader_priority_heatmap,
     log::{do_logging, LoggingKind},
     setup::get_event_file_paths,
     slot_priority_tracker::{do_slot_priority_tracking, TrackingKind, TrackingVerbosity},
@@ -11,6 +12,8 @@ use {
 };
 
 mod count_metrics;
+mod leader_priority_heatmap;
+mod leader_slots_tracker;
 mod log;
 mod process;
 mod setup;
@@ -45,6 +48,8 @@ enum TraceToolMode {
         /// End of slot range (inclusive).
         end: Slot,
     },
+    /// Heatmap of non-vote transaction priority and time-offset from beginning of slot range.
+    SlotPriorityHeatmap,
 }
 
 #[derive(Args, Copy, Clone, Debug, PartialEq)]
@@ -75,6 +80,7 @@ fn main() {
         TraceToolMode::LogSlotRange { start, end } => {
             do_log_slot_range(&event_file_paths, start, end)
         }
+        TraceToolMode::SlotPriorityHeatmap => do_leader_priority_heatmap(&event_file_paths),
     };
 
     if let Err(err) = result {
