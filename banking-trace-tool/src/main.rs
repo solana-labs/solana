@@ -4,7 +4,9 @@ use {
     log::{do_logging, LoggingKind},
     setup::get_event_file_paths,
     slot_priority_tracker::{do_slot_priority_tracking, TrackingKind, TrackingVerbosity},
+    slot_range_report::do_log_slot_range,
     slot_ranges::do_get_slot_ranges,
+    solana_sdk::clock::Slot,
     std::{path::PathBuf, process::exit},
 };
 
@@ -13,6 +15,7 @@ mod log;
 mod process;
 mod setup;
 mod slot_priority_tracker;
+mod slot_range_report;
 mod slot_ranges;
 
 #[derive(Parser)]
@@ -35,6 +38,13 @@ enum TraceToolMode {
     SlotRanges,
     /// Collect metrics on packets by slot and priority.
     SlotPriorityTracker(SlotPriorityTrackerArgs),
+    /// Log non-vote transactions in a slot range.
+    LogSlotRange {
+        /// Start of slot range (inclusive).
+        start: Slot,
+        /// End of slot range (inclusive).
+        end: Slot,
+    },
 }
 
 #[derive(Args, Copy, Clone, Debug, PartialEq)]
@@ -61,6 +71,9 @@ fn main() {
         TraceToolMode::SlotRanges => do_get_slot_ranges(&event_file_paths),
         TraceToolMode::SlotPriorityTracker(SlotPriorityTrackerArgs { kind, verbosity }) => {
             do_slot_priority_tracking(&event_file_paths, kind, verbosity)
+        }
+        TraceToolMode::LogSlotRange { start, end } => {
+            do_log_slot_range(&event_file_paths, start, end)
         }
     };
 
