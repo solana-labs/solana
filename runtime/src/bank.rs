@@ -200,6 +200,7 @@ struct VerifyAccountsHashConfig {
 }
 
 mod address_lookup_table;
+pub mod bank_hash_details;
 mod builtin_programs;
 mod metrics;
 mod sysvar_cache;
