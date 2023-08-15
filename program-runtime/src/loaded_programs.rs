@@ -350,9 +350,9 @@ impl LoadedProgram {
 #[derive(Clone, Debug, Default)]
 pub struct ProgramRuntimeEnvironments {
     /// Globally shared RBPF config and syscall registry
-    pub program_runtime_environment_v1: Arc<BuiltinProgram<InvokeContext<'static>>>,
+    pub program_runtime_v1: Arc<BuiltinProgram<InvokeContext<'static>>>,
     /// Globally shared RBPF config and syscall registry for runtime V2
-    pub program_runtime_environment_v2: Arc<BuiltinProgram<InvokeContext<'static>>>,
+    pub program_runtime_v2: Arc<BuiltinProgram<InvokeContext<'static>>>,
 }
 
 #[derive(Debug, Default)]
@@ -503,27 +503,22 @@ impl LoadedPrograms {
                     LoadedProgramType::LegacyV0(program) | LoadedProgramType::LegacyV1(program)
                         if Arc::ptr_eq(
                             program.get_loader(),
-                            &self.environments.program_runtime_environment_v1,
+                            &self.environments.program_runtime_v1,
                         ) =>
                     {
                         true
                     }
                     LoadedProgramType::Unloaded(environment)
                     | LoadedProgramType::FailedVerification(environment)
-                        if Arc::ptr_eq(
-                            environment,
-                            &self.environments.program_runtime_environment_v1,
-                        ) || Arc::ptr_eq(
-                            environment,
-                            &self.environments.program_runtime_environment_v2,
-                        ) =>
+                        if Arc::ptr_eq(environment, &self.environments.program_runtime_v1)
+                            || Arc::ptr_eq(environment, &self.environments.program_runtime_v2) =>
                     {
                         true
                     }
                     LoadedProgramType::Typed(program)
                         if Arc::ptr_eq(
                             program.get_loader(),
-                            &self.environments.program_runtime_environment_v2,
+                            &self.environments.program_runtime_v2,
                         ) =>
                     {
                         true
