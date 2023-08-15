@@ -63,8 +63,8 @@ pub fn do_slot_priority_tracking(
 pub struct SlotPriorityTracker {
     /// Data for each slot
     data: Vec<SlotPriorityData>,
-    /// The current slot
-    current_slot: u64,
+    /// The current slot data
+    current_slot_data: SlotPriorityData,
 }
 
 impl SlotPriorityTracker {
@@ -96,10 +96,8 @@ impl SlotPriorityTracker {
                 self.process_packets(utc, packets);
             }
             TracedEvent::BlockAndBankHash(slot, _, _) => {
-                if self.current_slot != slot {
-                    self.current_slot = slot;
-                    self.data.push(SlotPriorityData::new(slot));
-                }
+                self.current_slot_data.slot = slot;
+                self.data.push(core::mem::take(&mut self.current_slot_data));
             }
         }
     }
@@ -109,18 +107,16 @@ impl SlotPriorityTracker {
         timestamp: DateTime<Utc>,
         packets: Vec<ImmutableDeserializedPacket>,
     ) {
-        let Some(slot_data) = self.data.last_mut() else {
-            return;
-        };
         for packet in packets {
-            slot_data.process_message(timestamp, packet);
+            self.current_slot_data.process_message(timestamp, packet);
         }
     }
 }
 
+#[derive(Default)]
 pub struct SlotPriorityData {
     /// The slot number
-    slot: u64,
+    slot: u64, // is not filled in until end of slot
     /// Account look-up tables accessed by the slot
     account_lookups: HashSet<Pubkey>,
     /// Time-ordered list of transaction signatures for each account.
@@ -286,7 +282,7 @@ impl SlotPriorityData {
     }
 }
 
-#[derive(PartialEq, Eq, Ord)]
+#[derive(PartialEq, Eq)]
 pub struct TimeOrderedTransactionSignature {
     timestamp: DateTime<Utc>,
     priority: u64,
@@ -300,7 +296,13 @@ impl PartialOrd for TimeOrderedTransactionSignature {
     }
 }
 
-#[derive(PartialEq, Eq, Ord)]
+impl Ord for TimeOrderedTransactionSignature {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.timestamp.cmp(&other.timestamp)
+    }
+}
+
+#[derive(PartialEq, Eq)]
 pub struct PriorityOrderedTransactionSignature {
     timestamp: DateTime<Utc>,
     priority: u64,
@@ -321,6 +323,12 @@ impl std::fmt::Display for PriorityOrderedTransactionSignature {
 impl PartialOrd for PriorityOrderedTransactionSignature {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.priority.partial_cmp(&other.priority)
+    }
+}
+
+impl Ord for PriorityOrderedTransactionSignature {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.timestamp.cmp(&other.timestamp)
     }
 }
 
