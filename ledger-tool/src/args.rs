@@ -41,7 +41,7 @@ pub fn get_accounts_db_config(
             .map(PathBuf::from)
             .collect()
     } else {
-        vec![ledger_path.join("accounts_index.ledger-tool")]
+        vec![ledger_path.join("ledger-tool").join("accounts_index")]
     };
     let accounts_index_config = AccountsIndexConfig {
         bins: accounts_index_bins,
