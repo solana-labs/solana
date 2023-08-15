@@ -50,7 +50,7 @@ chrono = { workspace = true, features = ["alloc"], optional = true }
 curve25519-dalek = { workspace = true, optional = true }
 derivation-path = { workspace = true }
 digest = { workspace = true, optional = true }
-ed25519-dalek = { workspace = true, optional = true }
+ed25519-dalek = { workspace = true, optional = true, features = ["rand_core"]}
 ed25519-dalek-bip32 = { workspace = true, optional = true }
 generic-array = { workspace = true, features = ["serde", "more_lengths"], optional = true }
 hmac = { workspace = true }
@@ -89,7 +89,6 @@ js-sys = { workspace = true }
 [dev-dependencies]
 anyhow = { workspace = true }
 curve25519-dalek = { workspace = true }
-ed25519-dalek = { workspace = true, features = ["rand_core"] }
 hex = { workspace = true }
 static_assertions = { workspace = true }
 tiny-bip39 = { workspace = true }
