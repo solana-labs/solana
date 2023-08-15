@@ -347,16 +347,21 @@ impl LoadedProgram {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct ProgramRuntimeEnvironments {
+    /// Globally shared RBPF config and syscall registry
+    pub program_runtime_environment_v1: Arc<BuiltinProgram<InvokeContext<'static>>>,
+    /// Globally shared RBPF config and syscall registry for runtime V2
+    pub program_runtime_environment_v2: Arc<BuiltinProgram<InvokeContext<'static>>>,
+}
+
 #[derive(Debug, Default)]
 pub struct LoadedPrograms {
     /// A two level index:
     ///
     /// Pubkey is the address of a program, multiple versions can coexists simultaneously under the same address (in different slots).
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
-    /// Globally shared RBPF config and syscall registry
-    pub program_runtime_environment_v1: Arc<BuiltinProgram<InvokeContext<'static>>>,
-    /// Globally shared RBPF config and syscall registry for runtime V2
-    pub program_runtime_environment_v2: Arc<BuiltinProgram<InvokeContext<'static>>>,
+    pub environments: ProgramRuntimeEnvironments,
     latest_root: Slot,
     pub stats: Stats,
 }
@@ -367,32 +372,15 @@ pub struct LoadedProgramsForTxBatch {
     /// LoadedProgram is the corresponding program entry valid for the slot in which a transaction is being executed.
     entries: HashMap<Pubkey, Arc<LoadedProgram>>,
     slot: Slot,
-    /// Runtime environment reference from LoadedProgram cache
-    pub program_runtime_environment_v1: Arc<BuiltinProgram<InvokeContext<'static>>>,
-    /// RuntimeV2 environment reference from LoadedProgram cache
-    pub program_runtime_environment_v2: Arc<BuiltinProgram<InvokeContext<'static>>>,
+    pub environments: ProgramRuntimeEnvironments,
 }
 
 impl LoadedProgramsForTxBatch {
-    pub fn new_from_cache(slot: Slot, loaded_programs_cache: &LoadedPrograms) -> Self {
+    pub fn new(slot: Slot, environments: ProgramRuntimeEnvironments) -> Self {
         Self {
             entries: HashMap::new(),
             slot,
-            program_runtime_environment_v1: loaded_programs_cache
-                .program_runtime_environment_v1
-                .clone(),
-            program_runtime_environment_v2: loaded_programs_cache
-                .program_runtime_environment_v2
-                .clone(),
-        }
-    }
-
-    pub fn new_from_tx_batch_cache(slot: Slot, tx_batch_cache: &LoadedProgramsForTxBatch) -> Self {
-        Self {
-            entries: HashMap::new(),
-            slot,
-            program_runtime_environment_v1: tx_batch_cache.program_runtime_environment_v1.clone(),
-            program_runtime_environment_v2: tx_batch_cache.program_runtime_environment_v2.clone(),
+            environments,
         }
     }
 
@@ -515,22 +503,27 @@ impl LoadedPrograms {
                     LoadedProgramType::LegacyV0(program) | LoadedProgramType::LegacyV1(program)
                         if Arc::ptr_eq(
                             program.get_loader(),
-                            &self.program_runtime_environment_v1,
+                            &self.environments.program_runtime_environment_v1,
                         ) =>
                     {
                         true
                     }
                     LoadedProgramType::Unloaded(environment)
                     | LoadedProgramType::FailedVerification(environment)
-                        if Arc::ptr_eq(environment, &self.program_runtime_environment_v1)
-                            || Arc::ptr_eq(environment, &self.program_runtime_environment_v2) =>
+                        if Arc::ptr_eq(
+                            environment,
+                            &self.environments.program_runtime_environment_v1,
+                        ) || Arc::ptr_eq(
+                            environment,
+                            &self.environments.program_runtime_environment_v2,
+                        ) =>
                     {
                         true
                     }
                     LoadedProgramType::Typed(program)
                         if Arc::ptr_eq(
                             program.get_loader(),
-                            &self.program_runtime_environment_v2,
+                            &self.environments.program_runtime_environment_v2,
                         ) =>
                     {
                         true
@@ -673,8 +666,7 @@ impl LoadedPrograms {
             LoadedProgramsForTxBatch {
                 entries: found,
                 slot: working_slot.current_slot(),
-                program_runtime_environment_v1: self.program_runtime_environment_v1.clone(),
-                program_runtime_environment_v2: self.program_runtime_environment_v2.clone(),
+                environments: self.environments.clone(),
             },
             missing,
         )

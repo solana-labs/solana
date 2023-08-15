@@ -453,6 +453,7 @@ pub fn process_instruction_deploy(
         &loader_v4::id(),
         invoke_context
             .programs_modified_by_tx
+            .environments
             .program_runtime_environment_v2
             .clone(),
         deployment_slot,
@@ -688,6 +689,7 @@ mod tests {
                         &loader_v4::id(),
                         invoke_context
                             .programs_modified_by_tx
+                            .environments
                             .program_runtime_environment_v2
                             .clone(),
                         0,
@@ -735,6 +737,7 @@ mod tests {
             |invoke_context| {
                 invoke_context
                     .programs_modified_by_tx
+                    .environments
                     .program_runtime_environment_v2 = Arc::new(
                     create_program_runtime_environment_v2(&ComputeBudget::default(), false),
                 );

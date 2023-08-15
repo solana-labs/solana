@@ -4644,6 +4644,7 @@ impl Bank {
             .loaded_programs_cache
             .read()
             .unwrap()
+            .environments
             .program_runtime_environment_v1
             .clone();
 
@@ -4651,6 +4652,7 @@ impl Bank {
             .loaded_programs_cache
             .read()
             .unwrap()
+            .environments
             .program_runtime_environment_v2
             .clone();
 
@@ -4819,15 +4821,14 @@ impl Bank {
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
 
         let mut executed_units = 0u64;
-        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::new_from_tx_batch_cache(
+        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::new(
             self.slot,
-            programs_loaded_for_tx_batch,
+            programs_loaded_for_tx_batch.environments.clone(),
         );
-        let mut programs_updated_only_for_global_cache =
-            LoadedProgramsForTxBatch::new_from_tx_batch_cache(
-                self.slot,
-                programs_loaded_for_tx_batch,
-            );
+        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::new(
+            self.slot,
+            programs_loaded_for_tx_batch.environments.clone(),
+        );
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
             tx.message(),
@@ -8064,22 +8065,28 @@ impl Bank {
             )
             .unwrap();
             let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-            if *loaded_programs_cache.program_runtime_environment_v1
+            if *loaded_programs_cache
+                .environments
+                .program_runtime_environment_v1
                 != program_runtime_environment_v1
             {
-                loaded_programs_cache.program_runtime_environment_v1 =
-                    Arc::new(program_runtime_environment_v1);
+                loaded_programs_cache
+                    .environments
+                    .program_runtime_environment_v1 = Arc::new(program_runtime_environment_v1);
             }
             let program_runtime_environment_v2 =
                 solana_loader_v4_program::create_program_runtime_environment_v2(
                     &self.runtime_config.compute_budget.unwrap_or_default(),
                     false, /* debugging_features */
                 );
-            if *loaded_programs_cache.program_runtime_environment_v2
+            if *loaded_programs_cache
+                .environments
+                .program_runtime_environment_v2
                 != program_runtime_environment_v2
             {
-                loaded_programs_cache.program_runtime_environment_v2 =
-                    Arc::new(program_runtime_environment_v2);
+                loaded_programs_cache
+                    .environments
+                    .program_runtime_environment_v2 = Arc::new(program_runtime_environment_v2);
             }
             loaded_programs_cache.prune_feature_set_transition();
         }
