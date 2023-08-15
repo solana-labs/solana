@@ -92,17 +92,11 @@ mod test {
         .unwrap();
         packet.meta_mut().flags |= PacketFlags::REPAIR;
 
-        let leader_slots = [(slot, keypair.pubkey().to_bytes())]
-            .iter()
-            .cloned()
-            .collect();
+        let leader_slots = HashMap::from([(slot, keypair.pubkey())]);
         assert!(verify_shred_cpu(&packet, &leader_slots));
 
         let wrong_keypair = Keypair::new();
-        let leader_slots = [(slot, wrong_keypair.pubkey().to_bytes())]
-            .iter()
-            .cloned()
-            .collect();
+        let leader_slots = HashMap::from([(slot, wrong_keypair.pubkey())]);
         assert!(!verify_shred_cpu(&packet, &leader_slots));
 
         let leader_slots = HashMap::new();
