@@ -6350,6 +6350,7 @@ dependencies = [
  "solana-tpu-client",
  "solana-turbine",
  "solana-vote-program",
+ "static_assertions",
  "tempfile",
  "trees",
 ]
