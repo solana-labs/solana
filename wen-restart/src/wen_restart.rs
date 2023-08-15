@@ -151,7 +151,7 @@ pub fn wen_restart(
         let new_slots = slots_to_repair.unwrap();
         info!("wen_restart waiting for all slots frozen, slots to repair {:?}", new_slots);
         let all_slots_frozen =
-            my_bank_forks.are_all_slots_frozen(new_slots.iter().map(|(s, _)| s).collect());
+            new_slots.is_empty() || my_bank_forks.are_all_slots_frozen(new_slots.iter().map(|(s, _)| s).collect());
         if all_slots_frozen {
             info!("wen_restart all slots frozen");
             if let Some((slot, hash, percent)) =
