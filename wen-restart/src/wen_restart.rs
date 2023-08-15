@@ -101,6 +101,7 @@ pub fn wen_restart(
     last_voted_fork.sort();
     cluster_info.push_last_voted_fork_slots(&last_voted_fork, last_vote.hash());
     let root_bank = bank_forks.read().unwrap().root_bank();
+    let root_slot = root_bank.slot();
     let mut cursor = Cursor::default();
     let mut epoch_stakes_map = EpochStakesMap::new(root_bank.clone());
     let my_pubkey = cluster_info.id();
@@ -120,7 +121,7 @@ pub fn wen_restart(
             let filtered_slots: Vec<Slot> = new_slots
                 .into_iter()
                 .map(|(slot, _)| slot)
-                .filter(|slot| my_bank_forks.bank_hash(slot.clone()).is_none())
+                .filter(|slot| slot > &root_slot && my_bank_forks.bank_hash(slot.clone()).is_none())
                 .collect();
             if !filtered_slots.is_empty() {
                 if let Err(err) = restart_slots_to_repair_sender.send(filtered_slots) {
@@ -150,7 +151,7 @@ pub fn wen_restart(
             last_voted_fork_slots_aggregate.aggregate(Vec::default(), &mut epoch_stakes_map);
         let new_slots = slots_to_repair.unwrap();
         let filtered_slots: Vec<u64> = new_slots.iter().filter(|(slot, _)| {
-            my_bank_forks.bank_hash(slot.clone()).is_none()
+            slot > &root_slot && my_bank_forks.bank_hash(slot.clone()).is_none()
         }).map(|(slot, _)| slot.clone()).collect();
         info!("wen_restart waiting for all slots frozen, slots to repair {:?}", &filtered_slots);
         if filtered_slots.is_empty() {
@@ -169,6 +170,7 @@ pub fn wen_restart(
         }
         sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
     }
+    restart_slots_to_repair_sender.send(Vec::new())?;
     // Aggregate heaviest fork and sanity check.
     let mut heaviest_fork_aggregate =
         HeaviestForkAggregate::new(my_pubkey, my_selected_slot, my_selected_hash);
