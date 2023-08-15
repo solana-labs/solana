@@ -7,7 +7,6 @@ use {
         signature::Signature,
         signer::{EncodableKey, EncodableKeypair, SeedDerivable, Signer, SignerError},
     },
-    ed25519_dalek::Signer as DalekSigner,
     ed25519_dalek_bip32::Error as Bip32Error,
     hmac::Hmac,
     rand::{rngs::OsRng, CryptoRng, RngCore},
@@ -60,8 +59,8 @@ impl Keypair {
     }
 
     /// Gets this `Keypair`'s SecretKey
-    pub fn secret(&self) -> &ed25519_dalek::SecretKey {
-        &self.0.to_bytes()
+    pub fn secret(&self) -> ed25519_dalek::SecretKey {
+        self.0.to_bytes()
     }
 
     /// Allows Keypair cloning
@@ -87,6 +86,7 @@ impl Signer for Keypair {
     }
 
     fn sign_message(&self, message: &[u8]) -> Signature {
+        use ed25519_dalek::Signer as _;
         Signature::from(self.0.sign(message).to_bytes())
     }
 
