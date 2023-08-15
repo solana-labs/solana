@@ -54,7 +54,7 @@ jobs:
           $CARGO_BUILD_SBF --manifest-path token/program-2022/Cargo.toml
           $CARGO_BUILD_SBF --manifest-path token-upgrade/program/Cargo.toml
           $CARGO_BUILD_SBF --manifest-path associated-token-account/program/Cargo.toml
-          $CARGO_BUILD_SBF --manifest-path stake-pool/single-pool/Cargo.toml
+          $CARGO_BUILD_SBF --manifest-path single-pool/program/Cargo.toml
 
           cargo build
           cargo test
