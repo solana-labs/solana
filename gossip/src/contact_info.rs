@@ -35,8 +35,8 @@ const SOCKET_TAG_TPU_FORWARDS_QUIC: u8 = 7;
 const SOCKET_TAG_TPU_QUIC: u8 = 8;
 const SOCKET_TAG_TPU_VOTE: u8 = 9;
 const SOCKET_TAG_TVU: u8 = 10;
-const SOCKET_TAG_TVU_QUIC: u8 = 12;
-const_assert_eq!(SOCKET_CACHE_SIZE, 13);
+const SOCKET_TAG_TVU_QUIC: u8 = 11;
+const_assert_eq!(SOCKET_CACHE_SIZE, 12);
 const SOCKET_CACHE_SIZE: usize = SOCKET_TAG_TVU_QUIC as usize + 1usize;
 
 #[derive(Debug, Error)]
