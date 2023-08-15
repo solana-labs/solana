@@ -214,6 +214,14 @@ impl<'a> InvokeContext<'a> {
         }
     }
 
+    pub fn find_program_in_cache(&self, pubkey: &Pubkey) -> Option<Arc<LoadedProgram>> {
+        // First lookup the cache of the programs modified by the current transaction. If not found, lookup
+        // the cache of the cache of the programs that are loaded for the transaction batch.
+        self.programs_modified_by_tx
+            .find(pubkey)
+            .or_else(|| self.programs_loaded_for_tx_batch.find(pubkey))
+    }
+
     /// Push a stack frame onto the invocation stack
     pub fn push(&mut self) -> Result<(), InstructionError> {
         let instruction_context = self

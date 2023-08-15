@@ -378,18 +378,6 @@ pub fn process_instruction_truncate(
     Ok(())
 }
 
-fn find_program_in_cache(
-    invoke_context: &InvokeContext,
-    pubkey: &Pubkey,
-) -> Option<Arc<LoadedProgram>> {
-    // First lookup the cache of the programs modified by the current transaction. If not found, lookup
-    // the cache of the cache of the programs that are loaded for the transaction batch.
-    invoke_context
-        .programs_modified_by_tx
-        .find(pubkey)
-        .or_else(|| invoke_context.programs_loaded_for_tx_batch.find(pubkey))
-}
-
 pub fn process_instruction_deploy(
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
@@ -481,7 +469,7 @@ pub fn process_instruction_deploy(
     state.slot = current_slot;
     state.is_deployed = true;
 
-    if let Some(old_entry) = find_program_in_cache(invoke_context, program.get_key()) {
+    if let Some(old_entry) = invoke_context.find_program_in_cache(program.get_key()) {
         executor.tx_usage_counter.store(
             old_entry.tx_usage_counter.load(Ordering::Relaxed),
             Ordering::Relaxed,
@@ -618,7 +606,8 @@ pub fn process_instruction_inner(
             return Err(Box::new(InstructionError::InvalidArgument));
         }
         let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-        let loaded_program = find_program_in_cache(invoke_context, program.get_key())
+        let loaded_program = invoke_context
+            .find_program_in_cache(program.get_key())
             .ok_or(InstructionError::InvalidAccountData)?;
 
         if loaded_program.is_tombstone() {
