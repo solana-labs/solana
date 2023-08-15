@@ -6,7 +6,7 @@ SOLANA_ROOT="$(cd "$here"/..; pwd)"
 
 # shellcheck source=net/common.sh
 source "$here"/common.sh
-
+# echo "greg"
 usage() {
   exitcode=0
   if [[ -n "$1" ]]; then
