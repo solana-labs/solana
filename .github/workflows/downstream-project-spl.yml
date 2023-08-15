@@ -52,8 +52,30 @@ jobs:
 
           cargo check
 
-  build-and-test:
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arrays:
+          [
+            {
+              test_paths: ["token/cli"],
+              required_programs:
+                [
+                  "token/program",
+                  "token/program-2022",
+                  "associated-token-account/program",
+                ],
+            },
+            {
+              test_paths: ["single-pool/cli"],
+              required_programs: ["single-pool/program"],
+            },
+            {
+              test_paths: ["token-upgrade/cli"],
+              required_programs: ["token/program", "token-upgrade/program"],
+            },
+          ]
     steps:
       - uses: actions/checkout@v3
 
@@ -70,14 +92,17 @@ jobs:
           sudo apt update
           sudo apt install libudev-dev binutils-dev libunwind-dev -y
 
-          $CARGO_BUILD_SBF --manifest-path token/program/Cargo.toml
-          $CARGO_BUILD_SBF --manifest-path token/program-2022/Cargo.toml
-          $CARGO_BUILD_SBF --manifest-path token-upgrade/program/Cargo.toml
-          $CARGO_BUILD_SBF --manifest-path associated-token-account/program/Cargo.toml
-          $CARGO_BUILD_SBF --manifest-path single-pool/program/Cargo.toml
+          programStr="${{ tojson(matrix.arrays.required_programs) }}"
+          IFS=', ' read -ra programs <<<"${programStr//[\[\]$'\n'$'\r' ]/}"
+          for program in "${programs[@]}"; do
+            $CARGO_BUILD_SBF --manifest-path "$program"/Cargo.toml
+          done
 
-          cargo build
-          cargo test
+          testPathsStr="${{ tojson(matrix.arrays.test_paths) }}"
+          IFS=', ' read -ra test_paths <<<"${testPathsStr//[\[\]$'\n'$'\r' ]/}"
+          for test_path in "${test_paths[@]}"; do
+            cargo test --manifest-path "$test_path"/Cargo.toml
+          done
 
   cargo-test-sbf:
     runs-on: ubuntu-latest
