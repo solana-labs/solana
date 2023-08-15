@@ -130,16 +130,6 @@ pub struct SlotPriorityData {
 }
 
 impl SlotPriorityData {
-    fn new(slot: u64) -> Self {
-        Self {
-            slot,
-            account_lookups: HashSet::new(),
-            time_ordered_transactions_by_account: HashMap::new(),
-            priority_ordered_transactions_by_account: HashMap::new(),
-            sigmap: HashMap::new(),
-        }
-    }
-
     fn report(&self, kind: TrackingKind, verbosity: TrackingVerbosity) {
         match kind {
             TrackingKind::HighestPriorityAccount => {
@@ -178,7 +168,7 @@ impl SlotPriorityData {
             TrackingVerbosity::TreeTop10 => {
                 let (highest_priority_account, tree) = priority_ordered_trees.first().unwrap();
                 let num_writes = tree.len();
-                let top_txs: Vec<_> = tree.into_iter().take(10).map(|tx| tx.priority).collect();
+                let top_txs: Vec<_> = tree.iter().take(10).map(|tx| tx.priority).collect();
                 let pretty_top_txs = top_txs.pretty();
                 println!("{slot}: {highest_priority_account} num_writes={num_writes} top_txs={pretty_top_txs}")
             }
@@ -212,7 +202,7 @@ impl SlotPriorityData {
             TrackingVerbosity::TreeTop10 => {
                 let (highest_conflict_account, tree) = conflict_ordered_trees.first().unwrap();
                 let num_writes = tree.len();
-                let top_txs: Vec<_> = tree.into_iter().take(10).map(|tx| tx.priority).collect();
+                let top_txs: Vec<_> = tree.iter().take(10).map(|tx| tx.priority).collect();
                 let pretty_top_txs = top_txs.pretty();
                 println!("{slot}: {highest_conflict_account} num_writes={num_writes} top_txs={pretty_top_txs}")
             }
@@ -250,12 +240,12 @@ impl SlotPriorityData {
         let message = &packet.transaction().get_message().message;
         if let Some(address_lookup_tables) = message.address_table_lookups() {
             self.account_lookups
-                .extend(address_lookup_tables.into_iter().map(|x| x.account_key));
+                .extend(address_lookup_tables.iter().map(|x| x.account_key));
         }
 
         // Insert for each static account map
-        let fee_payer = message.static_account_keys().first().unwrap().clone();
-        for (index, account) in message.static_account_keys().into_iter().enumerate() {
+        let fee_payer = *message.static_account_keys().first().unwrap();
+        for (index, account) in message.static_account_keys().iter().enumerate() {
             if !message.is_maybe_writable(index) {
                 continue;
             }
@@ -265,7 +255,7 @@ impl SlotPriorityData {
                 .insert(TimeOrderedTransactionSignature {
                     timestamp,
                     priority,
-                    signature: signature.clone(),
+                    signature,
                     fee_payer,
                 });
             self.priority_ordered_transactions_by_account
@@ -395,7 +385,7 @@ pub trait PrettySliceExt<'a, T: std::fmt::Display> {
     fn pretty(&'a self) -> PrettySlice<'a, T>;
 }
 
-impl<'a, T: std::fmt::Display> PrettySliceExt<'_, T> for Vec<T> {
+impl<T: std::fmt::Display> PrettySliceExt<'_, T> for Vec<T> {
     fn pretty(&self) -> PrettySlice<T> {
         PrettySlice(self)
     }

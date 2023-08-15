@@ -74,7 +74,7 @@ fn pretty_print_histogram(name: &str, histogram: &Histogram) {
     print!("{name}: [");
 
     const PERCENTILES: &[f64] = &[5.0, 10.0, 25.0, 50.0, 75.0, 90.0, 95.0, 99.0, 99.9];
-    for percentile in PERCENTILES.into_iter().copied() {
+    for percentile in PERCENTILES.iter().copied() {
         print!(
             "{}: {}, ",
             percentile,
