@@ -269,6 +269,8 @@ startCommon() {
   syncScripts "$ipAddress"
 }
 
+# TODO this could be done in Dockerfile on build?
+# or we could do this after we boot up and then we just 
 syncScripts() {
   echo "rsyncing scripts... to $ipAddress"
   declare ipAddress=$1
@@ -296,7 +298,7 @@ deployBootstrapValidator() {
     rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:$remoteCargoBin/"
     rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/version.yml "$ipAddress:~/"
     ;;
-  local)
+  local) #todo, change to kubectl cp
     rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:$remoteCargoBin/"
     rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/version.yml "$ipAddress:~/"
     ;;
@@ -309,11 +311,13 @@ deployBootstrapValidator() {
 }
 
 startBootstrapLeader() {
-  declare ipAddress=$1
-  declare nodeIndex="$2"
-  declare logFile="$3"
-  echo "--- Starting bootstrap validator: $ipAddress"
+  # declare ipAddress=$1
+  # declare nodeIndex="$2"
+  declare logFile="$1"
+  echo "--- Starting bootstrap validator"
   echo "start log: $logFile"
+
+  
 
   (
     set -x
@@ -609,6 +613,7 @@ prepareDeploy() {
       exit 0
     fi
   fi
+  echo "done preparedeploy()"
 }
 
 deploy() {
@@ -616,6 +621,12 @@ deploy() {
 
   echo "Deployment started at $(date)"
   $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
+
+  kubectl create ns $NAMESPACE
+
+  # startBootstrapLeader "$nodeAddress" "$nodeIndex" "$netLogDir/bootstrap-validator-$ipAddress.log"
+
+  startBootstrapLeader "$netLogDir/bootstrap-validator.log"
 
   declare bootstrapLeader=true
   for nodeAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}"; do
@@ -748,22 +759,25 @@ stop() {
   SECONDS=0
   $metricsWriteDatapoint "testnet-deploy net-stop-begin=1"
 
-  declare loopCount=0
-  pids=()
-  for ipAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}" "${clientIpList[@]}"; do
-    stopNode "$ipAddress" false
-
-    # Stagger additional node stop time to avoid too many concurrent ssh
-    # sessions
-    ((loopCount++ % 4 == 0)) && sleep 2
-  done
-
   echo --- Waiting for nodes to finish stopping
-  for pid in "${pids[@]}"; do
-    echo -n "$pid "
-    wait "$pid" || true
-  done
-  echo
+  kubectl delete ns $NAMESPACE
+
+  # declare loopCount=0
+  # pids=()
+  # for ipAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}" "${clientIpList[@]}"; do
+  #   stopNode "$ipAddress" false
+
+  #   # Stagger additional node stop time to avoid too many concurrent ssh
+  #   # sessions
+  #   ((loopCount++ % 4 == 0)) && sleep 2
+  # done
+
+  # echo --- Waiting for nodes to finish stopping
+  # for pid in "${pids[@]}"; do
+  #   echo -n "$pid "
+  #   wait "$pid" || true
+  # done
+  # echo
 
   $metricsWriteDatapoint "testnet-deploy net-stop-complete=1"
   echo "Stopping nodes took $SECONDS seconds"
