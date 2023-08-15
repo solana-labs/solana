@@ -7476,7 +7476,8 @@ impl AccountsDb {
     /// Set the accounts hash for `slot`
     ///
     /// returns the previous accounts hash for `slot`
-    pub fn set_accounts_hash(
+    #[cfg_attr(feature = "dev-context-only-utils", fn_qualifiers(pub))]
+    fn set_accounts_hash(
         &self,
         slot: Slot,
         accounts_hash: (AccountsHash, /*capitalization*/ u64),
@@ -9662,10 +9663,6 @@ impl AccountsDb {
 
     pub fn accounts_hashes(&self) -> &Mutex<HashMap<Slot, (AccountsHash, /*capitalization*/ u64)>> {
         &self.accounts_hashes
-    }
-
-    pub fn set_accounts_hash_for_tests(&self, slot: Slot, accounts_hash: AccountsHash) {
-        self.set_accounts_hash(slot, (accounts_hash, u64::default()));
     }
 
     pub fn assert_load_account(&self, slot: Slot, pubkey: Pubkey, expected_lamports: u64) {
