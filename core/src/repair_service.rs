@@ -289,15 +289,8 @@ impl RepairService {
         dumped_slots_receiver: DumpedSlotsReceiver,
         popular_pruned_forks_sender: PopularPrunedForksSender,
     ) {
-        let slots_to_repair_for_wen_restart = if repair_info.in_wen_restart.load(Ordering::Relaxed)
-        {
-            Some(Arc::new(Vec::new()))
-        } else {
-            None
-        };
         let mut repair_weight = RepairWeight::new(
             repair_info.bank_forks.read().unwrap().root(),
-            slots_to_repair_for_wen_restart,
         );
         let serve_repair = ServeRepair::new(
             repair_info.cluster_info.clone(),
@@ -311,6 +304,7 @@ impl RepairService {
         let mut last_stats = Instant::now();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
         let mut popular_pruned_forks_requests = HashSet::new();
+        let mut wen_restart_slots_to_repair: Option<Vec<Slot>> = Some(Vec::new());
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -385,12 +379,15 @@ impl RepairService {
                 );
                 add_votes_elapsed.stop();
 
-                if repair_info.in_wen_restart.load(Ordering::Relaxed) {
+                let in_wen_restart = repair_info.in_wen_restart.load(Ordering::Relaxed);
+                if in_wen_restart {
                     repair_info.wen_restart_repair_receiver.try_iter().for_each(
-                        |new_slots_option| {
-                            repair_weight.update_slots_to_repair_for_wen_restart(new_slots_option);
+                        |new_slots| {
+                            wen_restart_slots_to_repair = Some(new_slots);
                         },
                     )
+                } else if wen_restart_slots_to_repair.is_some() {
+                    wen_restart_slots_to_repair = None;
                 }
                 let repairs = repair_weight.get_best_weighted_repairs(
                     blockstore,
@@ -402,6 +399,7 @@ impl RepairService {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut repair_timing,
                     &mut best_repairs_stats,
+                    &wen_restart_slots_to_repair,
                 );
 
                 let mut popular_pruned_forks = repair_weight.get_popular_pruned_forks(

@@ -1130,7 +1130,7 @@ impl Validator {
             .map(|service| service.sender_cloned());
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let (restart_slots_to_repair_sender, restart_slots_to_repair_receiver) =
-            crossbeam_channel::unbounded::<Option<Vec<Slot>>>();
+            crossbeam_channel::unbounded::<Vec<Slot>>();
         let tvu_shred_version = Arc::new(RwLock::new(node.info.shred_version()));
         let in_wen_restart = Arc::new(AtomicBool::new(config.wen_restart));
         let tvu = Tvu::new(
