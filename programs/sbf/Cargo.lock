@@ -5416,6 +5416,7 @@ name = "solana-runtime"
 version = "1.16.21"
 dependencies = [
  "arrayref",
+ "base64 0.21.2",
  "bincode",
  "blake3",
  "bv",
@@ -5449,6 +5450,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
+ "serde_json",
  "solana-address-lookup-table-program",
  "solana-bpf-loader-program",
  "solana-bucket-map",
@@ -5465,6 +5467,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-system-program",
+ "solana-version",
  "solana-vote-program",
  "solana-zk-token-proof-program",
  "solana-zk-token-sdk",

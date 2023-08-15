@@ -59,7 +59,7 @@ use {
     solana_rpc_client_api::response::SlotUpdate,
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
-        bank::{Bank, NewBankOptions},
+        bank::{bank_hash_details, Bank, NewBankOptions},
         bank_forks::{BankForks, MAX_ROOT_DISTANCE_FOR_VOTE_ONLY},
         commitment::BlockCommitmentCache,
         prioritization_fee_cache::PrioritizationFeeCache,
@@ -1502,6 +1502,7 @@ impl ReplayStage {
                     let bank = w_bank_forks
                         .remove(*slot)
                         .expect("BankForks should not have been purged yet");
+                    let _ = bank_hash_details::write_bank_hash_details_file(&bank);
                     ((*slot, bank.bank_id()), bank)
                 })
                 .unzip()

@@ -469,6 +469,7 @@ pub(crate) struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+    base_working_path: None,
     accounts_hash_cache_path: None,
     filler_accounts_config: FillerAccountsConfig::const_default(),
     write_cache_limit_bytes: None,
@@ -480,6 +481,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
+    base_working_path: None,
     accounts_hash_cache_path: None,
     filler_accounts_config: FillerAccountsConfig::const_default(),
     write_cache_limit_bytes: None,
@@ -539,6 +541,8 @@ const ANCIENT_APPEND_VEC_DEFAULT_OFFSET: Option<i64> = Some(-10_000);
 #[derive(Debug, Default, Clone)]
 pub struct AccountsDbConfig {
     pub index: Option<AccountsIndexConfig>,
+    /// Base directory for various necessary files
+    pub base_working_path: Option<PathBuf>,
     pub accounts_hash_cache_path: Option<PathBuf>,
     pub filler_accounts_config: FillerAccountsConfig,
     pub write_cache_limit_bytes: Option<u64>,
@@ -1396,6 +1400,8 @@ pub struct AccountsDb {
     pub(crate) paths: Vec<PathBuf>,
 
     accounts_hash_cache_path: PathBuf,
+    /// Base directory for various necessary files
+    base_working_path: PathBuf,
 
     // used by tests
     // holds this until we are dropped
@@ -2347,6 +2353,13 @@ impl<'a> AppendVecScan for ScanState<'a> {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PubkeyHashAccount {
+    pub pubkey: Pubkey,
+    pub hash: Hash,
+    pub account: AccountSharedData,
+}
+
 impl AccountsDb {
     pub const DEFAULT_ACCOUNTS_HASH_CACHE_DIR: &str = "accounts_hash_cache";
 
@@ -2356,18 +2369,33 @@ impl AccountsDb {
 
     fn default_with_accounts_index(
         accounts_index: AccountInfoAccountsIndex,
-        accounts_hash_cache_path: Option<PathBuf>,
+        base_working_path: Option<PathBuf>,
     ) -> Self {
         let num_threads = get_thread_count();
         const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 400_000_000; // 400M bytes
 
-        let (accounts_hash_cache_path, temp_accounts_hash_cache_path) =
-            if let Some(accounts_hash_cache_path) = accounts_hash_cache_path {
-                (accounts_hash_cache_path, None)
-            } else {
-                let temp_dir = TempDir::new().expect("new tempdir");
-                let cache_path = temp_dir.path().to_path_buf();
-                (cache_path, Some(temp_dir))
+        let (base_working_path, accounts_hash_cache_path, temp_accounts_hash_cache_path) =
+            match base_working_path {
+                Some(base_working_path) => {
+                    let accounts_hash_cache_path =
+                        base_working_path.join(Self::DEFAULT_ACCOUNTS_HASH_CACHE_DIR);
+                    (base_working_path, accounts_hash_cache_path, None)
+                }
+                None => {
+                    let temp_accounts_hash_cache_path = Some(TempDir::new().unwrap());
+                    let base_working_path = temp_accounts_hash_cache_path
+                        .as_ref()
+                        .unwrap()
+                        .path()
+                        .to_path_buf();
+                    let accounts_hash_cache_path =
+                        base_working_path.join(Self::DEFAULT_ACCOUNTS_HASH_CACHE_DIR);
+                    (
+                        base_working_path,
+                        accounts_hash_cache_path,
+                        temp_accounts_hash_cache_path,
+                    )
+                }
             };
 
         let mut bank_hash_stats = HashMap::new();
@@ -2399,6 +2427,7 @@ impl AccountsDb {
             write_version: AtomicU64::new(0),
             paths: vec![],
             accounts_hash_cache_path,
+            base_working_path,
             temp_accounts_hash_cache_path,
             shrink_paths: RwLock::new(None),
             temp_paths: None,
@@ -2477,9 +2506,10 @@ impl AccountsDb {
             accounts_db_config.as_mut().and_then(|x| x.index.take()),
             exit,
         );
-        let accounts_hash_cache_path = accounts_db_config
+        let base_working_path = accounts_db_config
             .as_ref()
-            .and_then(|config| config.accounts_hash_cache_path.clone());
+            .and_then(|x| x.base_working_path.clone());
+
         let filler_accounts_config = accounts_db_config
             .as_ref()
             .map(|config| config.filler_accounts_config)
@@ -2534,7 +2564,7 @@ impl AccountsDb {
                 .and_then(|x| x.write_cache_limit_bytes),
             partitioned_epoch_rewards_config,
             exhaustively_verify_refcounts,
-            ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
+            ..Self::default_with_accounts_index(accounts_index, base_working_path)
         };
         if paths_is_empty {
             // Create a temporary set of accounts directories, used primarily
@@ -2579,6 +2609,11 @@ impl AccountsDb {
 
     pub fn file_size(&self) -> u64 {
         self.file_size
+    }
+
+    /// Get the base working directory
+    pub fn get_base_working_path(&self) -> PathBuf {
+        self.base_working_path.clone()
     }
 
     pub fn new_single_for_tests() -> Self {
@@ -7773,6 +7808,42 @@ impl AccountsDb {
             ScanStorageResult::Stored(stored_result) => stored_result.into_iter().collect(),
         };
         (hashes, scan.as_us(), accumulate)
+    }
+
+    /// Return all of the accounts for a given slot
+    pub fn get_pubkey_hash_account_for_slot(&self, slot: Slot) -> Vec<PubkeyHashAccount> {
+        type ScanResult =
+            ScanStorageResult<PubkeyHashAccount, DashMap<Pubkey, (Hash, AccountSharedData)>>;
+        let scan_result: ScanResult = self.scan_account_storage(
+            slot,
+            |loaded_account: LoadedAccount| {
+                // Cache only has one version per key, don't need to worry about versioning
+                Some(PubkeyHashAccount {
+                    pubkey: *loaded_account.pubkey(),
+                    hash: loaded_account.loaded_hash(),
+                    account: loaded_account.take_account(),
+                })
+            },
+            |accum: &DashMap<Pubkey, (Hash, AccountSharedData)>, loaded_account: LoadedAccount| {
+                // Storage may have duplicates so only keep the latest version for each key
+                accum.insert(
+                    *loaded_account.pubkey(),
+                    (loaded_account.loaded_hash(), loaded_account.take_account()),
+                );
+            },
+        );
+
+        match scan_result {
+            ScanStorageResult::Cached(cached_result) => cached_result,
+            ScanStorageResult::Stored(stored_result) => stored_result
+                .into_iter()
+                .map(|(pubkey, (hash, account))| PubkeyHashAccount {
+                    pubkey,
+                    hash,
+                    account,
+                })
+                .collect(),
+        }
     }
 
     /// Calculate accounts delta hash for `slot`
