@@ -55,27 +55,29 @@ impl ReadOnlyCacheStats {
 #[derive(Debug)]
 pub struct ReadOnlyAccountsCache {
     cache: DashMap<ReadOnlyCacheKey, ReadOnlyAccountCacheEntry>,
-    // When an item is first entered into the cache, it is added to the end of
-    // the queue. Also each time an entry is looked up from the cache it is
-    // moved to the end of the queue. As a result, items in the queue are
-    // always sorted in the order that they have last been accessed. When doing
-    // LRU eviction, cache entries are evicted from the front of the queue.
+    /// When an item is first entered into the cache, it is added to the end of
+    /// the queue. Also each time an entry is looked up from the cache it is
+    /// moved to the end of the queue. As a result, items in the queue are
+    /// always sorted in the order that they have last been accessed. When doing
+    /// LRU eviction, cache entries are evicted from the front of the queue.
     queue: Mutex<IndexList<ReadOnlyCacheKey>>,
     max_data_size: usize,
     data_size: AtomicUsize,
+    counter: AtomicU64,
 
     // Performance statistics
     stats: ReadOnlyCacheStats,
 }
 
 impl ReadOnlyAccountsCache {
-    pub fn new(max_data_size: usize) -> Self {
+    pub(crate) fn new(max_data_size: usize, ms_to_skip_lru_update: u32) -> Self {
         Self {
             max_data_size,
             cache: DashMap::default(),
             queue: Mutex::<IndexList<ReadOnlyCacheKey>>::default(),
             data_size: AtomicUsize::default(),
             stats: ReadOnlyCacheStats::default(),
+            counter: AtomicU64::default(),
         }
     }
 
@@ -103,7 +105,7 @@ impl ReadOnlyAccountsCache {
             // Move the entry to the end of the queue.
             // self.queue is modified while holding a reference to the cache entry;
             // so that another thread cannot write to the same key.
-            {
+            if self.counter.fetch_add(1, Ordering::Relaxed) % 8 == 0 {
                 let mut queue = self.queue.lock().unwrap();
                 queue.remove(entry.index());
                 entry.set_index(queue.insert_last(key));
@@ -185,7 +187,10 @@ impl ReadOnlyAccountCacheEntry {
     fn new(account: AccountSharedData, index: Index) -> Self {
         let index = unsafe { std::mem::transmute::<Index, u32>(index) };
         let index = AtomicU32::new(index);
-        Self { account, index }
+        Self {
+            account,
+            index,
+        }
     }
 
     #[inline]
@@ -261,7 +266,8 @@ mod tests {
 
         // can store 2 items, 3rd item kicks oldest item out
         let max = (data_size + per_account_size) * 2;
-        let cache = ReadOnlyAccountsCache::new(max);
+        let cache =
+            ReadOnlyAccountsCache::new(max, READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE_FOR_TESTS);
         cache.store(key1, slot, account1.clone());
         assert_eq!(100 + per_account_size, cache.data_size());
         assert!(accounts_equal(&cache.load(key1, slot).unwrap(), &account1));
@@ -284,13 +290,19 @@ mod tests {
         assert_eq!(2, cache.cache_len());
     }
 
+    /// tests like to deterministically update lru always
+    const READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE_FOR_TESTS: u32 = 0;
+
     #[test]
     fn test_read_only_accounts_cache_random() {
         const SEED: [u8; 32] = [0xdb; 32];
         const DATA_SIZE: usize = 19;
         const MAX_CACHE_SIZE: usize = 17 * (CACHE_ENTRY_SIZE + DATA_SIZE);
         let mut rng = ChaChaRng::from_seed(SEED);
-        let cache = ReadOnlyAccountsCache::new(MAX_CACHE_SIZE);
+        let cache = ReadOnlyAccountsCache::new(
+            MAX_CACHE_SIZE,
+            READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE_FOR_TESTS,
+        );
         let slots: Vec<Slot> = repeat_with(|| rng.gen_range(0, 1000)).take(5).collect();
         let pubkeys: Vec<Pubkey> = repeat_with(|| {
             let mut arr = [0u8; 32];
