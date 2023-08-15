@@ -3,7 +3,8 @@ use {
     count_metrics::do_count_metrics,
     log::{do_logging, LoggingKind},
     setup::get_event_file_paths,
-    slot_priority_tracker::{TrackingKind, TrackingVerbosity},
+    slot_priority_tracker::{do_slot_priority_tracking, TrackingKind, TrackingVerbosity},
+    slot_ranges::do_get_slot_ranges,
     std::{path::PathBuf, process::exit},
 };
 
@@ -12,6 +13,7 @@ mod log;
 mod process;
 mod setup;
 mod slot_priority_tracker;
+mod slot_ranges;
 
 #[derive(Parser)]
 struct AppArgs {
@@ -29,6 +31,8 @@ enum TraceToolMode {
     Log { kind: LoggingKind },
     /// Collect metrics on batch and packet count.
     CountMetrics,
+    /// Get the ranges of slots for data in directory.
+    SlotRanges,
     /// Collect metrics on packets by slot and priority.
     SlotPriorityTracker(SlotPriorityTrackerArgs),
 }
@@ -54,8 +58,9 @@ fn main() {
     let result = match mode {
         TraceToolMode::Log { kind } => do_logging(&event_file_paths, kind),
         TraceToolMode::CountMetrics => do_count_metrics(&event_file_paths),
+        TraceToolMode::SlotRanges => do_get_slot_ranges(&event_file_paths),
         TraceToolMode::SlotPriorityTracker(SlotPriorityTrackerArgs { kind, verbosity }) => {
-            slot_priority_tracker::do_slot_priority_tracking(&event_file_paths, kind, verbosity)
+            do_slot_priority_tracking(&event_file_paths, kind, verbosity)
         }
     };
 

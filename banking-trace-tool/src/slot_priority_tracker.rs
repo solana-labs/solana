@@ -71,6 +71,7 @@ impl SlotPriorityTracker {
     pub fn report(&self, kind: TrackingKind, verbosity: TrackingVerbosity) {
         for slot_data in &self.data {
             slot_data.report(kind, verbosity);
+            break;
         }
     }
 
