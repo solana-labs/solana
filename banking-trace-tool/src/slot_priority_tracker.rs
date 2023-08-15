@@ -29,12 +29,15 @@ pub enum TrackingVerbosity {
     /// Simple logging without significant detail.
     #[default]
     Simple,
+    /// Show top 10 Accounts in the appropriate tree.
+    TreeTop10,
 }
 
 impl std::fmt::Display for TrackingVerbosity {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             TrackingVerbosity::Simple => write!(f, "simple"),
+            TrackingVerbosity::TreeTop10 => write!(f, "top10"),
         }
     }
 }
@@ -171,6 +174,12 @@ impl SlotPriorityData {
                 let num_writes = tree.len();
                 println!("{slot}: {highest_priority_account} highest_priority={highest_priority} num_writes={num_writes}")
             }
+            TrackingVerbosity::TreeTop10 => {
+                let num_writes = tree.len();
+                let top_txs: Vec<_> = tree.into_iter().take(10).map(|tx| tx.priority).collect();
+                let pretty_top_txs = PrettySlice(&top_txs);
+                println!("{slot}: {highest_priority_account} num_writes={num_writes} top_txs={pretty_top_txs}")
+            }
         }
     }
 
@@ -189,6 +198,12 @@ impl SlotPriorityData {
                 let num_writes = tree.len();
                 println!("{slot}: {highest_conflict_account} highest_priority={highest_priority} num_writes={num_writes}")
             }
+            TrackingVerbosity::TreeTop10 => {
+                let num_writes = tree.len();
+                let top_txs: Vec<_> = tree.into_iter().take(10).map(|tx| tx.priority).collect();
+                let pretty_top_txs = PrettySlice(&top_txs);
+                println!("{slot}: {highest_conflict_account} num_writes={num_writes} top_txs={pretty_top_txs}")
+            }
         }
     }
 
@@ -197,7 +212,9 @@ impl SlotPriorityData {
         let mut lookup_tables = self.account_lookups.iter().cloned().collect::<Vec<_>>();
         lookup_tables.sort_unstable();
         match verbosity {
-            TrackingVerbosity::Simple => println!("{slot}: {lookup_tables:?}"),
+            TrackingVerbosity::Simple | TrackingVerbosity::TreeTop10 => {
+                println!("{slot}: {lookup_tables:?}")
+            }
         }
     }
 
@@ -288,5 +305,18 @@ impl std::fmt::Display for TimeOrderedTransactionSignature {
             "{:} {:} ({:} - {:})",
             self.signature, self.fee_payer, self.timestamp, self.priority
         )
+    }
+}
+
+pub struct PrettySlice<'a, T: std::fmt::Display>(&'a [T]);
+
+impl<'a, T: std::fmt::Display> std::fmt::Display for PrettySlice<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        for item in self.0 {
+            write!(f, "{item:}, ")?;
+        }
+        write!(f, "]")?;
+        Ok(())
     }
 }
