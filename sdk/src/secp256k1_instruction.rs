@@ -1271,7 +1271,7 @@ pub mod test {
 
         assert!(tx.verify_precompiles(&feature_set).is_ok());
 
-        let index = thread_rng().gen_range(0, secp_instruction.data.len());
+        let index = thread_rng().gen_range(0..secp_instruction.data.len());
         secp_instruction.data[index] = secp_instruction.data[index].wrapping_add(12);
         let tx = Transaction::new_signed_with_payer(
             &[secp_instruction],

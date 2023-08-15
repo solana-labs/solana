@@ -367,7 +367,7 @@ pub mod test {
         assert!(tx.verify_precompiles(&feature_set).is_ok());
 
         let index = loop {
-            let index = thread_rng().gen_range(0, instruction.data.len());
+            let index = thread_rng().gen_range(0..instruction.data.len());
             // byte 1 is not used, so this would not cause the verify to fail
             if index != 1 {
                 break index;
