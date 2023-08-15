@@ -139,25 +139,24 @@ impl MerkleTree {
         self.nodes.iter().last()
     }
 
-    fn append_nodes(&mut self, nodes: Vec<Hash>,) {
-        let mut leaf_count = self.leaf_count;
-        for mut node in nodes {
+    fn append_nodes(nodes: &mut[Hash], mut leaf_count: usize, leaves: Vec<Hash>) -> usize {
+        for mut leaf in leaves {
             let mut layer: usize = 0;
             leaf_count += 1;
             let mut cursor = leaf_count;
             while (cursor & 1) == 0 {
-                let arg1 = &node;
-                let arg2 = &self.nodes[layer];
+                let arg1 = &leaf;
+                let arg2 = &nodes[layer];
                 //todo: verify and implement jump's fancy avx implementation
-                node = hash_intermediate!(arg1, arg2);
+                leaf = hash_intermediate!(arg1, arg2);
                 layer += 1;
                 cursor >>= 1;
             }
         
-            self.nodes[layer] = node;
+            nodes[layer] = leaf;
             
         }
-        self.leaf_count = leaf_count;
+        leaf_count
     }
 
     fn private_depth(leaf_count: usize) -> usize {
@@ -169,14 +168,14 @@ impl MerkleTree {
         }
     }
 
-    fn commit_finish(&mut self) -> Hash {
-        let leaf_count = self.leaf_count;
+    fn commit_finish(nodes: &mut[Hash], leaf_count: usize) -> Hash {
+        let leaf_count = leaf_count;
         let root_idx: usize = Self::private_depth(leaf_count) - 1;
 
         if !leaf_count.is_power_of_two() {
             let mut layer = leaf_count.trailing_zeros() as usize;
             let mut layer_count = leaf_count >> layer;
-            let mut tmp = self.nodes[layer];
+            let mut tmp = nodes[layer];
 
             while layer_count > 1 {
                 tmp = if (layer_count & 1) != 0 {
@@ -186,34 +185,31 @@ impl MerkleTree {
                 }
                 else {
                     let arg1 = &tmp;
-                    let arg2 = &self.nodes[layer];
+                    let arg2 = &nodes[layer];
                     hash_intermediate!(arg1, arg2)
                 };
                 layer+=1; 
                 layer_count = (layer_count+1) >> 1;
             }
-            self.nodes[root_idx] = tmp;
+            nodes[root_idx] = tmp;
         }
-        self.nodes[root_idx]
+        nodes[root_idx]
     }
 
     pub fn merkle_root<T: AsRef<[u8]>>(items: &[T]) -> Hash {
-        let mut mt = MerkleTree {
-            leaf_count: 0,
-            nodes: Vec::with_capacity(63),
-        };
+        let mut nodes: Vec<Hash> = Vec::with_capacity(63);
         unsafe{
-            mt.nodes.set_len(63);
+            nodes.set_len(63);
         }
 
         let hashes = items.iter().map(|item| {
             let item = item.as_ref();
             hash_leaf!(item)
         }).collect::<Vec<_>>();
+        let mut leaf_count =0;
+        leaf_count = Self::append_nodes(&mut nodes, leaf_count, hashes);
 
-        mt.append_nodes(hashes);
-
-        mt.commit_finish()
+        Self::commit_finish(&mut nodes, leaf_count)
     }
 
     pub fn find_path(&self, index: usize) -> Option<Proof> {
