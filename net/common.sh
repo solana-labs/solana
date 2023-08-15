@@ -54,10 +54,11 @@ buildSshOptions() {
 }
 
 loadConfigFile() {
-  # [[ -r $configFile ]] || usage "Config file unreadable: $configFile"
+  [[ -r $configFile ]] || usage "Config file unreadable: $configFile"
 
-  # # shellcheck source=/dev/null
-  # source "$configFile"
+  # shellcheck source=/dev/null
+  source "$configFile"
+  echo "config file: $configFile"
   # [[ -n "$publicNetwork" ]] || usage "Config file invalid, publicNetwork unspecified: $configFile"
   # [[ -n "$netBasename" ]] || usage "Config file invalid, netBasename unspecified: $configFile"
   # [[ -n $sshPrivateKey ]] || usage "Config file invalid, sshPrivateKey unspecified: $configFile"
