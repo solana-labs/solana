@@ -1,6 +1,7 @@
 use {
     crate::process::process_event_files,
     chrono::{DateTime, Utc},
+    clap::ValueEnum,
     solana_core::{
         banking_stage::immutable_deserialized_packet::ImmutableDeserializedPacket,
         banking_trace::{ChannelLabel, TimedTracedEvent, TracedEvent},
@@ -13,12 +14,41 @@ use {
     },
 };
 
-pub fn run(event_file_paths: &[PathBuf]) -> std::io::Result<()> {
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum TrackingKind {
+    /// Determine the highest-priority write account for each slot.
+    HighestPriorityAccount,
+    /// Determine the highest-conflict write account for each slot.
+    HighestConflictAccount,
+    /// Log unique lookup-tables accessed by each slot.
+    LookupTables,
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, ValueEnum)]
+pub enum TrackingVerbosity {
+    /// Simple logging without significant detail.
+    #[default]
+    Simple,
+}
+
+impl std::fmt::Display for TrackingVerbosity {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            TrackingVerbosity::Simple => write!(f, "simple"),
+        }
+    }
+}
+
+pub fn do_slot_priority_tracking(
+    event_file_paths: &[PathBuf],
+    kind: TrackingKind,
+    verbosity: TrackingVerbosity,
+) -> std::io::Result<()> {
     let mut slot_priority_tracker = SlotPriorityTracker::default();
     let mut handler = |event| slot_priority_tracker.process_event(event);
     process_event_files(event_file_paths, &mut handler)?;
 
-    slot_priority_tracker.report();
+    slot_priority_tracker.report(kind, verbosity);
 
     Ok(())
 }
@@ -32,10 +62,9 @@ pub struct SlotPriorityTracker {
 }
 
 impl SlotPriorityTracker {
-    pub fn report(&self) {
+    pub fn report(&self, kind: TrackingKind, verbosity: TrackingVerbosity) {
         for slot_data in &self.data {
-            slot_data.report();
-            // break; // debug
+            slot_data.report(kind, verbosity);
         }
     }
 
@@ -64,7 +93,6 @@ impl SlotPriorityTracker {
                 if self.current_slot != slot {
                     self.current_slot = slot;
                     self.data.push(SlotPriorityData::new(slot));
-                    println!("new slot: {slot}");
                 }
             }
         }
@@ -110,39 +138,67 @@ impl SlotPriorityData {
         }
     }
 
-    fn report(&self) {
-        println!("Slot: {}", self.slot);
-        let account_lookups = self.account_lookups.iter().cloned().collect::<Vec<_>>();
-        // println!("\tAccount lookups: {account_lookups:#?}");
-        let account = self
-            .time_ordered_transactions_by_account
+    fn report(&self, kind: TrackingKind, verbosity: TrackingVerbosity) {
+        match kind {
+            TrackingKind::HighestPriorityAccount => {
+                self.report_highest_priority_account(verbosity);
+            }
+            TrackingKind::HighestConflictAccount => {
+                self.report_highest_conflict_account(verbosity);
+            }
+            TrackingKind::LookupTables => {
+                self.report_lookup_tables(verbosity);
+            }
+        }
+    }
+
+    fn report_highest_priority_account(&self, verbosity: TrackingVerbosity) {
+        let (highest_priority_account, tree) = self
+            .priority_ordered_transactions_by_account
+            .iter()
+            .max_by(|a, b| {
+                a.1.first()
+                    .unwrap()
+                    .priority
+                    .cmp(&b.1.first().unwrap().priority)
+            })
+            .unwrap();
+
+        let slot = self.slot;
+        match verbosity {
+            TrackingVerbosity::Simple => {
+                let highest_priority = tree.first().unwrap().priority;
+                let num_writes = tree.len();
+                println!("{slot}: {highest_priority_account} highest_priority={highest_priority} num_writes={num_writes}")
+            }
+        }
+    }
+
+    fn report_highest_conflict_account(&self, verbosity: TrackingVerbosity) {
+        let (highest_conflict_account, tree) = self
+            .priority_ordered_transactions_by_account
             .iter()
             .max_by(|a, b| a.1.len().cmp(&b.1.len()))
-            .unwrap()
-            .0;
-        println!("\tMost conflicting account: {account}");
+            .unwrap();
 
-        // // println!("\tAccount lookups: {account_lookups:#?}");
-        // // for account in self.time_ordered_transactions_by_account.keys() {
-        // let time_ordered = self
-        //     .time_ordered_transactions_by_account
-        //     .get(account)
-        //     .unwrap()
-        //     .into_iter()
-        //     .collect::<Vec<_>>();
-        // let priority_ordered = self
-        //     .priority_ordered_transactions_by_account
-        //     .get(account)
-        //     .unwrap()
-        //     .into_iter()
-        //     .collect::<Vec<_>>();
+        let slot = self.slot;
 
-        // //     println!("\tAccount {account}");
-        // pretty_print("Time-ordered: ", &time_ordered);
-        // pretty_print("Priority-ordered: ", &priority_ordered);
+        match verbosity {
+            TrackingVerbosity::Simple => {
+                let highest_priority = tree.first().unwrap().priority;
+                let num_writes = tree.len();
+                println!("{slot}: {highest_conflict_account} highest_priority={highest_priority} num_writes={num_writes}")
+            }
+        }
+    }
 
-        // }
-        // println!();
+    fn report_lookup_tables(&self, verbosity: TrackingVerbosity) {
+        let slot = self.slot;
+        let mut lookup_tables = self.account_lookups.iter().cloned().collect::<Vec<_>>();
+        lookup_tables.sort_unstable();
+        match verbosity {
+            TrackingVerbosity::Simple => println!("{slot}: {lookup_tables:?}"),
+        }
     }
 
     fn process_message(&mut self, timestamp: DateTime<Utc>, packet: ImmutableDeserializedPacket) {
@@ -233,12 +289,4 @@ impl std::fmt::Display for TimeOrderedTransactionSignature {
             self.signature, self.fee_payer, self.timestamp, self.priority
         )
     }
-}
-
-fn pretty_print<T: std::fmt::Display>(name: &str, items: &[T]) {
-    println!("\t\t{name}: [");
-    for item in items.iter() {
-        println!("\t\t\t{item}");
-    }
-    println!("\t\t]");
 }

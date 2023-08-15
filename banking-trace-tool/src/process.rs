@@ -8,7 +8,6 @@ pub fn process_event_files(
     handler_fn: &mut impl FnMut(TimedTracedEvent),
 ) -> std::io::Result<()> {
     for event_file_path in event_file_paths {
-        println!("Processing events from {}:", event_file_path.display());
         process_event_file(&event_file_path, handler_fn)?;
     }
     Ok(())
@@ -29,13 +28,7 @@ fn process_event_file(
                 offset += bincode::serialized_size(&event).unwrap() as usize;
                 handler_fn(event);
             }
-            Err(err) => {
-                eprintln!(
-                    "Error deserializing event at offset {}. File size {}. Error: {:?}",
-                    offset,
-                    data.len(),
-                    err,
-                );
+            Err(_) => {
                 return Ok(()); // TODO: Return an error
             }
         }

@@ -1,8 +1,9 @@
 use {
-    clap::{Parser, Subcommand},
+    clap::{Args, Parser, Subcommand},
     count_metrics::do_count_metrics,
     log::{do_logging, LoggingKind},
     setup::get_event_file_paths,
+    slot_priority_tracker::{TrackingKind, TrackingVerbosity},
     std::{path::PathBuf, process::exit},
 };
 
@@ -13,7 +14,7 @@ mod setup;
 mod slot_priority_tracker;
 
 #[derive(Parser)]
-struct Args {
+struct AppArgs {
     /// The path to the banking trace event files.
     #[clap(short, long)]
     path: PathBuf,
@@ -29,11 +30,20 @@ enum TraceToolMode {
     /// Collect metrics on batch and packet count.
     CountMetrics,
     /// Collect metrics on packets by slot and priority.
-    SlotPriorityTracker,
+    SlotPriorityTracker(SlotPriorityTrackerArgs),
+}
+
+#[derive(Args, Copy, Clone, Debug, PartialEq)]
+struct SlotPriorityTrackerArgs {
+    /// The kind of tracking to perform.
+    kind: TrackingKind,
+    /// The verbosity of the report.
+    #[arg(default_value_t = TrackingVerbosity::default())]
+    verbosity: TrackingVerbosity,
 }
 
 fn main() {
-    let Args { path, mode } = Args::parse();
+    let AppArgs { path, mode } = AppArgs::parse();
 
     if !path.is_dir() {
         eprintln!("Error: {} is not a directory", path.display());
@@ -44,7 +54,9 @@ fn main() {
     let result = match mode {
         TraceToolMode::Log { kind } => do_logging(&event_file_paths, kind),
         TraceToolMode::CountMetrics => do_count_metrics(&event_file_paths),
-        TraceToolMode::SlotPriorityTracker => slot_priority_tracker::run(&event_file_paths),
+        TraceToolMode::SlotPriorityTracker(SlotPriorityTrackerArgs { kind, verbosity }) => {
+            slot_priority_tracker::do_slot_priority_tracking(&event_file_paths, kind, verbosity)
+        }
     };
 
     if let Err(err) = result {
