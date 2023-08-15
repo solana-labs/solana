@@ -27,9 +27,9 @@ pub enum Protocol {
     QUIC,
 }
 
-pub trait ConnectionManager {
+pub trait ConnectionManager: Send + Sync + 'static {
     type ConnectionPool: ConnectionPool;
-    type NewConnectionConfig;
+    type NewConnectionConfig: Send + Sync + 'static;
 
     const PROTOCOL: Protocol;
 
@@ -299,8 +299,8 @@ pub enum ClientError {
     IoError(#[from] std::io::Error),
 }
 
-pub trait ConnectionPool {
-    type NewConnectionConfig;
+pub trait ConnectionPool: Send + Sync + 'static {
+    type NewConnectionConfig: Send + Sync + 'static;
     type BaseClientConnection: BaseClientConnection;
 
     /// Add a connection to the pool
@@ -332,7 +332,7 @@ pub trait ConnectionPool {
     ) -> Arc<Self::BaseClientConnection>;
 }
 
-pub trait BaseClientConnection {
+pub trait BaseClientConnection: Send + Sync + 'static {
     type BlockingClientConnection: BlockingClientConnection;
     type NonblockingClientConnection: NonblockingClientConnection;
 

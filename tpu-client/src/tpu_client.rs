@@ -69,8 +69,9 @@ pub struct TpuClient<
 
 impl<P, M, C> TpuClient<P, M, C>
 where
-    P: ConnectionPool<NewConnectionConfig = C>,
-    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    P: ConnectionPool<NewConnectionConfig = C> + 'static,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C> + 'static,
+    C: Sync + Send + 'static,
 {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size

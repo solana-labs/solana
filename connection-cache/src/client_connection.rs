@@ -21,7 +21,7 @@ pub struct ClientStats {
     pub send_timeout: AtomicU64,
 }
 
-pub trait ClientConnection: Sync + Send {
+pub trait ClientConnection: Sync + Send + 'static {
     fn server_addr(&self) -> &SocketAddr;
 
     fn send_data(&self, buffer: &[u8]) -> TransportResult<()>;

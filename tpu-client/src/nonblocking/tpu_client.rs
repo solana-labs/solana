@@ -38,7 +38,7 @@ use {
     },
     thiserror::Error,
     tokio::{
-        task::JoinHandle,
+        task::{self, JoinHandle},
         time::{sleep, timeout, Duration, Instant},
     },
 };
@@ -272,6 +272,44 @@ pub struct TpuClient<
     connection_cache: Arc<ConnectionCache<P, M, C>>,
 }
 
+async fn try_send_wire_transaction<P, M, C>(
+    wire_transaction: Vec<u8>,
+    leaders: &[SocketAddr],
+    connection_cache: &ConnectionCache<P, M, C>,
+) -> TransportResult<()>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: Send + Sync + 'static,
+{
+    let futures = leaders
+        .iter()
+        .map(|addr| send_wire_transaction_to_addr(connection_cache, addr, wire_transaction.clone()))
+        .collect::<Vec<_>>();
+    let results: Vec<TransportResult<()>> = join_all(futures).await;
+
+    let mut last_error: Option<TransportError> = None;
+    let mut some_success = false;
+    for result in results {
+        if let Err(e) = result {
+            if last_error.is_none() {
+                last_error = Some(e);
+            }
+        } else {
+            some_success = true;
+        }
+    }
+    if !some_success {
+        Err(if let Some(err) = last_error {
+            err
+        } else {
+            std::io::Error::new(std::io::ErrorKind::Other, "No sends attempted").into()
+        })
+    } else {
+        Ok(())
+    }
+}
+
 async fn send_wire_transaction_to_addr<P, M, C>(
     connection_cache: &ConnectionCache<P, M, C>,
     addr: &SocketAddr,
@@ -302,6 +340,7 @@ impl<P, M, C> TpuClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: Send + Sync + 'static,
 {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
@@ -325,6 +364,22 @@ where
         self.try_send_wire_transaction(wire_transaction).await
     }
 
+    /// Send a transaction to the current and upcoming leader TPUs according to fanout size
+    /// Returns a detached running task with the last error if all sends fail
+    pub async fn try_send_transaction_detached(
+        &self,
+        transaction: &Transaction,
+    ) -> JoinHandle<TransportResult<()>> {
+        let leaders = self
+            .leader_tpu_service
+            .leader_tpu_sockets(self.fanout_slots);
+        let wire_transaction = serialize(transaction).expect("serialization should succeed");
+        let connection_cache = self.connection_cache.clone();
+        task::spawn(async move {
+            try_send_wire_transaction(wire_transaction, &leaders, &connection_cache).await
+        })
+    }
+
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     /// Returns the last error if all sends fail
     pub async fn try_send_wire_transaction(
@@ -334,38 +389,7 @@ where
         let leaders = self
             .leader_tpu_service
             .leader_tpu_sockets(self.fanout_slots);
-        let futures = leaders
-            .iter()
-            .map(|addr| {
-                send_wire_transaction_to_addr(
-                    &self.connection_cache,
-                    addr,
-                    wire_transaction.clone(),
-                )
-            })
-            .collect::<Vec<_>>();
-        let results: Vec<TransportResult<()>> = join_all(futures).await;
-
-        let mut last_error: Option<TransportError> = None;
-        let mut some_success = false;
-        for result in results {
-            if let Err(e) = result {
-                if last_error.is_none() {
-                    last_error = Some(e);
-                }
-            } else {
-                some_success = true;
-            }
-        }
-        if !some_success {
-            Err(if let Some(err) = last_error {
-                err
-            } else {
-                std::io::Error::new(std::io::ErrorKind::Other, "No sends attempted").into()
-            })
-        } else {
-            Ok(())
-        }
+        try_send_wire_transaction(wire_transaction, &leaders, &self.connection_cache).await
     }
 
     /// Send a batch of wire transactions to the current and upcoming leader TPUs according to
@@ -483,10 +507,9 @@ where
 
                 // Periodically re-send all pending transactions
                 if Instant::now().duration_since(last_resend) > TRANSACTION_RESEND_INTERVAL {
+                    let mut futures = vec![];
                     for (index, (_i, transaction)) in pending_transactions.values().enumerate() {
-                        if !self.send_transaction(transaction).await {
-                            let _result = self.rpc_client.send_transaction(transaction).await.ok();
-                        }
+                        futures.push(self.try_send_transaction_detached(transaction));
                         set_message_for_confirmed_transactions(
                             &progress_bar,
                             confirmed_transactions,
@@ -496,6 +519,28 @@ where
                             &format!("Sending {}/{} transactions", index + 1, num_transactions,),
                         );
                         sleep(SEND_TRANSACTION_INTERVAL).await;
+                    }
+                    let results = join_all(futures).await;
+                    for (index, (result, (_i, transaction))) in results
+                        .into_iter()
+                        .zip(pending_transactions.values())
+                        .enumerate()
+                    {
+                        if result.await.is_err() {
+                            set_message_for_confirmed_transactions(
+                                &progress_bar,
+                                confirmed_transactions,
+                                total_transactions,
+                                None, //block_height,
+                                last_valid_block_height,
+                                &format!(
+                                    "Resending failed transaction {} of {}",
+                                    index + 1,
+                                    num_transactions,
+                                ),
+                            );
+                            let _result = self.rpc_client.send_transaction(transaction).await.ok();
+                        }
                     }
                     last_resend = Instant::now();
                 }
