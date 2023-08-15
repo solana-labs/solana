@@ -149,10 +149,11 @@ pub fn wen_restart(
         let (slots_to_repair, not_active_percentage, _) =
             last_voted_fork_slots_aggregate.aggregate(Vec::default(), &mut epoch_stakes_map);
         let new_slots = slots_to_repair.unwrap();
-        info!("wen_restart waiting for all slots frozen, slots to repair {:?}", new_slots);
-        let all_slots_frozen =
-            new_slots.is_empty() || my_bank_forks.are_all_slots_frozen(new_slots.iter().map(|(s, _)| s).collect());
-        if all_slots_frozen {
+        let not_frozen_slots: Vec<(u64, f64)> = new_slots.iter().filter(|(slot, _)| {
+            my_bank_forks.get(*slot).map(|bank| bank.is_frozen()) != Some(true)
+        }).map(|(slot, weight)| (slot.clone(), weight.clone())).collect();
+        info!("wen_restart waiting for all slots frozen, slots to repair {:?}", not_frozen_slots);
+        if not_frozen_slots.is_empty() {
             info!("wen_restart all slots frozen");
             if let Some((slot, hash, percent)) =
                 select_heaviest_fork(new_slots, my_bank_forks, not_active_percentage)

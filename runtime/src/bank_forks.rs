@@ -123,16 +123,6 @@ impl BankForks {
             .collect()
     }
 
-    pub fn are_all_slots_frozen(&self, slots: Vec<&Slot>) -> bool {
-        slots.iter().all(|slot| {
-            if let Some(bank) = self.banks.get(slot) {
-                bank.is_frozen()
-            } else {
-                false
-            }
-        })
-    }
-
     pub fn active_bank_slots(&self) -> Vec<Slot> {
         self.banks
             .iter()
