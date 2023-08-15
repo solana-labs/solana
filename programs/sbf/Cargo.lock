@@ -3633,9 +3633,9 @@ dependencies = [
 
 [[package]]
 name = "qualifier_attr"
-version = "0.1.6"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a696aef893ed46a96ed81163ef58856b2da620c2eb4b38623253ad215c600b1d"
+checksum = "9e2e25ee72f5b24d773cae88422baddefff7714f97aab68d96fe2b6fc4a28fb2"
 dependencies = [
  "proc-macro2",
  "quote",
