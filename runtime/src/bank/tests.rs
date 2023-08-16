@@ -8003,9 +8003,15 @@ fn test_compute_active_feature_set() {
     assert!(feature_set.is_active(&test_feature));
 }
 
-fn set_up_account_with_bank(bank: &mut Bank, pubkey: &Pubkey, lamports: u64) -> AccountSharedData {
+fn set_up_account_with_bank(
+    bank: &mut Bank,
+    pubkey: &Pubkey,
+    lamports: u64,
+    data: Vec<u8>,
+) -> AccountSharedData {
     let new_account = AccountSharedData::from(Account {
         lamports,
+        data,
         ..Account::default()
     });
     bank.store_account_and_update_capitalization(pubkey, &new_account);
@@ -8014,41 +8020,180 @@ fn set_up_account_with_bank(bank: &mut Bank, pubkey: &Pubkey, lamports: u64) -> 
 }
 
 #[test]
-fn test_program_replacement() {
+fn test_non_upgradable_program_replace() {
+    // Non-Upgradable program
+    // - Old:     [Old program data]
+    // - New:     [*New program data]
+    //
+    // Should replace the old program account with the new program account:
+    // - Old:     [*New program data]
     let mut bank = create_simple_test_bank(0);
 
-    // Setup original program accounts
-    let old_address = Pubkey::new_unique();
-    set_up_account_with_bank(&mut bank, &old_address, 100);
+    let old = Pubkey::new_unique();
+    set_up_account_with_bank(&mut bank, &old, 100, vec![0, 0, 0, 0]);
 
-    let (old_data_address, _) =
-        Pubkey::find_program_address(&[old_address.as_ref()], &bpf_loader_upgradeable::id());
-    set_up_account_with_bank(&mut bank, &old_data_address, 102);
-
-    // Setup new program accounts
-    let new_address = Pubkey::new_unique();
-    let new_program_account = set_up_account_with_bank(&mut bank, &new_address, 123);
-
-    let (new_data_address, _) =
-        Pubkey::find_program_address(&[new_address.as_ref()], &bpf_loader_upgradeable::id());
-    let new_program_data_account = set_up_account_with_bank(&mut bank, &new_data_address, 125);
+    let new = Pubkey::new_unique();
+    let new_program_bytes = vec![6, 5, 4, 3, 2, 1, 0];
+    set_up_account_with_bank(&mut bank, &new, 100, new_program_bytes.clone());
 
     let original_capitalization = bank.capitalization();
 
-    bank.replace_program_account(&old_address, &new_address, "bank-apply_program_replacement");
+    bank.replace_program_account(&old, &new, "bank-apply_program_replacement");
+
+    // Old program account balance is unchanged
+    assert_eq!(bank.get_balance(&old), 100);
+
+    // New program account is now empty
+    assert_eq!(bank.get_balance(&new), 0);
+
+    // Old program account now holds the new program data, ie:
+    // - Old:     [*New program data]
+    let old_account = bank.get_account(&old).unwrap();
+    assert_eq!(old_account.data(), &new_program_bytes,);
+
+    // Lamports in the old token account was burnt
+    assert_eq!(bank.capitalization(), original_capitalization - 100);
+}
+
+#[test]
+fn test_non_upgradable_program_replace_with_data() {
+    // Non-Upgradable program
+    // - Old:     [Old program data]
+    // - New:     PDA(NewData)
+    // - NewData: [*New program data]
+    //
+    // Should replace the program account with the PDA of the data account,
+    // and create the data account:
+    // - Old:     PDA(OldData)
+    // - OldData: [*New program data]
+    let bpf_id = bpf_loader_upgradeable::id();
+    let mut bank = create_simple_test_bank(0);
+
+    let old = Pubkey::new_unique();
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
+    set_up_account_with_bank(&mut bank, &old, 100, vec![0, 0, 0, 0]);
+
+    let new = Pubkey::new_unique();
+    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_id);
+    let new_program_bytes = vec![6, 5, 4, 3, 2, 1, 0];
+    set_up_account_with_bank(&mut bank, &new, 100, new_data.to_bytes().to_vec());
+    set_up_account_with_bank(&mut bank, &new_data, 102, new_program_bytes.clone());
+
+    let original_capitalization = bank.capitalization();
+
+    bank.replace_program_account(&old, &new, "bank-apply_program_replacement");
+
+    // Old program account balances are unchanged
+    assert_eq!(bank.get_balance(&old), 100);
+    assert_eq!(bank.get_balance(&old_data), 102);
 
     // New program accounts are now empty
-    assert_eq!(bank.get_balance(&new_address), 0);
-    assert_eq!(bank.get_balance(&new_data_address), 0);
+    assert_eq!(bank.get_balance(&new), 0);
+    assert_eq!(bank.get_balance(&new_data), 0);
 
-    // Old program account holds the new program account
-    assert_eq!(bank.get_account(&old_address), Some(new_program_account));
+    // Old program account now holds the PDA, ie:
+    // - Old:     PDA(OldData)
+    let old_account = bank.get_account(&old).unwrap();
+    assert_eq!(old_account.data(), &old_data.to_bytes().to_vec(),);
 
-    // Old program data account holds the new program data account
-    assert_eq!(
-        bank.get_account(&old_data_address),
-        Some(new_program_data_account)
-    );
+    // Old program data account has been created & now holds the new data, ie:
+    // - OldData: [*New program data]
+    let old_data_account = bank.get_account(&old_data).unwrap();
+    assert_eq!(old_data_account.data(), &new_program_bytes,);
+
+    // Lamports in the old token accounts were burnt
+    assert_eq!(bank.capitalization(), original_capitalization - 100);
+}
+
+#[test]
+fn test_upgradable_program_replace() {
+    // Upgradable program
+    // - Old:     PDA(OldData)
+    // - OldData: [Old program data]
+    // - New:     PDA(NewData)
+    // - NewData: [*New program data]
+    //
+    // Should _only_ replace the data account, not the program account:
+    // - Old:     PDA(OldData)
+    // - OldData: [*New program data]
+    let bpf_id = bpf_loader_upgradeable::id();
+    let mut bank = create_simple_test_bank(0);
+
+    let old = Pubkey::new_unique();
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
+    set_up_account_with_bank(&mut bank, &old, 100, old_data.to_bytes().to_vec());
+    set_up_account_with_bank(&mut bank, &old_data, 102, vec![0, 1, 2, 3, 4, 5, 6]);
+
+    let new = Pubkey::new_unique();
+    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_id);
+    let new_program_bytes = vec![6, 5, 4, 3, 2, 1, 0];
+    set_up_account_with_bank(&mut bank, &new, 100, new_data.to_bytes().to_vec());
+    set_up_account_with_bank(&mut bank, &new_data, 102, new_program_bytes.clone());
+
+    let original_capitalization = bank.capitalization();
+
+    bank.replace_program_account(&old, &new, "bank-apply_program_replacement");
+
+    // Old program account balances are unchanged
+    assert_eq!(bank.get_balance(&old), 100);
+    assert_eq!(bank.get_balance(&old_data), 102);
+
+    // New program accounts are now empty
+    assert_eq!(bank.get_balance(&new), 0);
+    assert_eq!(bank.get_balance(&new_data), 0);
+
+    // Old program account still holds the same PDA, ie:
+    // - Old:     PDA(OldData)
+    let old_account = bank.get_account(&old).unwrap();
+    assert_eq!(old_account.data(), &old_data.to_bytes().to_vec(),);
+
+    // Old program data account now holds the new data, ie:
+    // - OldData: [*New program data]
+    let old_data_account = bank.get_account(&old_data).unwrap();
+    assert_eq!(old_data_account.data(), &new_program_bytes,);
+
+    // Lamports in the old token accounts were burnt
+    assert_eq!(bank.capitalization(), original_capitalization - 100 - 102);
+}
+
+#[test]
+fn test_upgradable_program_replace_with_no_data() {
+    // Upgradable program
+    // - Old:     PDA(OldData)
+    // - OldData: [Old program data]
+    // - New:     [*New program data]
+    //
+    // Should replace the program account and delete the data account:
+    // - Old:     [*New program data]
+    let bpf_id = bpf_loader_upgradeable::id();
+    let mut bank = create_simple_test_bank(0);
+
+    let old = Pubkey::new_unique();
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
+    set_up_account_with_bank(&mut bank, &old, 100, old_data.to_bytes().to_vec());
+    set_up_account_with_bank(&mut bank, &old_data, 102, vec![0, 1, 2, 3, 4, 5, 6]);
+
+    let new = Pubkey::new_unique();
+    let new_program_bytes = vec![6, 5, 4, 3, 2, 1, 0];
+    set_up_account_with_bank(&mut bank, &new, 100, new_program_bytes.clone());
+
+    let original_capitalization = bank.capitalization();
+
+    bank.replace_program_account(&old, &new, "bank-apply_program_replacement");
+
+    // Old program account balance is unchanged
+    assert_eq!(bank.get_balance(&old), 100);
+
+    // Old data account is now empty
+    assert_eq!(bank.get_balance(&old_data), 0);
+
+    // New program account is now empty
+    assert_eq!(bank.get_balance(&new), 0);
+
+    // Old program account now holds the new program bytes
+    // - Old:     [*New program data]
+    let old_account = bank.get_account(&old).unwrap();
+    assert_eq!(old_account.data(), &new_program_bytes,);
 
     // Lamports in the old token accounts were burnt
     assert_eq!(bank.capitalization(), original_capitalization - 100 - 102);

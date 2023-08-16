@@ -8196,6 +8196,26 @@ impl Bank {
         }
     }
 
+    fn replace_account(
+        &mut self,
+        old_address: &Pubkey,
+        new_address: &Pubkey,
+        old_account: Option<&AccountSharedData>,
+        new_account: &AccountSharedData,
+    ) {
+        let (old_lamports, old_len) = match old_account {
+            Some(old_account) => (old_account.lamports(), old_account.data().len()),
+            None => (0, 0),
+        };
+        self.capitalization.fetch_sub(old_lamports, Relaxed);
+        self.store_account(old_address, new_account);
+        self.store_account(new_address, &AccountSharedData::default());
+        self.calculate_and_update_accounts_data_size_delta_off_chain(
+            old_len,
+            new_account.data().len(),
+        );
+    }
+
     /// Use to replace programs by feature activation
     #[allow(dead_code)]
     fn replace_program_account(
@@ -8204,46 +8224,95 @@ impl Bank {
         new_address: &Pubkey,
         datapoint_name: &'static str,
     ) {
-        let program_data_address = |address: &Pubkey| {
-            Pubkey::find_program_address(&[address.as_ref()], &bpf_loader_upgradeable::id()).0
-        };
-        let maybe_replace_program_account =
-            |old_address: &Pubkey, new_address: &Pubkey, is_program: bool| {
-                if let Some(old_account) = self.get_account_with_fixed_root(old_address) {
-                    if let Some(new_account) = self.get_account_with_fixed_root(new_address) {
-                        datapoint_info!(datapoint_name, ("slot", self.slot, i64));
+        // Both program accounts must exist in order to attempt a replacement
+        if let Some(old_account) = self.get_account_with_fixed_root(old_address) {
+            if let Some(new_account) = self.get_account_with_fixed_root(new_address) {
+                // Both exist, so we can proceed with the replacement
+                datapoint_info!(datapoint_name, ("slot", self.slot, i64));
 
-                        // Burn lamports in the old account
-                        self.capitalization
-                            .fetch_sub(old_account.lamports(), Relaxed);
+                // Derive each program's data account address (PDA)
+                let (old_data_address, _) = Pubkey::find_program_address(
+                    &[old_address.as_ref()],
+                    &bpf_loader_upgradeable::id(),
+                );
+                let (new_data_address, _) = Pubkey::find_program_address(
+                    &[new_address.as_ref()],
+                    &bpf_loader_upgradeable::id(),
+                );
 
-                        // Transfer new account to old account
-                        self.store_account(old_address, &new_account);
-
-                        // Clear new account
-                        self.store_account(new_address, &AccountSharedData::default());
-
-                        // Unload a program from the bank's cache
-                        if is_program {
-                            self.loaded_programs_cache
-                                .write()
-                                .unwrap()
-                                .remove_programs([*old_address].into_iter());
-                        }
-
-                        self.calculate_and_update_accounts_data_size_delta_off_chain(
-                            old_account.data().len(),
-                            new_account.data().len(),
+                // If a data account is also provided with this new program
+                // account, then we want to update the existing data account
+                if let Some(new_data_account) = self.get_account_with_fixed_root(&new_data_address)
+                {
+                    // A data account exists for the new program
+                    // Check if the old program account has a data account
+                    if let Some(old_data_account) =
+                        self.get_account_with_fixed_root(&old_data_address)
+                    {
+                        // It does. Replace it with the new data account
+                        self.replace_account(
+                            &old_data_address,
+                            &new_data_address,
+                            Some(&old_data_account),
+                            &new_data_account,
                         );
+                        // The old program account will already house the PDA
+                        // of the data account
+                    } else {
+                        // It does _not_. Create it with the new data account
+                        self.replace_account(
+                            &old_data_address,
+                            &new_data_address,
+                            None,
+                            &new_data_account,
+                        );
+                        // Update the old program account to house the PDA of
+                        // the data account
+                        {
+                            let mut account = Account::from(old_account.clone());
+                            account.data = old_data_address.as_ref().to_vec();
+                            let account_shared_data = AccountSharedData::from(account);
+                            self.store_account(old_address, &account_shared_data);
+                        }
                     }
+                    // We only swapped the data accounts, so now we need to
+                    // clear the new program account
+                    self.capitalization
+                        .fetch_sub(new_account.lamports(), Relaxed);
+                    self.store_account(new_address, &AccountSharedData::default());
+                } else if let Some(old_data_account) =
+                    self.get_account_with_fixed_root(&old_data_address)
+                {
+                    // A data account exists for the old program, but not the
+                    // new program
+                    // Swap program accounts and delete the old data account
+                    self.replace_account(
+                        old_address,
+                        new_address,
+                        Some(&old_account),
+                        &new_account,
+                    );
+                    self.capitalization
+                        .fetch_sub(old_data_account.lamports(), Relaxed);
+                    self.store_account(&old_data_address, &AccountSharedData::default());
+                } else {
+                    // A data account does not exist for the new program
+                    // Swap program accounts only
+                    self.replace_account(
+                        old_address,
+                        new_address,
+                        Some(&old_account),
+                        &new_account,
+                    );
                 }
-            };
-        maybe_replace_program_account(
-            &program_data_address(old_address),
-            &program_data_address(new_address),
-            false, /* is_program */
-        );
-        maybe_replace_program_account(old_address, new_address, true /* is_program */);
+
+                // Unload a program from the bank's cache
+                self.loaded_programs_cache
+                    .write()
+                    .unwrap()
+                    .remove_programs([*old_address].into_iter());
+            }
+        }
     }
 
     /// Get all the accounts for this bank and calculate stats
