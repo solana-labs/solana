@@ -22,6 +22,7 @@ solana-core = { workspace = true }
 solana-entry = { workspace = true }
 solana-gossip = { workspace = true }
 solana-ledger = { workspace = true }
+solana-logger = { workspace = true }
 solana-pubsub-client = { workspace = true }
 solana-rpc-client = { workspace = true }
 solana-rpc-client-api = { workspace = true }
@@ -33,6 +34,7 @@ solana-thin-client = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-turbine = { workspace = true }
 solana-vote-program = { workspace = true }
+static_assertions = { workspace = true }
 tempfile = { workspace = true }
 trees = { workspace = true }
 
@@ -43,7 +45,6 @@ gag = { workspace = true }
 serial_test = { workspace = true }
 solana-download-utils = { workspace = true }
 solana-ledger = { workspace = true, features = ["dev-context-only-utils"] }
-solana-logger = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
