@@ -53,4 +53,22 @@ _ ci/check-channel-version.sh
 _ ci/nits.sh
 _ ci/check-ssh-keys.sh
 
+scripts/increment-cargo-version.sh check
+
+if ! [ -v SOLANA_CI_ALLOW_STALE_CARGO_LOCK ] ; then
+# Disallow uncommitted Cargo.lock changes
+(
+  _ scripts/cargo-for-all-lock-files.sh tree >/dev/null
+  set +e
+  if ! _ git diff --exit-code; then
+    cat <<EOF 1>&2
+
+Error: Uncommitted Cargo.lock changes.
+Run './scripts/cargo-for-all-lock-files.sh tree' and commit the result.
+EOF
+    exit 1
+  fi
+)
+fi
+
 echo --- ok
