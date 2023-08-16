@@ -41,7 +41,6 @@ stop() {
         kubectl delete ns "$namespace"
     else 
         echo "Namespace $namespace doesn't exist"
-        exit 1
     fi
 }
 
@@ -49,13 +48,31 @@ deploy() {
     echo "Creating Namespace $namespace..."
     kubectl create ns "$namespace" 
 
-    deployBootstrapValidatorPod
+    echo "Deploying bootstrap deployment/service"
+    deployBootstrapValidatorDeployments
+
+    echo "Deploying validator deployments/services"
+    deployValidatorDeployments
 }
 
-deployBootstrapValidatorPod() {
-    kubectl apply -f "$here/k8s-cluster/deployments/bootstrap-validator.yaml"
+deployBootstrapValidatorDeployments() {
+    kubectl apply -f "$here/k8s-cluster/deployments/bootstrap-validator.yaml" --namespace=$namespace
     
+    ATTEMPTS=0
+    ROLLOUT_STATUS_COMMAND="kubectl rollout status deployment/solana-bootstrap-validator-deployment -n $namespace"
+    until $ROLLOUT_STATUS_COMMAND || [ $ATTEMPTS -eq 10 ]; do
+        $ROLLOUT_STATUS_COMMAND
+        ATTEMPTS=$((attempts + 1))
+        sleep 2
+    done
 }
+
+deployValidatorDeployments() {
+    
+
+}
+
+
 
 
 
