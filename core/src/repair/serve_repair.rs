@@ -101,9 +101,9 @@ pub enum ShredRepairType {
 impl ShredRepairType {
     pub fn slot(&self) -> Slot {
         match self {
-            ShredRepairType::Orphan(slot) => *slot,
-            ShredRepairType::HighestShred(slot, _) => *slot,
-            ShredRepairType::Shred(slot, _) => *slot,
+            ShredRepairType::Orphan(slot)
+            | ShredRepairType::HighestShred(slot, _)
+            | ShredRepairType::Shred(slot, _) => *slot,
         }
     }
 }
@@ -112,9 +112,8 @@ impl RequestResponse for ShredRepairType {
     type Response = Shred;
     fn num_expected_responses(&self) -> u32 {
         match self {
-            ShredRepairType::Orphan(_) => (MAX_ORPHAN_REPAIR_RESPONSES) as u32,
-            ShredRepairType::HighestShred(_, _) => 1,
-            ShredRepairType::Shred(_, _) => 1,
+            ShredRepairType::Orphan(_) => MAX_ORPHAN_REPAIR_RESPONSES as u32,
+            ShredRepairType::Shred(_, _) | ShredRepairType::HighestShred(_, _) => 1,
         }
     }
     fn verify_response(&self, response_shred: &Shred) -> bool {
@@ -307,18 +306,17 @@ impl RepairProtocol {
     fn max_response_packets(&self) -> usize {
         match self {
             RepairProtocol::WindowIndex { .. }
-            | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
             | RepairProtocol::HighestWindowIndex { .. }
-            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
-            | RepairProtocol::AncestorHashes { .. }
-            | RepairProtocol::LegacyAncestorHashes(_, _, _) => 1,
-            RepairProtocol::Orphan { .. } | RepairProtocol::LegacyOrphanWithNonce(_, _, _) => {
-                MAX_ORPHAN_REPAIR_RESPONSES
-            }
+            | RepairProtocol::AncestorHashes { .. } => 1,
+            RepairProtocol::Orphan { .. } => MAX_ORPHAN_REPAIR_RESPONSES,
             RepairProtocol::Pong(_) => 0, // no response
             RepairProtocol::LegacyWindowIndex(_, _, _)
             | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
-            | RepairProtocol::LegacyOrphan(_, _) => 0, // unsupported
+            | RepairProtocol::LegacyOrphan(_, _)
+            | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
+            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
+            | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
+            | RepairProtocol::LegacyAncestorHashes(_, _, _) => 0, // unsupported
         }
     }
 
@@ -2295,9 +2293,9 @@ mod tests {
         let repair = ShredRepairType::Orphan(9);
         // Ensure new options are addded to this test
         match repair {
-            ShredRepairType::Orphan(_) => (),
-            ShredRepairType::HighestShred(_, _) => (),
-            ShredRepairType::Shred(_, _) => (),
+            ShredRepairType::Orphan(_)
+            | ShredRepairType::HighestShred(_, _)
+            | ShredRepairType::Shred(_, _) => (),
         };
 
         let slot = 9;
