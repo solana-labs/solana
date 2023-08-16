@@ -877,20 +877,24 @@ mod tests {
             .collect()
     }
 
-    #[test]
-    fn test_bank_forks_with_set_root() {
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new_for_tests(&genesis_config);
-        let mut bank_forks = BankForks::new(bank);
-
-        let parent_child_slot_pairs = vec![(0, 1), (1, 2), (0, 3), (3, 4)];
-        for (parent, child) in parent_child_slot_pairs.iter() {
+    fn extend_bank_forks(bank_forks: &mut BankForks, parent_child_pairs: &[(Slot, Slot)]) {
+        for (parent, child) in parent_child_pairs.iter() {
             bank_forks.insert(Bank::new_from_parent(
                 &bank_forks[*parent],
                 &Pubkey::default(),
                 *child,
             ));
         }
+    }
+
+    #[test]
+    fn test_bank_forks_with_set_root() {
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new_for_tests(&genesis_config);
+        let mut bank_forks = BankForks::new(bank);
+
+        let parent_child_pairs = vec![(0, 1), (1, 2), (0, 3), (3, 4)];
+        extend_bank_forks(&mut bank_forks, &parent_child_pairs);
 
         assert_eq!(
             bank_forks.ancestors(),
@@ -924,8 +928,8 @@ mod tests {
             make_hash_map(vec![(0, vec![2]), (1, vec![2]), (2, vec![]),])
         );
 
-        bank_forks.insert(Bank::new_from_parent(&bank_forks[2], &Pubkey::default(), 5));
-        bank_forks.insert(Bank::new_from_parent(&bank_forks[5], &Pubkey::default(), 6));
+        let parent_child_pairs = vec![(2, 5), (5, 6)];
+        extend_bank_forks(&mut bank_forks, &parent_child_pairs);
         assert_eq!(
             bank_forks.ancestors(),
             make_hash_map(vec![(2, vec![]), (5, vec![2]), (6, vec![2, 5])])
@@ -949,14 +953,8 @@ mod tests {
         assert_eq!(bank.slot(), 0);
         let mut bank_forks = BankForks::new(bank);
 
-        let parent_child_slot_pairs = vec![(0, 1), (1, 2), (0, 3), (3, 4)];
-        for (parent, child) in parent_child_slot_pairs.iter() {
-            bank_forks.insert(Bank::new_from_parent(
-                &bank_forks[*parent],
-                &Pubkey::default(),
-                *child,
-            ));
-        }
+        let parent_child_pairs = vec![(0, 1), (1, 2), (0, 3), (3, 4)];
+        extend_bank_forks(&mut bank_forks, &parent_child_pairs);
 
         assert_eq!(
             bank_forks.ancestors(),
@@ -993,8 +991,8 @@ mod tests {
             make_hash_map(vec![(0, vec![1, 2]), (1, vec![2]), (2, vec![]),])
         );
 
-        bank_forks.insert(Bank::new_from_parent(&bank_forks[2], &Pubkey::default(), 5));
-        bank_forks.insert(Bank::new_from_parent(&bank_forks[5], &Pubkey::default(), 6));
+        let parent_child_pairs = vec![(2, 5), (5, 6)];
+        extend_bank_forks(&mut bank_forks, &parent_child_pairs);
         assert_eq!(
             bank_forks.ancestors(),
             make_hash_map(vec![
@@ -1022,7 +1020,7 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
 
-        let parent_child_slot_pairs = vec![
+        let parent_child_pairs = vec![
             (0, 1),
             (1, 3),
             (3, 8),
@@ -1033,13 +1031,8 @@ mod tests {
             (4, 6),
             (6, 12),
         ];
-        for (parent, child) in parent_child_slot_pairs.iter() {
-            bank_forks.insert(Bank::new_from_parent(
-                &bank_forks[*parent],
-                &Pubkey::default(),
-                *child,
-            ));
-        }
+        extend_bank_forks(&mut bank_forks, &parent_child_pairs);
+
         // Fork graph created for the test
         //                   0
         //                 /   \
