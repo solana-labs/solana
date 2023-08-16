@@ -21,7 +21,7 @@ metadata:
   labels:
     app.kubernetes.io/name: solana-validator
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: solana-validator
@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
         - name: solana-validator
-          image: gregcusack/solana-validator:latest
+          image: ubuntu:latest
           env:
             - name: NAMESPACE
               valueFrom:
@@ -44,5 +44,6 @@ spec:
               value: "solana-bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001"
             - name: BOOTSTRAP_FAUCET_PORT
               value: "solana-bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900"
-          command: ["/workspace/start-validator.sh"]
+          command: ["/bin/sleep", "3650d"]
+          imagePullPolicy: IfNotPresent
       restartPolicy: Always

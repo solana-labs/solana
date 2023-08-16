@@ -34,7 +34,7 @@ spec:
     spec:
       containers:
       - name: solana-bootstrap-validator
-        image: ubuntu:20.04
+        image: ubuntu:latest
         env:
           - name: MY_POD_IP
             valueFrom:
