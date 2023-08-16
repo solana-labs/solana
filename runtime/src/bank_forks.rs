@@ -230,6 +230,17 @@ impl BankForks {
         self.banks.values().map(|bank| bank.slot()).max().unwrap()
     }
 
+    pub fn highest_frozen_bank(&self) -> Arc<Bank> {
+        let highest_frozen_slot = self
+            .banks
+            .values()
+            .filter(|bank| bank.is_frozen())
+            .map(|bank| bank.slot())
+            .max()
+            .unwrap();
+        self[highest_frozen_slot].clone()
+    }
+
     pub fn working_bank(&self) -> Arc<Bank> {
         self[self.highest_slot()].clone()
     }
@@ -239,6 +250,7 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_super_majority_root: Option<Slot>,
+        write_incremental_snapshot: bool,
     ) -> (Vec<Arc<Bank>>, SetRootMetrics) {
         let old_epoch = self.root_bank().epoch();
         // To support `RootBankCache` (via `ReadOnlyAtomicSlot`) accessing `root` *without* locking
@@ -330,10 +342,15 @@ impl BankForks {
         // part of the same set of `banks` in a single `set_root()` invocation.  While (very)
         // unlikely for a validator with default snapshot intervals (and accounts hash verifier
         // intervals), it *is* possible, and there are tests to exercise this possibility.
-        if let Some(bank) = banks.iter().find(|bank| {
-            bank.slot() > self.last_accounts_hash_slot
-                && bank.block_height() % self.accounts_hash_interval_slots == 0
-        }) {
+        let bank_for_snapshot = if write_incremental_snapshot {
+            Some(&root_bank)
+        } else {
+            banks.iter().find(|bank| {
+                bank.slot() > self.last_accounts_hash_slot
+                    && bank.block_height() % self.accounts_hash_interval_slots == 0
+            })
+        };
+        if let Some(bank) = bank_for_snapshot {
             let bank_slot = bank.slot();
             self.last_accounts_hash_slot = bank_slot;
             squash_timing += bank.squash();
@@ -409,6 +426,7 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_super_majority_root: Option<Slot>,
+        write_incremental_snapshot: bool,
     ) -> Vec<Arc<Bank>> {
         let program_cache_prune_start = Instant::now();
         let root_bank = self
@@ -425,6 +443,7 @@ impl BankForks {
             root,
             accounts_background_request_sender,
             highest_super_majority_root,
+            write_incremental_snapshot,
         );
         datapoint_info!(
             "bank-forks_set_root",
@@ -821,7 +840,7 @@ mod tests {
 
         let bank0 = Bank::new_for_tests(&genesis_config);
         let mut bank_forks0 = BankForks::new(bank0);
-        bank_forks0.set_root(0, &abs_request_sender, None);
+        bank_forks0.set_root(0, &abs_request_sender, None, false);
 
         let bank1 = Bank::new_for_tests(&genesis_config);
         let mut bank_forks1 = BankForks::new(bank1);
@@ -855,7 +874,7 @@ mod tests {
 
             // Set root in bank_forks0 to truncate the ancestor history
             bank_forks0.insert(child1);
-            bank_forks0.set_root(slot, &abs_request_sender, None);
+            bank_forks0.set_root(slot, &abs_request_sender, None, false);
 
             // Don't set root in bank_forks1 to keep the ancestor history
             bank_forks1.insert(child2);
@@ -923,6 +942,7 @@ mod tests {
             2,
             &AbsRequestSender::default(),
             None, // highest confirmed root
+            false,
         );
         bank_forks[2].squash();
         assert_eq!(bank_forks.ancestors(), make_hash_map(vec![(2, vec![]),]));
@@ -983,6 +1003,7 @@ mod tests {
             2,
             &AbsRequestSender::default(),
             Some(1), // highest confirmed root
+            false,
         );
         bank_forks[2].squash();
         assert_eq!(
@@ -1073,6 +1094,7 @@ mod tests {
             2,
             &AbsRequestSender::default(),
             Some(1), // highest confirmed root
+            false,
         );
         assert_matches!(bank_forks.relationship(1, 2), BlockRelation::Unknown);
         assert_matches!(bank_forks.relationship(2, 0), BlockRelation::Unknown);

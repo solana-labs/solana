@@ -1374,6 +1374,18 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .possible_values(BlockProductionMethod::cli_names())
                 .help(BlockProductionMethod::cli_message())
         )
+        .arg(
+            Arg::with_name("wen_restart")
+                .long("wen-restart")
+                .takes_value(false)
+                .help(
+                    "When specified, make validator enter Wen Restart, where it doesn't
+                    vote, create new blocks, or transmit new blocks. The only thing it
+                    does is Gossip last vote information with other validators in Wen
+                    Restart and figure out whether consensus can be reached to proceed
+                    into a cluster restart.
+                ")
+        )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
         .subcommand(

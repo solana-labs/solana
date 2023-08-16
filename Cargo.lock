@@ -5787,6 +5787,7 @@ dependencies = [
  "solana-turbine",
  "solana-version",
  "solana-vote-program",
+ "solana-wen-restart",
  "static_assertions",
  "strum",
  "strum_macros",
@@ -7449,6 +7450,42 @@ dependencies = [
  "solana-rpc-client-api",
  "solana-sdk",
  "solana-version",
+]
+
+[[package]]
+name = "solana-wen-restart"
+version = "1.17.0"
+dependencies = [
+ "bincode",
+ "bv",
+ "clap 2.33.3",
+ "crossbeam-channel",
+ "flate2",
+ "indexmap 2.0.0",
+ "itertools",
+ "log",
+ "lru",
+ "matches",
+ "num-traits",
+ "num_cpus",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
+ "rayon",
+ "regex",
+ "rustc_version 0.4.0",
+ "serde",
+ "serde_bytes",
+ "serde_derive",
+ "serial_test",
+ "solana-gossip",
+ "solana-ledger",
+ "solana-logger",
+ "solana-program",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-vote-program",
+ "static_assertions",
+ "thiserror",
 ]
 
 [[package]]

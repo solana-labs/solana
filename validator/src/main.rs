@@ -1398,6 +1398,7 @@ pub fn main() {
             use_snapshot_archives_at_startup::cli::NAME,
             UseSnapshotArchivesAtStartup
         ),
+        wen_restart: matches.is_present("wen_restart"),
         ..ValidatorConfig::default()
     };
 

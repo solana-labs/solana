@@ -1577,6 +1577,7 @@ fn load_frozen_forks(
                     root,
                     accounts_background_request_sender,
                     None,
+                    false,
                 );
                 m.stop();
                 set_root_us += m.as_us();
@@ -3610,6 +3611,7 @@ pub mod tests {
             1,
             &solana_runtime::accounts_background_service::AbsRequestSender::default(),
             None,
+            false,
         );
 
         let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank1);

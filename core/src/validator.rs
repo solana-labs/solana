@@ -101,7 +101,8 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
-            self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
+            self, clean_orphaned_account_snapshot_dirs, get_incremental_snapshot_archives,
+            move_and_async_delete_path_contents,
         },
     },
     solana_sdk::{
@@ -119,6 +120,7 @@ use {
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     solana_turbine::{self, broadcast_stage::BroadcastStageType},
     solana_vote_program::vote_state,
+    solana_wen_restart::wen_restart::wen_restart,
     std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
@@ -258,6 +260,7 @@ pub struct ValidatorConfig {
     pub block_production_method: BlockProductionMethod,
     pub generator_config: Option<GeneratorConfig>,
     pub use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup,
+    pub wen_restart: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -325,6 +328,7 @@ impl Default for ValidatorConfig {
             block_production_method: BlockProductionMethod::default(),
             generator_config: None,
             use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup::default(),
+            wen_restart: false,
         }
     }
 }
@@ -1072,9 +1076,29 @@ impl Validator {
         let ledger_metric_report_service =
             LedgerMetricReportService::new(blockstore.clone(), exit.clone());
 
-        let wait_for_vote_to_start_leader =
-            !waited_for_supermajority && !config.no_wait_for_vote_to_start_leader;
+        let wait_for_vote_to_start_leader = !waited_for_supermajority
+            && !config.no_wait_for_vote_to_start_leader
+            && !config.wen_restart;
 
+        let tower = process_blockstore.process_to_create_tower()?;
+        let last_vote = tower.last_vote();
+        // TVU shred version should be the old one before wen_restart, otherwise repair results
+        // from before the restart will be rejected.
+        let tvu_shred_version = Arc::new(RwLock::new(node.info.shred_version()));
+        if config.wen_restart {
+            config.turbine_disabled.swap(true, Ordering::Relaxed);
+            node.info
+                .set_shred_version((node.info.shred_version() + 1) % 0xffff);
+            assert!(
+                !last_vote.is_empty(),
+                "wen_restart needs to know the last vote"
+            );
+            warn!(
+                "wen_restart configured, turbine disabled, last_vote {:?}, shred_version now {}",
+                last_vote.slots(),
+                node.info.shred_version()
+            );
+        }
         let poh_service = PohService::new(
             poh_recorder.clone(),
             &genesis_config.poh_config,
@@ -1157,6 +1181,9 @@ impl Validator {
         .unwrap();
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
+        let (restart_slots_to_repair_sender, restart_slots_to_repair_receiver) =
+            crossbeam_channel::unbounded::<Vec<Slot>>();
+        let in_wen_restart = Arc::new(AtomicBool::new(config.wen_restart));
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -1172,7 +1199,7 @@ impl Validator {
             ledger_signal_receiver,
             &rpc_subscriptions,
             &poh_recorder,
-            Some(process_blockstore),
+            tower,
             config.tower_storage.clone(),
             &leader_schedule_cache,
             exit.clone(),
@@ -1192,7 +1219,7 @@ impl Validator {
             cluster_confirmed_slot_receiver,
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
-                shred_version: node.info.shred_version(),
+                shred_version: tvu_shred_version.clone(),
                 repair_validators: config.repair_validators.clone(),
                 repair_whitelist: config.repair_whitelist.clone(),
                 wait_for_vote_to_start_leader,
@@ -1201,14 +1228,70 @@ impl Validator {
             &max_slots,
             block_metadata_notifier,
             config.wait_to_vote_slot,
-            accounts_background_request_sender,
+            accounts_background_request_sender.clone(),
             config.runtime_config.log_messages_bytes_limit,
             &connection_cache,
             &prioritization_fee_cache,
             banking_tracer.clone(),
             turbine_quic_endpoint_sender.clone(),
             turbine_quic_endpoint_receiver,
+            restart_slots_to_repair_receiver,
+            in_wen_restart.clone(),
         )?;
+
+                // repair and restart don't need to produce new blocks but it does need
+        // repair and replay, just not voting. So we need TVU, but not TPU.
+        if config.wen_restart {
+            info!("Waiting for wen_restart to finish");
+            match wen_restart(
+                last_vote,
+                blockstore.clone(),
+                cluster_info.clone(),
+                bank_forks.clone(),
+                restart_slots_to_repair_sender,
+            ) {
+                Ok(new_root_slot) => {
+                    info!(
+                        "wen_restart set_root and generate snapshot {}",
+                        new_root_slot
+                    );
+                    bank_forks.write().unwrap().set_root(
+                        new_root_slot,
+                        &accounts_background_request_sender,
+                        None,
+                        true,
+                    );
+                    let working_bank = bank_forks.read().unwrap().working_bank();
+                    working_bank.register_hard_fork(new_root_slot);
+                    loop {
+                        if get_incremental_snapshot_archives(&config.snapshot_config.incremental_snapshot_archives_dir)
+                            .iter()
+                            .any(|archive_info| archive_info.slot() == new_root_slot)
+                        {
+                            info!("wen_restart snapshot generated {}", new_root_slot);
+                            break;
+                        }
+                        sleep(Duration::from_millis(100));
+                    }
+                    config.turbine_disabled.swap(false, Ordering::Relaxed);
+                    let new_shred_version = compute_shred_version(
+                        &genesis_config.hash(),
+                        Some(&working_bank.hard_forks()),
+                    );
+                    *tvu_shred_version.write().unwrap() = new_shred_version;
+                    cluster_info
+                        .my_contact_info()
+                        .set_shred_version(new_shred_version);
+                    info!(
+                        "wen_restart finished, shred_version now {}",
+                        new_shred_version
+                    );
+                    in_wen_restart.swap(false, Ordering::Relaxed);
+                    ()
+                }
+                Err(e) => return Err(format!("wait_for_wen_restart failed: {e:?}")),
+            };
+        }
 
         let tpu = Tpu::new(
             &cluster_info,
@@ -1931,6 +2014,7 @@ fn maybe_warp_slot(
             warp_slot,
             accounts_background_request_sender,
             Some(warp_slot),
+            false,
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
 

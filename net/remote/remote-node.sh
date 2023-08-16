@@ -30,6 +30,7 @@ extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
 disableQuic="${23}"
 enableUdp="${24}"
+wenRestart="${25}"
 
 set +x
 
@@ -290,6 +291,10 @@ EOF
 
     if $enableUdp; then
       args+=(--tpu-enable-udp)
+    fi
+
+    if $wenRestart; then
+      args+=(--wen-restart)
     fi
 
     if [[ $airdropsEnabled = true ]]; then

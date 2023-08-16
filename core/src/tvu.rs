@@ -12,6 +12,7 @@ use {
         cluster_slots_service::{cluster_slots::ClusterSlots, ClusterSlotsService},
         completed_data_sets_service::CompletedDataSetsSender,
         consensus::tower_storage::TowerStorage,
+        consensus::Tower,
         cost_update_service::CostUpdateService,
         drop_bank_service::DropBankService,
         ledger_cleanup_service::LedgerCleanupService,
@@ -19,7 +20,6 @@ use {
         replay_stage::{ReplayStage, ReplayStageConfig},
         rewards_recorder_service::RewardsRecorderSender,
         shred_fetch_stage::ShredFetchStage,
-        validator::ProcessBlockStore,
         voting_service::VotingService,
         warm_quic_cache_service::WarmQuicCacheService,
         window_service::WindowService,
@@ -48,6 +48,7 @@ use {
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
     solana_turbine::retransmit_stage::RetransmitStage,
+    solana_wen_restart::wen_restart::RestartSlotsToRepairReceiver,
     std::{
         collections::HashSet,
         net::{SocketAddr, UdpSocket},
@@ -82,7 +83,7 @@ pub struct TvuSockets {
 #[derive(Default)]
 pub struct TvuConfig {
     pub max_ledger_shreds: Option<u64>,
-    pub shred_version: u16,
+    pub shred_version: Arc<RwLock<u16>>,
     // Validators from which repairs are requested
     pub repair_validators: Option<HashSet<Pubkey>>,
     // Validators which should be given priority when serving repairs
@@ -109,7 +110,7 @@ impl Tvu {
         ledger_signal_receiver: Receiver<bool>,
         rpc_subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        maybe_process_block_store: Option<ProcessBlockStore>,
+        prev_tower: Tower,
         tower_storage: Arc<dyn TowerStorage>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: Arc<AtomicBool>,
@@ -138,6 +139,8 @@ impl Tvu {
         banking_tracer: Arc<BankingTracer>,
         turbine_quic_endpoint_sender: AsyncSender<(SocketAddr, Bytes)>,
         turbine_quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
+        wen_restart_repair_receiver: RestartSlotsToRepairReceiver,
+        in_wen_restart: Arc<AtomicBool>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
@@ -202,6 +205,8 @@ impl Tvu {
                 repair_whitelist: tvu_config.repair_whitelist,
                 cluster_info: cluster_info.clone(),
                 cluster_slots: cluster_slots.clone(),
+                wen_restart_repair_receiver,
+                in_wen_restart: in_wen_restart.clone(),
             };
             WindowService::new(
                 blockstore.clone(),
@@ -286,7 +291,7 @@ impl Tvu {
             ledger_signal_receiver,
             duplicate_slots_receiver,
             poh_recorder.clone(),
-            maybe_process_block_store,
+            prev_tower,
             vote_tracker,
             cluster_slots,
             retransmit_slots_sender,
@@ -304,6 +309,7 @@ impl Tvu {
             dumped_slots_sender,
             banking_tracer,
             popular_pruned_forks_receiver,
+            in_wen_restart,
         )?;
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -484,6 +490,7 @@ pub mod tests {
             BankingTracer::new_disabled(),
             turbine_quic_endpoint_sender,
             turbine_quic_endpoint_receiver,
+            false,
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);

@@ -1134,7 +1134,7 @@ impl ProgramTestContext {
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
         let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
 
-        bank_forks.set_root(pre_warp_slot, &abs_request_sender, Some(pre_warp_slot));
+        bank_forks.set_root(pre_warp_slot, &abs_request_sender, Some(pre_warp_slot), false);
 
         // The call to `set_root()` above will send an EAH request.  Need to intercept and handle
         // all EpochAccountsHash requests so future rooted banks do not hang in Bank::freeze()
@@ -1192,6 +1192,7 @@ impl ProgramTestContext {
             pre_warp_slot,
             &solana_runtime::accounts_background_service::AbsRequestSender::default(),
             Some(pre_warp_slot),
+            false,
         );
 
         // warp_bank is frozen so go forward to get unfrozen bank at warp_slot

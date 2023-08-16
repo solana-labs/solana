@@ -38,6 +38,9 @@ pub const MAX_VOTES: VoteIndex = 32;
 
 pub type EpochSlotsIndex = u8;
 pub const MAX_EPOCH_SLOTS: EpochSlotsIndex = 255;
+// We now keep 81000 slots, 81000/MAX_SLOTS_PER_ENTRY = 5.
+pub const MAX_RESTART_LAST_VOTED_FORK_SLOTS: EpochSlotsIndex = 5;
+pub const MAX_PERCENT: u16 = 10000;
 
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
@@ -94,6 +97,8 @@ pub enum CrdsData {
     DuplicateShred(DuplicateShredIndex, DuplicateShred),
     SnapshotHashes(SnapshotHashes),
     ContactInfo(ContactInfo),
+    RestartLastVotedForkSlots(EpochSlotsIndex, EpochSlots, Slot, Hash),
+    RestartHeaviestFork(Slot, Hash, Percent),
 }
 
 impl Sanitize for CrdsData {
@@ -132,6 +137,18 @@ impl Sanitize for CrdsData {
             }
             CrdsData::SnapshotHashes(val) => val.sanitize(),
             CrdsData::ContactInfo(node) => node.sanitize(),
+            CrdsData::RestartLastVotedForkSlots(ix, slots, _last_vote_slot, last_vote_hash) => {
+                if *ix as usize >= MAX_RESTART_LAST_VOTED_FORK_SLOTS as usize {
+                    return Err(SanitizeError::ValueOutOfBounds);
+                }
+                slots.sanitize().and(last_vote_hash.sanitize())
+            },
+            CrdsData::RestartHeaviestFork(_slot, hash, percent) => {
+                if percent.percent > MAX_PERCENT {
+                    return Err(SanitizeError::ValueOutOfBounds);
+                }
+                hash.sanitize()
+            },
         }
     }
 }
@@ -145,7 +162,7 @@ pub(crate) fn new_rand_timestamp<R: Rng>(rng: &mut R) -> u64 {
 impl CrdsData {
     /// New random CrdsData for tests and benchmarks.
     fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> CrdsData {
-        let kind = rng.gen_range(0..7);
+        let kind = rng.gen_range(0, 9);
         // TODO: Implement other kinds of CrdsData here.
         // TODO: Assign ranges to each arm proportional to their frequency in
         // the mainnet crds table.
@@ -156,9 +173,16 @@ impl CrdsData {
             2 => CrdsData::LegacySnapshotHashes(LegacySnapshotHashes::new_rand(rng, pubkey)),
             3 => CrdsData::AccountsHashes(AccountsHashes::new_rand(rng, pubkey)),
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
-            5 => CrdsData::Vote(rng.gen_range(0..MAX_VOTES), Vote::new_rand(rng, pubkey)),
+            5 => CrdsData::Vote(rng.gen_range(0, MAX_VOTES), Vote::new_rand(rng, pubkey)),
+            6 => CrdsData::RestartLastVotedForkSlots(
+                rng.gen_range(0, MAX_EPOCH_SLOTS),
+                EpochSlots::new_rand(rng, pubkey),
+                0,
+                Hash::default(),
+            ),
+            7 => CrdsData::RestartHeaviestFork(0, Hash::default(), Percent::new(pubkey.unwrap(), 1)),
             _ => CrdsData::EpochSlots(
-                rng.gen_range(0..MAX_EPOCH_SLOTS),
+                rng.gen_range(0, MAX_RESTART_LAST_VOTED_FORK_SLOTS),
                 EpochSlots::new_rand(rng, pubkey),
             ),
         }
@@ -485,6 +509,33 @@ impl Sanitize for NodeInstance {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
+pub struct Percent {
+    pub from: Pubkey,
+    pub(crate) percent: u16,
+    pub(crate) wallclock: u64,
+}
+
+impl Percent {
+    pub fn new(from: Pubkey, percent: u16) -> Self {
+        Self {
+            from,
+            percent,
+            wallclock: timestamp(),
+        }
+    }
+}
+
+impl Sanitize for Percent {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        sanitize_wallclock(self.wallclock)?;
+        if self.percent > MAX_PERCENT {
+            return Err(SanitizeError::ValueOutOfBounds);
+        }
+        self.from.sanitize()
+    }
+}
+
 /// Type of the replicated value
 /// These are labels for values in a record that is associated with `Pubkey`
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]
@@ -501,6 +552,8 @@ pub enum CrdsValueLabel {
     DuplicateShred(DuplicateShredIndex, Pubkey),
     SnapshotHashes(Pubkey),
     ContactInfo(Pubkey),
+    RestartLastVotedForkSlots(EpochSlotsIndex, Pubkey),
+    RestartHeaviestFork(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -524,6 +577,10 @@ impl fmt::Display for CrdsValueLabel {
                 write!(f, "SnapshotHashes({})", self.pubkey())
             }
             CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
+            CrdsValueLabel::RestartLastVotedForkSlots(ix, _) => {
+                write!(f, "RestartLastVotedForkSlots({}, {})", ix, self.pubkey())
+            }
+            CrdsValueLabel::RestartHeaviestFork(_) => write!(f, "RestartHeaviestFork({})", self.pubkey()),
         }
     }
 }
@@ -543,6 +600,8 @@ impl CrdsValueLabel {
             CrdsValueLabel::DuplicateShred(_, p) => *p,
             CrdsValueLabel::SnapshotHashes(p) => *p,
             CrdsValueLabel::ContactInfo(pubkey) => *pubkey,
+            CrdsValueLabel::RestartLastVotedForkSlots(_, p) => *p,
+            CrdsValueLabel::RestartHeaviestFork(p) => *p,
         }
     }
 }
@@ -593,6 +652,8 @@ impl CrdsValue {
             CrdsData::DuplicateShred(_, shred) => shred.wallclock,
             CrdsData::SnapshotHashes(hash) => hash.wallclock,
             CrdsData::ContactInfo(node) => node.wallclock(),
+            CrdsData::RestartLastVotedForkSlots(_, slots, _, _) => slots.wallclock,
+            CrdsData::RestartHeaviestFork(_, _, percent) => percent.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -609,6 +670,8 @@ impl CrdsValue {
             CrdsData::DuplicateShred(_, shred) => shred.from,
             CrdsData::SnapshotHashes(hash) => hash.from,
             CrdsData::ContactInfo(node) => *node.pubkey(),
+            CrdsData::RestartLastVotedForkSlots(_, slots, _, _) => slots.from,
+            CrdsData::RestartHeaviestFork(_, _, percent) => percent.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -627,6 +690,10 @@ impl CrdsValue {
             CrdsData::DuplicateShred(ix, shred) => CrdsValueLabel::DuplicateShred(*ix, shred.from),
             CrdsData::SnapshotHashes(_) => CrdsValueLabel::SnapshotHashes(self.pubkey()),
             CrdsData::ContactInfo(node) => CrdsValueLabel::ContactInfo(*node.pubkey()),
+            CrdsData::RestartLastVotedForkSlots(ix, _, _, _) => {
+                CrdsValueLabel::RestartLastVotedForkSlots(*ix, self.pubkey())
+            }
+            CrdsData::RestartHeaviestFork(_, _, percent) => CrdsValueLabel::RestartHeaviestFork(percent.from),
         }
     }
     pub fn contact_info(&self) -> Option<&LegacyContactInfo> {
@@ -646,6 +713,7 @@ impl CrdsValue {
     pub(crate) fn epoch_slots(&self) -> Option<&EpochSlots> {
         match &self.data {
             CrdsData::EpochSlots(_, slots) => Some(slots),
+            CrdsData::RestartLastVotedForkSlots(_, slots, _, _) => Some(slots),
             _ => None,
         }
     }

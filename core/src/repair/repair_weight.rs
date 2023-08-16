@@ -214,8 +214,19 @@ impl RepairWeight {
         max_closest_completion_repairs: usize,
         repair_timing: &mut RepairTiming,
         stats: &mut BestRepairsStats,
+        slots_to_repair_for_wen_restart: &Option<Vec<Slot>>,
     ) -> Vec<ShredRepairType> {
         let mut repairs = vec![];
+
+        if let Some(my_slots_to_repair) = slots_to_repair_for_wen_restart {
+            info!("wen_restart repairing {:?}", my_slots_to_repair);
+            let repairs = my_slots_to_repair
+                .iter()
+                .map(|slot| ShredRepairType::WenRestart(slot.clone()))
+                .collect();
+            return repairs;
+        }
+
         let mut processed_slots = HashSet::from([self.root]);
         let mut slot_meta_cache = HashMap::default();
 
