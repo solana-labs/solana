@@ -53,6 +53,9 @@ deploy() {
 
     echo "Deploying validator deployments/services"
     deployValidatorDeployments
+
+    echo "installing required libraries..."
+    installRequiredLibraries
 }
 
 deployBootstrapValidatorDeployments() {
@@ -72,9 +75,19 @@ installRequiredLibraries() {
 
     # Loop through each pod and run apt update
     for POD_NAME in $POD_NAMES; do
-        echo "Running apt update in pod: $POD_NAME"
-        kubectl exec -it $POD_NAME -n $namespace -- sh -c "apt update && apt install -y iputils-ping curl vim bzip2"
+        updateAndInstall $POD_NAME &
     done
+
+    wait
+    echo "finished installing libraries"
+}
+
+# TODO: Possible add startup script from gce.sh here
+# it's with name/path: net/config/instance-startup-script.sh
+updateAndInstall() {
+    local pod_name=$1
+    echo "Updating pod: $pod_name"
+    kubectl exec -i $pod_name -n $namespace -- sh -c "apt-get update && apt-get install -y iputils-ping curl vim bzip2"
 }
 
 deployValidatorDeployments() {
