@@ -188,7 +188,7 @@ prepareDeploy() {
 remoteHomeDir() {
   declare deploymentName=$1
   declare remoteHome
-  remoteHome="$(kubectl exec $deploymentName -n $namespace  -- echo \$HOME)"
+  remoteHome="$(kubectl exec $deploymentName -n $namespace  -- echo $HOME)"
   echo "$remoteHome"
 }
 
@@ -196,7 +196,7 @@ startCommon() {
   # declare ipAddress=$1
   declare deploymentName=$1
   declare remoteHome
-  remoteHome=$(remoteHomeDir "$ipAddress")
+  remoteHome=$(remoteHomeDir "$deploymentName")
   local remoteSolanaHome="${remoteHome}/solana"
   local remoteCargoBin="${remoteHome}/.cargo/bin"
   test -d "$SOLANA_ROOT"
