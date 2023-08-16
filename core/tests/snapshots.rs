@@ -378,9 +378,9 @@ fn test_concurrent_snapshot_packaging(
     let mut saved_archive_path = None;
 
     for i in 0..MAX_BANK_SNAPSHOTS_TO_RETAIN + 2 {
-        let parent_slot = i as u64;
+        let parent_slot = i as Slot;
         let bank = Bank::new_from_parent(
-            bank_forks.get(parent_slot).unwrap(),
+            bank_forks[parent_slot].clone(),
             &Pubkey::default(),
             parent_slot + 1,
         );

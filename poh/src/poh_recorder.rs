@@ -1067,14 +1067,15 @@ pub fn create_test_recorder(
         &poh_config,
         exit.clone(),
     );
-    poh_recorder.set_bank(bank.clone(), false);
+    let ticks_per_slot = bank.ticks_per_slot();
 
+    poh_recorder.set_bank(bank, false);
     let poh_recorder = Arc::new(RwLock::new(poh_recorder));
     let poh_service = PohService::new(
         poh_recorder.clone(),
         &poh_config,
         exit.clone(),
-        bank.ticks_per_slot(),
+        ticks_per_slot,
         crate::poh_service::DEFAULT_PINNED_CPU_CORE,
         crate::poh_service::DEFAULT_HASHES_PER_BATCH,
         record_receiver,

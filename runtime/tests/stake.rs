@@ -48,14 +48,13 @@ fn next_epoch_and_n_slots(bank: Arc<Bank>, mut n: usize) -> Arc<Bank> {
 }
 
 fn fill_epoch_with_votes(
-    bank: Arc<Bank>,
+    mut bank: Arc<Bank>,
     vote_keypair: &Keypair,
     mint_keypair: &Keypair,
 ) -> Arc<Bank> {
     let mint_pubkey = mint_keypair.pubkey();
     let vote_pubkey = vote_keypair.pubkey();
     let old_epoch = bank.epoch();
-    let mut bank = bank;
     while bank.epoch() != old_epoch + 1 {
         bank.squash();
         let slot = bank.slot() + 1;
