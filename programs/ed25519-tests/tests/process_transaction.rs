@@ -5,6 +5,7 @@ use {
     solana_sdk::{
         ed25519_instruction::new_ed25519_instruction,
         signature::Signer,
+        signer::keypair::Keypair,
         transaction::{Transaction, TransactionError},
     },
 };
@@ -17,7 +18,7 @@ async fn test_success() {
     let payer = &context.payer;
     let recent_blockhash = context.last_blockhash;
 
-    let privkey = ed25519_dalek::Keypair::generate(&mut thread_rng());
+    let privkey = Keypair::generate(&mut thread_rng());
     let message_arr = b"hello";
     let instruction = new_ed25519_instruction(&privkey, message_arr);
 
@@ -39,7 +40,7 @@ async fn test_failure() {
     let payer = &context.payer;
     let recent_blockhash = context.last_blockhash;
 
-    let privkey = ed25519_dalek::Keypair::generate(&mut thread_rng());
+    let privkey = Keypair::generate(&mut thread_rng());
     let message_arr = b"hello";
     let mut instruction = new_ed25519_instruction(&privkey, message_arr);
 

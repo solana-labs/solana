@@ -5,9 +5,12 @@
 #![cfg(feature = "full")]
 
 use {
-    crate::{feature_set::FeatureSet, instruction::Instruction, precompiles::PrecompileError},
+    crate::{
+        feature_set::FeatureSet, instruction::Instruction, precompiles::PrecompileError,
+        signature::Signature, signer::Signer,
+    },
     bytemuck::{bytes_of, Pod, Zeroable},
-    ed25519_dalek::{ed25519::signature::Signature, Signer, Verifier},
+    solana_program::pubkey::Pubkey,
 };
 
 pub const PUBKEY_SERIALIZED_SIZE: usize = 32;
@@ -29,19 +32,18 @@ pub struct Ed25519SignatureOffsets {
     message_instruction_index: u16,    // index of instruction data to get message data
 }
 
-pub fn new_ed25519_instruction(keypair: &ed25519_dalek::Keypair, message: &[u8]) -> Instruction {
-    new_ed25519_instruction_unchecked(&keypair.public, &keypair.sign(message), message)
-}
+/// Creates an instruction used to verify a ed25519 signature with the native ed25519 program.
+///
+/// If only the Signature and Pubkey are available the Presigner struct implements Signer and can be initialized with only those two
+pub fn new_ed25519_instruction<S>(signer: &S, message: &[u8]) -> Instruction
+where
+    S: Signer,
+{
+    let pubkey = signer.pubkey().to_bytes();
+    let signature = signer.sign_message(message);
 
-pub fn new_ed25519_instruction_unchecked(
-    pubkey: &ed25519_dalek::PublicKey,
-    signature: &ed25519_dalek::Signature,
-    message: &[u8],
-) -> Instruction {
-    let pubkey = pubkey.as_bytes();
-    let signature = signature.as_bytes();
     assert_eq!(pubkey.len(), PUBKEY_SERIALIZED_SIZE);
-    assert_eq!(signature.len(), SIGNATURE_SERIALIZED_SIZE);
+    assert_eq!(signature.as_ref().len(), SIGNATURE_SERIALIZED_SIZE);
 
     let mut instruction_data = Vec::with_capacity(
         DATA_START
@@ -72,11 +74,11 @@ pub fn new_ed25519_instruction_unchecked(
 
     debug_assert_eq!(instruction_data.len(), public_key_offset);
 
-    instruction_data.extend_from_slice(pubkey);
+    instruction_data.extend_from_slice(&pubkey);
 
     debug_assert_eq!(instruction_data.len(), signature_offset);
 
-    instruction_data.extend_from_slice(signature);
+    instruction_data.extend_from_slice(signature.as_ref());
 
     debug_assert_eq!(instruction_data.len(), message_data_offset);
 
@@ -128,7 +130,7 @@ pub fn verify(
         )?;
 
         let signature =
-            Signature::from_bytes(signature).map_err(|_| PrecompileError::InvalidSignature)?;
+            Signature::try_from(signature).map_err(|_| PrecompileError::InvalidSignature)?;
 
         // Parse out pubkey
         let pubkey = get_data_slice(
@@ -139,8 +141,7 @@ pub fn verify(
             PUBKEY_SERIALIZED_SIZE,
         )?;
 
-        let publickey = ed25519_dalek::PublicKey::from_bytes(pubkey)
-            .map_err(|_| PrecompileError::InvalidPublicKey)?;
+        let publickey = Pubkey::try_from(pubkey).map_err(|_| PrecompileError::InvalidPublicKey)?;
 
         // Parse out message
         let message = get_data_slice(
@@ -151,9 +152,9 @@ pub fn verify(
             offsets.message_data_size as usize,
         )?;
 
-        publickey
-            .verify(message, &signature)
-            .map_err(|_| PrecompileError::InvalidSignature)?;
+        if !signature.verify(publickey.as_ref(), message) {
+            return Err(PrecompileError::InvalidSignature);
+        }
     }
     Ok(())
 }
@@ -193,9 +194,9 @@ pub mod test {
             feature_set::FeatureSet,
             hash::Hash,
             signature::{Keypair, Signer},
+            signer::presigner::Presigner,
             transaction::Transaction,
         },
-        ed25519_dalek::Signer as DalekSigner,
         rand::{thread_rng, Rng},
     };
 
@@ -376,9 +377,9 @@ pub mod test {
     fn test_ed25519() {
         solana_logger::setup();
 
-        let privkey = ed25519_dalek::Keypair::generate(&mut thread_rng());
+        let msg_signer = Keypair::generate(&mut thread_rng());
         let message_arr = b"hello";
-        let mut instruction = new_ed25519_instruction(&privkey, message_arr);
+        let mut instruction = new_ed25519_instruction(&msg_signer, message_arr);
         let tx_signer_keypair = Keypair::new();
         let feature_set = FeatureSet::all_enabled();
 
@@ -391,13 +392,16 @@ pub mod test {
     }
 
     #[test]
-    fn test_unchecked_ed25519() {
+    fn test_ed25519_presigner() {
         solana_logger::setup();
 
-        let privkey = ed25519_dalek::Keypair::generate(&mut thread_rng());
+        let msg_signer = Keypair::generate(&mut thread_rng());
         let message_arr = b"hello";
-        let sig = privkey.sign(message_arr);
-        let mut instruction = new_ed25519_instruction_unchecked(&privkey.public, &sig, message_arr);
+        let signature = msg_signer.sign_message(message_arr);
+        let mut instruction = new_ed25519_instruction(
+            &Presigner::new(&msg_signer.pubkey(), &signature),
+            message_arr,
+        );
         let tx_signer_keypair = Keypair::new();
         let feature_set = FeatureSet::all_enabled();
 
