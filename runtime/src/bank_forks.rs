@@ -880,17 +880,16 @@ mod tests {
     #[test]
     fn test_bank_forks_with_set_root() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let mut banks = vec![Arc::new(Bank::new_for_tests(&genesis_config))];
-        assert_eq!(banks[0].slot(), 0);
-        let mut bank_forks = BankForks::new_from_banks(&banks, 0);
+        let bank = Bank::new_for_tests(&genesis_config);
+        let mut bank_forks = BankForks::new(bank);
 
         let parent_child_slot_pairs = vec![(0, 1), (1, 2), (0, 3), (3, 4)];
         for (parent, child) in parent_child_slot_pairs.iter() {
-            banks.push(bank_forks.insert(Bank::new_from_parent(
-                &banks[*parent],
+            bank_forks.insert(Bank::new_from_parent(
+                &bank_forks[*parent],
                 &Pubkey::default(),
                 *child,
-            )));
+            ));
         }
 
         assert_eq!(
@@ -918,14 +917,15 @@ mod tests {
             &AbsRequestSender::default(),
             None, // highest confirmed root
         );
-        banks[2].squash();
+        bank_forks[2].squash();
         assert_eq!(bank_forks.ancestors(), make_hash_map(vec![(2, vec![]),]));
         assert_eq!(
             bank_forks.descendants(),
             make_hash_map(vec![(0, vec![2]), (1, vec![2]), (2, vec![]),])
         );
-        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[2], &Pubkey::default(), 5)));
-        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[5], &Pubkey::default(), 6)));
+
+        bank_forks.insert(Bank::new_from_parent(&bank_forks[2], &Pubkey::default(), 5));
+        bank_forks.insert(Bank::new_from_parent(&bank_forks[5], &Pubkey::default(), 6));
         assert_eq!(
             bank_forks.ancestors(),
             make_hash_map(vec![(2, vec![]), (5, vec![2]), (6, vec![2, 5])])
@@ -945,17 +945,17 @@ mod tests {
     #[test]
     fn test_bank_forks_with_highest_super_majority_root() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let mut banks = vec![Arc::new(Bank::new_for_tests(&genesis_config))];
-        assert_eq!(banks[0].slot(), 0);
-        let mut bank_forks = BankForks::new_from_banks(&banks, 0);
+        let bank = Bank::new_for_tests(&genesis_config);
+        assert_eq!(bank.slot(), 0);
+        let mut bank_forks = BankForks::new(bank);
 
         let parent_child_slot_pairs = vec![(0, 1), (1, 2), (0, 3), (3, 4)];
         for (parent, child) in parent_child_slot_pairs.iter() {
-            banks.push(bank_forks.insert(Bank::new_from_parent(
-                &banks[*parent],
+            bank_forks.insert(Bank::new_from_parent(
+                &bank_forks[*parent],
                 &Pubkey::default(),
                 *child,
-            )));
+            ));
         }
 
         assert_eq!(
@@ -983,7 +983,7 @@ mod tests {
             &AbsRequestSender::default(),
             Some(1), // highest confirmed root
         );
-        banks[2].squash();
+        bank_forks[2].squash();
         assert_eq!(
             bank_forks.ancestors(),
             make_hash_map(vec![(1, vec![]), (2, vec![]),])
@@ -992,8 +992,9 @@ mod tests {
             bank_forks.descendants(),
             make_hash_map(vec![(0, vec![1, 2]), (1, vec![2]), (2, vec![]),])
         );
-        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[2], &Pubkey::default(), 5)));
-        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[5], &Pubkey::default(), 6)));
+
+        bank_forks.insert(Bank::new_from_parent(&bank_forks[2], &Pubkey::default(), 5));
+        bank_forks.insert(Bank::new_from_parent(&bank_forks[5], &Pubkey::default(), 6));
         assert_eq!(
             bank_forks.ancestors(),
             make_hash_map(vec![
