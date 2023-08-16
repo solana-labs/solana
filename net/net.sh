@@ -311,13 +311,11 @@ deployBootstrapValidator() {
 }
 
 startBootstrapLeader() {
-  # declare ipAddress=$1
-  # declare nodeIndex="$2"
-  declare logFile="$1"
-  echo "--- Starting bootstrap validator"
+  declare ipAddress=$1
+  declare nodeIndex="$2"
+  declare logFile="$3"
+  echo "--- Starting bootstrap validator: $ipAddress"
   echo "start log: $logFile"
-
-  
 
   (
     set -x
@@ -626,7 +624,7 @@ deploy() {
 
   # startBootstrapLeader "$nodeAddress" "$nodeIndex" "$netLogDir/bootstrap-validator-$ipAddress.log"
 
-  startBootstrapLeader "$netLogDir/bootstrap-validator.log"
+  startBootstrapLeader "$nodeAddress" "$nodeIndex" "$netLogDir/bootstrap-validator-$ipAddress.log"
 
   declare bootstrapLeader=true
   for nodeAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}"; do
