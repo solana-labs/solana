@@ -30,7 +30,6 @@ impl<P, M, C> TpuClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: Send + Sync,
 {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
@@ -98,9 +97,25 @@ impl TpuClient<QuicPool, QuicConnectionManager, QuicConfig> {
 
 impl<P, M, C> TpuClient<P, M, C>
 where
+    P: ConnectionPool<NewConnectionConfig = C> + Send + Sync + 'static,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C> + Send + Sync + 'static,
+    C: Send + Sync + 'static,
+{
+    pub async fn send_and_confirm_messages_with_spinner<T: Signers + ?Sized>(
+        &self,
+        messages: &[Message],
+        signers: &T,
+    ) -> Result<Vec<Option<TransactionError>>> {
+        self.tpu_client
+            .send_and_confirm_messages_with_spinner(messages, signers)
+            .await
+    }
+}
+
+impl<P, M, C> TpuClient<P, M, C>
+where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: Send + Sync + 'static,
 {
     /// Create a new client that disconnects when dropped
     pub async fn new_with_connection_cache(
@@ -118,16 +133,6 @@ where
             )
             .await?,
         })
-    }
-
-    pub async fn send_and_confirm_messages_with_spinner<T: Signers + ?Sized>(
-        &self,
-        messages: &[Message],
-        signers: &T,
-    ) -> Result<Vec<Option<TransactionError>>> {
-        self.tpu_client
-            .send_and_confirm_messages_with_spinner(messages, signers)
-            .await
     }
 
     pub fn rpc_client(&self) -> &RpcClient {

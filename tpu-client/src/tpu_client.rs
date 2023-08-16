@@ -69,8 +69,8 @@ pub struct TpuClient<
 
 impl<P, M, C> TpuClient<P, M, C>
 where
-    P: ConnectionPool<NewConnectionConfig = C> + 'static,
-    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C> + 'static,
+    P: ConnectionPool<NewConnectionConfig = C> + Send + Sync + 'static,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C> + Send + Sync + 'static,
     C: Sync + Send + 'static,
 {
     #[cfg(feature = "spinner")]
@@ -90,7 +90,6 @@ impl<P, M, C> TpuClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: Sync + Send,
 {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size

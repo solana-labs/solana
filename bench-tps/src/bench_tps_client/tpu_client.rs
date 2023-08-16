@@ -12,7 +12,6 @@ impl<P, M, C> BenchTpsClient for TpuClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: Send + Sync,
 {
     fn send_transaction(&self, transaction: Transaction) -> Result<Signature> {
         let signature = transaction.signatures[0];
