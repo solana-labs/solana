@@ -1,4 +1,5 @@
 use {
+    crate::LEDGER_TOOL_DIRECTORY,
     clap::{value_t, value_t_or_exit, values_t_or_exit, ArgMatches},
     crossbeam_channel::unbounded,
     log::*,
@@ -76,7 +77,7 @@ pub fn load_and_process_ledger(
     } else {
         blockstore
             .ledger_path()
-            .join("ledger-tool")
+            .join(LEDGER_TOOL_DIRECTORY)
             .join("snapshot")
     };
 
@@ -168,7 +169,7 @@ pub fn load_and_process_ledger(
     } else {
         let non_primary_accounts_path = blockstore
             .ledger_path()
-            .join("ledger-tool")
+            .join(LEDGER_TOOL_DIRECTORY)
             .join("accounts");
         info!(
             "Default accounts path is switched aligning with Blockstore's secondary access: {:?}",
