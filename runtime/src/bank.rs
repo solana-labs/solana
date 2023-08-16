@@ -109,7 +109,7 @@ use {
         invoke_context::ProcessInstructionWithContext,
         loaded_programs::{
             LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
-            LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot,
+            LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         log_collector::LogCollector,
         message_processor::MessageProcessor,
@@ -150,7 +150,7 @@ use {
         inflation::Inflation,
         instruction::InstructionError,
         lamports::LamportsError,
-        loader_v4,
+        loader_v4::{self, LoaderV4State},
         message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::LAMPORTS_PER_SOL,
@@ -305,8 +305,10 @@ impl BankRc {
 enum ProgramAccountLoadResult {
     AccountNotFound,
     InvalidAccountData,
+    InvalidV4Program,
     ProgramOfLoaderV1orV2(AccountSharedData),
     ProgramOfLoaderV3(AccountSharedData, AccountSharedData, Slot),
+    ProgramOfLoaderV4(AccountSharedData, Slot),
 }
 
 pub struct LoadAndExecuteTransactionsOutput {
@@ -4602,6 +4604,14 @@ impl Bank {
             program_account.owner()
         ));
 
+        if loader_v4::check_id(program_account.owner()) {
+            return solana_loader_v4_program::get_state(program_account.data())
+                .ok()
+                .and_then(|state| state.is_deployed.then_some(state.slot))
+                .map(|slot| ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot))
+                .unwrap_or(ProgramAccountLoadResult::InvalidV4Program);
+        }
+
         if !bpf_loader_upgradeable::check_id(program_account.owner()) {
             return ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account);
         }
@@ -4631,11 +4641,11 @@ impl Bank {
     }
 
     pub fn load_program(&self, pubkey: &Pubkey) -> Arc<LoadedProgram> {
-        let program_runtime_environment_v1 = self
+        let environments = self
             .loaded_programs_cache
             .read()
             .unwrap()
-            .program_runtime_environment_v1
+            .environments
             .clone();
 
         let mut load_program_metrics = LoadProgramMetrics {
@@ -4662,7 +4672,7 @@ impl Bank {
                     program_account.owner(),
                     program_account.data().len(),
                     0,
-                    program_runtime_environment_v1.clone(),
+                    environments.program_runtime_v1.clone(),
                 )
             }
 
@@ -4686,14 +4696,43 @@ impl Bank {
                             .len()
                             .saturating_add(programdata_account.data().len()),
                         slot,
-                        program_runtime_environment_v1.clone(),
+                        environments.program_runtime_v1.clone(),
                     )
                 }),
+
+            ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot) => {
+                let loaded_program = program_account
+                    .data()
+                    .get(LoaderV4State::program_data_offset()..)
+                    .and_then(|elf_bytes| {
+                        LoadedProgram::new(
+                            &loader_v4::id(),
+                            environments.program_runtime_v2.clone(),
+                            slot,
+                            slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET),
+                            None,
+                            elf_bytes,
+                            program_account.data().len(),
+                            &mut load_program_metrics,
+                        )
+                        .ok()
+                    })
+                    .unwrap_or(LoadedProgram::new_tombstone(
+                        self.slot,
+                        LoadedProgramType::FailedVerification(environments.program_runtime_v2),
+                    ));
+                Ok(loaded_program)
+            }
+
+            ProgramAccountLoadResult::InvalidV4Program => Ok(LoadedProgram::new_tombstone(
+                self.slot,
+                LoadedProgramType::FailedVerification(environments.program_runtime_v2),
+            )),
         }
         .unwrap_or_else(|_| {
             LoadedProgram::new_tombstone(
                 self.slot,
-                LoadedProgramType::FailedVerification(program_runtime_environment_v1),
+                LoadedProgramType::FailedVerification(environments.program_runtime_v1),
             )
         });
 
@@ -4774,8 +4813,14 @@ impl Bank {
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
 
         let mut executed_units = 0u64;
-        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::new(self.slot);
-        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::new(self.slot);
+        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::new(
+            self.slot,
+            programs_loaded_for_tx_batch.environments.clone(),
+        );
+        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::new(
+            self.slot,
+            programs_loaded_for_tx_batch.environments.clone(),
+        );
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
             tx.message(),
@@ -8012,10 +8057,10 @@ impl Bank {
             )
             .unwrap();
             let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-            if *loaded_programs_cache.program_runtime_environment_v1
+            if *loaded_programs_cache.environments.program_runtime_v1
                 != program_runtime_environment_v1
             {
-                loaded_programs_cache.program_runtime_environment_v1 =
+                loaded_programs_cache.environments.program_runtime_v1 =
                     Arc::new(program_runtime_environment_v1);
             }
             let program_runtime_environment_v2 =
@@ -8023,10 +8068,10 @@ impl Bank {
                     &self.runtime_config.compute_budget.unwrap_or_default(),
                     false, /* debugging_features */
                 );
-            if *loaded_programs_cache.program_runtime_environment_v2
+            if *loaded_programs_cache.environments.program_runtime_v2
                 != program_runtime_environment_v2
             {
-                loaded_programs_cache.program_runtime_environment_v2 =
+                loaded_programs_cache.environments.program_runtime_v2 =
                     Arc::new(program_runtime_environment_v2);
             }
             loaded_programs_cache.prune_feature_set_transition();

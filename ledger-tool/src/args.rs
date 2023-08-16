@@ -1,4 +1,5 @@
 use {
+    crate::LEDGER_TOOL_DIRECTORY,
     clap::{value_t, values_t_or_exit, ArgMatches},
     solana_accounts_db::{
         accounts_db::{AccountsDbConfig, FillerAccountsConfig},
@@ -41,7 +42,9 @@ pub fn get_accounts_db_config(
             .map(PathBuf::from)
             .collect()
     } else {
-        vec![ledger_path.join("accounts_index.ledger-tool")]
+        vec![ledger_path
+            .join(LEDGER_TOOL_DIRECTORY)
+            .join("accounts_index")]
     };
     let accounts_index_config = AccountsIndexConfig {
         bins: accounts_index_bins,

@@ -15,8 +15,7 @@ use {
         account_utils::StateMut,
         clock::{Clock, Epoch},
         feature_set::{
-            self, clean_up_delegation_errors,
-            reduce_stake_warmup_cooldown::NewWarmupCooldownRateEpoch,
+            self, reduce_stake_warmup_cooldown::NewWarmupCooldownRateEpoch,
             stake_merge_with_unmatched_credits_observed, FeatureSet,
         },
         instruction::{checked_add, InstructionError},
@@ -700,7 +699,6 @@ pub fn split(
                 split_index,
                 lamports,
                 &meta,
-                Some(&stake),
                 minimum_delegation,
             )?;
 
@@ -727,11 +725,7 @@ pub fn split(
                     // Otherwise, the new split stake should reflect the entire split
                     // requested, less any lamports needed to cover the split_rent_exempt_reserve.
 
-                    if invoke_context
-                        .feature_set
-                        .is_active(&clean_up_delegation_errors::id())
-                        && stake.delegation.stake.saturating_sub(lamports) < minimum_delegation
-                    {
+                    if stake.delegation.stake.saturating_sub(lamports) < minimum_delegation {
                         return Err(StakeError::InsufficientDelegation.into());
                     }
 
@@ -745,11 +739,7 @@ pub fn split(
                     )
                 };
 
-            if invoke_context
-                .feature_set
-                .is_active(&clean_up_delegation_errors::id())
-                && split_stake_amount < minimum_delegation
-            {
+            if split_stake_amount < minimum_delegation {
                 return Err(StakeError::InsufficientDelegation.into());
             }
 
@@ -775,7 +765,6 @@ pub fn split(
                 split_index,
                 lamports,
                 &meta,
-                None,
                 0, // additional_required_lamports
             )?;
             let mut split_meta = meta;
@@ -1205,7 +1194,6 @@ fn validate_split_amount(
     destination_account_index: IndexOfAccount,
     lamports: u64,
     source_meta: &Meta,
-    source_stake: Option<&Stake>,
     additional_required_lamports: u64,
 ) -> Result<ValidatedSplitInfo, InstructionError> {
     let source_account = instruction_context
@@ -1258,25 +1246,6 @@ fn validate_split_amount(
     let destination_balance_deficit =
         destination_minimum_balance.saturating_sub(destination_lamports);
     if lamports < destination_balance_deficit {
-        return Err(InstructionError::InsufficientFunds);
-    }
-
-    // If the source account is already staked, the destination will end up staked as well.  Verify
-    // the destination account's delegation amount is at least the minimum delegation.
-    //
-    // The *delegation* requirements are different than the *balance* requirements.  If the
-    // destination account is prefunded with a balance of `rent exempt reserve + minimum stake
-    // delegation - 1`, the minimum split amount to satisfy the *balance* requirements is 1
-    // lamport.  And since *only* the split amount is immediately staked in the destination
-    // account, the split amount must be at least the minimum stake delegation.  So if the minimum
-    // stake delegation was 10 lamports, then a split amount of 1 lamport would not meet the
-    // *delegation* requirements.
-    if !invoke_context
-        .feature_set
-        .is_active(&clean_up_delegation_errors::id())
-        && source_stake.is_some()
-        && lamports < additional_required_lamports
-    {
         return Err(InstructionError::InsufficientFunds);
     }
 
