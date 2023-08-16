@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
         - name: solana-validator
-          image: ubuntu:latest
+          image: ubuntu:20.04
           env:
             - name: NAMESPACE
               valueFrom:
