@@ -4658,7 +4658,6 @@ impl Bank {
     }
 
     pub fn load_program(&self, pubkey: &Pubkey, reload: bool) -> Arc<LoadedProgram> {
-        let program_runtime_environment_v1 = self
         let environments = self
             .loaded_programs_cache
             .read()

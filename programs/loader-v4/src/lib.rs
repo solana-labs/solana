@@ -421,6 +421,7 @@ pub fn process_instruction_deploy(
         programdata,
         buffer.get_data().len(),
         &mut load_program_metrics,
+        false,
     )
     .map_err(|err| {
         ic_logger_msg!(log_collector, "{}", err);

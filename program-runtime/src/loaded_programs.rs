@@ -660,7 +660,12 @@ impl LoadedPrograms {
                             }
 
                             if let LoadedProgramType::Unloaded(environment) = &entry.program {
-                                if Arc::ptr_eq(environment, &self.program_runtime_environment_v1) {
+                                if Arc::ptr_eq(environment, &self.environments.program_runtime_v1)
+                                    || Arc::ptr_eq(
+                                        environment,
+                                        &self.environments.program_runtime_v2,
+                                    )
+                                {
                                     // if the environment hasn't changed since the entry was unloaded.
                                     unloaded.push((key, count));
                                 } else {
@@ -904,7 +909,7 @@ mod tests {
         let unloaded = Arc::new(
             LoadedProgram {
                 program: LoadedProgramType::TestLoaded(
-                    cache.program_runtime_environment_v1.clone(),
+                    cache.environments.program_runtime_v1.clone(),
                 ),
                 account_size: 0,
                 deployment_slot: slot,
