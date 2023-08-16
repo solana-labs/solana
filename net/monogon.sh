@@ -67,8 +67,27 @@ deployBootstrapValidatorDeployments() {
     done
 }
 
+installRequiredLibraries() {
+    POD_NAMES=$(kubectl get pods -n $namespace -o jsonpath='{.items[*].metadata.name}')
+
+    # Loop through each pod and run apt update
+    for POD_NAME in $POD_NAMES; do
+        echo "Running apt update in pod: $POD_NAME"
+        kubectl exec -it $POD_NAME -n $namespace -- sh -c "apt update && apt install -y iputils-ping curl vim bzip2"
+    done
+}
+
 deployValidatorDeployments() {
-    
+    sed -i.bak "s/replicas: .*/replicas: $additionalValidatorCount/" $here/k8s-cluster/deployments/validator.yaml
+
+    kubectl apply -f "$here/k8s-cluster/deployments/validator.yaml" --namespace=$namespace
+    ATTEMPTS=0
+    ROLLOUT_STATUS_COMMAND="kubectl rollout status deployment/solana-validator-deployment -n $namespace"
+    until $ROLLOUT_STATUS_COMMAND || [ $ATTEMPTS -eq 10 ]; do
+        $ROLLOUT_STATUS_COMMAND
+        ATTEMPTS=$((attempts + 1))
+        sleep 2
+    done
 
 }
 
