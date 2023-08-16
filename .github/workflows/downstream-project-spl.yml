@@ -71,8 +71,6 @@ jobs:
               test_paths: ["single-pool/cli"],
               required_programs:
                 [
-                  "token/program",
-                  "associated-token-account/program",
                   "single-pool/program",
                 ],
             },
@@ -80,10 +78,7 @@ jobs:
               test_paths: ["token-upgrade/cli"],
               required_programs:
                 [
-                  "token/program",
                   "token-upgrade/program",
-                  "token/program-2022",
-                  "associated-token-account/program",
                 ],
             },
           ]
