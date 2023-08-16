@@ -4640,20 +4640,11 @@ impl Bank {
     }
 
     pub fn load_program(&self, pubkey: &Pubkey) -> Arc<LoadedProgram> {
-        let program_runtime_environment_v1 = self
+        let environments = self
             .loaded_programs_cache
             .read()
             .unwrap()
             .environments
-            .program_runtime_v1
-            .clone();
-
-        let program_runtime_environment_v2 = self
-            .loaded_programs_cache
-            .read()
-            .unwrap()
-            .environments
-            .program_runtime_v2
             .clone();
 
         let mut load_program_metrics = LoadProgramMetrics {
@@ -4680,7 +4671,7 @@ impl Bank {
                     program_account.owner(),
                     program_account.data().len(),
                     0,
-                    program_runtime_environment_v1.clone(),
+                    environments.program_runtime_v1.clone(),
                 )
             }
 
@@ -4704,7 +4695,7 @@ impl Bank {
                             .len()
                             .saturating_add(programdata_account.data().len()),
                         slot,
-                        program_runtime_environment_v1.clone(),
+                        environments.program_runtime_v1.clone(),
                     )
                 }),
 
@@ -4715,7 +4706,7 @@ impl Bank {
                     .and_then(|elf_bytes| {
                         LoadedProgram::new(
                             &loader_v4::id(),
-                            program_runtime_environment_v2.clone(),
+                            environments.program_runtime_v2.clone(),
                             slot,
                             slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET),
                             None,
@@ -4727,20 +4718,20 @@ impl Bank {
                     })
                     .unwrap_or(LoadedProgram::new_tombstone(
                         self.slot,
-                        LoadedProgramType::FailedVerification(program_runtime_environment_v2),
+                        LoadedProgramType::FailedVerification(environments.program_runtime_v2),
                     ));
                 Ok(loaded_program)
             }
 
             ProgramAccountLoadResult::InvalidV4Program => Ok(LoadedProgram::new_tombstone(
                 self.slot,
-                LoadedProgramType::FailedVerification(program_runtime_environment_v2),
+                LoadedProgramType::FailedVerification(environments.program_runtime_v2),
             )),
         }
         .unwrap_or_else(|_| {
             LoadedProgram::new_tombstone(
                 self.slot,
-                LoadedProgramType::FailedVerification(program_runtime_environment_v1),
+                LoadedProgramType::FailedVerification(environments.program_runtime_v1),
             )
         });
 
