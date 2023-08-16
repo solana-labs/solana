@@ -34,7 +34,7 @@ impl<P, M, C> TpuClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: Send + Sync + 'static,
+    C: Send + Sync,
 {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size

@@ -73,6 +73,25 @@ where
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C> + 'static,
     C: Sync + Send + 'static,
 {
+    #[cfg(feature = "spinner")]
+    pub fn send_and_confirm_messages_with_spinner<T: Signers + ?Sized>(
+        &self,
+        messages: &[Message],
+        signers: &T,
+    ) -> Result<Vec<Option<TransactionError>>> {
+        self.invoke(
+            self.tpu_client
+                .send_and_confirm_messages_with_spinner(messages, signers),
+        )
+    }
+}
+
+impl<P, M, C> TpuClient<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: Sync + Send,
+{
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
     pub fn send_transaction(&self, transaction: &Transaction) -> bool {
@@ -157,18 +176,6 @@ where
             rpc_client,
             tpu_client: Arc::new(tpu_client),
         })
-    }
-
-    #[cfg(feature = "spinner")]
-    pub fn send_and_confirm_messages_with_spinner<T: Signers + ?Sized>(
-        &self,
-        messages: &[Message],
-        signers: &T,
-    ) -> Result<Vec<Option<TransactionError>>> {
-        self.invoke(
-            self.tpu_client
-                .send_and_confirm_messages_with_spinner(messages, signers),
-        )
     }
 
     pub fn rpc_client(&self) -> &RpcClient {

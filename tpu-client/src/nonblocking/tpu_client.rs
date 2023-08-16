@@ -280,7 +280,7 @@ async fn try_send_wire_transaction<P, M, C>(
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: Send + Sync + 'static,
+    C: Send + Sync,
 {
     let futures = leaders
         .iter()
@@ -338,136 +338,22 @@ where
 
 impl<P, M, C> TpuClient<P, M, C>
 where
-    P: ConnectionPool<NewConnectionConfig = C>,
-    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    P: ConnectionPool<NewConnectionConfig = C> + 'static,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C> + 'static,
     C: Send + Sync + 'static,
 {
-    /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
-    /// size
-    pub async fn send_transaction(&self, transaction: &Transaction) -> bool {
-        let wire_transaction = serialize(transaction).expect("serialization should succeed");
-        self.send_wire_transaction(wire_transaction).await
-    }
-
-    /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
-    pub async fn send_wire_transaction(&self, wire_transaction: Vec<u8>) -> bool {
-        self.try_send_wire_transaction(wire_transaction)
-            .await
-            .is_ok()
-    }
-
-    /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
-    /// size
-    /// Returns the last error if all sends fail
-    pub async fn try_send_transaction(&self, transaction: &Transaction) -> TransportResult<()> {
-        let wire_transaction = serialize(transaction).expect("serialization should succeed");
-        self.try_send_wire_transaction(wire_transaction).await
-    }
-
     /// Send a transaction to the current and upcoming leader TPUs according to fanout size
     /// Returns a detached running task with the last error if all sends fail
-    pub async fn try_send_transaction_detached(
+    pub async fn try_send_wire_transaction_detached(
         &self,
-        transaction: &Transaction,
+        wire_transaction: Vec<u8>,
     ) -> JoinHandle<TransportResult<()>> {
         let leaders = self
             .leader_tpu_service
             .leader_tpu_sockets(self.fanout_slots);
-        let wire_transaction = serialize(transaction).expect("serialization should succeed");
         let connection_cache = self.connection_cache.clone();
         task::spawn(async move {
             try_send_wire_transaction(wire_transaction, &leaders, &connection_cache).await
-        })
-    }
-
-    /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
-    /// Returns the last error if all sends fail
-    pub async fn try_send_wire_transaction(
-        &self,
-        wire_transaction: Vec<u8>,
-    ) -> TransportResult<()> {
-        let leaders = self
-            .leader_tpu_service
-            .leader_tpu_sockets(self.fanout_slots);
-        try_send_wire_transaction(wire_transaction, &leaders, &self.connection_cache).await
-    }
-
-    /// Send a batch of wire transactions to the current and upcoming leader TPUs according to
-    /// fanout size
-    /// Returns the last error if all sends fail
-    pub async fn try_send_wire_transaction_batch(
-        &self,
-        wire_transactions: Vec<Vec<u8>>,
-    ) -> TransportResult<()> {
-        let leaders = self
-            .leader_tpu_service
-            .leader_tpu_sockets(self.fanout_slots);
-        let futures = leaders
-            .iter()
-            .map(|addr| {
-                send_wire_transaction_batch_to_addr(
-                    &self.connection_cache,
-                    addr,
-                    &wire_transactions,
-                )
-            })
-            .collect::<Vec<_>>();
-        let results: Vec<TransportResult<()>> = join_all(futures).await;
-
-        let mut last_error: Option<TransportError> = None;
-        let mut some_success = false;
-        for result in results {
-            if let Err(e) = result {
-                if last_error.is_none() {
-                    last_error = Some(e);
-                }
-            } else {
-                some_success = true;
-            }
-        }
-        if !some_success {
-            Err(if let Some(err) = last_error {
-                err
-            } else {
-                std::io::Error::new(std::io::ErrorKind::Other, "No sends attempted").into()
-            })
-        } else {
-            Ok(())
-        }
-    }
-
-    /// Create a new client that disconnects when dropped
-    pub async fn new(
-        name: &'static str,
-        rpc_client: Arc<RpcClient>,
-        websocket_url: &str,
-        config: TpuClientConfig,
-        connection_manager: M,
-    ) -> Result<Self> {
-        let connection_cache = Arc::new(
-            ConnectionCache::new(name, connection_manager, DEFAULT_CONNECTION_POOL_SIZE).unwrap(),
-        ); // TODO: Handle error properly, as the ConnectionCache ctor is now fallible.
-        Self::new_with_connection_cache(rpc_client, websocket_url, config, connection_cache).await
-    }
-
-    /// Create a new client that disconnects when dropped
-    pub async fn new_with_connection_cache(
-        rpc_client: Arc<RpcClient>,
-        websocket_url: &str,
-        config: TpuClientConfig,
-        connection_cache: Arc<ConnectionCache<P, M, C>>,
-    ) -> Result<Self> {
-        let exit = Arc::new(AtomicBool::new(false));
-        let leader_tpu_service =
-            LeaderTpuService::new(rpc_client.clone(), websocket_url, M::PROTOCOL, exit.clone())
-                .await?;
-
-        Ok(Self {
-            fanout_slots: config.fanout_slots.clamp(1, MAX_FANOUT_SLOTS),
-            leader_tpu_service,
-            exit,
-            rpc_client,
-            connection_cache,
         })
     }
 
@@ -509,7 +395,9 @@ where
                 if Instant::now().duration_since(last_resend) > TRANSACTION_RESEND_INTERVAL {
                     let mut futures = vec![];
                     for (index, (_i, transaction)) in pending_transactions.values().enumerate() {
-                        futures.push(self.try_send_transaction_detached(transaction));
+                        let wire_transaction =
+                            serialize(transaction).expect("serialization should succeed");
+                        futures.push(self.try_send_wire_transaction_detached(wire_transaction));
                         set_message_for_confirmed_transactions(
                             &progress_bar,
                             confirmed_transactions,
@@ -612,6 +500,126 @@ where
             ));
         }
         Err(TpuSenderError::Custom("Max retries exceeded".into()))
+    }
+}
+
+impl<P, M, C> TpuClient<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: Send + Sync,
+{
+    /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
+    /// size
+    pub async fn send_transaction(&self, transaction: &Transaction) -> bool {
+        let wire_transaction = serialize(transaction).expect("serialization should succeed");
+        self.send_wire_transaction(wire_transaction).await
+    }
+
+    /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
+    pub async fn send_wire_transaction(&self, wire_transaction: Vec<u8>) -> bool {
+        self.try_send_wire_transaction(wire_transaction)
+            .await
+            .is_ok()
+    }
+
+    /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
+    /// size
+    /// Returns the last error if all sends fail
+    pub async fn try_send_transaction(&self, transaction: &Transaction) -> TransportResult<()> {
+        let wire_transaction = serialize(transaction).expect("serialization should succeed");
+        self.try_send_wire_transaction(wire_transaction).await
+    }
+
+    /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
+    /// Returns the last error if all sends fail
+    pub async fn try_send_wire_transaction(
+        &self,
+        wire_transaction: Vec<u8>,
+    ) -> TransportResult<()> {
+        let leaders = self
+            .leader_tpu_service
+            .leader_tpu_sockets(self.fanout_slots);
+        try_send_wire_transaction(wire_transaction, &leaders, &self.connection_cache).await
+    }
+
+    /// Send a batch of wire transactions to the current and upcoming leader TPUs according to
+    /// fanout size
+    /// Returns the last error if all sends fail
+    pub async fn try_send_wire_transaction_batch(
+        &self,
+        wire_transactions: Vec<Vec<u8>>,
+    ) -> TransportResult<()> {
+        let leaders = self
+            .leader_tpu_service
+            .leader_tpu_sockets(self.fanout_slots);
+        let futures = leaders
+            .iter()
+            .map(|addr| {
+                send_wire_transaction_batch_to_addr(
+                    &self.connection_cache,
+                    addr,
+                    &wire_transactions,
+                )
+            })
+            .collect::<Vec<_>>();
+        let results: Vec<TransportResult<()>> = join_all(futures).await;
+
+        let mut last_error: Option<TransportError> = None;
+        let mut some_success = false;
+        for result in results {
+            if let Err(e) = result {
+                if last_error.is_none() {
+                    last_error = Some(e);
+                }
+            } else {
+                some_success = true;
+            }
+        }
+        if !some_success {
+            Err(if let Some(err) = last_error {
+                err
+            } else {
+                std::io::Error::new(std::io::ErrorKind::Other, "No sends attempted").into()
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Create a new client that disconnects when dropped
+    pub async fn new(
+        name: &'static str,
+        rpc_client: Arc<RpcClient>,
+        websocket_url: &str,
+        config: TpuClientConfig,
+        connection_manager: M,
+    ) -> Result<Self> {
+        let connection_cache = Arc::new(
+            ConnectionCache::new(name, connection_manager, DEFAULT_CONNECTION_POOL_SIZE).unwrap(),
+        ); // TODO: Handle error properly, as the ConnectionCache ctor is now fallible.
+        Self::new_with_connection_cache(rpc_client, websocket_url, config, connection_cache).await
+    }
+
+    /// Create a new client that disconnects when dropped
+    pub async fn new_with_connection_cache(
+        rpc_client: Arc<RpcClient>,
+        websocket_url: &str,
+        config: TpuClientConfig,
+        connection_cache: Arc<ConnectionCache<P, M, C>>,
+    ) -> Result<Self> {
+        let exit = Arc::new(AtomicBool::new(false));
+        let leader_tpu_service =
+            LeaderTpuService::new(rpc_client.clone(), websocket_url, M::PROTOCOL, exit.clone())
+                .await?;
+
+        Ok(Self {
+            fanout_slots: config.fanout_slots.clamp(1, MAX_FANOUT_SLOTS),
+            leader_tpu_service,
+            exit,
+            rpc_client,
+            connection_cache,
+        })
     }
 
     pub fn rpc_client(&self) -> &RpcClient {

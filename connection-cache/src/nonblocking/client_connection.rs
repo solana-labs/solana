@@ -6,7 +6,7 @@ use {
 };
 
 #[async_trait]
-pub trait ClientConnection: Send + Sync + 'static {
+pub trait ClientConnection: Send + Sync {
     fn server_addr(&self) -> &SocketAddr;
 
     async fn send_data(&self, buffer: &[u8]) -> TransportResult<()>;
