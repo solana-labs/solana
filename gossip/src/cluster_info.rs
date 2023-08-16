@@ -3060,7 +3060,7 @@ impl Node {
         );
         let _ = info.set_tpu_vote((addr, tpu_vote_port));
         let _ = info.set_serve_repair((addr, serve_repair_port));
-        let _ = info.set_serve_repair((addr, serve_repair_quic_port));
+        let _ = info.set_serve_repair_quic((addr, serve_repair_quic_port));
         trace!("new ContactInfo: {:?}", info);
 
         Node {
