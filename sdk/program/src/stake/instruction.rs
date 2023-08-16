@@ -1,3 +1,5 @@
+#[allow(deprecated)]
+use crate::stake::config;
 use {
     crate::{
         clock::{Epoch, UnixTimestamp},
@@ -5,9 +7,8 @@ use {
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         stake::{
-            config,
             program::id,
-            state::{Authorized, Lockup, StakeAuthorize, StakeState},
+            state::{Authorized, Lockup, StakeAuthorize, StakeStateV2},
         },
         system_instruction, sysvar,
     },
@@ -363,7 +364,7 @@ pub fn create_account_with_seed(
             base,
             seed,
             lamports,
-            StakeState::size_of() as u64,
+            StakeStateV2::size_of() as u64,
             &id(),
         ),
         initialize(stake_pubkey, authorized, lockup),
@@ -382,7 +383,7 @@ pub fn create_account(
             from_pubkey,
             stake_pubkey,
             lamports,
-            StakeState::size_of() as u64,
+            StakeStateV2::size_of() as u64,
             &id(),
         ),
         initialize(stake_pubkey, authorized, lockup),
@@ -404,7 +405,7 @@ pub fn create_account_with_seed_checked(
             base,
             seed,
             lamports,
-            StakeState::size_of() as u64,
+            StakeStateV2::size_of() as u64,
             &id(),
         ),
         initialize_checked(stake_pubkey, authorized),
@@ -422,7 +423,7 @@ pub fn create_account_checked(
             from_pubkey,
             stake_pubkey,
             lamports,
-            StakeState::size_of() as u64,
+            StakeStateV2::size_of() as u64,
             &id(),
         ),
         initialize_checked(stake_pubkey, authorized),
@@ -451,7 +452,7 @@ pub fn split(
     split_stake_pubkey: &Pubkey,
 ) -> Vec<Instruction> {
     vec![
-        system_instruction::allocate(split_stake_pubkey, StakeState::size_of() as u64),
+        system_instruction::allocate(split_stake_pubkey, StakeStateV2::size_of() as u64),
         system_instruction::assign(split_stake_pubkey, &id()),
         _split(
             stake_pubkey,
@@ -475,7 +476,7 @@ pub fn split_with_seed(
             split_stake_pubkey,
             base,
             seed,
-            StakeState::size_of() as u64,
+            StakeStateV2::size_of() as u64,
             &id(),
         ),
         _split(
@@ -676,6 +677,7 @@ pub fn delegate_stake(
         AccountMeta::new_readonly(*vote_pubkey, false),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
         AccountMeta::new_readonly(sysvar::stake_history::id(), false),
+        #[allow(deprecated)]
         AccountMeta::new_readonly(config::id(), false),
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];
@@ -780,6 +782,7 @@ fn _redelegate(
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new(*uninitialized_stake_pubkey, false),
         AccountMeta::new_readonly(*vote_pubkey, false),
+        #[allow(deprecated)]
         AccountMeta::new_readonly(config::id(), false),
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];
@@ -793,7 +796,7 @@ pub fn redelegate(
     uninitialized_stake_pubkey: &Pubkey,
 ) -> Vec<Instruction> {
     vec![
-        system_instruction::allocate(uninitialized_stake_pubkey, StakeState::size_of() as u64),
+        system_instruction::allocate(uninitialized_stake_pubkey, StakeStateV2::size_of() as u64),
         system_instruction::assign(uninitialized_stake_pubkey, &id()),
         _redelegate(
             stake_pubkey,
@@ -817,7 +820,7 @@ pub fn redelegate_with_seed(
             uninitialized_stake_pubkey,
             base,
             seed,
-            StakeState::size_of() as u64,
+            StakeStateV2::size_of() as u64,
             &id(),
         ),
         _redelegate(

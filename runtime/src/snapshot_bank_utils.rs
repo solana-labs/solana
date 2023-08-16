@@ -1,12 +1,5 @@
 use {
     crate::{
-        accounts_db::{
-            AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig, AtomicAppendVecId,
-            CalcAccountsHashDataSource,
-        },
-        accounts_hash::AccountsHash,
-        accounts_index::AccountSecondaryIndexes,
-        accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{Bank, BankFieldsToDeserialize, BankSlotDelta},
         builtins::BuiltinPrototype,
         runtime_config::RuntimeConfig,
@@ -36,6 +29,15 @@ use {
     bincode::{config::Options, serialize_into},
     fs_err,
     log::*,
+    solana_accounts_db::{
+        accounts_db::{
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig, AtomicAppendVecId,
+            CalcAccountsHashDataSource,
+        },
+        accounts_hash::AccountsHash,
+        accounts_index::AccountSecondaryIndexes,
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
+    },
     solana_measure::{measure, measure::Measure},
     solana_sdk::{
         clock::Slot,
@@ -75,7 +77,7 @@ pub fn add_bank_snapshot(
     // this lambda function is to facilitate converting between
     // the AddBankSnapshotError and SnapshotError types
     let do_add_bank_snapshot = || {
-        let mut add_snapshot_time = Measure::start("add-snapshot-ms");
+        let mut measure_everything = Measure::start("");
         let slot = bank.slot();
         let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
         if bank_snapshot_dir.exists() {
@@ -101,8 +103,11 @@ pub fn add_bank_snapshot(
         // constructing a bank from this directory.  It acts like an archive to include the full state.
         // The set of the account storages files is the necessary part of this snapshot state.  Hard-link them
         // from the operational accounts/ directory to here.
-        hard_link_storages_to_snapshot(&bank_snapshot_dir, slot, snapshot_storages)
-            .map_err(AddBankSnapshotError::HardLinkStorages)?;
+        let (_, measure_hard_linking) =
+            measure!(
+                hard_link_storages_to_snapshot(&bank_snapshot_dir, slot, snapshot_storages)
+                    .map_err(AddBankSnapshotError::HardLinkStorages)?
+            );
 
         let bank_snapshot_serializer =
             move |stream: &mut BufWriter<std::fs::File>| -> snapshot_utils::Result<()> {
@@ -122,7 +127,6 @@ pub fn add_bank_snapshot(
                 .map_err(|err| AddBankSnapshotError::SerializeBank(Box::new(err)))?,
             "bank serialize"
         );
-        add_snapshot_time.stop();
 
         let status_cache_path =
             bank_snapshot_dir.join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILENAME);
@@ -131,28 +135,43 @@ pub fn add_bank_snapshot(
                 .map_err(|err| AddBankSnapshotError::SerializeStatusCache(Box::new(err)))?);
 
         let version_path = bank_snapshot_dir.join(snapshot_utils::SNAPSHOT_VERSION_FILENAME);
-        write_snapshot_version_file(version_path, snapshot_version)
-            .map_err(AddBankSnapshotError::WriteSnapshotVersionFile)?;
+        let (_, measure_write_version_file) =
+            measure!(write_snapshot_version_file(version_path, snapshot_version)
+                .map_err(AddBankSnapshotError::WriteSnapshotVersionFile)?);
 
         // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
         let state_complete_path =
             bank_snapshot_dir.join(snapshot_utils::SNAPSHOT_STATE_COMPLETE_FILENAME);
-        fs_err::File::create(state_complete_path)
-            .map_err(AddBankSnapshotError::CreateStateCompleteFile)?;
+        let (_, measure_write_state_complete_file) =
+            measure!(fs_err::File::create(state_complete_path)
+                .map_err(AddBankSnapshotError::CreateStateCompleteFile)?);
+
+        measure_everything.stop();
 
         // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
         datapoint_info!(
-            "snapshot-bank-file",
+            "snapshot_bank",
             ("slot", slot, i64),
             ("bank_size", bank_snapshot_consumed_size, i64),
             ("status_cache_size", status_cache_consumed_size, i64),
-            ("bank_serialize_ms", bank_serialize.as_ms(), i64),
-            ("add_snapshot_ms", add_snapshot_time.as_ms(), i64),
+            ("hard_link_storages_us", measure_hard_linking.as_us(), i64),
+            ("bank_serialize_us", bank_serialize.as_us(), i64),
             (
-                "status_cache_serialize_ms",
-                status_cache_serialize.as_ms(),
+                "status_cache_serialize_us",
+                status_cache_serialize.as_us(),
                 i64
             ),
+            (
+                "write_version_file_us",
+                measure_write_version_file.as_us(),
+                i64
+            ),
+            (
+                "write_state_complete_file_us",
+                measure_write_state_complete_file.as_us(),
+                i64
+            ),
+            ("total_us", measure_everything.as_us(), i64),
         );
 
         info!(
@@ -689,13 +708,13 @@ fn rebuild_bank_from_unarchived_snapshots(
         if let Some(snapshot_unpacked_snapshots_dir_and_version) =
             incremental_snapshot_unpacked_snapshots_dir_and_version
         {
-            let (snapshot_version, bank_snapshot_info) = verify_unpacked_snapshots_dir_and_version(
+            Some(verify_unpacked_snapshots_dir_and_version(
                 snapshot_unpacked_snapshots_dir_and_version,
-            )?;
-            (Some(snapshot_version), Some(bank_snapshot_info))
+            )?)
         } else {
-            (None, None)
-        };
+            None
+        }
+        .unzip();
     info!(
         "Rebuilding bank from full snapshot {} and incremental snapshot {:?}",
         full_snapshot_root_paths.snapshot_path().display(),
@@ -1236,8 +1255,6 @@ mod tests {
     use {
         super::*,
         crate::{
-            accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING,
-            accounts_hash::{CalcAccountsHashConfig, HashStats},
             genesis_utils,
             snapshot_utils::{
                 clean_orphaned_account_snapshot_dirs, create_all_accounts_run_and_snapshot_dirs,
@@ -1247,8 +1264,12 @@ mod tests {
                 purge_old_bank_snapshots, purge_old_bank_snapshots_at_startup,
                 snapshot_storage_rebuilder::get_slot_and_append_vec_id, ArchiveFormat,
             },
-            sorted_storages::SortedStorages,
             status_cache::Status,
+        },
+        solana_accounts_db::{
+            accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING,
+            accounts_hash::{CalcAccountsHashConfig, HashStats},
+            sorted_storages::SortedStorages,
         },
         solana_sdk::{
             genesis_config::create_genesis_config,

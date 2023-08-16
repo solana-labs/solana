@@ -675,11 +675,11 @@ mod tests {
         super::*,
         crate::{
             bank::test_utils::update_vote_account_timestamp,
-            epoch_accounts_hash::EpochAccountsHash,
             genesis_utils::{
                 create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
             },
         },
+        solana_accounts_db::epoch_accounts_hash::EpochAccountsHash,
         solana_sdk::{
             clock::UnixTimestamp,
             epoch_schedule::EpochSchedule,

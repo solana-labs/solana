@@ -146,8 +146,13 @@ impl BpfAllocator {
 
 pub struct SyscallContext {
     pub allocator: BpfAllocator,
-    pub orig_account_lengths: Vec<usize>,
+    pub accounts_metadata: Vec<SerializedAccountMetadata>,
     pub trace_log: Vec<[u64; 12]>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SerializedAccountMetadata {
+    pub original_data_len: usize,
 }
 
 pub struct InvokeContext<'a> {
@@ -207,6 +212,14 @@ impl<'a> InvokeContext<'a> {
             syscall_context: Vec::new(),
             traces: Vec::new(),
         }
+    }
+
+    pub fn find_program_in_cache(&self, pubkey: &Pubkey) -> Option<Arc<LoadedProgram>> {
+        // First lookup the cache of the programs modified by the current transaction. If not found, lookup
+        // the cache of the cache of the programs that are loaded for the transaction batch.
+        self.programs_modified_by_tx
+            .find(pubkey)
+            .or_else(|| self.programs_loaded_for_tx_batch.find(pubkey))
     }
 
     /// Push a stack frame onto the invocation stack

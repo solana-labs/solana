@@ -251,7 +251,7 @@ fn main() {
         external_client_type,
         use_quic,
         tpu_connection_pool_size,
-        use_randomized_compute_unit_price,
+        compute_unit_price,
         use_durable_nonce,
         instruction_padding_config,
         bind_address,
@@ -266,9 +266,7 @@ fn main() {
         let num_accounts = keypairs.len() as u64;
         let max_fee = FeeRateGovernor::new(*target_lamports_per_signature, 0)
             .max_lamports_per_signature
-            .saturating_add(max_lamports_for_prioritization(
-                *use_randomized_compute_unit_price,
-            ));
+            .saturating_add(max_lamports_for_prioritization(compute_unit_price));
         let num_lamports_per_account = (num_accounts - 1 + NUM_SIGNATURES_FOR_TXS * max_fee)
             / num_accounts
             + num_lamports_per_account;

@@ -978,11 +978,12 @@ mod test {
     use {
         super::*,
         itertools::Itertools,
+        solana_accounts_db::contains::Contains,
         solana_ledger::{
             blockstore::{make_chaining_slot_entries, Blockstore},
             get_tmp_ledger_path,
         },
-        solana_runtime::{bank::Bank, bank_utils, contains::Contains},
+        solana_runtime::{bank::Bank, bank_utils},
         solana_sdk::hash::Hash,
         trees::tr,
     };

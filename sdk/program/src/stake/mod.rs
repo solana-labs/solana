@@ -2,6 +2,7 @@
 //!
 //! [np]: https://docs.solana.com/developing/runtime-facilities/sysvars#stakehistory
 
+#[allow(deprecated)]
 pub mod config;
 pub mod instruction;
 pub mod stake_flags;

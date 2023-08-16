@@ -8,6 +8,7 @@ use {
     base64::{prelude::BASE64_STANDARD, Engine},
     chrono_humanize::{Accuracy, HumanTime, Tense},
     log::*,
+    solana_accounts_db::epoch_accounts_hash::EpochAccountsHash,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
     solana_bpf_loader_program::serialization::serialize_parameters,
@@ -20,7 +21,6 @@ use {
         bank::Bank,
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
-        epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
     },
@@ -334,8 +334,8 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             let new_data = borrowed_account.get_data();
             let new_len = new_data.len();
 
-            // Resize account_info data (grow-only)
-            if account_info.data_len() < new_len {
+            // Resize account_info data
+            if account_info.data_len() != new_len {
                 account_info.realloc(new_len, false)?;
             }
 
@@ -521,6 +521,10 @@ impl ProgramTest {
 
     /// Override the default maximum compute units
     pub fn set_compute_max_units(&mut self, compute_max_units: u64) {
+        debug_assert!(
+            compute_max_units <= i64::MAX as u64,
+            "Compute unit limit must fit in `i64::MAX`"
+        );
         self.compute_max_units = Some(compute_max_units);
     }
 
@@ -533,7 +537,7 @@ impl ProgramTest {
     #[allow(deprecated)]
     #[deprecated(since = "1.8.0", note = "please use `set_compute_max_units` instead")]
     pub fn set_bpf_compute_max_units(&mut self, bpf_compute_max_units: u64) {
-        self.compute_max_units = Some(bpf_compute_max_units);
+        self.set_compute_max_units(bpf_compute_max_units);
     }
 
     /// Add an account to the test environment
@@ -1118,7 +1122,7 @@ impl ProgramTestContext {
                 &Pubkey::default(),
                 pre_warp_slot,
                 // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
-                solana_runtime::accounts_db::CalcAccountsHashDataSource::IndexForTests,
+                solana_accounts_db::accounts_db::CalcAccountsHashDataSource::IndexForTests,
             ))
         };
 

@@ -31,7 +31,12 @@ use {
     crossbeam_channel::{bounded, unbounded, Receiver},
     lazy_static::lazy_static,
     quinn::Endpoint,
-    rand::{thread_rng, Rng},
+    solana_accounts_db::{
+        accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
+        accounts_index::AccountSecondaryIndexes,
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
+        hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+    },
     solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::{
@@ -60,7 +65,9 @@ use {
         use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     solana_measure::measure::Measure,
-    solana_metrics::{datapoint_info, poh_timing_point::PohTimingSender},
+    solana_metrics::{
+        datapoint_info, metrics::metrics_config_sanity_check, poh_timing_point::PohTimingSender,
+    },
     solana_poh::{
         poh_recorder::PohRecorder,
         poh_service::{self, PohService},
@@ -84,13 +91,9 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
-        accounts_index::AccountSecondaryIndexes,
-        accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::Bank,
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
-        hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
@@ -391,12 +394,11 @@ struct BlockstoreRootScan {
 }
 
 impl BlockstoreRootScan {
-    fn new(config: &ValidatorConfig, blockstore: &Arc<Blockstore>, exit: Arc<AtomicBool>) -> Self {
+    fn new(config: &ValidatorConfig, blockstore: Arc<Blockstore>, exit: Arc<AtomicBool>) -> Self {
         let thread = if config.rpc_addrs.is_some()
             && config.rpc_config.enable_rpc_transaction_history
             && config.rpc_config.rpc_scan_and_fix_roots
         {
-            let blockstore = blockstore.clone();
             Some(
                 Builder::new()
                     .name("solBStoreRtScan".to_string())
@@ -552,15 +554,21 @@ impl Validator {
             ));
         }
 
-        if let Some(shred_version) = config.expected_shred_version {
+        if let Some(expected_shred_version) = config.expected_shred_version {
             if let Some(wait_for_supermajority_slot) = config.wait_for_supermajority {
                 *start_progress.write().unwrap() = ValidatorStartProgress::CleaningBlockStore;
                 backup_and_clear_blockstore(
                     ledger_path,
                     config,
                     wait_for_supermajority_slot + 1,
-                    shred_version,
-                );
+                    expected_shred_version,
+                )
+                .map_err(|err| {
+                    format!(
+                        "Failed to backup and clear shreds with incorrect \
+                        shred version from blockstore: {err}"
+                    )
+                })?;
             }
         }
 
@@ -817,7 +825,7 @@ impl Validator {
             if config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history {
                 Some(SamplePerformanceService::new(
                     &bank_forks,
-                    &blockstore,
+                    blockstore.clone(),
                     exit.clone(),
                 ))
             } else {
@@ -984,6 +992,7 @@ impl Validator {
                     optimistically_confirmed_bank,
                     rpc_subscriptions.clone(),
                     confirmed_bank_subscribers,
+                    prioritization_fee_cache.clone(),
                 )),
                 Some(BankNotificationSenderConfig {
                     sender: bank_notification_sender,
@@ -1217,7 +1226,7 @@ impl Validator {
             &rpc_subscriptions,
             transaction_status_sender,
             entry_notification_sender,
-            &blockstore,
+            blockstore.clone(),
             &config.broadcast_stage_type,
             exit,
             node.info.shred_version(),
@@ -1243,10 +1252,14 @@ impl Validator {
             config.generator_config.clone(),
         );
 
+        let cluster_type = bank_forks.read().unwrap().root_bank().cluster_type();
+        metrics_config_sanity_check(cluster_type)?;
+
         datapoint_info!(
             "validator-new",
             ("id", id.to_string(), String),
-            ("version", solana_version::version!(), String)
+            ("version", solana_version::version!(), String),
+            ("cluster_type", cluster_type as u32, i64),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
@@ -1327,7 +1340,6 @@ impl Validator {
     pub fn join(self) {
         drop(self.bank_forks);
         drop(self.cluster_info);
-        solana_turbine::quic_endpoint::close_quic_endpoint(&self.turbine_quic_endpoint);
 
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
@@ -1408,6 +1420,7 @@ impl Validator {
         self.accounts_hash_verifier
             .join()
             .expect("accounts_hash_verifier");
+        solana_turbine::quic_endpoint::close_quic_endpoint(&self.turbine_quic_endpoint);
         self.tpu.join().expect("tpu");
         self.tvu.join().expect("tvu");
         self.turbine_quic_endpoint_runtime
@@ -1640,7 +1653,7 @@ fn load_blockstore(
     let original_blockstore_root = blockstore.last_root();
 
     let blockstore = Arc::new(blockstore);
-    let blockstore_root_scan = BlockstoreRootScan::new(config, &blockstore, exit.clone());
+    let blockstore_root_scan = BlockstoreRootScan::new(config, blockstore.clone(), exit.clone());
     let halt_at_slot = config
         .halt_at_slot
         .or_else(|| blockstore.highest_slot().unwrap_or(None));
@@ -1855,7 +1868,7 @@ impl<'a> ProcessBlockStore<'a> {
 
             if let Some(hard_fork_restart_slot) = maybe_cluster_restart_with_hard_fork(
                 self.config,
-                self.bank_forks.read().unwrap().root_bank().slot(),
+                self.bank_forks.read().unwrap().root(),
             ) {
                 // reconciliation attempt 2 of 2 with hard fork
                 // this should be #2 because hard fork root > tower root in almost all cases
@@ -1912,7 +1925,7 @@ fn maybe_warp_slot(
             &root_bank,
             &Pubkey::default(),
             warp_slot,
-            solana_runtime::accounts_db::CalcAccountsHashDataSource::Storages,
+            solana_accounts_db::accounts_db::CalcAccountsHashDataSource::Storages,
         ));
         bank_forks.set_root(
             warp_slot,
@@ -1951,85 +1964,104 @@ fn maybe_warp_slot(
     Ok(())
 }
 
+/// Searches the blockstore for data shreds with the incorrect shred version.
 fn blockstore_contains_bad_shred_version(
     blockstore: &Blockstore,
     start_slot: Slot,
-    shred_version: u16,
-) -> bool {
-    let now = Instant::now();
+    expected_shred_version: u16,
+) -> Result<bool, BlockstoreError> {
+    const TIMEOUT: Duration = Duration::from_secs(60);
+    let timer = Instant::now();
     // Search for shreds with incompatible version in blockstore
-    if let Ok(slot_meta_iterator) = blockstore.slot_meta_iterator(start_slot) {
-        info!("Searching for incorrect shreds..");
-        for (slot, _meta) in slot_meta_iterator {
-            if let Ok(shreds) = blockstore.get_data_shreds_for_slot(slot, 0) {
-                for shred in &shreds {
-                    if shred.version() != shred_version {
-                        return true;
-                    }
-                }
-            }
-            if now.elapsed().as_secs() > 60 {
-                info!("Didn't find incorrect shreds after 60 seconds, aborting");
-                return false;
+    let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
+
+    info!("Searching blockstore for shred with incorrect version..");
+    for (slot, _meta) in slot_meta_iterator {
+        let shreds = blockstore.get_data_shreds_for_slot(slot, 0)?;
+        for shred in &shreds {
+            if shred.version() != expected_shred_version {
+                return Ok(true);
             }
         }
+        if timer.elapsed() > TIMEOUT {
+            info!("Didn't find incorrect shreds after 60 seconds, aborting");
+            break;
+        }
     }
-    false
+    Ok(false)
 }
 
+/// If the blockstore contains any shreds with the incorrect shred version,
+/// copy them to a backup blockstore and purge them from the actual blockstore.
 fn backup_and_clear_blockstore(
     ledger_path: &Path,
     config: &ValidatorConfig,
     start_slot: Slot,
-    shred_version: u16,
-) {
+    expected_shred_version: u16,
+) -> Result<(), BlockstoreError> {
     let blockstore =
-        Blockstore::open_with_options(ledger_path, blockstore_options_from_config(config)).unwrap();
+        Blockstore::open_with_options(ledger_path, blockstore_options_from_config(config))?;
     let do_copy_and_clear =
-        blockstore_contains_bad_shred_version(&blockstore, start_slot, shred_version);
+        blockstore_contains_bad_shred_version(&blockstore, start_slot, expected_shred_version)?;
 
-    // If found, then copy shreds to another db and clear from start_slot
     if do_copy_and_clear {
-        let folder_name = format!(
-            "backup_{}_{}",
+        // .unwrap() safe because getting to this point implies blockstore has slots/shreds
+        let end_slot = blockstore.highest_slot()?.unwrap();
+
+        // Backing up the shreds that will be deleted from primary blockstore is
+        // not critical, so swallow errors from backup blockstore operations.
+        let backup_folder = format!(
+            "{}_backup_{}_{}_{}",
             config
                 .ledger_column_options
                 .shred_storage_type
                 .blockstore_directory(),
-            thread_rng().gen_range(0, 99999)
+            expected_shred_version,
+            start_slot,
+            end_slot
         );
-        let backup_blockstore = Blockstore::open_with_options(
-            &ledger_path.join(folder_name),
+        match Blockstore::open_with_options(
+            &ledger_path.join(backup_folder),
             blockstore_options_from_config(config),
-        );
-        let mut last_print = Instant::now();
-        let mut copied = 0;
-        let mut last_slot = None;
-        let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot).unwrap();
-        for (slot, _meta) in slot_meta_iterator {
-            if let Ok(shreds) = blockstore.get_data_shreds_for_slot(slot, 0) {
-                if let Ok(ref backup_blockstore) = backup_blockstore {
-                    copied += shreds.len();
+        ) {
+            Ok(backup_blockstore) => {
+                info!("Backing up slots from {start_slot} to {end_slot}");
+                let mut timer = Measure::start("blockstore backup");
+
+                const PRINT_INTERVAL: Duration = Duration::from_secs(5);
+                let mut print_timer = Instant::now();
+                let mut num_slots_copied = 0;
+                let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
+                for (slot, _meta) in slot_meta_iterator {
+                    let shreds = blockstore.get_data_shreds_for_slot(slot, 0)?;
                     let _ = backup_blockstore.insert_shreds(shreds, None, true);
+                    num_slots_copied += 1;
+
+                    if print_timer.elapsed() > PRINT_INTERVAL {
+                        info!("Backed up {num_slots_copied} slots thus far");
+                        print_timer = Instant::now();
+                    }
                 }
+
+                timer.stop();
+                info!("Backing up slots done. {timer}");
             }
-            if last_print.elapsed().as_millis() > 3000 {
-                info!(
-                    "Copying shreds from slot {} copied {} so far.",
-                    start_slot, copied
-                );
-                last_print = Instant::now();
+            Err(err) => {
+                warn!("Unable to backup shreds with incorrect shred version: {err}");
             }
-            last_slot = Some(slot);
         }
 
-        let end_slot = last_slot.unwrap();
-        info!("Purging slots {} to {}", start_slot, end_slot);
+        info!("Purging slots {start_slot} to {end_slot} from blockstore");
+        let mut timer = Measure::start("blockstore purge");
         blockstore.purge_from_next_slots(start_slot, end_slot);
         blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
-        info!("done");
+        timer.stop();
+        info!("Purging slots done. {timer}");
+    } else {
+        info!("Only shreds with the correct version were found in the blockstore");
     }
-    drop(blockstore);
+
+    Ok(())
 }
 
 fn initialize_rpc_transaction_history_services(
@@ -2316,8 +2348,12 @@ mod tests {
     use {
         super::*,
         crossbeam_channel::{bounded, RecvTimeoutError},
+        solana_entry::entry,
         solana_gossip::contact_info::{ContactInfo, LegacyContactInfo},
-        solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
+        solana_ledger::{
+            blockstore, create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader,
+            get_tmp_ledger_path_auto_delete,
+        },
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         solana_tpu_client::tpu_client::{
             DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
@@ -2375,51 +2411,37 @@ mod tests {
 
     #[test]
     fn test_backup_and_clear_blockstore() {
-        use std::time::Instant;
         solana_logger::setup();
-        use {
-            solana_entry::entry,
-            solana_ledger::{blockstore, get_tmp_ledger_path},
-        };
 
         let validator_config = ValidatorConfig::default_for_test();
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-            let entries = entry::create_ticks(1, 0, Hash::default());
+        let entries = entry::create_ticks(1, 0, Hash::default());
+        for i in 1..10 {
+            let shreds = blockstore::entries_to_test_shreds(
+                &entries,
+                i,     // slot
+                i - 1, // parent_slot
+                true,  // is_full_slot
+                1,     // version
+                true,  // merkle_variant
+            );
+            blockstore.insert_shreds(shreds, None, true).unwrap();
+        }
+        drop(blockstore);
 
-            info!("creating shreds");
-            let mut last_print = Instant::now();
-            for i in 1..10 {
-                let shreds = blockstore::entries_to_test_shreds(
-                    &entries,
-                    i,     // slot
-                    i - 1, // parent_slot
-                    true,  // is_full_slot
-                    1,     // version
-                    true,  // merkle_variant
-                );
-                blockstore.insert_shreds(shreds, None, true).unwrap();
-                if last_print.elapsed().as_millis() > 5000 {
-                    info!("inserted {}", i);
-                    last_print = Instant::now();
-                }
-            }
-            drop(blockstore);
+        // this purges and compacts all slots greater than or equal to 5
+        backup_and_clear_blockstore(ledger_path.path(), &validator_config, 5, 2).unwrap();
 
-            // this purges and compacts all slots greater than or equal to 5
-            backup_and_clear_blockstore(&blockstore_path, &validator_config, 5, 2);
-
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
-            // assert that slots less than 5 aren't affected
-            assert!(blockstore.meta(4).unwrap().unwrap().next_slots.is_empty());
-            for i in 5..10 {
-                assert!(blockstore
-                    .get_data_shreds_for_slot(i, 0)
-                    .unwrap()
-                    .is_empty());
-            }
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        // assert that slots less than 5 aren't affected
+        assert!(blockstore.meta(4).unwrap().unwrap().next_slots.is_empty());
+        for i in 5..10 {
+            assert!(blockstore
+                .get_data_shreds_for_slot(i, 0)
+                .unwrap()
+                .is_empty());
         }
     }
 

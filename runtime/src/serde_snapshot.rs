@@ -1,21 +1,8 @@
 use {
     crate::{
-        account_storage::meta::StoredMetaWriteVersion,
-        accounts::Accounts,
-        accounts_db::{
-            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
-            AtomicAppendVecId, BankHashStats, IndexGenerationInfo,
-        },
-        accounts_file::AccountsFile,
-        accounts_hash::AccountsHash,
-        accounts_index::AccountSecondaryIndexes,
-        accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{Bank, BankFieldsToDeserialize, BankRc},
-        blockhash_queue::BlockhashQueue,
         builtins::BuiltinPrototype,
-        epoch_accounts_hash::EpochAccountsHash,
         epoch_stakes::EpochStakes,
-        rent_collector::RentCollector,
         runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
         snapshot_utils::{
@@ -26,6 +13,21 @@ use {
     bincode::{self, config::Options, Error},
     log::*,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
+    solana_accounts_db::{
+        account_storage::meta::StoredMetaWriteVersion,
+        accounts::Accounts,
+        accounts_db::{
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
+            AtomicAppendVecId, BankHashStats, IndexGenerationInfo,
+        },
+        accounts_file::AccountsFile,
+        accounts_hash::AccountsHash,
+        accounts_index::AccountSecondaryIndexes,
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
+        blockhash_queue::BlockhashQueue,
+        epoch_accounts_hash::EpochAccountsHash,
+        rent_collector::RentCollector,
+    },
     solana_measure::measure::Measure,
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
@@ -55,15 +57,13 @@ use {
 mod newer;
 mod storage;
 mod tests;
-mod types;
 mod utils;
 
-// a number of test cases in accounts_db use this
-#[cfg(test)]
-pub(crate) use tests::reconstruct_accounts_db_via_serialization;
 pub(crate) use {
+    solana_accounts_db::accounts_hash::{
+        SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash,
+    },
     storage::SerializedAppendVecId,
-    types::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
 };
 
 #[derive(Copy, Clone, Eq, PartialEq)]

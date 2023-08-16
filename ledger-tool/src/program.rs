@@ -1,12 +1,12 @@
 use {
-    crate::{args::*, ledger_utils::*},
+    crate::{args::*, canonicalize_ledger_path, ledger_utils::*},
     clap::{value_t, App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
     serde::{Deserialize, Serialize},
     serde_json::Result,
     solana_bpf_loader_program::{
         create_vm, load_program_from_bytes, serialization::serialize_parameters,
-        syscalls::create_program_runtime_environment,
+        syscalls::create_program_runtime_environment_v1,
     },
     solana_clap_utils::input_parsers::pubkeys_of,
     solana_ledger::{
@@ -77,6 +77,7 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
     let debug_keys = pubkeys_of(arg_matches, "debug_key")
         .map(|pubkeys| Arc::new(pubkeys.into_iter().collect::<HashSet<_>>()));
     let force_update_to_open = arg_matches.is_present("force_update_to_open");
+    let enforce_ulimit_nofile = !arg_matches.is_present("ignore_ulimit_nofile_error");
     let process_options = ProcessOptions {
         new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
         run_verification: false,
@@ -116,6 +117,7 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
         AccessType::Secondary,
         wal_recovery_mode,
         force_update_to_open,
+        enforce_ulimit_nofile,
     );
     let (bank_forks, ..) = load_and_process_ledger(
         arg_matches,
@@ -160,13 +162,11 @@ impl ProgramSubCommand for App<'_, '_> {
         .subcommand(
             SubCommand::with_name("cfg")
                 .about("generates Control Flow Graph of the program.")
-                .arg(&max_genesis_arg)
                 .arg(&program_arg)
         )
         .subcommand(
             SubCommand::with_name("disassemble")
                 .about("dumps disassembled code of the program.")
-                .arg(&max_genesis_arg)
                 .arg(&program_arg)
         )
         .subcommand(
@@ -346,7 +346,7 @@ fn load_program<'a>(
         ..LoadProgramMetrics::default()
     };
     let account_size = contents.len();
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &invoke_context.feature_set,
         invoke_context.get_compute_budget(),
         false, /* deployment */
@@ -433,7 +433,8 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
         ("run", Some(arg_matches)) => arg_matches,
         _ => unreachable!(),
     };
-    let bank = load_blockstore(ledger_path, matches);
+    let ledger_path = canonicalize_ledger_path(ledger_path);
+    let bank = load_blockstore(&ledger_path, matches);
     let loader_id = bpf_loader_upgradeable::id();
     let mut transaction_accounts = Vec::new();
     let mut instruction_accounts = Vec::new();
@@ -535,8 +536,14 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
 
     // Adding `DELAY_VISIBILITY_SLOT_OFFSET` to slots to accommodate for delay visibility of the program
-    let mut loaded_programs =
-        LoadedProgramsForTxBatch::new(bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET);
+    let mut loaded_programs = LoadedProgramsForTxBatch::new(
+        bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET,
+        bank.loaded_programs_cache
+            .read()
+            .unwrap()
+            .environments
+            .clone(),
+    );
     for key in cached_account_keys {
         loaded_programs.replenish(key, bank.load_program(&key));
         debug!("Loaded program {}", key);

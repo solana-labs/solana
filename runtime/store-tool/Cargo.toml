@@ -12,8 +12,8 @@ edition = { workspace = true }
 [dependencies]
 clap = { workspace = true }
 log = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-logger = { workspace = true }
-solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-version = { workspace = true }
 

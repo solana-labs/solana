@@ -14,6 +14,7 @@ log = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
 solana-account-decoder = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-clap-utils = { workspace = true }
 solana-cli-config = { workspace = true }
 solana-client = { workspace = true }

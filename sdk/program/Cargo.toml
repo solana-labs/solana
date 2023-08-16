@@ -15,6 +15,7 @@ rust-version = "1.68.0" # solana platform-tools rust version
 bincode = { workspace = true }
 blake3 = { workspace = true, features = ["digest", "traits-preview"] }
 borsh = { workspace = true }
+borsh0-9 = { package = "borsh", version = "0.9.3" }
 bs58 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
 bytemuck = { workspace = true, features = ["derive"] }
@@ -83,8 +84,10 @@ serde_json = { workspace = true }
 static_assertions = { workspace = true }
 
 [build-dependencies]
-cc = { workspace = true, features = ["jobserver", "parallel"] }
 rustc_version = { workspace = true }
+
+[target.'cfg(any(unix, windows))'.build-dependencies]
+cc = { workspace = true, features = ["jobserver", "parallel"] }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

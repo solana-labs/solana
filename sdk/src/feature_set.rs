@@ -620,6 +620,7 @@ pub mod delay_visibility_of_program_deployment {
 pub mod apply_cost_tracker_during_replay {
     solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
 }
+
 pub mod bpf_account_data_direct_mapping {
     solana_sdk::declare_id!("9gwzizfABsKUereT6phZZxbTzuAnovkgwpVVpdcSxv9h");
 }
@@ -670,6 +671,25 @@ pub mod checked_arithmetic_in_fee_validation {
 
 pub mod last_restart_slot_sysvar {
     solana_sdk::declare_id!("HooKD5NC9QNxk25QuzCssB8ecrEzGt6eXEPBUxWp1LaR");
+}
+
+pub mod reduce_stake_warmup_cooldown {
+    use solana_program::{epoch_schedule::EpochSchedule, stake_history::Epoch};
+    solana_sdk::declare_id!("GwtDQBghCTBgmX2cpEGNPxTEBUTQRaDMGTr5qychdGMj");
+
+    pub trait NewWarmupCooldownRateEpoch {
+        fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch>;
+    }
+    impl NewWarmupCooldownRateEpoch for super::FeatureSet {
+        fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch> {
+            self.activated_slot(&id())
+                .map(|slot| epoch_schedule.get_epoch(slot))
+        }
+    }
+}
+
+pub mod timely_vote_credits {
+    solana_sdk::declare_id!("2oXpeh141pPZCTCFHBsvCwG2BtaHZZAtrVhwaxSy6brS");
 }
 
 lazy_static! {
@@ -835,6 +855,8 @@ lazy_static! {
         (checked_arithmetic_in_fee_validation::id(), "checked arithmetic in fee validation #31273"),
         (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
         (last_restart_slot_sysvar::id(), "enable new sysvar last_restart_slot"),
+        (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
+        (timely_vote_credits::id(), "use timeliness of votes in determining credits to award"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

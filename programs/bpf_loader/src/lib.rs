@@ -8,7 +8,7 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         ic_logger_msg, ic_msg,
-        invoke_context::{BpfAllocator, InvokeContext, SyscallContext},
+        invoke_context::{BpfAllocator, InvokeContext, SerializedAccountMetadata, SyscallContext},
         loaded_programs::{
             LoadProgramMetrics, LoadedProgram, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET,
         },
@@ -59,7 +59,7 @@ use {
         rc::Rc,
         sync::{atomic::Ordering, Arc},
     },
-    syscalls::create_program_runtime_environment,
+    syscalls::create_program_runtime_environment_v1,
 };
 
 pub const DEFAULT_LOADER_COMPUTE_UNITS: u64 = 570;
@@ -99,24 +99,12 @@ pub fn load_program_from_bytes(
     Ok(loaded_program)
 }
 
-fn find_program_in_cache(
-    invoke_context: &InvokeContext,
-    pubkey: &Pubkey,
-) -> Option<Arc<LoadedProgram>> {
-    // First lookup the cache of the programs modified by the current transaction. If not found, lookup
-    // the cache of the cache of the programs that are loaded for the transaction batch.
-    invoke_context
-        .programs_modified_by_tx
-        .find(pubkey)
-        .or_else(|| invoke_context.programs_loaded_for_tx_batch.find(pubkey))
-}
-
 macro_rules! deploy_program {
     ($invoke_context:expr, $program_id:expr, $loader_key:expr,
      $account_size:expr, $slot:expr, $drop:expr, $new_programdata:expr $(,)?) => {{
         let mut load_program_metrics = LoadProgramMetrics::default();
         let mut register_syscalls_time = Measure::start("register_syscalls_time");
-        let program_runtime_environment = create_program_runtime_environment(
+        let program_runtime_environment = create_program_runtime_environment_v1(
             &$invoke_context.feature_set,
             $invoke_context.get_compute_budget(),
             true, /* deployment */
@@ -137,7 +125,7 @@ macro_rules! deploy_program {
             $slot,
             Arc::new(program_runtime_environment),
         )?;
-        if let Some(old_entry) = find_program_in_cache($invoke_context, &$program_id) {
+        if let Some(old_entry) = $invoke_context.find_program_in_cache(&$program_id) {
             executor.tx_usage_counter.store(
                 old_entry.tx_usage_counter.load(Ordering::Relaxed),
                 Ordering::Relaxed
@@ -204,7 +192,7 @@ pub fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: 
 pub fn create_vm<'a, 'b>(
     program: &'a Executable<RequisiteVerifier, InvokeContext<'b>>,
     regions: Vec<MemoryRegion>,
-    orig_account_lengths: Vec<usize>,
+    accounts_metadata: Vec<SerializedAccountMetadata>,
     invoke_context: &'a mut InvokeContext<'b>,
     stack: &mut AlignedMemory<HOST_ALIGN>,
     heap: &mut AlignedMemory<HOST_ALIGN>,
@@ -238,7 +226,7 @@ pub fn create_vm<'a, 'b>(
     )?;
     invoke_context.set_syscall_context(SyscallContext {
         allocator: BpfAllocator::new(heap_size as u64),
-        orig_account_lengths,
+        accounts_metadata,
         trace_log: Vec::new(),
     })?;
     Ok(EbpfVm::new(
@@ -253,7 +241,7 @@ pub fn create_vm<'a, 'b>(
 /// Create the SBF virtual machine
 #[macro_export]
 macro_rules! create_vm {
-    ($vm:ident, $program:expr, $regions:expr, $orig_account_lengths:expr, $invoke_context:expr $(,)?) => {
+    ($vm:ident, $program:expr, $regions:expr, $accounts_metadata:expr, $invoke_context:expr $(,)?) => {
         let invoke_context = &*$invoke_context;
         let stack_size = $program.get_config().stack_size();
         let heap_size = invoke_context
@@ -282,7 +270,7 @@ macro_rules! create_vm {
             let vm = $crate::create_vm(
                 $program,
                 $regions,
-                $orig_account_lengths,
+                $accounts_metadata,
                 $invoke_context,
                 &mut stack,
                 &mut heap,
@@ -295,7 +283,7 @@ macro_rules! create_vm {
 
 #[macro_export]
 macro_rules! mock_create_vm {
-    ($vm:ident, $additional_regions:expr, $orig_account_lengths:expr, $invoke_context:expr $(,)?) => {
+    ($vm:ident, $additional_regions:expr, $accounts_metadata:expr, $invoke_context:expr $(,)?) => {
         let loader = std::sync::Arc::new(BuiltinProgram::new_loader(
             solana_rbpf::vm::Config::default(),
         ));
@@ -315,7 +303,7 @@ macro_rules! mock_create_vm {
             $vm,
             &verified_executable,
             $additional_regions,
-            $orig_account_lengths,
+            $accounts_metadata,
             $invoke_context,
         );
     };
@@ -431,11 +419,13 @@ fn process_instruction_inner(
             transaction_context.get_key_of_account_at_index(index_in_transaction)
         });
         let program_id = instruction_context.get_last_program_key(transaction_context)?;
-        if first_account_key == program_id
-            || second_account_key
-                .map(|key| key == program_id)
-                .unwrap_or(false)
+        let program_account_index = if first_account_key == program_id {
+            first_instruction_account
+        } else if second_account_key
+            .map(|key| key == program_id)
+            .unwrap_or(false)
         {
+            first_instruction_account.saturating_add(1)
         } else {
             let first_account = try_borrow_account(
                 transaction_context,
@@ -446,6 +436,19 @@ fn process_instruction_inner(
                 ic_logger_msg!(log_collector, "BPF loader is executable");
                 return Err(Box::new(InstructionError::IncorrectProgramId));
             }
+            first_instruction_account
+        };
+        let program = try_borrow_account(
+            transaction_context,
+            instruction_context,
+            program_account_index,
+        )?;
+        if program.is_executable() && !check_loader_id(program.get_owner()) {
+            ic_logger_msg!(
+                log_collector,
+                "Executable account not owned by the BPF loader"
+            );
+            return Err(Box::new(InstructionError::IncorrectProgramId));
         }
     }
 
@@ -492,7 +495,8 @@ fn process_instruction_inner(
     }
 
     let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-    let executor = find_program_in_cache(invoke_context, program_account.get_key())
+    let executor = invoke_context
+        .find_program_in_cache(program_account.get_key())
         .ok_or(InstructionError::InvalidAccountData)?;
 
     if executor.is_tombstone() {
@@ -1500,7 +1504,7 @@ fn execute<'a, 'b: 'a>(
         .is_active(&bpf_account_data_direct_mapping::id());
 
     let mut serialize_time = Measure::start("serialize");
-    let (parameter_bytes, regions, account_lengths) = serialization::serialize_parameters(
+    let (parameter_bytes, regions, accounts_metadata) = serialization::serialize_parameters(
         invoke_context.transaction_context,
         instruction_context,
         invoke_context
@@ -1523,7 +1527,7 @@ fn execute<'a, 'b: 'a>(
     let mut execute_time;
     let execution_result = {
         let compute_meter_prev = invoke_context.get_remaining();
-        create_vm!(vm, executable, regions, account_lengths, invoke_context,);
+        create_vm!(vm, executable, regions, accounts_metadata, invoke_context,);
         let mut vm = match vm {
             Ok(info) => info,
             Err(e) => {
@@ -1604,7 +1608,7 @@ fn execute<'a, 'b: 'a>(
                 .get_current_instruction_context()?,
             copy_account_data,
             parameter_bytes,
-            &invoke_context.get_syscall_context()?.orig_account_lengths,
+            &invoke_context.get_syscall_context()?.accounts_metadata,
         )
     }
 
@@ -1639,7 +1643,7 @@ pub mod test_utils {
 
     pub fn load_all_invoked_programs(invoke_context: &mut InvokeContext) {
         let mut load_program_metrics = LoadProgramMetrics::default();
-        let program_runtime_environment = create_program_runtime_environment(
+        let program_runtime_environment = create_program_runtime_environment_v1(
             &invoke_context.feature_set,
             invoke_context.get_compute_budget(),
             false, /* deployment */

@@ -5,6 +5,7 @@ use {
     base64::{prelude::BASE64_STANDARD, Engine},
     clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches},
     itertools::Itertools,
+    solana_accounts_db::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     solana_clap_utils::{
         input_parsers::{
             cluster_type_of, pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime,
@@ -16,7 +17,6 @@ use {
     solana_entry::poh::compute_hashes_per_tick,
     solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account},
     solana_ledger::{blockstore::create_new_ledger, blockstore_options::LedgerColumnOptions},
-    solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         bpf_loader_upgradeable::UpgradeableLoaderState,
@@ -31,7 +31,7 @@ use {
         rent::Rent,
         signature::{Keypair, Signer},
         signer::keypair::read_keypair_file,
-        stake::state::StakeState,
+        stake::state::StakeStateV2,
         system_program, timing,
     },
     solana_stake_program::stake_state,
@@ -141,7 +141,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .to_string();
     // stake account
     let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
-        .max(rent.minimum_balance(StakeState::size_of()))
+        .max(rent.minimum_balance(StakeStateV2::size_of()))
         .to_string();
 
     let default_target_tick_duration =
@@ -444,7 +444,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_validator_stake_lamports = rent_exempt_check(
         &matches,
         "bootstrap_validator_stake_lamports",
-        rent.minimum_balance(StakeState::size_of()),
+        rent.minimum_balance(StakeStateV2::size_of()),
     )?;
 
     let bootstrap_stake_authorized_pubkey =

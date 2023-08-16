@@ -10,8 +10,11 @@ pub const QUIC_MIN_STAKED_CONCURRENT_STREAMS: usize = 128;
 
 pub const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: usize = 100_000;
 
-// Set the maximum concurrent stream numbers to avoid excessive streams
-pub const QUIC_MAX_STAKED_CONCURRENT_STREAMS: usize = 2048;
+// Set the maximum concurrent stream numbers to avoid excessive streams.
+// The value was lowered from 2048 to reduce contention of the limited
+// receive_window among the streams which is observed in CI bench-tests with
+// forwarded packets from staked nodes.
+pub const QUIC_MAX_STAKED_CONCURRENT_STREAMS: usize = 512;
 
 pub const QUIC_MAX_TIMEOUT: Duration = Duration::from_secs(2);
 pub const QUIC_KEEP_ALIVE: Duration = Duration::from_secs(1);
