@@ -2824,6 +2824,28 @@ impl ReplayStage {
                     purge_repair_slot_counter,
                     SlotStateUpdate::BankFrozen(bank_frozen_state),
                 );
+                // If we are replaying from ledger and previously marked this slot as duplicate, let the state machine know
+                if blockstore.get_duplicate_slot(bank.slot()).is_some() {
+                    let duplicate_state = DuplicateState::new_from_state(
+                        bank.slot(),
+                        gossip_duplicate_confirmed_slots,
+                        heaviest_subtree_fork_choice,
+                        || false,
+                        || Some(bank.hash()),
+                    );
+                    check_slot_agrees_with_cluster(
+                        bank.slot(),
+                        bank_forks.read().unwrap().root(),
+                        blockstore,
+                        duplicate_slots_tracker,
+                        epoch_slots_frozen_slots,
+                        heaviest_subtree_fork_choice,
+                        duplicate_slots_to_repair,
+                        ancestor_hashes_replay_update_sender,
+                        purge_repair_slot_counter,
+                        SlotStateUpdate::Duplicate(duplicate_state),
+                    );
+                }
                 if let Some(sender) = bank_notification_sender {
                     sender
                         .sender

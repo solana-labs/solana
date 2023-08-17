@@ -3,7 +3,7 @@ use {
     itertools::Itertools,
     solana_ledger::{
         blockstore::BlockstoreError,
-        blockstore_meta::DuplicateSlotProof,
+        blockstore_meta::{DuplicateSlotProof, ErasureMeta},
         shred::{self, Shred, ShredType},
     },
     solana_sdk::{
@@ -29,7 +29,8 @@ pub struct DuplicateShred {
     pub(crate) from: Pubkey,
     pub(crate) wallclock: u64,
     pub(crate) slot: Slot,
-    shred_index: u32,
+    // Shred index of the first shred in the proof
+    pub(crate) shred_index: u32,
     shred_type: ShredType,
     // Serialized DuplicateSlotProof split into chunks.
     num_chunks: u8,
@@ -84,35 +85,73 @@ pub enum Error {
     TryFromIntError(#[from] TryFromIntError),
     #[error("unknown slot leader: {0}")]
     UnknownSlotLeader(Slot),
+    #[error("invalid last index conflict")]
+    InvalidLastIndexConflict,
+    #[error("invalid erasure meta conflict")]
+    InvalidErasureMetaConflict,
+    #[error("unable to send duplicate slot to state machine")]
+    DuplicateSlotSenderFailure,
 }
 
-// Asserts that the two shreds can indicate duplicate proof for
-// the same triplet of (slot, shred-index, and shred-type_), and
-// that they have valid signatures from the slot leader.
+/// Check that `shred1` and `shred2` indicate a valid duplicate proof
+///     - Must be for the same slot
+///     - Must have the same `shred_type`
+///     - Must both sigverify for the correct leader
+///     - If `shred1` and `shred2` share the same index they must be not equal
+///     - If `shred1` and `shred2` do not share the same index and are data shreds
+///       verify that they indicate an index conflict. One of them must be the
+///       LAST_SHRED_IN_SLOT, however the other shred must have a higher index.
+///     - If `shred1` and `shred2` do not share the same index and are coding shreds
+///       verify that they have conflicting erasure metas
 fn check_shreds<F>(leader_schedule: Option<F>, shred1: &Shred, shred2: &Shred) -> Result<(), Error>
 where
     F: FnOnce(Slot) -> Option<Pubkey>,
 {
     if shred1.slot() != shred2.slot() {
-        Err(Error::SlotMismatch)
-    } else if shred1.index() != shred2.index() {
-        // TODO: Should also allow two coding shreds with different indices but
-        // same fec-set-index and mismatching erasure-config.
-        Err(Error::ShredIndexMismatch)
-    } else if shred1.shred_type() != shred2.shred_type() {
-        Err(Error::ShredTypeMismatch)
-    } else if shred1.payload() == shred2.payload() {
-        Err(Error::InvalidDuplicateShreds)
-    } else {
-        if let Some(leader_schedule) = leader_schedule {
-            let slot_leader =
-                leader_schedule(shred1.slot()).ok_or(Error::UnknownSlotLeader(shred1.slot()))?;
-            if !shred1.verify(&slot_leader) || !shred2.verify(&slot_leader) {
-                return Err(Error::InvalidSignature);
-            }
-        }
-        Ok(())
+        return Err(Error::SlotMismatch);
     }
+
+    if shred1.shred_type() != shred2.shred_type() {
+        return Err(Error::ShredTypeMismatch);
+    }
+
+    if shred1.index() == shred2.index() && shred1.payload() == shred2.payload() {
+        return Err(Error::InvalidDuplicateShreds);
+    }
+
+    if shred1.index() != shred2.index() && shred1.shred_type() == ShredType::Data {
+        match (
+            shred1.index(),
+            shred1.last_in_slot(),
+            shred2.index(),
+            shred2.last_in_slot(),
+        ) {
+            (ix1, true, ix2, false) if ix1 > ix2 => return Err(Error::InvalidLastIndexConflict),
+            (ix1, false, ix2, true) if ix1 < ix2 => return Err(Error::InvalidLastIndexConflict),
+            (_, false, _, false) => return Err(Error::InvalidLastIndexConflict),
+            _ => (),
+        }
+    }
+
+    if shred1.index() != shred2.index() && shred1.shred_type() == ShredType::Code {
+        if shred1.fec_set_index() != shred2.fec_set_index() {
+            return Err(Error::InvalidErasureMetaConflict);
+        }
+        let erasure_meta =
+            ErasureMeta::from_coding_shred(shred1).expect("Shred1 should be a coding shred");
+        if erasure_meta.check_coding_shred(shred2) {
+            return Err(Error::InvalidErasureMetaConflict);
+        }
+    }
+
+    if let Some(leader_schedule) = leader_schedule {
+        let slot_leader =
+            leader_schedule(shred1.slot()).ok_or(Error::UnknownSlotLeader(shred1.slot()))?;
+        if !shred1.verify(&slot_leader) || !shred2.verify(&slot_leader) {
+            return Err(Error::InvalidSignature);
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn from_shred<F>(
@@ -231,15 +270,12 @@ pub(crate) fn into_shreds(
     let shred2 = Shred::new_from_serialized_shred(proof.shred2)?;
     if shred1.slot() != slot || shred2.slot() != slot {
         Err(Error::SlotMismatch)
-    } else if shred1.index() != shred_index || shred2.index() != shred_index {
+    } else if shred1.index() != shred_index && shred2.index() != shred_index {
         Err(Error::ShredIndexMismatch)
     } else if shred1.shred_type() != shred_type || shred2.shred_type() != shred_type {
         Err(Error::ShredTypeMismatch)
-    } else if shred1.payload() == shred2.payload() {
-        Err(Error::InvalidDuplicateShreds)
-    } else if !shred1.verify(slot_leader) || !shred2.verify(slot_leader) {
-        Err(Error::InvalidSignature)
     } else {
+        check_shreds(Some(|_| Some(slot_leader).copied()), &shred1, &shred2)?;
         Ok((shred1, shred2))
     }
 }
@@ -267,6 +303,7 @@ pub(crate) mod tests {
             system_transaction,
         },
         std::sync::Arc,
+        test_case::test_case,
     };
 
     #[test]
@@ -297,6 +334,71 @@ pub(crate) mod tests {
         shredder: &Shredder,
         keypair: &Keypair,
     ) -> Shred {
+        let (mut data_shreds, _) = new_rand_shreds(
+            rng,
+            next_shred_index,
+            next_shred_index,
+            5,
+            true,
+            shredder,
+            keypair,
+            true,
+        );
+        data_shreds.pop().unwrap()
+    }
+
+    fn new_rand_data_shred<R: Rng>(
+        rng: &mut R,
+        next_shred_index: u32,
+        shredder: &Shredder,
+        keypair: &Keypair,
+        merkle_variant: bool,
+        is_last_in_slot: bool,
+    ) -> Shred {
+        let (mut data_shreds, _) = new_rand_shreds(
+            rng,
+            next_shred_index,
+            next_shred_index,
+            5,
+            merkle_variant,
+            shredder,
+            keypair,
+            is_last_in_slot,
+        );
+        data_shreds.pop().unwrap()
+    }
+
+    fn new_rand_coding_shreds<R: Rng>(
+        rng: &mut R,
+        next_shred_index: u32,
+        num_entries: usize,
+        shredder: &Shredder,
+        keypair: &Keypair,
+        merkle_variant: bool,
+    ) -> Vec<Shred> {
+        let (_, coding_shreds) = new_rand_shreds(
+            rng,
+            next_shred_index,
+            next_shred_index,
+            num_entries,
+            merkle_variant,
+            shredder,
+            keypair,
+            true,
+        );
+        coding_shreds
+    }
+
+    fn new_rand_shreds<R: Rng>(
+        rng: &mut R,
+        next_shred_index: u32,
+        next_code_index: u32,
+        num_entries: usize,
+        merkle_variant: bool,
+        shredder: &Shredder,
+        keypair: &Keypair,
+        is_last_in_slot: bool,
+    ) -> (Vec<Shred>, Vec<Shred>) {
         let entries: Vec<_> = std::iter::repeat_with(|| {
             let tx = system_transaction::transfer(
                 &Keypair::new(),       // from
@@ -310,30 +412,76 @@ pub(crate) mod tests {
                 vec![tx],             // transactions
             )
         })
-        .take(5)
+        .take(num_entries)
         .collect();
-        let (mut data_shreds, _coding_shreds) = shredder.entries_to_shreds(
+        shredder.entries_to_shreds(
             keypair,
             &entries,
-            true, // is_last_in_slot
+            is_last_in_slot,
             next_shred_index,
-            next_shred_index, // next_code_index
-            true,             // merkle_variant
+            next_code_index, // next_code_index
+            merkle_variant,
             &ReedSolomonCache::default(),
             &mut ProcessShredsStats::default(),
-        );
-        data_shreds.swap_remove(0)
+        )
     }
 
-    #[test]
-    fn test_duplicate_shred_round_trip() {
+    fn from_shred_bypass_checks(
+        shred: Shred,
+        self_pubkey: Pubkey, // Pubkey of my node broadcasting crds value.
+        other_shred: Shred,
+        wallclock: u64,
+        max_size: usize, // Maximum serialized size of each DuplicateShred.
+    ) -> Result<impl Iterator<Item = DuplicateShred>, Error> {
+        let (slot, shred_index, shred_type) = (shred.slot(), shred.index(), shred.shred_type());
+        let proof = DuplicateSlotProof {
+            shred1: shred.into_payload(),
+            shred2: other_shred.into_payload(),
+        };
+        let data = bincode::serialize(&proof)?;
+        let chunk_size = max_size - DUPLICATE_SHRED_HEADER_SIZE;
+        let chunks: Vec<_> = data.chunks(chunk_size).map(Vec::from).collect();
+        let num_chunks = u8::try_from(chunks.len())?;
+        let chunks = chunks
+            .into_iter()
+            .enumerate()
+            .map(move |(i, chunk)| DuplicateShred {
+                from: self_pubkey,
+                wallclock,
+                slot,
+                shred_index,
+                shred_type,
+                num_chunks,
+                chunk_index: i as u8,
+                chunk,
+            });
+        Ok(chunks)
+    }
+
+    #[test_case(true ; "merkle")]
+    #[test_case(false ; "legacy")]
+    fn test_duplicate_shred_round_trip(merkle_variant: bool) {
         let mut rng = rand::thread_rng();
         let leader = Arc::new(Keypair::new());
         let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
         let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
         let next_shred_index = rng.gen_range(0, 32_000);
-        let shred1 = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
-        let shred2 = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
+        let shred1 = new_rand_data_shred(
+            &mut rng,
+            next_shred_index,
+            &shredder,
+            &leader,
+            merkle_variant,
+            true,
+        );
+        let shred2 = new_rand_data_shred(
+            &mut rng,
+            next_shred_index,
+            &shredder,
+            &leader,
+            merkle_variant,
+            true,
+        );
         let leader_schedule = |s| {
             if s == slot {
                 Some(leader.pubkey())
@@ -355,5 +503,462 @@ pub(crate) mod tests {
         let (shred3, shred4) = into_shreds(&leader.pubkey(), chunks).unwrap();
         assert_eq!(shred1, shred3);
         assert_eq!(shred2, shred4);
+    }
+
+    #[test_case(true ; "merkle")]
+    #[test_case(false ; "legacy")]
+    fn test_duplicate_shred_invalid(merkle_variant: bool) {
+        let mut rng = rand::thread_rng();
+        let leader = Arc::new(Keypair::new());
+        let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
+        let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
+        let next_shred_index = rng.gen_range(0, 32_000);
+        let leader_schedule = |s| {
+            if s == slot {
+                Some(leader.pubkey())
+            } else {
+                None
+            }
+        };
+        let data_shred = new_rand_data_shred(
+            &mut rng,
+            next_shred_index,
+            &shredder,
+            &leader,
+            merkle_variant,
+            true,
+        );
+        let coding_shreds = new_rand_coding_shreds(
+            &mut rng,
+            next_shred_index,
+            10,
+            &shredder,
+            &leader,
+            merkle_variant,
+        );
+        let test_cases = vec![
+            // Same data_shred
+            (data_shred.clone(), data_shred),
+            // Same coding_shred
+            (coding_shreds[0].clone(), coding_shreds[0].clone()),
+        ];
+        for (shred1, shred2) in test_cases.into_iter() {
+            assert_matches!(
+                from_shred(
+                    shred1.clone(),
+                    Pubkey::new_unique(), // self_pubkey
+                    shred2.payload().clone(),
+                    Some(leader_schedule),
+                    rng.gen(), // wallclock
+                    512,       // max_size
+                )
+                .err()
+                .unwrap(),
+                Error::InvalidDuplicateShreds
+            );
+
+            let chunks: Vec<_> = from_shred_bypass_checks(
+                shred1.clone(),
+                Pubkey::new_unique(), // self_pubkey
+                shred2.clone(),
+                rng.gen(), // wallclock
+                512,       // max_size
+            )
+            .unwrap()
+            .collect();
+            assert!(chunks.len() > 4);
+
+            assert_matches!(
+                into_shreds(&leader.pubkey(), chunks).err().unwrap(),
+                Error::InvalidDuplicateSlotProof
+            );
+        }
+    }
+
+    #[test_case(true ; "merkle")]
+    #[test_case(false ; "legacy")]
+    fn test_latest_index_conflict_round_trip(merkle_variant: bool) {
+        let mut rng = rand::thread_rng();
+        let leader = Arc::new(Keypair::new());
+        let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
+        let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
+        let next_shred_index = rng.gen_range(0, 31_000);
+        let leader_schedule = |s| {
+            if s == slot {
+                Some(leader.pubkey())
+            } else {
+                None
+            }
+        };
+        let test_cases = vec![
+            (
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    true,
+                ),
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index + 1,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    false,
+                ),
+            ),
+            (
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index + 1,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    false,
+                ),
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    true,
+                ),
+            ),
+            (
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index + 100,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    true,
+                ),
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    true,
+                ),
+            ),
+            (
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    true,
+                ),
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index + 100,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    true,
+                ),
+            ),
+        ];
+        for (shred1, shred2) in test_cases.into_iter() {
+            let chunks: Vec<_> = from_shred(
+                shred1.clone(),
+                Pubkey::new_unique(), // self_pubkey
+                shred2.payload().clone(),
+                Some(leader_schedule),
+                rng.gen(), // wallclock
+                512,       // max_size
+            )
+            .unwrap()
+            .collect();
+            assert!(chunks.len() > 4);
+            let (shred3, shred4) = into_shreds(&leader.pubkey(), chunks).unwrap();
+            assert_eq!(shred1, shred3);
+            assert_eq!(shred2, shred4);
+        }
+    }
+
+    #[test_case(true ; "merkle")]
+    #[test_case(false ; "legacy")]
+    fn test_latest_index_conflict_invalid(merkle_variant: bool) {
+        let mut rng = rand::thread_rng();
+        let leader = Arc::new(Keypair::new());
+        let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
+        let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
+        let next_shred_index = rng.gen_range(0, 31_000);
+        let leader_schedule = |s| {
+            if s == slot {
+                Some(leader.pubkey())
+            } else {
+                None
+            }
+        };
+        let test_cases = vec![
+            (
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    false,
+                ),
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index + 1,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    true,
+                ),
+            ),
+            (
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index + 1,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    true,
+                ),
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    false,
+                ),
+            ),
+            (
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index + 100,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    false,
+                ),
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    false,
+                ),
+            ),
+            (
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    false,
+                ),
+                new_rand_data_shred(
+                    &mut rng,
+                    next_shred_index + 100,
+                    &shredder,
+                    &leader,
+                    merkle_variant,
+                    false,
+                ),
+            ),
+        ];
+        for (shred1, shred2) in test_cases.into_iter() {
+            assert_matches!(
+                from_shred(
+                    shred1.clone(),
+                    Pubkey::new_unique(), // self_pubkey
+                    shred2.payload().clone(),
+                    Some(leader_schedule),
+                    rng.gen(), // wallclock
+                    512,       // max_size
+                )
+                .err()
+                .unwrap(),
+                Error::InvalidLastIndexConflict
+            );
+
+            let chunks: Vec<_> = from_shred_bypass_checks(
+                shred1.clone(),
+                Pubkey::new_unique(), // self_pubkey
+                shred2.clone(),
+                rng.gen(), // wallclock
+                512,       // max_size
+            )
+            .unwrap()
+            .collect();
+            assert!(chunks.len() > 4);
+
+            assert_matches!(
+                into_shreds(&leader.pubkey(), chunks).err().unwrap(),
+                Error::InvalidLastIndexConflict
+            );
+        }
+    }
+
+    #[test_case(true ; "merkle")]
+    #[test_case(false ; "legacy")]
+    fn test_erasure_meta_conflict_round_trip(merkle_variant: bool) {
+        let mut rng = rand::thread_rng();
+        let leader = Arc::new(Keypair::new());
+        let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
+        let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
+        let next_shred_index = rng.gen_range(0, 31_000);
+        let leader_schedule = |s| {
+            if s == slot {
+                Some(leader.pubkey())
+            } else {
+                None
+            }
+        };
+        let coding_shreds = new_rand_coding_shreds(
+            &mut rng,
+            next_shred_index,
+            10,
+            &shredder,
+            &leader,
+            merkle_variant,
+        );
+        let coding_shreds_bigger = new_rand_coding_shreds(
+            &mut rng,
+            next_shred_index,
+            13,
+            &shredder,
+            &leader,
+            merkle_variant,
+        );
+        let coding_shreds_smaller = new_rand_coding_shreds(
+            &mut rng,
+            next_shred_index,
+            7,
+            &shredder,
+            &leader,
+            merkle_variant,
+        );
+
+        // Same fec-set, different index, different erasure meta
+        let test_cases = vec![
+            (coding_shreds[0].clone(), coding_shreds_bigger[1].clone()),
+            (coding_shreds[0].clone(), coding_shreds_smaller[1].clone()),
+        ];
+        for (shred1, shred2) in test_cases.into_iter() {
+            let chunks: Vec<_> = from_shred(
+                shred1.clone(),
+                Pubkey::new_unique(), // self_pubkey
+                shred2.payload().clone(),
+                Some(leader_schedule),
+                rng.gen(), // wallclock
+                512,       // max_size
+            )
+            .unwrap()
+            .collect();
+            assert!(chunks.len() > 4);
+            let (shred3, shred4) = into_shreds(&leader.pubkey(), chunks).unwrap();
+            assert_eq!(shred1, shred3);
+            assert_eq!(shred2, shred4);
+        }
+    }
+
+    #[test_case(true ; "merkle")]
+    #[test_case(false ; "legacy")]
+    fn test_erasure_meta_conflict_invalid(merkle_variant: bool) {
+        let mut rng = rand::thread_rng();
+        let leader = Arc::new(Keypair::new());
+        let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
+        let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
+        let next_shred_index = rng.gen_range(0, 31_000);
+        let leader_schedule = |s| {
+            if s == slot {
+                Some(leader.pubkey())
+            } else {
+                None
+            }
+        };
+        let coding_shreds = new_rand_coding_shreds(
+            &mut rng,
+            next_shred_index,
+            10,
+            &shredder,
+            &leader,
+            merkle_variant,
+        );
+        let coding_shreds_different_fec = new_rand_coding_shreds(
+            &mut rng,
+            next_shred_index + 1,
+            10,
+            &shredder,
+            &leader,
+            merkle_variant,
+        );
+        let coding_shreds_different_fec_and_size = new_rand_coding_shreds(
+            &mut rng,
+            next_shred_index + 1,
+            13,
+            &shredder,
+            &leader,
+            merkle_variant,
+        );
+
+        let test_cases = vec![
+            // Different index, different fec set, same erasure meta
+            (
+                coding_shreds[0].clone(),
+                coding_shreds_different_fec[1].clone(),
+            ),
+            // Different index, different fec set, different erasure meta
+            (
+                coding_shreds[0].clone(),
+                coding_shreds_different_fec_and_size[1].clone(),
+            ),
+            // Different index, same fec set, same erasure meta
+            (coding_shreds[0].clone(), coding_shreds[1].clone()),
+            (
+                coding_shreds_different_fec[0].clone(),
+                coding_shreds_different_fec[1].clone(),
+            ),
+            (
+                coding_shreds_different_fec_and_size[0].clone(),
+                coding_shreds_different_fec_and_size[1].clone(),
+            ),
+        ];
+        for (shred1, shred2) in test_cases.into_iter() {
+            assert_matches!(
+                from_shred(
+                    shred1.clone(),
+                    Pubkey::new_unique(), // self_pubkey
+                    shred2.payload().clone(),
+                    Some(leader_schedule),
+                    rng.gen(), // wallclock
+                    512,       // max_size
+                )
+                .err()
+                .unwrap(),
+                Error::InvalidErasureMetaConflict
+            );
+
+            let chunks: Vec<_> = from_shred_bypass_checks(
+                shred1.clone(),
+                Pubkey::new_unique(), // self_pubkey
+                shred2.clone(),
+                rng.gen(), // wallclock
+                512,       // max_size
+            )
+            .unwrap()
+            .collect();
+            assert!(chunks.len() > 4);
+
+            assert_matches!(
+                into_shreds(&leader.pubkey(), chunks).err().unwrap(),
+                Error::InvalidErasureMetaConflict
+            );
+        }
     }
 }
