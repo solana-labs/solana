@@ -2267,7 +2267,7 @@ fn send_deploy_messages(
                         write_messages,
                         &[payer_signer, write_signer],
                     ),
-                    ConnectionCache::Quic(_) => {
+                    ConnectionCache::Quic(cache) => {
                         let tpu_client_fut = solana_client::nonblocking::tpu_client::TpuClient::new_with_connection_cache(
                             rpc_client.get_inner_client().clone(),
                             config.websocket_url.as_str(),
@@ -2278,7 +2278,7 @@ fn send_deploy_messages(
                             .runtime()
                             .block_on(tpu_client_fut)
                             .expect("Should return a valid tpu client");
-    
+
                         send_and_confirm_transactions_in_parallel_blocking(
                             rpc_client.clone(),
                             Some(tpu_client),
