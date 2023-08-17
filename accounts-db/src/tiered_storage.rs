@@ -158,6 +158,7 @@ mod tests {
         crate::account_storage::meta::{StoredMeta, StoredMetaWriteVersion},
         footer::{TieredStorageFooter, TieredStorageMagicNumber},
         hot::HOT_FORMAT,
+        solana_accounts_db::rent_collector::RENT_EXEMPT_RENT_EPOCH,
         solana_sdk::{
             account::{Account, AccountSharedData},
             clock::Slot,
@@ -311,18 +312,24 @@ mod tests {
     /// Create a test account based on the specified seed.
     /// The created test account might have default rent_epoch
     /// and write_version.
-    fn create_test_account(seed: u64) -> (StoredMeta, AccountSharedData) {
-        let data_byte = (seed % 256) as u8;
+    fn create_account(seed: u64) -> (StoredMeta, AccountSharedData) {
+        let data_byte = seed as u8;
         let account = Account {
             lamports: seed,
-            data: (0..seed as usize).map(|_| data_byte).collect(),
+            data: std::iter::repeat_with(|| data_byte)
+                .take(seed.try_into().unwrap())
+                .collect(),
             owner: Pubkey::new_unique(),
             executable: seed % 2 > 0,
-            rent_epoch: if seed % 3 > 0 { seed } else { u64::MAX },
+            rent_epoch: if seed % 3 > 0 {
+                seed
+            } else {
+                RENT_EXEMPT_RENT_EPOCH
+            },
         };
 
         let stored_meta = StoredMeta {
-            write_version_obsolete: if seed % 5 > 0 { seed } else { u64::MAX },
+            write_version_obsolete: u64::MAX,
             pubkey: Pubkey::new_unique(),
             data_len: seed,
         };
@@ -338,7 +345,7 @@ mod tests {
     ) {
         let accounts: Vec<_> = account_data_sizes
             .iter()
-            .map(|size| create_test_account(*size))
+            .map(|size| create_account(*size))
             .collect();
 
         let account_refs: Vec<_> = accounts
@@ -368,19 +375,13 @@ mod tests {
         let tiered_storage = TieredStorage::new_writable(tiered_storage_path, format.clone());
         _ = tiered_storage.write_accounts(&storable_accounts, 0);
 
-        verify_hot_storage(&tiered_storage, &storable_accounts, format);
+        verify_hot_storage(&tiered_storage, &accounts, format);
     }
 
     /// Verify the generated tiered storage in the test.
-    fn verify_hot_storage<
-        'a,
-        'b,
-        T: ReadableAccount + Sync,
-        U: StorableAccounts<'a, T>,
-        V: Borrow<Hash>,
-    >(
+    fn verify_hot_storage(
         tiered_storage: &TieredStorage,
-        expected_accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
+        expected_accounts: &[(StoredMeta, AccountSharedData)],
         expected_format: TieredStorageFormat,
     ) {
         let reader = tiered_storage.reader().unwrap();
