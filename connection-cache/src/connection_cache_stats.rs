@@ -227,7 +227,11 @@ impl ConnectionCacheStats {
             ),
             ("average_send_packet_us", average_send_packet_us, i64),
             ("successful_packets", successful_packets, i64),
-            ("average_prepare_connection_us", average_prepare_connection_us, i64),
+            (
+                "average_prepare_connection_us",
+                average_prepare_connection_us,
+                i64
+            ),
         );
     }
 }
