@@ -25,6 +25,9 @@ use {
 pub struct Keypair(ed25519_dalek::Keypair);
 
 impl Keypair {
+    /// Can be used for generating a Keypair without a dependency on `rand` types
+    pub const SECRET_KEY_LENGTH: usize = ed25519_dalek::SECRET_KEY_LENGTH;
+
     /// Constructs a new, random `Keypair` using a caller-provided RNG
     pub fn generate<R>(csprng: &mut R) -> Self
     where
@@ -77,20 +80,6 @@ impl Keypair {
             secret: ed25519_dalek::SecretKey::from_bytes(self.0.secret.as_bytes()).unwrap(),
             public: self.0.public,
         })
-    }
-
-    /// Generates a `Keypair` from the secret key bytes only
-    pub fn from_secret_key_bytes(bytes: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
-        let secret_key = ed25519_dalek::SecretKey::from_bytes(bytes)?;
-        let public_key = ed25519_dalek::PublicKey::from(&secret_key);
-        ed25519_dalek::Keypair::from_bytes(
-            &[
-                secret_key.as_bytes().as_slice(),
-                public_key.as_bytes().as_slice(),
-            ]
-            .concat(),
-        )
-        .map(Self)
     }
 }
 
@@ -377,17 +366,5 @@ mod tests {
         // PartialEq
         let keypair2 = keypair_from_seed(&[0u8; 32]).unwrap();
         assert_eq!(keypair, keypair2);
-    }
-
-    #[test]
-    fn test_from_secret_key_bytes() {
-        let keypair = Keypair::new();
-        let keypair_from_bytes =
-            Keypair::from_secret_key_bytes(keypair.secret().as_bytes()).unwrap();
-        assert_eq!(
-            keypair_from_bytes.secret().as_bytes(),
-            keypair.secret().as_bytes()
-        );
-        assert_eq!(keypair_from_bytes.pubkey(), keypair.pubkey());
     }
 }
