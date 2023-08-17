@@ -22,7 +22,7 @@ use {
     solana_client::{
         connection_cache::ConnectionCache,
         send_and_confirm_transactions_in_parallel::{
-            send_and_confirm_transactions_in_parallel_blocking, SendAndConfrimConfig,
+            send_and_confirm_transactions_in_parallel_blocking, SendAndConfirmConfig,
         },
         tpu_client::{TpuClient, TpuClientConfig},
     },
@@ -2198,7 +2198,7 @@ fn send_deploy_messages(
                         Some(tpu_client),
                         write_messages,
                         &[payer_signer, write_signer],
-                        SendAndConfrimConfig {
+                        SendAndConfirmConfig {
                             resign_txs_count: Some(5),
                             with_spinner: true,
                         },
