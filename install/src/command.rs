@@ -1290,17 +1290,28 @@ pub fn list(config_file: &str) -> Result<(), String> {
     let entries = fs::read_dir(&config.releases_dir).map_err(|err| format!("Failed to read install directory, double check that your configuration file is correct: {err}"))?;
 
     for entry in entries {
-        let entry_path = entry.unwrap().path();
-        let dir_name = entry_path.file_name().unwrap().to_string_lossy();
-        let current_version =
-            load_release_version(&config.active_release_dir().join("version.yml"))?.channel;
+        match entry {
+            Ok(entry) => {
+                let entry_path = entry.path();
+                let dir_name = entry_path
+                    .file_name()
+                    .map(|name| name.to_string_lossy())
+                    .unwrap_or_default();
 
-        let current = if current_version.contains(dir_name.as_ref()) {
-            " (current)"
-        } else {
-            ""
+                let current_version =
+                    load_release_version(&config.active_release_dir().join("version.yml"))?.channel;
+
+                let current = if current_version.contains(dir_name.as_ref()) {
+                    " (current)"
+                } else {
+                    ""
+                };
+                println!("{}{}", dir_name, current);
+            }
+            Err(err) => {
+                eprintln!("error listing installed versions: {err:?}");
+            }
         };
-        println!("{}{}", dir_name, current);
     }
     Ok(())
 }
