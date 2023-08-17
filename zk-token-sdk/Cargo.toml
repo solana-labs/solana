@@ -28,7 +28,7 @@ getrandom = { workspace = true, features = ["custom"] }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 merlin = { workspace = true }
-rand = { workspace = true }
+rand = { version = "0.7" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha3 = "0.9"
