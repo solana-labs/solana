@@ -316,9 +316,7 @@ mod tests {
         let data_byte = seed as u8;
         let account = Account {
             lamports: seed,
-            data: std::iter::repeat_with(|| data_byte)
-                .take(seed.try_into().unwrap())
-                .collect(),
+            data: std::iter::repeat(data_byte).take(seed as usize).collect(),
             owner: Pubkey::new_unique(),
             executable: seed % 2 > 0,
             rent_epoch: if seed % 3 > 0 {
@@ -338,7 +336,7 @@ mod tests {
 
     /// The helper function for all write_accounts tests.
     /// Currently only supports hot accounts.
-    fn do_write_accounts_test(
+    fn do_test_write_accounts(
         path_suffix: &str,
         account_data_sizes: &[u64],
         format: TieredStorageFormat,
@@ -407,7 +405,7 @@ mod tests {
 
     #[test]
     fn test_write_accounts_small_accounts() {
-        do_write_accounts_test(
+        do_test_write_accounts(
             "test_write_accounts_small_accounts",
             &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
             HOT_FORMAT.clone(),
@@ -416,7 +414,7 @@ mod tests {
 
     #[test]
     fn test_write_accounts_one_max_len() {
-        do_write_accounts_test(
+        do_test_write_accounts(
             "test_write_accounts_one_max_len",
             &[MAX_PERMITTED_DATA_LENGTH],
             HOT_FORMAT.clone(),
@@ -425,7 +423,7 @@ mod tests {
 
     #[test]
     fn test_write_accounts_mixed_size() {
-        do_write_accounts_test(
+        do_test_write_accounts(
             "test_write_accounts_mixed_size",
             &[
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1000, 2000, 3000, 4000, 9, 8, 7, 6, 5, 4, 3, 2, 1,

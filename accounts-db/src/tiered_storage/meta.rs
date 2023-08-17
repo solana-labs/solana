@@ -116,21 +116,6 @@ pub struct AccountMetaOptionalFields {
 }
 
 impl AccountMetaOptionalFields {
-    /// Create a new AccountMetaOptionalFields instance with the specified
-    /// fields.  If the value of a field equals to the default, then None
-    /// will be used in that field.
-    pub fn new_from_fields(
-        rent_epoch: Epoch,
-        account_hash: &Hash,
-        write_version: StoredMetaWriteVersion,
-    ) -> Self {
-        AccountMetaOptionalFields {
-            rent_epoch: (rent_epoch != DEFAULT_RENT_EPOCH).then_some(rent_epoch),
-            account_hash: (*account_hash != Hash::default()).then_some(*account_hash),
-            write_version: (write_version != DEFAULT_WRITE_VERSION).then_some(write_version),
-        }
-    }
-
     /// The size of the optional fields in bytes (excluding the boolean flags).
     pub fn size(&self) -> usize {
         self.rent_epoch.map_or(0, |_| std::mem::size_of::<Epoch>())
