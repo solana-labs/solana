@@ -299,15 +299,15 @@ pub(crate) mod tests {
     ) -> Shred {
         let entries: Vec<_> = std::iter::repeat_with(|| {
             let tx = system_transaction::transfer(
-                &Keypair::new(),       // from
-                &Pubkey::new_unique(), // to
-                rng.gen(),             // lamports
-                hash::new_rand(rng),   // recent blockhash
+                &Keypair::new(),             // from
+                &Pubkey::new_unique(),       // to
+                rng.gen(),                   // lamports
+                hash::new_with_thread_rng(), // recent blockhash
             );
             Entry::new(
-                &hash::new_rand(rng), // prev_hash
-                1,                    // num_hashes,
-                vec![tx],             // transactions
+                &hash::new_with_thread_rng(), // prev_hash
+                1,                            // num_hashes,
+                vec![tx],                     // transactions
             )
         })
         .take(5)

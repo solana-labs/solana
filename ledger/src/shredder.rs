@@ -994,8 +994,8 @@ mod tests {
         .take(num_tx)
         .collect();
         let entry = Entry::new(
-            &hash::new_rand(&mut rng), // prev hash
-            rng.gen_range(1..64),      // num hashes
+            &hash::new_with_thread_rng(), // prev hash
+            rng.gen_range(1..64),         // num hashes
             txs,
         );
         let keypair = Arc::new(Keypair::new());

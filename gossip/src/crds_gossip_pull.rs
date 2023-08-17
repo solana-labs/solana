@@ -655,7 +655,7 @@ pub(crate) mod tests {
         }
         let mut rng = thread_rng();
         for _ in 0..100 {
-            let hash = solana_sdk::hash::new_rand(&mut rng);
+            let hash = solana_sdk::hash::new_with_thread_rng();
             assert_eq!(CrdsFilter::hash_as_u64(&hash), hash_as_u64_bitops(&hash));
         }
     }
@@ -667,7 +667,7 @@ pub(crate) mod tests {
         assert_eq!(filter.mask, mask);
         let mut rng = thread_rng();
         for _ in 0..10 {
-            let hash = solana_sdk::hash::new_rand(&mut rng);
+            let hash = solana_sdk::hash::new_with_thread_rng();
             assert!(filter.test_mask(&hash));
         }
     }
@@ -677,7 +677,7 @@ pub(crate) mod tests {
         let mut rng = thread_rng();
         let crds_filter_set =
             CrdsFilterSet::new(/*num_items=*/ 9672788, /*max_bytes=*/ 8196);
-        let hash_values: Vec<_> = repeat_with(|| solana_sdk::hash::new_rand(&mut rng))
+        let hash_values: Vec<_> = repeat_with(|| solana_sdk::hash::new_with_thread_rng())
             .take(1024)
             .collect();
         for hash_value in &hash_values {

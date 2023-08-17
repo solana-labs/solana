@@ -59,14 +59,16 @@ where
     let mut slots: Vec<Slot> = std::iter::repeat_with(|| rng.gen()).take(5).collect();
     slots.sort_unstable();
     slots.dedup();
-    let switch_proof_hash = rng.gen_bool(0.5).then(|| solana_sdk::hash::new_rand(rng));
+    let switch_proof_hash = rng
+        .gen_bool(0.5)
+        .then(|| solana_sdk::hash::new_with_thread_rng());
     vote_transaction::new_vote_transaction(
         slots,
-        solana_sdk::hash::new_rand(rng), // bank_hash
-        solana_sdk::hash::new_rand(rng), // blockhash
-        &Keypair::generate(rng),         // node_keypair
-        &Keypair::generate(rng),         // vote_keypair
-        &Keypair::generate(rng),         // authorized_voter_keypair
+        solana_sdk::hash::new_with_thread_rng(), // bank_hash
+        solana_sdk::hash::new_with_thread_rng(), // blockhash
+        &Keypair::generate(rng),                 // node_keypair
+        &Keypair::generate(rng),                 // vote_keypair
+        &Keypair::generate(rng),                 // authorized_voter_keypair
         switch_proof_hash,
     )
 }

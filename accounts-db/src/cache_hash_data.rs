@@ -462,7 +462,7 @@ pub mod tests {
                                 }
 
                                 CalculateHashIntermediate::new(
-                                    solana_sdk::hash::new_rand(&mut rng),
+                                    solana_sdk::hash::new_with_thread_rng(),
                                     ct as u64,
                                     pk,
                                 )

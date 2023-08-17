@@ -9909,7 +9909,7 @@ fn test_verify_and_hash_transaction_sig_len() {
     let bank = Bank::new_for_tests(&genesis_config);
 
     let mut rng = rand::thread_rng();
-    let recent_blockhash = hash::new_rand(&mut rng);
+    let recent_blockhash = hash::new_with_thread_rng();
     let from_keypair = Keypair::new();
     let to_keypair = Keypair::new();
     let from_pubkey = from_keypair.pubkey();
@@ -9966,7 +9966,7 @@ fn test_verify_transactions_packet_data_size() {
     let bank = Bank::new_for_tests(&genesis_config);
 
     let mut rng = rand::thread_rng();
-    let recent_blockhash = hash::new_rand(&mut rng);
+    let recent_blockhash = hash::new_with_thread_rng();
     let keypair = Keypair::new();
     let pubkey = keypair.pubkey();
     let make_transaction = |size| {

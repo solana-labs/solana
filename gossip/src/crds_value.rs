@@ -198,7 +198,7 @@ impl AccountsHashes {
         let num_hashes = rng.gen_range(0..MAX_LEGACY_SNAPSHOT_HASHES) + 1;
         let hashes = std::iter::repeat_with(|| {
             let slot = 47825632 + rng.gen_range(0..512);
-            let hash = solana_sdk::hash::new_rand(rng);
+            let hash = solana_sdk::hash::new_with_thread_rng();
             (slot, hash)
         })
         .take(num_hashes)
@@ -801,7 +801,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let vote = vote_state::Vote::new(
             vec![1, 3, 7], // slots
-            solana_sdk::hash::new_rand(&mut rng),
+            solana_sdk::hash::new_with_thread_rng(),
         );
         let ix = vote_instruction::vote(
             &Pubkey::new_unique(), // vote_pubkey

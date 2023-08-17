@@ -19,7 +19,7 @@ use {
 #[bench]
 fn bench_hash_as_u64(bencher: &mut Bencher) {
     let mut rng = thread_rng();
-    let hashes: Vec<_> = std::iter::repeat_with(|| hash::new_rand(&mut rng))
+    let hashes: Vec<_> = std::iter::repeat_with(|| hash::new_with_thread_rng())
         .take(1000)
         .collect();
     bencher.iter(|| {

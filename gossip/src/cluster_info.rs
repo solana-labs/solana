@@ -3849,7 +3849,7 @@ mod tests {
         // add a vote
         let vote = Vote::new(
             vec![1, 3, 7], // slots
-            solana_sdk::hash::new_rand(&mut rng),
+            solana_sdk::hash::new_with_thread_rng(),
         );
         let ix = vote_instruction::vote(
             &Pubkey::new_unique(), // vote_pubkey
@@ -3879,7 +3879,7 @@ mod tests {
     }
 
     fn new_vote_transaction<R: Rng>(rng: &mut R, slots: Vec<Slot>) -> Transaction {
-        let vote = Vote::new(slots, solana_sdk::hash::new_rand(rng));
+        let vote = Vote::new(slots, solana_sdk::hash::new_with_thread_rng());
         let ix = vote_instruction::vote(
             &Pubkey::new_unique(), // vote_pubkey
             &Pubkey::new_unique(), // authorized_voter_pubkey
