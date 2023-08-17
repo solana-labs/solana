@@ -620,13 +620,14 @@ pub(crate) mod tests {
             crds_value::{CrdsData, Vote},
         },
         itertools::Itertools,
-        rand::{seq::SliceRandom, thread_rng, SeedableRng},
+        rand::{seq::SliceRandom, SeedableRng},
         rand_chacha::ChaChaRng,
         rayon::ThreadPoolBuilder,
         solana_perf::test_tx::new_test_vote_tx,
         solana_sdk::{
             hash::{hash, HASH_BYTES},
             packet::PACKET_DATA_SIZE,
+            signer::keypair::keypair_from_seed,
             timing::timestamp,
         },
         std::time::Instant,
@@ -653,7 +654,6 @@ pub(crate) mod tests {
             }
             out
         }
-        let mut rng = thread_rng();
         for _ in 0..100 {
             let hash = solana_sdk::hash::new_with_thread_rng();
             assert_eq!(CrdsFilter::hash_as_u64(&hash), hash_as_u64_bitops(&hash));
@@ -665,7 +665,6 @@ pub(crate) mod tests {
         let filter = CrdsFilter::default();
         let mask = CrdsFilter::compute_mask(0, filter.mask_bits);
         assert_eq!(filter.mask, mask);
-        let mut rng = thread_rng();
         for _ in 0..10 {
             let hash = solana_sdk::hash::new_with_thread_rng();
             assert!(filter.test_mask(&hash));
@@ -674,10 +673,9 @@ pub(crate) mod tests {
 
     #[test]
     fn test_crds_filter_set_add() {
-        let mut rng = thread_rng();
         let crds_filter_set =
             CrdsFilterSet::new(/*num_items=*/ 9672788, /*max_bytes=*/ 8196);
-        let hash_values: Vec<_> = repeat_with(|| solana_sdk::hash::new_with_thread_rng())
+        let hash_values: Vec<_> = repeat_with(solana_sdk::hash::new_with_thread_rng)
             .take(1024)
             .collect();
         for hash_value in &hash_values {
@@ -727,9 +725,13 @@ pub(crate) mod tests {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let crds_gossip_pull = CrdsGossipPull::default();
         let mut crds = Crds::default();
-        let keypairs: Vec<_> = repeat_with(|| Keypair::generate(&mut rng))
-            .take(10_000)
-            .collect();
+        let keypairs: Vec<_> = repeat_with(|| {
+            let mut seed = [0u8; Keypair::SECRET_KEY_LENGTH];
+            rng.fill(&mut seed[..]);
+            keypair_from_seed(&seed).unwrap()
+        })
+        .take(10_000)
+        .collect();
         let mut num_inserts = 0;
         for _ in 0..40_000 {
             let keypair = keypairs.choose(&mut rng).unwrap();
