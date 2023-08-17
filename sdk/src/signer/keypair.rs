@@ -26,7 +26,7 @@ pub struct Keypair(ed25519_dalek::Keypair);
 
 impl Keypair {
     /// Can be used for generating a Keypair without a dependency on `rand` types
-    pub const SECRET_KEY_LENGTH: usize = ed25519_dalek::SECRET_KEY_LENGTH;
+    pub const SECRET_KEY_LENGTH: usize = 32;
 
     /// Constructs a new, random `Keypair` using a caller-provided RNG
     pub fn generate<R>(csprng: &mut R) -> Self
@@ -82,6 +82,9 @@ impl Keypair {
         })
     }
 }
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(Keypair::SECRET_KEY_LENGTH, ed25519_dalek::SECRET_KEY_LENGTH);
 
 impl Signer for Keypair {
     #[inline]
