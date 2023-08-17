@@ -415,9 +415,9 @@ mod tests {
     }
 
     #[test]
-    fn test_write_accounts_one_10mb() {
+    fn test_write_accounts_one_max_len() {
         do_write_accounts_test(
-            "test_write_accounts_one_10mb",
+            "test_write_accounts_one_max_len",
             &[MAX_PERMITTED_DATA_LENGTH],
             HOT_FORMAT.clone(),
         );
