@@ -1287,7 +1287,12 @@ pub fn run(
 pub fn list(config_file: &str) -> Result<(), String> {
     let config = Config::load(config_file)?;
 
-    let entries = fs::read_dir(&config.releases_dir).map_err(|err| format!("Failed to read install directory, double check that your configuration file is correct: {err}"))?;
+    let entries = fs::read_dir(&config.releases_dir).map_err(|err| {
+        format!(
+            "Failed to read install directory, \
+            double check that your configuration file is correct: {err}"
+        )
+    })?;
 
     for entry in entries {
         match entry {
