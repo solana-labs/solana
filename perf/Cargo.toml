@@ -36,7 +36,7 @@ name = "solana_perf"
 
 [dev-dependencies]
 matches = { workspace = true }
-rand_chacha = "0.2.2"
+rand_chacha = { workspace = true }
 solana-logger = { workspace = true }
 test-case = { workspace = true }
 
