@@ -10,7 +10,7 @@ use {
     ed25519_dalek::Signer as DalekSigner,
     ed25519_dalek_bip32::Error as Bip32Error,
     hmac::Hmac,
-    rand::{rngs::OsRng, CryptoRng, RngCore},
+    rand0_7::{rngs::OsRng, CryptoRng, RngCore},
     std::{
         error,
         io::{Read, Write},
@@ -77,6 +77,20 @@ impl Keypair {
             secret: ed25519_dalek::SecretKey::from_bytes(self.0.secret.as_bytes()).unwrap(),
             public: self.0.public,
         })
+    }
+
+    /// Generates a `Keypair` from the secret key bytes only
+    pub fn from_secret_key_bytes(bytes: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
+        let secret_key = ed25519_dalek::SecretKey::from_bytes(bytes)?;
+        let public_key = ed25519_dalek::PublicKey::from(&secret_key);
+        ed25519_dalek::Keypair::from_bytes(
+            &[
+                secret_key.as_bytes().as_slice(),
+                public_key.as_bytes().as_slice(),
+            ]
+            .concat(),
+        )
+        .map(Self)
     }
 }
 
@@ -363,5 +377,13 @@ mod tests {
         // PartialEq
         let keypair2 = keypair_from_seed(&[0u8; 32]).unwrap();
         assert_eq!(keypair, keypair2);
+    }
+
+    #[test]
+    fn test_from_secret_key_bytes() {
+        let keypair = Keypair::new();
+        let keypair_from_bytes = Keypair::from_secret_key_bytes(keypair.secret().as_bytes()).unwrap();
+        assert_eq!(keypair_from_bytes.secret().as_bytes(), keypair.secret().as_bytes());
+        assert_eq!(keypair_from_bytes.pubkey(), keypair.pubkey());
     }
 }
