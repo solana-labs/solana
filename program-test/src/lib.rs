@@ -334,8 +334,8 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             let new_data = borrowed_account.get_data();
             let new_len = new_data.len();
 
-            // Resize account_info data (grow-only)
-            if account_info.data_len() < new_len {
+            // Resize account_info data
+            if account_info.data_len() != new_len {
                 account_info.realloc(new_len, false)?;
             }
 
