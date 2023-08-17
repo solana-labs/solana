@@ -9908,7 +9908,6 @@ fn test_verify_and_hash_transaction_sig_len() {
         .remove(&feature_set::verify_tx_signatures_len::id());
     let bank = Bank::new_for_tests(&genesis_config);
 
-    let mut rng = rand::thread_rng();
     let recent_blockhash = hash::new_with_thread_rng();
     let from_keypair = Keypair::new();
     let to_keypair = Keypair::new();
@@ -9965,7 +9964,6 @@ fn test_verify_transactions_packet_data_size() {
         create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
     let bank = Bank::new_for_tests(&genesis_config);
 
-    let mut rng = rand::thread_rng();
     let recent_blockhash = hash::new_with_thread_rng();
     let keypair = Keypair::new();
     let pubkey = keypair.pubkey();
@@ -10019,7 +10017,20 @@ fn test_call_precomiled_program() {
     let bank = Bank::new_for_tests(&genesis_config);
 
     // libsecp256k1
-    let secp_privkey = libsecp256k1::SecretKey::random(&mut rand::thread_rng());
+    // Since libsecp256k1 is still using the old version of rand, this test
+    // copies the `random` implementation at:
+    // https://docs.rs/libsecp256k1/latest/src/libsecp256k1/lib.rs.html#430
+    let secp_privkey = {
+        use rand::RngCore;
+        let mut rng = rand::thread_rng();
+        loop {
+            let mut ret = [0u8; libsecp256k1::util::SECRET_KEY_SIZE];
+            rng.fill_bytes(&mut ret);
+            if let Ok(key) = libsecp256k1::SecretKey::parse(&ret) {
+                break key;
+            }
+        }
+    };
     let message_arr = b"hello";
     let instruction =
         solana_sdk::secp256k1_instruction::new_secp256k1_instruction(&secp_privkey, message_arr);
@@ -10034,7 +10045,20 @@ fn test_call_precomiled_program() {
     bank.process_transaction(&tx).unwrap();
 
     // ed25519
-    let privkey = ed25519_dalek::Keypair::generate(&mut rand::thread_rng());
+    // Since ed25519_dalek is still using the old version of rand, this test
+    // copies the `generate` implementation at:
+    // https://docs.rs/ed25519-dalek/1.0.1/src/ed25519_dalek/secret.rs.html#167
+    let privkey = {
+        use rand::RngCore;
+        let mut rng = rand::thread_rng();
+        let mut seed = [0u8; ed25519_dalek::SECRET_KEY_LENGTH];
+        rng.fill_bytes(&mut seed);
+        let secret =
+            ed25519_dalek::SecretKey::from_bytes(&seed[..ed25519_dalek::SECRET_KEY_LENGTH])
+                .unwrap();
+        let public = ed25519_dalek::PublicKey::from(&secret);
+        ed25519_dalek::Keypair { secret, public }
+    };
     let message_arr = b"hello";
     let instruction =
         solana_sdk::ed25519_instruction::new_ed25519_instruction(&privkey, message_arr);
@@ -11572,10 +11596,8 @@ fn test_accounts_data_size_and_resize_transactions() {
     {
         let account_pubkey = Pubkey::new_unique();
         let account_balance = LAMPORTS_PER_SOL;
-        let account_size = rng.gen_range(
-            1,
-            MAX_PERMITTED_DATA_LENGTH as usize - MAX_PERMITTED_DATA_INCREASE,
-        );
+        let account_size =
+            rng.gen_range(1..MAX_PERMITTED_DATA_LENGTH as usize - MAX_PERMITTED_DATA_INCREASE);
         let account_data = AccountSharedData::new(account_balance, account_size, &mock_program_id);
         bank.store_account(&account_pubkey, &account_data);
 
@@ -11604,7 +11626,7 @@ fn test_accounts_data_size_and_resize_transactions() {
         let account_pubkey = Pubkey::new_unique();
         let account_balance = LAMPORTS_PER_SOL;
         let account_size =
-            rng.gen_range(MAX_PERMITTED_DATA_LENGTH / 2, MAX_PERMITTED_DATA_LENGTH) as usize;
+            rng.gen_range(MAX_PERMITTED_DATA_LENGTH / 2..MAX_PERMITTED_DATA_LENGTH) as usize;
         let account_data = AccountSharedData::new(account_balance, account_size, &mock_program_id);
         bank.store_account(&account_pubkey, &account_data);
 
