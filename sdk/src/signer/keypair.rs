@@ -382,8 +382,12 @@ mod tests {
     #[test]
     fn test_from_secret_key_bytes() {
         let keypair = Keypair::new();
-        let keypair_from_bytes = Keypair::from_secret_key_bytes(keypair.secret().as_bytes()).unwrap();
-        assert_eq!(keypair_from_bytes.secret().as_bytes(), keypair.secret().as_bytes());
+        let keypair_from_bytes =
+            Keypair::from_secret_key_bytes(keypair.secret().as_bytes()).unwrap();
+        assert_eq!(
+            keypair_from_bytes.secret().as_bytes(),
+            keypair.secret().as_bytes()
+        );
         assert_eq!(keypair_from_bytes.pubkey(), keypair.pubkey());
     }
 }
