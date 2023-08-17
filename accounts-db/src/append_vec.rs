@@ -1067,7 +1067,7 @@ pub mod tests {
 
         let now = Instant::now();
         for _ in 0..size {
-            let sample = thread_rng().gen_range(0, indexes.len());
+            let sample = thread_rng().gen_range(0..indexes.len());
             let account = create_test_account(sample);
             assert_eq!(av.get_account_test(indexes[sample]).unwrap(), account);
         }

@@ -198,7 +198,7 @@ impl PruneData {
     #[cfg(test)]
     fn new_rand<R: Rng>(rng: &mut R, self_keypair: &Keypair, num_nodes: Option<usize>) -> Self {
         let wallclock = crds_value::new_rand_timestamp(rng);
-        let num_nodes = num_nodes.unwrap_or_else(|| rng.gen_range(0, MAX_PRUNE_DATA_NODES + 1));
+        let num_nodes = num_nodes.unwrap_or_else(|| rng.gen_range(0..MAX_PRUNE_DATA_NODES + 1));
         let prunes = std::iter::repeat_with(Pubkey::new_unique)
             .take(num_nodes)
             .collect();
@@ -3511,7 +3511,7 @@ mod tests {
         let keypair = Keypair::new();
         let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
         let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
-        let next_shred_index = rng.gen_range(0, 32_000);
+        let next_shred_index = rng.gen_range(0..32_000);
         let shred = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
         let other_payload = {
             let other_shred = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
@@ -4349,7 +4349,7 @@ mod tests {
         );
         //random should be hard to compress
         let mut rng = rand::thread_rng();
-        let range: Vec<Slot> = repeat_with(|| rng.gen_range(1, 32))
+        let range: Vec<Slot> = repeat_with(|| rng.gen_range(1..32))
             .scan(0, |slot, step| {
                 *slot += step;
                 Some(*slot)

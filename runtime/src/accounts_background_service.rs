@@ -674,7 +674,7 @@ impl AccountsBackgroundService {
                         }
                     } else {
                         if bank.block_height() - last_cleaned_block_height
-                            > (CLEAN_INTERVAL_BLOCKS + thread_rng().gen_range(0, 10))
+                            > (CLEAN_INTERVAL_BLOCKS + thread_rng().gen_range(0..10))
                         {
                             // Note that the flush will do an internal clean of the
                             // cache up to bank.slot(), so should be safe as long

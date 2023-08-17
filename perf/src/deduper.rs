@@ -262,7 +262,7 @@ mod tests {
         let mut packet = Packet::new([0u8; PACKET_DATA_SIZE], Meta::default());
         let mut dup_count = 0usize;
         for _ in 0..num_packets {
-            let size = rng.gen_range(0, PACKET_DATA_SIZE);
+            let size = rng.gen_range(0..PACKET_DATA_SIZE);
             packet.meta_mut().size = size;
             rng.fill(&mut packet.buffer_mut()[0..size]);
             if deduper.dedup(packet.data(..).unwrap()) {

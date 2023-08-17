@@ -999,7 +999,7 @@ impl ConnectionTable {
         let mut rng = thread_rng();
         let num_pruned = std::iter::once(self.table.len())
             .filter(|&size| size > 0)
-            .flat_map(|size| repeat_with(move || rng.gen_range(0, size)))
+            .flat_map(|size| repeat_with(move || rng.gen_range(0..size)))
             .map(|index| {
                 let connection = self.table[index].first();
                 let stake = connection.map(|connection| connection.stake);

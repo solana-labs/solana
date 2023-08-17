@@ -381,7 +381,7 @@ where
                 };
                 if let ["accounts", file] = parts {
                     // Randomly distribute the accounts files about the available `account_paths`,
-                    let path_index = thread_rng().gen_range(0, account_paths.len());
+                    let path_index = thread_rng().gen_range(0..account_paths.len());
                     match account_paths
                         .get(path_index)
                         .map(|path_buf| path_buf.as_path())

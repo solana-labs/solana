@@ -207,9 +207,9 @@ mod tests {
         let mut rng = ChaChaRng::from_seed([189u8; 32]);
         let pubkey = Pubkey::new_unique();
         let nodes: Vec<_> = repeat_with(Pubkey::new_unique).take(20).collect();
-        let stakes = repeat_with(|| rng.gen_range(1, MAX_STAKE));
+        let stakes = repeat_with(|| rng.gen_range(1..MAX_STAKE));
         let mut stakes: HashMap<_, _> = nodes.iter().copied().zip(stakes).collect();
-        stakes.insert(pubkey, rng.gen_range(1, MAX_STAKE));
+        stakes.insert(pubkey, rng.gen_range(1..MAX_STAKE));
         let mut active_set = PushActiveSet::default();
         assert!(active_set.0.iter().all(|entry| entry.0.is_empty()));
         active_set.rotate(&mut rng, 5, CLUSTER_SIZE, &nodes, &stakes);
@@ -262,7 +262,7 @@ mod tests {
         const NUM_BLOOM_FILTER_ITEMS: usize = 100;
         let mut rng = ChaChaRng::from_seed([147u8; 32]);
         let nodes: Vec<_> = repeat_with(Pubkey::new_unique).take(20).collect();
-        let weights: Vec<_> = repeat_with(|| rng.gen_range(1, 1000)).take(20).collect();
+        let weights: Vec<_> = repeat_with(|| rng.gen_range(1..1000)).take(20).collect();
         let mut entry = PushActiveSetEntry::default();
         entry.rotate(
             &mut rng,

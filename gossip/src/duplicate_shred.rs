@@ -331,7 +331,7 @@ pub(crate) mod tests {
         let leader = Arc::new(Keypair::new());
         let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
         let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
-        let next_shred_index = rng.gen_range(0, 32_000);
+        let next_shred_index = rng.gen_range(0..32_000);
         let shred1 = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
         let shred2 = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
         let leader_schedule = |s| {

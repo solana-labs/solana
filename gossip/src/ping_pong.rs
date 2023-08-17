@@ -296,8 +296,8 @@ mod tests {
         .take(8)
         .collect();
         let remote_nodes: Vec<(&Keypair, SocketAddr)> = repeat_with(|| {
-            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
-            let socket = sockets[rng.gen_range(0, sockets.len())];
+            let keypair = &keypairs[rng.gen_range(0..keypairs.len())];
+            let socket = sockets[rng.gen_range(0..sockets.len())];
             (keypair, socket)
         })
         .take(128)

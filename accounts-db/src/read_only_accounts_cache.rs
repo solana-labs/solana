@@ -291,7 +291,7 @@ mod tests {
         const MAX_CACHE_SIZE: usize = 17 * (CACHE_ENTRY_SIZE + DATA_SIZE);
         let mut rng = ChaChaRng::from_seed(SEED);
         let cache = ReadOnlyAccountsCache::new(MAX_CACHE_SIZE);
-        let slots: Vec<Slot> = repeat_with(|| rng.gen_range(0, 1000)).take(5).collect();
+        let slots: Vec<Slot> = repeat_with(|| rng.gen_range(0..1000)).take(5).collect();
         let pubkeys: Vec<Pubkey> = repeat_with(|| {
             let mut arr = [0u8; 32];
             rng.fill(&mut arr[..]);
