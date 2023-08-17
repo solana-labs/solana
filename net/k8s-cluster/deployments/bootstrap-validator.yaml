@@ -34,12 +34,16 @@ spec:
     spec:
       containers:
       - name: solana-bootstrap-validator
-        image: ubuntu:20.04
+        image: gregcusack/solana-bootstrap-validator:v2
         env:
           - name: MY_POD_IP
             valueFrom:
               fieldRef:
                 fieldPath: status.podIP
-        command: ["/bin/sleep", "3650d"]
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        command: ["/home/solana/", "3650d"]
         imagePullPolicy: IfNotPresent
       restartPolicy: Always
