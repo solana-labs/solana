@@ -1042,7 +1042,7 @@ mod tests {
         matches::assert_matches,
         rand::Rng,
         rand_chacha::{rand_core::SeedableRng, ChaChaRng},
-        solana_sdk::{shred_version, signature::Signer},
+        solana_sdk::{shred_version, signature::Signer, signer::keypair::keypair_from_seed},
     };
 
     const SIZE_OF_SHRED_INDEX: usize = 4;
@@ -1525,7 +1525,10 @@ mod tests {
         };
         let mut data = [0u8; legacy::ShredData::CAPACITY];
         rng.fill(&mut data[..]);
-        let keypair = Keypair::generate(&mut rng);
+
+        let mut seed = [0u8; Keypair::SECRET_KEY_LENGTH];
+        rng.fill(&mut seed[..]);
+        let keypair = keypair_from_seed(&seed).unwrap();
         let mut shred = Shred::new_from_data(
             141939602, // slot
             28685,     // index
@@ -1562,7 +1565,9 @@ mod tests {
             let seed = <[u8; 32]>::try_from(bs58_decode(SEED)).unwrap();
             ChaChaRng::from_seed(seed)
         };
-        let keypair = Keypair::generate(&mut rng);
+        let mut seed = [0u8; Keypair::SECRET_KEY_LENGTH];
+        rng.fill(&mut seed[..]);
+        let keypair = keypair_from_seed(&seed).unwrap();
         let mut shred = Shred::new_from_data(
             142076266, // slot
             21443,     // index
@@ -1598,7 +1603,9 @@ mod tests {
         };
         let mut parity_shard = vec![0u8; legacy::SIZE_OF_ERASURE_ENCODED_SLICE];
         rng.fill(&mut parity_shard[..]);
-        let keypair = Keypair::generate(&mut rng);
+        let mut seed = [0u8; Keypair::SECRET_KEY_LENGTH];
+        rng.fill(&mut seed[..]);
+        let keypair = keypair_from_seed(&seed).unwrap();
         let mut shred = Shred::new_from_parity_shard(
             141945197, // slot
             23418,     // index

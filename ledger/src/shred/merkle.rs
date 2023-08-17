@@ -1056,7 +1056,10 @@ mod test {
         matches::assert_matches,
         rand::{seq::SliceRandom, CryptoRng, Rng},
         rayon::ThreadPoolBuilder,
-        solana_sdk::signature::{Keypair, Signer},
+        solana_sdk::{
+            signature::{Keypair, Signer},
+            signer::keypair::keypair_from_seed,
+        },
         std::{cmp::Ordering, iter::repeat_with},
         test_case::test_case,
     };
@@ -1173,7 +1176,9 @@ mod test {
         num_coding_shreds: usize,
         reed_solomon_cache: &ReedSolomonCache,
     ) {
-        let keypair = Keypair::generate(rng);
+        let mut seed = [0u8; Keypair::SECRET_KEY_LENGTH];
+        rng.fill(&mut seed[..]);
+        let keypair = keypair_from_seed(&seed).unwrap();
         let num_shreds = num_data_shreds + num_coding_shreds;
         let proof_size = get_proof_size(num_shreds);
         let capacity = ShredData::capacity(proof_size).unwrap();
@@ -1356,7 +1361,9 @@ mod test {
         reed_solomon_cache: &ReedSolomonCache,
     ) {
         let thread_pool = ThreadPoolBuilder::new().num_threads(2).build().unwrap();
-        let keypair = Keypair::new();
+        let mut seed = [0u8; Keypair::SECRET_KEY_LENGTH];
+        rng.fill(&mut seed[..]);
+        let keypair = keypair_from_seed(&seed).unwrap();
         let slot = 149_745_689;
         let parent_slot = slot - rng.gen_range(1..65536);
         let shred_version = rng.gen();
