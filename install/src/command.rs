@@ -1292,21 +1292,16 @@ pub fn list(config_file: &str) -> Result<(), String> {
     for entry in entries {
         match entry {
             Ok(entry) => {
-                let entry_path = entry.path();
-                let dir_name = entry_path
-                    .file_name()
-                    .map(|name| name.to_string_lossy())
-                    .unwrap_or_default();
-
+                let dir_name = entry.file_name();
                 let current_version =
                     load_release_version(&config.active_release_dir().join("version.yml"))?.channel;
 
-                let current = if current_version.contains(dir_name.as_ref()) {
+                let current = if current_version.contains(dir_name.to_string_lossy().as_ref()) {
                     " (current)"
                 } else {
                     ""
                 };
-                println!("{}{}", dir_name, current);
+                println!("{}{}", dir_name.to_string_lossy(), current);
             }
             Err(err) => {
                 eprintln!("error listing installed versions: {err:?}");
