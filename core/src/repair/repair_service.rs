@@ -518,6 +518,7 @@ impl RepairService {
                         ("repair-orphan", repair_stats.orphan.max, i64), // deprecated
                         ("orphan-slot-max", nonzero_num(repair_stats.orphan.max), Option<i64>),
                         ("orphan-slot-min", nonzero_num(repair_stats.orphan.min), Option<i64>),
+                        ("wen_restart-total", repair_stats.wen_restart.count, i64)
                     );
                 }
                 datapoint_info!(
