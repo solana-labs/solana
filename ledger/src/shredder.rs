@@ -476,7 +476,7 @@ mod tests {
         matches::assert_matches,
         rand::{seq::SliceRandom, Rng},
         solana_sdk::{
-            hash::{self, hash, Hash},
+            hash::{hash, Hash},
             pubkey::Pubkey,
             shred_version,
             signature::{Signature, Signer},
@@ -994,8 +994,8 @@ mod tests {
         .take(num_tx)
         .collect();
         let entry = Entry::new(
-            &hash::new_with_thread_rng(), // prev hash
-            rng.gen_range(1..64),         // num hashes
+            &Hash::new_unique(),  // prev hash
+            rng.gen_range(1..64), // num hashes
             txs,
         );
         let keypair = Arc::new(Keypair::new());

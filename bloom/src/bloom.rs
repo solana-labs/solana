@@ -310,7 +310,7 @@ mod test {
 
     #[test]
     fn test_atomic_bloom() {
-        let hash_values: Vec<_> = std::iter::repeat_with(solana_sdk::hash::new_with_thread_rng)
+        let hash_values: Vec<_> = std::iter::repeat_with(Hash::new_unique)
             .take(1200)
             .collect();
         let bloom: AtomicBloom<_> = Bloom::<Hash>::random(1287, 0.1, 7424).into();
@@ -327,7 +327,7 @@ mod test {
         for hash_value in hash_values {
             assert!(bloom.contains(&hash_value));
         }
-        let false_positive = std::iter::repeat_with(solana_sdk::hash::new_with_thread_rng)
+        let false_positive = std::iter::repeat_with(Hash::new_unique)
             .take(10_000)
             .filter(|hash_value| bloom.contains(hash_value))
             .count();
@@ -339,7 +339,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let keys: Vec<_> = std::iter::repeat_with(|| rng.gen()).take(5).collect();
         let mut bloom = Bloom::<Hash>::new(9731, keys.clone());
-        let hash_values: Vec<_> = std::iter::repeat_with(solana_sdk::hash::new_with_thread_rng)
+        let hash_values: Vec<_> = std::iter::repeat_with(Hash::new_unique)
             .take(1000)
             .collect();
         for hash_value in &hash_values {
@@ -374,10 +374,9 @@ mod test {
             assert!(bloom.contains(hash_value));
         }
         // Round trip, inserting new hash values.
-        let more_hash_values: Vec<_> =
-            std::iter::repeat_with(solana_sdk::hash::new_with_thread_rng)
-                .take(1000)
-                .collect();
+        let more_hash_values: Vec<_> = std::iter::repeat_with(Hash::new_unique)
+            .take(1000)
+            .collect();
         let bloom: AtomicBloom<_> = bloom.into();
         assert_eq!(bloom.num_bits, 9731);
         assert_eq!(bloom.bits.len(), (9731 + 63) / 64);
@@ -390,7 +389,7 @@ mod test {
         for hash_value in &more_hash_values {
             assert!(bloom.contains(hash_value));
         }
-        let false_positive = std::iter::repeat_with(solana_sdk::hash::new_with_thread_rng)
+        let false_positive = std::iter::repeat_with(Hash::new_unique)
             .take(10_000)
             .filter(|hash_value| bloom.contains(hash_value))
             .count();
@@ -409,7 +408,7 @@ mod test {
         for hash_value in &more_hash_values {
             assert!(bloom.contains(hash_value));
         }
-        let false_positive = std::iter::repeat_with(solana_sdk::hash::new_with_thread_rng)
+        let false_positive = std::iter::repeat_with(Hash::new_unique)
             .take(10_000)
             .filter(|hash_value| bloom.contains(hash_value))
             .count();

@@ -103,7 +103,7 @@ fn bench_sigs_hashmap(bencher: &mut Bencher) {
 #[bench]
 fn bench_add_hash(bencher: &mut Bencher) {
     let mut rng = rand::thread_rng();
-    let hash_values: Vec<_> = std::iter::repeat_with(solana_sdk::hash::new_with_thread_rng)
+    let hash_values: Vec<_> = std::iter::repeat_with(Hash::new_unique)
         .take(1200)
         .collect();
     let mut fail = 0;
@@ -123,7 +123,7 @@ fn bench_add_hash(bencher: &mut Bencher) {
 #[bench]
 fn bench_add_hash_atomic(bencher: &mut Bencher) {
     let mut rng = rand::thread_rng();
-    let hash_values: Vec<_> = std::iter::repeat_with(solana_sdk::hash::new_with_thread_rng)
+    let hash_values: Vec<_> = std::iter::repeat_with(Hash::new_unique)
         .take(1200)
         .collect();
     let mut fail = 0;

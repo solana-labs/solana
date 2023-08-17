@@ -66,7 +66,7 @@ use {
         fee::FeeStructure,
         fee_calculator::FeeRateGovernor,
         genesis_config::{create_genesis_config, ClusterType, GenesisConfig},
-        hash::{self, hash, Hash},
+        hash::{hash, Hash},
         incinerator,
         instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
@@ -9908,7 +9908,7 @@ fn test_verify_and_hash_transaction_sig_len() {
         .remove(&feature_set::verify_tx_signatures_len::id());
     let bank = Bank::new_for_tests(&genesis_config);
 
-    let recent_blockhash = hash::new_with_thread_rng();
+    let recent_blockhash = Hash::new_unique();
     let from_keypair = Keypair::new();
     let to_keypair = Keypair::new();
     let from_pubkey = from_keypair.pubkey();
@@ -9964,7 +9964,7 @@ fn test_verify_transactions_packet_data_size() {
         create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
     let bank = Bank::new_for_tests(&genesis_config);
 
-    let recent_blockhash = hash::new_with_thread_rng();
+    let recent_blockhash = Hash::new_unique();
     let keypair = Keypair::new();
     let pubkey = keypair.pubkey();
     let make_transaction = |size| {

@@ -262,7 +262,7 @@ pub(crate) mod tests {
         solana_entry::entry::Entry,
         solana_ledger::shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
         solana_sdk::{
-            hash,
+            hash::Hash,
             signature::{Keypair, Signer},
             system_transaction,
         },
@@ -299,15 +299,15 @@ pub(crate) mod tests {
     ) -> Shred {
         let entries: Vec<_> = std::iter::repeat_with(|| {
             let tx = system_transaction::transfer(
-                &Keypair::new(),             // from
-                &Pubkey::new_unique(),       // to
-                rng.gen(),                   // lamports
-                hash::new_with_thread_rng(), // recent blockhash
+                &Keypair::new(),       // from
+                &Pubkey::new_unique(), // to
+                rng.gen(),             // lamports
+                Hash::new_unique(),    // recent blockhash
             );
             Entry::new(
-                &hash::new_with_thread_rng(), // prev_hash
-                1,                            // num_hashes,
-                vec![tx],                     // transactions
+                &Hash::new_unique(), // prev_hash
+                1,                   // num_hashes,
+                vec![tx],            // transactions
             )
         })
         .take(5)
