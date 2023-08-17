@@ -8280,22 +8280,10 @@ impl Bank {
                     self.capitalization
                         .fetch_sub(new_account.lamports(), Relaxed);
                     self.store_account(new_address, &AccountSharedData::default());
-                } else if let Some(old_data_account) =
-                    self.get_account_with_fixed_root(&old_data_address)
+                } else if self
+                    .get_account_with_fixed_root(&old_data_address)
+                    .is_none()
                 {
-                    // A data account exists for the old program, but not the
-                    // new program
-                    // Swap program accounts and delete the old data account
-                    self.replace_account(
-                        old_address,
-                        new_address,
-                        Some(&old_account),
-                        &new_account,
-                    );
-                    self.capitalization
-                        .fetch_sub(old_data_account.lamports(), Relaxed);
-                    self.store_account(&old_data_address, &AccountSharedData::default());
-                } else {
                     // A data account does not exist for the new program
                     // Swap program accounts only
                     self.replace_account(

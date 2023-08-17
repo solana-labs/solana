@@ -8163,15 +8163,17 @@ fn test_upgradable_program_replace_with_no_data() {
     // - OldData: [Old program data]
     // - New:     [*New program data]
     //
-    // Should replace the program account and delete the data account:
-    // - Old:     [*New program data]
+    // This is NOT allowed and should leave the program unchanged:
+    // - Old:     PDA(OldData)
+    // - OldData: [Old program data]
     let bpf_id = bpf_loader_upgradeable::id();
     let mut bank = create_simple_test_bank(0);
 
     let old = Pubkey::new_unique();
     let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
+    let old_program_bytes = vec![0, 1, 2, 3, 4, 5, 6];
     set_up_account_with_bank(&mut bank, &old, 100, old_data.to_bytes().to_vec());
-    set_up_account_with_bank(&mut bank, &old_data, 102, vec![0, 1, 2, 3, 4, 5, 6]);
+    set_up_account_with_bank(&mut bank, &old_data, 102, old_program_bytes.clone());
 
     let new = Pubkey::new_unique();
     let new_program_bytes = vec![6, 5, 4, 3, 2, 1, 0];
@@ -8181,22 +8183,26 @@ fn test_upgradable_program_replace_with_no_data() {
 
     bank.replace_program_account(&old, &new, "bank-apply_program_replacement");
 
-    // Old program account balance is unchanged
+    // All balances are unchanged
     assert_eq!(bank.get_balance(&old), 100);
+    assert_eq!(bank.get_balance(&old_data), 102);
+    assert_eq!(bank.get_balance(&new), 100);
 
-    // Old data account is now empty
-    assert_eq!(bank.get_balance(&old_data), 0);
-
-    // New program account is now empty
-    assert_eq!(bank.get_balance(&new), 0);
-
-    // Old program account now holds the new program bytes
-    // - Old:     [*New program data]
+    // Old program accounts' data are unchanged
+    // - Old:     PDA(OldData)
+    // - OldData: [Old program data]
     let old_account = bank.get_account(&old).unwrap();
-    assert_eq!(old_account.data(), &new_program_bytes,);
+    assert_eq!(old_account.data(), &old_data.to_bytes().to_vec());
+    let old_data_account = bank.get_account(&old_data).unwrap();
+    assert_eq!(old_data_account.data(), &old_program_bytes);
 
-    // Lamports in the old token accounts were burnt
-    assert_eq!(bank.capitalization(), original_capitalization - 100 - 102);
+    // New program account is unchanged
+    // - New:     [*New program data]
+    let new_account = bank.get_account(&new).unwrap();
+    assert_eq!(new_account.data(), &new_program_bytes);
+
+    // Lamports were unchanged across the board
+    assert_eq!(bank.capitalization(), original_capitalization);
 }
 
 fn min_rent_exempt_balance_for_sysvars(bank: &Bank, sysvar_ids: &[Pubkey]) -> u64 {
