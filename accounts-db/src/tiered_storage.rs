@@ -162,6 +162,7 @@ mod tests {
             account::{Account, AccountSharedData},
             clock::Slot,
             pubkey::Pubkey,
+            system_instruction::MAX_PERMITTED_DATA_LENGTH,
         },
         std::mem::ManuallyDrop,
         tempfile::tempdir,
@@ -330,25 +331,25 @@ mod tests {
 
     /// The helper function for all write_accounts tests.
     /// Currently only supports hot accounts.
-    fn write_accounts_test_impl(
+    fn do_write_accounts_test(
         path_suffix: &str,
         account_data_sizes: &[u64],
         format: TieredStorageFormat,
     ) {
-        let accounts: Vec<(StoredMeta, AccountSharedData)> = account_data_sizes
+        let accounts: Vec<_> = account_data_sizes
             .iter()
             .map(|size| create_test_account(*size))
             .collect();
 
-        let account_refs: Vec<(&Pubkey, &AccountSharedData)> = accounts
+        let account_refs: Vec<_> = accounts
             .iter()
             .map(|account| (&account.0.pubkey, &account.1))
             .collect();
 
         // Slot information is not used here
         let account_data = (Slot::MAX, &account_refs[..]);
-        let hashes: Vec<_> = (0..account_data_sizes.len())
-            .map(|_| Hash::new_unique())
+        let hashes: Vec<_> = std::iter::repeat_with(Hash::new_unique)
+            .take(account_data_sizes.len())
             .collect();
         let write_versions: Vec<_> = accounts
             .iter()
@@ -358,7 +359,7 @@ mod tests {
         let storable_accounts =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
                 &account_data,
-                hashes.iter().collect(),
+                hashes,
                 write_versions,
             );
 
@@ -368,14 +369,6 @@ mod tests {
         _ = tiered_storage.write_accounts(&storable_accounts, 0);
 
         verify_hot_storage(&tiered_storage, &storable_accounts, format);
-    }
-
-    fn optional_size<T: std::cmp::PartialEq>(value: &T, default_value: T) -> usize {
-        if *value != default_value {
-            std::mem::size_of::<T>()
-        } else {
-            0
-        }
     }
 
     /// Verify the generated tiered storage in the test.
@@ -413,7 +406,7 @@ mod tests {
 
     #[test]
     fn test_write_accounts_small_accounts() {
-        write_accounts_test_impl(
+        do_write_accounts_test(
             "test_write_accounts_small_accounts",
             &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
             HOT_FORMAT.clone(),
@@ -422,17 +415,17 @@ mod tests {
 
     #[test]
     fn test_write_accounts_one_10mb() {
-        write_accounts_test_impl(
-            "test_write_accounts_small_accounts",
-            &[10 * 1024 * 1024],
+        do_write_accounts_test(
+            "test_write_accounts_one_10mb",
+            &[MAX_PERMITTED_DATA_LENGTH],
             HOT_FORMAT.clone(),
         );
     }
 
     #[test]
     fn test_write_accounts_mixed_size() {
-        write_accounts_test_impl(
-            "test_write_accounts_small_accounts",
+        do_write_accounts_test(
+            "test_write_accounts_mixed_size",
             &[
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1000, 2000, 3000, 4000, 9, 8, 7, 6, 5, 4, 3, 2, 1,
             ],

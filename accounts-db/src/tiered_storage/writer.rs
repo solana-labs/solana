@@ -2,9 +2,7 @@
 
 use {
     crate::{
-        account_storage::meta::{
-            StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredMetaWriteVersion,
-        },
+        account_storage::meta::{StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo},
         storable_accounts::StorableAccounts,
         tiered_storage::{
             error::TieredStorageError, file::TieredStorageFile, footer::TieredStorageFooter,
@@ -46,25 +44,6 @@ impl<'format> TieredStorageWriter<'format> {
         })
     }
 
-    /// Persists a single account to a dedicated new account block and
-    /// return its stored size.
-    ///
-    /// The function currently only supports HotAccountMeta, and will
-    /// be extended to cover more TieredAccountMeta in future PRs.
-    fn write_single_account<T: ReadableAccount + Sync>(
-        &self,
-        _account: Option<&T>,
-        _account_hash: &Hash,
-        _write_version: StoredMetaWriteVersion,
-        footer: &mut TieredStorageFooter,
-    ) -> TieredStorageResult<()> {
-        footer.account_entry_count += 1;
-
-        // TODO(yhchiang): implementation will be included in separate PRs.
-
-        Ok(())
-    }
-
     pub fn write_accounts<
         'a,
         'b,
@@ -84,13 +63,7 @@ impl<'format> TieredStorageWriter<'format> {
             ..TieredStorageFooter::default()
         };
 
-        let len = accounts.accounts.len();
-        for i in skip..len {
-            let (account, _, hash, write_version) = accounts.get(i);
-
-            self.write_single_account(account, hash, write_version, &mut footer)?;
-        }
-
+        footer.account_entry_count = accounts.accounts.len().saturating_sub(skip) as u32;
         footer.write_footer_block(&self.storage)?;
 
         Err(TieredStorageError::Unsupported())
