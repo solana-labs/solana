@@ -7971,15 +7971,15 @@ fn test_compute_active_feature_set() {
     feature_set.inactive.insert(test_feature);
     bank.feature_set = Arc::new(feature_set.clone());
 
-    let new_activations = bank.compute_active_feature_set(true);
+    let (feature_set, new_activations) = bank.compute_active_feature_set(true);
     assert!(new_activations.is_empty());
-    assert!(!bank.feature_set.is_active(&test_feature));
+    assert!(!feature_set.is_active(&test_feature));
 
     // Depositing into the `test_feature` account should do nothing
     bank.deposit(&test_feature, 42).unwrap();
-    let new_activations = bank.compute_active_feature_set(true);
+    let (feature_set, new_activations) = bank.compute_active_feature_set(true);
     assert!(new_activations.is_empty());
-    assert!(!bank.feature_set.is_active(&test_feature));
+    assert!(!feature_set.is_active(&test_feature));
 
     // Request `test_feature` activation
     let feature = Feature::default();
@@ -7987,30 +7987,26 @@ fn test_compute_active_feature_set() {
     bank.store_account(&test_feature, &feature::create_account(&feature, 42));
 
     // Run `compute_active_feature_set` disallowing new activations
-    let new_activations = bank.compute_active_feature_set(false);
+    let (feature_set, new_activations) = bank.compute_active_feature_set(false);
     assert!(new_activations.is_empty());
-    assert!(!bank.feature_set.is_active(&test_feature));
+    assert!(!feature_set.is_active(&test_feature));
     let feature = feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
         .expect("from_account");
     assert_eq!(feature.activated_at, None);
 
     // Run `compute_active_feature_set` allowing new activations
-    let new_activations = bank.compute_active_feature_set(true);
+    let (feature_set, new_activations) = bank.compute_active_feature_set(true);
     assert_eq!(new_activations.len(), 1);
-    assert!(bank.feature_set.is_active(&test_feature));
+    assert!(feature_set.is_active(&test_feature));
     let feature = feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
         .expect("from_account");
     assert_eq!(feature.activated_at, Some(1));
 
-    // Reset the bank's feature set
-    bank.feature_set = Arc::new(feature_set);
-    assert!(!bank.feature_set.is_active(&test_feature));
-
     // Running `compute_active_feature_set` will not cause new activations, but
     // `test_feature` is now be active
-    let new_activations = bank.compute_active_feature_set(true);
+    let (feature_set, new_activations) = bank.compute_active_feature_set(true);
     assert!(new_activations.is_empty());
-    assert!(bank.feature_set.is_active(&test_feature));
+    assert!(feature_set.is_active(&test_feature));
 }
 
 #[test]
@@ -8880,7 +8876,7 @@ fn test_get_inflation_start_slot_devnet_testnet() {
             42,
         ),
     );
-    bank.compute_active_feature_set(true);
+    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
     assert_eq!(bank.get_inflation_start_slot(), 1);
 
     // Advance slot
@@ -8898,7 +8894,7 @@ fn test_get_inflation_start_slot_devnet_testnet() {
             42,
         ),
     );
-    bank.compute_active_feature_set(true);
+    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
     assert_eq!(bank.get_inflation_start_slot(), 2);
 
     // Request `full_inflation::mainnet::certusone` activation,
@@ -8921,7 +8917,7 @@ fn test_get_inflation_start_slot_devnet_testnet() {
             42,
         ),
     );
-    bank.compute_active_feature_set(true);
+    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
     assert_eq!(bank.get_inflation_start_slot(), 2);
 }
 
@@ -8961,7 +8957,7 @@ fn test_get_inflation_start_slot_mainnet() {
             42,
         ),
     );
-    bank.compute_active_feature_set(true);
+    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
     assert_eq!(bank.get_inflation_start_slot(), 1);
 
     // Advance slot
@@ -8988,7 +8984,7 @@ fn test_get_inflation_start_slot_mainnet() {
             42,
         ),
     );
-    bank.compute_active_feature_set(true);
+    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
     assert_eq!(bank.get_inflation_start_slot(), 2);
 
     // Advance slot
@@ -9006,7 +9002,7 @@ fn test_get_inflation_start_slot_mainnet() {
             42,
         ),
     );
-    bank.compute_active_feature_set(true);
+    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
     assert_eq!(bank.get_inflation_start_slot(), 2);
 }
 
@@ -9048,7 +9044,7 @@ fn test_get_inflation_num_slots_with_activations() {
             42,
         ),
     );
-    bank.compute_active_feature_set(true);
+    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
     assert_eq!(bank.get_inflation_num_slots(), slots_per_epoch);
     for _ in 0..slots_per_epoch {
         bank = new_from_parent(&Arc::new(bank));
@@ -9066,7 +9062,7 @@ fn test_get_inflation_num_slots_with_activations() {
             42,
         ),
     );
-    bank.compute_active_feature_set(true);
+    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
     assert_eq!(bank.get_inflation_num_slots(), slots_per_epoch);
     for _ in 0..slots_per_epoch {
         bank = new_from_parent(&Arc::new(bank));
