@@ -352,6 +352,7 @@ startBootstrapLeader() {
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
          \"$enableUdp\" \
+         \"false\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -365,7 +366,6 @@ startNode() {
   declare ipAddress=$1
   declare nodeType=$2
   declare nodeIndex="$3"
-  declare wenRestart=$4
 
   initLogDir
   declare logFile="$netLogDir/validator-$ipAddress.log"
@@ -427,7 +427,7 @@ startNode() {
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
          \"$enableUdp\" \
-         \"$wenRestart\" \
+         \"false\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -727,7 +727,7 @@ deploy() {
       SECONDS=0
       pids=()
     else
-      startNode "$ipAddress" "$nodeType" "$nodeIndex" false
+      startNode "$ipAddress" "$nodeType" "$nodeIndex"
 
       # Stagger additional node start time. If too many nodes start simultaneously
       # the bootstrap node gets more rsync requests from the additional nodes than
@@ -1259,7 +1259,7 @@ startnode)
   nodeType=
   nodeIndex=
   getNodeType
-  startNode "$nodeAddress" "$nodeType" "$nodeIndex" false
+  startNode "$nodeAddress" "$nodeType" "$nodeIndex"
   ;;
 startclients)
   startClients
