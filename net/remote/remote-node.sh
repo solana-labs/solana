@@ -293,10 +293,6 @@ EOF
       args+=(--tpu-enable-udp)
     fi
 
-    if $wenRestart; then
-      args+=(--wen-restart)
-    fi
-
     if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
       ./multinode-demo/faucet.sh > faucet.log 2>&1 &
@@ -431,6 +427,10 @@ EOF
 
     if $enableUdp; then
       args+=(--tpu-enable-udp)
+    fi
+
+    if $wenRestart; then
+      args+=(--wen-restart)
     fi
 
 cat >> ~/solana/on-reboot <<EOF
