@@ -7,7 +7,7 @@ use {
     solana_measure::measure::Measure,
     std::{
         collections::HashSet,
-        fs::{self, remove_file, OpenOptions},
+        fs::{self, remove_file, File, OpenOptions},
         io::{Seek, SeekFrom, Write},
         path::{Path, PathBuf},
         sync::{Arc, Mutex},
@@ -23,7 +23,15 @@ pub struct Header {
     count: usize,
 }
 
-pub struct CacheHashDataFile {
+/// cache hash data file to be mmapped later
+pub(crate) struct CacheHashDataFileReference {
+    file: File,
+    file_len: u64,
+    path: PathBuf,
+}
+
+/// mmapped cache hash data file
+pub(crate) struct CacheHashDataFile {
     cell_size: u64,
     mmap: MmapMut,
     capacity: u64,
@@ -129,14 +137,8 @@ impl CacheHashDataFile {
         Ok(unsafe { MmapMut::map_mut(&data).unwrap() })
     }
 
-    fn load_map(file: impl AsRef<Path>) -> Result<MmapMut, std::io::Error> {
-        let data = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(false)
-            .open(file)?;
-
-        Ok(unsafe { MmapMut::map_mut(&data).unwrap() })
+    fn load_map(file: &File) -> Result<MmapMut, std::io::Error> {
+        Ok(unsafe { MmapMut::map_mut(file).unwrap() })
     }
 }
 
@@ -196,7 +198,7 @@ impl CacheHashData {
 
     #[cfg(test)]
     /// load from 'file_name' into 'accumulator'
-    pub fn load(
+    pub(crate) fn load(
         &self,
         file_name: impl AsRef<Path>,
         accumulator: &mut SavedType,
@@ -212,13 +214,43 @@ impl CacheHashData {
         Ok(())
     }
 
+    /// open a cache hash file, but don't map it.
+    /// This allows callers to know a file exists, but preserves the # mmapped files.
+    fn get_file_reference_to_map_later(
+        &self,
+        file_name: impl AsRef<Path>,
+    ) -> Result<CacheHashDataFileReference, std::io::Error> {
+        let mut stats = CacheHashDataStats::default();
+        let path = self.cache_dir.join(&file_name);
+        let file_len = std::fs::metadata(&path)?.len();
+        let mut m1 = Measure::start("read_file");
+
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(false)
+            .open(path.clone())?;
+        m1.stop();
+        stats.read_us = m1.as_us();
+
+        self.stats.lock().unwrap().accumulate(&stats);
+        self.pre_existing_cache_file_will_be_used(file_name);
+
+        Ok(CacheHashDataFileReference {
+            file,
+            file_len,
+            path,
+        })
+    }
+
     /// map 'file_name' into memory
-    pub fn load_map(
+    pub(crate) fn load_map(
         &self,
         file_name: impl AsRef<Path>,
     ) -> Result<CacheHashDataFile, std::io::Error> {
         let mut stats = CacheHashDataStats::default();
-        let result = self.map(file_name, &mut stats);
+        let reference = self.get_file_reference_to_map_later(file_name)?;
+        let result = self.map(reference, &mut stats);
         self.stats.lock().unwrap().accumulate(&stats);
         result
     }
@@ -226,13 +258,12 @@ impl CacheHashData {
     /// create and return a MappedCacheFile for a cache file path
     fn map(
         &self,
-        file_name: impl AsRef<Path>,
+        reference: CacheHashDataFileReference,
         stats: &mut CacheHashDataStats,
     ) -> Result<CacheHashDataFile, std::io::Error> {
-        let path = self.cache_dir.join(&file_name);
-        let file_len = std::fs::metadata(&path)?.len();
+        let file_len = reference.file_len;
         let mut m1 = Measure::start("read_file");
-        let mmap = CacheHashDataFile::load_map(&path)?;
+        let mmap = CacheHashDataFile::load_map(&reference.file)?;
         m1.stop();
         stats.read_us = m1.as_us();
         let header_size = std::mem::size_of::<Header>() as u64;
@@ -264,21 +295,23 @@ impl CacheHashData {
         cache_file.capacity = capacity;
         assert_eq!(
             capacity, file_len,
-            "expected: {capacity}, len on disk: {file_len} {}, entries: {entries}, cell_size: {cell_size}", path.display(),
+            "expected: {capacity}, len on disk: {file_len} {}, entries: {entries}, cell_size: {cell_size}", reference.path.display(),
         );
 
         stats.total_entries = entries;
         stats.cache_file_size += capacity as usize;
 
-        self.pre_existing_cache_files
-            .lock()
-            .unwrap()
-            .remove(file_name.as_ref());
-
         stats.loaded_from_cache += 1;
         stats.entries_loaded_from_cache += entries;
 
         Ok(cache_file)
+    }
+
+    pub(crate) fn pre_existing_cache_file_will_be_used(&self, file_name: impl AsRef<Path>) {
+        self.pre_existing_cache_files
+            .lock()
+            .unwrap()
+            .remove(file_name.as_ref());
     }
 
     /// save 'data' to 'file_name'
