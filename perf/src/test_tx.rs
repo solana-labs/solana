@@ -61,7 +61,7 @@ where
     slots.dedup();
     let switch_proof_hash = rng
         .gen_bool(0.5)
-        .then(|| solana_sdk::hash::new_with_thread_rng());
+        .then(solana_sdk::hash::new_with_thread_rng);
     vote_transaction::new_vote_transaction(
         slots,
         solana_sdk::hash::new_with_thread_rng(), // bank_hash
