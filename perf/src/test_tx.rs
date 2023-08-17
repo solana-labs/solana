@@ -66,9 +66,9 @@ where
         slots,
         solana_sdk::hash::new_with_thread_rng(), // bank_hash
         solana_sdk::hash::new_with_thread_rng(), // blockhash
-        &Keypair::generate(rng),                 // node_keypair
-        &Keypair::generate(rng),                 // vote_keypair
-        &Keypair::generate(rng),                 // authorized_voter_keypair
+        &Keypair::new(),                         // node_keypair
+        &Keypair::new(),                         // vote_keypair
+        &Keypair::new(),                         // authorized_voter_keypair
         switch_proof_hash,
     )
 }
