@@ -1973,7 +1973,7 @@ impl ReplayStage {
 
     #[allow(clippy::too_many_arguments)]
     fn replay_blockstore_into_bank(
-        bank: Arc<Bank>,
+        bank: &Arc<Bank>,
         blockstore: &Blockstore,
         replay_stats: &RwLock<ReplaySlotStats>,
         replay_progress: &RwLock<ConfirmationProgress>,
@@ -2596,7 +2596,7 @@ impl ReplayStage {
                         let mut replay_blockstore_time =
                             Measure::start("replay_blockstore_into_bank");
                         let blockstore_result = Self::replay_blockstore_into_bank(
-                            bank,
+                            &bank,
                             blockstore,
                             &replay_stats,
                             &replay_progress,
@@ -2679,7 +2679,7 @@ impl ReplayStage {
             if bank.collector_id() != my_pubkey {
                 let mut replay_blockstore_time = Measure::start("replay_blockstore_into_bank");
                 let blockstore_result = Self::replay_blockstore_into_bank(
-                    bank,
+                    &bank,
                     blockstore,
                     &bank_progress.replay_stats,
                     &bank_progress.replay_progress,
@@ -4608,7 +4608,7 @@ pub(crate) mod tests {
             let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
             let exit = Arc::new(AtomicBool::new(false));
             let res = ReplayStage::replay_blockstore_into_bank(
-                bank1.clone(),
+                &bank1,
                 &blockstore,
                 &bank1_progress.replay_stats,
                 &bank1_progress.replay_progress,

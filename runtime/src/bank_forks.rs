@@ -696,7 +696,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
-        let child_bank = Bank::new_from_parent(bank_forks[0u64].clone(), &Pubkey::default(), 1);
+        let child_bank = Bank::new_from_parent(bank_forks[0].clone(), &Pubkey::default(), 1);
         child_bank.register_tick(&Hash::default());
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks[1u64].tick_height(), 1);
@@ -723,7 +723,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
-        let bank0 = bank_forks.get(0).unwrap();
+        let bank0 = bank_forks[0].clone();
         let bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
         bank_forks.insert(bank);
         let bank = Bank::new_from_parent(bank0, &Pubkey::default(), 2);
@@ -740,7 +740,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
-        let bank0 = bank_forks.get(0).unwrap();
+        let bank0 = bank_forks[0].clone();
         let bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
         bank_forks.insert(bank);
         let bank = Bank::new_from_parent(bank0, &Pubkey::default(), 2);
@@ -758,7 +758,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
-        let bank0 = bank_forks.get(0).unwrap();
+        let bank0 = bank_forks[0].clone();
         let child_bank = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
         assert!(bank_forks.frozen_banks().get(&0).is_some());
@@ -770,7 +770,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
-        let bank0 = bank_forks.get(0).unwrap();
+        let bank0 = bank_forks[0].clone();
         let child_bank = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks.active_bank_slots(), vec![1]);
