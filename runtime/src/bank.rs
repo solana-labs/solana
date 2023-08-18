@@ -8196,20 +8196,30 @@ impl Bank {
         }
     }
 
-    fn replace_account(
+    fn replace_account<O, N>(
         &mut self,
         old_address: &Pubkey,
         new_address: &Pubkey,
-        old_account: Option<&AccountSharedData>,
-        new_account: &AccountSharedData,
-    ) {
+        old_account: Option<&O>,
+        new_account: &N,
+    ) where
+        O: ReadableAccount + Sync + ZeroLamport,
+        N: ReadableAccount + Sync + ZeroLamport,
+    {
         let (old_lamports, old_len) = match old_account {
             Some(old_account) => (old_account.lamports(), old_account.data().len()),
             None => (0, 0),
         };
+
+        // Burn lamports in the old account
         self.capitalization.fetch_sub(old_lamports, Relaxed);
+
+        // Transfer new account to old account
         self.store_account(old_address, new_account);
+
+        // Clear new account
         self.store_account(new_address, &AccountSharedData::default());
+
         self.calculate_and_update_accounts_data_size_delta_off_chain(
             old_len,
             new_account.data().len(),
@@ -8224,9 +8234,32 @@ impl Bank {
         new_address: &Pubkey,
         datapoint_name: &'static str,
     ) {
-        if let Some(new_account) = self.get_account_with_fixed_root(new_address) {
-            datapoint_info!(datapoint_name, ("slot", self.slot, i64));
+        if let Some(old_account) = self.get_account_with_fixed_root(old_address) {
+            if let Some(new_account) = self.get_account_with_fixed_root(new_address) {
+                datapoint_info!(datapoint_name, ("slot", self.slot, i64));
 
+                self.replace_account(old_address, new_address, Some(&old_account), &new_account);
+
+                // Unload a program from the bank's cache
+                self.loaded_programs_cache
+                    .write()
+                    .unwrap()
+                    .remove_programs([*old_address].into_iter());
+            }
+        }
+    }
+
+    /// Use to replace an empty account with a program by feature activation
+    #[allow(dead_code)]
+    fn replace_empty_account_with_upgradeable_program(
+        &mut self,
+        old_address: &Pubkey,
+        new_address: &Pubkey,
+        datapoint_name: &'static str,
+    ) {
+        // Must be attempting to replace an empty account with a program
+        // account _and_ data account
+        if let Some(new_account) = self.get_account_with_fixed_root(new_address) {
             let (old_data_address, _) = Pubkey::find_program_address(
                 &[old_address.as_ref()],
                 &bpf_loader_upgradeable::id(),
@@ -8235,47 +8268,15 @@ impl Bank {
                 &[new_address.as_ref()],
                 &bpf_loader_upgradeable::id(),
             );
-
-            // If a data account is also provided with this new program
-            // account, then we want to update the existing data account
             if let Some(new_data_account) = self.get_account_with_fixed_root(&new_data_address) {
+                datapoint_info!(datapoint_name, ("slot", self.slot, i64));
+
                 let data = old_data_address.as_ref().to_vec();
+                let lamports = self.get_minimum_balance_for_rent_exemption(data.len());
 
-                let change_in_cap =
-                    if let Some(old_account) = self.get_account_with_fixed_root(old_address) {
-                        // If the old program account exists and the data is not
-                        // the PDA of the data account, overwrite the data with the
-                        // PDA and fund it with any lamports for rent if necessary
-                        if old_account.data() != data {
-                            let lamports = old_account
-                                .lamports()
-                                .max(self.get_minimum_balance_for_rent_exemption(data.len()));
-                            let overwrite = Account {
-                                lamports,
-                                data,
-                                ..Account::from(new_account.clone())
-                            };
-                            self.store_account(old_address, &overwrite);
-                            new_account.lamports() + old_account.lamports() - lamports
-                        } else {
-                            new_account.lamports()
-                        }
-                    } else {
-                        // If the old program account does not exist, create it
-                        // with the PDA as its data and fund it with rent-exempt
-                        // lamports
-                        let lamports = self.get_minimum_balance_for_rent_exemption(data.len());
-                        let overwrite = Account {
-                            lamports,
-                            data,
-                            ..Account::from(new_account.clone())
-                        };
-                        self.store_account(old_address, &overwrite);
-                        new_account.lamports() - lamports
-                    };
-
-                // Replace the old data account with the new data account
+                // Replace the old data account with the new one
                 // If the old data account does not exist, it will be created
+                // If the new data account does exist, it will be overwritten
                 self.replace_account(
                     &old_data_address,
                     &new_data_address,
@@ -8283,31 +8284,23 @@ impl Bank {
                     &new_data_account,
                 );
 
-                // Clear the new program account
-                self.store_account(new_address, &AccountSharedData::default());
-
-                // Update capitalization
-                self.capitalization.fetch_sub(change_in_cap, Relaxed);
-            } else if self
-                .get_account_with_fixed_root(&old_data_address)
-                .is_none()
-            {
-                // A data account does not exist for the new program
-                // Replace the old program account with the new program account
-                // If the old program account doesn't exist, it will be created
+                // Write the data account's PDA into the program account
+                let created_program_account = Account {
+                    lamports,
+                    data,
+                    ..new_account.clone().into()
+                };
                 self.replace_account(
                     old_address,
                     new_address,
                     self.get_account_with_fixed_root(old_address).as_ref(),
-                    &new_account,
+                    &created_program_account,
                 );
-            }
 
-            // Unload a program from the bank's cache
-            self.loaded_programs_cache
-                .write()
-                .unwrap()
-                .remove_programs([*old_address].into_iter());
+                // Any remaining lamports in the new program account are burnt
+                let change_in_cap = new_account.lamports() - lamports;
+                self.capitalization.fetch_sub(change_in_cap, Relaxed);
+            }
         }
     }
 
