@@ -401,14 +401,22 @@ mod tests {
         std::sync::atomic::AtomicU64,
     };
 
-    /// Given a bank get the parent slot chains, this include the parent slot of the oldest parent bank.
+    // Given a bank, get a chain of the parent slots (descending order)
+    // inclusive of the provided bank.
     fn get_parent_chains(bank: &Arc<Bank>) -> Vec<Slot> {
-        let mut parents = bank.parents();
-        let oldest_parent = parents.last().map(|last| last.parent_slot());
-        parents.push(bank.clone());
-        let mut rooted_slots: Vec<_> = parents.iter().map(|bank| bank.slot()).collect();
-        rooted_slots.push(oldest_parent.unwrap_or_else(|| bank.parent_slot()));
-        rooted_slots
+        let parents = bank.clone().parents_inclusive();
+        // The oldest parent Bank does not have a parent Bank to link to as
+        // that is either the end of chain (block 0) or that parent may have
+        // been cleaned up. However, bank's cache the parent slot so we can
+        // still add one more parent slot to the chain. The unwrap() is safe
+        // because parents_inclusive() will contain at least the bank that it
+        // was invoked on.
+        let oldest_parent = parents.last().unwrap().parent_slot();
+        parents
+            .iter()
+            .map(|bank| bank.slot())
+            .chain(std::iter::once(oldest_parent))
+            .collect()
     }
 
     /// Receive the Root notifications from the channel, if no item received within 100 ms, break and return all
