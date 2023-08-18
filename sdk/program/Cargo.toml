@@ -60,7 +60,6 @@ libc = { workspace = true, features = ["extra_traits"] }
 libsecp256k1 = { workspace = true }
 num-bigint = { workspace = true }
 rand = { workspace = true }
-rand_chacha = { workspace = true }
 tiny-bip39 = { workspace = true }
 wasm-bindgen = { workspace = true }
 zeroize = { workspace = true, features = ["default", "zeroize_derive"] }

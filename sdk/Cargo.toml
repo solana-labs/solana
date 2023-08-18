@@ -27,7 +27,6 @@ full = [
     "memmap2",
     "rand",
     "rand0-7",
-    "rand_chacha",
     "serde_json",
     "ed25519-dalek",
     "ed25519-dalek-bip32",
@@ -67,8 +66,6 @@ pbkdf2 = { workspace = true }
 qstring = { workspace = true }
 rand = { workspace = true, optional = true }
 rand0-7 = { package = "rand", version = "0.7", optional = true } # remove with upgrade to ed25519-dalek v2
-rand_chacha = { workspace = true, optional = true }
-rand_core = { workspace = true, optional = true }
 rustversion = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }

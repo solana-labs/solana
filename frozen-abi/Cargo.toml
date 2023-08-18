@@ -33,7 +33,6 @@ generic-array = { workspace = true, features = ["serde", "more_lengths"] }
 im = { workspace = true, features = ["rayon", "serde"] }
 memmap2 = { workspace = true }
 once_cell = { workspace = true, features = ["alloc", "race"] }
-rand_core = { workspace = true, features = ["std"] }
 subtle = { workspace = true }
 
 [target.'cfg(any(unix, windows))'.dependencies]
