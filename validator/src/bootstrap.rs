@@ -81,7 +81,7 @@ fn verify_reachable_ports(
     };
     let mut udp_sockets = vec![&node.sockets.gossip, &node.sockets.repair];
 
-    if verify_address(&node.info.serve_repair().ok()) {
+    if verify_address(&node.info.serve_repair(Protocol::UDP).ok()) {
         udp_sockets.push(&node.sockets.serve_repair);
     }
     if verify_address(&node.info.tpu(Protocol::UDP).ok()) {

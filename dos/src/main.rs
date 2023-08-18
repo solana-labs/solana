@@ -448,8 +448,10 @@ fn get_target(
                     Mode::TpuForwards => {
                         Some((*node.pubkey(), node.tpu_forwards(protocol).unwrap()))
                     }
-                    Mode::Repair => Some((*node.pubkey(), node.repair().unwrap())),
-                    Mode::ServeRepair => Some((*node.pubkey(), node.serve_repair().unwrap())),
+                    Mode::Repair => todo!("repair socket is not gossiped anymore!"),
+                    Mode::ServeRepair => {
+                        Some((*node.pubkey(), node.serve_repair(Protocol::UDP).unwrap()))
+                    }
                     Mode::Rpc => None,
                 };
                 break;
@@ -856,6 +858,9 @@ pub mod test {
             },
         );
 
+        // TODO: Figure out how to DOS repair. Repair socket is no longer
+        // gossiped and cannot be obtained from a node's contact-info.
+        #[cfg(not(test))]
         run_dos_no_client(
             &nodes,
             1,

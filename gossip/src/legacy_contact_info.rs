@@ -27,8 +27,8 @@ pub struct LegacyContactInfo {
     tvu: SocketAddr,
     /// TVU over QUIC protocol.
     tvu_quic: SocketAddr,
-    /// address to send repair responses to
-    repair: SocketAddr,
+    /// repair service over QUIC protocol.
+    serve_repair_quic: SocketAddr,
     /// transactions address
     tpu: SocketAddr,
     /// address to forward unprocessed transactions to
@@ -124,7 +124,7 @@ impl Default for LegacyContactInfo {
             gossip: socketaddr_any!(),
             tvu: socketaddr_any!(),
             tvu_quic: socketaddr_any!(),
-            repair: socketaddr_any!(),
+            serve_repair_quic: socketaddr_any!(),
             tpu: socketaddr_any!(),
             tpu_forwards: socketaddr_any!(),
             tpu_vote: socketaddr_any!(),
@@ -144,7 +144,7 @@ impl LegacyContactInfo {
             gossip: socketaddr!(Ipv4Addr::LOCALHOST, 1234),
             tvu: socketaddr!(Ipv4Addr::LOCALHOST, 1235),
             tvu_quic: socketaddr!(Ipv4Addr::LOCALHOST, 1236),
-            repair: socketaddr!(Ipv4Addr::LOCALHOST, 1237),
+            serve_repair_quic: socketaddr!(Ipv4Addr::LOCALHOST, 1237),
             tpu: socketaddr!(Ipv4Addr::LOCALHOST, 1238),
             tpu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1239),
             tpu_vote: socketaddr!(Ipv4Addr::LOCALHOST, 1240),
@@ -206,13 +206,12 @@ impl LegacyContactInfo {
 
     get_socket!(gossip);
     get_socket!(tvu, tvu_quic);
-    get_socket!(repair);
     get_socket!(@quic tpu);
     get_socket!(@quic tpu_forwards);
     get_socket!(tpu_vote);
     get_socket!(rpc);
     get_socket!(rpc_pubsub);
-    get_socket!(serve_repair);
+    get_socket!(serve_repair, serve_repair_quic);
 
     set_socket!(set_gossip, gossip);
     set_socket!(set_rpc, rpc);
@@ -274,13 +273,13 @@ impl TryFrom<&ContactInfo> for LegacyContactInfo {
             gossip: unwrap_socket!(gossip),
             tvu: unwrap_socket!(tvu, Protocol::UDP),
             tvu_quic: unwrap_socket!(tvu, Protocol::QUIC),
-            repair: unwrap_socket!(repair),
+            serve_repair_quic: unwrap_socket!(serve_repair, Protocol::QUIC),
             tpu: unwrap_socket!(tpu, Protocol::UDP),
             tpu_forwards: unwrap_socket!(tpu_forwards, Protocol::UDP),
             tpu_vote: unwrap_socket!(tpu_vote),
             rpc: unwrap_socket!(rpc),
             rpc_pubsub: unwrap_socket!(rpc_pubsub),
-            serve_repair: unwrap_socket!(serve_repair),
+            serve_repair: unwrap_socket!(serve_repair, Protocol::UDP),
             wallclock: node.wallclock(),
             shred_version: node.shred_version(),
         })

@@ -18,7 +18,7 @@ use {
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
-        legacy_contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo},
+        contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo, Protocol},
         ping_pong::{self, PingCache, Pong},
         weighted_shuffle::WeightedShuffle,
     },
@@ -101,9 +101,9 @@ pub enum ShredRepairType {
 impl ShredRepairType {
     pub fn slot(&self) -> Slot {
         match self {
-            ShredRepairType::Orphan(slot) => *slot,
-            ShredRepairType::HighestShred(slot, _) => *slot,
-            ShredRepairType::Shred(slot, _) => *slot,
+            ShredRepairType::Orphan(slot)
+            | ShredRepairType::HighestShred(slot, _)
+            | ShredRepairType::Shred(slot, _) => *slot,
         }
     }
 }
@@ -112,9 +112,8 @@ impl RequestResponse for ShredRepairType {
     type Response = Shred;
     fn num_expected_responses(&self) -> u32 {
         match self {
-            ShredRepairType::Orphan(_) => (MAX_ORPHAN_REPAIR_RESPONSES) as u32,
-            ShredRepairType::HighestShred(_, _) => 1,
-            ShredRepairType::Shred(_, _) => 1,
+            ShredRepairType::Orphan(_) => MAX_ORPHAN_REPAIR_RESPONSES as u32,
+            ShredRepairType::Shred(_, _) | ShredRepairType::HighestShred(_, _) => 1,
         }
     }
     fn verify_response(&self, response_shred: &Shred) -> bool {
@@ -214,7 +213,7 @@ pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
 #[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize, strum_macros::Display)]
-#[frozen_abi(digest = "DPHju3YufeNw1qfr22ZWRgJdXb1TvZt8iwLqWXUTyrtW")]
+#[frozen_abi(digest = "3VzVe3kMrG6ijkVPyCGeJVA9hQjWcFEZbAQPc5Zizrjm")]
 pub enum RepairProtocol {
     LegacyWindowIndex(LegacyContactInfo, Slot, u64),
     LegacyHighestWindowIndex(LegacyContactInfo, Slot, u64),
@@ -307,18 +306,17 @@ impl RepairProtocol {
     fn max_response_packets(&self) -> usize {
         match self {
             RepairProtocol::WindowIndex { .. }
-            | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
             | RepairProtocol::HighestWindowIndex { .. }
-            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
-            | RepairProtocol::AncestorHashes { .. }
-            | RepairProtocol::LegacyAncestorHashes(_, _, _) => 1,
-            RepairProtocol::Orphan { .. } | RepairProtocol::LegacyOrphanWithNonce(_, _, _) => {
-                MAX_ORPHAN_REPAIR_RESPONSES
-            }
+            | RepairProtocol::AncestorHashes { .. } => 1,
+            RepairProtocol::Orphan { .. } => MAX_ORPHAN_REPAIR_RESPONSES,
             RepairProtocol::Pong(_) => 0, // no response
             RepairProtocol::LegacyWindowIndex(_, _, _)
             | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
-            | RepairProtocol::LegacyOrphan(_, _) => 0, // unsupported
+            | RepairProtocol::LegacyOrphan(_, _)
+            | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
+            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
+            | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
+            | RepairProtocol::LegacyAncestorHashes(_, _, _) => 0, // unsupported
         }
     }
 
@@ -350,7 +348,7 @@ impl RepairPeers {
             .iter()
             .zip(weights)
             .filter_map(|(peer, &weight)| {
-                let addr = peer.serve_repair().ok()?;
+                let addr = peer.serve_repair(Protocol::UDP).ok()?;
                 Some(((*peer.pubkey(), addr), weight))
             })
             .unzip();
@@ -1078,7 +1076,7 @@ impl ServeRepair {
             .shuffle(&mut rand::thread_rng())
             .map(|i| index[i])
             .filter_map(|i| {
-                let addr = repair_peers[i].serve_repair().ok()?;
+                let addr = repair_peers[i].serve_repair(Protocol::UDP).ok()?;
                 Some((*repair_peers[i].pubkey(), addr))
             })
             .take(get_ancestor_hash_repair_sample_size())
@@ -1102,7 +1100,10 @@ impl ServeRepair {
             .unzip();
         let k = WeightedIndex::new(weights)?.sample(&mut rand::thread_rng());
         let n = index[k];
-        Ok((*repair_peers[n].pubkey(), repair_peers[n].serve_repair()?))
+        Ok((
+            *repair_peers[n].pubkey(),
+            repair_peers[n].serve_repair(Protocol::UDP)?,
+        ))
     }
 
     pub(crate) fn map_repair_request(
@@ -1912,7 +1913,6 @@ mod tests {
         nxt.set_gossip((Ipv4Addr::LOCALHOST, 1234)).unwrap();
         nxt.set_tvu((Ipv4Addr::LOCALHOST, 1235)).unwrap();
         nxt.set_tvu_quic((Ipv4Addr::LOCALHOST, 1236)).unwrap();
-        nxt.set_repair((Ipv4Addr::LOCALHOST, 1237)).unwrap();
         nxt.set_tpu((Ipv4Addr::LOCALHOST, 1238)).unwrap();
         nxt.set_tpu_forwards((Ipv4Addr::LOCALHOST, 1239)).unwrap();
         nxt.set_tpu_vote((Ipv4Addr::LOCALHOST, 1240)).unwrap();
@@ -1931,8 +1931,8 @@ mod tests {
                 &identity_keypair,
             )
             .unwrap();
-        assert_eq!(nxt.serve_repair().unwrap(), serve_repair_addr);
-        assert_eq!(rv.0, nxt.serve_repair().unwrap());
+        assert_eq!(nxt.serve_repair(Protocol::UDP).unwrap(), serve_repair_addr);
+        assert_eq!(rv.0, nxt.serve_repair(Protocol::UDP).unwrap());
 
         let serve_repair_addr2 = socketaddr!([127, 0, 0, 2], 1243);
         let mut nxt = ContactInfo::new(
@@ -1943,7 +1943,6 @@ mod tests {
         nxt.set_gossip((Ipv4Addr::LOCALHOST, 1234)).unwrap();
         nxt.set_tvu((Ipv4Addr::LOCALHOST, 1235)).unwrap();
         nxt.set_tvu_quic((Ipv4Addr::LOCALHOST, 1236)).unwrap();
-        nxt.set_repair((Ipv4Addr::LOCALHOST, 1237)).unwrap();
         nxt.set_tpu((Ipv4Addr::LOCALHOST, 1238)).unwrap();
         nxt.set_tpu_forwards((Ipv4Addr::LOCALHOST, 1239)).unwrap();
         nxt.set_tpu_vote((Ipv4Addr::LOCALHOST, 1240)).unwrap();
@@ -2294,9 +2293,9 @@ mod tests {
         let repair = ShredRepairType::Orphan(9);
         // Ensure new options are addded to this test
         match repair {
-            ShredRepairType::Orphan(_) => (),
-            ShredRepairType::HighestShred(_, _) => (),
-            ShredRepairType::Shred(_, _) => (),
+            ShredRepairType::Orphan(_)
+            | ShredRepairType::HighestShred(_, _)
+            | ShredRepairType::Shred(_, _) => (),
         };
 
         let slot = 9;

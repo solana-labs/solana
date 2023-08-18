@@ -131,10 +131,10 @@ mod tests {
         bank2.freeze();
         bank2.squash();
         bank2.force_flush_accounts_cache();
-        bank2
-            .accounts()
-            .accounts_db
-            .set_accounts_hash_for_tests(bank2.slot(), AccountsHash(Hash::new(&[0; 32])));
+        bank2.accounts().accounts_db.set_accounts_hash(
+            bank2.slot(),
+            (AccountsHash(Hash::new(&[0; 32])), u64::default()),
+        );
 
         let snapshot_storages = bank2.get_snapshot_storages(None);
         let mut buf = vec![];
@@ -164,10 +164,10 @@ mod tests {
         .unwrap();
 
         if update_accounts_hash {
-            bank2
-                .accounts()
-                .accounts_db
-                .set_accounts_hash_for_tests(bank2.slot(), AccountsHash(Hash::new(&[1; 32])));
+            bank2.accounts().accounts_db.set_accounts_hash(
+                bank2.slot(),
+                (AccountsHash(Hash::new(&[1; 32])), u64::default()),
+            );
         }
         let accounts_hash = bank2.get_accounts_hash().unwrap();
 
@@ -352,14 +352,11 @@ mod tests {
             bank.rc
                 .accounts
                 .accounts_db
-                .set_accounts_delta_hash_for_tests(
-                    bank.slot(),
-                    AccountsDeltaHash(Hash::new_unique()),
-                );
-            bank.rc
-                .accounts
-                .accounts_db
-                .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
+                .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+            bank.rc.accounts.accounts_db.set_accounts_hash(
+                bank.slot(),
+                (AccountsHash(Hash::new_unique()), u64::default()),
+            );
 
             // Set extra fields
             bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -546,11 +543,11 @@ mod tests {
         bank.rc
             .accounts
             .accounts_db
-            .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
-        bank.rc
-            .accounts
-            .accounts_db
-            .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
+            .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+        bank.rc.accounts.accounts_db.set_accounts_hash(
+            bank.slot(),
+            (AccountsHash(Hash::new_unique()), u64::default()),
+        );
 
         // Set extra fields
         bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -628,14 +625,11 @@ mod tests {
             bank.rc
                 .accounts
                 .accounts_db
-                .set_accounts_delta_hash_for_tests(
-                    bank.slot(),
-                    AccountsDeltaHash(Hash::new_unique()),
-                );
-            bank.rc
-                .accounts
-                .accounts_db
-                .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
+                .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+            bank.rc.accounts.accounts_db.set_accounts_hash(
+                bank.slot(),
+                (AccountsHash(Hash::new_unique()), u64::default()),
+            );
             let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(..=0).0;
             // ensure there is a single snapshot storage example for ABI digesting
             assert_eq!(snapshot_storages.len(), 1);

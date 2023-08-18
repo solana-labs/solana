@@ -1,7 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     assert_matches::assert_matches,
-    common::*,
     crossbeam_channel::{unbounded, Receiver},
     gag::BufferRedirect,
     log::*,
@@ -34,6 +33,16 @@ use {
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
         cluster_tests,
+        integration_tests::{
+            copy_blocks, create_custom_leader_schedule,
+            create_custom_leader_schedule_with_random_keys, farf_dir, generate_account_paths,
+            last_root_in_tower, last_vote_in_tower, ms_for_n_slots, open_blockstore,
+            purge_slots_with_count, remove_tower, remove_tower_if_exists, restore_tower,
+            run_cluster_partition, run_kill_partition_switch_threshold, save_tower,
+            setup_snapshot_validator_config, test_faulty_node,
+            wait_for_last_vote_in_tower_to_land_in_ledger, SnapshotValidatorConfig,
+            ValidatorTestConfig, DEFAULT_CLUSTER_LAMPORTS, DEFAULT_NODE_STAKE, RUST_LOG_FILTER,
+        },
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
     },
@@ -91,8 +100,6 @@ use {
         time::{Duration, Instant},
     },
 };
-
-mod common;
 
 #[test]
 fn test_local_cluster_start_and_exit() {

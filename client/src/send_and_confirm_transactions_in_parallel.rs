@@ -51,7 +51,7 @@ struct BlockHashData {
 }
 
 #[derive(Clone, Debug, Copy)]
-pub struct SendAndConfrimConfig {
+pub struct SendAndConfirmConfig {
     pub with_spinner: bool,
     pub resign_txs_count: Option<usize>,
 }
@@ -61,7 +61,7 @@ pub fn send_and_confirm_transactions_in_parallel_blocking<T: Signers + ?Sized>(
     tpu_client: Option<QuicTpuClient>,
     messages: &[Message],
     signers: &T,
-    config: SendAndConfrimConfig,
+    config: SendAndConfirmConfig,
 ) -> Result<Vec<Option<TransactionError>>> {
     let fut = send_and_confirm_transactions_in_parallel(
         rpc_client.get_inner_client().clone(),
@@ -286,7 +286,7 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
 
         // wait till all transactions are confirmed or we have surpassed max processing age for the last sent transaction
         while !unconfirmed_transasction_map.is_empty()
-            && current_block_height.load(Ordering::Relaxed) < max_valid_block_height
+            && current_block_height.load(Ordering::Relaxed) <= max_valid_block_height
         {
             let blockheight = current_block_height.load(Ordering::Relaxed);
 
@@ -352,7 +352,7 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
     tpu_client: Option<QuicTpuClient>,
     messages: &[Message],
     signers: &T,
-    config: SendAndConfrimConfig,
+    config: SendAndConfirmConfig,
 ) -> Result<Vec<Option<TransactionError>>> {
     // get current blockhash and corresponding last valid block height
     let (blockhash, last_valid_blockheight) = rpc_client

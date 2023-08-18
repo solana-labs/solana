@@ -271,7 +271,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "9eS1agTwFQxCcCWgoBYhPfEVBfXkppan1zbob5rRRu7u")]
+#[frozen_abi(digest = "6T2sn92PMrTijsgncH3bBZL4K5GUowb442cCw4y4DuwV")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -824,7 +824,7 @@ impl ClusterInfo {
                     }
                     let ip_addr = node.gossip().as_ref().map(SocketAddr::ip).ok();
                     Some(format!(
-                        "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}|  {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
+                        "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}|  {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
                         node.gossip()
                             .ok()
                             .filter(|addr| self.socket_addr_space.check(addr))
@@ -847,8 +847,7 @@ impl ClusterInfo {
                         self.addr_to_string(&ip_addr, &node.tpu_forwards(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tvu(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tvu(contact_info::Protocol::QUIC).ok()),
-                        self.addr_to_string(&ip_addr, &node.repair().ok()),
-                        self.addr_to_string(&ip_addr, &node.serve_repair().ok()),
+                        self.addr_to_string(&ip_addr, &node.serve_repair(contact_info::Protocol::UDP).ok()),
                         node.shred_version(),
                     ))
                 }
@@ -857,9 +856,9 @@ impl ClusterInfo {
 
         format!(
             "IP Address        |Age(ms)| Node identifier                              \
-             | Version |Gossip|TPUvote| TPU  |TPUfwd| TVU  |TVU Q |Repair|ServeR|ShredVer\n\
-             ------------------+-------+----------------------------------------------\
-             +---------+------+-------+------+------+------+------+------+------+--------\n\
+             | Version |Gossip|TPUvote| TPU  |TPUfwd| TVU  |TVU Q |ServeR|ShredVer\n\
+             ------------------+-------+---------------------------------------\
+             +---------+------+-------+------+------+------+------+------+--------\n\
              {}\
              Nodes: {}{}{}",
             nodes.join(""),
@@ -1346,7 +1345,7 @@ impl ClusterInfo {
                 node.pubkey() != &self_pubkey
                     && node.shred_version() == self_shred_version
                     && self.check_socket_addr_space(&node.tvu(contact_info::Protocol::UDP))
-                    && self.check_socket_addr_space(&node.serve_repair())
+                    && self.check_socket_addr_space(&node.serve_repair(contact_info::Protocol::UDP))
                     && match gossip_crds.get::<&LowestSlot>(*node.pubkey()) {
                         None => true, // fallback to legacy behavior
                         Some(lowest_slot) => lowest_slot.lowest <= slot,
@@ -2800,6 +2799,7 @@ pub struct Sockets {
     pub repair: UdpSocket,
     pub retransmit_sockets: Vec<UdpSocket>,
     pub serve_repair: UdpSocket,
+    pub serve_repair_quic: UdpSocket,
     pub ancestor_hashes_requests: UdpSocket,
     pub tpu_quic: UdpSocket,
     pub tpu_forwards_quic: UdpSocket,
@@ -2840,6 +2840,7 @@ impl Node {
         let broadcast = vec![UdpSocket::bind(&unspecified_bind_addr).unwrap()];
         let retransmit_socket = UdpSocket::bind(&unspecified_bind_addr).unwrap();
         let serve_repair = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let serve_repair_quic = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let ancestor_hashes_requests = UdpSocket::bind(&unspecified_bind_addr).unwrap();
 
         let mut info = ContactInfo::new(
@@ -2858,7 +2859,6 @@ impl Node {
         set_socket!(set_gossip, gossip_addr, "gossip");
         set_socket!(set_tvu, tvu.local_addr().unwrap(), "TVU");
         set_socket!(set_tvu_quic, tvu_quic.local_addr().unwrap(), "TVU QUIC");
-        set_socket!(set_repair, repair.local_addr().unwrap(), "repair");
         set_socket!(set_tpu, tpu.local_addr().unwrap(), "TPU");
         set_socket!(
             set_tpu_forwards,
@@ -2872,6 +2872,11 @@ impl Node {
             set_serve_repair,
             serve_repair.local_addr().unwrap(),
             "serve-repair"
+        );
+        set_socket!(
+            set_serve_repair_quic,
+            serve_repair_quic.local_addr().unwrap(),
+            "serve-repair QUIC"
         );
         Node {
             info,
@@ -2887,6 +2892,7 @@ impl Node {
                 repair,
                 retransmit_sockets: vec![retransmit_socket],
                 serve_repair,
+                serve_repair_quic,
                 ancestor_hashes_requests,
                 tpu_quic,
                 tpu_forwards_quic,
@@ -2930,8 +2936,9 @@ impl Node {
             bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
-        let (repair_port, repair) = Self::bind(bind_ip_addr, port_range);
+        let (_, repair) = Self::bind(bind_ip_addr, port_range);
         let (serve_repair_port, serve_repair) = Self::bind(bind_ip_addr, port_range);
+        let (serve_repair_quic_port, serve_repair_quic) = Self::bind(bind_ip_addr, port_range);
         let (_, broadcast) = Self::bind(bind_ip_addr, port_range);
         let (_, ancestor_hashes_requests) = Self::bind(bind_ip_addr, port_range);
 
@@ -2955,13 +2962,17 @@ impl Node {
         set_socket!(set_gossip, gossip_port, "gossip");
         set_socket!(set_tvu, tvu_port, "TVU");
         set_socket!(set_tvu_quic, tvu_quic_port, "TVU QUIC");
-        set_socket!(set_repair, repair_port, "repair");
         set_socket!(set_tpu, tpu_port, "TPU");
         set_socket!(set_tpu_forwards, tpu_forwards_port, "TPU-forwards");
         set_socket!(set_tpu_vote, tpu_vote_port, "TPU-vote");
         set_socket!(set_rpc, rpc_port, "RPC");
         set_socket!(set_rpc_pubsub, rpc_pubsub_port, "RPC-pubsub");
         set_socket!(set_serve_repair, serve_repair_port, "serve-repair");
+        set_socket!(
+            set_serve_repair_quic,
+            serve_repair_quic_port,
+            "serve-repair QUIC"
+        );
         trace!("new ContactInfo: {:?}", info);
 
         Node {
@@ -2978,6 +2989,7 @@ impl Node {
                 repair,
                 retransmit_sockets: vec![retransmit_socket],
                 serve_repair,
+                serve_repair_quic,
                 ancestor_hashes_requests,
                 tpu_quic,
                 tpu_forwards_quic,
@@ -3024,8 +3036,9 @@ impl Node {
         let (_, retransmit_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("retransmit multi_bind");
 
-        let (repair_port, repair) = Self::bind(bind_ip_addr, port_range);
+        let (_, repair) = Self::bind(bind_ip_addr, port_range);
         let (serve_repair_port, serve_repair) = Self::bind(bind_ip_addr, port_range);
+        let (serve_repair_quic_port, serve_repair_quic) = Self::bind(bind_ip_addr, port_range);
 
         let (_, broadcast) =
             multi_bind_in_range(bind_ip_addr, port_range, 4).expect("broadcast multi_bind");
@@ -3038,16 +3051,19 @@ impl Node {
             0u16,        // shred_version
         );
         let addr = gossip_addr.ip();
-        let _ = info.set_gossip((addr, gossip_port));
-        let _ = info.set_tvu((addr, tvu_port));
-        let _ = info.set_tvu_quic((addr, tvu_quic_port));
-        let _ = info.set_repair((addr, repair_port));
-        let _ = info.set_tpu(public_tpu_addr.unwrap_or_else(|| SocketAddr::new(addr, tpu_port)));
-        let _ = info.set_tpu_forwards(
+        info.set_gossip((addr, gossip_port)).unwrap();
+        info.set_tvu((addr, tvu_port)).unwrap();
+        info.set_tvu_quic((addr, tvu_quic_port)).unwrap();
+        info.set_tpu(public_tpu_addr.unwrap_or_else(|| SocketAddr::new(addr, tpu_port)))
+            .unwrap();
+        info.set_tpu_forwards(
             public_tpu_forwards_addr.unwrap_or_else(|| SocketAddr::new(addr, tpu_forwards_port)),
-        );
-        let _ = info.set_tpu_vote((addr, tpu_vote_port));
-        let _ = info.set_serve_repair((addr, serve_repair_port));
+        )
+        .unwrap();
+        info.set_tpu_vote((addr, tpu_vote_port)).unwrap();
+        info.set_serve_repair((addr, serve_repair_port)).unwrap();
+        info.set_serve_repair_quic((addr, serve_repair_quic_port))
+            .unwrap();
         trace!("new ContactInfo: {:?}", info);
 
         Node {
@@ -3063,6 +3079,7 @@ impl Node {
                 repair,
                 retransmit_sockets,
                 serve_repair,
+                serve_repair_quic,
                 ip_echo: Some(ip_echo),
                 ancestor_hashes_requests,
                 tpu_quic,

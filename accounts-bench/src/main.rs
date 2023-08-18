@@ -125,7 +125,7 @@ fn main() {
                 .update_accounts_hash_for_tests(0, &ancestors, false, false);
             time.stop();
             let mut time_store = Measure::start("hash using store");
-            let results_store = accounts.accounts_db.update_accounts_hash(
+            let results_store = accounts.accounts_db.update_accounts_hash_with_verify(
                 CalcAccountsHashDataSource::Storages,
                 false,
                 solana_sdk::clock::Slot::default(),
