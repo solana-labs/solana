@@ -19,7 +19,6 @@ indexmap = { workspace = true }
 indicatif = { workspace = true }
 log = { workspace = true }
 quinn = { workspace = true }
-rand = { workspace = true }
 rayon = { workspace = true }
 solana-connection-cache = { workspace = true }
 solana-measure = { workspace = true }
@@ -39,7 +38,6 @@ tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 crossbeam-channel = { workspace = true }
-rand_chacha = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

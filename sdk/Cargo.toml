@@ -65,7 +65,7 @@ num_enum = { workspace = true }
 pbkdf2 = { workspace = true }
 qstring = { workspace = true }
 rand = { workspace = true, optional = true }
-rand0-7 = { package = "rand", version = "0.7", optional = true } # remove with upgrade to ed25519-dalek v2
+rand0-7 = { package = "rand", version = "0.7", optional = true }
 rustversion = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
