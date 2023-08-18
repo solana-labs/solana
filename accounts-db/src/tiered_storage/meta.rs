@@ -97,9 +97,6 @@ impl AccountMetaFlags {
     }
 }
 
-const DEFAULT_RENT_EPOCH: Epoch = u64::MAX;
-const DEFAULT_WRITE_VERSION: StoredMetaWriteVersion = u64::MAX;
-
 /// The in-memory struct for the optional fields for tiered account meta.
 ///
 /// Note that the storage representation of the optional fields might be
