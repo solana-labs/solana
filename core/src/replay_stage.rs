@@ -3016,19 +3016,20 @@ impl ReplayStage {
                     .computed;
                 if !is_computed {
                     // Check if our tower is behind, if so (and the feature migration flag is in use)
-                    // overwrite with the newer bank.
                     if let (true, Some(vote_account)) = (
                         Tower::is_direct_vote_state_update_enabled(bank),
                         bank.get_vote_account(my_vote_pubkey),
                     ) {
-                        if let Ok(mut bank_vote_state) = vote_account.vote_state().cloned() {
+                        if let Ok(bank_vote_state) = vote_account.vote_state().cloned() {
                             if bank_vote_state.last_voted_slot()
                                 > tower.vote_state.last_voted_slot()
                             {
                                 info!(
                                     "Frozen bank vote state slot {:?}
                                     is newer than our local vote state slot {:?},
-                                    adopting the bank vote state as our own.
+                                    If this is your primary voting validator this indicates
+                                    that your local state is missing later votes observed by the chain.
+                                    This could be due to a recent restart.
                                     Bank votes: {:?}, root: {:?},
                                     Local votes: {:?}, root: {:?}",
                                     bank_vote_state.last_voted_slot(),
@@ -3038,42 +3039,6 @@ impl ReplayStage {
                                     tower.vote_state.votes,
                                     tower.vote_state.root_slot
                                 );
-
-                                if let Some(local_root) = tower.vote_state.root_slot {
-                                    if bank_vote_state
-                                        .root_slot
-                                        .map(|bank_root| local_root > bank_root)
-                                        .unwrap_or(true)
-                                    {
-                                        // If the local root is larger than this on chain vote state
-                                        // root (possible due to supermajority roots being set on
-                                        // startup), then we need to adjust the tower
-                                        bank_vote_state.root_slot = Some(local_root);
-                                        bank_vote_state
-                                            .votes
-                                            .retain(|lockout| lockout.slot() > local_root);
-                                        info!(
-                                            "Local root is larger than on chain root,
-                                            overwrote bank root {:?} and updated votes {:?}",
-                                            bank_vote_state.root_slot, bank_vote_state.votes
-                                        );
-
-                                        if let Some(first_vote) = bank_vote_state.votes.front() {
-                                            assert!(ancestors
-                                                .get(&first_vote.slot())
-                                                .expect(
-                                                    "Ancestors map must contain an
-                                                        entry for all slots on this fork
-                                                        greater than `local_root` and less
-                                                        than `bank_slot`"
-                                                )
-                                                .contains(&local_root));
-                                        }
-                                    }
-                                }
-
-                                tower.vote_state.root_slot = bank_vote_state.root_slot;
-                                tower.vote_state.votes = bank_vote_state.votes;
                             }
                         }
                     }
