@@ -1067,7 +1067,7 @@ impl Validator {
         let tower = process_blockstore.process_to_create_tower()?;
         let last_vote = tower.last_vote();
         if config.wen_restart {
-            config.turbine_disabled.swap(true, Ordering::Relaxed);
+//            config.turbine_disabled.swap(true, Ordering::Relaxed);
             node.info
                 .set_shred_version((node.info.shred_version() + 1) % 0xffff);
             assert!(
