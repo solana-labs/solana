@@ -155,10 +155,16 @@ impl TieredStorage {
 mod tests {
     use {
         super::*,
-        crate::account_storage::meta::StoredMetaWriteVersion,
+        crate::account_storage::meta::{StoredMeta, StoredMetaWriteVersion},
         footer::{TieredStorageFooter, TieredStorageMagicNumber},
         hot::HOT_FORMAT,
-        solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
+        solana_accounts_db::rent_collector::RENT_EXEMPT_RENT_EPOCH,
+        solana_sdk::{
+            account::{Account, AccountSharedData},
+            clock::Slot,
+            pubkey::Pubkey,
+            system_instruction::MAX_PERMITTED_DATA_LENGTH,
+        },
         std::mem::ManuallyDrop,
         tempfile::tempdir,
     };
@@ -301,5 +307,128 @@ mod tests {
         }
         // expect the file does not exist as the file has been removed on drop
         assert!(!tiered_storage_path.try_exists().unwrap());
+    }
+
+    /// Create a test account based on the specified seed.
+    /// The created test account might have default rent_epoch
+    /// and write_version.
+    fn create_account(seed: u64) -> (StoredMeta, AccountSharedData) {
+        let data_byte = seed as u8;
+        let account = Account {
+            lamports: seed,
+            data: std::iter::repeat(data_byte).take(seed as usize).collect(),
+            owner: Pubkey::new_unique(),
+            executable: seed % 2 > 0,
+            rent_epoch: if seed % 3 > 0 {
+                seed
+            } else {
+                RENT_EXEMPT_RENT_EPOCH
+            },
+        };
+
+        let stored_meta = StoredMeta {
+            write_version_obsolete: u64::MAX,
+            pubkey: Pubkey::new_unique(),
+            data_len: seed,
+        };
+        (stored_meta, AccountSharedData::from(account))
+    }
+
+    /// The helper function for all write_accounts tests.
+    /// Currently only supports hot accounts.
+    fn do_test_write_accounts(
+        path_suffix: &str,
+        account_data_sizes: &[u64],
+        format: TieredStorageFormat,
+    ) {
+        let accounts: Vec<_> = account_data_sizes
+            .iter()
+            .map(|size| create_account(*size))
+            .collect();
+
+        let account_refs: Vec<_> = accounts
+            .iter()
+            .map(|account| (&account.0.pubkey, &account.1))
+            .collect();
+
+        // Slot information is not used here
+        let account_data = (Slot::MAX, &account_refs[..]);
+        let hashes: Vec<_> = std::iter::repeat_with(Hash::new_unique)
+            .take(account_data_sizes.len())
+            .collect();
+        let write_versions: Vec<_> = accounts
+            .iter()
+            .map(|account| account.0.write_version_obsolete)
+            .collect();
+
+        let storable_accounts =
+            StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
+                &account_data,
+                hashes,
+                write_versions,
+            );
+
+        let temp_dir = tempdir().unwrap();
+        let tiered_storage_path = temp_dir.path().join(path_suffix);
+        let tiered_storage = TieredStorage::new_writable(tiered_storage_path, format.clone());
+        _ = tiered_storage.write_accounts(&storable_accounts, 0);
+
+        verify_hot_storage(&tiered_storage, &accounts, format);
+    }
+
+    /// Verify the generated tiered storage in the test.
+    fn verify_hot_storage(
+        tiered_storage: &TieredStorage,
+        expected_accounts: &[(StoredMeta, AccountSharedData)],
+        expected_format: TieredStorageFormat,
+    ) {
+        let reader = tiered_storage.reader().unwrap();
+        assert_eq!(reader.num_accounts(), expected_accounts.len());
+
+        let footer = reader.footer();
+        let expected_footer = TieredStorageFooter {
+            account_meta_format: expected_format.account_meta_format,
+            owners_block_format: expected_format.owners_block_format,
+            account_index_format: expected_format.account_index_format,
+            account_block_format: expected_format.account_block_format,
+            account_entry_count: expected_accounts.len() as u32,
+            // Hash is not yet implemented, so we bypass the check
+            hash: footer.hash,
+            ..TieredStorageFooter::default()
+        };
+
+        // TODO(yhchiang): verify account meta and data once the reader side
+        // is implemented in a separate PR.
+
+        assert_eq!(*footer, expected_footer);
+    }
+
+    #[test]
+    fn test_write_accounts_small_accounts() {
+        do_test_write_accounts(
+            "test_write_accounts_small_accounts",
+            &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            HOT_FORMAT.clone(),
+        );
+    }
+
+    #[test]
+    fn test_write_accounts_one_max_len() {
+        do_test_write_accounts(
+            "test_write_accounts_one_max_len",
+            &[MAX_PERMITTED_DATA_LENGTH],
+            HOT_FORMAT.clone(),
+        );
+    }
+
+    #[test]
+    fn test_write_accounts_mixed_size() {
+        do_test_write_accounts(
+            "test_write_accounts_mixed_size",
+            &[
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1000, 2000, 3000, 4000, 9, 8, 7, 6, 5, 4, 3, 2, 1,
+            ],
+            HOT_FORMAT.clone(),
+        );
     }
 }
