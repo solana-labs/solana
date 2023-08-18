@@ -7278,16 +7278,12 @@ pub mod tests {
             .unwrap();
         assert_ne!(leader_info.activated_stake, 0);
         // Subtract one because the last vote always carries over to the next epoch
-        // Each slot earned maximum credits
-        let credits_per_slot =
-            solana_vote_program::vote_state::VOTE_CREDITS_MAXIMUM_PER_SLOT as u64;
-        let expected_credits =
-            (TEST_SLOTS_PER_EPOCH - MAX_LOCKOUT_HISTORY as u64 - 1) * credits_per_slot;
+        let expected_credits = TEST_SLOTS_PER_EPOCH - MAX_LOCKOUT_HISTORY as u64 - 1;
         assert_eq!(
             leader_info.epoch_credits,
             vec![
                 (0, expected_credits, 0),
-                (1, expected_credits + credits_per_slot, expected_credits) // one vote in current epoch
+                (1, expected_credits + 1, expected_credits) // one vote in current epoch
             ]
         );
 
