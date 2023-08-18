@@ -8244,36 +8244,22 @@ impl Bank {
                 // account, then we want to update the existing data account
                 if let Some(new_data_account) = self.get_account_with_fixed_root(&new_data_address)
                 {
-                    // A data account exists for the new program
-                    // Check if the old program account has a data account
-                    if let Some(old_data_account) =
-                        self.get_account_with_fixed_root(&old_data_address)
-                    {
-                        // It does. Replace it with the new data account
-                        self.replace_account(
-                            &old_data_address,
-                            &new_data_address,
-                            Some(&old_data_account),
-                            &new_data_account,
-                        );
-                        // The old program account will already house the PDA
-                        // of the data account
-                    } else {
-                        // It does _not_. Create it with the new data account
-                        self.replace_account(
-                            &old_data_address,
-                            &new_data_address,
-                            None,
-                            &new_data_account,
-                        );
-                        // Update the old program account to house the PDA of
-                        // the data account
-                        {
-                            let mut account = Account::from(old_account.clone());
-                            account.data = old_data_address.as_ref().to_vec();
-                            let account_shared_data = AccountSharedData::from(account);
-                            self.store_account(old_address, &account_shared_data);
-                        }
+                    // If a data account exists for the old program, it will be
+                    // replaced with the new data account
+                    // If a data account does not exist for the old program, it
+                    // will be created with the new data account
+                    self.replace_account(
+                        &old_data_address,
+                        &new_data_address,
+                        self.get_account_with_fixed_root(&old_data_address).as_ref(), // None if no old data account
+                        &new_data_account,
+                    );
+                    // If necessary, update the old program account to house
+                    // the PDA of the data account.
+                    if old_account.data() != old_data_address.as_ref() {
+                        let mut account = Account::from(old_account.clone());
+                        account.data = old_data_address.as_ref().to_vec();
+                        self.store_account(old_address, &account);
                     }
                     // We only swapped the data accounts, so now we need to
                     // clear the new program account

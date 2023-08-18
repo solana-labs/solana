@@ -8019,8 +8019,9 @@ fn set_up_account_with_bank(
     new_account
 }
 
+// FIXME: Use rent-real lamport values
 #[test]
-fn test_non_upgradable_program_replace() {
+fn test_program_replace_non_upgradable_base_case() {
     // Non-Upgradable program
     // - Old:     [Old program data]
     // - New:     [*New program data]
@@ -8030,18 +8031,19 @@ fn test_non_upgradable_program_replace() {
     let mut bank = create_simple_test_bank(0);
 
     let old = Pubkey::new_unique();
-    set_up_account_with_bank(&mut bank, &old, 100, vec![0, 0, 0, 0]);
+    let old_program_bytes = vec![0, 0, 0, 0];
+    set_up_account_with_bank(&mut bank, &old, 100, old_program_bytes);
 
     let new = Pubkey::new_unique();
     let new_program_bytes = vec![6, 5, 4, 3, 2, 1, 0];
-    set_up_account_with_bank(&mut bank, &new, 100, new_program_bytes.clone());
+    set_up_account_with_bank(&mut bank, &new, 200, new_program_bytes.clone());
 
     let original_capitalization = bank.capitalization();
 
     bank.replace_program_account(&old, &new, "bank-apply_program_replacement");
 
-    // Old program account balance is unchanged
-    assert_eq!(bank.get_balance(&old), 100);
+    // Old program account balance is now the new program account's balance
+    assert_eq!(bank.get_balance(&old), 200);
 
     // New program account is now empty
     assert_eq!(bank.get_balance(&new), 0);
@@ -8049,14 +8051,15 @@ fn test_non_upgradable_program_replace() {
     // Old program account now holds the new program data, ie:
     // - Old:     [*New program data]
     let old_account = bank.get_account(&old).unwrap();
-    assert_eq!(old_account.data(), &new_program_bytes,);
+    assert_eq!(old_account.data(), &new_program_bytes);
 
-    // Lamports in the old token account was burnt
+    // Lamports in the old program account were burnt
     assert_eq!(bank.capitalization(), original_capitalization - 100);
 }
 
+// FIXME: Use rent-real lamport values
 #[test]
-fn test_non_upgradable_program_replace_with_data() {
+fn test_program_replace_non_upgradable_create_data() {
     // Non-Upgradable program
     // - Old:     [Old program data]
     // - New:     PDA(NewData)
@@ -8070,22 +8073,29 @@ fn test_non_upgradable_program_replace_with_data() {
     let mut bank = create_simple_test_bank(0);
 
     let old = Pubkey::new_unique();
+    let old_program_bytes = vec![0, 0, 0, 0];
     let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
-    set_up_account_with_bank(&mut bank, &old, 100, vec![0, 0, 0, 0]);
+    set_up_account_with_bank(&mut bank, &old, 100, old_program_bytes);
 
     let new = Pubkey::new_unique();
     let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_id);
     let new_program_bytes = vec![6, 5, 4, 3, 2, 1, 0];
-    set_up_account_with_bank(&mut bank, &new, 100, new_data.to_bytes().to_vec());
-    set_up_account_with_bank(&mut bank, &new_data, 102, new_program_bytes.clone());
+    set_up_account_with_bank(&mut bank, &new, 200, new_data.to_bytes().to_vec());
+    set_up_account_with_bank(&mut bank, &new_data, 204, new_program_bytes.clone());
 
     let original_capitalization = bank.capitalization();
 
     bank.replace_program_account(&old, &new, "bank-apply_program_replacement");
 
-    // Old program account balances are unchanged
+    // FIXME: We can't assume the size is unchanged
+    //
+    // Old program account's balance was unchanged
+    // (Data was maybe modified, but size was unchanged)
     assert_eq!(bank.get_balance(&old), 100);
-    assert_eq!(bank.get_balance(&old_data), 102);
+
+    // Old data account's balance is now the new data account's balance
+    // (newly created)
+    assert_eq!(bank.get_balance(&old_data), 204);
 
     // New program accounts are now empty
     assert_eq!(bank.get_balance(&new), 0);
@@ -8094,19 +8104,116 @@ fn test_non_upgradable_program_replace_with_data() {
     // Old program account now holds the PDA, ie:
     // - Old:     PDA(OldData)
     let old_account = bank.get_account(&old).unwrap();
-    assert_eq!(old_account.data(), &old_data.to_bytes().to_vec(),);
+    assert_eq!(old_account.data(), &old_data.to_bytes().to_vec());
 
-    // Old program data account has been created & now holds the new data, ie:
+    // Old data account has been created & now holds the new data, ie:
     // - OldData: [*New program data]
     let old_data_account = bank.get_account(&old_data).unwrap();
-    assert_eq!(old_data_account.data(), &new_program_bytes,);
+    assert_eq!(old_data_account.data(), &new_program_bytes);
 
-    // Lamports in the old token accounts were burnt
-    assert_eq!(bank.capitalization(), original_capitalization - 100);
+    // Lamports in the old program account were burnt
+    assert_eq!(bank.capitalization(), original_capitalization - 200);
 }
 
+// FIXME: Use rent-real lamport values
 #[test]
-fn test_upgradable_program_replace() {
+fn test_program_replace_non_upgradable_does_not_exist() {
+    // Non-Upgradable program
+    // - Old:     ** Does not exist! **
+    // - New:     PDA(NewData)
+    // - NewData: [*New program data]
+    //
+    // This is NOT allowed and should leave everything unchanged
+    let bpf_id = bpf_loader_upgradeable::id();
+    let mut bank = create_simple_test_bank(0);
+
+    let old = Pubkey::new_unique();
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
+
+    let new = Pubkey::new_unique();
+    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_id);
+    let new_program_bytes = vec![6, 5, 4, 3, 2, 1, 0];
+    set_up_account_with_bank(&mut bank, &new, 200, new_data.to_bytes().to_vec());
+    set_up_account_with_bank(&mut bank, &new_data, 204, new_program_bytes);
+
+    let original_capitalization = bank.capitalization();
+
+    bank.replace_program_account(&old, &new, "bank-apply_program_replacement");
+
+    // Old program accounts still don't exist
+    assert_eq!(bank.get_balance(&old), 0);
+    assert_eq!(bank.get_balance(&old_data), 0);
+
+    // New program accounts are unchanged
+    assert_eq!(bank.get_balance(&new), 200);
+    assert_eq!(bank.get_balance(&new_data), 204);
+
+    // Lamports were unchanged across the board
+    assert_eq!(bank.capitalization(), original_capitalization);
+}
+
+// FIXME: Use rent-real lamport values
+#[cfg(ignore)]
+#[test]
+fn test_program_replace_non_upgradable_is_native_account() {
+    // Non-Upgradable program
+    // - Old:     ** Native account (ie. `Feature11111111`) **
+    // - New:     PDA(NewData)
+    // - NewData: [*New program data]
+    //
+    // Should replace the native account with the PDA of the data account,
+    // and create the data account:
+    // - Old:     PDA(OldData)
+    // - OldData: [*New program data]
+    let bpf_id = bpf_loader_upgradeable::id();
+    let mut bank = create_simple_test_bank(0);
+
+    let old = feature::id();
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
+
+    let new = Pubkey::new_unique();
+    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_id);
+    let new_program_bytes = vec![6, 5, 4, 3, 2, 1, 0];
+    set_up_account_with_bank(&mut bank, &new, 200, new_data.to_bytes().to_vec());
+    set_up_account_with_bank(&mut bank, &new_data, 204, new_program_bytes.clone());
+
+    let original_capitalization = bank.capitalization();
+
+    bank.replace_program_account(&old, &new, "bank-apply_program_replacement");
+
+    // TODO
+
+    // FIXME: We can't assume the size is unchanged
+    //
+    // Old program account's balance was unchanged
+    // (Data was maybe modified, but size was unchanged)
+    assert_eq!(bank.get_balance(&old), 0);
+
+    // Old data account's balance is now the new data account's balance
+    // (newly created)
+    assert_eq!(bank.get_balance(&old_data), 204);
+
+    // New program accounts are now empty
+    assert_eq!(bank.get_balance(&new), 0);
+    assert_eq!(bank.get_balance(&new_data), 0);
+
+    // Old program account now holds the PDA, ie:
+    // - Old:     PDA(OldData)
+    let old_account = bank.get_account(&old).unwrap();
+    assert_eq!(old_account.data(), &old_data.to_bytes().to_vec());
+
+    // Old data account has been created & now holds the new data, ie:
+    // - OldData: [*New program data]
+    let old_data_account = bank.get_account(&old_data).unwrap();
+    assert_eq!(old_data_account.data(), &new_program_bytes);
+
+    // Lamports in the old program account were burnt
+    assert_eq!(bank.capitalization(), original_capitalization - 200);
+}
+
+// FIXME: Use rent-real lamport values
+#[test]
+fn test_program_replace_upgradable_base_case() {
     // Upgradable program
     // - Old:     PDA(OldData)
     // - OldData: [Old program data]
@@ -8127,16 +8234,21 @@ fn test_upgradable_program_replace() {
     let new = Pubkey::new_unique();
     let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_id);
     let new_program_bytes = vec![6, 5, 4, 3, 2, 1, 0];
-    set_up_account_with_bank(&mut bank, &new, 100, new_data.to_bytes().to_vec());
-    set_up_account_with_bank(&mut bank, &new_data, 102, new_program_bytes.clone());
+    set_up_account_with_bank(&mut bank, &new, 200, new_data.to_bytes().to_vec());
+    set_up_account_with_bank(&mut bank, &new_data, 204, new_program_bytes.clone());
 
     let original_capitalization = bank.capitalization();
 
     bank.replace_program_account(&old, &new, "bank-apply_program_replacement");
 
-    // Old program account balances are unchanged
+    // FIXME: We can't assume the size is unchanged
+    //
+    // Old program account's balance was unchanged
+    // (Data was maybe modified, but size was unchanged)
     assert_eq!(bank.get_balance(&old), 100);
-    assert_eq!(bank.get_balance(&old_data), 102);
+
+    // Old data account's balance is now the new data account's balance
+    assert_eq!(bank.get_balance(&old_data), 204);
 
     // New program accounts are now empty
     assert_eq!(bank.get_balance(&new), 0);
@@ -8145,19 +8257,77 @@ fn test_upgradable_program_replace() {
     // Old program account still holds the same PDA, ie:
     // - Old:     PDA(OldData)
     let old_account = bank.get_account(&old).unwrap();
-    assert_eq!(old_account.data(), &old_data.to_bytes().to_vec(),);
+    assert_eq!(old_account.data(), &old_data.to_bytes().to_vec());
 
-    // Old program data account now holds the new data, ie:
+    // Old data account now holds the new data, ie:
     // - OldData: [*New program data]
     let old_data_account = bank.get_account(&old_data).unwrap();
-    assert_eq!(old_data_account.data(), &new_program_bytes,);
+    assert_eq!(old_data_account.data(), &new_program_bytes);
 
-    // Lamports in the old token accounts were burnt
-    assert_eq!(bank.capitalization(), original_capitalization - 100 - 102);
+    // Lamports in the old program accounts were burnt
+    assert_eq!(bank.capitalization(), original_capitalization - 102 - 200);
 }
 
+// FIXME: Use rent-real lamport values
 #[test]
-fn test_upgradable_program_replace_with_no_data() {
+fn test_program_replace_upgradable_not_data_pda_at_first() {
+    // Upgradable program
+    // - Old:     [*Old arbitrary data]
+    // - OldData: [Old program data]
+    // - New:     PDA(NewData)
+    // - NewData: [*New program data]
+    //
+    // Should _only_ replace the data account, not the program account:
+    // - Old:     PDA(OldData)
+    // - OldData: [*New program data]
+    let bpf_id = bpf_loader_upgradeable::id();
+    let mut bank = create_simple_test_bank(0);
+
+    let old = Pubkey::new_unique();
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
+    set_up_account_with_bank(&mut bank, &old, 100, old_data.to_bytes().to_vec());
+    set_up_account_with_bank(&mut bank, &old_data, 102, vec![0, 1, 2, 3, 4, 5, 6]);
+
+    let new = Pubkey::new_unique();
+    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_id);
+    let new_program_bytes = vec![6, 5, 4, 3, 2, 1, 0];
+    set_up_account_with_bank(&mut bank, &new, 200, new_data.to_bytes().to_vec());
+    set_up_account_with_bank(&mut bank, &new_data, 204, new_program_bytes.clone());
+
+    let original_capitalization = bank.capitalization();
+
+    bank.replace_program_account(&old, &new, "bank-apply_program_replacement");
+
+    // FIXME: We can't assume the size is unchanged
+    //
+    // Old program account's balance was unchanged
+    // (Data was maybe modified, but size was unchanged)
+    assert_eq!(bank.get_balance(&old), 100);
+
+    // Old data account's balance is now the new data account's balance
+    assert_eq!(bank.get_balance(&old_data), 204);
+
+    // New program accounts are now empty
+    assert_eq!(bank.get_balance(&new), 0);
+    assert_eq!(bank.get_balance(&new_data), 0);
+
+    // Old program account now holds the PDA, ie:
+    // - Old:     PDA(OldData)
+    let old_account = bank.get_account(&old).unwrap();
+    assert_eq!(old_account.data(), &old_data.to_bytes().to_vec());
+
+    // Old data account now holds the new data, ie:
+    // - OldData: [*New program data]
+    let old_data_account = bank.get_account(&old_data).unwrap();
+    assert_eq!(old_data_account.data(), &new_program_bytes);
+
+    // Lamports in the old program accounts were burnt
+    assert_eq!(bank.capitalization(), original_capitalization - 102 - 200);
+}
+
+// FIXME: Use rent-real lamport values
+#[test]
+fn test_program_replace_upgradable_no_data_provided_with_replacement() {
     // Upgradable program
     // - Old:     PDA(OldData)
     // - OldData: [Old program data]
@@ -8177,7 +8347,7 @@ fn test_upgradable_program_replace_with_no_data() {
 
     let new = Pubkey::new_unique();
     let new_program_bytes = vec![6, 5, 4, 3, 2, 1, 0];
-    set_up_account_with_bank(&mut bank, &new, 100, new_program_bytes.clone());
+    set_up_account_with_bank(&mut bank, &new, 200, new_program_bytes.clone());
 
     let original_capitalization = bank.capitalization();
 
@@ -8186,7 +8356,7 @@ fn test_upgradable_program_replace_with_no_data() {
     // All balances are unchanged
     assert_eq!(bank.get_balance(&old), 100);
     assert_eq!(bank.get_balance(&old_data), 102);
-    assert_eq!(bank.get_balance(&new), 100);
+    assert_eq!(bank.get_balance(&new), 200);
 
     // Old program accounts' data are unchanged
     // - Old:     PDA(OldData)
