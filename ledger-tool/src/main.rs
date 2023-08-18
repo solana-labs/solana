@@ -3332,8 +3332,7 @@ fn main() {
                     }
                 };
                 let mut measure = Measure::start("scanning accounts");
-                bank.scan_all_accounts_with_modified_slots(scan_func)
-                    .unwrap();
+                bank.scan_all_accounts(scan_func).unwrap();
                 measure.stop();
                 info!("{}", measure);
                 if let Some(json_serializer) = json_serializer {

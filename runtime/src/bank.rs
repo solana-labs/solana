@@ -6854,7 +6854,8 @@ impl Bank {
         self.rc.accounts.load_all(&self.ancestors, self.bank_id)
     }
 
-    pub fn scan_all_accounts_with_modified_slots<F>(&self, scan_func: F) -> ScanResult<()>
+    // Scans all the accounts this bank can load, applying `scan_func`
+    pub fn scan_all_accounts<F>(&self, scan_func: F) -> ScanResult<()>
     where
         F: FnMut(Option<(&Pubkey, AccountSharedData, Slot)>),
     {
