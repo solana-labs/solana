@@ -42,6 +42,7 @@ use {
         builtins::{BuiltinPrototype, BUILTINS},
         epoch_rewards_hasher::hash_rewards_into_partitions,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
+        inline_feature_gate_program,
         runtime_config::RuntimeConfig,
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_hash::SnapshotHash,
@@ -8053,6 +8054,14 @@ impl Bank {
 
         if new_feature_activations.contains(&feature_set::update_hashes_per_tick::id()) {
             self.apply_updated_hashes_per_tick(DEFAULT_HASHES_PER_TICK);
+        }
+
+        if new_feature_activations.contains(&feature_set::feature_gate_program::id()) {
+            self.replace_empty_account_with_upgradeable_program(
+                &feature::id(),
+                &inline_feature_gate_program::noop_program::id(),
+                "bank-apply_feature_gate_program",
+            );
         }
     }
 
