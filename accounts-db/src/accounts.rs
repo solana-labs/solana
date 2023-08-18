@@ -861,22 +861,19 @@ impl Accounts {
         }
     }
 
+    /// Returns all the accounts from `slot`
+    ///
+    /// If `program_id` is `Some`, filter the results to those whose owner matches `program_id`
     pub fn load_by_program_slot(
         &self,
         slot: Slot,
         program_id: Option<&Pubkey>,
     ) -> Vec<TransactionAccount> {
         self.scan_slot(slot, |stored_account| {
-            let hit = match program_id {
-                None => true,
-                Some(program_id) => stored_account.owner() == program_id,
-            };
-
-            if hit {
-                Some((*stored_account.pubkey(), stored_account.take_account()))
-            } else {
-                None
-            }
+            program_id
+                .map(|program_id| program_id == stored_account.owner())
+                .unwrap_or(true)
+                .then(|| (*stored_account.pubkey(), stored_account.take_account()))
         })
     }
 
