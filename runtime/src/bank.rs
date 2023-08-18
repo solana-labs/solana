@@ -6884,6 +6884,7 @@ impl Bank {
             .get_logs_for_address(address)
     }
 
+    /// Returns all the accounts stored in this slot
     pub fn get_all_accounts_modified_since_parent(&self) -> Vec<TransactionAccount> {
         self.rc.accounts.load_by_program_slot(self.slot(), None)
     }
