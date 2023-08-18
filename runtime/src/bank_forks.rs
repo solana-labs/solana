@@ -902,7 +902,7 @@ mod tests {
     fn extend_bank_forks(bank_forks: &mut BankForks, parent_child_pairs: &[(Slot, Slot)]) {
         for (parent, child) in parent_child_pairs.iter() {
             bank_forks.insert(Bank::new_from_parent(
-                bank_forks[*parent].clone(),
+                &bank_forks[*parent],
                 &Pubkey::default(),
                 *child,
             ));
