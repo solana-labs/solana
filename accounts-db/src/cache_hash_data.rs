@@ -37,6 +37,63 @@ pub(crate) struct CacheHashDataFile {
     capacity: u64,
 }
 
+impl CacheHashDataFileReference {
+    /// convert the open file refrence to a mmapped file that can be returned as a slice
+    pub(crate) fn map(
+        &self,
+        stats: &mut CacheHashDataStats,
+    ) -> Result<CacheHashDataFile, std::io::Error> {
+        let file_len = self.file_len;
+        let mut m1 = Measure::start("read_file");
+        let mmap = CacheHashDataFileReference::load_map(&self.file)?;
+        m1.stop();
+        stats.read_us = m1.as_us();
+        let header_size = std::mem::size_of::<Header>() as u64;
+        if file_len < header_size {
+            return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
+        }
+
+        let cell_size = std::mem::size_of::<EntryType>() as u64;
+        unsafe {
+            assert_eq!(
+                mmap.align_to::<EntryType>().0.len(),
+                0,
+                "mmap is not aligned"
+            );
+        }
+        assert_eq!((cell_size as usize) % std::mem::size_of::<u64>(), 0);
+        let mut cache_file = CacheHashDataFile {
+            mmap,
+            cell_size,
+            capacity: 0,
+        };
+        let header = cache_file.get_header_mut();
+        let entries = header.count;
+
+        let capacity = cell_size * (entries as u64) + header_size;
+        if file_len < capacity {
+            return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
+        }
+        cache_file.capacity = capacity;
+        assert_eq!(
+            capacity, file_len,
+            "expected: {capacity}, len on disk: {file_len} {}, entries: {entries}, cell_size: {cell_size}", self.path.display(),
+        );
+
+        stats.total_entries = entries;
+        stats.cache_file_size += capacity as usize;
+
+        stats.loaded_from_cache += 1;
+        stats.entries_loaded_from_cache += entries;
+
+        Ok(cache_file)
+    }
+
+    fn load_map(file: &File) -> Result<MmapMut, std::io::Error> {
+        Ok(unsafe { MmapMut::map_mut(file).unwrap() })
+    }
+}
+
 impl CacheHashDataFile {
     /// return a slice of a reference to all the cache hash data from the mmapped file
     pub fn get_cache_hash_data(&self) -> &[EntryType] {
@@ -135,10 +192,6 @@ impl CacheHashDataFile {
         data.rewind().unwrap();
         data.flush().unwrap();
         Ok(unsafe { MmapMut::map_mut(&data).unwrap() })
-    }
-
-    fn load_map(file: &File) -> Result<MmapMut, std::io::Error> {
-        Ok(unsafe { MmapMut::map_mut(file).unwrap() })
     }
 }
 
@@ -250,61 +303,9 @@ impl CacheHashData {
     ) -> Result<CacheHashDataFile, std::io::Error> {
         let mut stats = CacheHashDataStats::default();
         let reference = self.get_file_reference_to_map_later(file_name)?;
-        let result = self.map(reference, &mut stats);
+        let result = reference.map(&mut stats);
         self.stats.lock().unwrap().accumulate(&stats);
         result
-    }
-
-    /// create and return a MappedCacheFile for a cache file path
-    fn map(
-        &self,
-        reference: CacheHashDataFileReference,
-        stats: &mut CacheHashDataStats,
-    ) -> Result<CacheHashDataFile, std::io::Error> {
-        let file_len = reference.file_len;
-        let mut m1 = Measure::start("read_file");
-        let mmap = CacheHashDataFile::load_map(&reference.file)?;
-        m1.stop();
-        stats.read_us = m1.as_us();
-        let header_size = std::mem::size_of::<Header>() as u64;
-        if file_len < header_size {
-            return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
-        }
-
-        let cell_size = std::mem::size_of::<EntryType>() as u64;
-        unsafe {
-            assert_eq!(
-                mmap.align_to::<EntryType>().0.len(),
-                0,
-                "mmap is not aligned"
-            );
-        }
-        assert_eq!((cell_size as usize) % std::mem::size_of::<u64>(), 0);
-        let mut cache_file = CacheHashDataFile {
-            mmap,
-            cell_size,
-            capacity: 0,
-        };
-        let header = cache_file.get_header_mut();
-        let entries = header.count;
-
-        let capacity = cell_size * (entries as u64) + header_size;
-        if file_len < capacity {
-            return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
-        }
-        cache_file.capacity = capacity;
-        assert_eq!(
-            capacity, file_len,
-            "expected: {capacity}, len on disk: {file_len} {}, entries: {entries}, cell_size: {cell_size}", reference.path.display(),
-        );
-
-        stats.total_entries = entries;
-        stats.cache_file_size += capacity as usize;
-
-        stats.loaded_from_cache += 1;
-        stats.entries_loaded_from_cache += entries;
-
-        Ok(cache_file)
     }
 
     pub(crate) fn pre_existing_cache_file_will_be_used(&self, file_name: impl AsRef<Path>) {
