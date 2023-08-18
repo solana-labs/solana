@@ -16,5 +16,9 @@ bincode = { workspace = true }
 chrono = { workspace = true }
 clap = { version = "4.3.11", features = ["derive"] }
 histogram = { workspace = true }
+itertools = { workspace = true }
 solana-core = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+solana-transaction-status = { workspace = true }
 solana-sdk = { workspace = true }

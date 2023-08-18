@@ -1,5 +1,5 @@
 use {
-    crate::process::process_event_files,
+    crate::{block_history::load_history, process::process_event_files},
     chrono::{DateTime, Utc},
     solana_core::{
         banking_stage::immutable_deserialized_packet::ImmutableDeserializedPacket,
@@ -14,10 +14,11 @@ pub fn do_log_slot_range(
     start: Slot,
     end: Slot,
     priority_sort: bool,
+    filter_already_processed: bool,
 ) -> std::io::Result<()> {
     let mut collector = SlotRangeCollector::new(start, end);
     process_event_files(event_file_paths, &mut |event| collector.handle_event(event))?;
-    collector.report(priority_sort);
+    collector.report(priority_sort, filter_already_processed);
     Ok(())
 }
 
@@ -28,7 +29,11 @@ pub struct SlotRangeCollector {
     /// End of slot range (inclusive) to collect data for.
     end: Slot,
     /// Packets in the range separated by slot.
-    packets: Vec<(Slot, Vec<(DateTime<Utc>, ImmutableDeserializedPacket)>)>,
+    packets: Vec<(
+        Slot,
+        DateTime<Utc>,
+        Vec<(DateTime<Utc>, ImmutableDeserializedPacket)>,
+    )>,
 
     /// Packets being accumulated before we know the slot.
     pending_packets: Vec<(DateTime<Utc>, ImmutableDeserializedPacket)>,
@@ -44,9 +49,35 @@ impl SlotRangeCollector {
         }
     }
 
-    fn report(&mut self, priority_sort: bool) {
-        for (slot, packets) in self.packets.iter_mut() {
-            println!("{slot}: [");
+    fn report(self, priority_sort: bool, filter_already_processed: bool) {
+        let history_checker = if filter_already_processed {
+            assert!(
+                self.packets.len() == 1,
+                "only support history filtering for single slot"
+            );
+
+            Some(load_history(self.packets.first().unwrap().0))
+        } else {
+            None
+        };
+
+        for (slot, slot_timestamp, mut packets) in self.packets.into_iter() {
+            println!("{slot} ({slot_timestamp}): [");
+
+            if filter_already_processed {
+                if let Some(history_checker) = history_checker.as_ref() {
+                    packets.retain(|x| {
+                        let recent_blockhash = format!(
+                            "{}",
+                            x.1.transaction().get_message().message.recent_blockhash()
+                        );
+                        let sig = x.1.transaction().get_signatures()[0];
+                        !history_checker.should_filter(&recent_blockhash, &sig)
+                    });
+                } else {
+                    panic!("required");
+                }
+            }
 
             if priority_sort {
                 packets.sort_by(|a, b| b.1.priority().cmp(&a.1.priority()));
@@ -63,6 +94,12 @@ impl SlotRangeCollector {
                     // Should never fail here because sigverify?
                     continue;
                 };
+                let included = history_checker
+                    .as_ref()
+                    .map(|hc| hc.actually_contained(&signature))
+                    .unwrap_or_default()
+                    .then_some('*')
+                    .unwrap_or(' ');
                 let message = &transaction.get_message().message;
                 let account_keys = message.static_account_keys();
                 let write_keys: Vec<_> = account_keys
@@ -78,7 +115,7 @@ impl SlotRangeCollector {
                     .map(|(_, k)| *k)
                     .collect();
 
-                println!("  [{timestamp}] {signature}: ({ip}, {priority}, {compute_units}) - [{write_keys:?}] [{read_keys:?}],");
+                println!("  [{timestamp}] {included}{signature}: ({ip}, {priority}, {compute_units}) - [{write_keys:?}] [{read_keys:?}],");
 
                 // println!("  {:?},", packet);
             }
@@ -91,7 +128,7 @@ impl SlotRangeCollector {
             TracedEvent::PacketBatch(label, packets) => {
                 self.handle_packets(timestamp, label, packets)
             }
-            TracedEvent::BlockAndBankHash(slot, _, _) => self.handle_slot(slot),
+            TracedEvent::BlockAndBankHash(slot, _, _) => self.handle_slot(timestamp, slot),
         }
     }
 
@@ -120,13 +157,14 @@ impl SlotRangeCollector {
         self.pending_packets.extend(packets);
     }
 
-    fn handle_slot(&mut self, slot: Slot) {
+    fn handle_slot(&mut self, timestamp: SystemTime, slot: Slot) {
         if slot < self.start || slot > self.end {
             self.pending_packets.clear();
             return;
         }
 
+        let timestamp = DateTime::<Utc>::from(timestamp);
         self.packets
-            .push((slot, core::mem::take(&mut self.pending_packets)));
+            .push((slot, timestamp, core::mem::take(&mut self.pending_packets)));
     }
 }

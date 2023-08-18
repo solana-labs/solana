@@ -1,4 +1,5 @@
 use {
+    block_history::save_history_before,
     clap::{Args, Parser, Subcommand},
     count_metrics::do_count_metrics,
     leader_priority_heatmap::do_leader_priority_heatmap,
@@ -11,6 +12,7 @@ use {
     std::{path::PathBuf, process::exit},
 };
 
+mod block_history;
 mod count_metrics;
 mod leader_priority_heatmap;
 mod leader_slots_tracker;
@@ -34,7 +36,9 @@ struct AppArgs {
 #[derive(Copy, Clone, Debug, PartialEq, Subcommand)]
 enum TraceToolMode {
     /// Simply log without additional processing.
-    Log { kind: LoggingKind },
+    Log {
+        kind: LoggingKind,
+    },
     /// Collect metrics on batch and packet count.
     CountMetrics,
     /// Get the ranges of slots for data in directory.
@@ -46,10 +50,16 @@ enum TraceToolMode {
         /// Priority-sort transactions (within slot)
         #[arg(short, long)]
         priority_sort: bool,
+        /// Filter already-processed tx signatures from logging. This requires using RPC client.
+        #[arg(short, long)]
+        filter_already_processed: bool,
         /// Start of slot range (inclusive).
         start: Slot,
         /// End of slot range (inclusive).
         end: Slot,
+    },
+    SaveBlockHistory {
+        slot: Slot,
     },
     /// Heatmap of non-vote transaction priority and time-offset from beginning of slot range.
     SlotPriorityHeatmap,
@@ -84,7 +94,18 @@ fn main() {
             start,
             end,
             priority_sort,
-        } => do_log_slot_range(&event_file_paths, start, end, priority_sort),
+            filter_already_processed,
+        } => do_log_slot_range(
+            &event_file_paths,
+            start,
+            end,
+            priority_sort,
+            filter_already_processed,
+        ),
+        TraceToolMode::SaveBlockHistory { slot } => {
+            save_history_before(slot);
+            Ok(())
+        }
         TraceToolMode::SlotPriorityHeatmap => do_leader_priority_heatmap(&event_file_paths),
     };
 
