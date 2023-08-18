@@ -90,6 +90,10 @@ impl VoteAccounts {
         self.vote_accounts.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.vote_accounts.is_empty()
+    }
+
     pub fn staked_nodes(&self) -> Arc<HashMap</*node_pubkey:*/ Pubkey, /*stake:*/ u64>> {
         self.staked_nodes
             .get_or_init(|| {
