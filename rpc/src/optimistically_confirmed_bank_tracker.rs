@@ -401,16 +401,6 @@ mod tests {
         std::sync::atomic::AtomicU64,
     };
 
-    /// Given a bank get the parent slot chains, this include the parent slot of the oldest parent bank.
-    fn get_parent_chains(bank: &Arc<Bank>) -> Vec<Slot> {
-        let mut parents = bank.parents();
-        let oldest_parent = parents.last().map(|last| last.parent_slot());
-        parents.push(bank.clone());
-        let mut rooted_slots: Vec<_> = parents.iter().map(|bank| bank.slot()).collect();
-        rooted_slots.push(oldest_parent.unwrap_or_else(|| bank.parent_slot()));
-        rooted_slots
-    }
-
     /// Receive the Root notifications from the channel, if no item received within 100 ms, break and return all
     /// of those received.
     fn get_root_notifications(receiver: &Receiver<SlotNotification>) -> Vec<SlotNotification> {
@@ -559,7 +549,7 @@ mod tests {
         bank_notification_senders.push(sender);
 
         let subscribers = Some(Arc::new(RwLock::new(bank_notification_senders)));
-        let parent_roots = get_parent_chains(&bank5);
+        let parent_roots = bank5.ancestors.keys();
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::NewRootBank(bank5),
             &bank_forks,
@@ -628,8 +618,7 @@ mod tests {
         assert_eq!(newest_root_slot, 5);
 
         let bank7 = bank_forks.read().unwrap().get(7).unwrap();
-
-        let parent_roots = get_parent_chains(&bank7);
+        let parent_roots = bank7.ancestors.keys();
 
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::NewRootBank(bank7),
