@@ -294,7 +294,7 @@ mod tests {
         let g1: G1 =
             G1::deserialize_with_mode(g1_le.as_slice(), Compress::No, Validate::No).unwrap();
 
-        let g1_neg = g1.clone().neg();
+        let g1_neg = g1.neg();
         let mut g1_neg_be = [0u8; 64];
         g1_neg
             .x
@@ -308,19 +308,19 @@ mod tests {
 
         let points = [(g1, g1_be), (g1_neg, g1_neg_be)];
 
-        for (point, _g1_be) in &points {
+        for (point, g1_be) in &points {
             let mut compressed_ref = [0u8; 32];
             G1::serialize_with_mode(point, compressed_ref.as_mut_slice(), Compress::Yes).unwrap();
             let compressed_ref: [u8; 32] = convert_endianness::<32, 32>(&compressed_ref);
 
             let decompressed =
-                alt_bn128_compression_g1_decompress(&compressed_ref.as_slice()).unwrap();
+                alt_bn128_compression_g1_decompress(compressed_ref.as_slice()).unwrap();
 
             assert_eq!(
                 alt_bn128_compression_g1_compress(&decompressed).unwrap(),
                 compressed_ref
             );
-            assert_eq!(decompressed, *_g1_be);
+            assert_eq!(decompressed, *g1_be);
         }
     }
 
@@ -353,19 +353,19 @@ mod tests {
 
         let points = [(g2, g2_be), (g2_neg, g2_neg_be)];
 
-        for (point, _g2_be) in &points {
+        for (point, g2_be) in &points {
             let mut compressed_ref = [0u8; 64];
             G2::serialize_with_mode(point, compressed_ref.as_mut_slice(), Compress::Yes).unwrap();
             let compressed_ref: [u8; 64] = convert_endianness::<64, 64>(&compressed_ref);
 
             let decompressed =
-                alt_bn128_compression_g2_decompress(&compressed_ref.as_slice()).unwrap();
+                alt_bn128_compression_g2_decompress(compressed_ref.as_slice()).unwrap();
 
             assert_eq!(
                 alt_bn128_compression_g2_compress(&decompressed).unwrap(),
                 compressed_ref
             );
-            assert_eq!(decompressed, *_g2_be);
+            assert_eq!(decompressed, *g2_be);
         }
     }
 
