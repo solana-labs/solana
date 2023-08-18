@@ -1,21 +1,23 @@
 use {
     crate::process::process_event_files,
+    chrono::{DateTime, Utc},
     solana_core::{
         banking_stage::immutable_deserialized_packet::ImmutableDeserializedPacket,
         banking_trace::{BankingPacketBatch, ChannelLabel, TimedTracedEvent, TracedEvent},
     },
     solana_sdk::clock::Slot,
-    std::path::PathBuf,
+    std::{path::PathBuf, time::SystemTime},
 };
 
 pub fn do_log_slot_range(
     event_file_paths: &[PathBuf],
     start: Slot,
     end: Slot,
+    priority_sort: bool,
 ) -> std::io::Result<()> {
     let mut collector = SlotRangeCollector::new(start, end);
     process_event_files(event_file_paths, &mut |event| collector.handle_event(event))?;
-    collector.report();
+    collector.report(priority_sort);
     Ok(())
 }
 
@@ -26,10 +28,10 @@ pub struct SlotRangeCollector {
     /// End of slot range (inclusive) to collect data for.
     end: Slot,
     /// Packets in the range separated by slot.
-    packets: Vec<(Slot, Vec<ImmutableDeserializedPacket>)>,
+    packets: Vec<(Slot, Vec<(DateTime<Utc>, ImmutableDeserializedPacket)>)>,
 
     /// Packets being accumulated before we know the slot.
-    pending_packets: Vec<ImmutableDeserializedPacket>,
+    pending_packets: Vec<(DateTime<Utc>, ImmutableDeserializedPacket)>,
 }
 
 impl SlotRangeCollector {
@@ -42,10 +44,15 @@ impl SlotRangeCollector {
         }
     }
 
-    fn report(&self) {
-        for (slot, packets) in self.packets.iter() {
+    fn report(&mut self, priority_sort: bool) {
+        for (slot, packets) in self.packets.iter_mut() {
             println!("{slot}: [");
-            for packet in packets {
+
+            if priority_sort {
+                packets.sort_by(|a, b| b.1.priority().cmp(&a.1.priority()));
+            }
+
+            for (timestamp, packet) in packets {
                 let ip = packet.original_packet().meta().addr;
                 // TODO: verbosity
                 let priority = packet.priority();
@@ -71,7 +78,7 @@ impl SlotRangeCollector {
                     .map(|(_, k)| *k)
                     .collect();
 
-                println!("  {signature}: ({ip}, {priority}, {compute_units}) - [{write_keys:?}] [{read_keys:?}],");
+                println!("  [{timestamp}] {signature}: ({ip}, {priority}, {compute_units}) - [{write_keys:?}] [{read_keys:?}],");
 
                 // println!("  {:?},", packet);
             }
@@ -79,14 +86,21 @@ impl SlotRangeCollector {
         }
     }
 
-    fn handle_event(&mut self, TimedTracedEvent(_, event): TimedTracedEvent) {
+    fn handle_event(&mut self, TimedTracedEvent(timestamp, event): TimedTracedEvent) {
         match event {
-            TracedEvent::PacketBatch(label, packets) => self.handle_packets(label, packets),
+            TracedEvent::PacketBatch(label, packets) => {
+                self.handle_packets(timestamp, label, packets)
+            }
             TracedEvent::BlockAndBankHash(slot, _, _) => self.handle_slot(slot),
         }
     }
 
-    fn handle_packets(&mut self, label: ChannelLabel, banking_packet_batch: BankingPacketBatch) {
+    fn handle_packets(
+        &mut self,
+        timestamp: SystemTime,
+        label: ChannelLabel,
+        banking_packet_batch: BankingPacketBatch,
+    ) {
         if !matches!(label, ChannelLabel::NonVote) {
             return;
         }
@@ -94,12 +108,15 @@ impl SlotRangeCollector {
             return;
         }
 
+        let timestamp = DateTime::<Utc>::from(timestamp);
+
         let packets = banking_packet_batch
             .0
             .iter()
             .flatten()
             .cloned()
-            .filter_map(|p| ImmutableDeserializedPacket::new(p).ok());
+            .filter_map(|p| ImmutableDeserializedPacket::new(p).ok())
+            .map(|p| (timestamp, p));
         self.pending_packets.extend(packets);
     }
 

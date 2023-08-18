@@ -43,6 +43,9 @@ enum TraceToolMode {
     SlotPriorityTracker(SlotPriorityTrackerArgs),
     /// Log non-vote transactions in a slot range.
     LogSlotRange {
+        /// Priority-sort transactions (within slot)
+        #[arg(short, long)]
+        priority_sort: bool,
         /// Start of slot range (inclusive).
         start: Slot,
         /// End of slot range (inclusive).
@@ -77,9 +80,11 @@ fn main() {
         TraceToolMode::SlotPriorityTracker(SlotPriorityTrackerArgs { kind, verbosity }) => {
             do_slot_priority_tracking(&event_file_paths, kind, verbosity)
         }
-        TraceToolMode::LogSlotRange { start, end } => {
-            do_log_slot_range(&event_file_paths, start, end)
-        }
+        TraceToolMode::LogSlotRange {
+            start,
+            end,
+            priority_sort,
+        } => do_log_slot_range(&event_file_paths, start, end, priority_sort),
         TraceToolMode::SlotPriorityHeatmap => do_leader_priority_heatmap(&event_file_paths),
     };
 

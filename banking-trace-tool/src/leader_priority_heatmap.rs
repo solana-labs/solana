@@ -143,26 +143,29 @@ impl LeaderPriorityTracker {
             .iter()
             .zip(self.collected_data.iter())
         {
+            const NANOS_PER_MILLI: f64 = 1000.0 * 1000.0;
             let slot_start = slot_range.start.slot;
             let slot_end = slot_range.end.slot;
             let priority_stats = get_stats(data.data.iter().map(|d| d.priority as f64));
-            let offset_stats = get_stats(data.data.iter().map(|d| d.offset_ns as f64));
-            let prioritized_offset_stats = get_stats(
+            let offset_stats = get_stats(
                 data.data
                     .iter()
-                    .filter_map(|d| (d.priority != 0).then_some(d.offset_ns as f64)),
+                    .map(|d| d.offset_ns as f64 / NANOS_PER_MILLI),
             );
-            let unprioritized_offset_stats = get_stats(
-                data.data
-                    .iter()
-                    .filter_map(|d| (d.priority == 0).then_some(d.offset_ns as f64)),
-            );
+            let prioritized_offset_stats =
+                get_stats(data.data.iter().filter_map(|d| {
+                    (d.priority != 0).then_some(d.offset_ns as f64 / NANOS_PER_MILLI)
+                }));
+            let unprioritized_offset_stats =
+                get_stats(data.data.iter().filter_map(|d| {
+                    (d.priority == 0).then_some(d.offset_ns as f64 / NANOS_PER_MILLI)
+                }));
 
             println!("{slot_start} - {slot_end}:");
             println!("    Priority: {priority_stats}");
-            println!("    OffsetNs: {offset_stats}");
-            println!("    Prioritized-OffsetNs: {prioritized_offset_stats}");
-            println!("    UnPrioritized-OffsetNs: {unprioritized_offset_stats}");
+            println!("    OffsetMs: {offset_stats}");
+            println!("    Prioritized-OffsetMs: {prioritized_offset_stats}");
+            println!("    UnPrioritized-OffsetMs: {unprioritized_offset_stats}");
         }
     }
 }
@@ -177,7 +180,7 @@ impl std::fmt::Display for Stats {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{{min: {}, max: {}, average: {}}}",
+            "{{min: {:.2}, max: {:.2}, average: {:.2}}}",
             self.min, self.max, self.average
         )
     }
