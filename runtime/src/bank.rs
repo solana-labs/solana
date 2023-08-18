@@ -8266,7 +8266,7 @@ impl Bank {
                         let account = Account {
                             lamports,
                             data,
-                            ..Account::from(old_account.clone())
+                            ..Account::from(new_account.clone())
                         };
                         self.store_account(old_address, &account);
                         new_account.lamports() + old_account.lamports() - account.lamports

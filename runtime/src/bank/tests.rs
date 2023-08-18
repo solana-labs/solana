@@ -8003,15 +8003,19 @@ fn test_compute_active_feature_set() {
     assert!(feature_set.is_active(&test_feature));
 }
 
-fn set_up_account_with_bank(
+fn test_program_replace_set_up_account(
     bank: &mut Bank,
     pubkey: &Pubkey,
     lamports: u64,
     data: Vec<u8>,
+    owner: &Pubkey,
+    executable: bool,
 ) -> AccountSharedData {
     let new_account = AccountSharedData::from(Account {
         lamports,
         data,
+        owner: *owner,
+        executable,
         ..Account::default()
     });
     bank.store_account_and_update_capitalization(pubkey, &new_account);
@@ -8027,17 +8031,25 @@ fn test_program_replace_non_upgradable_base_case() {
     //
     // Should replace the old program account with the new program account:
     // - Old:     [*New program data]
+    let bpf_id = bpf_loader::id();
     let mut bank = create_simple_test_bank(0);
 
     let old = Pubkey::new_unique();
     let old_bytes = vec![0, 0, 0, 0];
     let old_lamports = bank.get_minimum_balance_for_rent_exemption(old_bytes.len());
-    set_up_account_with_bank(&mut bank, &old, old_lamports, old_bytes);
+    test_program_replace_set_up_account(&mut bank, &old, old_lamports, old_bytes, &bpf_id, true);
 
     let new = Pubkey::new_unique();
     let new_bytes = vec![6; 30];
     let new_lamports = bank.get_minimum_balance_for_rent_exemption(new_bytes.len());
-    set_up_account_with_bank(&mut bank, &new, new_lamports, new_bytes.clone());
+    test_program_replace_set_up_account(
+        &mut bank,
+        &new,
+        new_lamports,
+        new_bytes.clone(),
+        &bpf_id,
+        true,
+    );
 
     let original_capitalization = bank.capitalization();
 
@@ -8053,6 +8065,10 @@ fn test_program_replace_non_upgradable_base_case() {
     // - Old:     [*New program data]
     let old_account = bank.get_account(&old).unwrap();
     assert_eq!(old_account.data(), &new_bytes);
+
+    // Ownership & executable match the new program account
+    assert_eq!(old_account.owner(), &bpf_id);
+    assert!(old_account.executable());
 
     // Lamports from the new program account were burnt
     assert_eq!(
@@ -8072,27 +8088,37 @@ fn test_program_replace_non_upgradable_create_data_add_rent() {
     // and create the data account:
     // - Old:     PDA(OldData)
     // - OldData: [*New program data]
-    let bpf_id = bpf_loader_upgradeable::id();
+    let bpf_id = bpf_loader::id();
+    let bpf_upgradable_id = bpf_loader_upgradeable::id();
     let mut bank = create_simple_test_bank(0);
 
     let old = Pubkey::new_unique();
     let old_bytes = vec![0, 0, 0, 0]; // Smaller than 32 bytes
     let old_lamports = bank.get_minimum_balance_for_rent_exemption(old_bytes.len());
-    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
-    set_up_account_with_bank(&mut bank, &old, old_lamports, old_bytes);
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_upgradable_id);
+    test_program_replace_set_up_account(&mut bank, &old, old_lamports, old_bytes, &bpf_id, true);
 
     let new = Pubkey::new_unique();
-    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_id);
+    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_upgradable_id);
     let new_bytes = new_data.to_bytes().to_vec();
     let new_lamports = bank.get_minimum_balance_for_rent_exemption(new_bytes.len());
     let new_data_bytes = vec![6; 30];
     let new_data_lamports = bank.get_minimum_balance_for_rent_exemption(new_data_bytes.len());
-    set_up_account_with_bank(&mut bank, &new, new_lamports, new_bytes);
-    set_up_account_with_bank(
+    test_program_replace_set_up_account(
+        &mut bank,
+        &new,
+        new_lamports,
+        new_bytes,
+        &bpf_upgradable_id,
+        true,
+    );
+    test_program_replace_set_up_account(
         &mut bank,
         &new_data,
         new_data_lamports,
         new_data_bytes.clone(),
+        &bpf_upgradable_id,
+        false,
     );
 
     let original_capitalization = bank.capitalization();
@@ -8127,6 +8153,12 @@ fn test_program_replace_non_upgradable_create_data_add_rent() {
     let old_data_account = bank.get_account(&old_data).unwrap();
     assert_eq!(old_data_account.data(), &new_data_bytes);
 
+    // Ownership & executable match the new program accounts
+    assert_eq!(old_account.owner(), &bpf_upgradable_id);
+    assert!(old_account.executable());
+    assert_eq!(old_data_account.owner(), &bpf_upgradable_id);
+    assert!(!old_data_account.executable());
+
     // The remaining lamports from both program accounts minus the rent-exempt
     // minimum were burnt
     assert_eq!(
@@ -8148,27 +8180,37 @@ fn test_program_replace_non_upgradable_create_data_dont_add_rent() {
     // and create the data account:
     // - Old:     PDA(OldData)
     // - OldData: [*New program data]
-    let bpf_id = bpf_loader_upgradeable::id();
+    let bpf_id = bpf_loader::id();
+    let bpf_upgradable_id = bpf_loader_upgradeable::id();
     let mut bank = create_simple_test_bank(0);
 
     let old = Pubkey::new_unique();
     let old_bytes = vec![0; 44]; // Larger than 32 bytes
     let old_lamports = bank.get_minimum_balance_for_rent_exemption(old_bytes.len());
-    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
-    set_up_account_with_bank(&mut bank, &old, old_lamports, old_bytes);
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_upgradable_id);
+    test_program_replace_set_up_account(&mut bank, &old, old_lamports, old_bytes, &bpf_id, true);
 
     let new = Pubkey::new_unique();
-    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_id);
+    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_upgradable_id);
     let new_bytes = new_data.to_bytes().to_vec();
     let new_lamports = bank.get_minimum_balance_for_rent_exemption(new_bytes.len());
     let new_data_bytes = vec![6; 30];
     let new_data_lamports = bank.get_minimum_balance_for_rent_exemption(new_data_bytes.len());
-    set_up_account_with_bank(&mut bank, &new, new_lamports, new_bytes);
-    set_up_account_with_bank(
+    test_program_replace_set_up_account(
+        &mut bank,
+        &new,
+        new_lamports,
+        new_bytes,
+        &bpf_upgradable_id,
+        true,
+    );
+    test_program_replace_set_up_account(
         &mut bank,
         &new_data,
         new_data_lamports,
         new_data_bytes.clone(),
+        &bpf_upgradable_id,
+        false,
     );
 
     let original_capitalization = bank.capitalization();
@@ -8200,6 +8242,12 @@ fn test_program_replace_non_upgradable_create_data_dont_add_rent() {
     let old_data_account = bank.get_account(&old_data).unwrap();
     assert_eq!(old_data_account.data(), &new_data_bytes);
 
+    // Ownership & executable match the new program accounts
+    assert_eq!(old_account.owner(), &bpf_upgradable_id);
+    assert!(old_account.executable());
+    assert_eq!(old_data_account.owner(), &bpf_upgradable_id);
+    assert!(!old_data_account.executable());
+
     // Lamports from the new program account were burnt
     assert_eq!(
         bank.capitalization(),
@@ -8207,36 +8255,88 @@ fn test_program_replace_non_upgradable_create_data_dont_add_rent() {
     );
 }
 
+// FIX ME: This case SHOULD BE allowed
 #[test]
 fn test_program_replace_non_upgradable_does_not_exist() {
     // Non-Upgradable program
     // - Old:     ** Does not exist! **
-    // - New:     PDA(NewData)
-    // - NewData: [*New program data]
+    // - New:     [*Arbitrary data]
     //
     // This is NOT allowed and should leave everything unchanged
-    let bpf_id = bpf_loader_upgradeable::id();
+    let bpf_id = bpf_loader::id();
+    let bpf_upgradable_id = bpf_loader_upgradeable::id();
     let mut bank = create_simple_test_bank(0);
 
     let old = Pubkey::new_unique();
-    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_upgradable_id);
 
     let new = Pubkey::new_unique();
-    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_id);
+    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_upgradable_id);
     let new_bytes = new_data.to_bytes().to_vec();
     let new_lamports = bank.get_minimum_balance_for_rent_exemption(new_bytes.len());
-    let new_data_bytes = vec![6; 30];
-    let new_data_lamports = bank.get_minimum_balance_for_rent_exemption(new_data_bytes.len());
-    set_up_account_with_bank(&mut bank, &new, new_lamports, new_bytes);
-    set_up_account_with_bank(&mut bank, &new_data, new_data_lamports, new_data_bytes);
+    test_program_replace_set_up_account(&mut bank, &new, new_lamports, new_bytes, &bpf_id, true);
 
     let original_capitalization = bank.capitalization();
 
     bank.replace_program_account(&old, &new, "bank-apply_program_replacement");
 
     // Old program accounts still don't exist
-    assert_eq!(bank.get_balance(&old), 0);
-    assert_eq!(bank.get_balance(&old_data), 0);
+    assert_eq!(bank.get_account(&old), None);
+    assert_eq!(bank.get_account(&old_data), None);
+
+    // New program accounts are unchanged
+    assert_eq!(bank.get_balance(&new), new_lamports);
+    assert_eq!(bank.get_account(&new_data), None);
+
+    // Lamports were unchanged across the board
+    assert_eq!(bank.capitalization(), original_capitalization);
+}
+
+// FIX ME: This case SHOULD BE allowed
+#[test]
+fn test_program_replace_non_upgradable_does_not_exist_create_data() {
+    // Non-Upgradable program
+    // - Old:     ** Does not exist! **
+    // - New:     PDA(NewData)
+    // - NewData: [*New program data]
+    //
+    // This is NOT allowed and should leave everything unchanged
+    let bpf_upgradable_id = bpf_loader_upgradeable::id();
+    let mut bank = create_simple_test_bank(0);
+
+    let old = Pubkey::new_unique();
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_upgradable_id);
+
+    let new = Pubkey::new_unique();
+    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_upgradable_id);
+    let new_bytes = new_data.to_bytes().to_vec();
+    let new_lamports = bank.get_minimum_balance_for_rent_exemption(new_bytes.len());
+    let new_data_bytes = vec![6; 30];
+    let new_data_lamports = bank.get_minimum_balance_for_rent_exemption(new_data_bytes.len());
+    test_program_replace_set_up_account(
+        &mut bank,
+        &new,
+        new_lamports,
+        new_bytes,
+        &bpf_upgradable_id,
+        true,
+    );
+    test_program_replace_set_up_account(
+        &mut bank,
+        &new_data,
+        new_data_lamports,
+        new_data_bytes,
+        &bpf_upgradable_id,
+        false,
+    );
+
+    let original_capitalization = bank.capitalization();
+
+    bank.replace_program_account(&old, &new, "bank-apply_program_replacement");
+
+    // Old program accounts still don't exist
+    assert_eq!(bank.get_account(&old), None);
+    assert_eq!(bank.get_account(&old_data), None);
 
     // New program accounts are unchanged
     assert_eq!(bank.get_balance(&new), new_lamports);
@@ -8246,8 +8346,7 @@ fn test_program_replace_non_upgradable_does_not_exist() {
     assert_eq!(bank.capitalization(), original_capitalization);
 }
 
-// FIXME: Use rent-real lamport values
-#[cfg(ignore)]
+// FIX ME: This case SHOULD BE allowed
 #[test]
 fn test_program_replace_non_upgradable_is_native_account() {
     // Non-Upgradable program
@@ -8259,56 +8358,49 @@ fn test_program_replace_non_upgradable_is_native_account() {
     // and create the data account:
     // - Old:     PDA(OldData)
     // - OldData: [*New program data]
-    let bpf_id = bpf_loader_upgradeable::id();
+    let bpf_upgradable_id = bpf_loader_upgradeable::id();
     let mut bank = create_simple_test_bank(0);
 
-    let old = feature::id();
-    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
+    let old = feature::id(); // `Feature11111111`
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_upgradable_id);
 
     let new = Pubkey::new_unique();
-    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_id);
+    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_upgradable_id);
     let new_bytes = new_data.to_bytes().to_vec();
     let new_lamports = bank.get_minimum_balance_for_rent_exemption(new_bytes.len());
     let new_data_bytes = vec![6; 30];
     let new_data_lamports = bank.get_minimum_balance_for_rent_exemption(new_data_bytes.len());
-    set_up_account_with_bank(&mut bank, &new, new_lamports, new_bytes);
-    set_up_account_with_bank(&mut bank, &new_data, new_data_lamports, new_data_bytes);
+    test_program_replace_set_up_account(
+        &mut bank,
+        &new,
+        new_lamports,
+        new_bytes,
+        &bpf_upgradable_id,
+        true,
+    );
+    test_program_replace_set_up_account(
+        &mut bank,
+        &new_data,
+        new_data_lamports,
+        new_data_bytes,
+        &bpf_upgradable_id,
+        false,
+    );
 
     let original_capitalization = bank.capitalization();
 
     bank.replace_program_account(&old, &new, "bank-apply_program_replacement");
 
-    // TODO
+    // Old program accounts still don't exist
+    assert_eq!(bank.get_account(&old), None);
+    assert_eq!(bank.get_account(&old_data), None);
 
-    // FIXME: We can't assume the size is unchanged
-    //
-    // Old program account's balance was unchanged
-    // (Data was maybe modified, but size was unchanged)
-    assert_eq!(bank.get_balance(&old), 0);
+    // New program accounts are unchanged
+    assert_eq!(bank.get_balance(&new), new_lamports);
+    assert_eq!(bank.get_balance(&new_data), new_data_lamports);
 
-    // Old data account's balance is now the new data account's balance
-    // (newly created)
-    assert_eq!(bank.get_balance(&old_data), new_data_lamports);
-
-    // New program accounts are now empty
-    assert_eq!(bank.get_balance(&new), 0);
-    assert_eq!(bank.get_balance(&new_data), 0);
-
-    // Old program account now holds the PDA, ie:
-    // - Old:     PDA(OldData)
-    let old_account = bank.get_account(&old).unwrap();
-    assert_eq!(old_account.data(), &old_data.to_bytes().to_vec());
-
-    // Old data account has been created & now holds the new data, ie:
-    // - OldData: [*New program data]
-    let old_data_account = bank.get_account(&old_data).unwrap();
-    assert_eq!(old_data_account.data(), &new_data_bytes);
-
-    // Lamports from the new program account were burnt
-    assert_eq!(
-        bank.capitalization(),
-        original_capitalization - new_lamports
-    );
+    // Lamports were unchanged across the board
+    assert_eq!(bank.capitalization(), original_capitalization);
 }
 
 // FIXME: Use rent-real lamport values
@@ -8323,30 +8415,53 @@ fn test_program_replace_upgradable_base_case() {
     // Should _only_ replace the data account, not the program account:
     // - Old:     PDA(OldData)
     // - OldData: [*New program data]
-    let bpf_id = bpf_loader_upgradeable::id();
+    let bpf_upgradable_id = bpf_loader_upgradeable::id();
     let mut bank = create_simple_test_bank(0);
 
     let old = Pubkey::new_unique();
-    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_upgradable_id);
     let old_bytes = old_data.to_bytes().to_vec();
     let old_lamports = bank.get_minimum_balance_for_rent_exemption(old_bytes.len());
     let old_data_bytes = vec![4; 10];
     let old_data_lamports = bank.get_minimum_balance_for_rent_exemption(old_data_bytes.len());
-    set_up_account_with_bank(&mut bank, &old, old_lamports, old_bytes);
-    set_up_account_with_bank(&mut bank, &old_data, old_data_lamports, old_data_bytes);
+    test_program_replace_set_up_account(
+        &mut bank,
+        &old,
+        old_lamports,
+        old_bytes,
+        &bpf_upgradable_id,
+        true,
+    );
+    test_program_replace_set_up_account(
+        &mut bank,
+        &old_data,
+        old_data_lamports,
+        old_data_bytes,
+        &bpf_upgradable_id,
+        false,
+    );
 
     let new = Pubkey::new_unique();
-    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_id);
+    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_upgradable_id);
     let new_bytes = new_data.to_bytes().to_vec();
     let new_lamports = bank.get_minimum_balance_for_rent_exemption(new_bytes.len());
     let new_data_bytes = vec![6; 30];
     let new_data_lamports = bank.get_minimum_balance_for_rent_exemption(new_data_bytes.len());
-    set_up_account_with_bank(&mut bank, &new, new_lamports, new_bytes);
-    set_up_account_with_bank(
+    test_program_replace_set_up_account(
+        &mut bank,
+        &new,
+        new_lamports,
+        new_bytes,
+        &bpf_upgradable_id,
+        true,
+    );
+    test_program_replace_set_up_account(
         &mut bank,
         &new_data,
         new_data_lamports,
         new_data_bytes.clone(),
+        &bpf_upgradable_id,
+        false,
     );
 
     let original_capitalization = bank.capitalization();
@@ -8376,6 +8491,12 @@ fn test_program_replace_upgradable_base_case() {
     let old_data_account = bank.get_account(&old_data).unwrap();
     assert_eq!(old_data_account.data(), &new_data_bytes);
 
+    // Ownership & executable match the new program accounts
+    assert_eq!(old_account.owner(), &bpf_upgradable_id);
+    assert!(old_account.executable());
+    assert_eq!(old_data_account.owner(), &bpf_upgradable_id);
+    assert!(!old_data_account.executable());
+
     // Lamports from the new program account were burnt
     // Lamports from the old data account were burnt
     assert_eq!(
@@ -8396,30 +8517,53 @@ fn test_program_replace_upgradable_not_data_pda_at_first() {
     // Should _only_ replace the data account, not the program account:
     // - Old:     PDA(OldData)
     // - OldData: [*New program data]
-    let bpf_id = bpf_loader_upgradeable::id();
+    let bpf_upgradable_id = bpf_loader_upgradeable::id();
     let mut bank = create_simple_test_bank(0);
 
     let old = Pubkey::new_unique();
-    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_upgradable_id);
     let old_bytes = vec![1; 18]; // Smaller than 32 bytes
     let old_lamports = bank.get_minimum_balance_for_rent_exemption(old_bytes.len());
     let old_data_bytes = vec![4; 10];
     let old_data_lamports = bank.get_minimum_balance_for_rent_exemption(old_data_bytes.len());
-    set_up_account_with_bank(&mut bank, &old, old_lamports, old_bytes);
-    set_up_account_with_bank(&mut bank, &old_data, old_data_lamports, old_data_bytes);
+    test_program_replace_set_up_account(
+        &mut bank,
+        &old,
+        old_lamports,
+        old_bytes,
+        &bpf_upgradable_id,
+        true,
+    );
+    test_program_replace_set_up_account(
+        &mut bank,
+        &old_data,
+        old_data_lamports,
+        old_data_bytes,
+        &bpf_upgradable_id,
+        false,
+    );
 
     let new = Pubkey::new_unique();
-    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_id);
+    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_upgradable_id);
     let new_bytes = new_data.to_bytes().to_vec();
     let new_lamports = bank.get_minimum_balance_for_rent_exemption(new_bytes.len());
     let new_data_bytes = vec![6; 30];
     let new_data_lamports = bank.get_minimum_balance_for_rent_exemption(new_data_bytes.len());
-    set_up_account_with_bank(&mut bank, &new, new_lamports, new_bytes);
-    set_up_account_with_bank(
+    test_program_replace_set_up_account(
+        &mut bank,
+        &new,
+        new_lamports,
+        new_bytes,
+        &bpf_upgradable_id,
+        true,
+    );
+    test_program_replace_set_up_account(
         &mut bank,
         &new_data,
         new_data_lamports,
         new_data_bytes.clone(),
+        &bpf_upgradable_id,
+        false,
     );
 
     let original_capitalization = bank.capitalization();
@@ -8453,6 +8597,12 @@ fn test_program_replace_upgradable_not_data_pda_at_first() {
     let old_data_account = bank.get_account(&old_data).unwrap();
     assert_eq!(old_data_account.data(), &new_data_bytes);
 
+    // Ownership & executable match the new program accounts
+    assert_eq!(old_account.owner(), &bpf_upgradable_id);
+    assert!(old_account.executable());
+    assert_eq!(old_data_account.owner(), &bpf_upgradable_id);
+    assert!(!old_data_account.executable());
+
     // The remaining lamports from both program accounts minus the rent-exempt
     // minimum were burnt
     // Lamports from the old data account were burnt
@@ -8476,27 +8626,44 @@ fn test_program_replace_upgradable_no_data_provided_with_replacement() {
     // This is NOT allowed and should leave the program unchanged:
     // - Old:     PDA(OldData)
     // - OldData: [Old program data]
-    let bpf_id = bpf_loader_upgradeable::id();
+    let bpf_id = bpf_loader::id();
+    let bpf_upgradable_id = bpf_loader_upgradeable::id();
     let mut bank = create_simple_test_bank(0);
 
     let old = Pubkey::new_unique();
-    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_id);
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_upgradable_id);
     let old_bytes = vec![5; 5];
     let old_lamports = bank.get_minimum_balance_for_rent_exemption(old_bytes.len());
     let old_data_bytes = vec![4; 10];
     let old_data_lamports = bank.get_minimum_balance_for_rent_exemption(old_data_bytes.len());
-    set_up_account_with_bank(&mut bank, &old, old_lamports, old_bytes.clone());
-    set_up_account_with_bank(
+    test_program_replace_set_up_account(
+        &mut bank,
+        &old,
+        old_lamports,
+        old_bytes.clone(),
+        &bpf_upgradable_id,
+        true,
+    );
+    test_program_replace_set_up_account(
         &mut bank,
         &old_data,
         old_data_lamports,
         old_data_bytes.clone(),
+        &bpf_upgradable_id,
+        false,
     );
 
     let new = Pubkey::new_unique();
     let new_bytes = vec![2; 12];
     let new_lamports = bank.get_minimum_balance_for_rent_exemption(new_bytes.len());
-    set_up_account_with_bank(&mut bank, &new, new_lamports, new_bytes.clone());
+    test_program_replace_set_up_account(
+        &mut bank,
+        &new,
+        new_lamports,
+        new_bytes.clone(),
+        &bpf_id,
+        true,
+    );
 
     let original_capitalization = bank.capitalization();
 
@@ -8519,6 +8686,12 @@ fn test_program_replace_upgradable_no_data_provided_with_replacement() {
     // - New:     [*New program data]
     let new_account = bank.get_account(&new).unwrap();
     assert_eq!(new_account.data(), &new_bytes);
+
+    // Ownership & executable are unchanged
+    assert_eq!(old_account.owner(), &bpf_upgradable_id);
+    assert!(old_account.executable());
+    assert_eq!(old_data_account.owner(), &bpf_upgradable_id);
+    assert!(!old_data_account.executable());
 
     // Lamports were unchanged across the board
     assert_eq!(bank.capitalization(), original_capitalization);
