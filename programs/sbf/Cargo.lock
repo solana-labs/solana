@@ -6473,7 +6473,6 @@ name = "solana-zk-token-proof-program"
 version = "1.17.0"
 dependencies = [
  "bytemuck",
- "getrandom 0.2.10",
  "num-derive",
  "num-traits",
  "solana-program-runtime",

@@ -7522,7 +7522,6 @@ dependencies = [
  "bytemuck",
  "criterion",
  "curve25519-dalek",
- "getrandom 0.2.10",
  "num-derive",
  "num-traits",
  "solana-program-runtime",
