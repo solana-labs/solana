@@ -177,7 +177,7 @@ impl OptimisticallyConfirmedBankTracker {
     fn notify_or_defer(
         subscriptions: &RpcSubscriptions,
         bank_forks: &RwLock<BankForks>,
-        bank: &Arc<Bank>,
+        bank: &Bank,
         last_notified_confirmed_slot: &mut Slot,
         pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
         slot_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
@@ -204,13 +204,13 @@ impl OptimisticallyConfirmedBankTracker {
     fn notify_or_defer_confirmed_banks(
         subscriptions: &RpcSubscriptions,
         bank_forks: &RwLock<BankForks>,
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         slot_threshold: Slot,
         last_notified_confirmed_slot: &mut Slot,
         pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
         slot_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
     ) {
-        for confirmed_bank in bank.clone().parents_inclusive().iter().rev() {
+        for confirmed_bank in bank.parents_inclusive().iter().rev() {
             if confirmed_bank.slot() > slot_threshold {
                 debug!(
                     "Calling notify_or_defer for confirmed_bank {:?}",
@@ -286,7 +286,7 @@ impl OptimisticallyConfirmedBankTracker {
                         Self::notify_or_defer_confirmed_banks(
                             subscriptions,
                             bank_forks,
-                            &bank,
+                            bank,
                             *highest_confirmed_slot,
                             last_notified_confirmed_slot,
                             pending_optimistically_confirmed_banks,
@@ -343,7 +343,7 @@ impl OptimisticallyConfirmedBankTracker {
                     Self::notify_or_defer_confirmed_banks(
                         subscriptions,
                         bank_forks,
-                        &bank,
+                        bank.clone(),
                         *last_notified_confirmed_slot,
                         last_notified_confirmed_slot,
                         pending_optimistically_confirmed_banks,
@@ -418,13 +418,13 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let bank1 = bank_forks.read().unwrap().get(1).unwrap();
-        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
+        let bank2 = Bank::new_from_parent(bank1, &Pubkey::default(), 2);
         bank_forks.write().unwrap().insert(bank2);
         let bank2 = bank_forks.read().unwrap().get(2).unwrap();
-        let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), 3);
+        let bank3 = Bank::new_from_parent(bank2, &Pubkey::default(), 3);
         bank_forks.write().unwrap().insert(bank3);
 
         let optimistically_confirmed_bank =
@@ -520,7 +520,7 @@ mod tests {
 
         // Test higher root will be cached and clear pending_optimistically_confirmed_banks
         let bank3 = bank_forks.read().unwrap().get(3).unwrap();
-        let bank4 = Bank::new_from_parent(&bank3, &Pubkey::default(), 4);
+        let bank4 = Bank::new_from_parent(bank3, &Pubkey::default(), 4);
         bank_forks.write().unwrap().insert(bank4);
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::OptimisticallyConfirmed(4),
@@ -540,7 +540,7 @@ mod tests {
         assert_eq!(highest_confirmed_slot, 4);
 
         let bank4 = bank_forks.read().unwrap().get(4).unwrap();
-        let bank5 = Bank::new_from_parent(&bank4, &Pubkey::default(), 5);
+        let bank5 = Bank::new_from_parent(bank4, &Pubkey::default(), 5);
         bank_forks.write().unwrap().insert(bank5);
         let bank5 = bank_forks.read().unwrap().get(5).unwrap();
 
@@ -550,6 +550,7 @@ mod tests {
 
         let subscribers = Some(Arc::new(RwLock::new(bank_notification_senders)));
         let parent_roots = bank5.ancestors.keys();
+
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::NewRootBank(bank5),
             &bank_forks,
@@ -590,10 +591,10 @@ mod tests {
 
         // Banks <= root do not get added to pending list, even if not frozen
         let bank5 = bank_forks.read().unwrap().get(5).unwrap();
-        let bank6 = Bank::new_from_parent(&bank5, &Pubkey::default(), 6);
+        let bank6 = Bank::new_from_parent(bank5, &Pubkey::default(), 6);
         bank_forks.write().unwrap().insert(bank6);
         let bank5 = bank_forks.read().unwrap().get(5).unwrap();
-        let bank7 = Bank::new_from_parent(&bank5, &Pubkey::default(), 7);
+        let bank7 = Bank::new_from_parent(bank5, &Pubkey::default(), 7);
         bank_forks.write().unwrap().insert(bank7);
         bank_forks
             .write()

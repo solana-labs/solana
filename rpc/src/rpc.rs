@@ -338,7 +338,7 @@ impl JsonRpcRequestProcessor {
 
     // Useful for unit testing
     pub fn new_from_bank(
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         socket_addr_space: SocketAddrSpace,
         connection_cache: Arc<ConnectionCache>,
     ) -> Self {
@@ -373,6 +373,7 @@ impl JsonRpcRequestProcessor {
             exit.clone(),
         );
 
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         Self {
             config: JsonRpcConfig::default(),
             snapshot_config: None,
@@ -396,11 +397,11 @@ impl JsonRpcRequestProcessor {
             transaction_sender: Arc::new(Mutex::new(sender)),
             bigtable_ledger_storage: None,
             optimistically_confirmed_bank: Arc::new(RwLock::new(OptimisticallyConfirmedBank {
-                bank: bank.clone(),
+                bank,
             })),
             largest_accounts_cache: Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             max_slots: Arc::new(MaxSlots::default()),
-            leader_schedule_cache: Arc::new(LeaderScheduleCache::new_from_bank(bank)),
+            leader_schedule_cache,
             max_complete_transaction_status_slot: Arc::new(AtomicU64::default()),
             max_complete_rewards_slot: Arc::new(AtomicU64::default()),
             prioritization_fee_cache: Arc::new(PrioritizationFeeCache::default()),
@@ -1433,7 +1434,7 @@ impl JsonRpcRequestProcessor {
     fn get_transaction_status(
         &self,
         signature: Signature,
-        bank: &Arc<Bank>,
+        bank: &Bank,
     ) -> Option<TransactionStatus> {
         let (slot, status) = bank.get_signature_status_slot(&signature)?;
 
@@ -1987,7 +1988,7 @@ impl JsonRpcRequestProcessor {
     /// Use a set of filters to get an iterator of keyed program accounts from a bank
     fn get_filtered_program_accounts(
         &self,
-        bank: &Arc<Bank>,
+        bank: &Bank,
         program_id: &Pubkey,
         mut filters: Vec<RpcFilterType>,
     ) -> RpcCustomResult<Vec<(Pubkey, AccountSharedData)>> {
@@ -2037,7 +2038,7 @@ impl JsonRpcRequestProcessor {
     /// Get an iterator of spl-token accounts by owner address
     fn get_filtered_spl_token_accounts_by_owner(
         &self,
-        bank: &Arc<Bank>,
+        bank: &Bank,
         program_id: &Pubkey,
         owner_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
@@ -2088,7 +2089,7 @@ impl JsonRpcRequestProcessor {
     /// Get an iterator of spl-token accounts by mint address
     fn get_filtered_spl_token_accounts_by_mint(
         &self,
-        bank: &Arc<Bank>,
+        bank: &Bank,
         program_id: &Pubkey,
         mint_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
@@ -2280,7 +2281,7 @@ pub(crate) fn check_is_at_least_confirmed(commitment: CommitmentConfig) -> Resul
 }
 
 fn get_encoded_account(
-    bank: &Arc<Bank>,
+    bank: &Bank,
     pubkey: &Pubkey,
     encoding: UiAccountEncoding,
     data_slice: Option<UiDataSliceConfig>,
@@ -2290,7 +2291,7 @@ fn get_encoded_account(
             let response = if is_known_spl_token_id(account.owner())
                 && encoding == UiAccountEncoding::JsonParsed
             {
-                get_parsed_token_account(bank.clone(), pubkey, account)
+                get_parsed_token_account(bank, pubkey, account)
             } else {
                 encode_account(&account, pubkey, encoding, data_slice)?
             };
@@ -2441,7 +2442,7 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
 /// Analyze a passed Pubkey that may be a Token program id or Mint address to determine the program
 /// id and optional Mint
 fn get_token_program_id_and_mint(
-    bank: &Arc<Bank>,
+    bank: &Bank,
     token_account_filter: TokenAccountsFilter,
 ) -> Result<(Pubkey, Option<Pubkey>)> {
     match token_account_filter {
@@ -4955,7 +4956,7 @@ pub mod tests {
             let mut parent_bank = self.bank_forks.read().unwrap().working_bank();
             for (i, root) in roots.iter().enumerate() {
                 let new_bank =
-                    Bank::new_from_parent(&parent_bank, parent_bank.collector_id(), *root);
+                    Bank::new_from_parent(parent_bank.clone(), parent_bank.collector_id(), *root);
                 parent_bank = self.bank_forks.write().unwrap().insert(new_bank);
                 let parent = if i > 0 { roots[i - 1] } else { 0 };
                 fill_blockstore_slot_with_ticks(
@@ -4968,7 +4969,7 @@ pub mod tests {
             }
             self.blockstore.set_roots(roots.iter()).unwrap();
             let new_bank = Bank::new_from_parent(
-                &parent_bank,
+                parent_bank.clone(),
                 parent_bank.collector_id(),
                 roots.iter().max().unwrap() + 1,
             );
@@ -4998,11 +4999,7 @@ pub mod tests {
                 .bank_forks
                 .write()
                 .unwrap()
-                .insert(Bank::new_from_parent(
-                    &parent_bank,
-                    &Pubkey::default(),
-                    slot,
-                ));
+                .insert(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot));
 
             let new_block_commitment = BlockCommitmentCache::new(
                 HashMap::new(),
@@ -5056,7 +5053,7 @@ pub mod tests {
             .unwrap();
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let request_processor = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -5075,7 +5072,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -5107,7 +5104,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -5234,7 +5231,7 @@ pub mod tests {
 
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -6380,7 +6377,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -8294,13 +8291,13 @@ pub mod tests {
 
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let bank1 = bank_forks.read().unwrap().get(1).unwrap();
-        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
+        let bank2 = Bank::new_from_parent(bank1, &Pubkey::default(), 2);
         bank_forks.write().unwrap().insert(bank2);
         let bank2 = bank_forks.read().unwrap().get(2).unwrap();
-        let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), 3);
+        let bank3 = Bank::new_from_parent(bank2, &Pubkey::default(), 3);
         bank_forks.write().unwrap().insert(bank3);
 
         let optimistically_confirmed_bank =

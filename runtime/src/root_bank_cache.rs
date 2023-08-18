@@ -68,7 +68,7 @@ mod tests {
         assert_eq!(bank, root_bank_cache.root_bank());
 
         {
-            let child_bank = Bank::new_from_parent(&bank, &Pubkey::default(), 1);
+            let child_bank = Bank::new_from_parent(bank.clone(), &Pubkey::default(), 1);
             bank_forks.write().unwrap().insert(child_bank);
 
             // cached slot is still 0 since we have not set root

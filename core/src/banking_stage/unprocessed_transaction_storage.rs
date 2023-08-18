@@ -711,7 +711,7 @@ impl ThreadLocalUnprocessedPackets {
     fn sanitize_unforwarded_packets(
         &mut self,
         packets_to_process: &[Arc<ImmutableDeserializedPacket>],
-        bank: &Arc<Bank>,
+        bank: &Bank,
         total_dropped_packets: &mut usize,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
         // Get ref of ImmutableDeserializedPacket
@@ -721,11 +721,7 @@ impl ThreadLocalUnprocessedPackets {
                 .enumerate()
                 .filter_map(|(packet_index, deserialized_packet)| {
                     deserialized_packet
-                        .build_sanitized_transaction(
-                            &bank.feature_set,
-                            bank.vote_only_bank(),
-                            bank.as_ref(),
-                        )
+                        .build_sanitized_transaction(&bank.feature_set, bank.vote_only_bank(), bank)
                         .map(|transaction| (transaction, packet_index))
                 })
                 .unzip();
@@ -740,7 +736,7 @@ impl ThreadLocalUnprocessedPackets {
     /// Checks sanitized transactions against bank, returns valid transaction indexes
     fn filter_invalid_transactions(
         transactions: &[SanitizedTransaction],
-        bank: &Arc<Bank>,
+        bank: &Bank,
         total_dropped_packets: &mut usize,
     ) -> Vec<usize> {
         let filter = vec![Ok(()); transactions.len()];

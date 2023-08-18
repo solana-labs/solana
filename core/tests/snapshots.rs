@@ -218,7 +218,8 @@ fn run_bank_forks_snapshot_n<F>(
         accounts_package_sender,
     };
     for slot in 1..=last_slot {
-        let mut bank = Bank::new_from_parent(&bank_forks[slot - 1], &Pubkey::default(), slot);
+        let mut bank =
+            Bank::new_from_parent(bank_forks[slot - 1].clone(), &Pubkey::default(), slot);
         f(&mut bank, mint_keypair);
         let bank = bank_forks.insert(bank);
         // Set root to make sure we don't end up with too many account storage entries
@@ -376,11 +377,12 @@ fn test_concurrent_snapshot_packaging(
     let saved_slot = 4;
     let mut saved_archive_path = None;
 
-    for forks in 0..MAX_BANK_SNAPSHOTS_TO_RETAIN + 2 {
+    for i in 0..MAX_BANK_SNAPSHOTS_TO_RETAIN + 2 {
+        let parent_slot = i as Slot;
         let bank = Bank::new_from_parent(
-            &bank_forks[forks as u64],
+            bank_forks[parent_slot].clone(),
             &Pubkey::default(),
-            (forks + 1) as u64,
+            parent_slot + 1,
         );
         let slot = bank.slot();
         let key1 = Keypair::new().pubkey();
@@ -595,7 +597,7 @@ fn test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clust
         for _ in 0..num_set_roots {
             for _ in 0..*add_root_interval {
                 let new_slot = current_bank.slot() + 1;
-                let new_bank = Bank::new_from_parent(&current_bank, &Pubkey::default(), new_slot);
+                let new_bank = Bank::new_from_parent(current_bank, &Pubkey::default(), new_slot);
                 snapshot_test_config.bank_forks.insert(new_bank);
                 current_bank = snapshot_test_config.bank_forks[new_slot].clone();
             }
@@ -728,7 +730,8 @@ fn test_bank_forks_incremental_snapshot(
     for slot in 1..=LAST_SLOT {
         // Make a new bank and perform some transactions
         let bank = {
-            let bank = Bank::new_from_parent(&bank_forks[slot - 1], &Pubkey::default(), slot);
+            let bank =
+                Bank::new_from_parent(bank_forks[slot - 1].clone(), &Pubkey::default(), slot);
 
             let key = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(mint_keypair, &key, 1, bank.last_blockhash());
@@ -1024,7 +1027,7 @@ fn test_snapshots_with_background_services(
         // Make a new bank and process some transactions
         {
             let bank = Bank::new_from_parent(
-                &bank_forks.read().unwrap().get(slot - 1).unwrap(),
+                bank_forks.read().unwrap().get(slot - 1).unwrap(),
                 &Pubkey::default(),
                 slot,
             );

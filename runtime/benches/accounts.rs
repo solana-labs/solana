@@ -75,7 +75,11 @@ fn test_accounts_squash(bencher: &mut Bencher) {
     // merkle hash of the account state and distribution of fees and rent
     let mut slot = 1u64;
     bencher.iter(|| {
-        let next_bank = Arc::new(Bank::new_from_parent(&prev_bank, &Pubkey::default(), slot));
+        let next_bank = Arc::new(Bank::new_from_parent(
+            prev_bank.clone(),
+            &Pubkey::default(),
+            slot,
+        ));
         next_bank.deposit(&pubkeys[0], 1).unwrap();
         next_bank.squash();
         slot += 1;

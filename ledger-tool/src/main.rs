@@ -2930,8 +2930,11 @@ fn main() {
                             || bootstrap_validator_pubkeys.is_some();
 
                         if child_bank_required {
-                            let mut child_bank =
-                                Bank::new_from_parent(&bank, bank.collector_id(), bank.slot() + 1);
+                            let mut child_bank = Bank::new_from_parent(
+                                bank.clone(),
+                                bank.collector_id(),
+                                bank.slot() + 1,
+                            );
 
                             if let Ok(rent_burn_percentage) = rent_burn_percentage {
                                 child_bank.set_rent_burn_percentage(rent_burn_percentage);
@@ -3137,7 +3140,7 @@ fn main() {
                             bank.rc.accounts.accounts_db.add_root(bank.slot());
                             bank.force_flush_accounts_cache();
                             Arc::new(Bank::warp_from_parent(
-                                &bank,
+                                bank.clone(),
                                 bank.collector_id(),
                                 warp_slot,
                                 CalcAccountsHashDataSource::Storages,
@@ -3606,7 +3609,7 @@ fn main() {
                                 }
                             };
                             let warped_bank = Bank::new_from_parent_with_tracer(
-                                &base_bank,
+                                base_bank.clone(),
                                 base_bank.collector_id(),
                                 next_epoch,
                                 tracer,

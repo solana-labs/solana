@@ -696,7 +696,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
-        let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
+        let child_bank = Bank::new_from_parent(bank_forks[0].clone(), &Pubkey::default(), 1);
         child_bank.register_tick(&Hash::default());
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks[1u64].tick_height(), 1);
@@ -707,7 +707,7 @@ mod tests {
     fn test_bank_forks_new_from_banks() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let child_bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 1));
+        let child_bank = Arc::new(Bank::new_from_parent(bank.clone(), &Pubkey::default(), 1));
 
         let bank_forks = BankForks::new_from_banks(&[bank.clone(), child_bank.clone()], 0);
         assert_eq!(bank_forks.root(), 0);
@@ -724,9 +724,9 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
         let bank0 = bank_forks[0].clone();
-        let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
         bank_forks.insert(bank);
-        let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
+        let bank = Bank::new_from_parent(bank0, &Pubkey::default(), 2);
         bank_forks.insert(bank);
         let descendants = bank_forks.descendants();
         let children: HashSet<u64> = [1u64, 2u64].iter().copied().collect();
@@ -741,9 +741,9 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
         let bank0 = bank_forks[0].clone();
-        let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
         bank_forks.insert(bank);
-        let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
+        let bank = Bank::new_from_parent(bank0, &Pubkey::default(), 2);
         bank_forks.insert(bank);
         let ancestors = bank_forks.ancestors();
         assert!(ancestors[&0].is_empty());
@@ -758,7 +758,8 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
-        let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
+        let bank0 = bank_forks[0].clone();
+        let child_bank = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
         assert!(bank_forks.frozen_banks().get(&0).is_some());
         assert!(bank_forks.frozen_banks().get(&1).is_none());
@@ -769,7 +770,8 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
-        let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
+        let bank0 = bank_forks[0].clone();
+        let child_bank = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks.active_bank_slots(), vec![1]);
     }
@@ -833,8 +835,10 @@ mod tests {
             // Clock::unix_timestamp from Bank::unix_timestamp_from_genesis()
             let update_timestamp_case = slot == slots_in_epoch;
 
-            let child1 = Bank::new_from_parent(&bank_forks0[slot - 1], &Pubkey::default(), slot);
-            let child2 = Bank::new_from_parent(&bank_forks1[slot - 1], &Pubkey::default(), slot);
+            let child1 =
+                Bank::new_from_parent(bank_forks0[slot - 1].clone(), &Pubkey::default(), slot);
+            let child2 =
+                Bank::new_from_parent(bank_forks1[slot - 1].clone(), &Pubkey::default(), slot);
 
             if update_timestamp_case {
                 for child in &[&child1, &child2] {
@@ -880,7 +884,7 @@ mod tests {
     fn extend_bank_forks(bank_forks: &mut BankForks, parent_child_pairs: &[(Slot, Slot)]) {
         for (parent, child) in parent_child_pairs.iter() {
             bank_forks.insert(Bank::new_from_parent(
-                &bank_forks[*parent],
+                bank_forks[*parent].clone(),
                 &Pubkey::default(),
                 *child,
             ));

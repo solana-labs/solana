@@ -1372,7 +1372,7 @@ fn process_next_slots(
         // handles any partials
         if next_meta.is_full() {
             let next_bank = Bank::new_from_parent(
-                bank,
+                bank.clone(),
                 &leader_schedule_cache
                     .slot_leader_at(*next_slot, Some(bank))
                     .unwrap(),
@@ -3592,13 +3592,14 @@ pub mod tests {
         };
         let recyclers = VerifyRecyclers::default();
         process_bank_0(&bank0, &blockstore, &opts, &recyclers, None, None);
-        let bank1 = bank_forks.insert(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+        let bank0_last_blockhash = bank0.last_blockhash();
+        let bank1 = bank_forks.insert(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
         confirm_full_slot(
             &blockstore,
             &bank1,
             &opts,
             &recyclers,
-            &mut ConfirmationProgress::new(bank0.last_blockhash()),
+            &mut ConfirmationProgress::new(bank0_last_blockhash),
             None,
             None,
             None,
@@ -3752,11 +3753,8 @@ pub mod tests {
             }
             i += 1;
 
-            bank = Arc::new(Bank::new_from_parent(
-                &bank,
-                &Pubkey::default(),
-                bank.slot() + thread_rng().gen_range(1, 3),
-            ));
+            let slot = bank.slot() + thread_rng().gen_range(1, 3);
+            bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
         }
     }
 
@@ -3893,7 +3891,7 @@ pub mod tests {
         bank0.freeze();
 
         let bank1 = Arc::new(Bank::new_from_parent(
-            &bank0,
+            bank0.clone(),
             &solana_sdk::pubkey::new_rand(),
             1,
         ));
@@ -4465,7 +4463,7 @@ pub mod tests {
         assert_eq!(slot_0_bank.get_hash_age(&genesis_hash), Some(1));
         assert_eq!(slot_0_bank.get_hash_age(&slot_0_hash), Some(0));
 
-        let slot_2_bank = Arc::new(Bank::new_from_parent(&slot_0_bank, &collector_id, 2));
+        let slot_2_bank = Arc::new(Bank::new_from_parent(slot_0_bank, &collector_id, 2));
         assert_eq!(slot_2_bank.slot(), 2);
         assert_eq!(slot_2_bank.tick_height(), 2);
         assert_eq!(slot_2_bank.max_tick_height(), 6);

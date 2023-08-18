@@ -958,7 +958,7 @@ mod tests {
             .read()
             .unwrap()
             .contains_key(&bank.slot()));
-        let bank1 = Bank::new_from_parent(&bank, &Pubkey::default(), bank.slot() + 1);
+        let bank1 = Bank::new_from_parent(bank.clone(), &Pubkey::default(), bank.slot() + 1);
         vote_tracker.progress_with_new_root_bank(&bank1);
         assert!(!vote_tracker
             .slot_vote_trackers
@@ -969,12 +969,10 @@ mod tests {
         // Check `keys` and `epoch_authorized_voters` are purged when new
         // root bank moves to the next epoch
         let current_epoch = bank.epoch();
-        let new_epoch_bank = Bank::new_from_parent(
-            &bank,
-            &Pubkey::default(),
-            bank.epoch_schedule()
-                .get_first_slot_in_epoch(current_epoch + 1),
-        );
+        let new_epoch_slot = bank
+            .epoch_schedule()
+            .get_first_slot_in_epoch(current_epoch + 1);
+        let new_epoch_bank = Bank::new_from_parent(bank, &Pubkey::default(), new_epoch_slot);
         vote_tracker.progress_with_new_root_bank(&new_epoch_bank);
     }
 
@@ -1020,7 +1018,7 @@ mod tests {
         let bank0 = Bank::new_for_tests(&genesis_config);
         // Votes for slots less than the provided root bank's slot should not be processed
         let bank3 = Arc::new(Bank::new_from_parent(
-            &Arc::new(bank0),
+            Arc::new(bank0),
             &Pubkey::default(),
             3,
         ));
@@ -1541,7 +1539,7 @@ mod tests {
             .collect();
 
         let new_root_bank =
-            Bank::new_from_parent(&bank, &Pubkey::default(), first_slot_in_new_epoch - 2);
+            Bank::new_from_parent(bank, &Pubkey::default(), first_slot_in_new_epoch - 2);
         ClusterInfoVoteListener::filter_and_confirm_with_new_votes(
             &vote_tracker,
             vote_txs,
@@ -1757,10 +1755,11 @@ mod tests {
             1
         );
 
+        let slot = current_leader_bank.slot() + 1;
         let current_leader_bank = Arc::new(Bank::new_from_parent(
-            &current_leader_bank,
+            current_leader_bank,
             &Pubkey::default(),
-            current_leader_bank.slot() + 1,
+            slot,
         ));
         ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
             &mut bank_vote_sender_state_option,

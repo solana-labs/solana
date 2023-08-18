@@ -201,7 +201,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
     } = create_genesis_config(50);
     let bank = Bank::new_for_benches(&genesis_config);
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     let invoke_program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
     let bank = bank_client
