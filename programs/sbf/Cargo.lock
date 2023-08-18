@@ -5010,6 +5010,7 @@ dependencies = [
  "cc",
  "either",
  "generic-array 0.14.7",
+ "getrandom 0.2.10",
  "im",
  "lazy_static",
  "log",
@@ -6473,6 +6474,7 @@ name = "solana-zk-token-proof-program"
 version = "1.17.0"
 dependencies = [
  "bytemuck",
+ "getrandom 0.2.10",
  "num-derive",
  "num-traits",
  "solana-program-runtime",
