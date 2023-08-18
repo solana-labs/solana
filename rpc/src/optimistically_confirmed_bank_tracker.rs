@@ -401,24 +401,6 @@ mod tests {
         std::sync::atomic::AtomicU64,
     };
 
-    // Given a bank, get a chain of the parent slots (descending order)
-    // inclusive of the provided bank.
-    fn get_parent_chains(bank: &Arc<Bank>) -> Vec<Slot> {
-        let parents = bank.clone().parents_inclusive();
-        // The oldest parent Bank does not have a parent Bank to link to as
-        // that is either the end of chain (block 0) or that parent may have
-        // been cleaned up. However, bank's cache the parent slot so we can
-        // still add one more parent slot to the chain. The unwrap() is safe
-        // because parents_inclusive() will contain at least the bank that it
-        // was invoked on.
-        let oldest_parent = parents.last().unwrap().parent_slot();
-        parents
-            .iter()
-            .map(|bank| bank.slot())
-            .chain(std::iter::once(oldest_parent))
-            .collect()
-    }
-
     /// Receive the Root notifications from the channel, if no item received within 100 ms, break and return all
     /// of those received.
     fn get_root_notifications(receiver: &Receiver<SlotNotification>) -> Vec<SlotNotification> {
@@ -567,7 +549,7 @@ mod tests {
         bank_notification_senders.push(sender);
 
         let subscribers = Some(Arc::new(RwLock::new(bank_notification_senders)));
-        let parent_roots = get_parent_chains(&bank5);
+        let parent_roots = bank5.ancestors.keys();
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::NewRootBank(bank5),
             &bank_forks,
@@ -636,8 +618,7 @@ mod tests {
         assert_eq!(newest_root_slot, 5);
 
         let bank7 = bank_forks.read().unwrap().get(7).unwrap();
-
-        let parent_roots = get_parent_chains(&bank7);
+        let parent_roots = bank7.ancestors.keys();
 
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::NewRootBank(bank7),
