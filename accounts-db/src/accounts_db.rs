@@ -9908,7 +9908,6 @@ pub mod tests {
                 AccountSecondaryIndexesIncludeExclude, ReadAccountMapEntry, RefCount,
             },
             append_vec::{test_utils::TempFile, AppendVecStoredAccountMeta},
-            cache_hash_data_stats::CacheHashDataStats,
             inline_spl_token,
             secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
         },
@@ -10436,7 +10435,6 @@ pub mod tests {
                 &mut result2,
                 start_bin_index,
                 &PubkeyBinCalculator24::new(bins),
-                &mut CacheHashDataStats::default(),
             );
             assert_eq!(
                 convert_to_slice(&[result2]),
@@ -10821,12 +10819,7 @@ pub mod tests {
             }
             let mut result2 = (0..range).map(|_| Vec::default()).collect::<Vec<_>>();
             if let Some(m) = result.get(0) {
-                m.load_all(
-                    &mut result2,
-                    bin,
-                    &PubkeyBinCalculator24::new(bins),
-                    &mut CacheHashDataStats::default(),
-                );
+                m.load_all(&mut result2, bin, &PubkeyBinCalculator24::new(bins));
             } else {
                 result2 = vec![];
             }
@@ -10869,12 +10862,7 @@ pub mod tests {
         let mut expected = vec![Vec::new(); range];
         expected[0].push(raw_expected[1].clone());
         let mut result2 = (0..range).map(|_| Vec::default()).collect::<Vec<_>>();
-        result[0].load_all(
-            &mut result2,
-            0,
-            &PubkeyBinCalculator24::new(range),
-            &mut CacheHashDataStats::default(),
-        );
+        result[0].load_all(&mut result2, 0, &PubkeyBinCalculator24::new(range));
         assert_eq!(result2.len(), 1);
         assert_eq!(result2, expected);
     }
