@@ -8251,21 +8251,33 @@ impl Bank {
                     self.replace_account(
                         &old_data_address,
                         &new_data_address,
-                        self.get_account_with_fixed_root(&old_data_address).as_ref(), // None if no old data account
+                        self.get_account_with_fixed_root(&old_data_address).as_ref(),
                         &new_data_account,
                     );
                     // If necessary, update the old program account to house
                     // the PDA of the data account.
-                    if old_account.data() != old_data_address.as_ref() {
-                        let mut account = Account::from(old_account.clone());
-                        account.data = old_data_address.as_ref().to_vec();
+                    let data = old_data_address.as_ref().to_vec();
+                    let change_in_cap = if old_account.data() != data {
+                        // Determine if we need to add any lamports for rent
+                        // exemption
+                        let lamports = old_account
+                            .lamports()
+                            .max(self.get_minimum_balance_for_rent_exemption(data.len()));
+                        let account = Account {
+                            lamports,
+                            data,
+                            ..Account::from(old_account.clone())
+                        };
                         self.store_account(old_address, &account);
-                    }
+                        new_account.lamports() + old_account.lamports() - account.lamports
+                    } else {
+                        new_account.lamports()
+                    };
                     // We only swapped the data accounts, so now we need to
                     // clear the new program account
-                    self.capitalization
-                        .fetch_sub(new_account.lamports(), Relaxed);
                     self.store_account(new_address, &AccountSharedData::default());
+                    // Update capitalization
+                    self.capitalization.fetch_sub(change_in_cap, Relaxed);
                 } else if self
                     .get_account_with_fixed_root(&old_data_address)
                     .is_none()
