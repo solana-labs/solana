@@ -5010,7 +5010,6 @@ dependencies = [
  "cc",
  "either",
  "generic-array 0.14.7",
- "getrandom 0.2.10",
  "im",
  "lazy_static",
  "log",
