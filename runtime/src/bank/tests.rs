@@ -4479,7 +4479,7 @@ fn test_bank_get_program_accounts() {
     let parent = Arc::new(Bank::new_for_tests(&genesis_config));
     parent.restore_old_behavior_for_fragile_tests();
 
-    let genesis_accounts: Vec<_> = parent.get_all_accounts_with_modified_slots().unwrap();
+    let genesis_accounts: Vec<_> = parent.get_all_accounts().unwrap();
     assert!(
         genesis_accounts
             .iter()
