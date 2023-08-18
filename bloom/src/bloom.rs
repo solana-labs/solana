@@ -308,9 +308,16 @@ mod test {
         );
     }
 
+    fn generate_random_hash() -> Hash {
+        let mut rng = rand::thread_rng();
+        let mut hash = [0u8; solana_sdk::hash::HASH_BYTES];
+        rng.fill(&mut hash);
+        Hash::new_from_array(hash)
+    }
+
     #[test]
     fn test_atomic_bloom() {
-        let hash_values: Vec<_> = std::iter::repeat_with(Hash::new_unique)
+        let hash_values: Vec<_> = std::iter::repeat_with(generate_random_hash)
             .take(1200)
             .collect();
         let bloom: AtomicBloom<_> = Bloom::<Hash>::random(1287, 0.1, 7424).into();
@@ -327,7 +334,7 @@ mod test {
         for hash_value in hash_values {
             assert!(bloom.contains(&hash_value));
         }
-        let false_positive = std::iter::repeat_with(Hash::new_unique)
+        let false_positive = std::iter::repeat_with(generate_random_hash)
             .take(10_000)
             .filter(|hash_value| bloom.contains(hash_value))
             .count();
@@ -339,7 +346,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let keys: Vec<_> = std::iter::repeat_with(|| rng.gen()).take(5).collect();
         let mut bloom = Bloom::<Hash>::new(9731, keys.clone());
-        let hash_values: Vec<_> = std::iter::repeat_with(Hash::new_unique)
+        let hash_values: Vec<_> = std::iter::repeat_with(generate_random_hash)
             .take(1000)
             .collect();
         for hash_value in &hash_values {
@@ -374,7 +381,7 @@ mod test {
             assert!(bloom.contains(hash_value));
         }
         // Round trip, inserting new hash values.
-        let more_hash_values: Vec<_> = std::iter::repeat_with(Hash::new_unique)
+        let more_hash_values: Vec<_> = std::iter::repeat_with(generate_random_hash)
             .take(1000)
             .collect();
         let bloom: AtomicBloom<_> = bloom.into();
@@ -389,7 +396,7 @@ mod test {
         for hash_value in &more_hash_values {
             assert!(bloom.contains(hash_value));
         }
-        let false_positive = std::iter::repeat_with(Hash::new_unique)
+        let false_positive = std::iter::repeat_with(generate_random_hash)
             .take(10_000)
             .filter(|hash_value| bloom.contains(hash_value))
             .count();
@@ -408,7 +415,7 @@ mod test {
         for hash_value in &more_hash_values {
             assert!(bloom.contains(hash_value));
         }
-        let false_positive = std::iter::repeat_with(Hash::new_unique)
+        let false_positive = std::iter::repeat_with(generate_random_hash)
             .take(10_000)
             .filter(|hash_value| bloom.contains(hash_value))
             .count();
