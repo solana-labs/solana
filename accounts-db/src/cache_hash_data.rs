@@ -10,7 +10,7 @@ use {
         fs::{self, remove_file, File, OpenOptions},
         io::{Seek, SeekFrom, Write},
         path::{Path, PathBuf},
-        sync::{Arc, Mutex},
+        sync::{atomic::Ordering, Arc, Mutex},
     },
 };
 
@@ -28,6 +28,7 @@ pub(crate) struct CacheHashDataFileReference {
     file: File,
     file_len: u64,
     path: PathBuf,
+    stats: Arc<CacheHashDataStats>,
 }
 
 /// mmapped cache hash data file
@@ -39,15 +40,12 @@ pub(crate) struct CacheHashDataFile {
 
 impl CacheHashDataFileReference {
     /// convert the open file refrence to a mmapped file that can be returned as a slice
-    pub(crate) fn map(
-        &self,
-        stats: &mut CacheHashDataStats,
-    ) -> Result<CacheHashDataFile, std::io::Error> {
+    pub(crate) fn map(&self) -> Result<CacheHashDataFile, std::io::Error> {
         let file_len = self.file_len;
         let mut m1 = Measure::start("read_file");
         let mmap = CacheHashDataFileReference::load_map(&self.file)?;
         m1.stop();
-        stats.read_us = m1.as_us();
+        self.stats.read_us.fetch_add(m1.as_us(), Ordering::Relaxed);
         let header_size = std::mem::size_of::<Header>() as u64;
         if file_len < header_size {
             return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
@@ -80,12 +78,17 @@ impl CacheHashDataFileReference {
             "expected: {capacity}, len on disk: {file_len} {}, entries: {entries}, cell_size: {cell_size}", self.path.display(),
         );
 
-        stats.total_entries = entries;
-        stats.cache_file_size += capacity as usize;
+        self.stats
+            .total_entries
+            .fetch_add(entries, Ordering::Relaxed);
+        self.stats
+            .cache_file_size
+            .fetch_add(capacity as usize, Ordering::Relaxed);
 
-        stats.loaded_from_cache += 1;
-        stats.entries_loaded_from_cache += entries;
-
+        self.stats.loaded_from_cache.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .entries_loaded_from_cache
+            .fetch_add(entries, Ordering::Relaxed);
         Ok(cache_file)
     }
 
@@ -107,7 +110,6 @@ impl CacheHashDataFile {
         accumulator: &mut SavedType,
         start_bin_index: usize,
         bin_calculator: &PubkeyBinCalculator24,
-        stats: &mut CacheHashDataStats,
     ) {
         let mut m2 = Measure::start("decode");
         let slices = self.get_cache_hash_data();
@@ -122,7 +124,6 @@ impl CacheHashDataFile {
         }
 
         m2.stop();
-        stats.decode_us += m2.as_us();
     }
 
     /// get '&mut EntryType' from cache file [ix]
@@ -199,13 +200,13 @@ pub type PreExistingCacheFiles = HashSet<PathBuf>;
 pub struct CacheHashData {
     cache_dir: PathBuf,
     pre_existing_cache_files: Arc<Mutex<PreExistingCacheFiles>>,
-    pub stats: Arc<Mutex<CacheHashDataStats>>,
+    pub stats: Arc<CacheHashDataStats>,
 }
 
 impl Drop for CacheHashData {
     fn drop(&mut self) {
         self.delete_old_cache_files();
-        self.stats.lock().unwrap().report();
+        self.stats.report();
     }
 }
 
@@ -218,7 +219,7 @@ impl CacheHashData {
         let result = CacheHashData {
             cache_dir,
             pre_existing_cache_files: Arc::new(Mutex::new(PreExistingCacheFiles::default())),
-            stats: Arc::new(Mutex::new(CacheHashDataStats::default())),
+            stats: Arc::default(),
         };
 
         result.get_cache_files();
@@ -227,7 +228,9 @@ impl CacheHashData {
     fn delete_old_cache_files(&self) {
         let pre_existing_cache_files = self.pre_existing_cache_files.lock().unwrap();
         if !pre_existing_cache_files.is_empty() {
-            self.stats.lock().unwrap().unused_cache_files += pre_existing_cache_files.len();
+            self.stats
+                .unused_cache_files
+                .fetch_add(pre_existing_cache_files.len(), Ordering::Relaxed);
             for file_name in pre_existing_cache_files.iter() {
                 let result = self.cache_dir.join(file_name);
                 let _ = fs::remove_file(result);
@@ -244,7 +247,9 @@ impl CacheHashData {
                         pre_existing.insert(PathBuf::from(name));
                     }
                 }
-                self.stats.lock().unwrap().cache_file_count += pre_existing.len();
+                self.stats
+                    .cache_file_count
+                    .fetch_add(pre_existing.len(), Ordering::Relaxed);
             }
         }
     }
@@ -260,10 +265,9 @@ impl CacheHashData {
     ) -> Result<(), std::io::Error> {
         let mut m = Measure::start("overall");
         let cache_file = self.load_map(file_name)?;
-        let mut stats = CacheHashDataStats::default();
-        cache_file.load_all(accumulator, start_bin_index, bin_calculator, &mut stats);
+        cache_file.load_all(accumulator, start_bin_index, bin_calculator);
         m.stop();
-        self.stats.lock().unwrap().load_us += m.as_us();
+        self.stats.load_us.fetch_add(m.as_us(), Ordering::Relaxed);
         Ok(())
     }
 
@@ -273,7 +277,6 @@ impl CacheHashData {
         &self,
         file_name: impl AsRef<Path>,
     ) -> Result<CacheHashDataFileReference, std::io::Error> {
-        let mut stats = CacheHashDataStats::default();
         let path = self.cache_dir.join(&file_name);
         let file_len = std::fs::metadata(&path)?.len();
         let mut m1 = Measure::start("read_file");
@@ -284,15 +287,14 @@ impl CacheHashData {
             .create(false)
             .open(&path)?;
         m1.stop();
-        stats.read_us = m1.as_us();
-
-        self.stats.lock().unwrap().accumulate(&stats);
+        self.stats.read_us.fetch_add(m1.as_us(), Ordering::Relaxed);
         self.pre_existing_cache_file_will_be_used(file_name);
 
         Ok(CacheHashDataFileReference {
             file,
             file_len,
             path,
+            stats: Arc::clone(&self.stats),
         })
     }
 
@@ -301,11 +303,8 @@ impl CacheHashData {
         &self,
         file_name: impl AsRef<Path>,
     ) -> Result<CacheHashDataFile, std::io::Error> {
-        let mut stats = CacheHashDataStats::default();
         let reference = self.get_file_reference_to_map_later(file_name)?;
-        let result = reference.map(&mut stats);
-        self.stats.lock().unwrap().accumulate(&stats);
-        result
+        reference.map()
     }
 
     pub(crate) fn pre_existing_cache_file_will_be_used(&self, file_name: impl AsRef<Path>) {
@@ -321,17 +320,13 @@ impl CacheHashData {
         file_name: impl AsRef<Path>,
         data: &SavedTypeSlice,
     ) -> Result<(), std::io::Error> {
-        let mut stats = CacheHashDataStats::default();
-        let result = self.save_internal(file_name, data, &mut stats);
-        self.stats.lock().unwrap().accumulate(&stats);
-        result
+        self.save_internal(file_name, data)
     }
 
     fn save_internal(
         &self,
         file_name: impl AsRef<Path>,
         data: &SavedTypeSlice,
-        stats: &mut CacheHashDataStats,
     ) -> Result<(), std::io::Error> {
         let mut m = Measure::start("save");
         let cache_path = self.cache_dir.join(file_name);
@@ -348,7 +343,9 @@ impl CacheHashData {
 
         let mmap = CacheHashDataFile::new_map(&cache_path, capacity)?;
         m1.stop();
-        stats.create_save_us += m1.as_us();
+        self.stats
+            .create_save_us
+            .fetch_add(m1.as_us(), Ordering::Relaxed);
         let mut cache_file = CacheHashDataFile {
             mmap,
             cell_size,
@@ -358,8 +355,12 @@ impl CacheHashData {
         let header = cache_file.get_header_mut();
         header.count = entries;
 
-        stats.cache_file_size = capacity as usize;
-        stats.total_entries = entries;
+        self.stats
+            .cache_file_size
+            .fetch_add(capacity as usize, Ordering::Relaxed);
+        self.stats
+            .total_entries
+            .fetch_add(entries, Ordering::Relaxed);
 
         let mut m2 = Measure::start("write_to_mmap");
         let mut i = 0;
@@ -372,10 +373,12 @@ impl CacheHashData {
         });
         assert_eq!(i, entries);
         m2.stop();
-        stats.write_to_mmap_us += m2.as_us();
+        self.stats
+            .write_to_mmap_us
+            .fetch_add(m2.as_us(), Ordering::Relaxed);
         m.stop();
-        stats.save_us += m.as_us();
-        stats.saved_to_cache += 1;
+        self.stats.save_us.fetch_add(m.as_us(), Ordering::Relaxed);
+        self.stats.saved_to_cache.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 }
