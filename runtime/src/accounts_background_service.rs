@@ -907,10 +907,11 @@ mod test {
         // fine; but maybe unexpected for a reader/debugger without this additional context.
         let mut make_banks = |num_banks| {
             for _ in 0..num_banks {
+                let slot = bank.slot() + 1;
                 bank = Arc::new(Bank::new_from_parent(
-                    &bank,
+                    bank.clone(),
                     &Pubkey::new_unique(),
-                    bank.slot() + 1,
+                    slot,
                 ));
 
                 // Since we're not using `BankForks::set_root()`, we have to handle sending the

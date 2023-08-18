@@ -688,7 +688,7 @@ impl Consumer {
     /// * `transactions` - a batch of transactions deserialized from packets
     /// * `pending_indexes` - identifies which indexes in the `transactions` list are still pending
     fn filter_pending_packets_from_pending_txs(
-        bank: &Arc<Bank>,
+        bank: &Bank,
         transactions: &[SanitizedTransaction],
         pending_indexes: &[usize],
     ) -> Vec<usize> {
@@ -1701,7 +1701,7 @@ mod tests {
         let address_table_state = generate_new_address_lookup_table(None, 2);
         store_address_lookup_table(&bank, address_table_key, address_table_state);
 
-        let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::new_unique(), 1));
+        let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), 1));
         let message = VersionedMessage::V0(v0::Message {
             header: MessageHeader {
                 num_required_signatures: 1,

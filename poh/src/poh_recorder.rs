@@ -71,7 +71,7 @@ pub struct BankStart {
 }
 
 impl BankStart {
-    fn get_working_bank_if_not_expired(&self) -> Option<&Arc<Bank>> {
+    fn get_working_bank_if_not_expired(&self) -> Option<&Bank> {
         if self.should_working_bank_still_be_processing_txs() {
             Some(&self.working_bank)
         } else {
@@ -249,7 +249,7 @@ pub enum PohRecorderBank {
 }
 
 impl PohRecorderBank {
-    pub fn bank(&self) -> &Arc<Bank> {
+    pub fn bank(&self) -> &Bank {
         match self {
             PohRecorderBank::WorkingBank(bank_start) => &bank_start.working_bank,
             PohRecorderBank::LastResetBank(last_reset_bank) => last_reset_bank,
@@ -1024,7 +1024,7 @@ impl PohRecorder {
     // if it's still processing transactions
     pub fn get_working_bank_if_not_expired<'a>(
         bank_start: &Option<&'a BankStart>,
-    ) -> Option<&'a Arc<Bank>> {
+    ) -> Option<&'a Bank> {
         bank_start
             .as_ref()
             .and_then(|bank_start| bank_start.get_working_bank_if_not_expired())
@@ -1039,7 +1039,7 @@ impl PohRecorder {
 }
 
 pub fn create_test_recorder(
-    bank: &Arc<Bank>,
+    bank: Arc<Bank>,
     blockstore: Arc<Blockstore>,
     poh_config: Option<PohConfig>,
     leader_schedule_cache: Option<Arc<LeaderScheduleCache>>,
@@ -1051,7 +1051,7 @@ pub fn create_test_recorder(
 ) {
     let leader_schedule_cache = match leader_schedule_cache {
         Some(provided_cache) => provided_cache,
-        None => Arc::new(LeaderScheduleCache::new_from_bank(bank)),
+        None => Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
     };
     let exit = Arc::new(AtomicBool::new(false));
     let poh_config = poh_config.unwrap_or_default();
@@ -1067,14 +1067,15 @@ pub fn create_test_recorder(
         &poh_config,
         exit.clone(),
     );
-    poh_recorder.set_bank(bank.clone(), false);
+    let ticks_per_slot = bank.ticks_per_slot();
 
+    poh_recorder.set_bank(bank, false);
     let poh_recorder = Arc::new(RwLock::new(poh_recorder));
     let poh_service = PohService::new(
         poh_recorder.clone(),
         &poh_config,
         exit.clone(),
-        bank.ticks_per_slot(),
+        ticks_per_slot,
         crate::poh_service::DEFAULT_PINNED_CPU_CORE,
         crate::poh_service::DEFAULT_HASHES_PER_BATCH,
         record_receiver,
@@ -1236,7 +1237,7 @@ mod tests {
             );
 
             bank0.fill_bank_with_ticks_for_tests();
-            let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+            let bank1 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
 
             // Set a working bank
             poh_recorder.set_bank(bank1.clone(), false);
@@ -1348,7 +1349,7 @@ mod tests {
             );
 
             bank0.fill_bank_with_ticks_for_tests();
-            let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+            let bank1 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
             poh_recorder.set_bank(bank1.clone(), false);
             // Let poh_recorder tick up to bank1.tick_height() - 1
             for _ in 0..bank1.tick_height() - 1 {
@@ -1433,7 +1434,7 @@ mod tests {
             );
 
             bank0.fill_bank_with_ticks_for_tests();
-            let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+            let bank1 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
             poh_recorder.set_bank(bank1.clone(), false);
 
             // Record up to exactly min tick height
@@ -1601,7 +1602,7 @@ mod tests {
             );
 
             bank0.fill_bank_with_ticks_for_tests();
-            let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+            let bank1 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
             poh_recorder.set_bank(bank1, false);
 
             // Check we can make two ticks without hitting min_tick_height
@@ -1974,7 +1975,7 @@ mod tests {
             );
 
             // reset poh now. we should immediately be leader
-            let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+            let bank1 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
             assert_eq!(bank1.slot(), 1);
             poh_recorder.reset(bank1.clone(), Some((2, 2)));
             assert_eq!(
@@ -2017,7 +2018,7 @@ mod tests {
 
             // Let's test that correct grace ticks are reported
             // Set the leader slot one slot down
-            let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 2));
+            let bank2 = Arc::new(Bank::new_from_parent(bank1.clone(), &Pubkey::default(), 2));
             poh_recorder.reset(bank2.clone(), Some((4, 4)));
 
             // send ticks for a slot
@@ -2030,7 +2031,7 @@ mod tests {
                 poh_recorder.reached_leader_slot(),
                 PohLeaderStatus::NotReached
             );
-            let bank3 = Arc::new(Bank::new_from_parent(&bank2, &Pubkey::default(), 3));
+            let bank3 = Arc::new(Bank::new_from_parent(bank2, &Pubkey::default(), 3));
             assert_eq!(bank3.slot(), 3);
             poh_recorder.reset(bank3.clone(), Some((4, 4)));
 
@@ -2046,7 +2047,7 @@ mod tests {
             // Let's test that if a node overshoots the ticks for its target
             // leader slot, reached_leader_slot() will return true, because it's overdue
             // Set the leader slot one slot down
-            let bank4 = Arc::new(Bank::new_from_parent(&bank3, &Pubkey::default(), 4));
+            let bank4 = Arc::new(Bank::new_from_parent(bank3, &Pubkey::default(), 4));
             poh_recorder.reset(bank4.clone(), Some((5, 5)));
 
             // Overshoot ticks for the slot
@@ -2110,7 +2111,7 @@ mod tests {
             assert!(!poh_recorder.would_be_leader(2 * bank.ticks_per_slot()));
 
             // Move the bank up a slot (so that max_tick_height > slot 0's tick_height)
-            let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 1));
+            let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), 1));
             // If we set the working bank, the node should be leader within next 2 slots
             poh_recorder.set_bank(bank.clone(), false);
             assert!(poh_recorder.would_be_leader(2 * bank.ticks_per_slot()));
@@ -2141,7 +2142,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
             //create a new bank
-            let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 2));
+            let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), 2));
             // add virtual ticks into poh for slots 0, 1, and 2
             for _ in 0..(bank.ticks_per_slot() * 3) {
                 poh_recorder.tick();

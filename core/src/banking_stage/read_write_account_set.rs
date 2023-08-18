@@ -182,12 +182,9 @@ mod tests {
         account.set_data(data);
         bank.store_account(&address_table_key, &account);
 
+        let slot = bank.slot() + 1;
         (
-            Arc::new(Bank::new_from_parent(
-                &bank,
-                &Pubkey::new_unique(),
-                bank.slot() + 1,
-            )),
+            Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), slot)),
             address_table_key,
         )
     }

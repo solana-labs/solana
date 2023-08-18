@@ -23,7 +23,7 @@ use {
         offline::*,
     },
     solana_cli_output::{
-        return_signers_with_config, CliEpochVotingHistory, CliLandedVote, CliVoteAccount,
+        return_signers_with_config, CliEpochVotingHistory, CliLockout, CliVoteAccount,
         ReturnSignersConfig,
     },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
@@ -1215,7 +1215,7 @@ pub fn process_show_vote_account(
 
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
 
-    let mut votes: Vec<CliLandedVote> = vec![];
+    let mut votes: Vec<CliLockout> = vec![];
     let mut epoch_voting_history: Vec<CliEpochVotingHistory> = vec![];
     if !vote_state.votes.is_empty() {
         for vote in &vote_state.votes {

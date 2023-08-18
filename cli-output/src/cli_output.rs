@@ -43,7 +43,9 @@ use {
     },
     solana_vote_program::{
         authorized_voters::AuthorizedVoters,
-        vote_state::{BlockTimestamp, LandedVote, MAX_EPOCH_CREDITS_HISTORY, MAX_LOCKOUT_HISTORY},
+        vote_state::{
+            BlockTimestamp, LandedVote, Lockout, MAX_EPOCH_CREDITS_HISTORY, MAX_LOCKOUT_HISTORY,
+        },
     },
     std::{
         collections::{BTreeMap, HashMap},
@@ -1045,7 +1047,7 @@ impl fmt::Display for CliKeyedEpochRewards {
 
 fn show_votes_and_credits(
     f: &mut fmt::Formatter,
-    votes: &[CliLandedVote],
+    votes: &[CliLockout],
     epoch_voting_history: &[CliEpochVotingHistory],
 ) -> fmt::Result {
     if votes.is_empty() {
@@ -1068,16 +1070,11 @@ fn show_votes_and_credits(
     )?;
 
     for vote in votes.iter().rev() {
-        write!(
+        writeln!(
             f,
             "- slot: {} (confirmation count: {})",
             vote.slot, vote.confirmation_count
         )?;
-        if vote.latency == 0 {
-            writeln!(f)?;
-        } else {
-            writeln!(f, " (latency {})", vote.latency)?;
-        }
     }
     if let Some(newest) = newest_history_entry {
         writeln!(
@@ -1558,7 +1555,7 @@ pub struct CliVoteAccount {
     pub commission: u8,
     pub root_slot: Option<Slot>,
     pub recent_timestamp: BlockTimestamp,
-    pub votes: Vec<CliLandedVote>,
+    pub votes: Vec<CliLockout>,
     pub epoch_voting_history: Vec<CliEpochVotingHistory>,
     #[serde(skip_serializing)]
     pub use_lamports_unit: bool,
@@ -1640,18 +1637,25 @@ pub struct CliEpochVotingHistory {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CliLandedVote {
-    pub latency: u8,
+pub struct CliLockout {
     pub slot: Slot,
     pub confirmation_count: u32,
 }
 
-impl From<&LandedVote> for CliLandedVote {
-    fn from(landed_vote: &LandedVote) -> Self {
+impl From<&Lockout> for CliLockout {
+    fn from(lockout: &Lockout) -> Self {
         Self {
-            latency: landed_vote.latency,
-            slot: landed_vote.slot(),
-            confirmation_count: landed_vote.confirmation_count(),
+            slot: lockout.slot(),
+            confirmation_count: lockout.confirmation_count(),
+        }
+    }
+}
+
+impl From<&LandedVote> for CliLockout {
+    fn from(vote: &LandedVote) -> Self {
+        Self {
+            slot: vote.slot(),
+            confirmation_count: vote.confirmation_count(),
         }
     }
 }

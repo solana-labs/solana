@@ -323,7 +323,7 @@ mod tests {
         };
 
         let (exit, poh_recorder, poh_service, _entry_receiver) =
-            create_test_recorder(&bank, blockstore, Some(poh_config), None);
+            create_test_recorder(bank, blockstore, Some(poh_config), None);
 
         let (local_node, cluster_info) = new_test_cluster_info(Some(validator_keypair));
         let cluster_info = Arc::new(cluster_info);

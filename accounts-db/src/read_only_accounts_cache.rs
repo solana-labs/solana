@@ -55,11 +55,11 @@ impl ReadOnlyCacheStats {
 #[derive(Debug)]
 pub struct ReadOnlyAccountsCache {
     cache: DashMap<ReadOnlyCacheKey, ReadOnlyAccountCacheEntry>,
-    // When an item is first entered into the cache, it is added to the end of
-    // the queue. Also each time an entry is looked up from the cache it is
-    // moved to the end of the queue. As a result, items in the queue are
-    // always sorted in the order that they have last been accessed. When doing
-    // LRU eviction, cache entries are evicted from the front of the queue.
+    /// When an item is first entered into the cache, it is added to the end of
+    /// the queue. Also each time an entry is looked up from the cache it is
+    /// moved to the end of the queue. As a result, items in the queue are
+    /// always sorted in the order that they have last been accessed. When doing
+    /// LRU eviction, cache entries are evicted from the front of the queue.
     queue: Mutex<IndexList<ReadOnlyCacheKey>>,
     max_data_size: usize,
     data_size: AtomicUsize,
@@ -69,7 +69,7 @@ pub struct ReadOnlyAccountsCache {
 }
 
 impl ReadOnlyAccountsCache {
-    pub fn new(max_data_size: usize) -> Self {
+    pub(crate) fn new(max_data_size: usize) -> Self {
         Self {
             max_data_size,
             cache: DashMap::default(),
@@ -81,7 +81,7 @@ impl ReadOnlyAccountsCache {
 
     /// reset the read only accounts cache
     /// useful for benches/tests
-    pub fn reset_for_tests(&self) {
+    pub(crate) fn reset_for_tests(&self) {
         self.cache.clear();
         self.queue.lock().unwrap().clear();
         self.data_size.store(0, Ordering::Relaxed);
@@ -89,7 +89,7 @@ impl ReadOnlyAccountsCache {
     }
 
     /// true if pubkey is in cache at slot
-    pub fn in_cache(&self, pubkey: &Pubkey, slot: Slot) -> bool {
+    pub(crate) fn in_cache(&self, pubkey: &Pubkey, slot: Slot) -> bool {
         self.cache.contains_key(&(*pubkey, slot))
     }
 
@@ -121,7 +121,7 @@ impl ReadOnlyAccountsCache {
         CACHE_ENTRY_SIZE + account.data().len()
     }
 
-    pub fn store(&self, pubkey: Pubkey, slot: Slot, account: AccountSharedData) {
+    pub(crate) fn store(&self, pubkey: Pubkey, slot: Slot, account: AccountSharedData) {
         let key = (pubkey, slot);
         let account_size = self.account_size(&account);
         self.data_size.fetch_add(account_size, Ordering::Relaxed);
@@ -157,7 +157,7 @@ impl ReadOnlyAccountsCache {
         self.stats.evicts.fetch_add(num_evicts, Ordering::Relaxed);
     }
 
-    pub fn remove(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
+    pub(crate) fn remove(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
         let (_, entry) = self.cache.remove(&(pubkey, slot))?;
         // self.queue should be modified only after removing the entry from the
         // cache, so that this is still safe if another thread writes to the
@@ -168,11 +168,11 @@ impl ReadOnlyAccountsCache {
         Some(entry.account)
     }
 
-    pub fn cache_len(&self) -> usize {
+    pub(crate) fn cache_len(&self) -> usize {
         self.cache.len()
     }
 
-    pub fn data_size(&self) -> usize {
+    pub(crate) fn data_size(&self) -> usize {
         self.data_size.load(Ordering::Relaxed)
     }
 

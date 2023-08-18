@@ -103,7 +103,7 @@ mod tests {
         genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         let eah_start_slot = epoch_accounts_hash_utils::calculation_start(&bank0);
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let bank1 = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
         bank0.squash();
 
         // Create an account on a non-root fork
@@ -118,7 +118,7 @@ mod tests {
         } else {
             0
         } + 2;
-        let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank2_slot);
+        let bank2 = Bank::new_from_parent(bank0, &Pubkey::default(), bank2_slot);
 
         // Test new account
         let key2 = Keypair::new();
@@ -346,7 +346,7 @@ mod tests {
                 BankTestConfig::default(),
             ));
             bank0.squash();
-            let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+            let mut bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
 
             add_root_and_flush_write_cache(&bank0);
             bank.rc
@@ -448,7 +448,7 @@ mod tests {
             activate_all_features(&mut genesis_config);
 
             let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-            let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+            let mut bank = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
             while !bank.is_complete() {
                 bank.fill_bank_with_ticks_for_tests();
             }
@@ -538,7 +538,7 @@ mod tests {
             BankTestConfig::default(),
         ));
         bank0.squash();
-        let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let mut bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
         add_root_and_flush_write_cache(&bank0);
         bank.rc
             .accounts
