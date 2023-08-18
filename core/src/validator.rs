@@ -1086,7 +1086,7 @@ impl Validator {
         // from before the restart will be rejected.
         let tvu_shred_version = Arc::new(RwLock::new(node.info.shred_version()));
         if config.wen_restart {
-            config.turbine_disabled.swap(true, Ordering::Relaxed);
+//            config.turbine_disabled.swap(true, Ordering::Relaxed);
             node.info
                 .set_shred_version((node.info.shred_version() + 1) % 0xffff);
             assert!(
