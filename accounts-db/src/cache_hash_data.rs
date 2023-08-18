@@ -273,7 +273,7 @@ impl CacheHashData {
 
     /// open a cache hash file, but don't map it.
     /// This allows callers to know a file exists, but preserves the # mmapped files.
-    fn get_file_reference_to_map_later(
+    pub(crate) fn get_file_reference_to_map_later(
         &self,
         file_name: impl AsRef<Path>,
     ) -> Result<CacheHashDataFileReference, std::io::Error> {
@@ -298,11 +298,9 @@ impl CacheHashData {
         })
     }
 
+    #[cfg(test)]
     /// map 'file_name' into memory
-    pub(crate) fn load_map(
-        &self,
-        file_name: impl AsRef<Path>,
-    ) -> Result<CacheHashDataFile, std::io::Error> {
+    fn load_map(&self, file_name: impl AsRef<Path>) -> Result<CacheHashDataFile, std::io::Error> {
         let reference = self.get_file_reference_to_map_later(file_name)?;
         reference.map()
     }
