@@ -229,7 +229,7 @@ impl CacheHashData {
             .read(true)
             .write(true)
             .create(false)
-            .open(path.clone())?;
+            .open(&path)?;
         m1.stop();
         stats.read_us = m1.as_us();
 
