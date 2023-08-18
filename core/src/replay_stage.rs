@@ -1992,7 +1992,7 @@ impl ReplayStage {
         // will break!
         blockstore_processor::confirm_slot(
             blockstore,
-            &bank,
+            bank,
             &mut w_replay_stats,
             &mut w_replay_progress,
             false,
