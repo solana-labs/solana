@@ -60,14 +60,14 @@ impl AccountsPackage {
         snapshot_version: SnapshotVersion,
         accounts_hash_for_testing: Option<AccountsHash>,
     ) -> Self {
-        if let AccountsPackageType::Snapshot(snapshot_type) = package_type {
+        if let AccountsPackageType::Snapshot(snapshot_kind) = package_type {
             info!(
-                "Package snapshot for bank {} has {} account storage entries (snapshot type: {:?})",
+                "Package snapshot for bank {} has {} account storage entries (snapshot kind: {:?})",
                 bank.slot(),
                 snapshot_storages.len(),
-                snapshot_type,
+                snapshot_kind,
             );
-            if let SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) = snapshot_type
+            if let SnapshotKind::IncrementalSnapshot(incremental_snapshot_base_slot) = snapshot_kind
             {
                 assert!(
                     bank.slot() > incremental_snapshot_base_slot,
@@ -229,7 +229,7 @@ pub struct SupplementalSnapshotInfo {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum AccountsPackageType {
     AccountsHashVerifier,
-    Snapshot(SnapshotType),
+    Snapshot(SnapshotKind),
     EpochAccountsHash,
 }
 
@@ -240,7 +240,7 @@ pub struct SnapshotPackage {
     pub bank_snapshot_dir: PathBuf,
     pub snapshot_storages: Vec<Arc<AccountStorageEntry>>,
     pub snapshot_version: SnapshotVersion,
-    pub snapshot_type: SnapshotType,
+    pub snapshot_kind: SnapshotKind,
 
     /// The instant this snapshot package was sent to the queue.
     /// Used to track how long snapshot packages wait before handling.
@@ -249,7 +249,7 @@ pub struct SnapshotPackage {
 
 impl SnapshotPackage {
     pub fn new(accounts_package: AccountsPackage, accounts_hash: AccountsHashEnum) -> Self {
-        let AccountsPackageType::Snapshot(snapshot_type) = accounts_package.package_type else {
+        let AccountsPackageType::Snapshot(snapshot_kind) = accounts_package.package_type else {
             panic!(
                 "The AccountsPackage must be of type Snapshot in order to make a SnapshotPackage!"
             );
@@ -262,14 +262,14 @@ impl SnapshotPackage {
         let snapshot_hash =
             SnapshotHash::new(&accounts_hash, snapshot_info.epoch_accounts_hash.as_ref());
         let mut snapshot_storages = accounts_package.snapshot_storages;
-        let snapshot_archive_path = match snapshot_type {
-            SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
+        let snapshot_archive_path = match snapshot_kind {
+            SnapshotKind::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
                 snapshot_info.full_snapshot_archives_dir,
                 accounts_package.slot,
                 &snapshot_hash,
                 snapshot_info.archive_format,
             ),
-            SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
+            SnapshotKind::IncrementalSnapshot(incremental_snapshot_base_slot) => {
                 snapshot_storages.retain(|storage| storage.slot() > incremental_snapshot_base_slot);
                 assert!(
                     snapshot_storages.iter().all(|storage| storage.slot() > incremental_snapshot_base_slot),
@@ -296,7 +296,7 @@ impl SnapshotPackage {
             bank_snapshot_dir: snapshot_info.bank_snapshot_dir,
             snapshot_storages,
             snapshot_version: snapshot_info.snapshot_version,
-            snapshot_type,
+            snapshot_kind,
             enqueued: Instant::now(),
         }
     }
@@ -305,7 +305,7 @@ impl SnapshotPackage {
 impl std::fmt::Debug for SnapshotPackage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SnapshotPackage")
-            .field("type", &self.snapshot_type)
+            .field("type", &self.snapshot_kind)
             .field("slot", &self.slot())
             .field("block_height", &self.block_height)
             .finish_non_exhaustive()
@@ -318,20 +318,20 @@ impl SnapshotArchiveInfoGetter for SnapshotPackage {
     }
 }
 
-/// Snapshots come in two flavors, Full and Incremental.  The IncrementalSnapshot has a Slot field,
+/// Snapshots come in two kinds, Full and Incremental.  The IncrementalSnapshot has a Slot field,
 /// which is the incremental snapshot base slot.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SnapshotType {
+pub enum SnapshotKind {
     FullSnapshot,
     IncrementalSnapshot(Slot),
 }
 
-impl SnapshotType {
+impl SnapshotKind {
     pub fn is_full_snapshot(&self) -> bool {
-        matches!(self, SnapshotType::FullSnapshot)
+        matches!(self, SnapshotKind::FullSnapshot)
     }
     pub fn is_incremental_snapshot(&self) -> bool {
-        matches!(self, SnapshotType::IncrementalSnapshot(_))
+        matches!(self, SnapshotKind::IncrementalSnapshot(_))
     }
 }
 

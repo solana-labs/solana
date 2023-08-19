@@ -30,7 +30,7 @@ use {
         snapshot_bank_utils::{self, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL},
         snapshot_config::SnapshotConfig,
         snapshot_hash::SnapshotHash,
-        snapshot_package::{AccountsPackage, AccountsPackageType, SnapshotPackage, SnapshotType},
+        snapshot_package::{AccountsPackage, AccountsPackageType, SnapshotKind, SnapshotPackage},
         snapshot_utils::{
             self,
             SnapshotVersion::{self, V1_2_0},
@@ -244,7 +244,7 @@ fn run_bank_forks_snapshot_n<F>(
     let last_bank_snapshot_info = snapshot_utils::get_highest_bank_snapshot_pre(bank_snapshots_dir)
         .expect("no bank snapshots found in path");
     let accounts_package = AccountsPackage::new_for_snapshot(
-        AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+        AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
         &last_bank,
         &last_bank_snapshot_info,
         &snapshot_config.full_snapshot_archives_dir,
@@ -412,7 +412,7 @@ fn test_concurrent_snapshot_packaging(
         )
         .unwrap();
         let accounts_package = AccountsPackage::new_for_snapshot(
-            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+            AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
             &bank,
             &bank_snapshot_info,
             full_snapshot_archives_dir,

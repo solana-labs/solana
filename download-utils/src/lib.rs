@@ -5,7 +5,7 @@ use {
     log::*,
     solana_runtime::{
         snapshot_hash::SnapshotHash,
-        snapshot_package::SnapshotType,
+        snapshot_package::SnapshotKind,
         snapshot_utils::{self, ArchiveFormat},
     },
     solana_sdk::{clock::Slot, genesis_config::DEFAULT_GENESIS_ARCHIVE},
@@ -256,14 +256,14 @@ pub fn download_genesis_if_missing(
     }
 }
 
-/// Download a snapshot archive from `rpc_addr`.  Use `snapshot_type` to specify downloading either
+/// Download a snapshot archive from `rpc_addr`.  Use `snapshot_kind` to specify downloading either
 /// a full snapshot or an incremental snapshot.
 pub fn download_snapshot_archive(
     rpc_addr: &SocketAddr,
     full_snapshot_archives_dir: &Path,
     incremental_snapshot_archives_dir: &Path,
     desired_snapshot_hash: (Slot, SnapshotHash),
-    snapshot_type: SnapshotType,
+    snapshot_kind: SnapshotKind,
     maximum_full_snapshot_archives_to_retain: NonZeroUsize,
     maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
     use_progress_bar: bool,
@@ -277,9 +277,9 @@ pub fn download_snapshot_archive(
     );
 
     let snapshot_archives_remote_dir =
-        snapshot_utils::build_snapshot_archives_remote_dir(match snapshot_type {
-            SnapshotType::FullSnapshot => full_snapshot_archives_dir,
-            SnapshotType::IncrementalSnapshot(_) => incremental_snapshot_archives_dir,
+        snapshot_utils::build_snapshot_archives_remote_dir(match snapshot_kind {
+            SnapshotKind::FullSnapshot => full_snapshot_archives_dir,
+            SnapshotKind::IncrementalSnapshot(_) => incremental_snapshot_archives_dir,
         });
     fs::create_dir_all(&snapshot_archives_remote_dir).unwrap();
 
@@ -290,14 +290,14 @@ pub fn download_snapshot_archive(
         ArchiveFormat::TarLz4,
         ArchiveFormat::Tar, // `solana-test-validator` creates uncompressed snapshots
     ] {
-        let destination_path = match snapshot_type {
-            SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
+        let destination_path = match snapshot_kind {
+            SnapshotKind::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
                 &snapshot_archives_remote_dir,
                 desired_snapshot_hash.0,
                 &desired_snapshot_hash.1,
                 archive_format,
             ),
-            SnapshotType::IncrementalSnapshot(base_slot) => {
+            SnapshotKind::IncrementalSnapshot(base_slot) => {
                 snapshot_utils::build_incremental_snapshot_archive_path(
                     &snapshot_archives_remote_dir,
                     base_slot,

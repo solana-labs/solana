@@ -94,7 +94,7 @@ impl SnapshotPackagerService {
 
                         if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
                             snapshot_gossip_manager.push_snapshot_hash(
-                                snapshot_package.snapshot_type,
+                                snapshot_package.snapshot_kind,
                                 (snapshot_package.slot(), *snapshot_package.hash()),
                             );
                         }
@@ -206,7 +206,7 @@ mod tests {
             snapshot_archive_info::SnapshotArchiveInfo,
             snapshot_bank_utils,
             snapshot_hash::SnapshotHash,
-            snapshot_package::{SnapshotPackage, SnapshotType},
+            snapshot_package::{SnapshotKind, SnapshotPackage},
             snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
         },
         solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash},
@@ -296,7 +296,7 @@ mod tests {
     /// Otherwise, they should be dropped.
     #[test]
     fn test_get_next_snapshot_package() {
-        fn new(snapshot_type: SnapshotType, slot: Slot) -> SnapshotPackage {
+        fn new(snapshot_kind: SnapshotKind, slot: Slot) -> SnapshotPackage {
             SnapshotPackage {
                 snapshot_archive_info: SnapshotArchiveInfo {
                     path: PathBuf::default(),
@@ -308,15 +308,15 @@ mod tests {
                 bank_snapshot_dir: PathBuf::default(),
                 snapshot_storages: Vec::default(),
                 snapshot_version: SnapshotVersion::default(),
-                snapshot_type,
+                snapshot_kind,
                 enqueued: Instant::now(),
             }
         }
         fn new_full(slot: Slot) -> SnapshotPackage {
-            new(SnapshotType::FullSnapshot, slot)
+            new(SnapshotKind::FullSnapshot, slot)
         }
         fn new_incr(slot: Slot, base: Slot) -> SnapshotPackage {
-            new(SnapshotType::IncrementalSnapshot(base), slot)
+            new(SnapshotKind::IncrementalSnapshot(base), slot)
         }
 
         let (snapshot_package_sender, snapshot_package_receiver) = crossbeam_channel::unbounded();
@@ -350,7 +350,7 @@ mod tests {
             &snapshot_package_receiver,
         )
         .unwrap();
-        assert_eq!(snapshot_package.snapshot_type, SnapshotType::FullSnapshot,);
+        assert_eq!(snapshot_package.snapshot_kind, SnapshotKind::FullSnapshot,);
         assert_eq!(snapshot_package.slot(), 400);
         assert_eq!(num_re_enqueued_snapshot_packages, 2);
 
@@ -366,8 +366,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            snapshot_package.snapshot_type,
-            SnapshotType::IncrementalSnapshot(400),
+            snapshot_package.snapshot_kind,
+            SnapshotKind::IncrementalSnapshot(400),
         );
         assert_eq!(snapshot_package.slot(), 420);
         assert_eq!(num_re_enqueued_snapshot_packages, 0);

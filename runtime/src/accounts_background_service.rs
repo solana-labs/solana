@@ -9,7 +9,7 @@ use {
         bank_forks::BankForks,
         snapshot_bank_utils,
         snapshot_config::SnapshotConfig,
-        snapshot_package::{self, AccountsPackage, AccountsPackageType, SnapshotType},
+        snapshot_package::{self, AccountsPackage, AccountsPackageType, SnapshotKind},
         snapshot_utils::{self, SnapshotError},
     },
     crossbeam_channel::{Receiver, SendError, Sender},
@@ -257,7 +257,7 @@ impl SnapshotRequestHandler {
                 // then handle `y` first.
                 let (snapshot_request, accounts_package_type) = if z.1
                     == AccountsPackageType::EpochAccountsHash
-                    && y.1 == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+                    && y.1 == AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot)
                     && y.0.snapshot_root_bank.slot() < z.0.snapshot_root_bank.slot()
                 {
                     // SAFETY: We know the len is > 1, so both `pop`s will return `Some`
@@ -318,7 +318,7 @@ impl SnapshotRequestHandler {
         // we should not rely on the state of this validator until startup verification is complete
         assert!(snapshot_root_bank.is_startup_verification_complete());
 
-        if accounts_package_type == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot) {
+        if accounts_package_type == AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot) {
             *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
         }
 
@@ -749,13 +749,13 @@ fn new_accounts_package_type(
                 block_height,
                 snapshot_config.full_snapshot_archive_interval_slots,
             ) {
-                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+                AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot)
             } else if snapshot_utils::should_take_incremental_snapshot(
                 block_height,
                 snapshot_config.incremental_snapshot_archive_interval_slots,
                 last_full_snapshot_slot,
             ) {
-                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(
+                AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(
                     last_full_snapshot_slot.unwrap(),
                 ))
             } else {
@@ -945,7 +945,7 @@ mod test {
             .unwrap();
         assert_eq!(
             accounts_package_type,
-            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+            AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot)
         );
         assert_eq!(snapshot_request.snapshot_root_bank.slot(), 240);
 
@@ -956,7 +956,7 @@ mod test {
             .unwrap();
         assert_eq!(
             accounts_package_type,
-            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(240))
+            AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(240))
         );
         assert_eq!(snapshot_request.snapshot_root_bank.slot(), 300);
 
@@ -997,7 +997,7 @@ mod test {
             .unwrap();
         assert_eq!(
             accounts_package_type,
-            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+            AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot)
         );
         assert_eq!(snapshot_request.snapshot_root_bank.slot(), 480);
 
@@ -1017,7 +1017,7 @@ mod test {
             .unwrap();
         assert_eq!(
             accounts_package_type,
-            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(480))
+            AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(480))
         );
         assert_eq!(snapshot_request.snapshot_root_bank.slot(), 540);
 
