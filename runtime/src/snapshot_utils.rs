@@ -846,7 +846,7 @@ pub fn archive_snapshot_package(
         ),
         ("duration_ms", timer.as_ms(), i64),
         (
-            if snapshot_package.snapshot_type.is_full_snapshot() {
+            if snapshot_package.snapshot_kind.is_full_snapshot() {
                 "full-snapshot-archive-size"
             } else {
                 "incremental-snapshot-archive-size"

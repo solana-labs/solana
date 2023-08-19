@@ -19,8 +19,8 @@ use {
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
-            self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotPackage,
-            SnapshotType,
+            self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotKind,
+            SnapshotPackage,
         },
         snapshot_utils,
     },
@@ -200,7 +200,7 @@ impl AccountsHashVerifier {
                 // need to check.  If `y` is a FullSnapshot request *with a lower slot* than `z`,
                 // then handle `y` first.
                 let accounts_package = if z.package_type == AccountsPackageType::EpochAccountsHash
-                    && y.package_type == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+                    && y.package_type == AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot)
                     && y.slot < z.slot
                 {
                     // SAFETY: We know the len is > 1, so both `pop`s will return `Some`
@@ -277,9 +277,9 @@ impl AccountsHashVerifier {
         let accounts_hash_calculation_flavor = match accounts_package.package_type {
             AccountsPackageType::AccountsHashVerifier => CalcAccountsHashFlavor::Full,
             AccountsPackageType::EpochAccountsHash => CalcAccountsHashFlavor::Full,
-            AccountsPackageType::Snapshot(snapshot_type) => match snapshot_type {
-                SnapshotType::FullSnapshot => CalcAccountsHashFlavor::Full,
-                SnapshotType::IncrementalSnapshot(_) => {
+            AccountsPackageType::Snapshot(snapshot_kind) => match snapshot_kind {
+                SnapshotKind::FullSnapshot => CalcAccountsHashFlavor::Full,
+                SnapshotKind::IncrementalSnapshot(_) => {
                     if accounts_package.is_incremental_accounts_hash_feature_enabled {
                         CalcAccountsHashFlavor::Incremental
                     } else {
@@ -300,7 +300,7 @@ impl AccountsHashVerifier {
                 (accounts_hash.into(), accounts_hash, None)
             }
             CalcAccountsHashFlavor::Incremental => {
-                let AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(base_slot)) =
+                let AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(base_slot)) =
                     accounts_package.package_type
                 else {
                     panic!("Calculating incremental accounts hash requires a base slot");
@@ -337,7 +337,7 @@ impl AccountsHashVerifier {
         }
 
         if accounts_package.package_type
-            == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+            == AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot)
         {
             accounts_package
                 .accounts
@@ -581,7 +581,7 @@ mod tests {
         rand::seq::SliceRandom,
         solana_gossip::contact_info::ContactInfo,
         solana_runtime::{
-            snapshot_bank_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL, snapshot_package::SnapshotType,
+            snapshot_bank_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL, snapshot_package::SnapshotKind,
         },
         solana_sdk::{
             signature::{Keypair, Signer},
@@ -667,13 +667,13 @@ mod tests {
     }
     fn new_fss(slot: Slot) -> AccountsPackage {
         new(
-            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+            AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
             slot,
         )
     }
     fn new_iss(slot: Slot, base: Slot) -> AccountsPackage {
         new(
-            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(base)),
+            AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(base)),
             slot,
         )
     }
@@ -751,7 +751,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             account_package.package_type,
-            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+            AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot)
         );
         assert_eq!(account_package.slot, 400);
         assert_eq!(num_re_enqueued_accounts_packages, 7);
@@ -769,7 +769,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             account_package.package_type,
-            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(400))
+            AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(400))
         );
         assert_eq!(account_package.slot, 420);
         assert_eq!(num_re_enqueued_accounts_packages, 3);
@@ -842,7 +842,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             account_package.package_type,
-            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+            AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot)
         );
         assert_eq!(account_package.slot, 100);
         assert_eq!(num_re_enqueued_accounts_packages, 10);
@@ -877,7 +877,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             account_package.package_type,
-            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(100))
+            AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(100))
         );
         assert_eq!(account_package.slot, 220);
         assert_eq!(num_re_enqueued_accounts_packages, 2);

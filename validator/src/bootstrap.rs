@@ -16,7 +16,7 @@ use {
     solana_metrics::datapoint_info,
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
-        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::SnapshotType,
+        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::SnapshotKind,
         snapshot_utils,
     },
     solana_sdk::{
@@ -1176,7 +1176,7 @@ fn download_snapshots(
             download_abort_count,
             rpc_contact_info,
             full_snapshot_hash,
-            SnapshotType::FullSnapshot,
+            SnapshotKind::FullSnapshot,
         )?;
     }
 
@@ -1208,7 +1208,7 @@ fn download_snapshots(
                     download_abort_count,
                     rpc_contact_info,
                     incremental_snapshot_hash,
-                    SnapshotType::IncrementalSnapshot(full_snapshot_hash.0),
+                    SnapshotKind::IncrementalSnapshot(full_snapshot_hash.0),
                 )?;
             }
         }
@@ -1231,7 +1231,7 @@ fn download_snapshot(
     download_abort_count: &mut u64,
     rpc_contact_info: &ContactInfo,
     desired_snapshot_hash: (Slot, Hash),
-    snapshot_type: SnapshotType,
+    snapshot_kind: SnapshotKind,
 ) -> Result<(), String> {
     let maximum_full_snapshot_archives_to_retain = validator_config
         .snapshot_config
@@ -1253,7 +1253,7 @@ fn download_snapshot(
         full_snapshot_archives_dir,
         incremental_snapshot_archives_dir,
         desired_snapshot_hash,
-        snapshot_type,
+        snapshot_kind,
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
         use_progress_bar,
