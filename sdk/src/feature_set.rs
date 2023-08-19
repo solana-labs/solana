@@ -687,6 +687,10 @@ pub mod reduce_stake_warmup_cooldown {
     }
 }
 
+pub mod new_root_vote_credits_fix {
+    solana_sdk::declare_id!("3DW824DEYqeLDAGZa3ri6HQSNkVG33QWnEiPdDPde7HR");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -851,6 +855,7 @@ lazy_static! {
         (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
         (last_restart_slot_sysvar::id(), "enable new sysvar last_restart_slot"),
         (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
+        (new_root_vote_credits_fix::id(), "fix vote credit erroneously added for a new root in VoteStateUpdate regardless of whether that slot was voted on or not"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

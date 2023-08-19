@@ -609,13 +609,23 @@ pub fn process_new_vote_state(
     let mut current_vote_state_index: usize = 0;
     let mut new_vote_state_index = 0;
 
-    // Count the number of slots at and before the new root within the current vote state lockouts.  Start with 1
-    // for the new root.  The purpose of this is to know how many slots were rooted by this state update:
-    // - The new root was rooted
-    // - As were any slots that were in the current state but are not in the new state.  The only slots which
-    //   can be in this set are those oldest slots in the current vote state that are not present in the
-    //   new vote state; these have been "popped off the back" of the tower and thus represent finalized slots
-    let mut finalized_slot_count = 1_u64;
+    // Count the number of slots at and before the new root within the current vote state lockouts.  The purpose of
+    // this is to know how many previously voted-on slots were finalized by this state update, which gives the number
+    // of credits that should be awarded for the vote; this matches the number of credits awarded by a Vote
+    // instruction, where the credits are counted by directly "popping" voted for slots off of the Tower (including
+    // the new root, which itself was the last slot popped off of the Tower).
+    let new_root_vote_credits_fix = feature_set
+        .map(|feature_set| feature_set.is_active(&feature_set::new_root_vote_credits_fix::id()))
+        .unwrap_or(false);
+    // Previously credits were incorrectly awarded for new roots that were not present in the previous vote (by virtue
+    // of initializing finalized_and_voted_on_slot_count to 1 to always award 1 credit for any new root, regardless of
+    // whether it was found in the current_vote VoteState in the following loop), which is incorrect as credits should
+    // only ever be awarded for slots that were voted on.  This is fixed with the new_root_vote_credits_fix feature.
+    let mut finalized_and_voted_on_slot_count = if new_root_vote_credits_fix {
+        0_u64
+    } else {
+        1_u64
+    };
 
     if let Some(new_root) = new_root {
         for current_vote in &vote_state.votes {
@@ -625,10 +635,13 @@ pub fn process_new_vote_state(
                 current_vote_state_index = current_vote_state_index
                     .checked_add(1)
                     .expect("`current_vote_state_index` is bounded by `MAX_LOCKOUT_HISTORY` when processing new root");
-                if current_vote.slot() != new_root {
-                    finalized_slot_count = finalized_slot_count
+                // With new_root_vote_credits_fix, since finalized_and_voted_on_count was initialized to zero, it must
+                // be incremented for every vote in original VoteState that is not present in the new VoteState as all
+                // of those votes were "popped off the back" of the tower.
+                if new_root_vote_credits_fix || (current_vote.slot() != new_root) {
+                    finalized_and_voted_on_slot_count = finalized_and_voted_on_slot_count
                         .checked_add(1)
-                        .expect("`finalized_slot_count` is bounded by `MAX_LOCKOUT_HISTORY` when processing new root");
+                        .expect("`finalized_and_voted_on_slot_count` is bounded by `MAX_LOCKOUT_HISTORY` when processing new root");
                 }
                 continue;
             }
@@ -691,7 +704,7 @@ pub fn process_new_vote_state(
         {
             // For each finalized slot, there was one voted-on slot in the new vote state that was responsible for
             // finalizing it. Each of those votes is awarded 1 credit.
-            vote_state.increment_credits(epoch, finalized_slot_count);
+            vote_state.increment_credits(epoch, finalized_and_voted_on_slot_count);
         } else {
             vote_state.increment_credits(epoch, 1);
         }
@@ -1768,6 +1781,114 @@ mod tests {
             ),
             Err(VoteError::RootRollBack)
         );
+    }
+
+    #[allow(clippy::integer_arithmetic)]
+    fn process_new_vote_state_replaced_root_vote_credits(
+        feature_set: &FeatureSet,
+        expected_credits: u64,
+    ) {
+        let mut vote_state1 = VoteState::default();
+
+        // Initial vote state: as if 31 votes had occurred on slots 0 - 30 (inclusive)
+        assert_eq!(
+            process_new_vote_state_from_votes(
+                &mut vote_state1,
+                (0..MAX_LOCKOUT_HISTORY)
+                    .enumerate()
+                    .map(
+                        |(index, slot)| LandedVote::from(Lockout::new_with_confirmation_count(
+                            slot as Slot,
+                            (MAX_LOCKOUT_HISTORY - index) as u32
+                        ))
+                    )
+                    .collect(),
+                None,
+                None,
+                0,
+                Some(feature_set),
+            ),
+            Ok(())
+        );
+
+        // Now vote as if new votes on slots 31 and 32 had occurred, yielding a new Root of 1
+        assert_eq!(
+            process_new_vote_state_from_votes(
+                &mut vote_state1,
+                (2..(MAX_LOCKOUT_HISTORY + 2))
+                    .enumerate()
+                    .map(
+                        |(index, slot)| LandedVote::from(Lockout::new_with_confirmation_count(
+                            slot as Slot,
+                            (MAX_LOCKOUT_HISTORY - index) as u32
+                        ))
+                    )
+                    .collect(),
+                Some(1),
+                None,
+                0,
+                Some(feature_set),
+            ),
+            Ok(())
+        );
+
+        // Vote credits should be 2, since two voted-on slots were "popped off the back" of the tower
+        assert_eq!(vote_state1.credits(), 2);
+
+        // Create a new vote state that represents the validator having not voted for a long time, then voting on
+        // slots 10001 through 10032 (inclusive) with an entirely new root of 10000 that was never previously voted
+        // on.  This is valid because a vote state can include a root that it never voted on (if it votes after a very
+        // long delinquency, the new votes will have a root much newer than its most recently voted slot).
+        assert_eq!(
+            process_new_vote_state_from_votes(
+                &mut vote_state1,
+                (10001..(MAX_LOCKOUT_HISTORY + 10001))
+                    .enumerate()
+                    .map(
+                        |(index, slot)| LandedVote::from(Lockout::new_with_confirmation_count(
+                            slot as Slot,
+                            (MAX_LOCKOUT_HISTORY - index) as u32
+                        ))
+                    )
+                    .collect(),
+                Some(10000),
+                None,
+                0,
+                Some(feature_set),
+            ),
+            Ok(())
+        );
+
+        // The vote is valid, but no vote credits should be awarded because although there is a new root, it does not
+        // represent a slot previously voted on.
+        assert_eq!(vote_state1.credits(), expected_credits)
+    }
+
+    #[test]
+    fn test_process_new_vote_state_replaced_root_vote_credits() {
+        let mut feature_set = FeatureSet::default();
+
+        // Always use allow_votes_to_directly_update_vote_state feature because VoteStateUpdate is being tested
+        feature_set.activate(
+            &feature_set::allow_votes_to_directly_update_vote_state::id(),
+            1,
+        );
+
+        // Test using vote_state_update_credit_per_dequeue feature.  The expected credits here of 34 is
+        // *incorrect* but is what is expected using vote_state_update_credit_per_dequeue.  With this feature, the
+        // credits earned will be calculated as:
+        // 2 (from initial vote state)
+        // + 31 (for votes which were "popped off of the back of the tower" by the new vote
+        // + 1 (just because there is a new root, even though it was never voted on -- this is the flaw)
+        feature_set.activate(&feature_set::vote_state_update_credit_per_dequeue::id(), 1);
+        process_new_vote_state_replaced_root_vote_credits(&feature_set, 34);
+
+        // Now test using the new_root_vote_credits_fix feature.  The expected credits here of 33 is *correct*.  With
+        // this feature, the credits earned will be calculated as:
+        // 2 (from initial vote state)
+        // + 31 (for votes which were "popped off of the back of the tower" by the new vote)
+        feature_set.activate(&feature_set::new_root_vote_credits_fix::id(), 1);
+        process_new_vote_state_replaced_root_vote_credits(&feature_set, 33);
     }
 
     #[test]
