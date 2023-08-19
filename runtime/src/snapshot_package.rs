@@ -9,7 +9,7 @@ use {
     solana_accounts_db::{
         accounts::Accounts,
         accounts_db::{AccountStorageEntry, IncludeSlotInHash, INCLUDE_SLOT_IN_HASH_TESTS},
-        accounts_hash::{AccountsHash, AccountsHashEnum},
+        accounts_hash::{AccountsHash, AccountsHashKind},
         epoch_accounts_hash::EpochAccountsHash,
         rent_collector::RentCollector,
     },
@@ -248,7 +248,7 @@ pub struct SnapshotPackage {
 }
 
 impl SnapshotPackage {
-    pub fn new(accounts_package: AccountsPackage, accounts_hash: AccountsHashEnum) -> Self {
+    pub fn new(accounts_package: AccountsPackage, accounts_hash: AccountsHashKind) -> Self {
         let AccountsPackageType::Snapshot(snapshot_kind) = accounts_package.package_type else {
             panic!(
                 "The AccountsPackage must be of type Snapshot in order to make a SnapshotPackage!"

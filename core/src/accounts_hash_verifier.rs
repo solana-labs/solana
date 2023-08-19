@@ -8,7 +8,7 @@ use {
     solana_accounts_db::{
         accounts_db::CalcAccountsHashFlavor,
         accounts_hash::{
-            AccountsHash, AccountsHashEnum, CalcAccountsHashConfig, HashStats,
+            AccountsHash, AccountsHashKind, CalcAccountsHashConfig, HashStats,
             IncrementalAccountsHash,
         },
         sorted_storages::SortedStorages,
@@ -273,7 +273,7 @@ impl AccountsHashVerifier {
     fn calculate_and_verify_accounts_hash(
         accounts_package: &AccountsPackage,
         snapshot_config: &SnapshotConfig,
-    ) -> AccountsHashEnum {
+    ) -> AccountsHashKind {
         let accounts_hash_calculation_flavor = match accounts_package.package_type {
             AccountsPackageType::AccountsHashVerifier => CalcAccountsHashFlavor::Full,
             AccountsPackageType::EpochAccountsHash => CalcAccountsHashFlavor::Full,
@@ -290,7 +290,7 @@ impl AccountsHashVerifier {
         };
 
         let (
-            accounts_hash_enum,
+            accounts_hash_kind,
             accounts_hash_for_reserialize,
             bank_incremental_snapshot_persistence,
         ) = match accounts_hash_calculation_flavor {
@@ -371,7 +371,7 @@ impl AccountsHashVerifier {
             );
         }
 
-        accounts_hash_enum
+        accounts_hash_kind
     }
 
     fn _calculate_full_accounts_hash(
@@ -503,10 +503,10 @@ impl AccountsHashVerifier {
 
     fn save_epoch_accounts_hash(
         accounts_package: &AccountsPackage,
-        accounts_hash: AccountsHashEnum,
+        accounts_hash: AccountsHashKind,
     ) {
         if accounts_package.package_type == AccountsPackageType::EpochAccountsHash {
-            let AccountsHashEnum::Full(accounts_hash) = accounts_hash else {
+            let AccountsHashKind::Full(accounts_hash) = accounts_hash else {
                 panic!("EAH requires a full accounts hash!");
             };
             info!(
@@ -525,7 +525,7 @@ impl AccountsHashVerifier {
         accounts_package: &AccountsPackage,
         cluster_info: &ClusterInfo,
         hashes: &mut Vec<(Slot, Hash)>,
-        accounts_hash: AccountsHashEnum,
+        accounts_hash: AccountsHashKind,
         accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     ) {
         let hash = accounts_hash_fault_injector
@@ -542,7 +542,7 @@ impl AccountsHashVerifier {
         accounts_package: AccountsPackage,
         snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
         snapshot_config: &SnapshotConfig,
-        accounts_hash: AccountsHashEnum,
+        accounts_hash: AccountsHashKind,
         exit: &AtomicBool,
     ) {
         if !snapshot_config.should_generate_snapshots()
