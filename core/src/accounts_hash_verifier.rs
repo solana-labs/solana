@@ -19,7 +19,7 @@ use {
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
-            self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotKind,
+            self, retain_max_n_elements, AccountsPackage, AccountsPackageKind, SnapshotKind,
             SnapshotPackage,
         },
         snapshot_utils,
@@ -171,7 +171,7 @@ impl AccountsHashVerifier {
                 let num_eah_packages = accounts_packages
                     .iter()
                     .filter(|account_package| {
-                        account_package.package_type == AccountsPackageType::EpochAccountsHash
+                        account_package.package_kind == AccountsPackageKind::EpochAccountsHash
                     })
                     .count();
                 assert!(
@@ -199,8 +199,8 @@ impl AccountsHashVerifier {
                 // be at most one EpochAccountsHash request, so `y` is the only other request we
                 // need to check.  If `y` is a FullSnapshot request *with a lower slot* than `z`,
                 // then handle `y` first.
-                let accounts_package = if z.package_type == AccountsPackageType::EpochAccountsHash
-                    && y.package_type == AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot)
+                let accounts_package = if z.package_kind == AccountsPackageKind::EpochAccountsHash
+                    && y.package_kind == AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot)
                     && y.slot < z.slot
                 {
                     // SAFETY: We know the len is > 1, so both `pop`s will return `Some`
@@ -274,10 +274,10 @@ impl AccountsHashVerifier {
         accounts_package: &AccountsPackage,
         snapshot_config: &SnapshotConfig,
     ) -> AccountsHashKind {
-        let accounts_hash_calculation_kind = match accounts_package.package_type {
-            AccountsPackageType::AccountsHashVerifier => CalcAccountsHashKind::Full,
-            AccountsPackageType::EpochAccountsHash => CalcAccountsHashKind::Full,
-            AccountsPackageType::Snapshot(snapshot_kind) => match snapshot_kind {
+        let accounts_hash_calculation_kind = match accounts_package.package_kind {
+            AccountsPackageKind::AccountsHashVerifier => CalcAccountsHashKind::Full,
+            AccountsPackageKind::EpochAccountsHash => CalcAccountsHashKind::Full,
+            AccountsPackageKind::Snapshot(snapshot_kind) => match snapshot_kind {
                 SnapshotKind::FullSnapshot => CalcAccountsHashKind::Full,
                 SnapshotKind::IncrementalSnapshot(_) => {
                     if accounts_package.is_incremental_accounts_hash_feature_enabled {
@@ -300,8 +300,8 @@ impl AccountsHashVerifier {
                 (accounts_hash.into(), accounts_hash, None)
             }
             CalcAccountsHashKind::Incremental => {
-                let AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(base_slot)) =
-                    accounts_package.package_type
+                let AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(base_slot)) =
+                    accounts_package.package_kind
                 else {
                     panic!("Calculating incremental accounts hash requires a base slot");
                 };
@@ -336,8 +336,8 @@ impl AccountsHashVerifier {
             );
         }
 
-        if accounts_package.package_type
-            == AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot)
+        if accounts_package.package_kind
+            == AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot)
         {
             accounts_package
                 .accounts
@@ -505,7 +505,7 @@ impl AccountsHashVerifier {
         accounts_package: &AccountsPackage,
         accounts_hash: AccountsHashKind,
     ) {
-        if accounts_package.package_type == AccountsPackageType::EpochAccountsHash {
+        if accounts_package.package_kind == AccountsPackageKind::EpochAccountsHash {
             let AccountsHashKind::Full(accounts_hash) = accounts_hash else {
                 panic!("EAH requires a full accounts hash!");
             };
@@ -547,8 +547,8 @@ impl AccountsHashVerifier {
     ) {
         if !snapshot_config.should_generate_snapshots()
             || !matches!(
-                accounts_package.package_type,
-                AccountsPackageType::Snapshot(_)
+                accounts_package.package_kind,
+                AccountsPackageKind::Snapshot(_)
             )
         {
             return;
@@ -654,31 +654,31 @@ mod tests {
         );
     }
 
-    fn new(package_type: AccountsPackageType, slot: Slot) -> AccountsPackage {
+    fn new(package_kind: AccountsPackageKind, slot: Slot) -> AccountsPackage {
         AccountsPackage {
-            package_type,
+            package_kind,
             slot,
             block_height: slot,
             ..AccountsPackage::default_for_tests()
         }
     }
     fn new_eah(slot: Slot) -> AccountsPackage {
-        new(AccountsPackageType::EpochAccountsHash, slot)
+        new(AccountsPackageKind::EpochAccountsHash, slot)
     }
     fn new_fss(slot: Slot) -> AccountsPackage {
         new(
-            AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+            AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
             slot,
         )
     }
     fn new_iss(slot: Slot, base: Slot) -> AccountsPackage {
         new(
-            AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(base)),
+            AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(base)),
             slot,
         )
     }
     fn new_ahv(slot: Slot) -> AccountsPackage {
-        new(AccountsPackageType::AccountsHashVerifier, slot)
+        new(AccountsPackageKind::AccountsHashVerifier, slot)
     }
 
     /// Ensure that unhandled accounts packages are properly re-enqueued or dropped
@@ -732,8 +732,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::EpochAccountsHash
+            account_package.package_kind,
+            AccountsPackageKind::EpochAccountsHash
         );
         assert_eq!(account_package.slot, 200);
         assert_eq!(num_re_enqueued_accounts_packages, 15);
@@ -750,8 +750,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot)
+            account_package.package_kind,
+            AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot)
         );
         assert_eq!(account_package.slot, 400);
         assert_eq!(num_re_enqueued_accounts_packages, 7);
@@ -768,8 +768,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(400))
+            account_package.package_kind,
+            AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(400))
         );
         assert_eq!(account_package.slot, 420);
         assert_eq!(num_re_enqueued_accounts_packages, 3);
@@ -786,8 +786,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::AccountsHashVerifier
+            account_package.package_kind,
+            AccountsPackageKind::AccountsHashVerifier
         );
         assert_eq!(account_package.slot, 423);
         assert_eq!(num_re_enqueued_accounts_packages, 0);
@@ -841,8 +841,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot)
+            account_package.package_kind,
+            AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot)
         );
         assert_eq!(account_package.slot, 100);
         assert_eq!(num_re_enqueued_accounts_packages, 10);
@@ -858,8 +858,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::EpochAccountsHash
+            account_package.package_kind,
+            AccountsPackageKind::EpochAccountsHash
         );
         assert_eq!(account_package.slot, 200);
         assert_eq!(num_re_enqueued_accounts_packages, 6);
@@ -876,8 +876,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(100))
+            account_package.package_kind,
+            AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(100))
         );
         assert_eq!(account_package.slot, 220);
         assert_eq!(num_re_enqueued_accounts_packages, 2);
@@ -894,8 +894,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::AccountsHashVerifier
+            account_package.package_kind,
+            AccountsPackageKind::AccountsHashVerifier
         );
         assert_eq!(account_package.slot, 222);
         assert_eq!(num_re_enqueued_accounts_packages, 0);
