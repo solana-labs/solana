@@ -384,7 +384,7 @@ impl QuicClient {
                 .acks
                 .update_stat(&self.stats.acks, new_stats.frame_tx.acks);
 
-            if data.len() == 0 {
+            if data.is_empty() {
                 // no need to send packet as it is only for warming connections
                 return Ok(connection);
             }
