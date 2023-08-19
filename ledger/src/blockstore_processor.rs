@@ -35,7 +35,7 @@ use {
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
-        accounts_background_service::{AbsRequestSender, SnapshotRequestType},
+        accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
         bank::{Bank, TransactionBalancesSet},
         bank_forks::BankForks,
         bank_utils,
@@ -657,7 +657,7 @@ pub fn test_process_blockstore(
                 snapshot_request_receiver
                     .try_iter()
                     .filter(|snapshot_request| {
-                        snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+                        snapshot_request.request_kind == SnapshotRequestKind::EpochAccountsHash
                     })
                     .for_each(|snapshot_request| {
                         snapshot_request

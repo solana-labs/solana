@@ -111,7 +111,7 @@ impl SendDroppedBankCallback {
 pub struct SnapshotRequest {
     pub snapshot_root_bank: Arc<Bank>,
     pub status_cache_slot_deltas: Vec<BankSlotDelta>,
-    pub request_type: SnapshotRequestType,
+    pub request_kind: SnapshotRequestKind,
 
     /// The instant this request was send to the queue.
     /// Used to track how long requests wait before processing.
@@ -121,19 +121,19 @@ pub struct SnapshotRequest {
 impl Debug for SnapshotRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SnapshotRequest")
-            .field("request type", &self.request_type)
+            .field("request type", &self.request_kind)
             .field("bank slot", &self.snapshot_root_bank.slot())
             .finish()
     }
 }
 
-/// What type of request is this?
+/// What kind of request is this?
 ///
 /// The snapshot request has been expanded to support more than just snapshots.  This is
 /// confusing, but can be resolved by renaming this type; or better, by creating an enum with
 /// variants that wrap the fields-of-interest for each request.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum SnapshotRequestType {
+pub enum SnapshotRequestKind {
     Snapshot,
     EpochAccountsHash,
 }
@@ -311,7 +311,7 @@ impl SnapshotRequestHandler {
         let SnapshotRequest {
             snapshot_root_bank,
             status_cache_slot_deltas,
-            request_type,
+            request_kind,
             enqueued: _,
         } = snapshot_request;
 
@@ -388,8 +388,8 @@ impl SnapshotRequestHandler {
         // Snapshot the bank and send over an accounts package
         let mut snapshot_time = Measure::start("snapshot_time");
         let snapshot_storages = snapshot_bank_utils::get_snapshot_storages(&snapshot_root_bank);
-        let accounts_package = match request_type {
-            SnapshotRequestType::Snapshot => match &accounts_package_type {
+        let accounts_package = match request_kind {
+            SnapshotRequestKind::Snapshot => match &accounts_package_type {
                 AccountsPackageType::Snapshot(_) => {
                     let bank_snapshot_info = snapshot_bank_utils::add_bank_snapshot(
                         &self.snapshot_config.bank_snapshots_dir,
@@ -421,7 +421,7 @@ impl SnapshotRequestHandler {
                 }
                 AccountsPackageType::EpochAccountsHash => panic!("Illegal account package type: EpochAccountsHash packages must be from an EpochAccountsHash request!"),
             },
-            SnapshotRequestType::EpochAccountsHash => {
+            SnapshotRequestKind::EpochAccountsHash => {
                 // skip the bank snapshot, just make an accounts package to send to AHV
                 AccountsPackage::new_for_epoch_accounts_hash(
                     accounts_package_type,
@@ -742,8 +742,8 @@ fn new_accounts_package_type(
     last_full_snapshot_slot: Option<Slot>,
 ) -> AccountsPackageType {
     let block_height = snapshot_request.snapshot_root_bank.block_height();
-    match snapshot_request.request_type {
-        SnapshotRequestType::EpochAccountsHash => AccountsPackageType::EpochAccountsHash,
+    match snapshot_request.request_kind {
+        SnapshotRequestKind::EpochAccountsHash => AccountsPackageType::EpochAccountsHash,
         _ => {
             if snapshot_utils::should_take_full_snapshot(
                 block_height,
@@ -860,11 +860,11 @@ mod test {
             accounts_package_sender,
         };
 
-        let send_snapshot_request = |snapshot_root_bank, request_type| {
+        let send_snapshot_request = |snapshot_root_bank, request_kind| {
             let snapshot_request = SnapshotRequest {
                 snapshot_root_bank,
                 status_cache_slot_deltas: Vec::default(),
-                request_type,
+                request_kind,
                 enqueued: Instant::now(),
             };
             snapshot_request_sender.send(snapshot_request).unwrap();
@@ -919,10 +919,10 @@ mod test {
                 if bank.slot() == epoch_accounts_hash_utils::calculation_start(&bank) {
                     send_snapshot_request(
                         Arc::clone(&bank),
-                        SnapshotRequestType::EpochAccountsHash,
+                        SnapshotRequestKind::EpochAccountsHash,
                     );
                 } else {
-                    send_snapshot_request(Arc::clone(&bank), SnapshotRequestType::Snapshot);
+                    send_snapshot_request(Arc::clone(&bank), SnapshotRequestKind::Snapshot);
                 }
             }
         };
