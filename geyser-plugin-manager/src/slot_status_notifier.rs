@@ -19,7 +19,7 @@ pub trait SlotStatusNotifierInterface {
     fn notify_slot_rooted(&self, slot: Slot, parent: Option<Slot>);
 }
 
-pub type SlotStatusNotifier = Arc<RwLock<dyn SlotStatusNotifierInterface + Sync + Send>>;
+pub type SlotStatusNotifier = Arc<dyn SlotStatusNotifierInterface + Sync + Send>;
 
 pub struct SlotStatusNotifierImpl {
     plugin_manager: Arc<RwLock<GeyserPluginManager>>,

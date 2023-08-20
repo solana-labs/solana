@@ -56,10 +56,7 @@ impl EntryNotifierService {
     ) -> Result<(), RecvTimeoutError> {
         let EntryNotification { slot, index, entry } =
             entry_notification_receiver.recv_timeout(Duration::from_secs(1))?;
-        entry_notifier
-            .write()
-            .unwrap()
-            .notify_entry(slot, index, &entry);
+        entry_notifier.notify_entry(slot, index, &entry);
         Ok(())
     }
 

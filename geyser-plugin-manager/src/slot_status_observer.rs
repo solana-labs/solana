@@ -54,22 +54,13 @@ impl SlotStatusObserver {
                     if let Ok(slot) = bank_notification_receiver.recv() {
                         match slot {
                             SlotNotification::OptimisticallyConfirmed(slot) => {
-                                slot_status_notifier
-                                    .read()
-                                    .unwrap()
-                                    .notify_slot_confirmed(slot, None);
+                                slot_status_notifier.notify_slot_confirmed(slot, None);
                             }
                             SlotNotification::Frozen((slot, parent)) => {
-                                slot_status_notifier
-                                    .read()
-                                    .unwrap()
-                                    .notify_slot_processed(slot, Some(parent));
+                                slot_status_notifier.notify_slot_processed(slot, Some(parent));
                             }
                             SlotNotification::Root((slot, parent)) => {
-                                slot_status_notifier
-                                    .read()
-                                    .unwrap()
-                                    .notify_slot_rooted(slot, Some(parent));
+                                slot_status_notifier.notify_slot_rooted(slot, Some(parent));
                             }
                         }
                     }

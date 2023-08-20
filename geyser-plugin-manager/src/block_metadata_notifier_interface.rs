@@ -20,4 +20,4 @@ pub trait BlockMetadataNotifier {
     );
 }
 
-pub type BlockMetadataNotifierLock = Arc<RwLock<dyn BlockMetadataNotifier + Sync + Send>>;
+pub type BlockMetadataNotifierRef = Arc<dyn BlockMetadataNotifier + Sync + Send>;

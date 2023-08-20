@@ -169,7 +169,7 @@ impl TransactionStatusService {
                         };
 
                         if let Some(transaction_notifier) = transaction_notifier.as_ref() {
-                            transaction_notifier.write().unwrap().notify_transaction(
+                            transaction_notifier.notify_transaction(
                                 slot,
                                 transaction_index,
                                 transaction.signature(),

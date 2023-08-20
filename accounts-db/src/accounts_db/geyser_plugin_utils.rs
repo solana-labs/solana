@@ -56,8 +56,7 @@ impl AccountsDb {
         }
 
         let accounts_update_notifier = self.accounts_update_notifier.as_ref().unwrap();
-        let notifier = &accounts_update_notifier.read().unwrap();
-        notifier.notify_end_of_restore_from_snapshot();
+        accounts_update_notifier.notify_end_of_restore_from_snapshot();
         notify_stats.report();
     }
 
@@ -72,8 +71,7 @@ impl AccountsDb {
         P: Iterator<Item = u64>,
     {
         if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
-            let notifier = &accounts_update_notifier.read().unwrap();
-            notifier.notify_account_update(
+            accounts_update_notifier.notify_account_update(
                 slot,
                 account,
                 txn,
@@ -121,12 +119,7 @@ impl AccountsDb {
         mut accounts_to_stream: HashMap<Pubkey, StoredAccountMeta>,
         notify_stats: &mut GeyserPluginNotifyAtSnapshotRestoreStats,
     ) {
-        let notifier = self
-            .accounts_update_notifier
-            .as_ref()
-            .unwrap()
-            .read()
-            .unwrap();
+        let notifier = self.accounts_update_notifier.as_ref().unwrap();
 
         let mut measure_notify = Measure::start("accountsdb-plugin-notifying-accounts");
         let local_write_version = 0;
