@@ -34,7 +34,7 @@ upload-s3-artifact() {
     fi
     args+=(
       amazon/aws-cli:2.13.11
-      s3 cp "$1" "$2"
+      s3 cp "$1" "$2" --acl public-read
     )
     set -x
     docker run "${args[@]}"
