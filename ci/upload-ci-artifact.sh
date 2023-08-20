@@ -33,8 +33,8 @@ upload-s3-artifact() {
       )
     fi
     args+=(
-      eremite/aws-cli:2018.12.18
-      /usr/bin/s3cmd --acl-public put "$1" "$2"
+      amazon/aws-cli:2.13.11
+      s3 cp "$1" "$2" --acl public-read
     )
     set -x
     docker run "${args[@]}"
