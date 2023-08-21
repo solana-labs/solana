@@ -4,7 +4,7 @@
 use {
     async_mutex::Mutex,
     async_trait::async_trait,
-    futures::future::join_all,
+    futures::future::{join_all, TryFutureExt},
     itertools::Itertools,
     log::*,
     quinn::{
@@ -554,20 +554,22 @@ impl ClientConnection for QuicClientConnection {
 
     async fn send_data(&self, data: &[u8]) -> TransportResult<()> {
         let stats = Arc::new(ClientStats::default());
-        let send_buffer = self
-            .client
-            .send_buffer(data, &stats, self.connection_stats.clone());
-        if let Err(e) = send_buffer.await {
-            warn!(
-                "Failed to send data async to {}, error: {:?} ",
-                self.server_addr(),
-                e
-            );
-            datapoint_warn!("send-wire-async", ("failure", 1, i64),);
-            self.connection_stats.add_client_stats(&stats, 1, false);
-        } else {
-            self.connection_stats.add_client_stats(&stats, 1, true);
-        }
-        Ok(())
+        self.client
+            .send_buffer(data, &stats, self.connection_stats.clone())
+            .map_ok(|v| {
+                self.connection_stats.add_client_stats(&stats, 1, true);
+                v
+            })
+            .map_err(|e| {
+                warn!(
+                    "Failed to send data async to {}, error: {:?} ",
+                    self.server_addr(),
+                    e
+                );
+                datapoint_warn!("send-wire-async", ("failure", 1, i64),);
+                self.connection_stats.add_client_stats(&stats, 1, false);
+                e.into()
+            })
+            .await
     }
 }
