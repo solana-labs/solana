@@ -1098,9 +1098,9 @@ impl<'a> AccountsHasher<'a> {
         )
     }
 
-    // input:
-    // vec: group of slot data, ordered by Slot (low to high)
-    //   vec: [..] - items which fit in the containing bin. Sorted by: Pubkey, higher Slot, higher Write version (if pubkey =)
+    /// input:
+    /// vec: group of slot data, ordered by Slot (low to high)
+    ///   vec: [..] - items found in that slot range Sorted by: Pubkey, higher Slot, higher Write version (if pubkey =)
     pub fn rest_of_hash_calculation(
         &self,
         sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
