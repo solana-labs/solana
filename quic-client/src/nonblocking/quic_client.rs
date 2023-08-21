@@ -384,6 +384,11 @@ impl QuicClient {
                 .acks
                 .update_stat(&self.stats.acks, new_stats.frame_tx.acks);
 
+            if data.is_empty() {
+                // no need to send packet as it is only for warming connections
+                return Ok(connection);
+            }
+
             last_connection_id = connection.stable_id();
             match Self::_send_buffer_using_conn(data, &connection).await {
                 Ok(()) => {
