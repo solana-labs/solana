@@ -33,7 +33,7 @@ use {
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_file::{AccountsFile, AccountsFileError},
         accounts_hash::{
-            AccountsDeltaHash, AccountsHash, AccountsHashEnum, AccountsHasher,
+            AccountsDeltaHash, AccountsHash, AccountsHashKind, AccountsHasher,
             CalcAccountsHashConfig, CalculateHashIntermediate, HashStats, IncrementalAccountsHash,
             SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash,
             ZeroLamportAccounts,
@@ -7665,7 +7665,7 @@ impl AccountsDb {
             CalcAccountsHashFlavor::Full,
             self.full_accounts_hash_cache_path.clone(),
         )?;
-        let AccountsHashEnum::Full(accounts_hash) = accounts_hash else {
+        let AccountsHashKind::Full(accounts_hash) = accounts_hash else {
             panic!("calculate_accounts_hash_from_storages must return a FullAccountsHash");
         };
         Ok((accounts_hash, capitalization))
@@ -7693,7 +7693,7 @@ impl AccountsDb {
             CalcAccountsHashFlavor::Incremental,
             self.incremental_accounts_hash_cache_path.clone(),
         )?;
-        let AccountsHashEnum::Incremental(incremental_accounts_hash) = accounts_hash else {
+        let AccountsHashKind::Incremental(incremental_accounts_hash) = accounts_hash else {
             panic!("calculate_incremental_accounts_hash must return an IncrementalAccountsHash");
         };
         Ok((incremental_accounts_hash, capitalization))
@@ -7706,7 +7706,7 @@ impl AccountsDb {
         mut stats: HashStats,
         flavor: CalcAccountsHashFlavor,
         accounts_hash_cache_path: PathBuf,
-    ) -> Result<(AccountsHashEnum, u64), AccountsHashVerificationError> {
+    ) -> Result<(AccountsHashKind, u64), AccountsHashVerificationError> {
         let total_time = Measure::start("");
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         stats.oldest_root = storages.range().start;
@@ -7775,9 +7775,9 @@ impl AccountsDb {
             let (accounts_hash, capitalization) =
                 accounts_hasher.rest_of_hash_calculation(&cache_hash_intermediates, &mut stats);
             let accounts_hash = match flavor {
-                CalcAccountsHashFlavor::Full => AccountsHashEnum::Full(AccountsHash(accounts_hash)),
+                CalcAccountsHashFlavor::Full => AccountsHashKind::Full(AccountsHash(accounts_hash)),
                 CalcAccountsHashFlavor::Incremental => {
-                    AccountsHashEnum::Incremental(IncrementalAccountsHash(accounts_hash))
+                    AccountsHashKind::Incremental(IncrementalAccountsHash(accounts_hash))
                 }
             };
             info!("calculate_accounts_hash_from_storages: slot: {slot}, {accounts_hash:?}, capitalization: {capitalization}");

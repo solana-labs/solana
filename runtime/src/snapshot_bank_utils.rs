@@ -1142,7 +1142,7 @@ pub fn package_and_archive_incremental_snapshot(
         None,
     );
 
-    let (accounts_hash_enum, accounts_hash_for_reserialize, bank_incremental_snapshot_persistence) =
+    let (accounts_hash_kind, accounts_hash_for_reserialize, bank_incremental_snapshot_persistence) =
         if bank
             .feature_set
             .is_active(&feature_set::incremental_snapshot_only_incremental_hash_calculation::id())
@@ -1185,7 +1185,7 @@ pub fn package_and_archive_incremental_snapshot(
         bank_incremental_snapshot_persistence.as_ref(),
     );
 
-    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash_enum);
+    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash_kind);
     archive_snapshot_package(
         &snapshot_package,
         full_snapshot_archives_dir,
