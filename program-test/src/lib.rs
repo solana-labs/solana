@@ -25,7 +25,7 @@ use {
         runtime_config::RuntimeConfig,
     },
     solana_sdk::{
-        account::{Account, AccountSharedData},
+        account::{create_account_shared_data_for_test, Account, AccountSharedData},
         account_info::AccountInfo,
         clock::Slot,
         entrypoint::{deserialize, ProgramResult, SUCCESS},
@@ -589,6 +589,11 @@ impl ProgramTest {
                 rent_epoch: 0,
             },
         );
+    }
+
+    pub fn add_sysvar_account<S: Sysvar>(&mut self, address: Pubkey, sysvar: &S) {
+        let account = create_account_shared_data_for_test(sysvar);
+        self.add_account(address, account.into());
     }
 
     /// Add a SBF program to the test environment.

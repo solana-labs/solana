@@ -3541,7 +3541,7 @@ impl Bank {
         }
     }
 
-    /// Create EpochRewards syavar with calculated rewards
+    /// Create EpochRewards sysvar with calculated rewards
     fn create_epoch_rewards_sysvar(
         &self,
         total_rewards: u64,
