@@ -6432,7 +6432,7 @@ dependencies = [
  "ouroboros",
  "percentage",
  "qualifier_attr",
- "rand 0.7.3",
+ "rand 0.8.5",
  "rayon",
  "regex",
  "rustc_version",
