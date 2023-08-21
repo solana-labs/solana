@@ -8024,7 +8024,7 @@ fn test_program_replace_set_up_account(
 }
 
 #[test]
-fn test_program_replace_non_upgradeable() {
+fn test_program_replace() {
     // Non-upgradeable program
     // - Old:     [Old program data]
     // - New:     [*New program data]
@@ -8077,22 +8077,20 @@ fn test_program_replace_non_upgradeable() {
     );
 }
 
-#[test]
-fn test_replace_empty_account_with_upgradeable_program() {
-    // Non-Existent program
-    // - Old:     ** Does not exist! **
-    // - New:     PDA(NewData)
-    // - NewData: [*New program data]
-    //
-    // Should create the program account and the data account, ie:
+fn test_replace_empty_account_success(
+    old: Pubkey,
+    maybe_old_data_bytes: Option<Vec<u8>>, // Inner data of the old program _data_ account
+) {
+    // Ensures a program account and data account are created when replacing an
+    // empty account, ie:
     // - Old:     PDA(OldData)
     // - OldData: [Old program data]
+    //
+    // If the old data account exists, it will be overwritten
     let bpf_upgradeable_id = bpf_loader_upgradeable::id();
     let mut bank = create_simple_test_bank(0);
 
-    let old = Pubkey::new_unique();
-    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_upgradeable_id);
-
+    // Create the test new accounts, one for program and one for data
     let new = Pubkey::new_unique();
     let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_upgradeable_id);
     let new_bytes = new_data.to_bytes().to_vec();
@@ -8116,12 +8114,31 @@ fn test_replace_empty_account_with_upgradeable_program() {
         false,
     );
 
+    // Derive the well-known PDA address for the old data account
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_upgradeable_id);
+    let burnt_after_rent = if let Some(old_data_bytes) = maybe_old_data_bytes {
+        let old_data_lamports = bank.get_minimum_balance_for_rent_exemption(old_data_bytes.len());
+        test_program_replace_set_up_account(
+            &mut bank,
+            &old_data,
+            old_data_lamports,
+            old_data_bytes,
+            &bpf_upgradeable_id,
+            false,
+        );
+        old_data_lamports + new_lamports
+            - bank.get_minimum_balance_for_rent_exemption(old_data.to_bytes().len())
+    } else {
+        new_lamports - bank.get_minimum_balance_for_rent_exemption(old_data.to_bytes().len())
+    };
+
     let original_capitalization = bank.capitalization();
 
+    // Do the replacement
     bank.replace_empty_account_with_upgradeable_program(
         &old,
         &new,
-        "bank-apply_program_replacement",
+        "bank-apply_empty_account_replacement_for_program",
     );
 
     // Old program account was created and funded to pay for minimum rent
@@ -8156,8 +8173,6 @@ fn test_replace_empty_account_with_upgradeable_program() {
 
     // The remaining lamports from both program accounts minus the rent-exempt
     // minimum were burnt
-    let burnt_after_rent =
-        new_lamports - bank.get_minimum_balance_for_rent_exemption(old_data.to_bytes().len());
     assert_eq!(
         bank.capitalization(),
         original_capitalization - burnt_after_rent
@@ -8165,8 +8180,29 @@ fn test_replace_empty_account_with_upgradeable_program() {
 }
 
 #[test]
-fn test_replace_empty_account_with_upgradeable_program_is_native_account() {
-    // Native program
+fn test_replace_empty_account() {
+    // Empty account _without_ corresponding data account
+    // - Old:     ** Does not exist! **
+    // - New:     PDA(NewData)
+    // - NewData: [*New program data]
+    //
+    // Should create the program account and the data account, ie:
+    // - Old:     PDA(OldData)
+    // - OldData: [Old program data]
+    test_replace_empty_account_success(Pubkey::new_unique(), None);
+
+    // Empty account _with_ corresponding data account
+    // - Old:     ** Does not exist! **
+    // - OldData: [Old program data]
+    // - New:     PDA(NewData)
+    // - NewData: [*New program data]
+    //
+    // Should create the program account and the data account, ie:
+    // - Old:     PDA(OldData)
+    // - OldData: [Old program data]
+    test_replace_empty_account_success(Pubkey::new_unique(), Some(vec![4; 40]));
+
+    // Native account _without_ corresponding data account
     // - Old:     ** Native account (ie. `Feature11111111`) **
     // - New:     PDA(NewData)
     // - NewData: [*New program data]
@@ -8174,179 +8210,23 @@ fn test_replace_empty_account_with_upgradeable_program_is_native_account() {
     // Should create the program account and the data account, ie:
     // - Old:     PDA(OldData)
     // - OldData: [Old program data]
-    let bpf_upgradeable_id = bpf_loader_upgradeable::id();
-    let mut bank = create_simple_test_bank(0);
-
-    let old = feature::id(); // `Feature11111111`
-    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_upgradeable_id);
-
-    let new = Pubkey::new_unique();
-    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_upgradeable_id);
-    let new_bytes = new_data.to_bytes().to_vec();
-    let new_lamports = bank.get_minimum_balance_for_rent_exemption(new_bytes.len());
-    let new_data_bytes = vec![6; 30];
-    let new_data_lamports = bank.get_minimum_balance_for_rent_exemption(new_data_bytes.len());
-    test_program_replace_set_up_account(
-        &mut bank,
-        &new,
-        new_lamports,
-        new_bytes,
-        &bpf_upgradeable_id,
-        true,
-    );
-    test_program_replace_set_up_account(
-        &mut bank,
-        &new_data,
-        new_data_lamports,
-        new_data_bytes.clone(),
-        &bpf_upgradeable_id,
-        false,
+    test_replace_empty_account_success(
+        feature::id(), // `Feature11111111`
+        None,
     );
 
-    let original_capitalization = bank.capitalization();
-
-    bank.replace_empty_account_with_upgradeable_program(
-        &old,
-        &new,
-        "bank-apply_program_replacement",
-    );
-
-    // Old program account was created and funded to pay for minimum rent
-    // for the PDA
-    assert_eq!(
-        bank.get_balance(&old),
-        bank.get_minimum_balance_for_rent_exemption(old_data.to_bytes().len())
-    );
-
-    // Old data account was created, now holds the new data account's balance
-    assert_eq!(bank.get_balance(&old_data), new_data_lamports);
-
-    // New program accounts are now empty
-    assert_eq!(bank.get_balance(&new), 0);
-    assert_eq!(bank.get_balance(&new_data), 0);
-
-    // Old program account holds the PDA, ie:
-    // - Old:     PDA(OldData)
-    let old_account = bank.get_account(&old).unwrap();
-    assert_eq!(old_account.data(), &old_data.to_bytes().to_vec());
-
-    // Old data account holds the new data, ie:
-    // - OldData: [*New program data]
-    let old_data_account = bank.get_account(&old_data).unwrap();
-    assert_eq!(old_data_account.data(), &new_data_bytes);
-
-    // Ownership & executable match the new program accounts
-    assert_eq!(old_account.owner(), &bpf_upgradeable_id);
-    assert!(old_account.executable());
-    assert_eq!(old_data_account.owner(), &bpf_upgradeable_id);
-    assert!(!old_data_account.executable());
-
-    // The remaining lamports from both program accounts minus the rent-exempt
-    // minimum were burnt
-    let burnt_after_rent =
-        new_lamports - bank.get_minimum_balance_for_rent_exemption(old_data.to_bytes().len());
-    assert_eq!(
-        bank.capitalization(),
-        original_capitalization - burnt_after_rent
-    );
-}
-
-#[test]
-fn test_replace_empty_account_with_upgradeable_program_has_data() {
-    // Non-upgradeable program
-    // - Old:     ** Does not exist! **
+    // Native account _with_ corresponding data account
+    // - Old:     ** Native account (ie. `Feature11111111`) **
     // - OldData: [Old program data]
     // - New:     PDA(NewData)
     // - NewData: [*New program data]
     //
-    // Should create the program account and replace the data account:
+    // Should create the program account and the data account, ie:
     // - Old:     PDA(OldData)
-    // - OldData: [*New program data]
-    let bpf_upgradeable_id = bpf_loader_upgradeable::id();
-    let mut bank = create_simple_test_bank(0);
-
-    let old = Pubkey::new_unique();
-    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_upgradeable_id);
-    let old_data_bytes = vec![4; 10];
-    let old_data_lamports = bank.get_minimum_balance_for_rent_exemption(old_data_bytes.len());
-    test_program_replace_set_up_account(
-        &mut bank,
-        &old_data,
-        old_data_lamports,
-        old_data_bytes,
-        &bpf_upgradeable_id,
-        false,
-    );
-
-    let new = Pubkey::new_unique();
-    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_upgradeable_id);
-    let new_bytes = new_data.to_bytes().to_vec();
-    let new_lamports = bank.get_minimum_balance_for_rent_exemption(new_bytes.len());
-    let new_data_bytes = vec![6; 30];
-    let new_data_lamports = bank.get_minimum_balance_for_rent_exemption(new_data_bytes.len());
-    test_program_replace_set_up_account(
-        &mut bank,
-        &new,
-        new_lamports,
-        new_bytes,
-        &bpf_upgradeable_id,
-        true,
-    );
-    test_program_replace_set_up_account(
-        &mut bank,
-        &new_data,
-        new_data_lamports,
-        new_data_bytes.clone(),
-        &bpf_upgradeable_id,
-        false,
-    );
-
-    let original_capitalization = bank.capitalization();
-
-    bank.replace_empty_account_with_upgradeable_program(
-        &old,
-        &new,
-        "bank-apply_program_replacement",
-    );
-
-    // Old program account was created and funded to pay for minimum rent
-    // for the PDA
-    assert_eq!(
-        bank.get_balance(&old),
-        bank.get_minimum_balance_for_rent_exemption(old_data.to_bytes().len())
-    );
-
-    // Old data account's balance is now the new data account's balance
-    assert_eq!(bank.get_balance(&old_data), new_data_lamports);
-
-    // New program accounts are now empty
-    assert_eq!(bank.get_balance(&new), 0);
-    assert_eq!(bank.get_balance(&new_data), 0);
-
-    // Old program account holds the PDA, ie:
-    // - Old:     PDA(OldData)
-    let old_account = bank.get_account(&old).unwrap();
-    assert_eq!(old_account.data(), &old_data.to_bytes().to_vec());
-
-    // Old data account now holds the new data, ie:
-    // - OldData: [*New program data]
-    let old_data_account = bank.get_account(&old_data).unwrap();
-    assert_eq!(old_data_account.data(), &new_data_bytes);
-
-    // Ownership & executable match the new program accounts
-    assert_eq!(old_account.owner(), &bpf_upgradeable_id);
-    assert!(old_account.executable());
-    assert_eq!(old_data_account.owner(), &bpf_upgradeable_id);
-    assert!(!old_data_account.executable());
-
-    // The remaining lamports from both program accounts minus the rent-exempt
-    // minimum were burnt
-    // Lamports from the old data account were burnt
-    let burnt_after_rent =
-        new_lamports - bank.get_minimum_balance_for_rent_exemption(old_data.to_bytes().len());
-    assert_eq!(
-        bank.capitalization(),
-        original_capitalization - burnt_after_rent - old_data_lamports
+    // - OldData: [Old program data]
+    test_replace_empty_account_success(
+        feature::id(), // `Feature11111111`
+        Some(vec![4; 40]),
     );
 }
 
