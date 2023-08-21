@@ -1273,7 +1273,7 @@ restartnode)
   nodeIndex=
   skipSetup=true
   wenRestart=true
-  if [[ -z $wen_restart ]]; then
+  if [[ -z $wen-restart ]]; then
     wenRestart=false
   fi
   prepareDeploy
