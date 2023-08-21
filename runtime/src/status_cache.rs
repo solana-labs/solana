@@ -183,7 +183,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
     ) {
         let max_key_index = key.as_ref().len().saturating_sub(CACHED_KEY_SIZE + 1);
         let hash_map = self.cache.entry(*transaction_blockhash).or_insert_with(|| {
-            let key_index = thread_rng().gen_range(0, max_key_index + 1);
+            let key_index = thread_rng().gen_range(0..max_key_index + 1);
             (slot, key_index, HashMap::new())
         });
 

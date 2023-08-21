@@ -179,7 +179,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             // Spread out the scanning across all ages within the window.
             // This causes us to scan 1/N of the bins each 'Age'
             remaining_ages_to_skip_flushing: AtomicU8::new(
-                thread_rng().gen_range(0, num_ages_to_distribute_flushes),
+                thread_rng().gen_range(0..num_ages_to_distribute_flushes),
             ),
             num_ages_to_distribute_flushes,
         }
@@ -932,7 +932,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         // random eviction
         const N: usize = 1000;
         // 1/N chance of eviction
-        thread_rng().gen_range(0, N) == 0
+        thread_rng().gen_range(0..N) == 0
     }
 
     /// assumes 1 entry in the slot list. Ignores overhead of the HashMap and such

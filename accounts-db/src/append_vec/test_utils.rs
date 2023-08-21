@@ -25,6 +25,7 @@ pub fn get_append_vec_path(path: &str) -> TempFile {
     let out_dir = get_append_vec_dir();
     let rand_string: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)
+        .map(char::from)
         .take(30)
         .collect();
     let dir = format!("{out_dir}/{rand_string}");

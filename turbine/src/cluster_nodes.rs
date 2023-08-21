@@ -441,12 +441,12 @@ pub fn make_test_cluster<R: Rng>(
             if rng.gen_ratio(unstaked_numerator, unstaked_denominator) {
                 None // No stake for some of the nodes.
             } else {
-                Some((*node.pubkey(), rng.gen_range(0, 20)))
+                Some((*node.pubkey(), rng.gen_range(0..20)))
             }
         })
         .collect();
     // Add some staked nodes with no contact-info.
-    stakes.extend(repeat_with(|| (Pubkey::new_unique(), rng.gen_range(0, 20))).take(100));
+    stakes.extend(repeat_with(|| (Pubkey::new_unique(), rng.gen_range(0..20))).take(100));
     let cluster_info = ClusterInfo::new(this_node, keypair, SocketAddrSpace::Unspecified);
     let nodes: Vec<_> = nodes
         .iter()

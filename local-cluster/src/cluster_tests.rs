@@ -156,7 +156,7 @@ pub fn send_many_transactions(
         let (blockhash, _) = client
             .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
             .unwrap();
-        let transfer_amount = thread_rng().gen_range(1, max_tokens_per_transfer);
+        let transfer_amount = thread_rng().gen_range(1..max_tokens_per_transfer);
 
         let mut transaction = system_transaction::transfer(
             funding_keypair,

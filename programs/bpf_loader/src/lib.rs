@@ -99,18 +99,6 @@ pub fn load_program_from_bytes(
     Ok(loaded_program)
 }
 
-fn find_program_in_cache(
-    invoke_context: &InvokeContext,
-    pubkey: &Pubkey,
-) -> Option<Arc<LoadedProgram>> {
-    // First lookup the cache of the programs modified by the current transaction. If not found, lookup
-    // the cache of the cache of the programs that are loaded for the transaction batch.
-    invoke_context
-        .programs_modified_by_tx
-        .find(pubkey)
-        .or_else(|| invoke_context.programs_loaded_for_tx_batch.find(pubkey))
-}
-
 macro_rules! deploy_program {
     ($invoke_context:expr, $program_id:expr, $loader_key:expr,
      $account_size:expr, $slot:expr, $drop:expr, $new_programdata:expr $(,)?) => {{
@@ -137,7 +125,7 @@ macro_rules! deploy_program {
             $slot,
             Arc::new(program_runtime_environment),
         )?;
-        if let Some(old_entry) = find_program_in_cache($invoke_context, &$program_id) {
+        if let Some(old_entry) = $invoke_context.find_program_in_cache(&$program_id) {
             executor.tx_usage_counter.store(
                 old_entry.tx_usage_counter.load(Ordering::Relaxed),
                 Ordering::Relaxed
@@ -507,7 +495,8 @@ fn process_instruction_inner(
     }
 
     let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-    let executor = find_program_in_cache(invoke_context, program_account.get_key())
+    let executor = invoke_context
+        .find_program_in_cache(program_account.get_key())
         .ok_or(InstructionError::InvalidAccountData)?;
 
     if executor.is_tombstone() {
@@ -3969,8 +3958,8 @@ mod tests {
         for _ in 0..outer_iters {
             let mut mangled_bytes = bytes.to_vec();
             for _ in 0..inner_iters {
-                let offset = rng.gen_range(offset.start, offset.end);
-                let value = rng.gen_range(value.start, value.end);
+                let offset = rng.gen_range(offset.start..offset.end);
+                let value = rng.gen_range(value.start..value.end);
                 *mangled_bytes.get_mut(offset).unwrap() = value;
                 work(&mut mangled_bytes);
             }

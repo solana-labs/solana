@@ -53,10 +53,11 @@ mod tests {
         assert!(bank0_sysvar_cache.get_slot_hashes().is_err());
         assert!(bank0_sysvar_cache.get_epoch_rewards().is_err()); // partitioned epoch reward feature is not enabled
 
+        let bank1_slot = bank0.slot() + 1;
         let bank1 = Arc::new(Bank::new_from_parent(
-            &bank0,
+            bank0.clone(),
             &Pubkey::default(),
-            bank0.slot() + 1,
+            bank1_slot,
         ));
 
         let bank1_sysvar_cache = bank1.sysvar_cache.read().unwrap();
@@ -77,7 +78,8 @@ mod tests {
         assert_ne!(bank0_cached_fees, bank1_cached_fees);
         assert_eq!(bank0_cached_rent, bank1_cached_rent);
 
-        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), bank1.slot() + 1);
+        let bank2_slot = bank1.slot() + 1;
+        let bank2 = Bank::new_from_parent(bank1.clone(), &Pubkey::default(), bank2_slot);
 
         let bank2_sysvar_cache = bank2.sysvar_cache.read().unwrap();
         let bank2_cached_clock = bank2_sysvar_cache.get_clock();
@@ -107,7 +109,8 @@ mod tests {
     fn test_reset_and_fill_sysvar_cache() {
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-        let mut bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.slot() + 1);
+        let bank1_slot = bank0.slot() + 1;
+        let mut bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), bank1_slot);
 
         let bank1_sysvar_cache = bank1.sysvar_cache.read().unwrap();
         let bank1_cached_clock = bank1_sysvar_cache.get_clock();

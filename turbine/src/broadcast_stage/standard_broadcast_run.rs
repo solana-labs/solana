@@ -685,7 +685,7 @@ mod test {
 
         // Step 2: Make a transmission for another bank that interrupts the transmission for
         // slot 0
-        let bank2 = Arc::new(Bank::new_from_parent(&bank0, &leader_keypair.pubkey(), 2));
+        let bank2 = Arc::new(Bank::new_from_parent(bank0, &leader_keypair.pubkey(), 2));
         let interrupted_slot = unfinished_slot.slot;
         // Interrupting the slot should cause the unfinished_slot and stats to reset
         let num_shreds = 1;

@@ -710,10 +710,10 @@ mod tests {
     fn test_copy_return_values() {
         let mut rng = rand::thread_rng();
         let sig_lens: Vec<Vec<u32>> = {
-            let size = rng.gen_range(0, 64);
+            let size = rng.gen_range(0..64);
             repeat_with(|| {
-                let size = rng.gen_range(0, 16);
-                repeat_with(|| rng.gen_range(0, 5)).take(size).collect()
+                let size = rng.gen_range(0..16);
+                repeat_with(|| rng.gen_range(0..5)).take(size).collect()
             })
             .take(size)
             .collect()
@@ -1060,7 +1060,7 @@ mod tests {
         // generate packet vector
         let batches: Vec<_> = (0..num_batches)
             .map(|_| {
-                let num_packets_per_batch = thread_rng().gen_range(1, max_packets_per_batch);
+                let num_packets_per_batch = thread_rng().gen_range(1..max_packets_per_batch);
                 let mut packet_batch = PacketBatch::with_capacity(num_packets_per_batch);
                 for _ in 0..num_packets_per_batch {
                     packet_batch.push(packet.clone());
@@ -1221,22 +1221,22 @@ mod tests {
         let recycler = Recycler::default();
         let recycler_out = Recycler::default();
         for _ in 0..50 {
-            let num_batches = thread_rng().gen_range(2, 30);
+            let num_batches = thread_rng().gen_range(2..30);
             let mut batches = generate_packet_batches_random_size(&packet, 128, num_batches);
 
-            let num_modifications = thread_rng().gen_range(0, 5);
+            let num_modifications = thread_rng().gen_range(0..5);
             for _ in 0..num_modifications {
-                let batch = thread_rng().gen_range(0, batches.len());
-                let packet = thread_rng().gen_range(0, batches[batch].len());
-                let offset = thread_rng().gen_range(0, batches[batch][packet].meta().size);
-                let add = thread_rng().gen_range(0, 255);
+                let batch = thread_rng().gen_range(0..batches.len());
+                let packet = thread_rng().gen_range(0..batches[batch].len());
+                let offset = thread_rng().gen_range(0..batches[batch][packet].meta().size);
+                let add = thread_rng().gen_range(0..255);
                 batches[batch][packet].buffer_mut()[offset] = batches[batch][packet]
                     .data(offset)
                     .unwrap()
                     .wrapping_add(add);
             }
 
-            let batch_to_disable = thread_rng().gen_range(0, batches.len());
+            let batch_to_disable = thread_rng().gen_range(0..batches.len());
             for p in batches[batch_to_disable].iter_mut() {
                 p.meta_mut().set_discard(true);
             }

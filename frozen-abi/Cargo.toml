@@ -30,11 +30,9 @@ block-buffer = { workspace = true }
 byteorder = { workspace = true, features = ["i128"] }
 either = { workspace = true, features = ["use_std"] }
 generic-array = { workspace = true, features = ["serde", "more_lengths"] }
-getrandom = { workspace = true, features = ["dummy"] }
 im = { workspace = true, features = ["rayon", "serde"] }
 memmap2 = { workspace = true }
 once_cell = { workspace = true, features = ["alloc", "race"] }
-rand_core = { workspace = true, features = ["std"] }
 subtle = { workspace = true }
 
 [target.'cfg(any(unix, windows))'.dependencies]

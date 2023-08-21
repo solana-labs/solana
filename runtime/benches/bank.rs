@@ -78,12 +78,12 @@ pub fn create_native_loader_transactions(
         .collect()
 }
 
-fn sync_bencher(bank: &Arc<Bank>, _bank_client: &BankClient, transactions: &[Transaction]) {
+fn sync_bencher(bank: &Bank, _bank_client: &BankClient, transactions: &[Transaction]) {
     let results = bank.process_transactions(transactions.iter());
     assert!(results.iter().all(Result::is_ok));
 }
 
-fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &[Transaction]) {
+fn async_bencher(bank: &Bank, bank_client: &BankClient, transactions: &[Transaction]) {
     for transaction in transactions.iter().cloned() {
         bank_client.async_send_transaction(transaction).unwrap();
     }
@@ -113,7 +113,7 @@ fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &[Tra
 #[allow(clippy::type_complexity)]
 fn do_bench_transactions(
     bencher: &mut Bencher,
-    bench_work: &dyn Fn(&Arc<Bank>, &BankClient, &[Transaction]),
+    bench_work: &dyn Fn(&Bank, &BankClient, &[Transaction]),
     create_transactions: &dyn Fn(&BankClient, &Keypair) -> Vec<Transaction>,
 ) {
     solana_logger::setup();
@@ -130,11 +130,11 @@ fn do_bench_transactions(
         Ok(())
     });
 
-    let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), 1);
+    let mut bank = Bank::new_from_parent(Arc::new(bank), &Pubkey::default(), 1);
     bank.add_mockup_builtin(Pubkey::from(BUILTIN_PROGRAM_ID), process_instruction);
     bank.add_builtin_account("solana_noop_program", &Pubkey::from(NOOP_PROGRAM_ID), false);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let bank_client = BankClient::new_shared(bank.clone());
     let transactions = create_transactions(&bank_client, &mint_keypair);
 
     // Do once to fund accounts, load modules, etc...
@@ -189,7 +189,7 @@ fn bench_bank_update_recent_blockhashes(bencher: &mut Bencher) {
     // Prime blockhash_queue
     for i in 0..(MAX_RECENT_BLOCKHASHES + 1) {
         bank = Arc::new(Bank::new_from_parent(
-            &bank,
+            bank,
             &Pubkey::default(),
             (i + 1) as u64,
         ));

@@ -2,7 +2,7 @@ use {
     solana_client::{
         nonblocking::tpu_client::TpuClient,
         send_and_confirm_transactions_in_parallel::{
-            send_and_confirm_transactions_in_parallel_blocking, SendAndConfrimConfig,
+            send_and_confirm_transactions_in_parallel_blocking, SendAndConfirmConfig,
         },
     },
     solana_rpc_client::rpc_client::RpcClient,
@@ -56,7 +56,7 @@ fn test_send_and_confirm_transactions_in_parallel_without_tpu_client() {
         None,
         &messages,
         &[&alice],
-        SendAndConfrimConfig {
+        SendAndConfirmConfig {
             with_spinner: false,
             resign_txs_count: Some(5),
         },
@@ -114,7 +114,7 @@ fn test_send_and_confirm_transactions_in_parallel_with_tpu_client() {
         Some(tpu_client),
         &messages,
         &[&alice],
-        SendAndConfrimConfig {
+        SendAndConfirmConfig {
             with_spinner: false,
             resign_txs_count: Some(5),
         },

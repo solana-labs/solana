@@ -273,10 +273,11 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
     for _ in 0..slots_per_epoch.checked_mul(NUM_EPOCHS_TO_TEST).unwrap() {
         let bank = {
             let parent = bank_forks.read().unwrap().working_bank();
+            let slot = parent.slot().checked_add(1).unwrap();
             let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
-                &parent,
+                parent,
                 &Pubkey::default(),
-                parent.slot().checked_add(1).unwrap(),
+                slot,
             ));
 
             let transaction = system_transaction::transfer(
@@ -385,10 +386,11 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
     for _ in 0..slots_per_epoch.checked_mul(NUM_EPOCHS_TO_TEST).unwrap() {
         let bank = {
             let parent = bank_forks.read().unwrap().working_bank();
+            let slot = parent.slot().checked_add(1).unwrap();
             let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
-                &parent,
+                parent,
                 &Pubkey::default(),
-                parent.slot() + 1,
+                slot,
             ));
 
             let transaction = system_transaction::transfer(
@@ -501,10 +503,11 @@ fn test_background_services_request_handling_for_epoch_accounts_hash() {
     for _ in 0..slots_per_epoch.checked_mul(NUM_EPOCHS_TO_TEST).unwrap() {
         let bank = {
             let parent = bank_forks.read().unwrap().working_bank();
+            let slot = parent.slot().checked_add(1).unwrap();
             let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
-                &parent,
+                parent,
                 &Pubkey::default(),
-                parent.slot() + 1,
+                slot,
             ));
 
             let transaction = system_transaction::transfer(
@@ -593,16 +596,17 @@ fn test_epoch_accounts_hash_and_warping() {
     // flush the write cache so warping can calculate the accounts hash from storages
     bank.force_flush_accounts_cache();
     let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
-        &bank,
+        bank,
         &Pubkey::default(),
         eah_stop_slot_in_next_epoch,
         CalcAccountsHashDataSource::Storages,
     ));
-    let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
-        &bank,
-        &Pubkey::default(),
-        bank.slot() + 1,
-    ));
+    let slot = bank.slot().checked_add(1).unwrap();
+    let bank =
+        bank_forks
+            .write()
+            .unwrap()
+            .insert(Bank::new_from_parent(bank, &Pubkey::default(), slot));
     bank_forks.write().unwrap().set_root(
         bank.slot(),
         &test_environment
@@ -627,16 +631,17 @@ fn test_epoch_accounts_hash_and_warping() {
     // flush the write cache so warping can calculate the accounts hash from storages
     bank.force_flush_accounts_cache();
     let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
-        &bank,
+        bank,
         &Pubkey::default(),
         eah_start_slot_in_next_epoch,
         CalcAccountsHashDataSource::Storages,
     ));
-    let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
-        &bank,
-        &Pubkey::default(),
-        bank.slot() + 1,
-    ));
+    let slot = bank.slot().checked_add(1).unwrap();
+    let bank =
+        bank_forks
+            .write()
+            .unwrap()
+            .insert(Bank::new_from_parent(bank, &Pubkey::default(), slot));
     bank_forks.write().unwrap().set_root(
         bank.slot(),
         &test_environment

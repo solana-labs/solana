@@ -347,16 +347,21 @@ impl LoadedProgram {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct ProgramRuntimeEnvironments {
+    /// Globally shared RBPF config and syscall registry
+    pub program_runtime_v1: Arc<BuiltinProgram<InvokeContext<'static>>>,
+    /// Globally shared RBPF config and syscall registry for runtime V2
+    pub program_runtime_v2: Arc<BuiltinProgram<InvokeContext<'static>>>,
+}
+
 #[derive(Debug, Default)]
 pub struct LoadedPrograms {
     /// A two level index:
     ///
     /// Pubkey is the address of a program, multiple versions can coexists simultaneously under the same address (in different slots).
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
-    /// Globally shared RBPF config and syscall registry
-    pub program_runtime_environment_v1: Arc<BuiltinProgram<InvokeContext<'static>>>,
-    /// Globally shared RBPF config and syscall registry for runtime V2
-    pub program_runtime_environment_v2: Arc<BuiltinProgram<InvokeContext<'static>>>,
+    pub environments: ProgramRuntimeEnvironments,
     latest_root: Slot,
     pub stats: Stats,
 }
@@ -367,13 +372,15 @@ pub struct LoadedProgramsForTxBatch {
     /// LoadedProgram is the corresponding program entry valid for the slot in which a transaction is being executed.
     entries: HashMap<Pubkey, Arc<LoadedProgram>>,
     slot: Slot,
+    pub environments: ProgramRuntimeEnvironments,
 }
 
 impl LoadedProgramsForTxBatch {
-    pub fn new(slot: Slot) -> Self {
+    pub fn new(slot: Slot, environments: ProgramRuntimeEnvironments) -> Self {
         Self {
             entries: HashMap::new(),
             slot,
+            environments,
         }
     }
 
@@ -496,22 +503,22 @@ impl LoadedPrograms {
                     LoadedProgramType::LegacyV0(program) | LoadedProgramType::LegacyV1(program)
                         if Arc::ptr_eq(
                             program.get_loader(),
-                            &self.program_runtime_environment_v1,
+                            &self.environments.program_runtime_v1,
                         ) =>
                     {
                         true
                     }
                     LoadedProgramType::Unloaded(environment)
                     | LoadedProgramType::FailedVerification(environment)
-                        if Arc::ptr_eq(environment, &self.program_runtime_environment_v1)
-                            || Arc::ptr_eq(environment, &self.program_runtime_environment_v2) =>
+                        if Arc::ptr_eq(environment, &self.environments.program_runtime_v1)
+                            || Arc::ptr_eq(environment, &self.environments.program_runtime_v2) =>
                     {
                         true
                     }
                     LoadedProgramType::Typed(program)
                         if Arc::ptr_eq(
                             program.get_loader(),
-                            &self.program_runtime_environment_v2,
+                            &self.environments.program_runtime_v2,
                         ) =>
                     {
                         true
@@ -654,6 +661,7 @@ impl LoadedPrograms {
             LoadedProgramsForTxBatch {
                 entries: found,
                 slot: working_slot.current_slot(),
+                environments: self.environments.clone(),
             },
             missing,
         )
@@ -665,29 +673,39 @@ impl LoadedPrograms {
         })
     }
 
-    /// Unloads programs which were used infrequently
-    pub fn sort_and_unload(&mut self, shrink_to: PercentageInteger) {
-        let sorted_candidates: Vec<(Pubkey, Arc<LoadedProgram>)> = self
-            .entries
+    /// Returns the list of loaded programs which are verified and compiled sorted by `tx_usage_counter`.
+    ///
+    /// Entries from program runtime v1 and v2 can be individually filtered.
+    pub fn get_entries_sorted_by_tx_usage(
+        &self,
+        include_program_runtime_v1: bool,
+        include_program_runtime_v2: bool,
+    ) -> Vec<(Pubkey, Arc<LoadedProgram>)> {
+        self.entries
             .iter()
             .flat_map(|(id, list)| {
                 list.iter()
                     .filter_map(move |program| match program.program {
-                        LoadedProgramType::LegacyV0(_)
-                        | LoadedProgramType::LegacyV1(_)
-                        | LoadedProgramType::Typed(_) => Some((*id, program.clone())),
+                        LoadedProgramType::LegacyV0(_) | LoadedProgramType::LegacyV1(_)
+                            if include_program_runtime_v1 =>
+                        {
+                            Some((*id, program.clone()))
+                        }
+                        LoadedProgramType::Typed(_) if include_program_runtime_v2 => {
+                            Some((*id, program.clone()))
+                        }
                         #[cfg(test)]
                         LoadedProgramType::TestLoaded(_) => Some((*id, program.clone())),
-                        LoadedProgramType::Unloaded(_)
-                        | LoadedProgramType::FailedVerification(_)
-                        | LoadedProgramType::Closed
-                        | LoadedProgramType::DelayVisibility
-                        | LoadedProgramType::Builtin(_) => None,
+                        _ => None,
                     })
             })
             .sorted_by_cached_key(|(_id, program)| program.tx_usage_counter.load(Ordering::Relaxed))
-            .collect();
+            .collect()
+    }
 
+    /// Unloads programs which were used infrequently
+    pub fn sort_and_unload(&mut self, shrink_to: PercentageInteger) {
+        let sorted_candidates = self.get_entries_sorted_by_tx_usage(true, true);
         let num_to_unload = sorted_candidates
             .len()
             .saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));

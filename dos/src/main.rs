@@ -449,7 +449,9 @@ fn get_target(
                         Some((*node.pubkey(), node.tpu_forwards(protocol).unwrap()))
                     }
                     Mode::Repair => todo!("repair socket is not gossiped anymore!"),
-                    Mode::ServeRepair => Some((*node.pubkey(), node.serve_repair().unwrap())),
+                    Mode::ServeRepair => {
+                        Some((*node.pubkey(), node.serve_repair(Protocol::UDP).unwrap()))
+                    }
                     Mode::Rpc => None,
                 };
                 break;

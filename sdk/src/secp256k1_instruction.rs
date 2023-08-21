@@ -733,7 +733,7 @@
 //!     // Sign some messages.
 //!     let mut signatures = vec![];
 //!     for idx in 0..2 {
-//!         let secret_key = libsecp256k1::SecretKey::random(&mut rand::thread_rng());
+//!         let secret_key = libsecp256k1::SecretKey::random(&mut rand0_7::thread_rng());
 //!         let message = format!("hello world {}", idx).into_bytes();
 //!         let message_hash = {
 //!             let mut hasher = keccak::Hasher::default();
@@ -1059,7 +1059,7 @@ pub mod test {
             signature::{Keypair, Signer},
             transaction::Transaction,
         },
-        rand::{thread_rng, Rng},
+        rand0_7::{thread_rng, Rng},
     };
 
     fn test_case(

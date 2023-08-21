@@ -209,7 +209,7 @@ mod serde_snapshot_tests {
 
     fn check_accounts_local(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
         for _ in 1..num {
-            let idx = thread_rng().gen_range(0, num - 1);
+            let idx = thread_rng().gen_range(0..num - 1);
             let ancestors = vec![(0, 0)].into_iter().collect();
             let account = accounts.load_without_fixed_root(&ancestors, &pubkeys[idx]);
             let account1 = Some((
@@ -239,7 +239,7 @@ mod serde_snapshot_tests {
         let accounts_hash = AccountsHash(Hash::new_unique());
         accounts
             .accounts_db
-            .set_accounts_hash_for_tests(slot, accounts_hash);
+            .set_accounts_hash(slot, (accounts_hash, u64::default()));
 
         let mut writer = Cursor::new(vec![]);
         accountsdb_to_stream(

@@ -1098,9 +1098,9 @@ impl<'a> AccountsHasher<'a> {
         )
     }
 
-    // input:
-    // vec: group of slot data, ordered by Slot (low to high)
-    //   vec: [..] - items which fit in the containing bin. Sorted by: Pubkey, higher Slot, higher Write version (if pubkey =)
+    /// input:
+    /// vec: group of slot data, ordered by Slot (low to high)
+    ///   vec: [..] - items found in that slot range Sorted by: Pubkey, higher Slot, higher Write version (if pubkey =)
     pub fn rest_of_hash_calculation(
         &self,
         sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
@@ -1138,26 +1138,26 @@ pub enum ZeroLamportAccounts {
 
 /// Hash of accounts
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum AccountsHashEnum {
+pub enum AccountsHashKind {
     Full(AccountsHash),
     Incremental(IncrementalAccountsHash),
 }
-impl AccountsHashEnum {
+impl AccountsHashKind {
     pub fn as_hash(&self) -> &Hash {
         match self {
-            AccountsHashEnum::Full(AccountsHash(hash))
-            | AccountsHashEnum::Incremental(IncrementalAccountsHash(hash)) => hash,
+            AccountsHashKind::Full(AccountsHash(hash))
+            | AccountsHashKind::Incremental(IncrementalAccountsHash(hash)) => hash,
         }
     }
 }
-impl From<AccountsHash> for AccountsHashEnum {
+impl From<AccountsHash> for AccountsHashKind {
     fn from(accounts_hash: AccountsHash) -> Self {
-        AccountsHashEnum::Full(accounts_hash)
+        AccountsHashKind::Full(accounts_hash)
     }
 }
-impl From<IncrementalAccountsHash> for AccountsHashEnum {
+impl From<IncrementalAccountsHash> for AccountsHashKind {
     fn from(incremental_accounts_hash: IncrementalAccountsHash) -> Self {
-        AccountsHashEnum::Incremental(incremental_accounts_hash)
+        AccountsHashKind::Incremental(incremental_accounts_hash)
     }
 }
 

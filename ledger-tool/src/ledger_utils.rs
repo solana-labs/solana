@@ -1,4 +1,5 @@
 use {
+    crate::LEDGER_TOOL_DIRECTORY,
     clap::{value_t, value_t_or_exit, values_t_or_exit, ArgMatches},
     crossbeam_channel::unbounded,
     log::*,
@@ -71,13 +72,14 @@ pub fn load_and_process_ledger(
     snapshot_archive_path: Option<PathBuf>,
     incremental_snapshot_archive_path: Option<PathBuf>,
 ) -> Result<(Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>), BlockstoreProcessorError> {
-    let bank_snapshots_dir = blockstore
-        .ledger_path()
-        .join(if blockstore.is_primary_access() {
-            "snapshot"
-        } else {
-            "snapshot.ledger-tool"
-        });
+    let bank_snapshots_dir = if blockstore.is_primary_access() {
+        blockstore.ledger_path().join("snapshot")
+    } else {
+        blockstore
+            .ledger_path()
+            .join(LEDGER_TOOL_DIRECTORY)
+            .join("snapshot")
+    };
 
     let mut starting_slot = 0; // default start check with genesis
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
@@ -165,7 +167,10 @@ pub fn load_and_process_ledger(
     } else if blockstore.is_primary_access() {
         vec![blockstore.ledger_path().join("accounts")]
     } else {
-        let non_primary_accounts_path = blockstore.ledger_path().join("accounts.ledger-tool");
+        let non_primary_accounts_path = blockstore
+            .ledger_path()
+            .join(LEDGER_TOOL_DIRECTORY)
+            .join("accounts");
         info!(
             "Default accounts path is switched aligning with Blockstore's secondary access: {:?}",
             non_primary_accounts_path

@@ -129,13 +129,9 @@ pub fn process_instruction(
     {
         msg!("EpochRewards identifier:");
         sysvar::epoch_rewards::id().log();
-        let epoch_rewards = EpochRewards::from_account_info(&accounts[11]);
-        // epoch_rewards sysvar should only be valid during epoch reward period. In this test case,
-        // the test bank is outside reward period. Therefore, we expect that the epoch_rewards
-        // sysvar doesn't exist.
-        assert!(epoch_rewards.is_err());
-        let got_epoch_rewards = EpochRewards::get();
-        assert!(got_epoch_rewards.is_err());
+        let epoch_rewards = EpochRewards::from_account_info(&accounts[11]).unwrap();
+        let got_epoch_rewards = EpochRewards::get()?;
+        assert_eq!(epoch_rewards, got_epoch_rewards);
     }
 
     Ok(())

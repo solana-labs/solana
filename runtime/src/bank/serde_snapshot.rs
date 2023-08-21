@@ -103,7 +103,7 @@ mod tests {
         genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         let eah_start_slot = epoch_accounts_hash_utils::calculation_start(&bank0);
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let bank1 = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
         bank0.squash();
 
         // Create an account on a non-root fork
@@ -118,7 +118,7 @@ mod tests {
         } else {
             0
         } + 2;
-        let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank2_slot);
+        let bank2 = Bank::new_from_parent(bank0, &Pubkey::default(), bank2_slot);
 
         // Test new account
         let key2 = Keypair::new();
@@ -131,10 +131,10 @@ mod tests {
         bank2.freeze();
         bank2.squash();
         bank2.force_flush_accounts_cache();
-        bank2
-            .accounts()
-            .accounts_db
-            .set_accounts_hash_for_tests(bank2.slot(), AccountsHash(Hash::new(&[0; 32])));
+        bank2.accounts().accounts_db.set_accounts_hash(
+            bank2.slot(),
+            (AccountsHash(Hash::new(&[0; 32])), u64::default()),
+        );
 
         let snapshot_storages = bank2.get_snapshot_storages(None);
         let mut buf = vec![];
@@ -164,10 +164,10 @@ mod tests {
         .unwrap();
 
         if update_accounts_hash {
-            bank2
-                .accounts()
-                .accounts_db
-                .set_accounts_hash_for_tests(bank2.slot(), AccountsHash(Hash::new(&[1; 32])));
+            bank2.accounts().accounts_db.set_accounts_hash(
+                bank2.slot(),
+                (AccountsHash(Hash::new(&[1; 32])), u64::default()),
+            );
         }
         let accounts_hash = bank2.get_accounts_hash().unwrap();
 
@@ -346,17 +346,17 @@ mod tests {
                 BankTestConfig::default(),
             ));
             bank0.squash();
-            let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+            let mut bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
 
             add_root_and_flush_write_cache(&bank0);
             bank.rc
                 .accounts
                 .accounts_db
                 .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
-            bank.rc
-                .accounts
-                .accounts_db
-                .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
+            bank.rc.accounts.accounts_db.set_accounts_hash(
+                bank.slot(),
+                (AccountsHash(Hash::new_unique()), u64::default()),
+            );
 
             // Set extra fields
             bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -448,7 +448,7 @@ mod tests {
             activate_all_features(&mut genesis_config);
 
             let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-            let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+            let mut bank = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
             while !bank.is_complete() {
                 bank.fill_bank_with_ticks_for_tests();
             }
@@ -538,16 +538,16 @@ mod tests {
             BankTestConfig::default(),
         ));
         bank0.squash();
-        let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let mut bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
         add_root_and_flush_write_cache(&bank0);
         bank.rc
             .accounts
             .accounts_db
             .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
-        bank.rc
-            .accounts
-            .accounts_db
-            .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
+        bank.rc.accounts.accounts_db.set_accounts_hash(
+            bank.slot(),
+            (AccountsHash(Hash::new_unique()), u64::default()),
+        );
 
         // Set extra fields
         bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -626,10 +626,10 @@ mod tests {
                 .accounts
                 .accounts_db
                 .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
-            bank.rc
-                .accounts
-                .accounts_db
-                .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
+            bank.rc.accounts.accounts_db.set_accounts_hash(
+                bank.slot(),
+                (AccountsHash(Hash::new_unique()), u64::default()),
+            );
             let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(..=0).0;
             // ensure there is a single snapshot storage example for ABI digesting
             assert_eq!(snapshot_storages.len(), 1);

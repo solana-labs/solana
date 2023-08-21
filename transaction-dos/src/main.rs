@@ -126,7 +126,7 @@ fn make_dos_message(
 ) -> Message {
     let instructions: Vec<_> = (0..num_instructions)
         .map(|_| {
-            let data = [num_program_iterations, thread_rng().gen_range(0, 255)];
+            let data = [num_program_iterations, thread_rng().gen_range(0..255)];
             Instruction::new_with_bytes(program_id, &data, account_metas.to_vec())
         })
         .collect();

@@ -1283,3 +1283,35 @@ pub fn run(
         }
     }
 }
+
+pub fn list(config_file: &str) -> Result<(), String> {
+    let config = Config::load(config_file)?;
+
+    let entries = fs::read_dir(&config.releases_dir).map_err(|err| {
+        format!(
+            "Failed to read install directory, \
+            double check that your configuration file is correct: {err}"
+        )
+    })?;
+
+    for entry in entries {
+        match entry {
+            Ok(entry) => {
+                let dir_name = entry.file_name();
+                let current_version =
+                    load_release_version(&config.active_release_dir().join("version.yml"))?.channel;
+
+                let current = if current_version.contains(dir_name.to_string_lossy().as_ref()) {
+                    " (current)"
+                } else {
+                    ""
+                };
+                println!("{}{}", dir_name.to_string_lossy(), current);
+            }
+            Err(err) => {
+                eprintln!("error listing installed versions: {err:?}");
+            }
+        };
+    }
+    Ok(())
+}

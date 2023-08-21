@@ -1,7 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     assert_matches::assert_matches,
-    common::*,
     crossbeam_channel::{unbounded, Receiver},
     gag::BufferRedirect,
     log::*,
@@ -34,6 +33,16 @@ use {
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
         cluster_tests,
+        integration_tests::{
+            copy_blocks, create_custom_leader_schedule,
+            create_custom_leader_schedule_with_random_keys, farf_dir, generate_account_paths,
+            last_root_in_tower, last_vote_in_tower, ms_for_n_slots, open_blockstore,
+            purge_slots_with_count, remove_tower, remove_tower_if_exists, restore_tower,
+            run_cluster_partition, run_kill_partition_switch_threshold, save_tower,
+            setup_snapshot_validator_config, test_faulty_node,
+            wait_for_last_vote_in_tower_to_land_in_ledger, SnapshotValidatorConfig,
+            ValidatorTestConfig, DEFAULT_CLUSTER_LAMPORTS, DEFAULT_NODE_STAKE, RUST_LOG_FILTER,
+        },
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
     },
@@ -51,7 +60,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils,
         snapshot_config::SnapshotConfig,
-        snapshot_package::SnapshotType,
+        snapshot_package::SnapshotKind,
         snapshot_utils::{self},
         vote_parser,
     },
@@ -91,8 +100,6 @@ use {
         time::{Duration, Instant},
     },
 };
-
-mod common;
 
 #[test]
 fn test_local_cluster_start_and_exit() {
@@ -545,7 +552,7 @@ fn test_snapshot_download() {
             full_snapshot_archive_info.slot(),
             *full_snapshot_archive_info.hash(),
         ),
-        SnapshotType::FullSnapshot,
+        SnapshotKind::FullSnapshot,
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
@@ -676,7 +683,7 @@ fn test_incremental_snapshot_download() {
             full_snapshot_archive_info.slot(),
             *full_snapshot_archive_info.hash(),
         ),
-        SnapshotType::FullSnapshot,
+        SnapshotKind::FullSnapshot,
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
@@ -704,7 +711,7 @@ fn test_incremental_snapshot_download() {
             incremental_snapshot_archive_info.slot(),
             *incremental_snapshot_archive_info.hash(),
         ),
-        SnapshotType::IncrementalSnapshot(incremental_snapshot_archive_info.base_slot()),
+        SnapshotKind::IncrementalSnapshot(incremental_snapshot_archive_info.base_slot()),
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
@@ -847,7 +854,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
             .incremental_snapshot_archives_dir
             .path(),
         (full_snapshot_archive.slot(), *full_snapshot_archive.hash()),
-        SnapshotType::FullSnapshot,
+        SnapshotKind::FullSnapshot,
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
@@ -884,7 +891,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
             incremental_snapshot_archive.slot(),
             *incremental_snapshot_archive.hash(),
         ),
-        SnapshotType::IncrementalSnapshot(incremental_snapshot_archive.base_slot()),
+        SnapshotKind::IncrementalSnapshot(incremental_snapshot_archive.base_slot()),
         validator_snapshot_test_config
             .validator_config
             .snapshot_config

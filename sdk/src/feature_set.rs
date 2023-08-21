@@ -620,7 +620,6 @@ pub mod delay_visibility_of_program_deployment {
 pub mod apply_cost_tracker_during_replay {
     solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
 }
-
 pub mod bpf_account_data_direct_mapping {
     solana_sdk::declare_id!("9gwzizfABsKUereT6phZZxbTzuAnovkgwpVVpdcSxv9h");
 }
@@ -686,10 +685,6 @@ pub mod reduce_stake_warmup_cooldown {
                 .map(|slot| epoch_schedule.get_epoch(slot))
         }
     }
-}
-
-pub mod timely_vote_credits {
-    solana_sdk::declare_id!("2oXpeh141pPZCTCFHBsvCwG2BtaHZZAtrVhwaxSy6brS");
 }
 
 lazy_static! {
@@ -856,7 +851,6 @@ lazy_static! {
         (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
         (last_restart_slot_sysvar::id(), "enable new sysvar last_restart_slot"),
         (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
-        (timely_vote_credits::id(), "use timeliness of votes in determining credits to award"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -44,7 +44,7 @@ thiserror = { workspace = true }
 # Remove this once borsh 0.11 or 1.0 is released, which correctly declares the
 # hashbrown dependency as optional.
 [target.'cfg(target_os = "solana")'.dependencies]
-getrandom = { version = "0.2", features = ["custom"] }
+getrandom = { workspace = true, features = ["custom"] }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
 ark-bn254 = { workspace = true }
@@ -60,7 +60,6 @@ libc = { workspace = true, features = ["extra_traits"] }
 libsecp256k1 = { workspace = true }
 num-bigint = { workspace = true }
 rand = { workspace = true }
-rand_chacha = { workspace = true }
 tiny-bip39 = { workspace = true }
 wasm-bindgen = { workspace = true }
 zeroize = { workspace = true, features = ["default", "zeroize_derive"] }
@@ -72,7 +71,7 @@ solana-logger = { workspace = true }
 console_error_panic_hook = { workspace = true }
 console_log = { workspace = true }
 js-sys = { workspace = true }
-getrandom = { version = "0.2", features = ["js", "wasm-bindgen"] }
+getrandom = { workspace = true, features = ["js", "wasm-bindgen"] }
 
 [target.'cfg(not(target_pointer_width = "64"))'.dependencies]
 parking_lot = { workspace = true }

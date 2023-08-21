@@ -109,7 +109,7 @@ use {
         invoke_context::ProcessInstructionWithContext,
         loaded_programs::{
             LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
-            LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot,
+            LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         log_collector::LogCollector,
         message_processor::MessageProcessor,
@@ -150,7 +150,7 @@ use {
         inflation::Inflation,
         instruction::InstructionError,
         lamports::LamportsError,
-        loader_v4,
+        loader_v4::{self, LoaderV4State},
         message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::LAMPORTS_PER_SOL,
@@ -212,6 +212,7 @@ struct VerifyAccountsHashConfig {
 }
 
 mod address_lookup_table;
+pub mod bank_hash_details;
 mod builtin_programs;
 pub mod epoch_accounts_hash_utils;
 mod metrics;
@@ -304,8 +305,10 @@ impl BankRc {
 enum ProgramAccountLoadResult {
     AccountNotFound,
     InvalidAccountData,
+    InvalidV4Program,
     ProgramOfLoaderV1orV2(AccountSharedData),
     ProgramOfLoaderV3(AccountSharedData, AccountSharedData, Slot),
+    ProgramOfLoaderV4(AccountSharedData, Slot),
 }
 
 pub struct LoadAndExecuteTransactionsOutput {
@@ -1169,7 +1172,7 @@ impl Bank {
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
-    pub fn new_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
+    pub fn new_from_parent(parent: Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
         Self::_new_from_parent(
             parent,
             collector_id,
@@ -1180,7 +1183,7 @@ impl Bank {
     }
 
     pub fn new_from_parent_with_options(
-        parent: &Arc<Bank>,
+        parent: Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
         new_bank_options: NewBankOptions,
@@ -1189,7 +1192,7 @@ impl Bank {
     }
 
     pub fn new_from_parent_with_tracer(
-        parent: &Arc<Bank>,
+        parent: Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
         reward_calc_tracer: impl RewardCalcTracer,
@@ -1278,7 +1281,7 @@ impl Bank {
     }
 
     fn _new_from_parent(
-        parent: &Arc<Bank>,
+        parent: Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
@@ -1298,7 +1301,7 @@ impl Bank {
             accounts_db.insert_default_bank_hash_stats(slot, parent.slot());
             BankRc {
                 accounts: Arc::new(Accounts::new(accounts_db)),
-                parent: RwLock::new(Some(Arc::clone(parent))),
+                parent: RwLock::new(Some(Arc::clone(&parent))),
                 slot,
                 bank_id_generator: Arc::clone(&parent.rc.bank_id_generator),
             }
@@ -1718,7 +1721,7 @@ impl Bank {
     /// * Freezes the new bank, assuming that the user will `Bank::new_from_parent` from this bank
     /// * Calculates and sets the epoch accounts hash from the parent
     pub fn warp_from_parent(
-        parent: &Arc<Bank>,
+        parent: Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
         data_source: CalcAccountsHashDataSource,
@@ -3538,7 +3541,7 @@ impl Bank {
         }
     }
 
-    /// Create EpochRewards syavar with calculated rewards
+    /// Create EpochRewards sysvar with calculated rewards
     fn create_epoch_rewards_sysvar(
         &self,
         total_rewards: u64,
@@ -4601,6 +4604,14 @@ impl Bank {
             program_account.owner()
         ));
 
+        if loader_v4::check_id(program_account.owner()) {
+            return solana_loader_v4_program::get_state(program_account.data())
+                .ok()
+                .and_then(|state| state.is_deployed.then_some(state.slot))
+                .map(|slot| ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot))
+                .unwrap_or(ProgramAccountLoadResult::InvalidV4Program);
+        }
+
         if !bpf_loader_upgradeable::check_id(program_account.owner()) {
             return ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account);
         }
@@ -4630,11 +4641,11 @@ impl Bank {
     }
 
     pub fn load_program(&self, pubkey: &Pubkey) -> Arc<LoadedProgram> {
-        let program_runtime_environment_v1 = self
+        let environments = self
             .loaded_programs_cache
             .read()
             .unwrap()
-            .program_runtime_environment_v1
+            .environments
             .clone();
 
         let mut load_program_metrics = LoadProgramMetrics {
@@ -4661,7 +4672,7 @@ impl Bank {
                     program_account.owner(),
                     program_account.data().len(),
                     0,
-                    program_runtime_environment_v1.clone(),
+                    environments.program_runtime_v1.clone(),
                 )
             }
 
@@ -4685,14 +4696,43 @@ impl Bank {
                             .len()
                             .saturating_add(programdata_account.data().len()),
                         slot,
-                        program_runtime_environment_v1.clone(),
+                        environments.program_runtime_v1.clone(),
                     )
                 }),
+
+            ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot) => {
+                let loaded_program = program_account
+                    .data()
+                    .get(LoaderV4State::program_data_offset()..)
+                    .and_then(|elf_bytes| {
+                        LoadedProgram::new(
+                            &loader_v4::id(),
+                            environments.program_runtime_v2.clone(),
+                            slot,
+                            slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET),
+                            None,
+                            elf_bytes,
+                            program_account.data().len(),
+                            &mut load_program_metrics,
+                        )
+                        .ok()
+                    })
+                    .unwrap_or(LoadedProgram::new_tombstone(
+                        self.slot,
+                        LoadedProgramType::FailedVerification(environments.program_runtime_v2),
+                    ));
+                Ok(loaded_program)
+            }
+
+            ProgramAccountLoadResult::InvalidV4Program => Ok(LoadedProgram::new_tombstone(
+                self.slot,
+                LoadedProgramType::FailedVerification(environments.program_runtime_v2),
+            )),
         }
         .unwrap_or_else(|_| {
             LoadedProgram::new_tombstone(
                 self.slot,
-                LoadedProgramType::FailedVerification(program_runtime_environment_v1),
+                LoadedProgramType::FailedVerification(environments.program_runtime_v1),
             )
         });
 
@@ -4773,8 +4813,14 @@ impl Bank {
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
 
         let mut executed_units = 0u64;
-        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::new(self.slot);
-        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::new(self.slot);
+        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::new(
+            self.slot,
+            programs_loaded_for_tx_batch.environments.clone(),
+        );
+        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::new(
+            self.slot,
+            programs_loaded_for_tx_batch.environments.clone(),
+        );
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
             tx.message(),
@@ -6804,11 +6850,13 @@ impl Bank {
         self.rc.accounts.account_indexes_include_key(key)
     }
 
-    pub fn get_all_accounts_with_modified_slots(&self) -> ScanResult<Vec<PubkeyAccountSlot>> {
+    /// Returns all the accounts this bank can load
+    pub fn get_all_accounts(&self) -> ScanResult<Vec<PubkeyAccountSlot>> {
         self.rc.accounts.load_all(&self.ancestors, self.bank_id)
     }
 
-    pub fn scan_all_accounts_with_modified_slots<F>(&self, scan_func: F) -> ScanResult<()>
+    // Scans all the accounts this bank can load, applying `scan_func`
+    pub fn scan_all_accounts<F>(&self, scan_func: F) -> ScanResult<()>
     where
         F: FnMut(Option<(&Pubkey, AccountSharedData, Slot)>),
     {
@@ -6836,6 +6884,7 @@ impl Bank {
             .get_logs_for_address(address)
     }
 
+    /// Returns all the accounts stored in this slot
     pub fn get_all_accounts_modified_since_parent(&self) -> Vec<TransactionAccount> {
         self.rc.accounts.load_by_program_slot(self.slot(), None)
     }
@@ -6874,6 +6923,10 @@ impl Bank {
         self.transaction_count.load(Relaxed)
     }
 
+    /// Returns the number of non-vote transactions processed without error
+    /// since the most recent boot from snapshot or genesis.
+    /// This value is not shared though the network, nor retained
+    /// within snapshots, but is preserved in `Bank::new_from_parent`.
     pub fn non_vote_transaction_count_since_restart(&self) -> u64 {
         self.non_vote_transaction_count_since_restart.load(Relaxed)
     }
@@ -7887,7 +7940,9 @@ impl Bank {
             NewFromParent => true,
             WarpFromParent => false,
         };
-        let new_feature_activations = self.compute_active_feature_set(allow_new_activations);
+        let (feature_set, new_feature_activations) =
+            self.compute_active_feature_set(allow_new_activations);
+        self.feature_set = Arc::new(feature_set);
 
         if new_feature_activations.contains(&feature_set::pico_inflation::id()) {
             *self.inflation.write().unwrap() = Inflation::pico();
@@ -7935,8 +7990,12 @@ impl Bank {
         );
     }
 
-    // Compute the active feature set based on the current bank state, and return the set of newly activated features
-    fn compute_active_feature_set(&mut self, allow_new_activations: bool) -> HashSet<Pubkey> {
+    /// Compute the active feature set based on the current bank state,
+    /// and return it together with the set of newly activated features.
+    fn compute_active_feature_set(
+        &mut self,
+        allow_new_activations: bool,
+    ) -> (FeatureSet, HashSet<Pubkey>) {
         let mut active = self.feature_set.active.clone();
         let mut inactive = HashSet::new();
         let mut newly_activated = HashSet::new();
@@ -7975,8 +8034,7 @@ impl Bank {
             }
         }
 
-        self.feature_set = Arc::new(FeatureSet { active, inactive });
-        newly_activated
+        (FeatureSet { active, inactive }, newly_activated)
     }
 
     fn apply_builtin_program_feature_transitions(
@@ -8011,10 +8069,10 @@ impl Bank {
             )
             .unwrap();
             let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-            if *loaded_programs_cache.program_runtime_environment_v1
+            if *loaded_programs_cache.environments.program_runtime_v1
                 != program_runtime_environment_v1
             {
-                loaded_programs_cache.program_runtime_environment_v1 =
+                loaded_programs_cache.environments.program_runtime_v1 =
                     Arc::new(program_runtime_environment_v1);
             }
             let program_runtime_environment_v2 =
@@ -8022,10 +8080,10 @@ impl Bank {
                     &self.runtime_config.compute_budget.unwrap_or_default(),
                     false, /* debugging_features */
                 );
-            if *loaded_programs_cache.program_runtime_environment_v2
+            if *loaded_programs_cache.environments.program_runtime_v2
                 != program_runtime_environment_v2
             {
-                loaded_programs_cache.program_runtime_environment_v2 =
+                loaded_programs_cache.environments.program_runtime_v2 =
                     Arc::new(program_runtime_environment_v2);
             }
             loaded_programs_cache.prune_feature_set_transition();
@@ -8099,7 +8157,7 @@ impl Bank {
 
     /// Get all the accounts for this bank and calculate stats
     pub fn get_total_accounts_stats(&self) -> ScanResult<TotalAccountsStats> {
-        let accounts = self.get_all_accounts_with_modified_slots()?;
+        let accounts = self.get_all_accounts()?;
         Ok(self.calculate_total_accounts_stats(
             accounts
                 .iter()

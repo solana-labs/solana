@@ -26,7 +26,7 @@ full = [
     "generic-array",
     "memmap2",
     "rand",
-    "rand_chacha",
+    "rand0-7",
     "serde_json",
     "ed25519-dalek",
     "ed25519-dalek-bip32",
@@ -65,7 +65,7 @@ num_enum = { workspace = true }
 pbkdf2 = { workspace = true }
 qstring = { workspace = true }
 rand = { workspace = true, optional = true }
-rand_chacha = { workspace = true, optional = true }
+rand0-7 = { package = "rand", version = "0.7", optional = true }
 rustversion = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }

@@ -510,10 +510,11 @@ mod tests {
 
         // Create a set of valid ancestor hashes for this fork
         for _ in 0..MAX_ENTRIES {
+            let slot = my_leader_bank.slot() + 1;
             my_leader_bank = Arc::new(Bank::new_from_parent(
-                &my_leader_bank,
+                my_leader_bank,
                 &Pubkey::default(),
-                my_leader_bank.slot() + 1,
+                slot,
             ));
         }
         let slot_hashes_account = my_leader_bank
@@ -585,10 +586,11 @@ mod tests {
         my_leader_bank.freeze();
         let vote_slot = my_leader_bank.slot();
         let vote_hash = my_leader_bank.hash();
+        let new_leader_slot = my_leader_bank.slot() + 1;
         let my_leader_bank = Arc::new(Bank::new_from_parent(
-            &my_leader_bank,
+            my_leader_bank,
             &Pubkey::default(),
-            my_leader_bank.slot() + 1,
+            new_leader_slot,
         ));
         let vote_account_key = vote_simulator.vote_pubkeys[1];
         let vote = VoteTransaction::from(Vote::new(vec![vote_slot], vote_hash));
