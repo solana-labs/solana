@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -eo pipefail
 
 here="$(dirname "$0")"
 
@@ -14,7 +14,6 @@ source "$here"/common.sh
 
 if need_to_generate_test_result; then
   _ cargo test --jobs "$JOBS" --workspace --tests --verbose -- -Z unstable-options --format json --report-time | tee results.json
-  exit_if_error "${PIPESTATUS[0]}"
 else
   _ ci/intercept.sh cargo test --jobs "$JOBS" --workspace --tests --verbose -- --nocapture
 fi

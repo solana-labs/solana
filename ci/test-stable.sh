@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -eo pipefail
 cd "$(dirname "$0")/.."
 
 cargo="$(readlink -f "./cargo")"
@@ -35,7 +35,6 @@ case $testName in
 test-stable)
   if need_to_upload_test_result; then
     _ cargo test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
   else
     _ ci/intercept.sh cargo test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   fi
@@ -78,7 +77,6 @@ test-stable-sbf)
     _ cargo test \
       --manifest-path programs/sbf/Cargo.toml \
       --no-default-features --features=sbf_c,sbf_rust -- -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
   else
     _ cargo test \
       --manifest-path programs/sbf/Cargo.toml \
@@ -154,7 +152,6 @@ test-stable-perf)
   _ cargo build --bins ${V:+--verbose}
   if need_to_upload_test_result; then
     _ cargo test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
   else
     _ cargo test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
   fi
@@ -164,7 +161,6 @@ test-local-cluster)
   _ cargo build --release --bins ${V:+--verbose}
   if need_to_upload_test_result; then
     _ cargo test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
   else
     _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --nocapture --test-threads=1
   fi
@@ -174,7 +170,6 @@ test-local-cluster-flakey)
   _ cargo build --release --bins ${V:+--verbose}
   if need_to_upload_test_result; then
     _ cargo test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
   else
     _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --nocapture --test-threads=1
   fi
@@ -184,7 +179,6 @@ test-local-cluster-slow-1)
   _ cargo build --release --bins ${V:+--verbose}
   if need_to_upload_test_result; then
     _ cargo test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
   else
     _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --nocapture --test-threads=1
   fi
@@ -194,7 +188,6 @@ test-local-cluster-slow-2)
   _ cargo build --release --bins ${V:+--verbose}
   if need_to_upload_test_result; then
     _ cargo test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
   else
     _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --nocapture --test-threads=1
   fi
@@ -216,11 +209,10 @@ test-wasm)
 test-docs)
   if need_to_upload_test_result; then
     _ cargo test --jobs "$JOBS" --all --doc --exclude solana-local-cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
-    exit "${PIPESTATUS[0]}"
   else
     _ cargo test --jobs "$JOBS" --all --doc --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
-    exit 0
   fi
+  exit 0
   ;;
 *)
   echo "Error: Unknown test: $testName"
