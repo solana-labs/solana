@@ -6,9 +6,10 @@ use {
         banking_stage::immutable_deserialized_packet::ImmutableDeserializedPacket,
         banking_trace::{BankingPacketBatch, ChannelLabel, TimedTracedEvent, TracedEvent},
     },
-    solana_sdk::clock::Slot,
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         cmp::Ordering,
+        collections::HashSet,
         path::PathBuf,
         time::{SystemTime, UNIX_EPOCH},
     },
@@ -17,9 +18,10 @@ use {
 pub fn do_leader_priority_heatmap(
     event_file_paths: &[PathBuf],
     output_dir: impl AsRef<std::path::Path>,
+    filter_keys: Vec<Pubkey>,
 ) -> std::io::Result<()> {
     std::fs::create_dir_all(&output_dir)?;
-    let mut tracker = LeaderPriorityTracker::default();
+    let mut tracker = LeaderPriorityTracker::new(filter_keys);
     process_event_files(event_file_paths, &mut |event| tracker.handle_event(event))?;
     tracker.report(output_dir);
     Ok(())
@@ -29,12 +31,22 @@ pub fn do_leader_priority_heatmap(
 /// Time-offset is measured from the end of the first slot.
 #[derive(Default)]
 pub struct LeaderPriorityTracker {
+    filter_keys: HashSet<Pubkey>,
     leader_slots_tracker: LeaderSlotsTracker,
     current_collection: Vec<PriorityTimeData>,
     collected_data: Vec<LeaderPriorityData>,
 }
 
 impl LeaderPriorityTracker {
+    fn new(filter_keys: Vec<Pubkey>) -> Self {
+        Self {
+            filter_keys: filter_keys.into_iter().collect(),
+            leader_slots_tracker: LeaderSlotsTracker::default(),
+            current_collection: vec![],
+            collected_data: vec![],
+        }
+    }
+
     fn handle_event(&mut self, TimedTracedEvent(timestamp, event): TimedTracedEvent) {
         match event {
             TracedEvent::PacketBatch(label, banking_packet_batch) => {
@@ -63,6 +75,14 @@ impl LeaderPriorityTracker {
             .flatten()
             .cloned()
             .filter_map(|p| ImmutableDeserializedPacket::new(p).ok())
+            .filter(|p| {
+                !p.transaction()
+                    .get_message()
+                    .message
+                    .static_account_keys()
+                    .iter()
+                    .any(|k| self.filter_keys.contains(k))
+            })
             .map(|p| PriorityTimeData {
                 priority: p.priority(),
                 timestamp,
@@ -172,6 +192,7 @@ impl LeaderPriorityTracker {
             self.leader_slots_tracker.ranges.first().unwrap().start.slot,
             self.leader_slots_tracker.ranges.last().unwrap().end.slot
         ));
+        println!("Overlayed Slot ranges");
         generate_heatmap(&overlayed_data, filename);
     }
 }

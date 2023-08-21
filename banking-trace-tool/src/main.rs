@@ -8,7 +8,7 @@ use {
     slot_priority_tracker::{do_slot_priority_tracking, TrackingKind, TrackingVerbosity},
     slot_range_report::do_log_slot_range,
     slot_ranges::do_get_slot_ranges,
-    solana_sdk::clock::Slot,
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{path::PathBuf, process::exit},
 };
 
@@ -66,6 +66,10 @@ enum TraceToolMode {
         /// Directory to save heatmaps into.
         #[arg(short, long, default_value = "./heatmaps")]
         output_dir: PathBuf,
+
+        /// Filter transactions using any of these keys.
+        #[arg(short, long)]
+        filter_keys: Vec<Pubkey>,
     },
 }
 
@@ -110,9 +114,10 @@ fn main() {
             save_history_before(slot);
             Ok(())
         }
-        TraceToolMode::SlotPriorityHeatmap { output_dir } => {
-            do_leader_priority_heatmap(&event_file_paths, output_dir)
-        }
+        TraceToolMode::SlotPriorityHeatmap {
+            output_dir,
+            filter_keys,
+        } => do_leader_priority_heatmap(&event_file_paths, output_dir, filter_keys),
     };
 
     if let Err(err) = result {
