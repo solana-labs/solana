@@ -2,7 +2,7 @@
 
 use {
     crate::{
-        accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
+        accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestKind},
         bank::{epoch_accounts_hash_utils, Bank, SquashTiming},
         snapshot_config::SnapshotConfig,
     },
@@ -319,7 +319,7 @@ impl BankForks {
                 .send_snapshot_request(SnapshotRequest {
                     snapshot_root_bank: Arc::clone(eah_bank),
                     status_cache_slot_deltas: Vec::default(),
-                    request_type: SnapshotRequestType::EpochAccountsHash,
+                    request_kind: SnapshotRequestKind::EpochAccountsHash,
                     enqueued: Instant::now(),
                 })
                 .expect("send epoch accounts hash request");
@@ -355,7 +355,7 @@ impl BankForks {
                         accounts_background_request_sender.send_snapshot_request(SnapshotRequest {
                             snapshot_root_bank: Arc::clone(bank),
                             status_cache_slot_deltas,
-                            request_type: SnapshotRequestType::Snapshot,
+                            request_kind: SnapshotRequestKind::Snapshot,
                             enqueued: Instant::now(),
                         })
                     {
@@ -801,7 +801,7 @@ mod tests {
                     snapshot_request_receiver
                         .try_iter()
                         .filter(|snapshot_request| {
-                            snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+                            snapshot_request.request_kind == SnapshotRequestKind::EpochAccountsHash
                         })
                         .for_each(|snapshot_request| {
                             snapshot_request

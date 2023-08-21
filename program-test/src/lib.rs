@@ -17,7 +17,7 @@ use {
         loaded_programs::LoadedProgram, stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
-        accounts_background_service::{AbsRequestSender, SnapshotRequestType},
+        accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
         bank::Bank,
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
@@ -1137,7 +1137,7 @@ impl ProgramTestContext {
         snapshot_request_receiver
             .try_iter()
             .filter(|snapshot_request| {
-                snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+                snapshot_request.request_kind == SnapshotRequestKind::EpochAccountsHash
             })
             .for_each(|snapshot_request| {
                 snapshot_request
