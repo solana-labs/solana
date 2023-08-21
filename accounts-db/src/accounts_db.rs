@@ -57,7 +57,7 @@ use {
             aligned_stored_size, AppendVec, MatchAccountOwnerError, APPEND_VEC_MMAPPED_FILES_OPEN,
             STORE_META_OVERHEAD,
         },
-        cache_hash_data::{CacheHashData, CacheHashDataFile},
+        cache_hash_data::{CacheHashData, CacheHashDataFileReference},
         contains::Contains,
         epoch_accounts_hash::EpochAccountsHashManager,
         partitioned_rewards::{PartitionedEpochRewardsConfig, TestPartitionedEpochRewards},
@@ -7184,7 +7184,7 @@ impl AccountsDb {
     }
 
     /// Scan through all the account storage in parallel.
-    /// Returns a Vec of open/mmapped files.
+    /// Returns a Vec of opened files.
     /// Each file has serialized hash info, sorted by pubkey and then slot, from scanning the append vecs.
     ///   A single pubkey could be in multiple entries. The pubkey found in the latest entry is the one to use.
     fn scan_account_storage_no_bank<S>(
@@ -7195,7 +7195,7 @@ impl AccountsDb {
         scanner: S,
         bin_range: &Range<usize>,
         stats: &mut HashStats,
-    ) -> Vec<CacheHashDataFile>
+    ) -> Vec<CacheHashDataFileReference>
     where
         S: AppendVecScan,
     {
@@ -7251,7 +7251,9 @@ impl AccountsDb {
                         hash
                     );
                     if load_from_cache {
-                        if let Ok(mapped_file) = cache_hash_data.load_map(&file_name) {
+                        if let Ok(mapped_file) =
+                            cache_hash_data.get_file_reference_to_map_later(&file_name)
+                        {
                             return Some(mapped_file);
                         }
                     }
@@ -7291,7 +7293,9 @@ impl AccountsDb {
                         (!r.is_empty() && r.iter().any(|b| !b.is_empty())).then(|| {
                             // error if we can't write this
                             cache_hash_data.save(&file_name, &r).unwrap();
-                            cache_hash_data.load_map(&file_name).unwrap()
+                            cache_hash_data
+                                .get_file_reference_to_map_later(&file_name)
+                                .unwrap()
                         })
                     })
                     .flatten()
@@ -7554,7 +7558,7 @@ impl AccountsDb {
             .retain(|&slot, _| slot >= last_full_snapshot_slot);
     }
 
-    /// scan 'storages', return a vec of 'CacheHashDataFile', one per pass
+    /// scan 'storages', return a vec of 'CacheHashDataFileReference', one per pass
     fn scan_snapshot_stores_with_cache(
         &self,
         cache_hash_data: &CacheHashData,
@@ -7564,7 +7568,7 @@ impl AccountsDb {
         bin_range: &Range<usize>,
         config: &CalcAccountsHashConfig<'_>,
         filler_account_suffix: Option<&Pubkey>,
-    ) -> Result<Vec<CacheHashDataFile>, AccountsHashVerificationError> {
+    ) -> Result<Vec<CacheHashDataFileReference>, AccountsHashVerificationError> {
         let _guard = self.active_stats.activate(ActiveStatItem::HashScan);
 
         let bin_calculator = PubkeyBinCalculator24::new(bins);
@@ -7738,7 +7742,7 @@ impl AccountsDb {
             };
 
             // get raw data by scanning
-            let cache_hash_data_files = self.scan_snapshot_stores_with_cache(
+            let cache_hash_data_file_references = self.scan_snapshot_stores_with_cache(
                 &cache_hash_data,
                 storages,
                 &mut stats,
@@ -7748,10 +7752,23 @@ impl AccountsDb {
                 accounts_hasher.filler_account_suffix.as_ref(),
             )?;
 
+            let cache_hash_data_files = cache_hash_data_file_references
+                .iter()
+                .map(|d| d.map())
+                .collect::<Vec<_>>();
+
+            if let Some(err) = cache_hash_data_files
+                .iter()
+                .filter_map(|r| r.as_ref().err())
+                .next()
+            {
+                panic!("failed generating accounts hash files: {:?}", err);
+            }
+
             // convert mmapped cache files into slices of data
             let cache_hash_intermediates = cache_hash_data_files
                 .iter()
-                .map(|d| d.get_cache_hash_data())
+                .map(|d| d.as_ref().unwrap().get_cache_hash_data())
                 .collect::<Vec<_>>();
 
             // turn raw data into merkle tree hashes and sum of lamports
@@ -9908,6 +9925,7 @@ pub mod tests {
                 AccountSecondaryIndexesIncludeExclude, ReadAccountMapEntry, RefCount,
             },
             append_vec::{test_utils::TempFile, AppendVecStoredAccountMeta},
+            cache_hash_data::CacheHashDataFile,
             inline_spl_token,
             secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
         },
@@ -9967,6 +9985,12 @@ pub mod tests {
                 },
                 None,
             )
+            .map(|references| {
+                references
+                    .iter()
+                    .map(|reference| reference.map().unwrap())
+                    .collect::<Vec<_>>()
+            })
         }
 
         fn get_storage_for_slot(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
@@ -10996,9 +11020,13 @@ pub mod tests {
             &Range { start: 0, end: 1 },
             &mut HashStats::default(),
         );
+        let result2 = result
+            .iter()
+            .map(|file| file.map().unwrap())
+            .collect::<Vec<_>>();
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_scan(
-            result,
+            result2,
             vec![vec![vec![CalculateHashIntermediate::new(
                 Hash::default(),
                 expected,
