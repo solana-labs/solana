@@ -77,7 +77,7 @@ pub fn save_history_before(slot: Slot) {
     bincode::serialize_into(&mut file, &actual_signatures).unwrap();
 }
 
-fn get_block(client: &RpcClient, slot: Slot) -> Option<UiConfirmedBlock> {
+pub fn get_block(client: &RpcClient, slot: Slot) -> Option<UiConfirmedBlock> {
     client
         .get_block_with_config(
             slot,

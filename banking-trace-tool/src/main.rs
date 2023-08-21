@@ -75,6 +75,11 @@ enum TraceToolMode {
     },
     /// Scan for a specific account's precense in slots - report back which slots.
     AccountScan {
+        /// Only count received packets that were actually included.
+        /// This requires using RPC client.
+        #[arg(short, long)]
+        check_included: bool,
+
         /// The account to scan for.
         pubkey: Pubkey,
     },
@@ -125,7 +130,10 @@ fn main() {
             output_dir,
             filter_keys,
         } => do_leader_priority_heatmap(&event_file_paths, output_dir, filter_keys),
-        TraceToolMode::AccountScan { pubkey } => do_account_scan(&event_file_paths, pubkey),
+        TraceToolMode::AccountScan {
+            pubkey,
+            check_included,
+        } => do_account_scan(&event_file_paths, pubkey, check_included),
     };
 
     if let Err(err) = result {
