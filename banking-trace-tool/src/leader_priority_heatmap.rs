@@ -223,8 +223,10 @@ fn generate_heatmap(data: &[(f64, f64)], filename: impl AsRef<std::path::Path>) 
     let (x_buckets, y_buckets, counts) = bucket_counts(data);
     let (min_x, max_x) = (x_buckets.first().unwrap().0, x_buckets.last().unwrap().1);
     let (min_y, max_y) = (y_buckets.first().unwrap().0, y_buckets.last().unwrap().1);
+    let max_count = *counts.iter().flatten().max().unwrap() as f64;
 
     println!("  Total counts: {}", data.len());
+    println!("  Max count: {max_count}");
     println!("  X: [{min_x}, {max_x}]");
     println!("  Y: [{min_y}, {max_y}]");
 
@@ -244,8 +246,6 @@ fn generate_heatmap(data: &[(f64, f64)], filename: impl AsRef<std::path::Path>) 
         .y_desc("Priority")
         .draw()
         .unwrap();
-
-    let max_count = *counts.iter().flatten().max().unwrap() as f64;
 
     let color_interpolator = |f: f64| ViridisRGB::get_color(f);
     for (x_bucket, (x_lower, x_upper)) in x_buckets.iter().enumerate() {
@@ -284,8 +284,8 @@ fn bucket_counts(data: &[(f64, f64)]) -> (Vec<(f64, f64)>, Vec<(f64, f64)>, Vec<
     // Determine the buckets for the data.
     let (x_min, x_max) = minmax(data.iter().map(|&(x, _)| x));
     let (y_min, y_max) = minmax(data.iter().map(|&(_, y)| y));
-    let x_buckets = linspace(x_min, x_max, 50);
-    let y_buckets = linspace(y_min, y_max, 50);
+    let x_buckets = linspace(x_min, x_max, 100);
+    let y_buckets = linspace(y_min, y_max, 100);
 
     // Determine the counts for each bucket.
     let mut counts = vec![vec![0; y_buckets.len()]; x_buckets.len()];

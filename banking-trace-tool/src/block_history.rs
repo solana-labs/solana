@@ -10,14 +10,14 @@ use {
         signature::Signature,
     },
     solana_transaction_status::{TransactionDetails, UiConfirmedBlock},
-    std::{collections::HashSet, str::FromStr},
+    std::collections::{HashMap, HashSet},
 };
 
 #[derive(Default)]
 pub struct HistoryChecker {
     blockhashes: HashSet<String>,
     signatures: HashSet<Signature>,
-    actual_signatures: HashSet<Signature>,
+    actual_signatures: HashMap<Signature, usize>, // signature to index in block
 }
 
 impl HistoryChecker {
@@ -29,8 +29,8 @@ impl HistoryChecker {
     }
 
     /// Check if the slot actually contained a signature.
-    pub fn actually_contained(&self, sig: &Signature) -> bool {
-        self.actual_signatures.contains(sig)
+    pub fn actually_contained(&self, sig: &Signature) -> Option<usize> {
+        self.actual_signatures.get(sig).copied()
     }
 }
 
@@ -49,19 +49,20 @@ pub fn save_history_before(slot: Slot) {
         blockhashes.push(block.blockhash);
         signatures.extend(
             block
-                .signatures
+                .transactions
                 .unwrap()
                 .iter()
-                .map(|x| Signature::from_str(x).unwrap()),
+                .map(|tx| tx.transaction.decode().unwrap().signatures[0]),
         );
     }
 
     let actual_block = get_block(&client, slot).unwrap();
     let actual_signatures = actual_block
-        .signatures
+        .transactions
         .unwrap()
         .iter()
-        .map(|x| Signature::from_str(x).unwrap())
+        .enumerate()
+        .map(|(index, tx)| (tx.transaction.decode().unwrap().signatures[0], index))
         .collect_vec();
 
     // Save to file
@@ -82,7 +83,7 @@ fn get_block(client: &RpcClient, slot: Slot) -> Option<UiConfirmedBlock> {
             slot,
             RpcBlockConfig {
                 encoding: Some(solana_transaction_status::UiTransactionEncoding::Base58),
-                transaction_details: Some(TransactionDetails::Signatures),
+                transaction_details: Some(TransactionDetails::Full),
                 rewards: None,
                 commitment: Some(solana_sdk::commitment_config::CommitmentConfig {
                     commitment: solana_sdk::commitment_config::CommitmentLevel::Finalized,
@@ -100,7 +101,7 @@ pub fn load_history(slot: Slot) -> HistoryChecker {
 
     let blockhashes: Vec<String> = bincode::deserialize_from(&mut file).unwrap();
     let signatures: Vec<Signature> = bincode::deserialize_from(&mut file).unwrap();
-    let actual_signatures: Vec<Signature> = bincode::deserialize_from(&mut file).unwrap();
+    let actual_signatures: Vec<(Signature, usize)> = bincode::deserialize_from(&mut file).unwrap();
 
     HistoryChecker {
         blockhashes: blockhashes.into_iter().collect(),

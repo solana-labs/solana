@@ -94,12 +94,13 @@ impl SlotRangeCollector {
                     // Should never fail here because sigverify?
                     continue;
                 };
+
                 let included = history_checker
                     .as_ref()
                     .map(|hc| hc.actually_contained(&signature))
                     .unwrap_or_default()
-                    .then_some('*')
-                    .unwrap_or(' ');
+                    .map(|index| format!("({index:04})"))
+                    .unwrap_or("      ".to_string());
                 let message = &transaction.get_message().message;
                 let account_keys = message.static_account_keys();
                 let write_keys: Vec<_> = account_keys
