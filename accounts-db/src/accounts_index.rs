@@ -1619,7 +1619,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         let expected_items_per_bin = item_len * 2 / bins;
         // offset bin 0 in the 'binned' array by a random amount.
         // This results in calls to insert_new_entry_if_missing_with_lock from different threads starting at different bins.
-        let random_offset = thread_rng().gen_range(0, bins);
+        let random_offset = thread_rng().gen_range(0..bins);
         let use_disk = self.storage.storage.disk.is_some();
         let mut binned = (0..bins)
             .map(|mut pubkey_bin| {

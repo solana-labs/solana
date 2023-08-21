@@ -708,11 +708,11 @@ mod tests {
     }
 
     fn make_entry<R: Rng>(rng: &mut R, prev_hash: &Hash) -> Entry {
-        let size = rng.gen_range(16, 32);
+        let size = rng.gen_range(16..32);
         let txs = repeat_with(|| make_transaction(rng)).take(size).collect();
         Entry::new(
             prev_hash,
-            rng.gen_range(1, 64), // num_hashes
+            rng.gen_range(1..64), // num_hashes
             txs,
         )
     }
@@ -731,11 +731,11 @@ mod tests {
             .iter()
             .flat_map(|(&slot, keypair)| {
                 let parent_slot = slot - rng.gen::<u16>().max(1) as Slot;
-                let num_entries = rng.gen_range(64, 128);
+                let num_entries = rng.gen_range(64..128);
                 let (data_shreds, coding_shreds) = Shredder::new(
                     slot,
                     parent_slot,
-                    rng.gen_range(0, 0x40), // reference_tick
+                    rng.gen_range(0..0x40), // reference_tick
                     rng.gen(),              // version
                 )
                 .unwrap()
@@ -743,8 +743,8 @@ mod tests {
                     keypair,
                     &make_entries(rng, num_entries),
                     rng.gen(),              // is_last_in_slot
-                    rng.gen_range(0, 2671), // next_shred_index
-                    rng.gen_range(0, 2781), // next_code_index
+                    rng.gen_range(0..2671), // next_shred_index
+                    rng.gen_range(0..2781), // next_code_index
                     rng.gen(),              // merkle_variant,
                     &reed_solomon_cache,
                     &mut ProcessShredsStats::default(),
@@ -782,7 +782,7 @@ mod tests {
             packet
         });
         let packets: Vec<_> = repeat_with(|| {
-            let size = rng.gen_range(0, 16);
+            let size = rng.gen_range(0..16);
             let packets = packets.by_ref().take(size).collect();
             let batch = PacketBatch::new(packets);
             (size == 0 || !batch.is_empty()).then_some(batch)
@@ -802,7 +802,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         let thread_pool = ThreadPoolBuilder::new().num_threads(3).build().unwrap();
         let recycler_cache = RecyclerCache::default();
-        let keypairs = repeat_with(|| rng.gen_range(169_367_809, 169_906_789))
+        let keypairs = repeat_with(|| rng.gen_range(169_367_809..169_906_789))
             .map(|slot| (slot, Keypair::new()))
             .take(3)
             .collect();
@@ -848,7 +848,7 @@ mod tests {
         let thread_pool = ThreadPoolBuilder::new().num_threads(3).build().unwrap();
         let recycler_cache = RecyclerCache::default();
         let shreds = {
-            let keypairs = repeat_with(|| rng.gen_range(169_367_809, 169_906_789))
+            let keypairs = repeat_with(|| rng.gen_range(169_367_809..169_906_789))
                 .map(|slot| (slot, Keypair::new()))
                 .take(3)
                 .collect();

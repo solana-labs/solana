@@ -1173,7 +1173,7 @@ mod test {
         num_coding_shreds: usize,
         reed_solomon_cache: &ReedSolomonCache,
     ) {
-        let keypair = Keypair::generate(rng);
+        let keypair = Keypair::new();
         let num_shreds = num_data_shreds + num_coding_shreds;
         let proof_size = get_proof_size(num_shreds);
         let capacity = ShredData::capacity(proof_size).unwrap();
@@ -1186,7 +1186,7 @@ mod test {
             fec_set_index: 1835,
         };
         let data_header = {
-            let reference_tick = rng.gen_range(0, 0x40);
+            let reference_tick = rng.gen_range(0..0x40);
             DataShredHeader {
                 parent_offset: rng.gen::<u16>().max(1),
                 flags: ShredFlags::from_bits_retain(reference_tick),
@@ -1204,7 +1204,7 @@ mod test {
                 index: common_header.index + i as u32,
                 ..common_header
             };
-            let size = ShredData::SIZE_OF_HEADERS + rng.gen_range(0, capacity);
+            let size = ShredData::SIZE_OF_HEADERS + rng.gen_range(0..capacity);
             let data_header = DataShredHeader {
                 size: size as u16,
                 ..data_header
@@ -1345,7 +1345,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let reed_solomon_cache = ReedSolomonCache::default();
         for _ in 0..32 {
-            let data_size = rng.gen_range(0, 31200 * 7);
+            let data_size = rng.gen_range(0..31200 * 7);
             run_make_shreds_from_data(&mut rng, data_size, &reed_solomon_cache);
         }
     }
@@ -1358,11 +1358,11 @@ mod test {
         let thread_pool = ThreadPoolBuilder::new().num_threads(2).build().unwrap();
         let keypair = Keypair::new();
         let slot = 149_745_689;
-        let parent_slot = slot - rng.gen_range(1, 65536);
+        let parent_slot = slot - rng.gen_range(1..65536);
         let shred_version = rng.gen();
-        let reference_tick = rng.gen_range(1, 64);
-        let next_shred_index = rng.gen_range(0, 671);
-        let next_code_index = rng.gen_range(0, 781);
+        let reference_tick = rng.gen_range(1..64);
+        let next_shred_index = rng.gen_range(0..671);
+        let next_code_index = rng.gen_range(0..781);
         let mut data = vec![0u8; data_size];
         rng.fill(&mut data[..]);
         let shreds = make_shreds_from_data(

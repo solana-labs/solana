@@ -198,7 +198,7 @@ mod tests {
             .map(|(i, _)| i)
             .collect();
         while high != 0 {
-            let sample = rng.gen_range(0, high);
+            let sample = rng.gen_range(0..high);
             let index = weights
                 .iter()
                 .scan(0, |acc, &w| {
@@ -342,7 +342,7 @@ mod tests {
     #[test]
     fn test_weighted_shuffle_match_slow() {
         let mut rng = rand::thread_rng();
-        let weights: Vec<u64> = repeat_with(|| rng.gen_range(0, 1000)).take(997).collect();
+        let weights: Vec<u64> = repeat_with(|| rng.gen_range(0..1000)).take(997).collect();
         for _ in 0..10 {
             let mut seed = [0u8; 32];
             rng.fill(&mut seed[..]);

@@ -3958,8 +3958,8 @@ mod tests {
         for _ in 0..outer_iters {
             let mut mangled_bytes = bytes.to_vec();
             for _ in 0..inner_iters {
-                let offset = rng.gen_range(offset.start, offset.end);
-                let value = rng.gen_range(value.start, value.end);
+                let offset = rng.gen_range(offset.start..offset.end);
+                let value = rng.gen_range(value.start..value.end);
                 *mangled_bytes.get_mut(offset).unwrap() = value;
                 work(&mut mangled_bytes);
             }

@@ -10,7 +10,7 @@ use {
     ed25519_dalek::Signer as DalekSigner,
     ed25519_dalek_bip32::Error as Bip32Error,
     hmac::Hmac,
-    rand::{rngs::OsRng, CryptoRng, RngCore},
+    rand0_7::{rngs::OsRng, CryptoRng, RngCore},
     std::{
         error,
         io::{Read, Write},
@@ -25,6 +25,9 @@ use {
 pub struct Keypair(ed25519_dalek::Keypair);
 
 impl Keypair {
+    /// Can be used for generating a Keypair without a dependency on `rand` types
+    pub const SECRET_KEY_LENGTH: usize = 32;
+
     /// Constructs a new, random `Keypair` using a caller-provided RNG
     pub fn generate<R>(csprng: &mut R) -> Self
     where
@@ -79,6 +82,9 @@ impl Keypair {
         })
     }
 }
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(Keypair::SECRET_KEY_LENGTH, ed25519_dalek::SECRET_KEY_LENGTH);
 
 impl Signer for Keypair {
     #[inline]

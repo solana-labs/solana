@@ -91,7 +91,7 @@ impl AncientSlotInfos {
             let should_shrink = if capacity > 0 {
                 let alive_ratio = alive_bytes * 100 / capacity;
                 alive_ratio < 90
-                    || if can_randomly_shrink && thread_rng().gen_range(0, 10000) == 0 {
+                    || if can_randomly_shrink && thread_rng().gen_range(0..10000) == 0 {
                         was_randomly_shrunk = true;
                         true
                     } else {
@@ -1202,7 +1202,7 @@ pub mod tests {
                 let mut data_size = 450;
                 // random # of extra accounts here
                 let total_accounts_per_storage =
-                    thread_rng().gen_range(0, total_accounts_per_storage);
+                    thread_rng().gen_range(0..total_accounts_per_storage);
                 let _pubkeys_and_accounts = storages
                     .iter()
                     .map(|storage| {

@@ -4500,7 +4500,7 @@ impl AccountsDb {
             } else {
                 false
             };
-            if is_candidate || (can_randomly_shrink && thread_rng().gen_range(0, 10000) == 0) {
+            if is_candidate || (can_randomly_shrink && thread_rng().gen_range(0..10000) == 0) {
                 // we are a candidate for shrink, so either append us to the previous append vec
                 // or recreate us as a new append vec and eliminate the dead accounts
                 info!(
@@ -5712,7 +5712,7 @@ impl AccountsDb {
         self.stats
             .create_store_count
             .fetch_add(1, Ordering::Relaxed);
-        let path_index = thread_rng().gen_range(0, paths.len());
+        let path_index = thread_rng().gen_range(0..paths.len());
         let store = Arc::new(self.new_storage_entry(
             slot,
             Path::new(&paths[path_index]),
@@ -9697,7 +9697,7 @@ impl AccountsDb {
     pub fn check_accounts(&self, pubkeys: &[Pubkey], slot: Slot, num: usize, count: usize) {
         let ancestors = vec![(slot, 0)].into_iter().collect();
         for _ in 0..num {
-            let idx = thread_rng().gen_range(0, num);
+            let idx = thread_rng().gen_range(0..num);
             let account = self.load_without_fixed_root(&ancestors, &pubkeys[idx]);
             let account1 = Some((
                 AccountSharedData::new(
@@ -9904,7 +9904,7 @@ pub mod test_utils {
     // accounts cache!
     pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
         for pubkey in pubkeys {
-            let amount = thread_rng().gen_range(0, 10);
+            let amount = thread_rng().gen_range(0..10);
             let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
             accounts.store_slow_uncached(slot, pubkey, &account);
         }
@@ -11405,7 +11405,7 @@ pub mod tests {
         let mut pubkeys: Vec<Pubkey> = vec![];
         db.create_account(&mut pubkeys, 0, 100, 0, 0);
         for _ in 1..100 {
-            let idx = thread_rng().gen_range(0, 99);
+            let idx = thread_rng().gen_range(0..99);
             let ancestors = vec![(0, 0)].into_iter().collect();
             let account = db
                 .load_without_fixed_root(&ancestors, &pubkeys[idx])
@@ -11421,7 +11421,7 @@ pub mod tests {
 
         // check that all the accounts appear with a new root
         for _ in 1..100 {
-            let idx = thread_rng().gen_range(0, 99);
+            let idx = thread_rng().gen_range(0..99);
             let ancestors = vec![(0, 0)].into_iter().collect();
             let account0 = db
                 .load_without_fixed_root(&ancestors, &pubkeys[idx])
@@ -11556,7 +11556,7 @@ pub mod tests {
 
     fn update_accounts(accounts: &AccountsDb, pubkeys: &[Pubkey], slot: Slot, range: usize) {
         for _ in 1..1000 {
-            let idx = thread_rng().gen_range(0, range);
+            let idx = thread_rng().gen_range(0..range);
             let ancestors = vec![(slot, 0)].into_iter().collect();
             if let Some((mut account, _)) =
                 accounts.load_without_fixed_root(&ancestors, &pubkeys[idx])
@@ -12393,7 +12393,7 @@ pub mod tests {
                         let mut account = AccountSharedData::new(1, 0, &pubkey);
                         let mut i = 0;
                         loop {
-                            let account_bal = thread_rng().gen_range(1, 99);
+                            let account_bal = thread_rng().gen_range(1..99);
                             account.set_lamports(account_bal);
                             db.store_for_tests(slot, &[(&pubkey, &account)]);
 
@@ -15194,7 +15194,7 @@ pub mod tests {
                     // Ordering::Relaxed is ok because of no data dependencies; the modified field is
                     // completely free-standing cfg(test) control-flow knob.
                     db.load_limit
-                        .store(thread_rng().gen_range(0, 10) as u64, Ordering::Relaxed);
+                        .store(thread_rng().gen_range(0..10) as u64, Ordering::Relaxed);
 
                     // Load should never be unable to find this key
                     let loaded_account = db

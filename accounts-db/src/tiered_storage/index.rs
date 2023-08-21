@@ -127,7 +127,7 @@ mod tests {
             .iter()
             .map(|address| AccountIndexWriterEntry {
                 address,
-                block_offset: rng.gen_range(128, 2048),
+                block_offset: rng.gen_range(128..2048),
                 intra_block_offset: 0,
             })
             .collect();

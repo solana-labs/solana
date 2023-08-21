@@ -198,7 +198,7 @@ impl PruneData {
     #[cfg(test)]
     fn new_rand<R: Rng>(rng: &mut R, self_keypair: &Keypair, num_nodes: Option<usize>) -> Self {
         let wallclock = crds_value::new_rand_timestamp(rng);
-        let num_nodes = num_nodes.unwrap_or_else(|| rng.gen_range(0, MAX_PRUNE_DATA_NODES + 1));
+        let num_nodes = num_nodes.unwrap_or_else(|| rng.gen_range(0..MAX_PRUNE_DATA_NODES + 1));
         let prunes = std::iter::repeat_with(Pubkey::new_unique)
             .take(num_nodes)
             .collect();
@@ -3511,7 +3511,7 @@ mod tests {
         let keypair = Keypair::new();
         let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
         let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
-        let next_shred_index = rng.gen_range(0, 32_000);
+        let next_shred_index = rng.gen_range(0..32_000);
         let shred = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
         let other_payload = {
             let other_shred = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
@@ -3835,7 +3835,6 @@ mod tests {
 
     #[test]
     fn test_push_vote() {
-        let mut rng = rand::thread_rng();
         let keypair = Arc::new(Keypair::new());
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let cluster_info =
@@ -3849,7 +3848,7 @@ mod tests {
         // add a vote
         let vote = Vote::new(
             vec![1, 3, 7], // slots
-            solana_sdk::hash::new_rand(&mut rng),
+            Hash::new_unique(),
         );
         let ix = vote_instruction::vote(
             &Pubkey::new_unique(), // vote_pubkey
@@ -3878,8 +3877,8 @@ mod tests {
         assert_eq!(votes, vec![]);
     }
 
-    fn new_vote_transaction<R: Rng>(rng: &mut R, slots: Vec<Slot>) -> Transaction {
-        let vote = Vote::new(slots, solana_sdk::hash::new_rand(rng));
+    fn new_vote_transaction(slots: Vec<Slot>) -> Transaction {
+        let vote = Vote::new(slots, Hash::new_unique());
         let ix = vote_instruction::vote(
             &Pubkey::new_unique(), // vote_pubkey
             &Pubkey::new_unique(), // authorized_voter_pubkey
@@ -3907,7 +3906,6 @@ mod tests {
             }
             vote_slots.into_iter().collect()
         };
-        let mut rng = rand::thread_rng();
         let keypair = Arc::new(Keypair::new());
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
@@ -3915,7 +3913,7 @@ mod tests {
         for k in 0..MAX_LOCKOUT_HISTORY {
             let slot = k as Slot;
             tower.push(slot);
-            let vote = new_vote_transaction(&mut rng, vec![slot]);
+            let vote = new_vote_transaction(vec![slot]);
             cluster_info.push_vote(&tower, vote);
         }
         let vote_slots = get_vote_slots(&cluster_info);
@@ -3927,7 +3925,7 @@ mod tests {
         let slot = MAX_LOCKOUT_HISTORY as Slot;
         tower.push(slot);
         tower.remove(23);
-        let vote = new_vote_transaction(&mut rng, vec![slot]);
+        let vote = new_vote_transaction(vec![slot]);
         // New versioned-crds-value should have wallclock later than existing
         // entries, otherwise might not get inserted into the table.
         sleep(Duration::from_millis(5));
@@ -3944,7 +3942,7 @@ mod tests {
         tower.push(slot);
         tower.remove(17);
         tower.remove(5);
-        let vote = new_vote_transaction(&mut rng, vec![slot]);
+        let vote = new_vote_transaction(vec![slot]);
         cluster_info.push_vote(&tower, vote);
         let vote_slots = get_vote_slots(&cluster_info);
         assert_eq!(vote_slots.len(), MAX_LOCKOUT_HISTORY);
@@ -4349,7 +4347,7 @@ mod tests {
         );
         //random should be hard to compress
         let mut rng = rand::thread_rng();
-        let range: Vec<Slot> = repeat_with(|| rng.gen_range(1, 32))
+        let range: Vec<Slot> = repeat_with(|| rng.gen_range(1..32))
             .scan(0, |slot, step| {
                 *slot += step;
                 Some(*slot)

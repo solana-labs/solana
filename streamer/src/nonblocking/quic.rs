@@ -996,10 +996,12 @@ impl ConnectionTable {
     // If the stakes of all the sampled connections are higher than the
     // threshold_stake, rejects the pruning attempt, and returns 0.
     fn prune_random(&mut self, sample_size: usize, threshold_stake: u64) -> usize {
-        let mut rng = thread_rng();
         let num_pruned = std::iter::once(self.table.len())
             .filter(|&size| size > 0)
-            .flat_map(|size| repeat_with(move || rng.gen_range(0, size)))
+            .flat_map(|size| {
+                let mut rng = thread_rng();
+                repeat_with(move || rng.gen_range(0..size))
+            })
             .map(|index| {
                 let connection = self.table[index].first();
                 let stake = connection.map(|connection| connection.stake);

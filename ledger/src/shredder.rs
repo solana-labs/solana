@@ -476,7 +476,7 @@ mod tests {
         matches::assert_matches,
         rand::{seq::SliceRandom, Rng},
         solana_sdk::{
-            hash::{self, hash, Hash},
+            hash::{hash, Hash},
             pubkey::Pubkey,
             shred_version,
             signature::{Signature, Signer},
@@ -994,20 +994,20 @@ mod tests {
         .take(num_tx)
         .collect();
         let entry = Entry::new(
-            &hash::new_rand(&mut rng), // prev hash
-            rng.gen_range(1, 64),      // num hashes
+            &Hash::new_unique(),  // prev hash
+            rng.gen_range(1..64), // num hashes
             txs,
         );
         let keypair = Arc::new(Keypair::new());
         let slot = 71489660;
         let shredder = Shredder::new(
             slot,
-            slot - rng.gen_range(1, 27), // parent slot
+            slot - rng.gen_range(1..27), // parent slot
             0,                           // reference tick
             rng.gen(),                   // version
         )
         .unwrap();
-        let next_shred_index = rng.gen_range(1, 1024);
+        let next_shred_index = rng.gen_range(1..1024);
         let reed_solomon_cache = ReedSolomonCache::default();
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             &keypair,

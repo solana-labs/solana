@@ -697,7 +697,7 @@ mod tests {
                     let vote = from_slots(
                         vec![(i, 1)],
                         VoteSource::Gossip,
-                        &keypairs[rng.gen_range(0, 10)],
+                        &keypairs[rng.gen_range(0..10)],
                         None,
                     );
                     latest_unprocessed_votes.update_latest_vote(vote);
@@ -712,7 +712,7 @@ mod tests {
                     let vote = from_slots(
                         vec![(i, 1)],
                         VoteSource::Tpu,
-                        &keypairs_tpu[rng.gen_range(0, 10)],
+                        &keypairs_tpu[rng.gen_range(0..10)],
                         None,
                     );
                     latest_unprocessed_votes_tpu.update_latest_vote(vote);

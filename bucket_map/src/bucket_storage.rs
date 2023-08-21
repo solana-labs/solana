@@ -337,9 +337,9 @@ impl<O: BucketOccupied> BucketStorage<O> {
     /// allocate a new memory mapped file of size `bytes` on one of `drives`
     fn new_map(drives: &[PathBuf], bytes: u64, stats: &BucketStats) -> (MmapMut, PathBuf) {
         let mut measure_new_file = Measure::start("measure_new_file");
-        let r = thread_rng().gen_range(0, drives.len());
+        let r = thread_rng().gen_range(0..drives.len());
         let drive = &drives[r];
-        let pos = format!("{}", thread_rng().gen_range(0, u128::MAX),);
+        let pos = format!("{}", thread_rng().gen_range(0..u128::MAX),);
         let file = drive.join(pos);
         let mut data = OpenOptions::new()
             .read(true)

@@ -60,7 +60,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
         let id = pubkey::new_rand();
         let contact_info = ContactInfo::new_localhost(&id, timestamp());
         cluster_info.insert_info(contact_info);
-        stakes.insert(id, thread_rng().gen_range(1, NUM_PEERS) as u64);
+        stakes.insert(id, thread_rng().gen_range(1..NUM_PEERS) as u64);
     }
     let cluster_info = Arc::new(cluster_info);
     let cluster_nodes_cache = ClusterNodesCache::<BroadcastStage>::new(

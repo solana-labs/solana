@@ -744,7 +744,7 @@ fn get_rpc_nodes(
         blacklist_timeout = Instant::now();
         get_rpc_peers_timout = Instant::now();
         if bootstrap_config.no_snapshot_fetch {
-            let random_peer = &rpc_peers[thread_rng().gen_range(0, rpc_peers.len())];
+            let random_peer = &rpc_peers[thread_rng().gen_range(0..rpc_peers.len())];
             return Ok(vec![GetRpcNodeResult {
                 rpc_contact_info: random_peer.clone(),
                 snapshot_hash: None,

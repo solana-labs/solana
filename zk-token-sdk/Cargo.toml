@@ -24,11 +24,11 @@ aes-gcm-siv = { workspace = true }
 bincode = { workspace = true }
 byteorder = { workspace = true }
 curve25519-dalek = { workspace = true, features = ["serde"] }
-getrandom = { workspace = true, features = ["dummy"] }
+getrandom = { version = "0.1", features = ["dummy"] }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 merlin = { workspace = true }
-rand = { workspace = true }
+rand = { version = "0.7" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha3 = "0.9"
