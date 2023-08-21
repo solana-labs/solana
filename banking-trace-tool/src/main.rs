@@ -1,4 +1,5 @@
 use {
+    account_scan::do_account_scan,
     block_history::save_history_before,
     clap::{Args, Parser, Subcommand},
     count_metrics::do_count_metrics,
@@ -12,6 +13,7 @@ use {
     std::{path::PathBuf, process::exit},
 };
 
+mod account_scan;
 mod block_history;
 mod count_metrics;
 mod leader_priority_heatmap;
@@ -71,6 +73,11 @@ enum TraceToolMode {
         #[arg(short, long)]
         filter_keys: Vec<Pubkey>,
     },
+    /// Scan for a specific account's precense in slots - report back which slots.
+    AccountScan {
+        /// The account to scan for.
+        pubkey: Pubkey,
+    },
 }
 
 #[derive(Args, Copy, Clone, Debug, PartialEq)]
@@ -118,6 +125,7 @@ fn main() {
             output_dir,
             filter_keys,
         } => do_leader_priority_heatmap(&event_file_paths, output_dir, filter_keys),
+        TraceToolMode::AccountScan { pubkey } => do_account_scan(&event_file_paths, pubkey),
     };
 
     if let Err(err) = result {
