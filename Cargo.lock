@@ -6311,6 +6311,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_derive",
+ "serde_json",
  "serial_test",
  "solana-bloom",
  "solana-clap-utils",
