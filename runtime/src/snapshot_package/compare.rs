@@ -1,6 +1,6 @@
 use {
     super::{
-        AccountsPackage, AccountsPackageType, SnapshotArchiveInfoGetter, SnapshotKind,
+        AccountsPackage, AccountsPackageKind, SnapshotArchiveInfoGetter, SnapshotKind,
         SnapshotPackage,
     },
     std::cmp::Ordering::{self, Equal, Greater, Less},
@@ -15,11 +15,11 @@ pub fn cmp_snapshot_packages_by_priority(a: &SnapshotPackage, b: &SnapshotPackag
 /// Compare accounts packages by priority; first by type, then by slot
 #[must_use]
 pub fn cmp_accounts_packages_by_priority(a: &AccountsPackage, b: &AccountsPackage) -> Ordering {
-    cmp_accounts_package_types_by_priority(&a.package_type, &b.package_type)
+    cmp_accounts_package_kinds_by_priority(&a.package_kind, &b.package_kind)
         .then(a.slot.cmp(&b.slot))
 }
 
-/// Compare accounts package types by priority
+/// Compare accounts package kinds by priority
 ///
 /// Priority, from highest to lowest:
 /// - Epoch Accounts Hash
@@ -29,11 +29,11 @@ pub fn cmp_accounts_packages_by_priority(a: &AccountsPackage, b: &AccountsPackag
 ///
 /// If two `Snapshot`s are compared, their snapshot kinds are the tiebreaker.
 #[must_use]
-pub fn cmp_accounts_package_types_by_priority(
-    a: &AccountsPackageType,
-    b: &AccountsPackageType,
+pub fn cmp_accounts_package_kinds_by_priority(
+    a: &AccountsPackageKind,
+    b: &AccountsPackageKind,
 ) -> Ordering {
-    use AccountsPackageType::*;
+    use AccountsPackageKind::*;
     match (a, b) {
         // Epoch Accounts Hash packages
         (EpochAccountsHash, EpochAccountsHash) => Equal,
@@ -161,9 +161,9 @@ mod tests {
 
     #[test]
     fn test_cmp_accounts_packages_by_priority() {
-        fn new(package_type: AccountsPackageType, slot: Slot) -> AccountsPackage {
+        fn new(package_kind: AccountsPackageKind, slot: Slot) -> AccountsPackage {
             AccountsPackage {
-                package_type,
+                package_kind,
                 slot,
                 block_height: slot,
                 ..AccountsPackage::default_for_tests()
@@ -172,196 +172,196 @@ mod tests {
 
         for (accounts_package_a, accounts_package_b, expected_result) in [
             (
-                new(AccountsPackageType::EpochAccountsHash, 11),
-                new(AccountsPackageType::EpochAccountsHash, 22),
+                new(AccountsPackageKind::EpochAccountsHash, 11),
+                new(AccountsPackageKind::EpochAccountsHash, 22),
                 Less,
             ),
             (
-                new(AccountsPackageType::EpochAccountsHash, 22),
-                new(AccountsPackageType::EpochAccountsHash, 22),
+                new(AccountsPackageKind::EpochAccountsHash, 22),
+                new(AccountsPackageKind::EpochAccountsHash, 22),
                 Equal,
             ),
             (
-                new(AccountsPackageType::EpochAccountsHash, 33),
-                new(AccountsPackageType::EpochAccountsHash, 22),
+                new(AccountsPackageKind::EpochAccountsHash, 33),
+                new(AccountsPackageKind::EpochAccountsHash, 22),
                 Greater,
             ),
             (
-                new(AccountsPackageType::EpochAccountsHash, 123),
+                new(AccountsPackageKind::EpochAccountsHash, 123),
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+                    AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
                     123,
                 ),
                 Greater,
             ),
             (
-                new(AccountsPackageType::EpochAccountsHash, 123),
+                new(AccountsPackageKind::EpochAccountsHash, 123),
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                     123,
                 ),
                 Greater,
             ),
             (
-                new(AccountsPackageType::EpochAccountsHash, 123),
-                new(AccountsPackageType::AccountsHashVerifier, 123),
+                new(AccountsPackageKind::EpochAccountsHash, 123),
+                new(AccountsPackageKind::AccountsHashVerifier, 123),
                 Greater,
             ),
             (
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+                    AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
                     123,
                 ),
-                new(AccountsPackageType::EpochAccountsHash, 123),
+                new(AccountsPackageKind::EpochAccountsHash, 123),
                 Less,
             ),
             (
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+                    AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
                     11,
                 ),
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+                    AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
                     22,
                 ),
                 Less,
             ),
             (
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+                    AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
                     22,
                 ),
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+                    AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
                     22,
                 ),
                 Equal,
             ),
             (
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+                    AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
                     33,
                 ),
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+                    AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
                     22,
                 ),
                 Greater,
             ),
             (
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+                    AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
                     123,
                 ),
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                     123,
                 ),
                 Greater,
             ),
             (
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+                    AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
                     123,
                 ),
-                new(AccountsPackageType::AccountsHashVerifier, 123),
+                new(AccountsPackageKind::AccountsHashVerifier, 123),
                 Greater,
             ),
             (
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                     123,
                 ),
-                new(AccountsPackageType::EpochAccountsHash, 123),
+                new(AccountsPackageKind::EpochAccountsHash, 123),
                 Less,
             ),
             (
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                     123,
                 ),
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
-                    123,
-                ),
-                Less,
-            ),
-            (
-                new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
-                    123,
-                ),
-                new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(6)),
+                    AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
                     123,
                 ),
                 Less,
             ),
             (
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                    123,
+                ),
+                new(
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(6)),
+                    123,
+                ),
+                Less,
+            ),
+            (
+                new(
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                     11,
                 ),
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                     22,
                 ),
                 Less,
             ),
             (
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                     22,
                 ),
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                     22,
                 ),
                 Equal,
             ),
             (
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                     33,
                 ),
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                     22,
                 ),
                 Greater,
             ),
             (
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                     123,
                 ),
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(4)),
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(4)),
                     123,
                 ),
                 Greater,
             ),
             (
                 new(
-                    AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                    AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                     123,
                 ),
-                new(AccountsPackageType::AccountsHashVerifier, 123),
+                new(AccountsPackageKind::AccountsHashVerifier, 123),
                 Greater,
             ),
             (
-                new(AccountsPackageType::AccountsHashVerifier, 11),
-                new(AccountsPackageType::AccountsHashVerifier, 22),
+                new(AccountsPackageKind::AccountsHashVerifier, 11),
+                new(AccountsPackageKind::AccountsHashVerifier, 22),
                 Less,
             ),
             (
-                new(AccountsPackageType::AccountsHashVerifier, 22),
-                new(AccountsPackageType::AccountsHashVerifier, 22),
+                new(AccountsPackageKind::AccountsHashVerifier, 22),
+                new(AccountsPackageKind::AccountsHashVerifier, 22),
                 Equal,
             ),
             (
-                new(AccountsPackageType::AccountsHashVerifier, 33),
-                new(AccountsPackageType::AccountsHashVerifier, 22),
+                new(AccountsPackageKind::AccountsHashVerifier, 33),
+                new(AccountsPackageKind::AccountsHashVerifier, 22),
                 Greater,
             ),
         ] {
@@ -372,87 +372,87 @@ mod tests {
     }
 
     #[test]
-    fn test_cmp_accounts_package_types_by_priority() {
-        for (accounts_package_type_a, accounts_package_type_b, expected_result) in [
+    fn test_cmp_accounts_package_kinds_by_priority() {
+        for (accounts_package_kind_a, accounts_package_kind_b, expected_result) in [
             (
-                AccountsPackageType::EpochAccountsHash,
-                AccountsPackageType::EpochAccountsHash,
+                AccountsPackageKind::EpochAccountsHash,
+                AccountsPackageKind::EpochAccountsHash,
                 Equal,
             ),
             (
-                AccountsPackageType::EpochAccountsHash,
-                AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+                AccountsPackageKind::EpochAccountsHash,
+                AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
                 Greater,
             ),
             (
-                AccountsPackageType::EpochAccountsHash,
-                AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                AccountsPackageKind::EpochAccountsHash,
+                AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                 Greater,
             ),
             (
-                AccountsPackageType::EpochAccountsHash,
-                AccountsPackageType::AccountsHashVerifier,
+                AccountsPackageKind::EpochAccountsHash,
+                AccountsPackageKind::AccountsHashVerifier,
                 Greater,
             ),
             (
-                AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
-                AccountsPackageType::EpochAccountsHash,
+                AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
+                AccountsPackageKind::EpochAccountsHash,
                 Less,
             ),
             (
-                AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
-                AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+                AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
+                AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
                 Equal,
             ),
             (
-                AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
-                AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
+                AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                 Greater,
             ),
             (
-                AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
-                AccountsPackageType::AccountsHashVerifier,
+                AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
+                AccountsPackageKind::AccountsHashVerifier,
                 Greater,
             ),
             (
-                AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
-                AccountsPackageType::EpochAccountsHash,
+                AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                AccountsPackageKind::EpochAccountsHash,
                 Less,
             ),
             (
-                AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
-                AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+                AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
                 Less,
             ),
             (
-                AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
-                AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(6)),
+                AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(6)),
                 Less,
             ),
             (
-                AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
-                AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
                 Equal,
             ),
             (
-                AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
-                AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(4)),
+                AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(4)),
                 Greater,
             ),
             (
-                AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
-                AccountsPackageType::AccountsHashVerifier,
+                AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(5)),
+                AccountsPackageKind::AccountsHashVerifier,
                 Greater,
             ),
             (
-                AccountsPackageType::AccountsHashVerifier,
-                AccountsPackageType::AccountsHashVerifier,
+                AccountsPackageKind::AccountsHashVerifier,
+                AccountsPackageKind::AccountsHashVerifier,
                 Equal,
             ),
         ] {
-            let actual_result = cmp_accounts_package_types_by_priority(
-                &accounts_package_type_a,
-                &accounts_package_type_b,
+            let actual_result = cmp_accounts_package_kinds_by_priority(
+                &accounts_package_kind_a,
+                &accounts_package_kind_b,
             );
             assert_eq!(expected_result, actual_result);
         }
