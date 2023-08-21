@@ -985,7 +985,7 @@ fn print_local_fee_market_by_slot(
                     SimpleAddressLoader::Disabled,
                 )
                 .map_err(|err| {
-                    warn!("Failed to sanitize transaction: {:?}", err);
+                    warn!("Failed to sanitize transaction: {} {}, {:?}", entry_index, transaction_index, err);
                 });
                 if sanitized_transaction.is_ok() {
                     return Some((transaction_index, sanitized_transaction.unwrap()));
