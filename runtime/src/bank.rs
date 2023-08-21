@@ -8259,7 +8259,6 @@ impl Bank {
     }
 
     /// Use to replace an empty account with a program by feature activation
-    #[allow(dead_code)]
     fn replace_empty_account_with_upgradeable_program(
         &mut self,
         old_address: &Pubkey,
@@ -8285,7 +8284,7 @@ impl Bank {
 
                 // Replace the old data account with the new one
                 // If the old data account does not exist, it will be created
-                // If the new data account does exist, it will be overwritten
+                // If it does exist, it will be overwritten
                 self.replace_account(
                     &old_data_address,
                     &new_data_address,

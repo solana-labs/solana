@@ -874,7 +874,7 @@ lazy_static! {
         (require_rent_exempt_split_destination::id(), "Require stake split destination account to be rent exempt"),
         (better_error_codes_for_tx_lamport_check::id(), "better error codes for tx lamport check #33353"),
         (enable_alt_bn128_compression_syscall::id(), "add alt_bn128 compression syscalls"),
-        (feature_gate_program::id(), "control feature activations with an on-chain program"),
+        (feature_gate_program::id(), "control feature activations with an on-chain program #32783"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
