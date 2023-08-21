@@ -8077,6 +8077,26 @@ fn test_program_replace() {
     );
 }
 
+#[test_case(
+    Pubkey::new_unique(),
+    None;
+    "Empty account _without_ corresponding data account"
+)]
+#[test_case(
+    Pubkey::new_unique(),
+    Some(vec![4; 40]);
+    "Empty account _with_ corresponding data account"
+)]
+#[test_case(
+    feature::id(), // `Feature11111111`
+    None;
+    "Native account _without_ corresponding data account"
+)]
+#[test_case(
+    feature::id(), // `Feature11111111`
+    Some(vec![4; 40]);
+    "Native account _with_ corresponding data account"
+)]
 fn test_replace_empty_account_success(
     old: Pubkey,
     maybe_old_data_bytes: Option<Vec<u8>>, // Inner data of the old program _data_ account
@@ -8176,57 +8196,6 @@ fn test_replace_empty_account_success(
     assert_eq!(
         bank.capitalization(),
         original_capitalization - burnt_after_rent
-    );
-}
-
-#[test]
-fn test_replace_empty_account() {
-    // Empty account _without_ corresponding data account
-    // - Old:     ** Does not exist! **
-    // - New:     PDA(NewData)
-    // - NewData: [*New program data]
-    //
-    // Should create the program account and the data account, ie:
-    // - Old:     PDA(OldData)
-    // - OldData: [Old program data]
-    test_replace_empty_account_success(Pubkey::new_unique(), None);
-
-    // Empty account _with_ corresponding data account
-    // - Old:     ** Does not exist! **
-    // - OldData: [Old program data]
-    // - New:     PDA(NewData)
-    // - NewData: [*New program data]
-    //
-    // Should create the program account and the data account, ie:
-    // - Old:     PDA(OldData)
-    // - OldData: [Old program data]
-    test_replace_empty_account_success(Pubkey::new_unique(), Some(vec![4; 40]));
-
-    // Native account _without_ corresponding data account
-    // - Old:     ** Native account (ie. `Feature11111111`) **
-    // - New:     PDA(NewData)
-    // - NewData: [*New program data]
-    //
-    // Should create the program account and the data account, ie:
-    // - Old:     PDA(OldData)
-    // - OldData: [Old program data]
-    test_replace_empty_account_success(
-        feature::id(), // `Feature11111111`
-        None,
-    );
-
-    // Native account _with_ corresponding data account
-    // - Old:     ** Native account (ie. `Feature11111111`) **
-    // - OldData: [Old program data]
-    // - New:     PDA(NewData)
-    // - NewData: [*New program data]
-    //
-    // Should create the program account and the data account, ie:
-    // - Old:     PDA(OldData)
-    // - OldData: [Old program data]
-    test_replace_empty_account_success(
-        feature::id(), // `Feature11111111`
-        Some(vec![4; 40]),
     );
 }
 
