@@ -8277,37 +8277,49 @@ impl Bank {
                 &bpf_loader_upgradeable::id(),
             );
             if let Some(new_data_account) = self.get_account_with_fixed_root(&new_data_address) {
-                datapoint_info!(datapoint_name, ("slot", self.slot, i64));
+                // Make sure the old account is empty
+                // We aren't going to check that there isn't a data account at
+                // the known program-derived address (ie. `old_data_address`),
+                // because if it exists, it will be overwritten
+                if self.get_account_with_fixed_root(old_address).is_none() {
+                    let data = old_data_address.as_ref().to_vec();
+                    let lamports = self.get_minimum_balance_for_rent_exemption(data.len());
 
-                let data = old_data_address.as_ref().to_vec();
-                let lamports = self.get_minimum_balance_for_rent_exemption(data.len());
+                    // Make sure the new account has enough rent-exempt
+                    // lamports for the empty account that will now house the
+                    // PDA
+                    if new_account.lamports() >= lamports {
+                        if let Some(change_in_cap) = new_account.lamports().checked_sub(lamports) {
+                            datapoint_info!(datapoint_name, ("slot", self.slot, i64));
 
-                // Replace the old data account with the new one
-                // If the old data account does not exist, it will be created
-                // If it does exist, it will be overwritten
-                self.replace_account(
-                    &old_data_address,
-                    &new_data_address,
-                    self.get_account_with_fixed_root(&old_data_address).as_ref(),
-                    &new_data_account,
-                );
+                            // Replace the old data account with the new one
+                            // If the old data account does not exist, it will be created
+                            // If it does exist, it will be overwritten
+                            self.replace_account(
+                                &old_data_address,
+                                &new_data_address,
+                                self.get_account_with_fixed_root(&old_data_address).as_ref(),
+                                &new_data_account,
+                            );
 
-                // Write the data account's PDA into the program account
-                let created_program_account = Account {
-                    lamports,
-                    data,
-                    ..new_account.clone().into()
-                };
-                self.replace_account(
-                    old_address,
-                    new_address,
-                    self.get_account_with_fixed_root(old_address).as_ref(),
-                    &created_program_account,
-                );
+                            // Write the data account's PDA into the program account
+                            let created_program_account = Account {
+                                lamports,
+                                data,
+                                ..new_account.into()
+                            };
+                            self.replace_account(
+                                old_address,
+                                new_address,
+                                self.get_account_with_fixed_root(old_address).as_ref(),
+                                &created_program_account,
+                            );
 
-                // Any remaining lamports in the new program account are burnt
-                let change_in_cap = new_account.lamports() - lamports;
-                self.capitalization.fetch_sub(change_in_cap, Relaxed);
+                            // Any remaining lamports in the new program account are burnt
+                            self.capitalization.fetch_sub(change_in_cap, Relaxed);
+                        }
+                    }
+                }
             }
         }
     }
