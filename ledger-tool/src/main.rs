@@ -962,6 +962,7 @@ fn print_local_fee_market_by_slot(
     blockstore: &Blockstore,
     slot: Slot,
     verbose_level: u64,
+    bank: &Bank,
 ) -> Result<(), String> {
     if blockstore.is_dead(slot) {
         return Err("Dead slot".to_string());
@@ -982,7 +983,7 @@ fn print_local_fee_market_by_slot(
                     transaction.clone(),
                     MessageHash::Compute,
                     None,
-                    SimpleAddressLoader::Disabled,
+                    bank,
                 )
                 .map_err(|err| {
                     warn!("Failed to sanitize transaction: {} {}, {:?}", entry_index, transaction_index, err);
@@ -2205,6 +2206,13 @@ fn main() {
             SubCommand::with_name("local-fee-market")
             .about("Print prioritization fee usage, and local fee market details per writable \
                     accounts and block space.")
+            .arg(&hard_forks_arg)
+            .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(
                 Arg::with_name("slots")
                     .index(1)
@@ -4265,13 +4273,37 @@ fn main() {
                 }
             }
             ("local-fee-market", Some(arg_matches)) => {
+                let process_options = ProcessOptions {
+                    new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                    halt_at_slot: Some(0),
+                    run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
+                    ..ProcessOptions::default()
+                };
+                let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
-                    None,
+                    get_access_type(&process_options),
+                    wal_recovery_mode,
                     force_update_to_open,
                     enforce_ulimit_nofile,
                 );
+                let blockstore = Arc::new(blockstore);
+
+                let (bank_forks, ..) = load_and_process_ledger(
+                    arg_matches,
+                    &genesis_config,
+                    blockstore.clone(),
+                    process_options,
+                    snapshot_archive_path,
+                    incremental_snapshot_archive_path,
+                )
+                .unwrap_or_else(|err| {
+                    eprintln!("Failed to load ledger: {err:?}");
+                    exit(1);
+                });
+                // using working_bank to load ALT table, should be sufficient for most cases.
+                let bank = bank_forks.read().unwrap().working_bank();
 
                 let mut slots: Vec<u64> = vec![];
                 if !arg_matches.is_present("slots") {
@@ -4284,7 +4316,7 @@ fn main() {
 
                 for slot in slots {
                     if let Err(err) =
-                        print_local_fee_market_by_slot(&blockstore, slot, verbose_level)
+                        print_local_fee_market_by_slot(&blockstore, slot, verbose_level, &bank)
                     {
                         eprintln!("{err}");
                     }
