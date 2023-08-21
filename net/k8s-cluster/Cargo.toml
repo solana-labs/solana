@@ -9,6 +9,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+anyhow = { workspace = true }
 bincode = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
 clap = { workspace = true }
@@ -55,6 +56,7 @@ tokio = { workspace = true, features = ["full"] }
 [dev-dependencies]
 num_cpus = { workspace = true }
 serial_test = { workspace = true }
+anyhow = { workspace = true }
 
 [build-dependencies]
 rustc_version = { workspace = true }

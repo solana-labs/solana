@@ -126,7 +126,7 @@ license = "Apache-2.0"
 edition = "2021"
 
 [workspace.dependencies]
-aes-gcm-siv = "0.10.3"
+aes-gcm-siv = { git = "https://github.com/gregcusack/AEADs.git", rev="0b291255b5e71a86b68c21c7b2f2ecba943baabd" }
 ahash = "0.8.3"
 anyhow = "1.0.75"
 ark-bn254 = "0.4.0"
@@ -224,8 +224,8 @@ jsonrpc-http-server = "18.0.0"
 jsonrpc-ipc-server = "18.0.0"
 jsonrpc-pubsub = "18.0.0"
 jsonrpc-server-utils = "18.0.0"
-k8s-openapi = "0.19.0"
 kube = "0.85.0"
+k8s-openapi ={ version = "0.19.0", features = ["v1_27"] }
 lazy_static = "1.4.0"
 libc = "0.2.147"
 libloading = "0.7.4"
