@@ -8136,7 +8136,10 @@ fn test_replace_empty_account_success(
 
     // Derive the well-known PDA address for the old data account
     let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_upgradeable_id);
+
+    // Determine the lamports that will be burnt after the replacement
     let burnt_after_rent = if let Some(old_data_bytes) = maybe_old_data_bytes {
+        // Create the data account if necessary
         let old_data_lamports = bank.get_minimum_balance_for_rent_exemption(old_data_bytes.len());
         test_program_replace_set_up_account(
             &mut bank,
@@ -8197,6 +8200,96 @@ fn test_replace_empty_account_success(
         bank.capitalization(),
         original_capitalization - burnt_after_rent
     );
+}
+
+#[test_case(
+    None;
+    "Existing account _without_ corresponding data account"
+)]
+#[test_case(
+    Some(vec![4; 40]);
+    "Existing account _with_ corresponding data account"
+)]
+fn test_replace_empty_account_fail_when_account_exists(
+    maybe_old_data_bytes: Option<Vec<u8>>, // Inner data of the old program _data_ account
+) {
+    // Should not be allowed to execute replacement
+    let bpf_upgradeable_id = bpf_loader_upgradeable::id();
+    let mut bank = create_simple_test_bank(0);
+
+    // Create the test old account with some arbitrary data and lamports balance
+    let old = Pubkey::new_unique();
+    let old_bytes = vec![0, 0, 0, 0]; // Arbitrary bytes, doesn't matter
+    let old_lamports = bank.get_minimum_balance_for_rent_exemption(old_bytes.len());
+    let old_account = test_program_replace_set_up_account(
+        &mut bank,
+        &old,
+        old_lamports,
+        old_bytes,
+        &bpf_upgradeable_id,
+        true,
+    );
+
+    // Create the test new accounts, one for program and one for data
+    let new = Pubkey::new_unique();
+    let (new_data, _) = Pubkey::find_program_address(&[new.as_ref()], &bpf_upgradeable_id);
+    let new_bytes = new_data.to_bytes().to_vec();
+    let new_lamports = bank.get_minimum_balance_for_rent_exemption(new_bytes.len());
+    let new_data_bytes = vec![6; 30];
+    let new_data_lamports = bank.get_minimum_balance_for_rent_exemption(new_data_bytes.len());
+    let new_account = test_program_replace_set_up_account(
+        &mut bank,
+        &new,
+        new_lamports,
+        new_bytes,
+        &bpf_upgradeable_id,
+        true,
+    );
+    let new_data_account = test_program_replace_set_up_account(
+        &mut bank,
+        &new_data,
+        new_data_lamports,
+        new_data_bytes,
+        &bpf_upgradeable_id,
+        false,
+    );
+
+    // Derive the well-known PDA address for the old data account
+    let (old_data, _) = Pubkey::find_program_address(&[old.as_ref()], &bpf_upgradeable_id);
+
+    // Create the data account if necessary
+    let old_data_account = if let Some(old_data_bytes) = maybe_old_data_bytes {
+        let old_data_lamports = bank.get_minimum_balance_for_rent_exemption(old_data_bytes.len());
+        let old_data_account = test_program_replace_set_up_account(
+            &mut bank,
+            &old_data,
+            old_data_lamports,
+            old_data_bytes,
+            &bpf_upgradeable_id,
+            false,
+        );
+        Some(old_data_account)
+    } else {
+        None
+    };
+
+    let original_capitalization = bank.capitalization();
+
+    // Attempt the replacement
+    bank.replace_empty_account_with_upgradeable_program(
+        &old,
+        &new,
+        "bank-apply_empty_account_replacement_for_program",
+    );
+
+    // Everything should be unchanged
+    assert_eq!(bank.get_account(&old).unwrap(), old_account);
+    if let Some(old_data_account) = old_data_account {
+        assert_eq!(bank.get_account(&old_data).unwrap(), old_data_account);
+    }
+    assert_eq!(bank.get_account(&new).unwrap(), new_account);
+    assert_eq!(bank.get_account(&new_data).unwrap(), new_data_account);
+    assert_eq!(bank.capitalization(), original_capitalization);
 }
 
 fn min_rent_exempt_balance_for_sysvars(bank: &Bank, sysvar_ids: &[Pubkey]) -> u64 {
