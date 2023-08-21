@@ -17,6 +17,8 @@ chrono = { workspace = true }
 clap = { version = "4.3.11", features = ["derive"] }
 histogram = { workspace = true }
 itertools = { workspace = true }
+plotters = { version = "0.3.5" }
+rand = { workspace = true }
 solana-core = { workspace = true }
 solana-rpc-client = { workspace = true }
 solana-rpc-client-api = { workspace = true }

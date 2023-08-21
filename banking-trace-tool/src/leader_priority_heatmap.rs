@@ -1,11 +1,14 @@
 use {
     crate::{leader_slots_tracker::LeaderSlotsTracker, process::process_event_files},
+    itertools::{Itertools, MinMaxResult},
+    plotters::prelude::*,
     solana_core::{
         banking_stage::immutable_deserialized_packet::ImmutableDeserializedPacket,
         banking_trace::{BankingPacketBatch, ChannelLabel, TimedTracedEvent, TracedEvent},
     },
     solana_sdk::clock::Slot,
     std::{
+        cmp::Ordering,
         path::PathBuf,
         time::{SystemTime, UNIX_EPOCH},
     },
@@ -64,6 +67,8 @@ impl LeaderPriorityTracker {
     }
 
     fn handle_slot_end(&mut self, timestamp: SystemTime, slot: Slot) {
+        const THRESHOLD_NS: i64 = 8400 * 1000 * 1000; // 8.4 seconds
+
         let new_range = self.leader_slots_tracker.insert_slot(timestamp, slot);
 
         // If there is only one range, no work to be done. Just push the data into it.
@@ -78,13 +83,14 @@ impl LeaderPriorityTracker {
             let current_collection = core::mem::take(&mut self.current_collection);
             let packet_priority_offsets = current_collection
                 .into_iter()
-                .map(|d| {
+                .filter_map(|d| {
                     let timestamp_ns = system_time_to_timestamp_ns(d.timestamp);
                     let offset_ns = (timestamp_ns - slot_range_start_ns).try_into().unwrap();
-                    PacketPriorityOffset {
+
+                    (i64::abs(offset_ns) <= THRESHOLD_NS).then(|| PacketPriorityOffset {
                         priority: d.priority,
                         offset_ns,
-                    }
+                    })
                 })
                 .collect();
 
@@ -112,19 +118,15 @@ impl LeaderPriorityTracker {
             for (priority, range_1_offset_ns, range_2_offset_ns) in packet_priority_offsets {
                 let abs_1 = i64::abs(range_1_offset_ns);
                 let abs_2 = i64::abs(range_2_offset_ns);
-                const THRESHOLD_NS: i64 = 30 * 1000 * 1000 * 1000; // 30 seconds
-                if abs_1 > THRESHOLD_NS && abs_2 > THRESHOLD_NS {
-                    // Both ranges are too far away from the packet timestamp. Discard.
-                    continue;
-                }
-                if abs_1 > abs_2 {
+
+                if abs_1 > abs_2 && abs_2 <= THRESHOLD_NS {
                     self.collected_data[range_index_2]
                         .data
                         .push(PacketPriorityOffset {
                             priority,
                             offset_ns: range_2_offset_ns,
                         });
-                } else {
+                } else if abs_1 <= THRESHOLD_NS {
                     self.collected_data[range_index_1]
                         .data
                         .push(PacketPriorityOffset {
@@ -137,69 +139,37 @@ impl LeaderPriorityTracker {
     }
 
     fn report(&self) {
+        const NANOS_PER_MILLI: f64 = 1000.0 * 1000.0;
+        let mut overlayed_data = vec![];
         for (slot_range, data) in self
             .leader_slots_tracker
             .ranges
             .iter()
             .zip(self.collected_data.iter())
         {
-            const NANOS_PER_MILLI: f64 = 1000.0 * 1000.0;
-            let slot_start = slot_range.start.slot;
-            let slot_end = slot_range.end.slot;
-            let priority_stats = get_stats(data.data.iter().map(|d| d.priority as f64));
-            let offset_stats = get_stats(
-                data.data
-                    .iter()
-                    .map(|d| d.offset_ns as f64 / NANOS_PER_MILLI),
+            println!("{} - {}", slot_range.start.slot, slot_range.end.slot);
+
+            let points = data
+                .data
+                .iter()
+                .map(|d| (d.offset_ns as f64 / NANOS_PER_MILLI, d.priority as f64))
+                .collect_vec();
+
+            let filename = format!(
+                "./heatmaps/{}-{}.png",
+                slot_range.start.slot, slot_range.end.slot
             );
-            let prioritized_offset_stats =
-                get_stats(data.data.iter().filter_map(|d| {
-                    (d.priority != 0).then_some(d.offset_ns as f64 / NANOS_PER_MILLI)
-                }));
-            let unprioritized_offset_stats =
-                get_stats(data.data.iter().filter_map(|d| {
-                    (d.priority == 0).then_some(d.offset_ns as f64 / NANOS_PER_MILLI)
-                }));
-
-            println!("{slot_start} - {slot_end}:");
-            println!("    Priority: {priority_stats}");
-            println!("    OffsetMs: {offset_stats}");
-            println!("    Prioritized-OffsetMs: {prioritized_offset_stats}");
-            println!("    UnPrioritized-OffsetMs: {unprioritized_offset_stats}");
+            generate_heatmap(&points, filename);
+            overlayed_data.extend(points);
         }
+
+        let filename = format!(
+            "./heatmaps/overlay-{}-{}.png",
+            self.leader_slots_tracker.ranges.first().unwrap().start.slot,
+            self.leader_slots_tracker.ranges.last().unwrap().end.slot
+        );
+        generate_heatmap(&overlayed_data, filename);
     }
-}
-
-struct Stats {
-    min: f64,
-    max: f64,
-    average: f64,
-}
-
-impl std::fmt::Display for Stats {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{{min: {:.2}, max: {:.2}, average: {:.2}}}",
-            self.min, self.max, self.average
-        )
-    }
-}
-
-fn get_stats(iter: impl Iterator<Item = f64>) -> Stats {
-    let mut min = f64::MAX;
-    let mut max = f64::MIN;
-    let mut sum = 0.0;
-    let mut count = 0;
-    for item in iter.map(|i| i.try_into().unwrap()) {
-        min = min.min(item);
-        max = max.max(item);
-        sum += item;
-        count += 1;
-    }
-
-    let average = sum / count as f64;
-    Stats { min, max, average }
 }
 
 /// Aggregate priority and timestamp info for a contiguous group of leader slots.
@@ -222,4 +192,131 @@ struct PacketPriorityOffset {
 
 fn system_time_to_timestamp_ns(timestamp: SystemTime) -> i128 {
     i128::try_from(timestamp.duration_since(UNIX_EPOCH).unwrap().as_nanos()).unwrap()
+}
+
+fn generate_heatmap(data: &[(f64, f64)], filename: impl AsRef<std::path::Path>) {
+    let (x_buckets, y_buckets, counts) = bucket_counts(data);
+    let (min_x, max_x) = (x_buckets.first().unwrap().0, x_buckets.last().unwrap().1);
+    let (min_y, max_y) = (y_buckets.first().unwrap().0, y_buckets.last().unwrap().1);
+
+    println!("  Total counts: {}", data.len());
+    println!("  X: [{min_x}, {max_x}]");
+    println!("  Y: [{min_y}, {max_y}]");
+
+    let root = BitMapBackend::new(&filename, (1024, 1024)).into_drawing_area();
+    root.fill(&WHITE).unwrap();
+
+    let mut chart = ChartBuilder::on(&root)
+        .x_label_area_size(75)
+        .y_label_area_size(75)
+        .build_cartesian_2d(min_x..max_x, min_y..max_y)
+        .unwrap();
+
+    chart
+        .configure_mesh()
+        .disable_mesh()
+        .x_desc("Time Offset (ms)")
+        .y_desc("Priority")
+        .draw()
+        .unwrap();
+
+    let max_count = *counts.iter().flatten().max().unwrap() as f64;
+
+    let color_interpolator = |f: f64| ViridisRGB::get_color(f);
+    for (x_bucket, (x_lower, x_upper)) in x_buckets.iter().enumerate() {
+        for (y_bucket, (y_lower, y_upper)) in y_buckets.iter().enumerate() {
+            let count = counts[x_bucket][y_bucket];
+            if count == 0 {
+                continue;
+            }
+            let value = count as f64 / max_count;
+            let color = color_interpolator(value);
+
+            chart
+                .draw_series([Rectangle::new(
+                    [(*x_lower, *y_lower), (*x_upper, *y_upper)],
+                    color.filled(),
+                )])
+                .unwrap();
+        }
+    }
+
+    for x in [-400.0, 0.0, 400.0, 800.0, 1200.0] {
+        let line_data = [(x, min_y), (x, max_y)];
+        chart
+            .draw_series(LineSeries::new(
+                line_data.iter().map(|&(x, y)| (x, y)),
+                BLACK,
+            ))
+            .unwrap();
+    }
+
+    root.present().unwrap();
+}
+
+/// Returns `(x_buckets, y_buckets, counts)`
+fn bucket_counts(data: &[(f64, f64)]) -> (Vec<(f64, f64)>, Vec<(f64, f64)>, Vec<Vec<u64>>) {
+    // Determine the buckets for the data.
+    let (x_min, x_max) = minmax(data.iter().map(|&(x, _)| x));
+    let (y_min, y_max) = minmax(data.iter().map(|&(_, y)| y));
+    let x_buckets = linspace(x_min, x_max, 50);
+    let y_buckets = linspace(y_min, y_max, 50);
+
+    // Determine the counts for each bucket.
+    let mut counts = vec![vec![0; y_buckets.len()]; x_buckets.len()];
+
+    for &(x, y) in data {
+        let x_bucket = x_buckets
+            .binary_search_by(|&(x_lower, x_upper)| {
+                if x >= x_lower && x <= x_upper {
+                    Ordering::Equal
+                } else if x < x_lower {
+                    Ordering::Greater
+                } else {
+                    Ordering::Less
+                }
+            })
+            .unwrap();
+        let y_bucket = y_buckets
+            .binary_search_by(|&(y_lower, y_upper)| {
+                if y >= y_lower && y <= y_upper {
+                    Ordering::Equal
+                } else if y < y_lower {
+                    Ordering::Greater
+                } else {
+                    Ordering::Less
+                }
+            })
+            .unwrap();
+        counts[x_bucket][y_bucket] += 1;
+    }
+
+    (x_buckets, y_buckets, counts)
+}
+
+/// Panicking minmax
+fn minmax(it: impl Iterator<Item = f64>) -> (f64, f64) {
+    let MinMaxResult::MinMax(min, max) = it.minmax() else {
+        panic!("failed to get min/max of priorities");
+    };
+
+    (min, max)
+}
+
+fn linspace(min: f64, max: f64, n: usize) -> Vec<(f64, f64)> {
+    let bucket_width = (max - min) / n as f64;
+
+    let mut buckets = Vec::with_capacity(n - 1);
+    let mut start = min;
+    for i in 0..n {
+        let end = if i == n - 1 {
+            max
+        } else {
+            start + bucket_width
+        };
+        buckets.push((start, end));
+        start = end;
+    }
+
+    buckets
 }
