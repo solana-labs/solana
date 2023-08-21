@@ -6,7 +6,7 @@
 use {
     crossbeam_channel::{Receiver, Sender},
     solana_accounts_db::{
-        accounts_db::CalcAccountsHashFlavor,
+        accounts_db::CalcAccountsHashKind,
         accounts_hash::{
             AccountsHash, AccountsHashKind, CalcAccountsHashConfig, HashStats,
             IncrementalAccountsHash,
@@ -274,16 +274,16 @@ impl AccountsHashVerifier {
         accounts_package: &AccountsPackage,
         snapshot_config: &SnapshotConfig,
     ) -> AccountsHashKind {
-        let accounts_hash_calculation_flavor = match accounts_package.package_type {
-            AccountsPackageType::AccountsHashVerifier => CalcAccountsHashFlavor::Full,
-            AccountsPackageType::EpochAccountsHash => CalcAccountsHashFlavor::Full,
+        let accounts_hash_calculation_kind = match accounts_package.package_type {
+            AccountsPackageType::AccountsHashVerifier => CalcAccountsHashKind::Full,
+            AccountsPackageType::EpochAccountsHash => CalcAccountsHashKind::Full,
             AccountsPackageType::Snapshot(snapshot_kind) => match snapshot_kind {
-                SnapshotKind::FullSnapshot => CalcAccountsHashFlavor::Full,
+                SnapshotKind::FullSnapshot => CalcAccountsHashKind::Full,
                 SnapshotKind::IncrementalSnapshot(_) => {
                     if accounts_package.is_incremental_accounts_hash_feature_enabled {
-                        CalcAccountsHashFlavor::Incremental
+                        CalcAccountsHashKind::Incremental
                     } else {
-                        CalcAccountsHashFlavor::Full
+                        CalcAccountsHashKind::Full
                     }
                 }
             },
@@ -293,13 +293,13 @@ impl AccountsHashVerifier {
             accounts_hash_kind,
             accounts_hash_for_reserialize,
             bank_incremental_snapshot_persistence,
-        ) = match accounts_hash_calculation_flavor {
-            CalcAccountsHashFlavor::Full => {
+        ) = match accounts_hash_calculation_kind {
+            CalcAccountsHashKind::Full => {
                 let (accounts_hash, _capitalization) =
                     Self::_calculate_full_accounts_hash(accounts_package);
                 (accounts_hash.into(), accounts_hash, None)
             }
-            CalcAccountsHashFlavor::Incremental => {
+            CalcAccountsHashKind::Incremental => {
                 let AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(base_slot)) =
                     accounts_package.package_type
                 else {

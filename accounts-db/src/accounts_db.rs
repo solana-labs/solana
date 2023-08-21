@@ -7662,7 +7662,7 @@ impl AccountsDb {
             config,
             storages,
             stats,
-            CalcAccountsHashFlavor::Full,
+            CalcAccountsHashKind::Full,
             self.full_accounts_hash_cache_path.clone(),
         )?;
         let AccountsHashKind::Full(accounts_hash) = accounts_hash else {
@@ -7690,7 +7690,7 @@ impl AccountsDb {
             config,
             storages,
             stats,
-            CalcAccountsHashFlavor::Incremental,
+            CalcAccountsHashKind::Incremental,
             self.incremental_accounts_hash_cache_path.clone(),
         )?;
         let AccountsHashKind::Incremental(incremental_accounts_hash) = accounts_hash else {
@@ -7704,7 +7704,7 @@ impl AccountsDb {
         config: &CalcAccountsHashConfig<'_>,
         storages: &SortedStorages<'_>,
         mut stats: HashStats,
-        flavor: CalcAccountsHashFlavor,
+        kind: CalcAccountsHashKind,
         accounts_hash_cache_path: PathBuf,
     ) -> Result<(AccountsHashKind, u64), AccountsHashVerificationError> {
         let total_time = Measure::start("");
@@ -7736,7 +7736,7 @@ impl AccountsDb {
                 } else {
                     None
                 },
-                zero_lamport_accounts: flavor.zero_lamport_accounts(),
+                zero_lamport_accounts: kind.zero_lamport_accounts(),
                 dir_for_temp_cache_files: self.transient_accounts_hash_cache_path.clone(),
                 active_stats: &self.active_stats,
             };
@@ -7774,9 +7774,9 @@ impl AccountsDb {
             // turn raw data into merkle tree hashes and sum of lamports
             let (accounts_hash, capitalization) =
                 accounts_hasher.rest_of_hash_calculation(&cache_hash_intermediates, &mut stats);
-            let accounts_hash = match flavor {
-                CalcAccountsHashFlavor::Full => AccountsHashKind::Full(AccountsHash(accounts_hash)),
-                CalcAccountsHashFlavor::Incremental => {
+            let accounts_hash = match kind {
+                CalcAccountsHashKind::Full => AccountsHashKind::Full(AccountsHash(accounts_hash)),
+                CalcAccountsHashKind::Incremental => {
                     AccountsHashKind::Incremental(IncrementalAccountsHash(accounts_hash))
                 }
             };
@@ -9583,17 +9583,17 @@ pub enum CalcAccountsHashDataSource {
 
 /// Which accounts hash calculation is being performed?
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum CalcAccountsHashFlavor {
+pub enum CalcAccountsHashKind {
     Full,
     Incremental,
 }
 
-impl CalcAccountsHashFlavor {
+impl CalcAccountsHashKind {
     /// How should zero-lamport accounts be handled by this accounts hash calculation?
     fn zero_lamport_accounts(&self) -> ZeroLamportAccounts {
         match self {
-            CalcAccountsHashFlavor::Full => ZeroLamportAccounts::Excluded,
-            CalcAccountsHashFlavor::Incremental => ZeroLamportAccounts::Included,
+            CalcAccountsHashKind::Full => ZeroLamportAccounts::Excluded,
+            CalcAccountsHashKind::Incremental => ZeroLamportAccounts::Included,
         }
     }
 }
