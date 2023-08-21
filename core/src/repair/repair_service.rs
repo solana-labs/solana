@@ -490,7 +490,8 @@ impl RepairService {
             if last_stats.elapsed().as_secs() > 2 {
                 let repair_total = repair_stats.shred.count
                     + repair_stats.highest_shred.count
-                    + repair_stats.orphan.count;
+                    + repair_stats.orphan.count
+                    + repair_stats.wen_restart.count;
                 let slot_to_count: Vec<_> = repair_stats
                     .shred
                     .slot_pubkeys
