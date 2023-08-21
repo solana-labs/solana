@@ -14,10 +14,14 @@ use {
     },
 };
 
-pub fn do_leader_priority_heatmap(event_file_paths: &[PathBuf]) -> std::io::Result<()> {
+pub fn do_leader_priority_heatmap(
+    event_file_paths: &[PathBuf],
+    output_dir: impl AsRef<std::path::Path>,
+) -> std::io::Result<()> {
+    std::fs::create_dir_all(&output_dir)?;
     let mut tracker = LeaderPriorityTracker::default();
     process_event_files(event_file_paths, &mut |event| tracker.handle_event(event))?;
-    tracker.report();
+    tracker.report(output_dir);
     Ok(())
 }
 
@@ -138,7 +142,7 @@ impl LeaderPriorityTracker {
         }
     }
 
-    fn report(&self) {
+    fn report(&self, output_dir: impl AsRef<std::path::Path>) {
         const NANOS_PER_MILLI: f64 = 1000.0 * 1000.0;
         let mut overlayed_data = vec![];
         for (slot_range, data) in self
@@ -155,19 +159,19 @@ impl LeaderPriorityTracker {
                 .map(|d| (d.offset_ns as f64 / NANOS_PER_MILLI, d.priority as f64))
                 .collect_vec();
 
-            let filename = format!(
-                "./heatmaps/{}-{}.png",
+            let filename = output_dir.as_ref().join(format!(
+                "{}-{}.png",
                 slot_range.start.slot, slot_range.end.slot
-            );
+            ));
             generate_heatmap(&points, filename);
             overlayed_data.extend(points);
         }
 
-        let filename = format!(
-            "./heatmaps/overlay-{}-{}.png",
+        let filename = output_dir.as_ref().join(format!(
+            "overlay-{}-{}.png",
             self.leader_slots_tracker.ranges.first().unwrap().start.slot,
             self.leader_slots_tracker.ranges.last().unwrap().end.slot
-        );
+        ));
         generate_heatmap(&overlayed_data, filename);
     }
 }

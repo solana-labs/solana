@@ -33,7 +33,7 @@ struct AppArgs {
     mode: TraceToolMode,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Subcommand)]
+#[derive(Clone, Debug, PartialEq, Subcommand)]
 enum TraceToolMode {
     /// Simply log without additional processing.
     Log {
@@ -62,7 +62,11 @@ enum TraceToolMode {
         slot: Slot,
     },
     /// Heatmap of non-vote transaction priority and time-offset from beginning of slot range.
-    SlotPriorityHeatmap,
+    SlotPriorityHeatmap {
+        /// Directory to save heatmaps into.
+        #[arg(short, long, default_value = "./heatmaps")]
+        output_dir: PathBuf,
+    },
 }
 
 #[derive(Args, Copy, Clone, Debug, PartialEq)]
@@ -106,7 +110,9 @@ fn main() {
             save_history_before(slot);
             Ok(())
         }
-        TraceToolMode::SlotPriorityHeatmap => do_leader_priority_heatmap(&event_file_paths),
+        TraceToolMode::SlotPriorityHeatmap { output_dir } => {
+            do_leader_priority_heatmap(&event_file_paths, output_dir)
+        }
     };
 
     if let Err(err) = result {
