@@ -430,11 +430,13 @@ impl BankingStage {
                     ),
                 };
 
-                let mut packet_receiver =
-                    PacketReceiver::new(id, packet_receiver, bank_forks.clone());
+                let mut packet_receiver = PacketReceiver::new(
+                    id,
+                    packet_receiver,
+                    bank_forks.clone(),
+                    invalid_fee_payer_filter.clone(),
+                );
                 let poh_recorder = poh_recorder.clone();
-                let invalid_fee_payer_filter = invalid_fee_payer_filter.clone();
-
                 let committer = Committer::new(
                     transaction_status_sender.clone(),
                     replay_vote_sender.clone(),
@@ -450,7 +452,7 @@ impl BankingStage {
                     invalid_fee_payer_filter.clone(),
                 );
                 let consumer = Consumer::new(
-                    invalid_fee_payer_filter,
+                    invalid_fee_payer_filter.clone(),
                     committer,
                     poh_recorder.read().unwrap().new_recorder(),
                     QosService::new(id),

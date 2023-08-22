@@ -6,7 +6,10 @@ use {
         unprocessed_transaction_storage::UnprocessedTransactionStorage,
         BankingStageStats,
     },
-    crate::{banking_trace::BankingPacketReceiver, tracer_packet_stats::TracerPacketStats},
+    crate::{
+        banking_trace::BankingPacketReceiver, invalid_fee_payer_filter::InvalidFeePayerFilter,
+        tracer_packet_stats::TracerPacketStats,
+    },
     crossbeam_channel::RecvTimeoutError,
     solana_measure::{measure::Measure, measure_us},
     solana_runtime::bank_forks::BankForks,
@@ -20,6 +23,7 @@ use {
 pub struct PacketReceiver {
     id: u32,
     packet_deserializer: PacketDeserializer,
+    invalid_fee_payer_filter: Arc<InvalidFeePayerFilter>,
 }
 
 impl PacketReceiver {
@@ -27,10 +31,12 @@ impl PacketReceiver {
         id: u32,
         banking_packet_receiver: BankingPacketReceiver,
         bank_forks: Arc<RwLock<BankForks>>,
+        invalid_fee_payer_filter: Arc<InvalidFeePayerFilter>,
     ) -> Self {
         Self {
             id,
             packet_deserializer: PacketDeserializer::new(banking_packet_receiver, bank_forks),
+            invalid_fee_payer_filter,
         }
     }
 
@@ -50,7 +56,7 @@ impl PacketReceiver {
                     recv_timeout,
                     unprocessed_transaction_storage.max_receive_size(),
                 )
-                // Consumes results if Ok, otherwise we keep the Err
+                // Consumes results if Ok, otherwise we keep the Err)
                 .map(|receive_packet_results| {
                     self.buffer_packets(
                         receive_packet_results,
@@ -115,6 +121,10 @@ impl PacketReceiver {
 
         let mut dropped_packets_count = 0;
         let mut newly_buffered_packets_count = 0;
+        let (deserialized_packets, num_filter_dropped_packets) =
+            Self::filter_packets(&self.invalid_fee_payer_filter, deserialized_packets);
+        dropped_packets_count += num_filter_dropped_packets;
+
         Self::push_unprocessed(
             unprocessed_transaction_storage,
             deserialized_packets,
@@ -137,6 +147,27 @@ impl PacketReceiver {
         banking_stage_stats
             .current_buffered_packets_count
             .swap(unprocessed_transaction_storage.len(), Ordering::Relaxed);
+    }
+
+    fn filter_packets(
+        invalid_fee_payer_filter: &InvalidFeePayerFilter,
+        deserialized_packets: Vec<ImmutableDeserializedPacket>,
+    ) -> (Vec<ImmutableDeserializedPacket>, usize) {
+        let original_length = deserialized_packets.len();
+        let filtered_packets = deserialized_packets
+            .into_iter()
+            .filter(|packet| {
+                !invalid_fee_payer_filter.should_reject(
+                    &packet
+                        .transaction()
+                        .get_message()
+                        .message
+                        .static_account_keys()[0],
+                )
+            })
+            .collect::<Vec<_>>();
+        let num_filter_dropped = original_length.saturating_sub(filtered_packets.len());
+        (filtered_packets, num_filter_dropped)
     }
 
     fn push_unprocessed(
