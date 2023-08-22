@@ -8237,7 +8237,7 @@ impl Bank {
 
     /// Use to replace programs by feature activation
     #[allow(dead_code)]
-    fn replace_program_account(
+    fn replace_non_upgradeable_program_account(
         &mut self,
         old_address: &Pubkey,
         new_address: &Pubkey,
@@ -8282,41 +8282,52 @@ impl Bank {
                 // the known program-derived address (ie. `old_data_address`),
                 // because if it exists, it will be overwritten
                 if self.get_account_with_fixed_root(old_address).is_none() {
-                    let data = old_data_address.as_ref().to_vec();
-                    let lamports = self.get_minimum_balance_for_rent_exemption(data.len());
-
-                    // Make sure the new account has enough rent-exempt
-                    // lamports for the empty account that will now house the
-                    // PDA
-                    if new_account.lamports() >= lamports {
-                        let change_in_cap = new_account.lamports().saturating_sub(lamports);
-                        datapoint_info!(datapoint_name, ("slot", self.slot, i64));
-
-                        // Replace the old data account with the new one
-                        // If the old data account does not exist, it will be created
-                        // If it does exist, it will be overwritten
-                        self.replace_account(
-                            &old_data_address,
-                            &new_data_address,
-                            self.get_account_with_fixed_root(&old_data_address).as_ref(),
-                            &new_data_account,
-                        );
-
-                        // Write the data account's PDA into the program account
-                        let created_program_account = Account {
+                    let lamports = self.get_minimum_balance_for_rent_exemption(
+                        UpgradeableLoaderState::size_of_program(),
+                    );
+                    let state = UpgradeableLoaderState::Program {
+                        programdata_address: old_data_address,
+                    };
+                    if let Ok(data_len) = bincode::serialized_size(&state) {
+                        let mut created_program_account = Account {
                             lamports,
-                            data,
-                            ..new_account.into()
+                            data: vec![0u8; data_len as usize],
+                            owner: bpf_loader_upgradeable::id(),
+                            executable: true,
+                            rent_epoch: new_account.rent_epoch(),
                         };
-                        self.replace_account(
-                            old_address,
-                            new_address,
-                            None::<&AccountSharedData>,
-                            &created_program_account,
-                        );
 
-                        // Any remaining lamports in the new program account are burnt
-                        self.capitalization.fetch_sub(change_in_cap, Relaxed);
+                        // Make sure the new account has enough rent-exempt
+                        // lamports for the empty account that will now house the
+                        // PDA, and we can properly serialize the program account's
+                        // state
+                        if new_account.lamports() >= lamports
+                            && created_program_account.serialize_data(&state).is_ok()
+                        {
+                            let change_in_cap = new_account.lamports().saturating_sub(lamports);
+                            datapoint_info!(datapoint_name, ("slot", self.slot, i64));
+
+                            // Replace the old data account with the new one
+                            // If the old data account does not exist, it will be created
+                            // If it does exist, it will be overwritten
+                            self.replace_account(
+                                &old_data_address,
+                                &new_data_address,
+                                self.get_account_with_fixed_root(&old_data_address).as_ref(),
+                                &new_data_account,
+                            );
+
+                            // Write the data account's PDA into the program account
+                            self.replace_account(
+                                old_address,
+                                new_address,
+                                None::<&AccountSharedData>,
+                                &created_program_account,
+                            );
+
+                            // Any remaining lamports in the new program account are burnt
+                            self.capitalization.fetch_sub(change_in_cap, Relaxed);
+                        }
                     }
                 }
             }
