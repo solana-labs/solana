@@ -4039,6 +4039,19 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
+=======
+name = "rustls-webpki"
+version = "0.101.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d93931baf2d282fff8d3a532bbfd7653f734643161b87e3e01e59a04439bf0d"
+dependencies = [
+ "ring",
+ "untrusted",
+]
+
+[[package]]
+>>>>>>> e4a2d14c4e (ci: fix audit (#32932))
 name = "rustversion"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"

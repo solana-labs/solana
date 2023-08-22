@@ -33,8 +33,13 @@ cargo_audit_ignores=(
   # https://github.com/solana-labs/solana/pull/32836
   --ignore RUSTSEC-2022-0093
 
+<<<<<<< HEAD
   # webpki
   # https://github.com/solana-labs/solana/issues/32933
+=======
+  # webpki: CPU denial of service in certificate path building
+  # No fixed upgrade is available!
+>>>>>>> e4a2d14c4e (ci: fix audit (#32932))
   --ignore RUSTSEC-2023-0052
 )
 scripts/cargo-for-all-lock-files.sh audit "${cargo_audit_ignores[@]}" | $dep_tree_filter
