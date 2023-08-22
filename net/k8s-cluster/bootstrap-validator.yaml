@@ -22,7 +22,7 @@ metadata:
   labels:
     app.kubernetes.io/name: solana-bootstrap-validator
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app.kubernetes.io/name: solana-bootstrap-validator
