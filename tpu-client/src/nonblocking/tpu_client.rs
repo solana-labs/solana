@@ -3,7 +3,7 @@ use {
     crate::tpu_client::{RecentLeaderSlots, TpuClientConfig, MAX_FANOUT_SLOTS},
     bincode::serialize,
     futures_util::{
-        future::{join_all, FutureExt},
+        future::{join_all, FutureExt, TryFutureExt},
         stream::StreamExt,
     },
     log::*,
@@ -269,29 +269,50 @@ where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
 {
+    const SEND_TIMEOUT_INTERVAL: Duration = Duration::from_secs(5);
     let sleep_duration = SEND_TRANSACTION_INTERVAL.saturating_mul(index as u32);
+    let send_timeout = SEND_TIMEOUT_INTERVAL.saturating_add(sleep_duration);
     leaders
         .into_iter()
         .map(|addr| {
-            sleep_and_send_wire_transaction_to_addr(
-                sleep_duration,
-                connection_cache,
-                addr,
-                wire_transaction.clone(),
+            timeout_future(
+                send_timeout,
+                sleep_and_send_wire_transaction_to_addr(
+                    sleep_duration,
+                    connection_cache,
+                    addr,
+                    wire_transaction.clone(),
+                ),
             )
             .boxed_local() // required to make types work simply
         })
         .chain(iter::once(
-            sleep_and_set_message(
-                sleep_duration,
-                progress_bar,
-                progress,
-                index,
-                num_transactions,
+            timeout_future(
+                send_timeout,
+                sleep_and_set_message(
+                    sleep_duration,
+                    progress_bar,
+                    progress,
+                    index,
+                    num_transactions,
+                ),
             )
             .boxed_local(), // required to make types work simply
         ))
         .collect::<Vec<_>>()
+}
+
+// Wrap an existing future with a timeout.
+//
+// Useful for end-users who don't need a persistent connection to each validator,
+// and want to abort more quickly.
+fn timeout_future<'a, Fut: Future<Output = TransportResult<()>> + 'a>(
+    timeout_duration: Duration,
+    future: Fut,
+) -> impl Future<Output = TransportResult<()>> + 'a {
+    timeout(timeout_duration, future)
+        .unwrap_or_else(|_| Err(TransportError::Custom("Timed out".to_string())))
+        .boxed_local()
 }
 
 #[cfg(feature = "spinner")]
