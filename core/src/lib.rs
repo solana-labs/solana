@@ -22,6 +22,7 @@ pub mod cost_update_service;
 pub mod drop_bank_service;
 pub mod fetch_stage;
 pub mod gen_keys;
+mod invalid_fee_payer_filter;
 pub mod ledger_cleanup_service;
 pub mod ledger_metric_report_service;
 pub mod next_leader;
