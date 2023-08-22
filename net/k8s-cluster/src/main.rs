@@ -14,17 +14,21 @@ use {
                 ServiceSpec,
                 ServicePort,
                 Service,
+                EnvVar,
+                EnvVarSource,
+                ObjectFieldSelector,
+                PodStatus,
             },
             apps::v1::{
                 Deployment,
-                DeploymentSpec
+                DeploymentSpec,
             }
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
     },
     log::*,
     serde_json,
-    std::collections::BTreeMap,
+    std::collections::BTreeMap
 };
 
 
@@ -92,16 +96,73 @@ async fn main() {
 
     // info!("service: {:?}", serv_res.unwrap());
     let client = Client::try_default().await.unwrap();
-    let deployment = get_deployment_info(client.clone(), app_name, namespace).await.unwrap();
+    // let deployment = get_deployment_info(client.clone(), app_name, namespace).await.unwrap();
+    // let deployment_json = serde_json::to_string_pretty(&deployment).unwrap();
+    // info!("{}", deployment_json);
+
+
+    // let service = get_service_info(client.clone(), app_name, namespace).await.unwrap();
+    // let service_json = serde_json::to_string_pretty(&service).unwrap();
+    // info!("{}", service_json);
+
+    let res = check_service_matching_deployment(client, app_name, namespace).await;
+
+
+
+}
+
+async fn check_service_matching_deployment(
+    client: Client,
+    app_name: &str,
+    namespace: &str, 
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Get the Deployment
+    let deployment_api: Api<Deployment> = Api::namespaced(client.clone(), namespace);
+    let deployment = deployment_api.get(format!("{}-deployment", app_name).as_str()).await?;
     let deployment_json = serde_json::to_string_pretty(&deployment).unwrap();
     info!("{}", deployment_json);
 
-
-    let service = get_service_info(client.clone(), app_name, namespace).await.unwrap();
+    // Get the Service
+    let service_api: Api<Service> = Api::namespaced(client, namespace);
+    let service = service_api.get(format!("{}-service", app_name).as_str()).await?;
     let service_json = serde_json::to_string_pretty(&service).unwrap();
     info!("{}", service_json);
 
+    let deployment_labels = deployment
+        .spec
+        .and_then(|spec| {
+            Some(spec.selector).and_then(|selector| { 
+                selector.match_labels.and_then(|val| {
+                    val.get("app.kubernetes.io/name").cloned()
+                })
+            })
+        })
+        .clone();
 
+    let service_labels = service
+        .spec
+        .and_then(|spec| {
+            spec.selector.and_then(|val| {
+                val.get("app.kubernetes.io/name").cloned()
+            })
+        })
+        .clone();
+
+    // match(de)
+    info!("dep, serve labels: {:?}, {:?}", deployment_labels, service_labels);
+
+    let are_equal = match(deployment_labels, service_labels) {
+        (Some(dep_label), Some(serv_label)) => {
+            dep_label == serv_label
+        },
+        _ => false,
+    };
+
+    if !are_equal {
+        error!("Deployment and Service labels are not the same!");
+    } 
+
+    Ok(())
 }
 
 // #[tokio::main]
@@ -209,6 +270,18 @@ async fn create_deployment(
     let mut label_selector = BTreeMap::new();  // Create a JSON map for label selector
     label_selector.insert("app.kubernetes.io/name".to_string(), app_name.to_string());
     
+    let env_var = EnvVar {
+        name: "MY_POD_IP".to_string(),
+        value_from: Some(EnvVarSource { 
+            field_ref: Some(ObjectFieldSelector {
+                field_path: "status.podIP".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
     // Define the pod spec
     let pod_spec = PodTemplateSpec {
         metadata: Some(ObjectMeta {
@@ -219,6 +292,7 @@ async fn create_deployment(
             containers: vec![Container {
                 name: container_name.to_string(),
                 image: Some(image_name.to_string()),
+                env: Some(vec![env_var]),
                 ..Default::default()
             }],
             ..Default::default()
@@ -270,8 +344,8 @@ async fn create_service(
         },
         spec: Some(ServiceSpec {
             selector: Some(label_selector),
-            cluster_ip: None,
-            cluster_ips: None,
+            cluster_ip: Some("None".into()),
+            // cluster_ips: None,
             ports: Some(vec![ServicePort {
                 port: 8899, // RPC Port
                 name: Some("rpc-port".to_string()),
