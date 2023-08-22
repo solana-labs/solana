@@ -177,6 +177,7 @@ struct ServeRepairStats {
     orphan: usize,
     pong: usize,
     ancestor_hashes: usize,
+    wen_restart: usize,
     window_index_misses: usize,
     ping_cache_check_failed: usize,
     pings_sent: usize,
@@ -465,10 +466,6 @@ impl ServeRepair {
                 RepairProtocol::Orphan {
                     header: RepairRequestHeader { nonce, .. },
                     slot,
-                }
-                | RepairProtocol::WenRestart {
-                    header: RepairRequestHeader { nonce, .. },
-                    slot,
                 } => {
                     stats.orphan += 1;
                     (
@@ -481,6 +478,23 @@ impl ServeRepair {
                             *nonce,
                         ),
                         "OrphanWithNonce",
+                    )
+                }
+                | RepairProtocol::WenRestart {
+                    header: RepairRequestHeader { nonce, .. },
+                    slot,
+                } => {
+                    stats.wen_restart += 1;
+                    (
+                        Self::run_orphan(
+                            recycler,
+                            from_addr,
+                            blockstore,
+                            *slot,
+                            MAX_ORPHAN_REPAIR_RESPONSES,
+                            *nonce,
+                        ),
+                        "WenRestart",
                     )
                 }
                 RepairProtocol::AncestorHashes {
@@ -794,6 +808,7 @@ impl ServeRepair {
             ("err_sig_verify", stats.err_sig_verify, i64),
             ("err_unsigned", stats.err_unsigned, i64),
             ("err_id_mismatch", stats.err_id_mismatch, i64),
+            ("wen_restart", stats.wen_restart, i64),
         );
 
         *stats = ServeRepairStats::default();
