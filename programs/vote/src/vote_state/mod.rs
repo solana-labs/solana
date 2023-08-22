@@ -708,7 +708,7 @@ pub fn process_new_vote_state(
     Ok(())
 }
 
-fn process_vote_unfiltered(
+pub fn process_vote_unfiltered(
     vote_state: &mut VoteState,
     vote_slots: &[Slot],
     vote: &Vote,

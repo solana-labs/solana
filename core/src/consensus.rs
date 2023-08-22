@@ -35,9 +35,9 @@ use {
     solana_vote_program::{
         vote_instruction,
         vote_state::{
-            process_slot_vote_unchecked, process_vote_unchecked, BlockTimestamp, LandedVote,
-            Lockout, Vote, VoteState, VoteState1_14_11, VoteStateUpdate, VoteStateVersions,
-            VoteTransaction, MAX_LOCKOUT_HISTORY,
+            process_slot_vote_unchecked, process_vote_unchecked, process_vote_unfiltered,
+            BlockTimestamp, LandedVote, Lockout, Vote, VoteState, VoteState1_14_11,
+            VoteStateUpdate, VoteStateVersions, VoteTransaction, MAX_LOCKOUT_HISTORY,
         },
     },
     std::{
@@ -554,6 +554,23 @@ impl Tower {
         )
     }
 
+    /// If we've recently updated the vote state by applying a new vote
+    /// or syncing from a bank, generate the proper last_vote.
+    pub(crate) fn update_last_vote_from_vote_state(&mut self, vote_hash: Hash) {
+        let mut new_vote = VoteTransaction::from(VoteStateUpdate::new(
+            self.vote_state
+                .votes
+                .iter()
+                .map(|vote| vote.lockout)
+                .collect(),
+            self.vote_state.root_slot,
+            vote_hash,
+        ));
+
+        new_vote.set_timestamp(self.maybe_timestamp(self.last_voted_slot().unwrap_or_default()));
+        self.last_vote = new_vote;
+    }
+
     fn record_bank_vote_and_update_lockouts(
         &mut self,
         vote_slot: Slot,
@@ -564,29 +581,35 @@ impl Tower {
         trace!("{} record_vote for {}", self.node_pubkey, vote_slot);
         let old_root = self.root();
 
-        let mut new_vote = if is_direct_vote_state_update_enabled {
+        if is_direct_vote_state_update_enabled {
             let vote = Vote::new(vec![vote_slot], vote_hash);
-            process_vote_unchecked(&mut self.vote_state, vote);
-            VoteTransaction::from(VoteStateUpdate::new(
-                self.vote_state
-                    .votes
-                    .iter()
-                    .map(|vote| vote.lockout)
-                    .collect(),
-                self.vote_state.root_slot,
-                vote_hash,
-            ))
+            let epoch = self.vote_state.current_epoch();
+            let result = process_vote_unfiltered(
+                &mut self.vote_state,
+                &vote.slots,
+                &vote,
+                &[(vote_slot, vote_hash)],
+                epoch,
+            );
+            if result.is_err() {
+                warn!(
+                    "Error while recording vote {} {} in local tower {:?}",
+                    vote_slot, vote_hash, result
+                );
+            }
+            self.update_last_vote_from_vote_state(vote_hash);
         } else {
-            Self::apply_vote_and_generate_vote_diff(
+            let mut new_vote = Self::apply_vote_and_generate_vote_diff(
                 &mut self.vote_state,
                 vote_slot,
                 vote_hash,
                 last_voted_slot_in_bank,
-            )
-        };
+            );
 
-        new_vote.set_timestamp(self.maybe_timestamp(self.last_voted_slot().unwrap_or_default()));
-        self.last_vote = new_vote;
+            new_vote
+                .set_timestamp(self.maybe_timestamp(self.last_voted_slot().unwrap_or_default()));
+            self.last_vote = new_vote;
+        };
 
         let new_root = self.root();
 
