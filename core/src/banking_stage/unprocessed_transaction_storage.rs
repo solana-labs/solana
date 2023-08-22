@@ -14,6 +14,7 @@ use {
         },
         BankingStageStats, FilterForwardingResults, ForwardOption,
     },
+    crate::invalid_fee_payer_filter::InvalidFeePayerFilter,
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
     solana_measure::measure,
@@ -139,6 +140,7 @@ pub struct ConsumeScannerPayload<'a> {
 }
 
 fn consume_scan_should_process_packet(
+    invalid_fee_payer_filter: &InvalidFeePayerFilter,
     bank: &Bank,
     banking_stage_stats: &BankingStageStats,
     packet: &ImmutableDeserializedPacket,
@@ -149,8 +151,16 @@ fn consume_scan_should_process_packet(
         return ProcessingDecision::Now;
     }
 
-    // Before sanitization, let's quickly check the static keys (performance optimization)
+    // Check if the fee payer is in the invalid fee payer filter
     let message = &packet.transaction().get_message().message;
+    if invalid_fee_payer_filter.should_reject(&message.static_account_keys()[0]) {
+        payload
+            .message_hash_to_transaction
+            .remove(packet.message_hash());
+        return ProcessingDecision::Never;
+    }
+
+    // Before sanitization, let's quickly check the static keys (performance optimization)
     if !payload.account_locks.check_static_account_locks(message) {
         return ProcessingDecision::Later;
     }
@@ -341,6 +351,7 @@ impl UnprocessedTransactionStorage {
     #[must_use]
     pub fn process_packets<F>(
         &mut self,
+        invalid_fee_payer_filter: &InvalidFeePayerFilter,
         bank: Arc<Bank>,
         banking_stage_stats: &BankingStageStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
@@ -355,12 +366,14 @@ impl UnprocessedTransactionStorage {
         match self {
             Self::LocalTransactionStorage(transaction_storage) => transaction_storage
                 .process_packets(
+                    invalid_fee_payer_filter,
                     &bank,
                     banking_stage_stats,
                     slot_metrics_tracker,
                     processing_function,
                 ),
             Self::VoteStorage(vote_storage) => vote_storage.process_packets(
+                invalid_fee_payer_filter,
                 bank,
                 banking_stage_stats,
                 slot_metrics_tracker,
@@ -432,6 +445,7 @@ impl VoteStorage {
     // returns `true` if the end of slot is reached
     fn process_packets<F>(
         &mut self,
+        invalid_fee_payer_filter: &InvalidFeePayerFilter,
         bank: Arc<Bank>,
         banking_stage_stats: &BankingStageStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
@@ -449,7 +463,13 @@ impl VoteStorage {
 
         let should_process_packet =
             |packet: &Arc<ImmutableDeserializedPacket>, payload: &mut ConsumeScannerPayload| {
-                consume_scan_should_process_packet(&bank, banking_stage_stats, packet, payload)
+                consume_scan_should_process_packet(
+                    invalid_fee_payer_filter,
+                    &bank,
+                    banking_stage_stats,
+                    packet,
+                    payload,
+                )
             };
 
         // Based on the stake distribution present in the supplied bank, drain the unprocessed votes
@@ -844,6 +864,7 @@ impl ThreadLocalUnprocessedPackets {
     // returns `true` if reached end of slot
     fn process_packets<F>(
         &mut self,
+        invalid_fee_payer_filter: &InvalidFeePayerFilter,
         bank: &Bank,
         banking_stage_stats: &BankingStageStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
@@ -862,7 +883,13 @@ impl ThreadLocalUnprocessedPackets {
 
         let should_process_packet =
             |packet: &Arc<ImmutableDeserializedPacket>, payload: &mut ConsumeScannerPayload| {
-                consume_scan_should_process_packet(bank, banking_stage_stats, packet, payload)
+                consume_scan_should_process_packet(
+                    invalid_fee_payer_filter,
+                    bank,
+                    banking_stage_stats,
+                    packet,
+                    payload,
+                )
             };
         let mut scanner = create_consume_multi_iterator(
             &all_packets_to_process,
