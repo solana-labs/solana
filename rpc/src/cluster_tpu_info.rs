@@ -1,7 +1,10 @@
 use {
     solana_gossip::{cluster_info::ClusterInfo, contact_info::Protocol},
     solana_poh::poh_recorder::PohRecorder,
-    solana_sdk::{clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS}, pubkey::Pubkey},
+    solana_sdk::{
+        clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
+        pubkey::Pubkey,
+    },
     solana_send_transaction_service::tpu_info::TpuInfo,
     std::{
         collections::HashMap,
@@ -65,7 +68,11 @@ impl TpuInfo for ClusterTpuInfo {
         unique_leaders
     }
 
-    fn get_leader_tpus_with_slots(&self, max_count: u64, protocol: Protocol) -> Vec<(&SocketAddr, Slot)> {
+    fn get_leader_tpus_with_slots(
+        &self,
+        max_count: u64,
+        protocol: Protocol,
+    ) -> Vec<(&SocketAddr, Slot)> {
         let recorder = self.poh_recorder.read().unwrap();
         let leaders: Vec<_> = (0..max_count)
             .filter_map(|i| {

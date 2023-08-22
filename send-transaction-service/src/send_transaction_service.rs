@@ -10,8 +10,8 @@ use {
     solana_metrics::datapoint_warn,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
-        clock::Slot, hash::Hash, nonce_account, pubkey::Pubkey, saturating_add_assign, signature::Signature,
-        timing::AtomicInterval, transport::TransportError,
+        clock::Slot, hash::Hash, nonce_account, pubkey::Pubkey, saturating_add_assign,
+        signature::Signature, timing::AtomicInterval, transport::TransportError,
     },
     std::{
         collections::{
@@ -577,8 +577,7 @@ impl SendTransactionService {
             .map(|(_, transaction_info)| {
                 debug!(
                     "Sending transacation {} to (address, slot): {:?}",
-                    transaction_info.signature,
-                    addresses,
+                    transaction_info.signature, addresses,
                 );
                 transaction_info.wire_transaction.as_ref()
             })
@@ -790,9 +789,9 @@ impl SendTransactionService {
         config: &'a Config,
         protocol: Protocol,
     ) -> Vec<(&'a SocketAddr, Slot)> {
-        let addresses = leader_info
-            .as_ref()
-            .map(|leader_info| leader_info.get_leader_tpus_with_slots(config.leader_forward_count, protocol));
+        let addresses = leader_info.as_ref().map(|leader_info| {
+            leader_info.get_leader_tpus_with_slots(config.leader_forward_count, protocol)
+        });
         addresses
             .map(|address_list| {
                 if address_list.is_empty() {
