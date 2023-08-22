@@ -20,6 +20,9 @@ impl LastVotedForkSlotsAggregate {
         let mut slots_aggregate = BTreeMap::new();
         let mut active_peers = HashSet::new();
         for slot in my_slots {
+            if slot <= &root_slot {
+                continue
+            }
             let mut new_set = HashSet::new();
             new_set.insert(my_pubkey.clone());
             slots_aggregate.insert(*slot, new_set);
