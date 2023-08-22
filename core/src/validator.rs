@@ -566,7 +566,7 @@ impl Validator {
                 .map_err(|err| {
                     format!(
                         "Failed to backup and clear shreds with incorrect \
-                        shred version from blockstore: {err}"
+                        shred version from blockstore: {err:?}"
                     )
                 })?;
             }
