@@ -85,3 +85,24 @@ impl InvalidFeePayerFilterThread {
         self.thread_hdl.join()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use {super::*, solana_sdk::pubkey::Pubkey};
+
+    #[test]
+    fn test_invalid_fee_payer_filter() {
+        let invalid_fee_payer_filter = Arc::new(InvalidFeePayerFilter::default());
+        let pubkey1 = Pubkey::new_unique();
+        let pubkey2 = Pubkey::new_unique();
+        assert!(!invalid_fee_payer_filter.should_reject(&pubkey1));
+        assert!(!invalid_fee_payer_filter.should_reject(&pubkey2));
+        invalid_fee_payer_filter.add(pubkey1);
+        assert!(invalid_fee_payer_filter.should_reject(&pubkey1));
+        assert!(!invalid_fee_payer_filter.should_reject(&pubkey2));
+
+        invalid_fee_payer_filter.reset();
+        assert!(!invalid_fee_payer_filter.should_reject(&pubkey1));
+        assert!(!invalid_fee_payer_filter.should_reject(&pubkey2));
+    }
+}
