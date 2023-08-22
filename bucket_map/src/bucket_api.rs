@@ -82,18 +82,24 @@ impl<T: Clone + Copy> BucketApi<T> {
         }
     }
 
-    fn get_write_bucket(&self) -> RwLockWriteGuard<Option<Bucket<T>>> {
-        let mut bucket = self.bucket.write().unwrap();
+    /// allocate new bucket if not allocated yet
+    fn allocate_bucket(&self, bucket: &mut RwLockWriteGuard<Option<Bucket<T>>>) {
         if bucket.is_none() {
-            *bucket = Some(Bucket::new(
+            **bucket = Some(Bucket::new(
                 Arc::clone(&self.drives),
                 self.max_search,
                 Arc::clone(&self.stats),
                 Arc::clone(&self.count),
             ));
+        }
+    }
+
+    fn get_write_bucket(&self) -> RwLockWriteGuard<Option<Bucket<T>>> {
+        let mut bucket = self.bucket.write().unwrap();
+        if let Some(bucket) = bucket.as_mut() {
+            bucket.handle_delayed_grows();
         } else {
-            let write = bucket.as_mut().unwrap();
-            write.handle_delayed_grows();
+            self.allocate_bucket(&mut bucket);
         }
         bucket
     }
