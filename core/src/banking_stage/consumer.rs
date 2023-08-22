@@ -659,7 +659,8 @@ impl Consumer {
             .iter()
             .zip(batch.sanitized_transactions())
         {
-            if let Err(TransactionError::InsufficientFundsForFee) = result {
+            // This fee-payer submitted an unexecutable, non-fee paying transaction. Reject them.
+            if result.is_err() {
                 self.invalid_fee_payer_filter.add(*tx.message().fee_payer());
             }
         }

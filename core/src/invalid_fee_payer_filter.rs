@@ -58,7 +58,7 @@ impl InvalidFeePayerFilterThread {
             .spawn({
                 let invalid_fee_payer_filter = invalid_fee_payer_filter.clone();
                 move || {
-                    const RESET_INTERVAL: Duration = Duration::from_secs(120);
+                    const RESET_INTERVAL: Duration = Duration::from_secs(2);
                     while !exit.load(Ordering::Relaxed) {
                         let num_rejects = reject_count.swap(0, Ordering::Relaxed);
                         let num_invalid_fee_payers =
