@@ -45,35 +45,10 @@ use {
 #[cfg(feature = "spinner")]
 use {
     crate::tpu_client::{SEND_TRANSACTION_INTERVAL, TRANSACTION_RESEND_INTERVAL},
-    indicatif::ProgressBar,
-    solana_rpc_client::spinner,
+    solana_rpc_client::spinner::{self, SendTransactionProgress},
     solana_rpc_client_api::request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     solana_sdk::{message::Message, signers::Signers, transaction::TransactionError},
 };
-
-#[cfg(feature = "spinner")]
-pub fn set_message_for_confirmed_transactions(
-    progress_bar: &ProgressBar,
-    confirmed_transactions: u32,
-    total_transactions: usize,
-    block_height: Option<u64>,
-    last_valid_block_height: u64,
-    status: &str,
-) {
-    progress_bar.set_message(format!(
-        "{:>5.1}% | {:<40}{}",
-        confirmed_transactions as f64 * 100. / total_transactions as f64,
-        status,
-        match block_height {
-            Some(block_height) => format!(
-                " [block height {}; re-sign in {} blocks]",
-                block_height,
-                last_valid_block_height.saturating_sub(block_height),
-            ),
-            None => String::new(),
-        },
-    ));
-}
 
 #[derive(Error, Debug)]
 pub enum TpuSenderError {
@@ -453,6 +428,7 @@ where
         messages: &[Message],
         signers: &T,
     ) -> Result<Vec<Option<TransactionError>>> {
+        let mut progress = SendTransactionProgress::default();
         let progress_bar = spinner::new_progress_bar();
         progress_bar.set_message("Setting up...");
 
@@ -461,15 +437,15 @@ where
             .enumerate()
             .map(|(i, message)| (i, Transaction::new_unsigned(message.clone())))
             .collect::<Vec<_>>();
-        let total_transactions = transactions.len();
+        progress.total_transactions = transactions.len();
         let mut transaction_errors = vec![None; transactions.len()];
-        let mut confirmed_transactions = 0;
-        let mut block_height = self.rpc_client.get_block_height().await?;
+        progress.block_height = self.rpc_client.get_block_height().await?;
         for expired_blockhash_retries in (0..5).rev() {
             let (blockhash, last_valid_block_height) = self
                 .rpc_client
                 .get_latest_blockhash_with_commitment(self.rpc_client.commitment())
                 .await?;
+            progress.last_valid_block_height = last_valid_block_height;
 
             let mut pending_transactions = HashMap::new();
             for (i, mut transaction) in transactions {
@@ -478,7 +454,7 @@ where
             }
 
             let mut last_resend = Instant::now() - TRANSACTION_RESEND_INTERVAL;
-            while block_height <= last_valid_block_height {
+            while progress.block_height <= progress.last_valid_block_height {
                 let num_transactions = pending_transactions.len();
 
                 // Periodically re-send all pending transactions
@@ -487,12 +463,8 @@ where
                         if !self.send_transaction(transaction).await {
                             let _result = self.rpc_client.send_transaction(transaction).await.ok();
                         }
-                        set_message_for_confirmed_transactions(
+                        progress.set_message_for_confirmed_transactions(
                             &progress_bar,
-                            confirmed_transactions,
-                            total_transactions,
-                            None, //block_height,
-                            last_valid_block_height,
                             &format!("Sending {}/{} transactions", index + 1, num_transactions,),
                         );
                         sleep(SEND_TRANSACTION_INTERVAL).await;
@@ -502,21 +474,17 @@ where
 
                 // Wait for the next block before checking for transaction statuses
                 let mut block_height_refreshes = 10;
-                set_message_for_confirmed_transactions(
+                progress.set_message_for_confirmed_transactions(
                     &progress_bar,
-                    confirmed_transactions,
-                    total_transactions,
-                    Some(block_height),
-                    last_valid_block_height,
                     &format!("Waiting for next block, {num_transactions} transactions pending..."),
                 );
-                let mut new_block_height = block_height;
-                while block_height == new_block_height && block_height_refreshes > 0 {
+                let mut new_block_height = progress.block_height;
+                while progress.block_height == new_block_height && block_height_refreshes > 0 {
                     sleep(Duration::from_millis(500)).await;
                     new_block_height = self.rpc_client.get_block_height().await?;
                     block_height_refreshes -= 1;
                 }
-                block_height = new_block_height;
+                progress.block_height = new_block_height;
 
                 // Collect statuses for the transactions, drop those that are confirmed
                 let pending_signatures = pending_transactions.keys().cloned().collect::<Vec<_>>();
@@ -535,7 +503,7 @@ where
                             if let Some(status) = status {
                                 if status.satisfies_commitment(self.rpc_client.commitment()) {
                                     if let Some((i, _)) = pending_transactions.remove(signature) {
-                                        confirmed_transactions += 1;
+                                        progress.confirmed_transactions += 1;
                                         if status.err.is_some() {
                                             progress_bar
                                                 .println(format!("Failed transaction: {status:?}"));
@@ -546,12 +514,8 @@ where
                             }
                         }
                     }
-                    set_message_for_confirmed_transactions(
+                    progress.set_message_for_confirmed_transactions(
                         &progress_bar,
-                        confirmed_transactions,
-                        total_transactions,
-                        Some(block_height),
-                        last_valid_block_height,
                         "Checking transaction status...",
                     );
                 }
