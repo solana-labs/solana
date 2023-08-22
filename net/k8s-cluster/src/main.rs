@@ -85,22 +85,21 @@ async fn main() {
 
     info!("namespace: {}", namespace);
 
-    let dep_res = deployment_runner(app_name, namespace, container_name, image_name, replicas).await;
+    let _ = deployment_runner(app_name, namespace, container_name, image_name, replicas).await;
 
-    info!("dep: {:?}", dep_res.unwrap());
-    let serv_res = service_runner(app_name, namespace).await;
+    // info!("dep: {:?}", dep_res.unwrap());
+    let _ = service_runner(app_name, namespace).await;
 
-    info!("service: {:?}", serv_res.unwrap());
+    // info!("service: {:?}", serv_res.unwrap());
+    let client = Client::try_default().await.unwrap();
+    let deployment = get_deployment_info(client.clone(), app_name, namespace).await.unwrap();
+    let deployment_json = serde_json::to_string_pretty(&deployment).unwrap();
+    info!("{}", deployment_json);
 
 
-    // let deployment = create_deployment(app_name, namespace, container_name, image_name, replicas);
-    // let service = define_service(app_name, namespace);
-
-    // let _ = run_deployer(namespace, &deployment);
-    // let _ = run_controller(namespace);
-
-    // let _ = get_deployment_info(app_name, namespace);
-
+    let service = get_service_info(client.clone(), app_name, namespace).await.unwrap();
+    let service_json = serde_json::to_string_pretty(&service).unwrap();
+    info!("{}", service_json);
 
 
 }
@@ -116,7 +115,6 @@ async fn deployment_runner(
     info!("suhhhhh");
     let client = Client::try_default().await?;
 
-
     // Create the Deployment
     let deployment = create_deployment(
         client.clone(), 
@@ -127,23 +125,8 @@ async fn deployment_runner(
         replicas
     ).await;
 
-    // info!("dep: {:?}", deployment);
-
     info!("Deployment created successfully in the specified namespace!");
-
-    // let service = create_service(client, app_name, namespace);
-
-    // info!("Service created successfully in the specified namespace!");
-    // // info!("serv: {:?}", service);
-
-    
-    // let res = get_deployment_info(app_name, namespace).await;
-
-    // let (deployment_res, service_res) = tokio::try_join!(deployment, service)?;
-
     deployment
-    // return res;
-    // Ok(())
 }
 
 
@@ -156,39 +139,28 @@ async fn service_runner(
 
     // Create the Deployment
     let service = create_service(client, app_name, namespace).await;
-
-    // info!("dep: {:?}", deployment);
-
     info!("Service created successfully in the specified namespace!");
 
-    // let service = create_service(client, app_name, namespace);
-
-    // info!("Service created successfully in the specified namespace!");
-    // // info!("serv: {:?}", service);
-
-    
-    // let res = get_deployment_info(app_name, namespace).await;
-
-    // let (deployment_res, service_res) = tokio::try_join!(deployment, service)?;
-
     service
-    // return res;
-    // Ok(())
 }
 
 async fn get_deployment_info(
+    client: Client,
     app_name: &str,
     namespace: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let client = Client::try_default().await?;
+) -> Result<Deployment, kube::Error> {
     let api: Api<Deployment> = Api::namespaced(client, namespace);
 
-    let deployment = api.get(format!("{}-deployment", app_name).as_str()).await?;
-    let deployment_json = serde_json::to_string_pretty(&deployment)?;
-    info!("{}", deployment_json);
-    // let deployment_json = serde_json::to_value(&deployment)?;
+    api.get(format!("{}-deployment", app_name).as_str()).await
+}
 
-    Ok(())
+async fn get_service_info(
+    client: Client,
+    app_name: &str,
+    namespace: &str,
+) -> Result<Service, kube::Error> {
+    let api: Api<Service> = Api::namespaced(client, namespace);
+    api.get(format!("{}-service", app_name).as_str()).await
 }
 
 #[tokio::main]
@@ -235,7 +207,7 @@ async fn create_deployment(
 ) -> Result<Deployment, kube::Error> {
 // ) -> Result<(), Box<dyn std::error::Error>> {
     let mut label_selector = BTreeMap::new();  // Create a JSON map for label selector
-    label_selector.insert("app".to_string(), app_name.to_string());
+    label_selector.insert("app.kubernetes.io/name".to_string(), app_name.to_string());
     
     // Define the pod spec
     let pod_spec = PodTemplateSpec {
@@ -289,7 +261,7 @@ async fn create_service(
     namespace: &str,
 ) -> Result<Service, kube::Error> {
     let mut label_selector = BTreeMap::new();  // Create a JSON map for label selector
-    label_selector.insert("app".to_string(), app_name.to_string());
+    label_selector.insert("app.kubernetes.io/name".to_string(), app_name.to_string());
     let service = Service {
         metadata: ObjectMeta {
             name: Some(format!("{}-service", app_name).to_string()),
@@ -299,6 +271,7 @@ async fn create_service(
         spec: Some(ServiceSpec {
             selector: Some(label_selector),
             cluster_ip: None,
+            cluster_ips: None,
             ports: Some(vec![ServicePort {
                 port: 8899, // RPC Port
                 name: Some("rpc-port".to_string()),
