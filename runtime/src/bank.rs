@@ -8205,15 +8205,15 @@ impl Bank {
         }
     }
 
-    fn replace_account<O, N>(
+    fn replace_account<U, V>(
         &mut self,
         old_address: &Pubkey,
         new_address: &Pubkey,
-        old_account: Option<&O>,
-        new_account: &N,
+        old_account: Option<&U>,
+        new_account: &V,
     ) where
-        O: ReadableAccount + Sync + ZeroLamport,
-        N: ReadableAccount + Sync + ZeroLamport,
+        U: ReadableAccount + Sync + ZeroLamport,
+        V: ReadableAccount + Sync + ZeroLamport,
     {
         let (old_lamports, old_len) = match old_account {
             Some(old_account) => (old_account.lamports(), old_account.data().len()),
@@ -8289,35 +8289,34 @@ impl Bank {
                     // lamports for the empty account that will now house the
                     // PDA
                     if new_account.lamports() >= lamports {
-                        if let Some(change_in_cap) = new_account.lamports().checked_sub(lamports) {
-                            datapoint_info!(datapoint_name, ("slot", self.slot, i64));
+                        let change_in_cap = new_account.lamports().saturating_sub(lamports);
+                        datapoint_info!(datapoint_name, ("slot", self.slot, i64));
 
-                            // Replace the old data account with the new one
-                            // If the old data account does not exist, it will be created
-                            // If it does exist, it will be overwritten
-                            self.replace_account(
-                                &old_data_address,
-                                &new_data_address,
-                                self.get_account_with_fixed_root(&old_data_address).as_ref(),
-                                &new_data_account,
-                            );
+                        // Replace the old data account with the new one
+                        // If the old data account does not exist, it will be created
+                        // If it does exist, it will be overwritten
+                        self.replace_account(
+                            &old_data_address,
+                            &new_data_address,
+                            self.get_account_with_fixed_root(&old_data_address).as_ref(),
+                            &new_data_account,
+                        );
 
-                            // Write the data account's PDA into the program account
-                            let created_program_account = Account {
-                                lamports,
-                                data,
-                                ..new_account.into()
-                            };
-                            self.replace_account(
-                                old_address,
-                                new_address,
-                                self.get_account_with_fixed_root(old_address).as_ref(),
-                                &created_program_account,
-                            );
+                        // Write the data account's PDA into the program account
+                        let created_program_account = Account {
+                            lamports,
+                            data,
+                            ..new_account.into()
+                        };
+                        self.replace_account(
+                            old_address,
+                            new_address,
+                            None::<&AccountSharedData>,
+                            &created_program_account,
+                        );
 
-                            // Any remaining lamports in the new program account are burnt
-                            self.capitalization.fetch_sub(change_in_cap, Relaxed);
-                        }
+                        // Any remaining lamports in the new program account are burnt
+                        self.capitalization.fetch_sub(change_in_cap, Relaxed);
                     }
                 }
             }
