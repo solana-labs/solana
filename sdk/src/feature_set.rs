@@ -672,6 +672,21 @@ pub mod last_restart_slot_sysvar {
     solana_sdk::declare_id!("HooKD5NC9QNxk25QuzCssB8ecrEzGt6eXEPBUxWp1LaR");
 }
 
+pub mod reduce_stake_warmup_cooldown {
+    use solana_program::{epoch_schedule::EpochSchedule, stake_history::Epoch};
+    solana_sdk::declare_id!("GwtDQBghCTBgmX2cpEGNPxTEBUTQRaDMGTr5qychdGMj");
+
+    pub trait NewWarmupCooldownRateEpoch {
+        fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch>;
+    }
+    impl NewWarmupCooldownRateEpoch for super::FeatureSet {
+        fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch> {
+            self.activated_slot(&id())
+                .map(|slot| epoch_schedule.get_epoch(slot))
+        }
+    }
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -835,6 +850,7 @@ lazy_static! {
         (checked_arithmetic_in_fee_validation::id(), "checked arithmetic in fee validation #31273"),
         (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
         (last_restart_slot_sysvar::id(), "enable new sysvar last_restart_slot"),
+        (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

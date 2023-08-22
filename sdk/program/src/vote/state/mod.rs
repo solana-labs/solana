@@ -686,15 +686,11 @@ pub mod serde_compact_vote_state_update {
         let lockout_offsets = vote_state_update.lockouts.iter().scan(
             vote_state_update.root.unwrap_or_default(),
             |slot, lockout| {
-                let offset = match lockout.slot().checked_sub(*slot) {
-                    None => return Some(Err(serde::ser::Error::custom("Invalid vote lockout"))),
-                    Some(offset) => offset,
+                let Some(offset) = lockout.slot().checked_sub(*slot) else {
+                    return Some(Err(serde::ser::Error::custom("Invalid vote lockout")));
                 };
-                let confirmation_count = match u8::try_from(lockout.confirmation_count()) {
-                    Ok(confirmation_count) => confirmation_count,
-                    Err(_) => {
-                        return Some(Err(serde::ser::Error::custom("Invalid confirmation count")))
-                    }
+                let Ok(confirmation_count) = u8::try_from(lockout.confirmation_count()) else {
+                    return Some(Err(serde::ser::Error::custom("Invalid confirmation count")));
                 };
                 let lockout_offset = LockoutOffset {
                     offset,
@@ -1218,8 +1214,8 @@ mod tests {
 
     fn run_serde_compact_vote_state_update<R: Rng>(rng: &mut R) {
         let lockouts: VecDeque<_> = std::iter::repeat_with(|| {
-            let slot = 149_303_885_u64.saturating_add(rng.gen_range(0, 10_000));
-            let confirmation_count = rng.gen_range(0, 33);
+            let slot = 149_303_885_u64.saturating_add(rng.gen_range(0..10_000));
+            let confirmation_count = rng.gen_range(0..33);
             Lockout::new_with_confirmation_count(slot, confirmation_count)
         })
         .take(32)
@@ -1228,7 +1224,7 @@ mod tests {
         let root = rng.gen_ratio(1, 2).then(|| {
             lockouts[0]
                 .slot()
-                .checked_sub(rng.gen_range(0, 1_000))
+                .checked_sub(rng.gen_range(0..1_000))
                 .expect("All slots should be greater than 1_000")
         });
         let timestamp = rng.gen_ratio(1, 2).then(|| rng.gen());

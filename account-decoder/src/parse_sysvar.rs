@@ -15,7 +15,9 @@ use {
         slot_hashes::SlotHashes,
         slot_history::{self, SlotHistory},
         stake_history::{StakeHistory, StakeHistoryEntry},
-        sysvar::{self, last_restart_slot::LastRestartSlot, rewards::Rewards},
+        sysvar::{
+            self, epoch_rewards::EpochRewards, last_restart_slot::LastRestartSlot, rewards::Rewards,
+        },
     },
 };
 
@@ -89,6 +91,10 @@ pub fn parse_sysvar(data: &[u8], pubkey: &Pubkey) -> Result<SysvarAccountType, P
                     let last_restart_slot = last_restart_slot.last_restart_slot;
                     SysvarAccountType::LastRestartSlot(UiLastRestartSlot { last_restart_slot })
                 })
+        } else if pubkey == &sysvar::epoch_rewards::id() {
+            deserialize::<EpochRewards>(data)
+                .ok()
+                .map(SysvarAccountType::EpochRewards)
         } else {
             None
         }
@@ -113,6 +119,7 @@ pub enum SysvarAccountType {
     SlotHistory(UiSlotHistory),
     StakeHistory(Vec<UiStakeHistoryEntry>),
     LastRestartSlot(UiLastRestartSlot),
+    EpochRewards(EpochRewards),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -362,6 +369,17 @@ mod test {
             SysvarAccountType::LastRestartSlot(UiLastRestartSlot {
                 last_restart_slot: 1282
             })
+        );
+
+        let epoch_rewards = EpochRewards {
+            total_rewards: 100,
+            distributed_rewards: 20,
+            distribution_complete_block_height: 42,
+        };
+        let epoch_rewards_sysvar = create_account_for_test(&epoch_rewards);
+        assert_eq!(
+            parse_sysvar(&epoch_rewards_sysvar.data, &sysvar::epoch_rewards::id()).unwrap(),
+            SysvarAccountType::EpochRewards(epoch_rewards),
         );
     }
 }

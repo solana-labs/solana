@@ -42,9 +42,8 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
 
     // Drain channel
     while last_tick_height != bank.max_tick_height() {
-        let (try_bank, (entry, tick_height)) = match receiver.try_recv() {
-            Ok(working_bank_entry) => working_bank_entry,
-            Err(_) => break,
+        let Ok((try_bank, (entry, tick_height))) = receiver.try_recv() else {
+            break;
         };
         // If the bank changed, that implies the previous slot was interrupted and we do not have to
         // broadcast its entries.
@@ -65,11 +64,11 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
     while last_tick_height != bank.max_tick_height()
         && serialized_batch_byte_count < target_serialized_batch_byte_count
     {
-        let (try_bank, (entry, tick_height)) =
-            match receiver.recv_deadline(coalesce_start + ENTRY_COALESCE_DURATION) {
-                Ok(working_bank_entry) => working_bank_entry,
-                Err(_) => break,
-            };
+        let Ok((try_bank, (entry, tick_height))) =
+            receiver.recv_deadline(coalesce_start + ENTRY_COALESCE_DURATION)
+        else {
+            break;
+        };
         // If the bank changed, that implies the previous slot was interrupted and we do not have to
         // broadcast its entries.
         if try_bank.slot() != bank.slot() {
@@ -130,7 +129,7 @@ mod tests {
     fn test_recv_slot_entries_1() {
         let (genesis_config, bank0, tx) = setup_test();
 
-        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+        let bank1 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
         let (s, r) = unbounded();
         let mut last_hash = genesis_config.hash();
 
@@ -159,8 +158,8 @@ mod tests {
     fn test_recv_slot_entries_2() {
         let (genesis_config, bank0, tx) = setup_test();
 
-        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 2));
+        let bank1 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
+        let bank2 = Arc::new(Bank::new_from_parent(bank1.clone(), &Pubkey::default(), 2));
         let (s, r) = unbounded();
 
         let mut last_hash = genesis_config.hash();

@@ -5,7 +5,7 @@ use {
     rand::{seq::SliceRandom, Rng, SeedableRng},
     rand_chacha::ChaChaRng,
     solana_gossip::{
-        cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
+        cluster_info::ClusterInfo,
         contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo, Protocol},
         crds::GossipRoute,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
@@ -30,13 +30,13 @@ use {
         iter::repeat_with,
         marker::PhantomData,
         net::SocketAddr,
-        ops::Deref,
-        sync::{Arc, Mutex},
+        sync::{Arc, Mutex, RwLock},
         time::{Duration, Instant},
     },
     thiserror::Error,
 };
 
+const DATA_PLANE_FANOUT: usize = 200;
 pub(crate) const MAX_NUM_TURBINE_HOPS: usize = 4;
 
 #[derive(Debug, Error)]
@@ -72,9 +72,9 @@ pub struct ClusterNodes<T> {
 type CacheEntry<T> = Option<(/*as of:*/ Instant, Arc<ClusterNodes<T>>)>;
 
 pub struct ClusterNodesCache<T> {
-    // Cache entries are wrapped in Arc<Mutex<...>>, so that, when needed, only
+    // Cache entries are wrapped in Arc<RwLock<...>>, so that, when needed, only
     // one thread does the computations to update the entry for the epoch.
-    cache: Mutex<LruCache<Epoch, Arc<Mutex<CacheEntry<T>>>>>,
+    cache: Mutex<LruCache<Epoch, Arc<RwLock<CacheEntry<T>>>>>,
     ttl: Duration, // Time to live.
 }
 
@@ -343,7 +343,7 @@ impl<T> ClusterNodesCache<T> {
 }
 
 impl<T: 'static> ClusterNodesCache<T> {
-    fn get_cache_entry(&self, epoch: Epoch) -> Arc<Mutex<CacheEntry<T>>> {
+    fn get_cache_entry(&self, epoch: Epoch) -> Arc<RwLock<CacheEntry<T>>> {
         let mut cache = self.cache.lock().unwrap();
         match cache.get(&epoch) {
             Some(entry) => Arc::clone(entry),
@@ -364,19 +364,25 @@ impl<T: 'static> ClusterNodesCache<T> {
     ) -> Arc<ClusterNodes<T>> {
         let epoch = root_bank.get_leader_schedule_epoch(shred_slot);
         let entry = self.get_cache_entry(epoch);
+        if let Some((_, nodes)) = entry
+            .read()
+            .unwrap()
+            .as_ref()
+            .filter(|(asof, _)| asof.elapsed() < self.ttl)
+        {
+            return nodes.clone();
+        }
         // Hold the lock on the entry here so that, if needed, only
         // one thread recomputes cluster-nodes for this epoch.
-        let mut entry = entry.lock().unwrap();
-        if let Some((asof, nodes)) = entry.deref() {
-            if asof.elapsed() < self.ttl {
-                return Arc::clone(nodes);
-            }
+        let mut entry = entry.write().unwrap();
+        if let Some((_, nodes)) = entry.as_ref().filter(|(asof, _)| asof.elapsed() < self.ttl) {
+            return nodes.clone();
         }
         let epoch_staked_nodes = [root_bank, working_bank]
             .iter()
             .find_map(|bank| bank.epoch_staked_nodes(epoch));
         if epoch_staked_nodes.is_none() {
-            inc_new_counter_info!("cluster_nodes-unknown_epoch_staked_nodes", 1);
+            inc_new_counter_debug!("cluster_nodes-unknown_epoch_staked_nodes", 1);
             if epoch != root_bank.get_leader_schedule_epoch(root_bank.slot()) {
                 return self.get(root_bank.slot(), root_bank, working_bank, cluster_info);
             }
@@ -435,12 +441,12 @@ pub fn make_test_cluster<R: Rng>(
             if rng.gen_ratio(unstaked_numerator, unstaked_denominator) {
                 None // No stake for some of the nodes.
             } else {
-                Some((*node.pubkey(), rng.gen_range(0, 20)))
+                Some((*node.pubkey(), rng.gen_range(0..20)))
             }
         })
         .collect();
     // Add some staked nodes with no contact-info.
-    stakes.extend(repeat_with(|| (Pubkey::new_unique(), rng.gen_range(0, 20))).take(100));
+    stakes.extend(repeat_with(|| (Pubkey::new_unique(), rng.gen_range(0..20))).take(100));
     let cluster_info = ClusterInfo::new(this_node, keypair, SocketAddrSpace::Unspecified);
     let nodes: Vec<_> = nodes
         .iter()

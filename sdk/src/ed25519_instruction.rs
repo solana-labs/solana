@@ -188,7 +188,7 @@ pub mod test {
             signature::{Keypair, Signer},
             transaction::Transaction,
         },
-        rand::{thread_rng, Rng},
+        rand0_7::{thread_rng, Rng},
     };
 
     fn test_case(

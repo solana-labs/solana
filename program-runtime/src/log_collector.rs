@@ -23,12 +23,9 @@ impl Default for LogCollector {
 
 impl LogCollector {
     pub fn log(&mut self, message: &str) {
-        let limit = match self.bytes_limit {
-            Some(limit) => limit,
-            None => {
-                self.messages.push(message.to_string());
-                return;
-            }
+        let Some(limit) = self.bytes_limit else {
+            self.messages.push(message.to_string());
+            return;
         };
 
         let bytes_written = self.bytes_written.saturating_add(message.len());

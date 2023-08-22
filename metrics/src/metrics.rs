@@ -6,7 +6,7 @@ use {
     gethostname::gethostname,
     lazy_static::lazy_static,
     log::*,
-    solana_sdk::hash::hash,
+    solana_sdk::{genesis_config::ClusterType, hash::hash},
     std::{
         cmp,
         collections::HashMap,
@@ -17,9 +17,30 @@ use {
         thread,
         time::{Duration, Instant, UNIX_EPOCH},
     },
+    thiserror::Error,
 };
 
 type CounterMap = HashMap<(&'static str, u64), CounterPoint>;
+
+#[derive(Debug, Error)]
+pub enum MetricsError {
+    #[error(transparent)]
+    VarError(#[from] std::env::VarError),
+    #[error(transparent)]
+    ReqwestError(#[from] reqwest::Error),
+    #[error("SOLANA_METRICS_CONFIG is invalid: '{0}'")]
+    ConfigInvalid(String),
+    #[error("SOLANA_METRICS_CONFIG is incomplete")]
+    ConfigIncomplete,
+    #[error("SOLANA_METRICS_CONFIG database mismatch: {0}")]
+    DbMismatch(String),
+}
+
+impl From<MetricsError> for String {
+    fn from(error: MetricsError) -> Self {
+        error.to_string()
+    }
+}
 
 impl From<&CounterPoint> for DataPoint {
     fn from(counter_point: &CounterPoint) -> Self {
@@ -58,7 +79,7 @@ impl InfluxDbMetricsWriter {
         }
     }
 
-    fn build_write_url() -> Result<String, String> {
+    fn build_write_url() -> Result<String, MetricsError> {
         let config = get_metrics_config().map_err(|err| {
             info!("metrics disabled: {}", err);
             err
@@ -381,16 +402,14 @@ impl MetricsConfig {
     }
 }
 
-fn get_metrics_config() -> Result<MetricsConfig, String> {
+fn get_metrics_config() -> Result<MetricsConfig, MetricsError> {
     let mut config = MetricsConfig::default();
-
-    let config_var =
-        env::var("SOLANA_METRICS_CONFIG").map_err(|err| format!("SOLANA_METRICS_CONFIG: {err}"))?;
+    let config_var = env::var("SOLANA_METRICS_CONFIG")?;
 
     for pair in config_var.split(',') {
         let nv: Vec<_> = pair.split('=').collect();
         if nv.len() != 2 {
-            return Err(format!("SOLANA_METRICS_CONFIG is invalid: '{pair}'"));
+            return Err(MetricsError::ConfigInvalid(pair.to_string()));
         }
         let v = nv[1].to_string();
         match nv[0] {
@@ -398,27 +417,42 @@ fn get_metrics_config() -> Result<MetricsConfig, String> {
             "db" => config.db = v,
             "u" => config.username = v,
             "p" => config.password = v,
-            _ => return Err(format!("SOLANA_METRICS_CONFIG is invalid: '{pair}'")),
+            _ => return Err(MetricsError::ConfigInvalid(pair.to_string())),
         }
     }
 
     if !config.complete() {
-        return Err("SOLANA_METRICS_CONFIG is incomplete".to_string());
+        return Err(MetricsError::ConfigIncomplete);
     }
+
     Ok(config)
 }
 
-pub fn query(q: &str) -> Result<String, String> {
+pub fn metrics_config_sanity_check(cluster_type: ClusterType) -> Result<(), MetricsError> {
+    let config = match get_metrics_config() {
+        Ok(config) => config,
+        Err(MetricsError::VarError(std::env::VarError::NotPresent)) => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    match &config.db[..] {
+        "mainnet-beta" if cluster_type != ClusterType::MainnetBeta => (),
+        "tds" if cluster_type != ClusterType::Testnet => (),
+        "devnet" if cluster_type != ClusterType::Devnet => (),
+        _ => return Ok(()),
+    };
+    let (host, db) = (&config.host, &config.db);
+    let msg = format!("cluster_type={cluster_type:?} host={host} database={db}");
+    Err(MetricsError::DbMismatch(msg))
+}
+
+pub fn query(q: &str) -> Result<String, MetricsError> {
     let config = get_metrics_config()?;
     let query_url = format!(
         "{}/query?u={}&p={}&q={}",
         &config.host, &config.username, &config.password, &q
     );
 
-    let response = reqwest::blocking::get(query_url.as_str())
-        .map_err(|err| err.to_string())?
-        .text()
-        .map_err(|err| err.to_string())?;
+    let response = reqwest::blocking::get(query_url.as_str())?.text()?;
 
     Ok(response)
 }

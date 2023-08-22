@@ -1,0 +1,24 @@
+name: Downstream Project - SPL (Nightly)
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+
+jobs:
+  main:
+    strategy:
+      fail-fast: false
+      matrix:
+        branch:
+          - master
+    uses: ./.github/workflows/downstream-project-spl.yml
+    with:
+      branch: ${{ matrix.branch }}
+
+  error_reporting:
+    needs:
+      - main
+    if: failure()
+    uses: ./.github/workflows/error-reporting.yml
+    secrets:
+      WEBHOOK: ${{ secrets.SLACK_ERROR_REPORTING_WEBHOOK }}

@@ -11,8 +11,8 @@ msc {
 
   VoteSigner <:> Validator [label="register\n\n(optional)"];
   Validator => Cluster [label="VoteState::Initialize(VoteSigner)"];
-  StakerX => Cluster [label="StakeState::Delegate(Validator)"];
-  StakerY => Cluster [label="StakeState::Delegate(Validator)"];
+  StakerX => Cluster [label="StakeStateV2::Delegate(Validator)"];
+  StakerY => Cluster [label="StakeStateV2::Delegate(Validator)"];
 
      |||;
   Validator box Cluster [label="\nvalidate\n"];

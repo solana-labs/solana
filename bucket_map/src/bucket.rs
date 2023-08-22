@@ -483,7 +483,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         let best_bucket = &mut self.data[best_fit_bucket as usize];
         let cap_power = best_bucket.contents.capacity_pow2();
         let cap = best_bucket.capacity();
-        let pos = thread_rng().gen_range(0, cap);
+        let pos = thread_rng().gen_range(0..cap);
         let mut success = false;
         // max search is increased here by a lot for this search. The idea is that we just have to find an empty bucket somewhere.
         // We don't mind waiting on a new write (by searching longer). Writing is done in the background only.
@@ -733,14 +733,11 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     pub fn insert(&mut self, key: &Pubkey, value: (&[T], RefCount)) {
         let (new, refct) = value;
         loop {
-            let rv = self.try_write(key, new.iter(), new.len(), refct);
-            match rv {
-                Ok(_) => return,
-                Err(err) => {
-                    self.grow(err);
-                    self.handle_delayed_grows();
-                }
-            }
+            let Err(err) = self.try_write(key, new.iter(), new.len(), refct) else {
+                return;
+            };
+            self.grow(err);
+            self.handle_delayed_grows();
         }
     }
 

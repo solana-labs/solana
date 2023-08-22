@@ -5,7 +5,9 @@ use {
         compute_budget::ComputeBudget,
         ic_logger_msg,
         invoke_context::InvokeContext,
-        loaded_programs::{LoadProgramMetrics, LoadedProgram, LoadedProgramType},
+        loaded_programs::{
+            LoadProgramMetrics, LoadedProgram, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET,
+        },
         log_collector::LogCollector,
         stable_log,
     },
@@ -22,7 +24,7 @@ use {
     },
     solana_sdk::{
         entrypoint::{HEAP_LENGTH, SUCCESS},
-        feature_set::{self, FeatureSet},
+        feature_set,
         instruction::InstructionError,
         loader_v4::{self, LoaderV4State, DEPLOYMENT_COOLDOWN_IN_SLOTS},
         loader_v4_instruction::LoaderV4Instruction,
@@ -68,17 +70,10 @@ fn get_state_mut(data: &mut [u8]) -> Result<&mut LoaderV4State, InstructionError
     }
 }
 
-pub fn load_program_from_account(
-    _feature_set: &FeatureSet,
+pub fn create_program_runtime_environment_v2<'a>(
     compute_budget: &ComputeBudget,
-    log_collector: Option<Rc<RefCell<LogCollector>>>,
-    program: &BorrowedAccount,
     debugging_features: bool,
-) -> Result<(Arc<LoadedProgram>, LoadProgramMetrics), InstructionError> {
-    let mut load_program_metrics = LoadProgramMetrics {
-        program_id: program.get_key().to_string(),
-        ..LoadProgramMetrics::default()
-    };
+) -> BuiltinProgram<InvokeContext<'a>> {
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
@@ -97,37 +92,14 @@ pub fn load_program_from_account(
             .unwrap_or(0),
         external_internal_function_hash_collision: true,
         reject_callx_r10: true,
-        dynamic_stack_frames: true,
-        enable_sdiv: true,
+        enable_sbpf_v1: false,
+        enable_sbpf_v2: true,
         optimize_rodata: true,
-        static_syscalls: true,
-        enable_elf_vaddr: true,
-        reject_rodata_stack_overlap: true,
         new_elf_parser: true,
         aligned_memory_mapping: true,
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
-    let loader = BuiltinProgram::new_loader(config);
-    let state = get_state(program.get_data())?;
-    let programdata = program
-        .get_data()
-        .get(LoaderV4State::program_data_offset()..)
-        .ok_or(InstructionError::AccountDataTooSmall)?;
-    let loaded_program = LoadedProgram::new(
-        &loader_v4::id(),
-        Arc::new(loader),
-        state.slot,
-        state.slot.saturating_add(1),
-        None,
-        programdata,
-        program.get_data().len(),
-        &mut load_program_metrics,
-    )
-    .map_err(|err| {
-        ic_logger_msg!(log_collector, "{}", err);
-        InstructionError::InvalidAccountData
-    })?;
-    Ok((Arc::new(loaded_program), load_program_metrics))
+    BuiltinProgram::new_loader(config)
 }
 
 fn calculate_heap_cost(heap_size: u64, heap_cost: u64) -> u64 {
@@ -144,8 +116,9 @@ fn calculate_heap_cost(heap_size: u64, heap_cost: u64) -> u64 {
 pub fn create_vm<'a, 'b>(
     invoke_context: &'a mut InvokeContext<'b>,
     program: &'a Executable<RequisiteVerifier, InvokeContext<'b>>,
-) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, Box<dyn std::error::Error>> {
+) -> Result<EbpfVm<'a, InvokeContext<'b>>, Box<dyn std::error::Error>> {
     let config = program.get_config();
+    let sbpf_version = program.get_sbpf_version();
     let compute_budget = invoke_context.get_compute_budget();
     let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
     invoke_context.consume_checked(calculate_heap_cost(
@@ -163,22 +136,28 @@ pub fn create_vm<'a, 'b>(
         MemoryRegion::new_writable(heap.as_slice_mut(), ebpf::MM_HEAP_START),
     ];
     let log_collector = invoke_context.get_log_collector();
-    let memory_mapping = MemoryMapping::new(regions, config).map_err(|err| {
+    let memory_mapping = MemoryMapping::new(regions, config, sbpf_version).map_err(|err| {
         ic_logger_msg!(log_collector, "Failed to create SBF VM: {}", err);
         Box::new(InstructionError::ProgramEnvironmentSetupFailure)
     })?;
     Ok(EbpfVm::new(
-        program,
+        config,
+        sbpf_version,
         invoke_context,
         memory_mapping,
         stack_len,
     ))
 }
 
-fn execute(
-    invoke_context: &mut InvokeContext,
-    program: &Executable<RequisiteVerifier, InvokeContext<'static>>,
+fn execute<'a, 'b: 'a>(
+    invoke_context: &'a mut InvokeContext<'b>,
+    executable: &'a Executable<RequisiteVerifier, InvokeContext<'static>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // We dropped the lifetime tracking in the Executor by setting it to 'static,
+    // thus we need to reintroduce the correct lifetime of InvokeContext here again.
+    let executable = unsafe {
+        std::mem::transmute::<_, &'a Executable<RequisiteVerifier, InvokeContext<'b>>>(executable)
+    };
     let log_collector = invoke_context.get_log_collector();
     let stack_height = invoke_context.get_stack_height();
     let transaction_context = &invoke_context.transaction_context;
@@ -187,21 +166,16 @@ fn execute(
     #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
     let use_jit = false;
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
-    let use_jit = program.get_compiled_program().is_some();
+    let use_jit = executable.get_compiled_program().is_some();
 
     let compute_meter_prev = invoke_context.get_remaining();
     let mut create_vm_time = Measure::start("create_vm");
-    let mut vm = create_vm(
-        invoke_context,
-        // We dropped the lifetime tracking in the Executor by setting it to 'static,
-        // thus we need to reintroduce the correct lifetime of InvokeContext here again.
-        unsafe { std::mem::transmute(program) },
-    )?;
+    let mut vm = create_vm(invoke_context, executable)?;
     create_vm_time.stop();
 
     let mut execute_time = Measure::start("execute");
     stable_log::program_invoke(&log_collector, &program_id, stack_height);
-    let (compute_units_consumed, result) = vm.execute_program(!use_jit);
+    let (compute_units_consumed, result) = vm.execute_program(executable, !use_jit);
     drop(vm);
     ic_logger_msg!(
         log_collector,
@@ -450,13 +424,37 @@ pub fn process_instruction_deploy(
     } else {
         &program
     };
-    let (_executor, load_program_metrics) = load_program_from_account(
-        &invoke_context.feature_set,
-        invoke_context.get_compute_budget(),
-        invoke_context.get_log_collector(),
-        buffer,
-        false, /* debugging_features */
-    )?;
+
+    let programdata = buffer
+        .get_data()
+        .get(LoaderV4State::program_data_offset()..)
+        .ok_or(InstructionError::AccountDataTooSmall)?;
+
+    let deployment_slot = state.slot;
+    let effective_slot = deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET);
+
+    let mut load_program_metrics = LoadProgramMetrics {
+        program_id: buffer.get_key().to_string(),
+        ..LoadProgramMetrics::default()
+    };
+    let executor = LoadedProgram::new(
+        &loader_v4::id(),
+        invoke_context
+            .programs_modified_by_tx
+            .environments
+            .program_runtime_v2
+            .clone(),
+        deployment_slot,
+        effective_slot,
+        None,
+        programdata,
+        buffer.get_data().len(),
+        &mut load_program_metrics,
+    )
+    .map_err(|err| {
+        ic_logger_msg!(log_collector, "{}", err);
+        InstructionError::InvalidAccountData
+    })?;
     load_program_metrics.submit_datapoint(&mut invoke_context.timings);
     if let Some(mut source_program) = source_program {
         let rent = invoke_context.get_sysvar_cache().get_rent()?;
@@ -470,6 +468,20 @@ pub fn process_instruction_deploy(
     let state = get_state_mut(program.get_data_mut()?)?;
     state.slot = current_slot;
     state.is_deployed = true;
+
+    if let Some(old_entry) = invoke_context.find_program_in_cache(program.get_key()) {
+        executor.tx_usage_counter.store(
+            old_entry.tx_usage_counter.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        executor.ix_usage_counter.store(
+            old_entry.ix_usage_counter.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+    }
+    invoke_context
+        .programs_modified_by_tx
+        .replenish(*program.get_key(), Arc::new(executor));
     Ok(())
 }
 
@@ -594,14 +606,13 @@ pub fn process_instruction_inner(
             return Err(Box::new(InstructionError::InvalidArgument));
         }
         let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-        let (loaded_program, load_program_metrics) = load_program_from_account(
-            &invoke_context.feature_set,
-            invoke_context.get_compute_budget(),
-            invoke_context.get_log_collector(),
-            &program,
-            false, /* debugging_features */
-        )?;
-        load_program_metrics.submit_datapoint(&mut invoke_context.timings);
+        let loaded_program = invoke_context
+            .find_program_in_cache(program.get_key())
+            .ok_or(InstructionError::InvalidAccountData)?;
+
+        if loaded_program.is_tombstone() {
+            return Err(Box::new(InstructionError::InvalidAccountData));
+        }
         get_or_create_executor_time.stop();
         saturating_add_assign!(
             invoke_context.timings.get_or_create_executor_us,
@@ -643,6 +654,50 @@ mod tests {
         std::{fs::File, io::Read, path::Path},
     };
 
+    pub fn load_all_invoked_programs(invoke_context: &mut InvokeContext) {
+        let mut load_program_metrics = LoadProgramMetrics::default();
+        let num_accounts = invoke_context.transaction_context.get_number_of_accounts();
+        for index in 0..num_accounts {
+            let account = invoke_context
+                .transaction_context
+                .get_account_at_index(index)
+                .expect("Failed to get the account")
+                .borrow();
+
+            let owner = account.owner();
+            if loader_v4::check_id(owner) {
+                let pubkey = invoke_context
+                    .transaction_context
+                    .get_key_of_account_at_index(index)
+                    .expect("Failed to get account key");
+
+                if let Some(programdata) =
+                    account.data().get(LoaderV4State::program_data_offset()..)
+                {
+                    if let Ok(loaded_program) = LoadedProgram::new(
+                        &loader_v4::id(),
+                        invoke_context
+                            .programs_modified_by_tx
+                            .environments
+                            .program_runtime_v2
+                            .clone(),
+                        0,
+                        0,
+                        None,
+                        programdata,
+                        account.data().len(),
+                        &mut load_program_metrics,
+                    ) {
+                        invoke_context.programs_modified_by_tx.set_slot_for_tests(0);
+                        invoke_context
+                            .programs_modified_by_tx
+                            .replenish(*pubkey, Arc::new(loaded_program));
+                    }
+                }
+            }
+        }
+    }
+
     fn process_instruction(
         program_indices: Vec<IndexOfAccount>,
         instruction_data: &[u8],
@@ -668,7 +723,16 @@ mod tests {
             instruction_accounts,
             expected_result,
             super::process_instruction,
-            |_invoke_context| {},
+            |invoke_context| {
+                invoke_context
+                    .programs_modified_by_tx
+                    .environments
+                    .program_runtime_v2 = Arc::new(create_program_runtime_environment_v2(
+                    &ComputeBudget::default(),
+                    false,
+                ));
+                load_all_invoked_programs(invoke_context);
+            },
             |_invoke_context| {},
         )
     }
@@ -1439,7 +1503,7 @@ mod tests {
                 load_program_account_from_elf(false, None, "rodata"),
             ),
             (
-                program_address,
+                Pubkey::new_unique(),
                 load_program_account_from_elf(true, None, "invalid"),
             ),
         ];

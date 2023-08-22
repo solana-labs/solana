@@ -6,6 +6,7 @@ pub mod batched_grouped_ciphertext_validity;
 pub mod batched_range_proof;
 pub mod ciphertext_ciphertext_equality;
 pub mod ciphertext_commitment_equality;
+pub mod fee_sigma;
 pub mod grouped_ciphertext_validity;
 pub mod pubkey_validity;
 pub mod range_proof;
@@ -33,6 +34,7 @@ pub use {
     ciphertext_commitment_equality::{
         CiphertextCommitmentEqualityProofContext, CiphertextCommitmentEqualityProofData,
     },
+    fee_sigma::{FeeSigmaProofContext, FeeSigmaProofData},
     grouped_ciphertext_validity::{
         GroupedCiphertext2HandlesValidityProofContext, GroupedCiphertext2HandlesValidityProofData,
     },
@@ -64,6 +66,7 @@ pub enum ProofType {
     CiphertextCommitmentEquality,
     GroupedCiphertext2HandlesValidity,
     BatchedGroupedCiphertext2HandlesValidity,
+    FeeSigma,
 }
 
 pub trait ZkProofData<T: Pod> {

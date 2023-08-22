@@ -14,6 +14,7 @@ use {
         error,
         fs::{self, File, OpenOptions},
         io::{Read, Write},
+        ops::Deref,
         path::Path,
     },
     thiserror::Error,
@@ -93,11 +94,36 @@ where
     }
 }
 
+impl<Container: Deref<Target = impl Signer>> Signer for Container {
+    #[inline]
+    fn pubkey(&self) -> Pubkey {
+        self.deref().pubkey()
+    }
+
+    fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
+        self.deref().try_pubkey()
+    }
+
+    fn sign_message(&self, message: &[u8]) -> Signature {
+        self.deref().sign_message(message)
+    }
+
+    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
+        self.deref().try_sign_message(message)
+    }
+
+    fn is_interactive(&self) -> bool {
+        self.deref().is_interactive()
+    }
+}
+
 impl PartialEq for dyn Signer {
     fn eq(&self, other: &dyn Signer) -> bool {
         self.pubkey() == other.pubkey()
     }
 }
+
+impl Eq for dyn Signer {}
 
 impl std::fmt::Debug for dyn Signer {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -185,5 +211,42 @@ mod tests {
             pubkeys(&unique_signers(vec![&alice, &bob, &alice])),
             pubkeys(&[&alice, &bob])
         );
+    }
+
+    #[test]
+    fn test_containers() {
+        use std::{rc::Rc, sync::Arc};
+
+        struct Foo<S: Signer> {
+            #[allow(unused)]
+            signer: S,
+        }
+
+        fn foo(_s: impl Signer) {}
+
+        let _arc_signer = Foo {
+            signer: Arc::new(Keypair::new()),
+        };
+        foo(Arc::new(Keypair::new()));
+
+        let _rc_signer = Foo {
+            signer: Rc::new(Keypair::new()),
+        };
+        foo(Rc::new(Keypair::new()));
+
+        let _ref_signer = Foo {
+            signer: &Keypair::new(),
+        };
+        foo(&Keypair::new());
+
+        let _box_signer = Foo {
+            signer: Box::new(Keypair::new()),
+        };
+        foo(Box::new(Keypair::new()));
+
+        let _signer = Foo {
+            signer: Keypair::new(),
+        };
+        foo(Keypair::new());
     }
 }

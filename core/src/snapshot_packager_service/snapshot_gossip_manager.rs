@@ -4,7 +4,7 @@ use {
         snapshot_hash::{
             FullSnapshotHash, IncrementalSnapshotHash, SnapshotHash, StartingSnapshotHashes,
         },
-        snapshot_package::{retain_max_n_elements, SnapshotType},
+        snapshot_package::{retain_max_n_elements, SnapshotKind},
     },
     solana_sdk::{clock::Slot, hash::Hash},
     std::sync::Arc,
@@ -58,14 +58,14 @@ impl SnapshotGossipManager {
     /// Push new snapshot hash to the cluster via CRDS
     pub fn push_snapshot_hash(
         &mut self,
-        snapshot_type: SnapshotType,
+        snapshot_kind: SnapshotKind,
         snapshot_hash: (Slot, SnapshotHash),
     ) {
-        match snapshot_type {
-            SnapshotType::FullSnapshot => {
+        match snapshot_kind {
+            SnapshotKind::FullSnapshot => {
                 self.push_full_snapshot_hash(FullSnapshotHash(snapshot_hash));
             }
-            SnapshotType::IncrementalSnapshot(base_slot) => {
+            SnapshotKind::IncrementalSnapshot(base_slot) => {
                 self.push_incremental_snapshot_hash(
                     IncrementalSnapshotHash(snapshot_hash),
                     base_slot,

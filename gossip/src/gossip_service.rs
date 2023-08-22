@@ -203,7 +203,7 @@ pub fn get_client(
         .iter()
         .filter_map(|node| node.valid_client_facing_addr(protocol, socket_addr_space))
         .collect();
-    let select = thread_rng().gen_range(0, nodes.len());
+    let select = thread_rng().gen_range(0..nodes.len());
     let (rpc, tpu) = nodes[select];
     ThinClient::new(rpc, tpu, connection_cache)
 }

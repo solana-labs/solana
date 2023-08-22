@@ -6,24 +6,24 @@ use {
     },
     itertools::izip,
     log::*,
+    solana_accounts_db::accounts_db::create_accounts_run_and_snapshot_dirs,
     solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
     solana_core::{
-        tower_storage::FileTowerStorage,
+        consensus::tower_storage::FileTowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{
         cluster_info::Node,
-        contact_info::{ContactInfo, LegacyContactInfo},
+        contact_info::{ContactInfo, LegacyContactInfo, Protocol},
         gossip_service::discover_cluster,
     },
-    solana_ledger::create_new_tmp_ledger,
+    solana_ledger::{create_new_tmp_ledger, shred::Shred},
     solana_runtime::{
         genesis_utils::{
             create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,
             ValidatorVoteKeypairs,
         },
         snapshot_config::SnapshotConfig,
-        snapshot_utils::create_accounts_run_and_snapshot_dirs,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -38,13 +38,13 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         stake::{
-            config as stake_config, instruction as stake_instruction,
+            instruction as stake_instruction,
             state::{Authorized, Lockup},
         },
         system_transaction,
         transaction::Transaction,
     },
-    solana_stake_program::{config::create_account as create_stake_config_account, stake_state},
+    solana_stake_program::stake_state,
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::tpu_client::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
@@ -57,6 +57,7 @@ use {
         collections::HashMap,
         io::{Error, ErrorKind, Result},
         iter,
+        net::UdpSocket,
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
     },
@@ -91,6 +92,24 @@ pub struct ClusterConfig {
     pub additional_accounts: Vec<(Pubkey, AccountSharedData)>,
     pub tpu_use_quic: bool,
     pub tpu_connection_pool_size: usize,
+}
+
+impl ClusterConfig {
+    pub fn new_with_equal_stakes(
+        num_nodes: usize,
+        cluster_lamports: u64,
+        lamports_per_node: u64,
+    ) -> Self {
+        Self {
+            node_stakes: vec![lamports_per_node; num_nodes],
+            cluster_lamports,
+            validator_configs: make_identical_validator_configs(
+                &ValidatorConfig::default_for_test(),
+                num_nodes,
+            ),
+            ..Self::default()
+        }
+    }
 }
 
 impl Default for ClusterConfig {
@@ -133,17 +152,14 @@ impl LocalCluster {
         lamports_per_node: u64,
         socket_addr_space: SocketAddrSpace,
     ) -> Self {
-        let stakes: Vec<_> = (0..num_nodes).map(|_| lamports_per_node).collect();
-        let mut config = ClusterConfig {
-            node_stakes: stakes,
-            cluster_lamports,
-            validator_configs: make_identical_validator_configs(
-                &ValidatorConfig::default_for_test(),
+        Self::new(
+            &mut ClusterConfig::new_with_equal_stakes(
                 num_nodes,
+                cluster_lamports,
+                lamports_per_node,
             ),
-            ..ClusterConfig::default()
-        };
-        Self::new(&mut config, socket_addr_space)
+            socket_addr_space,
+        )
     }
 
     fn sync_ledger_path_across_nested_config_fields(
@@ -251,18 +267,6 @@ impl LocalCluster {
         genesis_config
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);
-
-        // Replace staking config
-        genesis_config.add_account(
-            stake_config::id(),
-            create_stake_config_account(
-                1,
-                &stake_config::Config {
-                    warmup_cooldown_rate: std::f64::MAX,
-                    slash_penalty: std::u8::MAX,
-                },
-            ),
-        );
 
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let leader_contact_info = leader_node.info.clone();
@@ -849,6 +853,10 @@ impl Cluster for LocalCluster {
         (node, entry_point_info)
     }
 
+    fn set_entry_point(&mut self, entry_point_info: ContactInfo) {
+        self.entry_point_info = entry_point_info;
+    }
+
     fn restart_node(
         &mut self,
         pubkey: &Pubkey,
@@ -918,6 +926,20 @@ impl Cluster for LocalCluster {
 
     fn get_contact_info(&self, pubkey: &Pubkey) -> Option<&ContactInfo> {
         self.validators.get(pubkey).map(|v| &v.info.contact_info)
+    }
+
+    fn send_shreds_to_validator(&self, dup_shreds: Vec<&Shred>, validator_key: &Pubkey) {
+        let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let validator_tvu = self
+            .get_contact_info(validator_key)
+            .unwrap()
+            .tvu(Protocol::UDP)
+            .unwrap();
+        for shred in dup_shreds {
+            send_socket
+                .send_to(shred.payload().as_ref(), validator_tvu)
+                .unwrap();
+        }
     }
 }
 

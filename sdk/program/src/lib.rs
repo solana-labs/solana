@@ -477,6 +477,8 @@ pub(crate) mod atomic_u64;
 pub mod big_mod_exp;
 pub mod blake3;
 pub mod borsh;
+pub mod borsh0_10;
+pub mod borsh0_9;
 pub mod bpf_loader;
 pub mod bpf_loader_deprecated;
 pub mod bpf_loader_upgradeable;
@@ -573,6 +575,7 @@ pub mod sdk_ids {
                 vote::program::id(),
                 feature::id(),
                 bpf_loader_deprecated::id(),
+                #[allow(deprecated)]
                 stake::config::id(),
             ];
             sdk_ids.extend(sysvar::ALL_IDS.iter());

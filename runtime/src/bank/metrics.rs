@@ -19,9 +19,6 @@ pub(crate) struct RewardsMetrics {
     pub(crate) redeem_rewards_us: u64,
     pub(crate) store_stake_accounts_us: AtomicU64,
     pub(crate) store_vote_accounts_us: AtomicU64,
-    pub(crate) invalid_cached_vote_accounts: usize,
-    pub(crate) invalid_cached_stake_accounts: usize,
-    pub(crate) invalid_cached_stake_accounts_rent_epoch: usize,
     pub(crate) vote_accounts_cache_miss_count: usize,
     pub(crate) hash_partition_rewards_us: u64,
 }
@@ -97,21 +94,6 @@ pub(crate) fn report_new_epoch_metrics(
             i64
         ),
         (
-            "invalid_cached_vote_accounts",
-            metrics.invalid_cached_vote_accounts,
-            i64
-        ),
-        (
-            "invalid_cached_stake_accounts",
-            metrics.invalid_cached_stake_accounts,
-            i64
-        ),
-        (
-            "invalid_cached_stake_accounts_rent_epoch",
-            metrics.invalid_cached_stake_accounts_rent_epoch,
-            i64
-        ),
-        (
             "vote_accounts_cache_miss_count",
             metrics.vote_accounts_cache_miss_count,
             i64
@@ -172,13 +154,13 @@ pub(crate) fn report_new_bank_metrics(
 }
 
 /// Metrics for partitioned epoch reward store
-#[allow(dead_code)]
 #[derive(Debug, Default)]
 pub(crate) struct RewardsStoreMetrics {
     pub(crate) partition_index: u64,
     pub(crate) store_stake_accounts_us: u64,
     pub(crate) store_stake_accounts_count: usize,
     pub(crate) total_stake_accounts_count: usize,
+    pub(crate) distributed_rewards: u64,
     pub(crate) pre_capitalization: u64,
     pub(crate) post_capitalization: u64,
 }
@@ -207,6 +189,7 @@ pub(crate) fn report_partitioned_reward_metrics(bank: &Bank, timings: RewardsSto
             timings.total_stake_accounts_count,
             i64
         ),
+        ("distributed_rewards", timings.distributed_rewards, i64),
         ("pre_capitalization", timings.pre_capitalization, i64),
         ("post_capitalization", timings.post_capitalization, i64),
     );

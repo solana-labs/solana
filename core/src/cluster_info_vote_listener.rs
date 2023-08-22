@@ -1,6 +1,7 @@
 use {
     crate::{
         banking_trace::{BankingPacketBatch, BankingPacketSender},
+        consensus::vote_stake_tracker::VoteStakeTracker,
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
         result::{Error, Result},
@@ -8,7 +9,6 @@ use {
         verified_vote_packets::{
             ValidatorGossipVotesIterator, VerifiedVoteMetadata, VerifiedVotePackets,
         },
-        vote_stake_tracker::VoteStakeTracker,
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Select, Sender},
     log::*,
@@ -422,15 +422,12 @@ impl ClusterInfoVoteListener {
                 // Always set this to avoid taking the poh lock too often
                 time_since_lock = Instant::now();
                 // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
-                let current_working_bank = poh_recorder.read().unwrap().bank();
-                if let Some(current_working_bank) = current_working_bank {
-                    Self::check_for_leader_bank_and_send_votes(
-                        &mut bank_vote_sender_state_option,
-                        current_working_bank,
-                        verified_packets_sender,
-                        &verified_vote_packets,
-                    )?;
-                }
+                Self::check_for_leader_bank_and_send_votes(
+                    &mut bank_vote_sender_state_option,
+                    poh_recorder.read().unwrap().bank(),
+                    verified_packets_sender,
+                    &verified_vote_packets,
+                )?;
                 // Check if we've crossed the feature boundary
                 if !is_tower_full_vote_enabled {
                     is_tower_full_vote_enabled = bank_forks
@@ -446,10 +443,19 @@ impl ClusterInfoVoteListener {
 
     fn check_for_leader_bank_and_send_votes(
         bank_vote_sender_state_option: &mut Option<BankVoteSenderState>,
-        current_working_bank: Arc<Bank>,
+        current_working_bank: Option<Arc<Bank>>,
         verified_packets_sender: &BankingPacketSender,
         verified_vote_packets: &VerifiedVotePackets,
     ) -> Result<()> {
+        let Some(current_working_bank) = current_working_bank else {
+            // We are not the leader!
+            if let Some(bank_vote_sender_state) = bank_vote_sender_state_option {
+                // This ensures we report the last slot's metrics
+                bank_vote_sender_state.report_metrics();
+                *bank_vote_sender_state_option = None;
+            }
+            return Ok(());
+        };
         // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
         if let Some(bank_vote_sender_state) = bank_vote_sender_state_option {
             if bank_vote_sender_state.bank.slot() != current_working_bank.slot() {
@@ -952,7 +958,7 @@ mod tests {
             .read()
             .unwrap()
             .contains_key(&bank.slot()));
-        let bank1 = Bank::new_from_parent(&bank, &Pubkey::default(), bank.slot() + 1);
+        let bank1 = Bank::new_from_parent(bank.clone(), &Pubkey::default(), bank.slot() + 1);
         vote_tracker.progress_with_new_root_bank(&bank1);
         assert!(!vote_tracker
             .slot_vote_trackers
@@ -963,12 +969,10 @@ mod tests {
         // Check `keys` and `epoch_authorized_voters` are purged when new
         // root bank moves to the next epoch
         let current_epoch = bank.epoch();
-        let new_epoch_bank = Bank::new_from_parent(
-            &bank,
-            &Pubkey::default(),
-            bank.epoch_schedule()
-                .get_first_slot_in_epoch(current_epoch + 1),
-        );
+        let new_epoch_slot = bank
+            .epoch_schedule()
+            .get_first_slot_in_epoch(current_epoch + 1);
+        let new_epoch_bank = Bank::new_from_parent(bank, &Pubkey::default(), new_epoch_slot);
         vote_tracker.progress_with_new_root_bank(&new_epoch_bank);
     }
 
@@ -1014,7 +1018,7 @@ mod tests {
         let bank0 = Bank::new_for_tests(&genesis_config);
         // Votes for slots less than the provided root bank's slot should not be processed
         let bank3 = Arc::new(Bank::new_from_parent(
-            &Arc::new(bank0),
+            Arc::new(bank0),
             &Pubkey::default(),
             3,
         ));
@@ -1535,7 +1539,7 @@ mod tests {
             .collect();
 
         let new_root_bank =
-            Bank::new_from_parent(&bank, &Pubkey::default(), first_slot_in_new_epoch - 2);
+            Bank::new_from_parent(bank, &Pubkey::default(), first_slot_in_new_epoch - 2);
         ClusterInfoVoteListener::filter_and_confirm_with_new_votes(
             &vote_tracker,
             vote_txs,
@@ -1713,7 +1717,7 @@ mod tests {
         // 1) If we hand over a `current_leader_bank`, vote sender state should be updated
         ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
             &mut bank_vote_sender_state_option,
-            current_leader_bank.clone(),
+            Some(current_leader_bank.clone()),
             &verified_packets_sender,
             &verified_vote_packets,
         )
@@ -1732,7 +1736,7 @@ mod tests {
         // 2) Handing over the same leader bank again should not update the state
         ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
             &mut bank_vote_sender_state_option,
-            current_leader_bank.clone(),
+            Some(current_leader_bank.clone()),
             &verified_packets_sender,
             &verified_vote_packets,
         )
@@ -1751,14 +1755,15 @@ mod tests {
             1
         );
 
+        let slot = current_leader_bank.slot() + 1;
         let current_leader_bank = Arc::new(Bank::new_from_parent(
-            &current_leader_bank,
+            current_leader_bank,
             &Pubkey::default(),
-            current_leader_bank.slot() + 1,
+            slot,
         ));
         ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
             &mut bank_vote_sender_state_option,
-            current_leader_bank.clone(),
+            Some(current_leader_bank.clone()),
             &verified_packets_sender,
             &verified_vote_packets,
         )

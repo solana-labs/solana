@@ -127,15 +127,17 @@ impl GeyserPluginManager {
 
     pub(crate) fn unload_plugin(&mut self, name: &str) -> JsonRpcResult<()> {
         // Check if any plugin names match this one
-        let Some(idx) = self.plugins.iter().position(|plugin| plugin.name().eq(name)) else {
+        let Some(idx) = self
+            .plugins
+            .iter()
+            .position(|plugin| plugin.name().eq(name))
+        else {
             // If we don't find one return an error
-            return Err(
-                jsonrpc_core::error::Error {
-                    code: ErrorCode::InvalidRequest,
-                    message: String::from("The plugin you requested to unload is not loaded"),
-                    data: None,
-                }
-            )
+            return Err(jsonrpc_core::error::Error {
+                code: ErrorCode::InvalidRequest,
+                message: String::from("The plugin you requested to unload is not loaded"),
+                data: None,
+            });
         };
 
         // Unload and drop plugin and lib
@@ -149,15 +151,17 @@ impl GeyserPluginManager {
     /// Then, attempt to load a new plugin
     pub(crate) fn reload_plugin(&mut self, name: &str, config_file: &str) -> JsonRpcResult<()> {
         // Check if any plugin names match this one
-        let Some(idx) = self.plugins.iter().position(|plugin| plugin.name().eq(name)) else {
+        let Some(idx) = self
+            .plugins
+            .iter()
+            .position(|plugin| plugin.name().eq(name))
+        else {
             // If we don't find one return an error
-            return Err(
-                jsonrpc_core::error::Error {
-                    code: ErrorCode::InvalidRequest,
-                    message: String::from("The plugin you requested to reload is not loaded"),
-                    data: None,
-                }
-            )
+            return Err(jsonrpc_core::error::Error {
+                code: ErrorCode::InvalidRequest,
+                message: String::from("The plugin you requested to reload is not loaded"),
+                data: None,
+            });
         };
 
         // Unload and drop current plugin first in case plugin requires exclusive access to resource,

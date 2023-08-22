@@ -1055,7 +1055,7 @@ fn show_votes_and_credits(
     }
 
     // Existence of this should guarantee the occurrence of vote truncation
-    let newest_history_entry = epoch_voting_history.iter().rev().next();
+    let newest_history_entry = epoch_voting_history.iter().next_back();
 
     writeln!(
         f,
@@ -3052,7 +3052,7 @@ mod tests {
             }
 
             fn try_sign_message(&self, _message: &[u8]) -> Result<Signature, SignerError> {
-                Ok(Signature::new(&[1u8; 64]))
+                Ok(Signature::from([1u8; 64]))
             }
 
             fn is_interactive(&self) -> bool {

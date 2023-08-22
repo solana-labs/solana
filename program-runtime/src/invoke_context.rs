@@ -13,6 +13,7 @@ use {
     solana_measure::measure::Measure,
     solana_rbpf::{
         ebpf::MM_HEAP_START,
+        elf::SBPFVersion,
         memory_region::MemoryMapping,
         vm::{BuiltinFunction, Config, ContextObject, ProgramResult},
     },
@@ -145,8 +146,13 @@ impl BpfAllocator {
 
 pub struct SyscallContext {
     pub allocator: BpfAllocator,
-    pub orig_account_lengths: Vec<usize>,
+    pub accounts_metadata: Vec<SerializedAccountMetadata>,
     pub trace_log: Vec<[u64; 12]>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SerializedAccountMetadata {
+    pub original_data_len: usize,
 }
 
 pub struct InvokeContext<'a> {
@@ -206,6 +212,14 @@ impl<'a> InvokeContext<'a> {
             syscall_context: Vec::new(),
             traces: Vec::new(),
         }
+    }
+
+    pub fn find_program_in_cache(&self, pubkey: &Pubkey) -> Option<Arc<LoadedProgram>> {
+        // First lookup the cache of the programs modified by the current transaction. If not found, lookup
+        // the cache of the cache of the programs that are loaded for the transaction batch.
+        self.programs_modified_by_tx
+            .find(pubkey)
+            .or_else(|| self.programs_loaded_for_tx_batch.find(pubkey))
     }
 
     /// Push a stack frame onto the invocation stack
@@ -744,7 +758,8 @@ impl<'a> InvokeContext<'a> {
         stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
         let pre_remaining_units = self.get_remaining();
         let mock_config = Config::default();
-        let mut mock_memory_mapping = MemoryMapping::new(Vec::new(), &mock_config).unwrap();
+        let mut mock_memory_mapping =
+            MemoryMapping::new(Vec::new(), &mock_config, &SBPFVersion::V2).unwrap();
         let mut result = ProgramResult::Ok(0);
         process_instruction(
             // Removes lifetime tracking

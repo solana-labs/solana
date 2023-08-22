@@ -48,8 +48,10 @@ pub mod qos_service;
 pub mod unprocessed_packet_batches;
 pub mod unprocessed_transaction_storage;
 
+mod consume_worker;
 mod decision_maker;
 mod forward_packet_batches_by_accounts;
+mod forward_worker;
 mod forwarder;
 mod immutable_deserialized_packet;
 mod latest_unprocessed_votes;
@@ -58,14 +60,9 @@ mod multi_iterator_scanner;
 mod packet_deserializer;
 mod packet_receiver;
 mod read_write_account_set;
-
 #[allow(dead_code)]
 mod scheduler_messages;
-
-mod consume_worker;
-mod forward_worker;
-#[allow(dead_code)]
-mod thread_aware_account_locks;
+mod transaction_scheduler;
 
 // Fixed thread size seems to be fastest on GCP setup
 pub const NUM_THREADS: u32 = 6;
@@ -653,7 +650,7 @@ mod tests {
         let genesis_config = create_genesis_config(2).genesis_config;
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
+        let bank = bank_forks.read().unwrap().get(0).unwrap();
         let banking_tracer = BankingTracer::new_disabled();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
         let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
@@ -666,7 +663,7 @@ mod tests {
                     .expect("Expected to be able to open database ledger"),
             );
             let (exit, poh_recorder, poh_service, _entry_receiever) =
-                create_test_recorder(&bank, blockstore, None, None);
+                create_test_recorder(bank, blockstore, None, None);
             let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
@@ -704,7 +701,7 @@ mod tests {
         let num_extra_ticks = 2;
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
+        let bank = bank_forks.read().unwrap().get(0).unwrap();
         let start_hash = bank.last_blockhash();
         let banking_tracer = BankingTracer::new_disabled();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
@@ -722,7 +719,7 @@ mod tests {
                 ..PohConfig::default()
             };
             let (exit, poh_recorder, poh_service, entry_receiver) =
-                create_test_recorder(&bank, blockstore, Some(poh_config), None);
+                create_test_recorder(bank.clone(), blockstore, Some(poh_config), None);
             let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
@@ -783,7 +780,7 @@ mod tests {
         } = create_slow_genesis_config(10);
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
+        let bank = bank_forks.read().unwrap().get(0).unwrap();
         let start_hash = bank.last_blockhash();
         let banking_tracer = BankingTracer::new_disabled();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
@@ -803,7 +800,7 @@ mod tests {
                 ..PohConfig::default()
             };
             let (exit, poh_recorder, poh_service, entry_receiver) =
-                create_test_recorder(&bank, blockstore, Some(poh_config), None);
+                create_test_recorder(bank.clone(), blockstore, Some(poh_config), None);
             let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
@@ -954,7 +951,7 @@ mod tests {
                 // start a banking_stage to eat verified receiver
                 let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
                 let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-                let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
+                let bank = bank_forks.read().unwrap().get(0).unwrap();
                 let blockstore = Arc::new(
                     Blockstore::open(ledger_path.path())
                         .expect("Expected to be able to open database ledger"),
@@ -966,7 +963,7 @@ mod tests {
                     ..PohConfig::default()
                 };
                 let (exit, poh_recorder, poh_service, entry_receiver) =
-                    create_test_recorder(&bank, blockstore, Some(poh_config), None);
+                    create_test_recorder(bank.clone(), blockstore, Some(poh_config), None);
                 let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
                 let cluster_info = Arc::new(cluster_info);
                 let _banking_stage = BankingStage::new_num_threads(
@@ -1139,7 +1136,7 @@ mod tests {
         );
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
+        let bank = bank_forks.read().unwrap().get(0).unwrap();
         let start_hash = bank.last_blockhash();
         let banking_tracer = BankingTracer::new_disabled();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
@@ -1159,7 +1156,7 @@ mod tests {
                 ..PohConfig::default()
             };
             let (exit, poh_recorder, poh_service, _entry_receiver) =
-                create_test_recorder(&bank, blockstore, Some(poh_config), None);
+                create_test_recorder(bank.clone(), blockstore, Some(poh_config), None);
             let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();

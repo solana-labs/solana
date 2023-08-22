@@ -147,11 +147,11 @@ fn verify_packets(
     packets: &mut [PacketBatch],
 ) {
     let working_bank = bank_forks.read().unwrap().working_bank();
-    let leader_slots: HashMap<Slot, [u8; 32]> =
+    let leader_slots: HashMap<Slot, Pubkey> =
         get_slot_leaders(self_pubkey, packets, leader_schedule_cache, &working_bank)
             .into_iter()
-            .filter_map(|(slot, pubkey)| Some((slot, pubkey?.to_bytes())))
-            .chain(std::iter::once((Slot::MAX, [0u8; 32])))
+            .filter_map(|(slot, pubkey)| Some((slot, pubkey?)))
+            .chain(std::iter::once((Slot::MAX, Pubkey::default())))
             .collect();
     let out = verify_shreds_gpu(thread_pool, packets, &leader_slots, recycler_cache);
     solana_perf::sigverify::mark_disabled(packets, &out);
@@ -175,12 +175,9 @@ fn get_slot_leaders(
                 continue;
             }
             let shred = shred::layout::get_shred(packet);
-            let slot = match shred.and_then(shred::layout::get_slot) {
-                None => {
-                    packet.meta_mut().set_discard(true);
-                    continue;
-                }
-                Some(slot) => slot,
+            let Some(slot) = shred.and_then(shred::layout::get_slot) else {
+                packet.meta_mut().set_discard(true);
+                continue;
             };
             let leader = leaders.entry(slot).or_insert_with(|| {
                 let leader = leader_schedule_cache.slot_leader_at(slot, Some(bank))?;

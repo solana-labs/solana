@@ -11,7 +11,7 @@ use {
 };
 
 fn make_weights<R: Rng>(rng: &mut R) -> Vec<u64> {
-    repeat_with(|| rng.gen_range(1, 100)).take(1000).collect()
+    repeat_with(|| rng.gen_range(1..100)).take(1000).collect()
 }
 
 #[bench]

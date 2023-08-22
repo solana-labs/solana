@@ -15,14 +15,15 @@ use {
     solana_account_decoder::parse_bpf_loader::{
         parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
     },
+    solana_accounts_db::transaction_results::{
+        DurableNonceFee, InnerInstruction, TransactionExecutionDetails, TransactionExecutionResult,
+        TransactionResults,
+    },
     solana_ledger::token_balances::collect_token_balances,
     solana_program_runtime::{compute_budget::ComputeBudget, timings::ExecuteTimings},
     solana_rbpf::vm::ContextObject,
     solana_runtime::{
-        bank::{
-            DurableNonceFee, InnerInstruction, TransactionBalancesSet, TransactionExecutionDetails,
-            TransactionExecutionResult, TransactionResults,
-        },
+        bank::TransactionBalancesSet,
         loader_utils::{
             create_program, load_and_finalize_program, load_program, load_program_from_file,
             load_upgradeable_buffer, load_upgradeable_program, set_upgrade_authority,
@@ -39,7 +40,7 @@ use {
         clock::MAX_PROCESSING_AGE,
         compute_budget::ComputeBudgetInstruction,
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
-        feature_set::{self, FeatureSet},
+        feature_set::{self, remove_deprecated_request_unit_ix, FeatureSet},
         fee::FeeStructure,
         loader_instruction,
         message::{v0::LoadedAddresses, SanitizedMessage},
@@ -456,7 +457,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
     // Try and finalize the program now that sol_alloc_free is re-enabled
     assert!(bank.process_transaction(&finalize_tx).is_ok());
     let new_slot = bank.slot() + 1;
-    let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), new_slot);
+    let mut bank = Bank::new_from_parent(Arc::new(bank), &Pubkey::default(), new_slot);
 
     // invoke the program
     assert!(bank.process_transaction(&invoke_tx).is_ok());
@@ -500,7 +501,7 @@ fn test_program_sbf_duplicate_accounts() {
         } = create_genesis_config(50);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank = Arc::new(bank);
-        let mut bank_client = BankClient::new_shared(&bank);
+        let mut bank_client = BankClient::new_shared(bank.clone());
         let (bank, program_id) = load_program_and_advance_slot(
             &mut bank_client,
             &bpf_loader::id(),
@@ -709,7 +710,7 @@ fn test_return_data_and_log_data_syscall() {
         } = create_genesis_config(50);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank = Arc::new(bank);
-        let mut bank_client = BankClient::new_shared(&bank);
+        let mut bank_client = BankClient::new_shared(bank.clone());
 
         let (bank, program_id) = load_program_and_advance_slot(
             &mut bank_client,
@@ -777,7 +778,7 @@ fn test_program_sbf_invoke_sanity() {
         } = create_genesis_config(50);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank = Arc::new(bank);
-        let mut bank_client = BankClient::new_shared(&bank);
+        let mut bank_client = BankClient::new_shared(bank.clone());
 
         let invoke_program_id =
             load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.1);
@@ -1174,7 +1175,7 @@ fn test_program_sbf_program_id_spoofing() {
     } = create_genesis_config(50);
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     let malicious_swap_pubkey = load_program(
         &bank_client,
@@ -1225,7 +1226,7 @@ fn test_program_sbf_caller_has_access_to_cpi_program() {
     } = create_genesis_config(50);
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     let caller_pubkey = load_program(
         &bank_client,
@@ -1263,7 +1264,7 @@ fn test_program_sbf_ro_modify() {
     } = create_genesis_config(50);
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     let (bank, program_pubkey) = load_program_and_advance_slot(
         &mut bank_client,
@@ -1478,7 +1479,7 @@ fn test_program_sbf_instruction_introspection() {
     } = create_genesis_config(50_000);
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     let (bank, program_id) = load_program_and_advance_slot(
         &mut bank_client,
@@ -1752,7 +1753,7 @@ fn test_program_sbf_invoke_stable_genesis_and_bank() {
     } = get_stable_genesis_config();
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let bank_client = BankClient::new_shared(bank.clone());
 
     // Deploy upgradeable program
     let buffer_keypair = Keypair::from_base58_string(
@@ -1926,7 +1927,7 @@ fn test_program_sbf_invoke_in_same_tx_as_deployment() {
     } = create_genesis_config(50);
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     // Deploy upgradeable program
     let buffer_keypair = Keypair::new();
@@ -2024,7 +2025,7 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
     } = create_genesis_config(50);
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     // Deploy upgradeable program
     let buffer_keypair = Keypair::new();
@@ -2132,7 +2133,7 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
     } = create_genesis_config(50);
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     // Deploy upgradeable program
     let buffer_keypair = Keypair::new();
@@ -2463,11 +2464,11 @@ fn test_program_sbf_upgrade_via_cpi() {
         .advance_slot(1, &Pubkey::default())
         .expect("Failed to advance the slot");
     let program_account = bank_client.get_account(&program_id).unwrap().unwrap();
-    let programdata_address = match program_account.state() {
-        Ok(bpf_loader_upgradeable::UpgradeableLoaderState::Program {
-            programdata_address,
-        }) => programdata_address,
-        _ => unreachable!(),
+    let Ok(bpf_loader_upgradeable::UpgradeableLoaderState::Program {
+        programdata_address,
+    }) = program_account.state()
+    else {
+        unreachable!()
     };
     let original_programdata = bank_client
         .get_account_data(&programdata_address)
@@ -2642,7 +2643,7 @@ fn test_program_upgradeable_locks() {
         } = create_genesis_config(2_000_000_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank = Arc::new(bank);
-        let mut bank_client = BankClient::new_shared(&bank);
+        let mut bank_client = BankClient::new_shared(bank.clone());
 
         load_upgradeable_program(
             &bank_client,
@@ -2765,7 +2766,7 @@ fn test_program_sbf_finalize() {
     } = create_genesis_config(50);
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     let (_, program_pubkey) = load_program_and_advance_slot(
         &mut bank_client,
@@ -2813,7 +2814,7 @@ fn test_program_sbf_ro_account_modify() {
     } = create_genesis_config(50);
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     let (bank, program_id) = load_program_and_advance_slot(
         &mut bank_client,
@@ -2884,7 +2885,7 @@ fn test_program_sbf_realloc() {
             feature_set.deactivate(&feature_set::bpf_account_data_direct_mapping::id());
         }
         let bank = Arc::new(bank);
-        let mut bank_client = BankClient::new_shared(&bank);
+        let mut bank_client = BankClient::new_shared(bank.clone());
 
         let (bank, program_id) = load_program_and_advance_slot(
             &mut bank_client,
@@ -3212,7 +3213,7 @@ fn test_program_sbf_realloc_invoke() {
 
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     let realloc_program_id = load_program(
         &bank_client,
@@ -3728,7 +3729,7 @@ fn test_program_sbf_processed_inner_instruction() {
     } = create_genesis_config(50);
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     let sibling_program_id = load_program(
         &bank_client,
@@ -3823,15 +3824,18 @@ fn test_program_fees() {
         Some(&mint_keypair.pubkey()),
     );
 
+    let mut feature_set = FeatureSet::all_enabled();
+    feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-    let expected_normal_fee = Bank::calculate_fee(
+    let expected_normal_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,
-        &fee_structure,
-        true,
-        false,
-        true,
-        true,
+        &ComputeBudget::fee_budget_limits(
+            sanitized_message.program_instructions_iter(),
+            &feature_set,
+            None,
+        ),
         true,
         false,
     );
@@ -3850,14 +3854,16 @@ fn test_program_fees() {
         Some(&mint_keypair.pubkey()),
     );
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-    let expected_prioritized_fee = Bank::calculate_fee(
+    let mut feature_set = FeatureSet::all_enabled();
+    feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
+    let expected_prioritized_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,
-        &fee_structure,
-        true,
-        false,
-        true,
-        true,
+        &ComputeBudget::fee_budget_limits(
+            sanitized_message.program_instructions_iter(),
+            &feature_set,
+            None,
+        ),
         true,
         false,
     );
@@ -3881,7 +3887,7 @@ fn test_get_minimum_delegation() {
     let mut bank = Bank::new_for_tests(&genesis_config);
     bank.feature_set = Arc::new(FeatureSet::all_enabled());
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     let (_, program_id) = load_program_and_advance_slot(
         &mut bank_client,

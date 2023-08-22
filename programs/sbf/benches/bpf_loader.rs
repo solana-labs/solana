@@ -14,7 +14,7 @@ use {
     byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
     solana_bpf_loader_program::{
         create_vm, serialization::serialize_parameters,
-        syscalls::create_program_runtime_environment,
+        syscalls::create_program_runtime_environment_v1,
     },
     solana_measure::measure::Measure,
     solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
@@ -90,7 +90,7 @@ macro_rules! with_mock_invoke_context {
 fn bench_program_create_executable(bencher: &mut Bencher) {
     let elf = load_program_from_file("bench_alu");
 
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &FeatureSet::default(),
         &ComputeBudget::default(),
         true,
@@ -118,7 +118,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let elf = load_program_from_file("bench_alu");
     with_mock_invoke_context!(invoke_context, bpf_loader::id(), 10000001);
 
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
@@ -144,10 +144,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let mut vm = vm.unwrap();
 
     println!("Interpreted:");
-    vm.env
-        .context_object_pointer
+    vm.context_object_pointer
         .mock_set_remaining(std::i64::MAX as u64);
-    let (instructions, result) = vm.execute_program(true);
+    let (instructions, result) = vm.execute_program(&verified_executable, true);
     assert_eq!(SUCCESS, result.unwrap());
     assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
     assert_eq!(
@@ -156,10 +155,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
     );
 
     bencher.iter(|| {
-        vm.env
-            .context_object_pointer
+        vm.context_object_pointer
             .mock_set_remaining(std::i64::MAX as u64);
-        vm.execute_program(true).1.unwrap();
+        vm.execute_program(&verified_executable, true).1.unwrap();
     });
     let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
     println!("  {:?} instructions", instructions);
@@ -170,7 +168,10 @@ fn bench_program_alu(bencher: &mut Bencher) {
     println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_interpreted_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
 
     println!("JIT to native:");
-    assert_eq!(SUCCESS, vm.execute_program(false).1.unwrap());
+    assert_eq!(
+        SUCCESS,
+        vm.execute_program(&verified_executable, false).1.unwrap()
+    );
     assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
     assert_eq!(
         ARMSTRONG_EXPECTED,
@@ -178,10 +179,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
     );
 
     bencher.iter(|| {
-        vm.env
-            .context_object_pointer
+        vm.context_object_pointer
             .mock_set_remaining(std::i64::MAX as u64);
-        vm.execute_program(false).1.unwrap();
+        vm.execute_program(&verified_executable, false).1.unwrap();
     });
     let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
     println!("  {:?} instructions", instructions);
@@ -201,7 +201,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
     } = create_genesis_config(50);
     let bank = Bank::new_for_benches(&genesis_config);
     let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(bank.clone());
 
     let invoke_program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
     let bank = bank_client
@@ -237,7 +237,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
     let direct_mapping = invoke_context
         .feature_set
         .is_active(&bpf_account_data_direct_mapping::id());
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
@@ -299,7 +299,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     )
     .unwrap();
 
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
@@ -324,17 +324,17 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let mut vm = vm.unwrap();
 
     let mut measure = Measure::start("tune");
-    let (instructions, _result) = vm.execute_program(true);
+    let (instructions, _result) = vm.execute_program(&verified_executable, true);
     measure.stop();
 
     assert_eq!(
         0,
-        vm.env.context_object_pointer.get_remaining(),
+        vm.context_object_pointer.get_remaining(),
         "Tuner must consume the whole budget"
     );
     println!(
         "{:?} compute units took {:?} us ({:?} instructions)",
-        BUDGET - vm.env.context_object_pointer.get_remaining(),
+        BUDGET - vm.context_object_pointer.get_remaining(),
         measure.as_us(),
         instructions,
     );

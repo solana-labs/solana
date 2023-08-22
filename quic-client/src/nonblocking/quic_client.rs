@@ -4,7 +4,7 @@
 use {
     async_mutex::Mutex,
     async_trait::async_trait,
-    futures::future::join_all,
+    futures::future::{join_all, TryFutureExt},
     itertools::Itertools,
     log::*,
     quinn::{
@@ -38,7 +38,7 @@ use {
     tokio::{sync::OnceCell, time::timeout},
 };
 
-struct SkipServerVerification;
+pub struct SkipServerVerification;
 
 impl SkipServerVerification {
     pub fn new() -> Arc<Self> {
@@ -117,7 +117,7 @@ impl QuicLazyInitializedEndpoint {
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_single_cert(
+            .with_client_auth_cert(
                 vec![self.client_certificate.certificate.clone()],
                 self.client_certificate.key.clone(),
             )
@@ -203,7 +203,7 @@ impl QuicNewConnection {
     }
 
     fn create_endpoint(config: EndpointConfig, client_socket: UdpSocket) -> Endpoint {
-        quinn::Endpoint::new(config, None, client_socket, TokioRuntime)
+        quinn::Endpoint::new(config, None, client_socket, Arc::new(TokioRuntime))
             .expect("QuicNewConnection::create_endpoint quinn::Endpoint::new")
     }
 
@@ -384,6 +384,11 @@ impl QuicClient {
                 .acks
                 .update_stat(&self.stats.acks, new_stats.frame_tx.acks);
 
+            if data.is_empty() {
+                // no need to send packet as it is only for warming connections
+                return Ok(connection);
+            }
+
             last_connection_id = connection.stable_id();
             match Self::_send_buffer_using_conn(data, &connection).await {
                 Ok(()) => {
@@ -554,20 +559,22 @@ impl ClientConnection for QuicClientConnection {
 
     async fn send_data(&self, data: &[u8]) -> TransportResult<()> {
         let stats = Arc::new(ClientStats::default());
-        let send_buffer = self
-            .client
-            .send_buffer(data, &stats, self.connection_stats.clone());
-        if let Err(e) = send_buffer.await {
-            warn!(
-                "Failed to send data async to {}, error: {:?} ",
-                self.server_addr(),
-                e
-            );
-            datapoint_warn!("send-wire-async", ("failure", 1, i64),);
-            self.connection_stats.add_client_stats(&stats, 1, false);
-        } else {
-            self.connection_stats.add_client_stats(&stats, 1, true);
-        }
-        Ok(())
+        self.client
+            .send_buffer(data, &stats, self.connection_stats.clone())
+            .map_ok(|v| {
+                self.connection_stats.add_client_stats(&stats, 1, true);
+                v
+            })
+            .map_err(|e| {
+                warn!(
+                    "Failed to send data async to {}, error: {:?} ",
+                    self.server_addr(),
+                    e
+                );
+                datapoint_warn!("send-wire-async", ("failure", 1, i64),);
+                self.connection_stats.add_client_stats(&stats, 1, false);
+                e.into()
+            })
+            .await
     }
 }

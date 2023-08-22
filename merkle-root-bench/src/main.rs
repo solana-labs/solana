@@ -1,8 +1,8 @@
 extern crate log;
 use {
     clap::{crate_description, crate_name, value_t, App, Arg},
+    solana_accounts_db::accounts_hash::AccountsHasher,
     solana_measure::measure::Measure,
-    solana_runtime::accounts_hash::AccountsHasher,
     solana_sdk::{hash::Hash, pubkey::Pubkey},
 };
 

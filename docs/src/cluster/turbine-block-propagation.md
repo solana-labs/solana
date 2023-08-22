@@ -79,7 +79,7 @@ propagation depth.
 
 A shred group is the set of data and coding packets that can be used to
 reconstruct each other. Each shred group has a chance of failure, based on the
-likelyhood of the number of packets failing that exceeds the FEC rate. If a
+likelihood of the number of packets failing that exceeds the FEC rate. If a
 validator fails to reconstruct the shred group, then the block cannot be
 reconstructed, and the validator has to rely on repair to fixup the blocks.
 

@@ -2,6 +2,7 @@ use {
     crate::{
         cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
         compute_unit_price::WithComputeUnitPrice,
+        feature::get_feature_activation_epoch,
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
     clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
@@ -43,6 +44,7 @@ use {
         clock::{self, Clock, Slot},
         commitment_config::CommitmentConfig,
         epoch_schedule::Epoch,
+        feature_set,
         hash::Hash,
         message::Message,
         native_token::lamports_to_sol,
@@ -52,7 +54,7 @@ use {
         rpc_port::DEFAULT_RPC_PORT_STR,
         signature::Signature,
         slot_history,
-        stake::{self, state::StakeState},
+        stake::{self, state::StakeStateV2},
         system_instruction,
         sysvar::{
             self,
@@ -1766,7 +1768,7 @@ pub fn process_show_stakes(
         // Use server-side filtering if only one vote account is provided
         if vote_account_pubkeys.len() == 1 {
             program_accounts_config.filters = Some(vec![
-                // Filter by `StakeState::Stake(_, _)`
+                // Filter by `StakeStateV2::Stake(_, _)`
                 RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &[2, 0, 0, 0])),
                 // Filter by `Delegation::voter_pubkey`, which begins at byte offset 124
                 RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
@@ -1800,12 +1802,14 @@ pub fn process_show_stakes(
     let stake_history = from_account(&stake_history_account).ok_or_else(|| {
         CliError::RpcRequestError("Failed to deserialize stake history".to_string())
     })?;
+    let new_rate_activation_epoch =
+        get_feature_activation_epoch(rpc_client, &feature_set::reduce_stake_warmup_cooldown::id())?;
 
     let mut stake_accounts: Vec<CliKeyedStakeState> = vec![];
     for (stake_pubkey, stake_account) in all_stake_accounts {
         if let Ok(stake_state) = stake_account.state() {
             match stake_state {
-                StakeState::Initialized(_) => {
+                StakeStateV2::Initialized(_) => {
                     if vote_account_pubkeys.is_none() {
                         stake_accounts.push(CliKeyedStakeState {
                             stake_pubkey: stake_pubkey.to_string(),
@@ -1815,11 +1819,12 @@ pub fn process_show_stakes(
                                 use_lamports_unit,
                                 &stake_history,
                                 &clock,
+                                new_rate_activation_epoch,
                             ),
                         });
                     }
                 }
-                StakeState::Stake(_, stake) => {
+                StakeStateV2::Stake(_, stake, _) => {
                     if vote_account_pubkeys.is_none()
                         || vote_account_pubkeys
                             .unwrap()
@@ -1833,6 +1838,7 @@ pub fn process_show_stakes(
                                 use_lamports_unit,
                                 &stake_history,
                                 &clock,
+                                new_rate_activation_epoch,
                             ),
                         });
                     }
@@ -1958,14 +1964,14 @@ pub fn process_show_validators(
 
     let mut stake_by_version: BTreeMap<CliVersion, CliValidatorsStakeByVersion> = BTreeMap::new();
     for validator in current_validators.iter() {
-        let mut entry = stake_by_version
+        let entry = stake_by_version
             .entry(validator.version.clone())
             .or_default();
         entry.current_validators += 1;
         entry.current_active_stake += validator.activated_stake;
     }
     for validator in delinquent_validators.iter() {
-        let mut entry = stake_by_version
+        let entry = stake_by_version
             .entry(validator.version.clone())
             .or_default();
         entry.delinquent_validators += 1;
@@ -2151,7 +2157,7 @@ impl RentLengthValue {
     pub fn length(&self) -> usize {
         match self {
             Self::Nonce => NonceState::size(),
-            Self::Stake => StakeState::size_of(),
+            Self::Stake => StakeStateV2::size_of(),
             Self::System => 0,
             Self::Vote => VoteState::size_of(),
             Self::Bytes(l) => *l,

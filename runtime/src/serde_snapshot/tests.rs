@@ -1,828 +1,861 @@
-#![cfg(test)]
-
-use {
-    super::*,
-    crate::{
-        account_storage::{AccountStorageMap, AccountStorageReference},
-        accounts::Accounts,
-        accounts_db::{
-            get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
-        },
-        accounts_file::{AccountsFile, AccountsFileError},
-        accounts_hash::{AccountsDeltaHash, AccountsHash},
-        bank::{Bank, BankTestConfig, EpochRewardStatus, StartBlockHeightAndRewards},
-        epoch_accounts_hash,
-        genesis_utils::{activate_all_features, activate_feature},
-        snapshot_utils::{
-            create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
-        },
-        stake_rewards::StakeReward,
-        status_cache::StatusCache,
-    },
-    bincode::serialize_into,
-    rand::{thread_rng, Rng},
-    solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
-        clock::Slot,
-        feature_set,
-        genesis_config::{create_genesis_config, ClusterType},
-        hash::Hash,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-    },
-    std::{
-        io::{BufReader, Cursor},
-        num::NonZeroUsize,
-        ops::RangeFull,
-        path::Path,
-        sync::{Arc, RwLock},
-    },
-    tempfile::TempDir,
-};
-
-/// Simulates the unpacking & storage reconstruction done during snapshot unpacking
-fn copy_append_vecs<P: AsRef<Path>>(
-    accounts_db: &AccountsDb,
-    output_dir: P,
-) -> Result<StorageAndNextAppendVecId, AccountsFileError> {
-    let storage_entries = accounts_db.get_snapshot_storages(RangeFull).0;
-    let storage: AccountStorageMap = AccountStorageMap::with_capacity(storage_entries.len());
-    let mut next_append_vec_id = 0;
-    for storage_entry in storage_entries.into_iter() {
-        // Copy file to new directory
-        let storage_path = storage_entry.get_path();
-        let file_name =
-            AccountsFile::file_name(storage_entry.slot(), storage_entry.append_vec_id());
-        let output_path = output_dir.as_ref().join(file_name);
-        std::fs::copy(storage_path, &output_path)?;
-
-        // Read new file into append-vec and build new entry
-        let (accounts_file, num_accounts) =
-            AccountsFile::new_from_file(output_path, storage_entry.accounts.len())?;
-        let new_storage_entry = AccountStorageEntry::new_existing(
-            storage_entry.slot(),
-            storage_entry.append_vec_id(),
-            accounts_file,
-            num_accounts,
-        );
-        next_append_vec_id = next_append_vec_id.max(new_storage_entry.append_vec_id());
-        storage.insert(
-            new_storage_entry.slot(),
-            AccountStorageReference {
-                id: new_storage_entry.append_vec_id(),
-                storage: Arc::new(new_storage_entry),
+#[cfg(test)]
+mod serde_snapshot_tests {
+    use {
+        crate::{
+            serde_snapshot::{
+                newer, reconstruct_accountsdb_from_fields, SerdeStyle, SerializableAccountsDb,
+                SnapshotAccountsDbFields, TypeContext,
             },
-        );
-    }
-
-    Ok(StorageAndNextAppendVecId {
-        storage,
-        next_append_vec_id: AtomicAppendVecId::new(next_append_vec_id + 1),
-    })
-}
-
-fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
-    for _ in 1..num {
-        let idx = thread_rng().gen_range(0, num - 1);
-        let ancestors = vec![(0, 0)].into_iter().collect();
-        let account = accounts.load_without_fixed_root(&ancestors, &pubkeys[idx]);
-        let account1 = Some((
-            AccountSharedData::new((idx + 1) as u64, 0, AccountSharedData::default().owner()),
-            0,
-        ));
-        assert_eq!(account, account1);
-    }
-}
-
-fn context_accountsdb_from_stream<'a, C, R>(
-    stream: &mut BufReader<R>,
-    account_paths: &[PathBuf],
-    storage_and_next_append_vec_id: StorageAndNextAppendVecId,
-) -> Result<AccountsDb, Error>
-where
-    C: TypeContext<'a>,
-    R: Read,
-{
-    // read and deserialise the accounts database directly from the stream
-    let accounts_db_fields = C::deserialize_accounts_db_fields(stream)?;
-    let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
-        full_snapshot_accounts_db_fields: accounts_db_fields,
-        incremental_snapshot_accounts_db_fields: None,
-    };
-    reconstruct_accountsdb_from_fields(
-        snapshot_accounts_db_fields,
-        account_paths,
-        storage_and_next_append_vec_id,
-        &GenesisConfig {
-            cluster_type: ClusterType::Development,
-            ..GenesisConfig::default()
+            snapshot_utils::{get_storages_to_serialize, StorageAndNextAppendVecId},
         },
-        AccountSecondaryIndexes::default(),
-        None,
-        AccountShrinkThreshold::default(),
-        false,
-        Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
-        None,
-        Arc::default(),
-        None,
-        (u64::default(), None),
-        None,
-    )
-    .map(|(accounts_db, _)| accounts_db)
-}
+        bincode::{serialize_into, Error},
+        log::info,
+        rand::{thread_rng, Rng},
+        solana_accounts_db::{
+            account_storage::{AccountStorageMap, AccountStorageReference},
+            accounts::Accounts,
+            accounts_db::{
+                get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
+                AccountStorageEntry, AccountsDb, AtomicAppendVecId,
+                VerifyAccountsHashAndLamportsConfig,
+            },
+            accounts_file::{AccountsFile, AccountsFileError},
+            accounts_hash::AccountsHash,
+            accounts_index::AccountSecondaryIndexes,
+            ancestors::Ancestors,
+            rent_collector::RentCollector,
+        },
+        solana_sdk::{
+            account::{AccountSharedData, ReadableAccount},
+            clock::Slot,
+            epoch_schedule::EpochSchedule,
+            genesis_config::{ClusterType, GenesisConfig},
+            hash::Hash,
+            pubkey::Pubkey,
+        },
+        std::{
+            io::{BufReader, Cursor, Read, Write},
+            ops::RangeFull,
+            path::{Path, PathBuf},
+            sync::{atomic::Ordering, Arc},
+        },
+        tempfile::TempDir,
+    };
 
-fn accountsdb_from_stream<R>(
-    serde_style: SerdeStyle,
-    stream: &mut BufReader<R>,
-    account_paths: &[PathBuf],
-    storage_and_next_append_vec_id: StorageAndNextAppendVecId,
-) -> Result<AccountsDb, Error>
-where
-    R: Read,
-{
-    match serde_style {
-        SerdeStyle::Newer => context_accountsdb_from_stream::<newer::Context, R>(
-            stream,
+    fn linear_ancestors(end_slot: u64) -> Ancestors {
+        let mut ancestors: Ancestors = vec![(0, 0)].into_iter().collect();
+        for i in 1..end_slot {
+            ancestors.insert(i, (i - 1) as usize);
+        }
+        ancestors
+    }
+
+    fn context_accountsdb_from_stream<'a, C, R>(
+        stream: &mut BufReader<R>,
+        account_paths: &[PathBuf],
+        storage_and_next_append_vec_id: StorageAndNextAppendVecId,
+    ) -> Result<AccountsDb, Error>
+    where
+        C: TypeContext<'a>,
+        R: Read,
+    {
+        // read and deserialise the accounts database directly from the stream
+        let accounts_db_fields = C::deserialize_accounts_db_fields(stream)?;
+        let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
+            full_snapshot_accounts_db_fields: accounts_db_fields,
+            incremental_snapshot_accounts_db_fields: None,
+        };
+        reconstruct_accountsdb_from_fields(
+            snapshot_accounts_db_fields,
             account_paths,
             storage_and_next_append_vec_id,
-        ),
-    }
-}
-
-fn accountsdb_to_stream<W>(
-    serde_style: SerdeStyle,
-    stream: &mut W,
-    accounts_db: &AccountsDb,
-    slot: Slot,
-    account_storage_entries: &[Vec<Arc<AccountStorageEntry>>],
-) -> Result<(), Error>
-where
-    W: Write,
-{
-    match serde_style {
-        SerdeStyle::Newer => serialize_into(
-            stream,
-            &SerializableAccountsDb::<newer::Context> {
-                accounts_db,
-                slot,
-                account_storage_entries,
-                phantom: std::marker::PhantomData::default(),
+            &GenesisConfig {
+                cluster_type: ClusterType::Development,
+                ..GenesisConfig::default()
             },
-        ),
-    }
-}
-
-fn test_accounts_serialize_style(serde_style: SerdeStyle) {
-    solana_logger::setup();
-    let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
-    let accounts = Accounts::new_with_config_for_tests(
-        paths,
-        &ClusterType::Development,
-        AccountSecondaryIndexes::default(),
-        AccountShrinkThreshold::default(),
-    );
-
-    let slot = 0;
-    let mut pubkeys: Vec<Pubkey> = vec![];
-    create_test_accounts(&accounts, &mut pubkeys, 100, slot);
-    check_accounts(&accounts, &pubkeys, 100);
-    accounts.add_root(slot);
-    let accounts_delta_hash = accounts.accounts_db.calculate_accounts_delta_hash(slot);
-    let accounts_hash = AccountsHash(Hash::new_unique());
-    accounts
-        .accounts_db
-        .set_accounts_hash_for_tests(slot, accounts_hash);
-
-    let mut writer = Cursor::new(vec![]);
-    accountsdb_to_stream(
-        serde_style,
-        &mut writer,
-        &accounts.accounts_db,
-        slot,
-        &get_storages_to_serialize(&accounts.accounts_db.get_snapshot_storages(..=slot).0),
-    )
-    .unwrap();
-
-    let copied_accounts = TempDir::new().unwrap();
-
-    // Simulate obtaining a copy of the AppendVecs from a tarball
-    let storage_and_next_append_vec_id =
-        copy_append_vecs(&accounts.accounts_db, copied_accounts.path()).unwrap();
-
-    let buf = writer.into_inner();
-    let mut reader = BufReader::new(&buf[..]);
-    let (_accounts_dir, daccounts_paths) = get_temp_accounts_paths(2).unwrap();
-    let daccounts = Accounts::new_empty(
-        accountsdb_from_stream(
-            serde_style,
-            &mut reader,
-            &daccounts_paths,
-            storage_and_next_append_vec_id,
+            AccountSecondaryIndexes::default(),
+            None,
+            AccountShrinkThreshold::default(),
+            false,
+            Some(solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
+            Arc::default(),
+            None,
+            (u64::default(), None),
+            None,
         )
-        .unwrap(),
-    );
-    check_accounts(&daccounts, &pubkeys, 100);
-    let daccounts_delta_hash = daccounts.accounts_db.calculate_accounts_delta_hash(slot);
-    assert_eq!(accounts_delta_hash, daccounts_delta_hash);
-    let daccounts_hash = daccounts.accounts_db.get_accounts_hash(slot).unwrap().0;
-    assert_eq!(accounts_hash, daccounts_hash);
-}
-
-fn test_bank_serialize_style(
-    serde_style: SerdeStyle,
-    reserialize_accounts_hash: bool,
-    update_accounts_hash: bool,
-    incremental_snapshot_persistence: bool,
-    initial_epoch_accounts_hash: bool,
-) {
-    solana_logger::setup();
-    let (mut genesis_config, _) = create_genesis_config(500);
-    activate_feature(&mut genesis_config, feature_set::epoch_accounts_hash::id());
-    genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
-    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-    let eah_start_slot = epoch_accounts_hash::calculation_start(&bank0);
-    let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
-    bank0.squash();
-
-    // Create an account on a non-root fork
-    let key1 = Keypair::new();
-    bank1.deposit(&key1.pubkey(), 5).unwrap();
-
-    // If setting an initial EAH, then the bank being snapshotted must be in the EAH calculation
-    // window.  Otherwise `bank_to_stream()` below will *not* include the EAH in the bank snapshot,
-    // and the later-deserialized bank's EAH will not match the expected EAH.
-    let bank2_slot = if initial_epoch_accounts_hash {
-        eah_start_slot
-    } else {
-        0
-    } + 2;
-    let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank2_slot);
-
-    // Test new account
-    let key2 = Keypair::new();
-    bank2.deposit(&key2.pubkey(), 10).unwrap();
-    assert_eq!(bank2.get_balance(&key2.pubkey()), 10);
-
-    let key3 = Keypair::new();
-    bank2.deposit(&key3.pubkey(), 0).unwrap();
-
-    bank2.freeze();
-    bank2.squash();
-    bank2.force_flush_accounts_cache();
-    bank2
-        .accounts()
-        .accounts_db
-        .set_accounts_hash_for_tests(bank2.slot(), AccountsHash(Hash::new(&[0; 32])));
-
-    let snapshot_storages = bank2.get_snapshot_storages(None);
-    let mut buf = vec![];
-    let mut writer = Cursor::new(&mut buf);
-
-    let mut expected_epoch_accounts_hash = None;
-
-    if initial_epoch_accounts_hash {
-        expected_epoch_accounts_hash = Some(Hash::new(&[7; 32]));
-        bank2
-            .rc
-            .accounts
-            .accounts_db
-            .epoch_accounts_hash_manager
-            .set_valid(
-                EpochAccountsHash::new(expected_epoch_accounts_hash.unwrap()),
-                eah_start_slot,
-            );
+        .map(|(accounts_db, _)| accounts_db)
     }
 
-    crate::serde_snapshot::bank_to_stream(
-        serde_style,
-        &mut std::io::BufWriter::new(&mut writer),
-        &bank2,
-        &get_storages_to_serialize(&snapshot_storages),
-    )
-    .unwrap();
-
-    if update_accounts_hash {
-        bank2
-            .accounts()
-            .accounts_db
-            .set_accounts_hash_for_tests(bank2.slot(), AccountsHash(Hash::new(&[1; 32])));
-    }
-    let accounts_hash = bank2.get_accounts_hash().unwrap();
-
-    let slot = bank2.slot();
-    let incremental =
-        incremental_snapshot_persistence.then(|| BankIncrementalSnapshotPersistence {
-            full_slot: slot - 1,
-            full_hash: SerdeAccountsHash(Hash::new(&[1; 32])),
-            full_capitalization: 31,
-            incremental_hash: SerdeIncrementalAccountsHash(Hash::new(&[2; 32])),
-            incremental_capitalization: 32,
-        });
-
-    if reserialize_accounts_hash || incremental_snapshot_persistence {
-        let temp_dir = TempDir::new().unwrap();
-        let slot_dir = snapshot_utils::get_bank_snapshot_dir(&temp_dir, slot);
-        let post_path = slot_dir.join(slot.to_string());
-        let pre_path = post_path.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
-        std::fs::create_dir(&slot_dir).unwrap();
-        {
-            let mut f = std::fs::File::create(pre_path).unwrap();
-            f.write_all(&buf).unwrap();
-        }
-
-        assert!(reserialize_bank_with_new_accounts_hash(
-            slot_dir,
-            slot,
-            &accounts_hash,
-            incremental.as_ref(),
-        ));
-        let mut buf_reserialized;
-        {
-            let previous_len = buf.len();
-            let expected = previous_len
-                + if incremental_snapshot_persistence {
-                    // previously saved a none (size = sizeof_None), now added a Some
-                    let sizeof_none = std::mem::size_of::<u64>();
-                    let sizeof_incremental_snapshot_persistence =
-                        std::mem::size_of::<Option<BankIncrementalSnapshotPersistence>>();
-                    sizeof_incremental_snapshot_persistence - sizeof_none
-                } else {
-                    // no change
-                    0
-                };
-
-            // +1: larger buffer than expected to make sure the file isn't larger than expected
-            buf_reserialized = vec![0; expected + 1];
-            let mut f = std::fs::File::open(post_path).unwrap();
-            let size = f.read(&mut buf_reserialized).unwrap();
-
-            assert_eq!(
-                size,
-                expected,
-                "(reserialize_accounts_hash, incremental_snapshot_persistence, update_accounts_hash, initial_epoch_accounts_hash): {:?}, previous_len: {previous_len}",
-                (
-                    reserialize_accounts_hash,
-                    incremental_snapshot_persistence,
-                    update_accounts_hash,
-                    initial_epoch_accounts_hash,
-                )
-            );
-            buf_reserialized.truncate(size);
-        }
-        if update_accounts_hash {
-            // We cannot guarantee buffer contents are exactly the same if hash is the same.
-            // Things like hashsets/maps have randomness in their in-mem representations.
-            // This makes serialized bytes not deterministic.
-            // But, we can guarantee that the buffer is different if we change the hash!
-            assert_ne!(buf, buf_reserialized);
-        }
-        if update_accounts_hash || incremental_snapshot_persistence {
-            buf = buf_reserialized;
-        }
-    }
-
-    let rdr = Cursor::new(&buf[..]);
-    let mut reader = std::io::BufReader::new(&buf[rdr.position() as usize..]);
-
-    // Create a new set of directories for this bank's accounts
-    let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
-    let mut status_cache = StatusCache::default();
-    status_cache.add_root(2);
-    // Create a directory to simulate AppendVecs unpackaged from a snapshot tar
-    let copied_accounts = TempDir::new().unwrap();
-    let storage_and_next_append_vec_id =
-        copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
-    let mut snapshot_streams = SnapshotStreams {
-        full_snapshot_stream: &mut reader,
-        incremental_snapshot_stream: None,
-    };
-    let mut dbank = crate::serde_snapshot::bank_from_streams(
-        serde_style,
-        &mut snapshot_streams,
-        &dbank_paths,
-        storage_and_next_append_vec_id,
-        &genesis_config,
-        &RuntimeConfig::default(),
-        None,
-        None,
-        AccountSecondaryIndexes::default(),
-        None,
-        AccountShrinkThreshold::default(),
-        false,
-        Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
-        None,
-        Arc::default(),
-    )
-    .unwrap();
-    dbank.status_cache = Arc::new(RwLock::new(status_cache));
-    assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
-    assert_eq!(dbank.get_balance(&key2.pubkey()), 10);
-    assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
-    if let Some(incremental_snapshot_persistence) = incremental.clone() {
-        assert_eq!(dbank.get_accounts_hash(), None,);
-        assert_eq!(
-            dbank.get_incremental_accounts_hash(),
-            Some(incremental_snapshot_persistence.incremental_hash.into()),
-        );
-    } else {
-        assert_eq!(dbank.get_accounts_hash(), Some(accounts_hash));
-        assert_eq!(dbank.get_incremental_accounts_hash(), None);
-    }
-    assert!(bank2 == dbank);
-    assert_eq!(dbank.incremental_snapshot_persistence, incremental);
-    assert_eq!(dbank.get_epoch_accounts_hash_to_serialize().map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()), expected_epoch_accounts_hash,
-        "(reserialize_accounts_hash, incremental_snapshot_persistence, update_accounts_hash, initial_epoch_accounts_hash): {:?}",
-        (
-            reserialize_accounts_hash,
-            incremental_snapshot_persistence,
-            update_accounts_hash,
-            initial_epoch_accounts_hash,
-        )
-    );
-}
-
-pub(crate) fn reconstruct_accounts_db_via_serialization(
-    accounts: &AccountsDb,
-    slot: Slot,
-) -> AccountsDb {
-    let mut writer = Cursor::new(vec![]);
-    let snapshot_storages = accounts.get_snapshot_storages(..=slot).0;
-    accountsdb_to_stream(
-        SerdeStyle::Newer,
-        &mut writer,
-        accounts,
-        slot,
-        &get_storages_to_serialize(&snapshot_storages),
-    )
-    .unwrap();
-
-    let buf = writer.into_inner();
-    let mut reader = BufReader::new(&buf[..]);
-    let copied_accounts = TempDir::new().unwrap();
-
-    // Simulate obtaining a copy of the AppendVecs from a tarball
-    let storage_and_next_append_vec_id =
-        copy_append_vecs(accounts, copied_accounts.path()).unwrap();
-    let mut accounts_db = accountsdb_from_stream(
-        SerdeStyle::Newer,
-        &mut reader,
-        &[],
-        storage_and_next_append_vec_id,
-    )
-    .unwrap();
-
-    // The append vecs will be used from `copied_accounts` directly by the new AccountsDb so keep
-    // its TempDir alive
-    accounts_db
-        .temp_paths
-        .as_mut()
-        .unwrap()
-        .push(copied_accounts);
-
-    accounts_db
-}
-
-#[test]
-fn test_accounts_serialize_newer() {
-    test_accounts_serialize_style(SerdeStyle::Newer)
-}
-
-#[test]
-fn test_bank_serialize_newer() {
-    for (reserialize_accounts_hash, update_accounts_hash) in
-        [(false, false), (true, false), (true, true)]
+    fn accountsdb_from_stream<R>(
+        serde_style: SerdeStyle,
+        stream: &mut BufReader<R>,
+        account_paths: &[PathBuf],
+        storage_and_next_append_vec_id: StorageAndNextAppendVecId,
+    ) -> Result<AccountsDb, Error>
+    where
+        R: Read,
     {
-        let parameters = if reserialize_accounts_hash {
-            [false, true].to_vec()
-        } else {
-            [false].to_vec()
-        };
-        for incremental_snapshot_persistence in parameters.clone() {
-            for initial_epoch_accounts_hash in [false, true] {
-                test_bank_serialize_style(
-                    SerdeStyle::Newer,
-                    reserialize_accounts_hash,
-                    update_accounts_hash,
-                    incremental_snapshot_persistence,
-                    initial_epoch_accounts_hash,
-                )
-            }
+        match serde_style {
+            SerdeStyle::Newer => context_accountsdb_from_stream::<newer::Context, R>(
+                stream,
+                account_paths,
+                storage_and_next_append_vec_id,
+            ),
         }
     }
-}
 
-fn add_root_and_flush_write_cache(bank: &Bank) {
-    bank.rc.accounts.add_root(bank.slot());
-    bank.flush_accounts_cache_slot_for_tests()
-}
+    fn accountsdb_to_stream<W>(
+        serde_style: SerdeStyle,
+        stream: &mut W,
+        accounts_db: &AccountsDb,
+        slot: Slot,
+        account_storage_entries: &[Vec<Arc<AccountStorageEntry>>],
+    ) -> Result<(), Error>
+    where
+        W: Write,
+    {
+        match serde_style {
+            SerdeStyle::Newer => serialize_into(
+                stream,
+                &SerializableAccountsDb::<newer::Context> {
+                    accounts_db,
+                    slot,
+                    account_storage_entries,
+                    phantom: std::marker::PhantomData,
+                },
+            ),
+        }
+    }
 
-#[test]
-fn test_extra_fields_eof() {
-    solana_logger::setup();
-    let sample_rewards = (0..2)
-        .map(|_| StakeReward::new_random())
-        .collect::<Vec<_>>();
-    for epoch_reward_status_active in [None, Some(vec![]), Some(vec![sample_rewards])] {
-        let (genesis_config, _) = create_genesis_config(500);
+    /// Simulates the unpacking & storage reconstruction done during snapshot unpacking
+    fn copy_append_vecs<P: AsRef<Path>>(
+        accounts_db: &AccountsDb,
+        output_dir: P,
+    ) -> Result<StorageAndNextAppendVecId, AccountsFileError> {
+        let storage_entries = accounts_db.get_snapshot_storages(RangeFull).0;
+        let storage: AccountStorageMap = AccountStorageMap::with_capacity(storage_entries.len());
+        let mut next_append_vec_id = 0;
+        for storage_entry in storage_entries.into_iter() {
+            // Copy file to new directory
+            let storage_path = storage_entry.get_path();
+            let file_name =
+                AccountsFile::file_name(storage_entry.slot(), storage_entry.append_vec_id());
+            let output_path = output_dir.as_ref().join(file_name);
+            std::fs::copy(storage_path, &output_path)?;
 
-        let bank0 = Arc::new(Bank::new_for_tests_with_config(
-            &genesis_config,
-            BankTestConfig::default(),
-        ));
-        bank0.squash();
-        let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
-
-        add_root_and_flush_write_cache(&bank0);
-        bank.rc
-            .accounts
-            .accounts_db
-            .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
-        bank.rc
-            .accounts
-            .accounts_db
-            .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
-
-        // Set extra fields
-        bank.fee_rate_governor.lamports_per_signature = 7000;
-
-        if let Some(rewards) = epoch_reward_status_active.as_ref() {
-            assert_eq!(bank.block_height(), 1);
-            bank.set_epoch_reward_status_active(rewards.clone());
+            // Read new file into append-vec and build new entry
+            let (accounts_file, num_accounts) =
+                AccountsFile::new_from_file(output_path, storage_entry.accounts.len())?;
+            let new_storage_entry = AccountStorageEntry::new_existing(
+                storage_entry.slot(),
+                storage_entry.append_vec_id(),
+                accounts_file,
+                num_accounts,
+            );
+            next_append_vec_id = next_append_vec_id.max(new_storage_entry.append_vec_id());
+            storage.insert(
+                new_storage_entry.slot(),
+                AccountStorageReference {
+                    id: new_storage_entry.append_vec_id(),
+                    storage: Arc::new(new_storage_entry),
+                },
+            );
         }
 
-        // Serialize
-        let snapshot_storages = bank.get_snapshot_storages(None);
-        let mut buf = vec![];
-        let mut writer = Cursor::new(&mut buf);
+        Ok(StorageAndNextAppendVecId {
+            storage,
+            next_append_vec_id: AtomicAppendVecId::new(next_append_vec_id + 1),
+        })
+    }
 
-        crate::serde_snapshot::bank_to_stream(
+    fn reconstruct_accounts_db_via_serialization(accounts: &AccountsDb, slot: Slot) -> AccountsDb {
+        let mut writer = Cursor::new(vec![]);
+        let snapshot_storages = accounts.get_snapshot_storages(..=slot).0;
+        accountsdb_to_stream(
             SerdeStyle::Newer,
-            &mut std::io::BufWriter::new(&mut writer),
-            &bank,
+            &mut writer,
+            accounts,
+            slot,
             &get_storages_to_serialize(&snapshot_storages),
         )
         .unwrap();
 
-        // Deserialize
-        let rdr = Cursor::new(&buf[..]);
-        let mut reader = std::io::BufReader::new(&buf[rdr.position() as usize..]);
-        let mut snapshot_streams = SnapshotStreams {
-            full_snapshot_stream: &mut reader,
-            incremental_snapshot_stream: None,
-        };
-        let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
+        let buf = writer.into_inner();
+        let mut reader = BufReader::new(&buf[..]);
         let copied_accounts = TempDir::new().unwrap();
+
+        // Simulate obtaining a copy of the AppendVecs from a tarball
         let storage_and_next_append_vec_id =
-            copy_append_vecs(&bank.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
-        let dbank = crate::serde_snapshot::bank_from_streams(
+            copy_append_vecs(accounts, copied_accounts.path()).unwrap();
+        let mut accounts_db = accountsdb_from_stream(
             SerdeStyle::Newer,
-            &mut snapshot_streams,
-            &dbank_paths,
+            &mut reader,
+            &[],
             storage_and_next_append_vec_id,
-            &genesis_config,
-            &RuntimeConfig::default(),
-            None,
-            None,
-            AccountSecondaryIndexes::default(),
-            None,
-            AccountShrinkThreshold::default(),
-            false,
-            Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
-            None,
-            Arc::default(),
         )
         .unwrap();
 
-        assert_eq!(
-            bank.fee_rate_governor.lamports_per_signature,
-            dbank.fee_rate_governor.lamports_per_signature
+        // The append vecs will be used from `copied_accounts` directly by the new AccountsDb so keep
+        // its TempDir alive
+        accounts_db
+            .temp_paths
+            .as_mut()
+            .unwrap()
+            .push(copied_accounts);
+
+        accounts_db
+    }
+
+    fn check_accounts_local(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
+        for _ in 1..num {
+            let idx = thread_rng().gen_range(0..num - 1);
+            let ancestors = vec![(0, 0)].into_iter().collect();
+            let account = accounts.load_without_fixed_root(&ancestors, &pubkeys[idx]);
+            let account1 = Some((
+                AccountSharedData::new((idx + 1) as u64, 0, AccountSharedData::default().owner()),
+                0,
+            ));
+            assert_eq!(account, account1);
+        }
+    }
+
+    fn test_accounts_serialize_style(serde_style: SerdeStyle) {
+        solana_logger::setup();
+        let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
+        let accounts = Accounts::new_with_config_for_tests(
+            paths,
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
         );
 
-        // assert epoch_reward_status is the same as the set epoch reward status
-        let epoch_reward_status = bank
-            .get_epoch_reward_status_to_serialize()
-            .unwrap_or(&EpochRewardStatus::Inactive);
-        if let Some(rewards) = epoch_reward_status_active {
-            assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
-            if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
-                start_block_height,
-                ref stake_rewards_by_partition,
-            }) = epoch_reward_status
-            {
-                assert_eq!(*start_block_height, 1);
-                assert_eq!(&rewards[..], &stake_rewards_by_partition[..]);
-            } else {
-                unreachable!("Epoch reward status should NOT be inactive.");
-            }
-        } else {
-            assert!(matches!(epoch_reward_status, EpochRewardStatus::Inactive));
-        }
-    }
-}
+        let slot = 0;
+        let mut pubkeys: Vec<Pubkey> = vec![];
+        create_test_accounts(&accounts, &mut pubkeys, 100, slot);
+        check_accounts_local(&accounts, &pubkeys, 100);
+        accounts.add_root(slot);
+        let accounts_delta_hash = accounts.accounts_db.calculate_accounts_delta_hash(slot);
+        let accounts_hash = AccountsHash(Hash::new_unique());
+        accounts
+            .accounts_db
+            .set_accounts_hash(slot, (accounts_hash, u64::default()));
 
-#[test]
-fn test_extra_fields_full_snapshot_archive() {
-    solana_logger::setup();
-
-    let sample_rewards = (0..2)
-        .map(|_| StakeReward::new_random())
-        .collect::<Vec<_>>();
-    for epoch_reward_status_active in [None, Some(vec![]), Some(vec![sample_rewards])] {
-        let (mut genesis_config, _) = create_genesis_config(500);
-        activate_all_features(&mut genesis_config);
-
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-        let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
-        while !bank.is_complete() {
-            bank.fill_bank_with_ticks_for_tests();
-        }
-
-        // Set extra field
-        bank.fee_rate_governor.lamports_per_signature = 7000;
-
-        if let Some(rewards) = epoch_reward_status_active.as_ref() {
-            assert_eq!(bank.block_height(), 1);
-            bank.set_epoch_reward_status_active(rewards.clone());
-        }
-
-        let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
-        let bank_snapshots_dir = TempDir::new().unwrap();
-        let full_snapshot_archives_dir = TempDir::new().unwrap();
-        let incremental_snapshot_archives_dir = TempDir::new().unwrap();
-
-        // Serialize
-        let snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
-            &bank_snapshots_dir,
-            &bank,
-            None,
-            full_snapshot_archives_dir.path(),
-            incremental_snapshot_archives_dir.path(),
-            ArchiveFormat::TarBzip2,
-            NonZeroUsize::new(1).unwrap(),
-            NonZeroUsize::new(1).unwrap(),
+        let mut writer = Cursor::new(vec![]);
+        accountsdb_to_stream(
+            serde_style,
+            &mut writer,
+            &accounts.accounts_db,
+            slot,
+            &get_storages_to_serialize(&accounts.accounts_db.get_snapshot_storages(..=slot).0),
         )
         .unwrap();
 
-        // Deserialize
-        let (dbank, _) = snapshot_utils::bank_from_snapshot_archives(
-            &[accounts_dir],
-            bank_snapshots_dir.path(),
-            &snapshot_archive_info,
-            None,
-            &genesis_config,
-            &RuntimeConfig::default(),
-            None,
-            None,
-            AccountSecondaryIndexes::default(),
-            None,
-            AccountShrinkThreshold::default(),
-            false,
-            false,
-            false,
-            Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
-            None,
-            Arc::default(),
-        )
-        .unwrap();
+        let copied_accounts = TempDir::new().unwrap();
 
-        assert_eq!(
-            bank.fee_rate_governor.lamports_per_signature,
-            dbank.fee_rate_governor.lamports_per_signature
+        // Simulate obtaining a copy of the AppendVecs from a tarball
+        let storage_and_next_append_vec_id =
+            copy_append_vecs(&accounts.accounts_db, copied_accounts.path()).unwrap();
+
+        let buf = writer.into_inner();
+        let mut reader = BufReader::new(&buf[..]);
+        let (_accounts_dir, daccounts_paths) = get_temp_accounts_paths(2).unwrap();
+        let daccounts = Accounts::new_empty(
+            accountsdb_from_stream(
+                serde_style,
+                &mut reader,
+                &daccounts_paths,
+                storage_and_next_append_vec_id,
+            )
+            .unwrap(),
         );
+        check_accounts_local(&daccounts, &pubkeys, 100);
+        let daccounts_delta_hash = daccounts.accounts_db.calculate_accounts_delta_hash(slot);
+        assert_eq!(accounts_delta_hash, daccounts_delta_hash);
+        let daccounts_hash = daccounts.accounts_db.get_accounts_hash(slot).unwrap().0;
+        assert_eq!(accounts_hash, daccounts_hash);
+    }
 
-        // assert epoch_reward_status is the same as the set epoch reward status
-        let epoch_reward_status = bank
-            .get_epoch_reward_status_to_serialize()
-            .unwrap_or(&EpochRewardStatus::Inactive);
-        if let Some(rewards) = epoch_reward_status_active {
-            assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
-            if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
-                start_block_height,
-                ref stake_rewards_by_partition,
-            }) = epoch_reward_status
-            {
-                assert_eq!(*start_block_height, 1);
-                assert_eq!(&rewards[..], &stake_rewards_by_partition[..]);
-            } else {
-                unreachable!("Epoch reward status should NOT be inactive.");
+    #[test]
+    fn test_accounts_serialize_newer() {
+        test_accounts_serialize_style(SerdeStyle::Newer)
+    }
+
+    #[test]
+    fn test_remove_unrooted_slot_snapshot() {
+        solana_logger::setup();
+        let unrooted_slot = 9;
+        let unrooted_bank_id = 9;
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let key = solana_sdk::pubkey::new_rand();
+        let account0 = AccountSharedData::new(1, 0, &key);
+        db.store_for_tests(unrooted_slot, &[(&key, &account0)]);
+
+        // Purge the slot
+        db.remove_unrooted_slots(&[(unrooted_slot, unrooted_bank_id)]);
+
+        // Add a new root
+        let key2 = solana_sdk::pubkey::new_rand();
+        let new_root = unrooted_slot + 1;
+        db.store_for_tests(new_root, &[(&key2, &account0)]);
+        db.add_root_and_flush_write_cache(new_root);
+
+        db.calculate_accounts_delta_hash(new_root);
+        db.update_accounts_hash_for_tests(new_root, &linear_ancestors(new_root), false, false);
+
+        // Simulate reconstruction from snapshot
+        let db = reconstruct_accounts_db_via_serialization(&db, new_root);
+
+        // Check root account exists
+        db.assert_load_account(new_root, key2, 1);
+
+        // Check purged account stays gone
+        let unrooted_slot_ancestors = vec![(unrooted_slot, 1)].into_iter().collect();
+        assert!(db
+            .load_without_fixed_root(&unrooted_slot_ancestors, &key)
+            .is_none());
+    }
+
+    #[test]
+    fn test_accounts_db_serialize1() {
+        for pass in 0..2 {
+            solana_logger::setup();
+            let accounts = AccountsDb::new_single_for_tests();
+            let mut pubkeys: Vec<Pubkey> = vec![];
+
+            // Create 100 accounts in slot 0
+            accounts.create_account(&mut pubkeys, 0, 100, 0, 0);
+            if pass == 0 {
+                accounts.add_root_and_flush_write_cache(0);
+                accounts.check_storage(0, 100);
+                accounts.clean_accounts_for_tests();
+                accounts.check_accounts(&pubkeys, 0, 100, 1);
+                // clean should have done nothing
+                continue;
             }
-        } else {
-            assert!(matches!(epoch_reward_status, EpochRewardStatus::Inactive));
+
+            // do some updates to those accounts and re-check
+            accounts.modify_accounts(&pubkeys, 0, 100, 2);
+            accounts.add_root_and_flush_write_cache(0);
+            accounts.check_storage(0, 100);
+            accounts.check_accounts(&pubkeys, 0, 100, 2);
+            accounts.calculate_accounts_delta_hash(0);
+
+            let mut pubkeys1: Vec<Pubkey> = vec![];
+
+            // CREATE SLOT 1
+            let latest_slot = 1;
+
+            // Modify the first 10 of the accounts from slot 0 in slot 1
+            accounts.modify_accounts(&pubkeys, latest_slot, 10, 3);
+            // Overwrite account 30 from slot 0 with lamports=0 into slot 1.
+            // Slot 1 should now have 10 + 1 = 11 accounts
+            let account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+            accounts.store_for_tests(latest_slot, &[(&pubkeys[30], &account)]);
+
+            // Create 10 new accounts in slot 1, should now have 11 + 10 = 21
+            // accounts
+            accounts.create_account(&mut pubkeys1, latest_slot, 10, 0, 0);
+
+            accounts.calculate_accounts_delta_hash(latest_slot);
+            accounts.add_root_and_flush_write_cache(latest_slot);
+            accounts.check_storage(1, 21);
+
+            // CREATE SLOT 2
+            let latest_slot = 2;
+            let mut pubkeys2: Vec<Pubkey> = vec![];
+
+            // Modify first 20 of the accounts from slot 0 in slot 2
+            accounts.modify_accounts(&pubkeys, latest_slot, 20, 4);
+            accounts.clean_accounts_for_tests();
+            // Overwrite account 31 from slot 0 with lamports=0 into slot 2.
+            // Slot 2 should now have 20 + 1 = 21 accounts
+            let account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+            accounts.store_for_tests(latest_slot, &[(&pubkeys[31], &account)]);
+
+            // Create 10 new accounts in slot 2. Slot 2 should now have
+            // 21 + 10 = 31 accounts
+            accounts.create_account(&mut pubkeys2, latest_slot, 10, 0, 0);
+
+            accounts.calculate_accounts_delta_hash(latest_slot);
+            accounts.add_root_and_flush_write_cache(latest_slot);
+            accounts.check_storage(2, 31);
+
+            let ancestors = linear_ancestors(latest_slot);
+            accounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false);
+
+            accounts.clean_accounts_for_tests();
+            // The first 20 accounts of slot 0 have been updated in slot 2, as well as
+            // accounts 30 and  31 (overwritten with zero-lamport accounts in slot 1 and
+            // slot 2 respectively), so only 78 accounts are left in slot 0's storage entries.
+            accounts.check_storage(0, 78);
+            // 10 of the 21 accounts have been modified in slot 2, so only 11
+            // accounts left in slot 1.
+            accounts.check_storage(1, 11);
+            accounts.check_storage(2, 31);
+
+            let daccounts = reconstruct_accounts_db_via_serialization(&accounts, latest_slot);
+
+            assert_eq!(
+                daccounts.write_version.load(Ordering::Acquire),
+                accounts.write_version.load(Ordering::Acquire)
+            );
+
+            // Get the hashes for the latest slot, which should be the only hashes in the
+            // map on the deserialized AccountsDb
+            assert_eq!(daccounts.accounts_delta_hashes().lock().unwrap().len(), 1);
+            assert_eq!(daccounts.accounts_hashes().lock().unwrap().len(), 1);
+            assert_eq!(
+                daccounts.get_accounts_delta_hash(latest_slot).unwrap(),
+                accounts.get_accounts_delta_hash(latest_slot).unwrap(),
+            );
+            assert_eq!(
+                daccounts.get_accounts_hash(latest_slot).unwrap().0,
+                accounts.get_accounts_hash(latest_slot).unwrap().0,
+            );
+
+            daccounts.print_count_and_status("daccounts");
+
+            // Don't check the first 35 accounts which have not been modified on slot 0
+            daccounts.check_accounts(&pubkeys[35..], 0, 65, 37);
+            daccounts.check_accounts(&pubkeys1, 1, 10, 1);
+            daccounts.check_storage(0, 100);
+            daccounts.check_storage(1, 21);
+            daccounts.check_storage(2, 31);
+
+            assert_eq!(
+                daccounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,),
+                accounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,)
+            );
         }
     }
-}
 
-#[test]
-fn test_blank_extra_fields() {
-    solana_logger::setup();
-    let (genesis_config, _) = create_genesis_config(500);
+    #[test]
+    fn test_accounts_db_serialize_zero_and_free() {
+        solana_logger::setup();
 
-    let bank0 = Arc::new(Bank::new_for_tests_with_config(
-        &genesis_config,
-        BankTestConfig::default(),
-    ));
-    bank0.squash();
-    let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
-    add_root_and_flush_write_cache(&bank0);
-    bank.rc
-        .accounts
-        .accounts_db
-        .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
-    bank.rc
-        .accounts
-        .accounts_db
-        .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
+        let some_lamport = 223;
+        let zero_lamport = 0;
+        let no_data = 0;
+        let owner = *AccountSharedData::default().owner();
 
-    // Set extra fields
-    bank.fee_rate_governor.lamports_per_signature = 7000;
+        let account = AccountSharedData::new(some_lamport, no_data, &owner);
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let zero_lamport_account = AccountSharedData::new(zero_lamport, no_data, &owner);
 
-    // Serialize, but don't serialize the extra fields
-    let snapshot_storages = bank.get_snapshot_storages(None);
-    let mut buf = vec![];
-    let mut writer = Cursor::new(&mut buf);
+        let account2 = AccountSharedData::new(some_lamport + 1, no_data, &owner);
+        let pubkey2 = solana_sdk::pubkey::new_rand();
 
-    crate::serde_snapshot::bank_to_stream_no_extra_fields(
-        SerdeStyle::Newer,
-        &mut std::io::BufWriter::new(&mut writer),
-        &bank,
-        &get_storages_to_serialize(&snapshot_storages),
-    )
-    .unwrap();
+        let filler_account = AccountSharedData::new(some_lamport, no_data, &owner);
+        let filler_account_pubkey = solana_sdk::pubkey::new_rand();
 
-    // Deserialize
-    let rdr = Cursor::new(&buf[..]);
-    let mut reader = std::io::BufReader::new(&buf[rdr.position() as usize..]);
-    let mut snapshot_streams = SnapshotStreams {
-        full_snapshot_stream: &mut reader,
-        incremental_snapshot_stream: None,
-    };
-    let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
-    let copied_accounts = TempDir::new().unwrap();
-    let storage_and_next_append_vec_id =
-        copy_append_vecs(&bank.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
-    let dbank = crate::serde_snapshot::bank_from_streams(
-        SerdeStyle::Newer,
-        &mut snapshot_streams,
-        &dbank_paths,
-        storage_and_next_append_vec_id,
-        &genesis_config,
-        &RuntimeConfig::default(),
-        None,
-        None,
-        AccountSecondaryIndexes::default(),
-        None,
-        AccountShrinkThreshold::default(),
-        false,
-        Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
-        None,
-        Arc::default(),
-    )
-    .unwrap();
+        let accounts = AccountsDb::new_single_for_tests();
 
-    // Defaults to 0
-    assert_eq!(0, dbank.fee_rate_governor.lamports_per_signature);
+        let mut current_slot = 1;
+        accounts.store_for_tests(current_slot, &[(&pubkey, &account)]);
+        accounts.add_root(current_slot);
 
-    // epoch_reward status should default to `Inactive`
-    let epoch_reward_status = bank
-        .get_epoch_reward_status_to_serialize()
-        .unwrap_or(&EpochRewardStatus::Inactive);
-    assert!(matches!(epoch_reward_status, EpochRewardStatus::Inactive));
-}
+        current_slot += 1;
+        accounts.store_for_tests(current_slot, &[(&pubkey, &zero_lamport_account)]);
+        accounts.store_for_tests(current_slot, &[(&pubkey2, &account2)]);
 
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-mod test_bank_serialize {
-    use super::*;
+        // Store the account a few times.
+        // use to be: store enough accounts such that an additional store for slot 2 is created.
+        // but we use the write cache now
+        for _ in 0..3 {
+            accounts.store_for_tests(current_slot, &[(&filler_account_pubkey, &filler_account)]);
+        }
+        accounts.add_root_and_flush_write_cache(current_slot);
 
-    // This some what long test harness is required to freeze the ABI of
-    // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "A99zFXvqYm88n6EbtEFbroDbuFNnhw4K7AmqMh2wjJmh")]
-    #[derive(Serialize, AbiExample)]
-    pub struct BankAbiTestWrapperNewer {
-        #[serde(serialize_with = "wrapper_newer")]
-        bank: Bank,
+        accounts.assert_load_account(current_slot, pubkey, zero_lamport);
+
+        accounts.print_accounts_stats("accounts");
+
+        accounts.clean_accounts_for_tests();
+
+        accounts.print_accounts_stats("accounts_post_purge");
+
+        accounts.calculate_accounts_delta_hash(current_slot);
+        accounts.update_accounts_hash_for_tests(
+            current_slot,
+            &linear_ancestors(current_slot),
+            false,
+            false,
+        );
+        let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+
+        accounts.print_accounts_stats("reconstructed");
+
+        accounts.assert_load_account(current_slot, pubkey, zero_lamport);
     }
 
-    pub fn wrapper_newer<S>(bank: &Bank, s: S) -> std::result::Result<S::Ok, S::Error>
+    fn with_chained_zero_lamport_accounts<F>(f: F)
     where
-        S: serde::Serializer,
+        F: Fn(AccountsDb, Slot) -> AccountsDb,
     {
-        bank.rc
-            .accounts
-            .accounts_db
-            .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
-        bank.rc
-            .accounts
-            .accounts_db
-            .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
-        let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(..=0).0;
-        // ensure there is a single snapshot storage example for ABI digesting
-        assert_eq!(snapshot_storages.len(), 1);
+        let some_lamport = 223;
+        let zero_lamport = 0;
+        let dummy_lamport = 999;
+        let no_data = 0;
+        let owner = *AccountSharedData::default().owner();
 
-        (SerializableBankAndStorage::<newer::Context> {
-            bank,
-            snapshot_storages: &get_storages_to_serialize(&snapshot_storages),
-            phantom: std::marker::PhantomData::default(),
-        })
-        .serialize(s)
+        let account = AccountSharedData::new(some_lamport, no_data, &owner);
+        let account2 = AccountSharedData::new(some_lamport + 100_001, no_data, &owner);
+        let account3 = AccountSharedData::new(some_lamport + 100_002, no_data, &owner);
+        let zero_lamport_account = AccountSharedData::new(zero_lamport, no_data, &owner);
+
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let purged_pubkey1 = solana_sdk::pubkey::new_rand();
+        let purged_pubkey2 = solana_sdk::pubkey::new_rand();
+
+        let dummy_account = AccountSharedData::new(dummy_lamport, no_data, &owner);
+        let dummy_pubkey = Pubkey::default();
+
+        let accounts = AccountsDb::new_single_for_tests();
+
+        let mut current_slot = 1;
+        accounts.store_for_tests(current_slot, &[(&pubkey, &account)]);
+        accounts.store_for_tests(current_slot, &[(&purged_pubkey1, &account2)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
+
+        current_slot += 1;
+        accounts.store_for_tests(current_slot, &[(&purged_pubkey1, &zero_lamport_account)]);
+        accounts.store_for_tests(current_slot, &[(&purged_pubkey2, &account3)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
+
+        current_slot += 1;
+        accounts.store_for_tests(current_slot, &[(&purged_pubkey2, &zero_lamport_account)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
+
+        current_slot += 1;
+        accounts.store_for_tests(current_slot, &[(&dummy_pubkey, &dummy_account)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
+
+        accounts.print_accounts_stats("pre_f");
+        accounts.calculate_accounts_delta_hash(current_slot);
+        accounts.update_accounts_hash_for_tests(4, &Ancestors::default(), false, false);
+
+        let accounts = f(accounts, current_slot);
+
+        accounts.print_accounts_stats("post_f");
+
+        accounts.assert_load_account(current_slot, pubkey, some_lamport);
+        accounts.assert_load_account(current_slot, purged_pubkey1, 0);
+        accounts.assert_load_account(current_slot, purged_pubkey2, 0);
+        accounts.assert_load_account(current_slot, dummy_pubkey, dummy_lamport);
+
+        let ancestors = Ancestors::default();
+        let epoch_schedule = EpochSchedule::default();
+        let rent_collector = RentCollector::default();
+        let config = VerifyAccountsHashAndLamportsConfig::new_for_test(
+            &ancestors,
+            &epoch_schedule,
+            &rent_collector,
+        );
+
+        accounts
+            .verify_accounts_hash_and_lamports(4, 1222, None, config)
+            .unwrap();
+    }
+
+    #[test]
+    fn test_accounts_purge_chained_purge_before_snapshot_restore() {
+        solana_logger::setup();
+        with_chained_zero_lamport_accounts(|accounts, current_slot| {
+            accounts.clean_accounts_for_tests();
+            reconstruct_accounts_db_via_serialization(&accounts, current_slot)
+        });
+    }
+
+    #[test]
+    fn test_accounts_purge_chained_purge_after_snapshot_restore() {
+        solana_logger::setup();
+        with_chained_zero_lamport_accounts(|accounts, current_slot| {
+            let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+            accounts.print_accounts_stats("after_reconstruct");
+            accounts.clean_accounts_for_tests();
+            reconstruct_accounts_db_via_serialization(&accounts, current_slot)
+        });
+    }
+
+    #[test]
+    fn test_accounts_purge_long_chained_after_snapshot_restore() {
+        solana_logger::setup();
+        let old_lamport = 223;
+        let zero_lamport = 0;
+        let no_data = 0;
+        let owner = *AccountSharedData::default().owner();
+
+        let account = AccountSharedData::new(old_lamport, no_data, &owner);
+        let account2 = AccountSharedData::new(old_lamport + 100_001, no_data, &owner);
+        let account3 = AccountSharedData::new(old_lamport + 100_002, no_data, &owner);
+        let dummy_account = AccountSharedData::new(99_999_999, no_data, &owner);
+        let zero_lamport_account = AccountSharedData::new(zero_lamport, no_data, &owner);
+
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let dummy_pubkey = solana_sdk::pubkey::new_rand();
+        let purged_pubkey1 = solana_sdk::pubkey::new_rand();
+        let purged_pubkey2 = solana_sdk::pubkey::new_rand();
+
+        let mut current_slot = 0;
+        let accounts = AccountsDb::new_single_for_tests();
+
+        // create intermediate updates to purged_pubkey1 so that
+        // generate_index must add slots as root last at once
+        current_slot += 1;
+        accounts.store_for_tests(current_slot, &[(&pubkey, &account)]);
+        accounts.store_for_tests(current_slot, &[(&purged_pubkey1, &account2)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
+
+        current_slot += 1;
+        accounts.store_for_tests(current_slot, &[(&purged_pubkey1, &account2)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
+
+        current_slot += 1;
+        accounts.store_for_tests(current_slot, &[(&purged_pubkey1, &account2)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
+
+        current_slot += 1;
+        accounts.store_for_tests(current_slot, &[(&purged_pubkey1, &zero_lamport_account)]);
+        accounts.store_for_tests(current_slot, &[(&purged_pubkey2, &account3)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
+
+        current_slot += 1;
+        accounts.store_for_tests(current_slot, &[(&purged_pubkey2, &zero_lamport_account)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
+
+        current_slot += 1;
+        accounts.store_for_tests(current_slot, &[(&dummy_pubkey, &dummy_account)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
+
+        accounts.print_count_and_status("before reconstruct");
+        accounts.calculate_accounts_delta_hash(current_slot);
+        accounts.update_accounts_hash_for_tests(
+            current_slot,
+            &linear_ancestors(current_slot),
+            false,
+            false,
+        );
+        let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+        accounts.print_count_and_status("before purge zero");
+        accounts.clean_accounts_for_tests();
+        accounts.print_count_and_status("after purge zero");
+
+        accounts.assert_load_account(current_slot, pubkey, old_lamport);
+        accounts.assert_load_account(current_slot, purged_pubkey1, 0);
+        accounts.assert_load_account(current_slot, purged_pubkey2, 0);
+    }
+
+    #[test]
+    fn test_accounts_clean_after_snapshot_restore_then_old_revives() {
+        solana_logger::setup();
+        let old_lamport = 223;
+        let zero_lamport = 0;
+        let no_data = 0;
+        let dummy_lamport = 999_999;
+        let owner = *AccountSharedData::default().owner();
+
+        let account = AccountSharedData::new(old_lamport, no_data, &owner);
+        let account2 = AccountSharedData::new(old_lamport + 100_001, no_data, &owner);
+        let account3 = AccountSharedData::new(old_lamport + 100_002, no_data, &owner);
+        let dummy_account = AccountSharedData::new(dummy_lamport, no_data, &owner);
+        let zero_lamport_account = AccountSharedData::new(zero_lamport, no_data, &owner);
+
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        let dummy_pubkey = solana_sdk::pubkey::new_rand();
+
+        let mut current_slot = 0;
+        let accounts = AccountsDb::new_single_for_tests();
+
+        // A: Initialize AccountsDb with pubkey1 and pubkey2
+        current_slot += 1;
+        accounts.store_for_tests(current_slot, &[(&pubkey1, &account)]);
+        accounts.store_for_tests(current_slot, &[(&pubkey2, &account)]);
+        accounts.calculate_accounts_delta_hash(current_slot);
+        accounts.add_root(current_slot);
+
+        // B: Test multiple updates to pubkey1 in a single slot/storage
+        current_slot += 1;
+        assert_eq!(0, accounts.alive_account_count_in_slot(current_slot));
+        accounts.add_root_and_flush_write_cache(current_slot - 1);
+        assert_eq!(1, accounts.ref_count_for_pubkey(&pubkey1));
+        accounts.store_for_tests(current_slot, &[(&pubkey1, &account2)]);
+        accounts.store_for_tests(current_slot, &[(&pubkey1, &account2)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
+        assert_eq!(1, accounts.alive_account_count_in_slot(current_slot));
+        // Stores to same pubkey, same slot only count once towards the
+        // ref count
+        assert_eq!(2, accounts.ref_count_for_pubkey(&pubkey1));
+        accounts.calculate_accounts_delta_hash(current_slot);
+
+        // C: Yet more update to trigger lazy clean of step A
+        current_slot += 1;
+        assert_eq!(2, accounts.ref_count_for_pubkey(&pubkey1));
+        accounts.store_for_tests(current_slot, &[(&pubkey1, &account3)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
+        assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
+        accounts.calculate_accounts_delta_hash(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
+
+        // D: Make pubkey1 0-lamport; also triggers clean of step B
+        current_slot += 1;
+        assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
+        accounts.store_for_tests(current_slot, &[(&pubkey1, &zero_lamport_account)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
+        // had to be a root to flush, but clean won't work as this test expects if it is a root
+        // so, remove the root from alive_roots, then restore it after clean
+        accounts
+            .accounts_index
+            .roots_tracker
+            .write()
+            .unwrap()
+            .alive_roots
+            .remove(&current_slot);
+        accounts.clean_accounts_for_tests();
+        accounts
+            .accounts_index
+            .roots_tracker
+            .write()
+            .unwrap()
+            .alive_roots
+            .insert(current_slot);
+
+        assert_eq!(
+            // Removed one reference from the dead slot (reference only counted once
+            // even though there were two stores to the pubkey in that slot)
+            3, /* == 3 - 1 + 1 */
+            accounts.ref_count_for_pubkey(&pubkey1)
+        );
+        accounts.calculate_accounts_delta_hash(current_slot);
+        accounts.add_root(current_slot);
+
+        // E: Avoid missing bank hash error
+        current_slot += 1;
+        accounts.store_for_tests(current_slot, &[(&dummy_pubkey, &dummy_account)]);
+        accounts.calculate_accounts_delta_hash(current_slot);
+        accounts.add_root(current_slot);
+
+        accounts.assert_load_account(current_slot, pubkey1, zero_lamport);
+        accounts.assert_load_account(current_slot, pubkey2, old_lamport);
+        accounts.assert_load_account(current_slot, dummy_pubkey, dummy_lamport);
+
+        // At this point, there is no index entries for A and B
+        // If step C and step D should be purged, snapshot restore would cause
+        // pubkey1 to be revived as the state of step A.
+        // So, prevent that from happening by introducing refcount
+        ((current_slot - 1)..=current_slot).for_each(|slot| accounts.flush_root_write_cache(slot));
+        accounts.clean_accounts_for_tests();
+        accounts.update_accounts_hash_for_tests(
+            current_slot,
+            &linear_ancestors(current_slot),
+            false,
+            false,
+        );
+        let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+        accounts.clean_accounts_for_tests();
+
+        info!("pubkey: {}", pubkey1);
+        accounts.print_accounts_stats("pre_clean");
+        accounts.assert_load_account(current_slot, pubkey1, zero_lamport);
+        accounts.assert_load_account(current_slot, pubkey2, old_lamport);
+        accounts.assert_load_account(current_slot, dummy_pubkey, dummy_lamport);
+
+        // F: Finally, make Step A cleanable
+        current_slot += 1;
+        accounts.store_for_tests(current_slot, &[(&pubkey2, &account)]);
+        accounts.calculate_accounts_delta_hash(current_slot);
+        accounts.add_root(current_slot);
+
+        // Do clean
+        accounts.flush_root_write_cache(current_slot);
+        accounts.clean_accounts_for_tests();
+
+        // 2nd clean needed to clean-up pubkey1
+        accounts.clean_accounts_for_tests();
+
+        // Ensure pubkey2 is cleaned from the index finally
+        accounts.assert_not_load_account(current_slot, pubkey1);
+        accounts.assert_load_account(current_slot, pubkey2, old_lamport);
+        accounts.assert_load_account(current_slot, dummy_pubkey, dummy_lamport);
+    }
+
+    #[test]
+    fn test_shrink_stale_slots_processed() {
+        solana_logger::setup();
+
+        for startup in &[false, true] {
+            let accounts = AccountsDb::new_single_for_tests();
+
+            let pubkey_count = 100;
+            let pubkeys: Vec<_> = (0..pubkey_count)
+                .map(|_| solana_sdk::pubkey::new_rand())
+                .collect();
+
+            let some_lamport = 223;
+            let no_data = 0;
+            let owner = *AccountSharedData::default().owner();
+
+            let account = AccountSharedData::new(some_lamport, no_data, &owner);
+
+            let mut current_slot = 0;
+
+            current_slot += 1;
+            for pubkey in &pubkeys {
+                accounts.store_for_tests(current_slot, &[(pubkey, &account)]);
+            }
+            let shrink_slot = current_slot;
+            accounts.calculate_accounts_delta_hash(current_slot);
+            accounts.add_root_and_flush_write_cache(current_slot);
+
+            current_slot += 1;
+            let pubkey_count_after_shrink = 10;
+            let updated_pubkeys = &pubkeys[0..pubkey_count - pubkey_count_after_shrink];
+
+            for pubkey in updated_pubkeys {
+                accounts.store_for_tests(current_slot, &[(pubkey, &account)]);
+            }
+            accounts.calculate_accounts_delta_hash(current_slot);
+            accounts.add_root_and_flush_write_cache(current_slot);
+
+            accounts.clean_accounts_for_tests();
+
+            assert_eq!(
+                pubkey_count,
+                accounts.all_account_count_in_append_vec(shrink_slot)
+            );
+            accounts.shrink_all_slots(*startup, None, &EpochSchedule::default());
+            assert_eq!(
+                pubkey_count_after_shrink,
+                accounts.all_account_count_in_append_vec(shrink_slot)
+            );
+
+            let no_ancestors = Ancestors::default();
+
+            let epoch_schedule = EpochSchedule::default();
+            let rent_collector = RentCollector::default();
+            let config = VerifyAccountsHashAndLamportsConfig::new_for_test(
+                &no_ancestors,
+                &epoch_schedule,
+                &rent_collector,
+            );
+
+            accounts.update_accounts_hash_for_tests(current_slot, &no_ancestors, false, false);
+            accounts
+                .verify_accounts_hash_and_lamports(current_slot, 22300, None, config.clone())
+                .unwrap();
+
+            let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+            accounts
+                .verify_accounts_hash_and_lamports(current_slot, 22300, None, config)
+                .unwrap();
+
+            // repeating should be no-op
+            accounts.shrink_all_slots(*startup, None, &epoch_schedule);
+            assert_eq!(
+                pubkey_count_after_shrink,
+                accounts.all_account_count_in_append_vec(shrink_slot)
+            );
+        }
     }
 }

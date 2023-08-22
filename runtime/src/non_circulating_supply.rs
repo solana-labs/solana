@@ -1,16 +1,14 @@
 use {
-    crate::{
-        accounts_index::{AccountIndex, IndexKey, ScanConfig, ScanResult},
-        bank::Bank,
-    },
+    crate::bank::Bank,
     log::*,
+    solana_accounts_db::accounts_index::{AccountIndex, IndexKey, ScanConfig, ScanResult},
     solana_sdk::{
         account::ReadableAccount,
         pubkey::Pubkey,
-        stake::{self, state::StakeState},
+        stake::{self, state::StakeStateV2},
     },
     solana_stake_program::stake_state,
-    std::{collections::HashSet, sync::Arc},
+    std::collections::HashSet,
 };
 
 pub struct NonCirculatingSupply {
@@ -18,7 +16,7 @@ pub struct NonCirculatingSupply {
     pub accounts: Vec<Pubkey>,
 }
 
-pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> ScanResult<NonCirculatingSupply> {
+pub fn calculate_non_circulating_supply(bank: &Bank) -> ScanResult<NonCirculatingSupply> {
     debug!("Updating Bank supply, epoch: {}", bank.epoch());
     let mut non_circulating_accounts_set: HashSet<Pubkey> = HashSet::new();
 
@@ -53,14 +51,14 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> ScanResult<NonCircu
     for (pubkey, account) in stake_accounts.iter() {
         let stake_account = stake_state::from(account).unwrap_or_default();
         match stake_account {
-            StakeState::Initialized(meta) => {
+            StakeStateV2::Initialized(meta) => {
                 if meta.lockup.is_in_force(&clock, None)
                     || withdraw_authority_list.contains(&meta.authorized.withdrawer)
                 {
                     non_circulating_accounts_set.insert(*pubkey);
                 }
             }
-            StakeState::Stake(meta, _stake) => {
+            StakeStateV2::Stake(meta, _stake, _stake_flags) => {
                 if meta.lockup.is_in_force(&clock, None)
                     || withdraw_authority_list.contains(&meta.authorized.withdrawer)
                 {
@@ -230,8 +228,10 @@ mod tests {
         std::{collections::BTreeMap, sync::Arc},
     };
 
-    fn new_from_parent(parent: &Arc<Bank>) -> Bank {
-        Bank::new_from_parent(parent, &Pubkey::default(), parent.slot() + 1)
+    fn new_from_parent(parent: Arc<Bank>) -> Bank {
+        let slot = parent.slot() + 1;
+        let collector_id = Pubkey::default();
+        Bank::new_from_parent(parent, &collector_id, slot)
     }
 
     #[test]
@@ -264,8 +264,8 @@ mod tests {
             };
             let stake_account = Account::new_data_with_space(
                 balance,
-                &StakeState::Initialized(meta),
-                StakeState::size_of(),
+                &StakeStateV2::Initialized(meta),
+                StakeStateV2::size_of(),
                 &stake::program::id(),
             )
             .unwrap();
@@ -296,7 +296,7 @@ mod tests {
             num_non_circulating_accounts as usize + num_stake_accounts as usize
         );
 
-        bank = Arc::new(new_from_parent(&bank));
+        bank = Arc::new(new_from_parent(bank));
         let new_balance = 11;
         for key in non_circulating_accounts {
             bank.store_account(
@@ -316,7 +316,7 @@ mod tests {
 
         // Advance bank an epoch, which should unlock stakes
         for _ in 0..slots_per_epoch {
-            bank = Arc::new(new_from_parent(&bank));
+            bank = Arc::new(new_from_parent(bank));
         }
         assert_eq!(bank.epoch(), 1);
         let non_circulating_supply = calculate_non_circulating_supply(&bank).unwrap();

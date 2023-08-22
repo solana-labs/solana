@@ -9,8 +9,8 @@ use {
         pubkey::Pubkey,
         signature::Signer,
         sysvar::{
-            clock, epoch_schedule, fees, instructions, recent_blockhashes, rent, slot_hashes,
-            slot_history, stake_history,
+            clock, epoch_rewards, epoch_schedule, fees, instructions, recent_blockhashes, rent,
+            slot_hashes, slot_history, stake_history,
         },
         transaction::Transaction,
     },
@@ -20,11 +20,18 @@ use {
 async fn test_sysvars() {
     let program_id = Pubkey::new_unique();
 
-    let program_test = ProgramTest::new(
+    let mut program_test = ProgramTest::new(
         "solana_sbf_rust_sysvar",
         program_id,
         processor!(process_instruction),
     );
+
+    let epoch_rewards = epoch_rewards::EpochRewards {
+        total_rewards: 100,
+        distributed_rewards: 50,
+        distribution_complete_block_height: 42,
+    };
+    program_test.add_sysvar_account(epoch_rewards::id(), &epoch_rewards);
     let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
 
     let mut transaction = Transaction::new_with_payer(
@@ -45,6 +52,7 @@ async fn test_sysvars() {
                 AccountMeta::new_readonly(stake_history::id(), false),
                 #[allow(deprecated)]
                 AccountMeta::new_readonly(fees::id(), false),
+                AccountMeta::new_readonly(epoch_rewards::id(), false),
             ],
         )],
         Some(&payer.pubkey()),
@@ -58,6 +66,7 @@ async fn test_sysvars() {
         processor!(process_instruction),
     );
     program_test.deactivate_feature(disable_fees_sysvar::id());
+    program_test.add_sysvar_account(epoch_rewards::id(), &epoch_rewards);
     let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
 
     let mut transaction = Transaction::new_with_payer(
@@ -78,6 +87,7 @@ async fn test_sysvars() {
                 AccountMeta::new_readonly(stake_history::id(), false),
                 #[allow(deprecated)]
                 AccountMeta::new_readonly(fees::id(), false),
+                AccountMeta::new_readonly(epoch_rewards::id(), false),
             ],
         )],
         Some(&payer.pubkey()),

@@ -156,7 +156,7 @@ pub fn send_many_transactions(
         let (blockhash, _) = client
             .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
             .unwrap();
-        let transfer_amount = thread_rng().gen_range(1, max_tokens_per_transfer);
+        let transfer_amount = thread_rng().gen_range(1..max_tokens_per_transfer);
 
         let mut transaction = system_transaction::transfer(
             funding_keypair,
@@ -184,8 +184,7 @@ pub fn verify_ledger_ticks(ledger_path: &Path, ticks_per_slot: usize) {
         .into_iter()
         .map(|slot| (slot, 0, last_id))
         .collect();
-    while !pending_slots.is_empty() {
-        let (slot, parent_slot, last_id) = pending_slots.pop().unwrap();
+    while let Some((slot, parent_slot, last_id)) = pending_slots.pop() {
         let next_slots = ledger
             .get_slots_since(&[slot])
             .unwrap()

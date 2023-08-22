@@ -7,6 +7,7 @@ use {
         entry_notifier_service::{EntryNotification, EntryNotifierSender},
         leader_schedule_cache::LeaderScheduleCache,
         token_balances::collect_token_balances,
+        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     chrono_humanize::{Accuracy, HumanTime, Tense},
     crossbeam_channel::Sender,
@@ -15,6 +16,17 @@ use {
     rand::{seq::SliceRandom, thread_rng},
     rayon::{prelude::*, ThreadPool},
     scopeguard::defer,
+    solana_accounts_db::{
+        accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
+        accounts_index::AccountSecondaryIndexes,
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
+        epoch_accounts_hash::EpochAccountsHash,
+        rent_debits::RentDebits,
+        transaction_results::{
+            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
+        },
+    },
+    solana_cost_model::cost_model::CostModel,
     solana_entry::entry::{
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
     },
@@ -23,21 +35,12 @@ use {
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
-        accounts_background_service::{AbsRequestSender, SnapshotRequestType},
-        accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
-        accounts_index::AccountSecondaryIndexes,
-        accounts_update_notifier_interface::AccountsUpdateNotifier,
-        bank::{
-            Bank, TransactionBalancesSet, TransactionExecutionDetails, TransactionExecutionResult,
-            TransactionResults,
-        },
+        accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
+        bank::{Bank, TransactionBalancesSet},
         bank_forks::BankForks,
         bank_utils,
         commitment::VOTE_THRESHOLD_SIZE,
-        cost_model::CostModel,
-        epoch_accounts_hash::EpochAccountsHash,
         prioritization_fee_cache::PrioritizationFeeCache,
-        rent_debits::RentDebits,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
         vote_account::VoteAccountsHashMap,
@@ -632,8 +635,7 @@ pub struct ProcessOptions {
     /// true if after processing the contents of the blockstore at startup, we should run an accounts hash calc
     /// This is useful for debugging.
     pub run_final_accounts_hash_calc: bool,
-    /// Enable booting from state already on disk, instead of extracting if from a snapshot archive.
-    pub boot_from_local_state: bool,
+    pub use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup,
 }
 
 pub fn test_process_blockstore(
@@ -655,7 +657,7 @@ pub fn test_process_blockstore(
                 snapshot_request_receiver
                     .try_iter()
                     .filter(|snapshot_request| {
-                        snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+                        snapshot_request.request_kind == SnapshotRequestKind::EpochAccountsHash
                     })
                     .for_each(|snapshot_request| {
                         snapshot_request
@@ -1370,7 +1372,7 @@ fn process_next_slots(
         // handles any partials
         if next_meta.is_full() {
             let next_bank = Bank::new_from_parent(
-                bank,
+                bank.clone(),
                 &leader_schedule_cache
                     .slot_leader_at(*next_slot, Some(bank))
                     .unwrap(),
@@ -3590,13 +3592,14 @@ pub mod tests {
         };
         let recyclers = VerifyRecyclers::default();
         process_bank_0(&bank0, &blockstore, &opts, &recyclers, None, None);
-        let bank1 = bank_forks.insert(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+        let bank0_last_blockhash = bank0.last_blockhash();
+        let bank1 = bank_forks.insert(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
         confirm_full_slot(
             &blockstore,
             &bank1,
             &opts,
             &recyclers,
-            &mut ConfirmationProgress::new(bank0.last_blockhash()),
+            &mut ConfirmationProgress::new(bank0_last_blockhash),
             None,
             None,
             None,
@@ -3750,11 +3753,8 @@ pub mod tests {
             }
             i += 1;
 
-            bank = Arc::new(Bank::new_from_parent(
-                &bank,
-                &Pubkey::default(),
-                bank.slot() + thread_rng().gen_range(1, 3),
-            ));
+            let slot = bank.slot() + thread_rng().gen_range(1..3);
+            bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
         }
     }
 
@@ -3891,7 +3891,7 @@ pub mod tests {
         bank0.freeze();
 
         let bank1 = Arc::new(Bank::new_from_parent(
-            &bank0,
+            bank0.clone(),
             &solana_sdk::pubkey::new_rand(),
             1,
         ));
@@ -4251,92 +4251,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_confirm_slot_entries_without_fix() {
-        const HASHES_PER_TICK: u64 = 10;
-        const TICKS_PER_SLOT: u64 = 2;
-
-        let collector_id = Pubkey::new_unique();
-
-        let GenesisConfigInfo {
-            mut genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config(10_000);
-        genesis_config.poh_config.hashes_per_tick = Some(HASHES_PER_TICK);
-        genesis_config.ticks_per_slot = TICKS_PER_SLOT;
-        let genesis_hash = genesis_config.hash();
-
-        let mut slot_0_bank = Bank::new_for_tests(&genesis_config);
-        slot_0_bank.deactivate_feature(&feature_set::fix_recent_blockhashes::id());
-        let slot_0_bank = Arc::new(slot_0_bank);
-        assert_eq!(slot_0_bank.slot(), 0);
-        assert_eq!(slot_0_bank.tick_height(), 0);
-        assert_eq!(slot_0_bank.max_tick_height(), 2);
-        assert_eq!(slot_0_bank.last_blockhash(), genesis_hash);
-        assert_eq!(slot_0_bank.get_hash_age(&genesis_hash), Some(0));
-
-        let slot_0_entries = entry::create_ticks(TICKS_PER_SLOT, HASHES_PER_TICK, genesis_hash);
-        let slot_0_hash = slot_0_entries.last().unwrap().hash;
-        confirm_slot_entries_for_tests(&slot_0_bank, slot_0_entries, true, genesis_hash).unwrap();
-        assert_eq!(slot_0_bank.tick_height(), slot_0_bank.max_tick_height());
-        assert_eq!(slot_0_bank.last_blockhash(), slot_0_hash);
-        assert_eq!(slot_0_bank.get_hash_age(&genesis_hash), Some(1));
-        assert_eq!(slot_0_bank.get_hash_age(&slot_0_hash), Some(0));
-
-        let slot_2_bank = Arc::new(Bank::new_from_parent(&slot_0_bank, &collector_id, 2));
-        assert_eq!(slot_2_bank.slot(), 2);
-        assert_eq!(slot_2_bank.tick_height(), 2);
-        assert_eq!(slot_2_bank.max_tick_height(), 6);
-        assert_eq!(slot_2_bank.last_blockhash(), slot_0_hash);
-
-        let slot_1_entries = entry::create_ticks(TICKS_PER_SLOT, HASHES_PER_TICK, slot_0_hash);
-        let slot_1_hash = slot_1_entries.last().unwrap().hash;
-        confirm_slot_entries_for_tests(&slot_2_bank, slot_1_entries, false, slot_0_hash).unwrap();
-        assert_eq!(slot_2_bank.tick_height(), 4);
-        assert_eq!(slot_2_bank.last_blockhash(), slot_1_hash);
-        assert_eq!(slot_2_bank.get_hash_age(&genesis_hash), Some(2));
-        assert_eq!(slot_2_bank.get_hash_age(&slot_0_hash), Some(1));
-        assert_eq!(slot_2_bank.get_hash_age(&slot_1_hash), Some(0));
-
-        // Check that slot 2 transactions can use any previous slot hash, including the
-        // hash for slot 1 which is just ticks.
-        let slot_2_entries = {
-            let to_pubkey = Pubkey::new_unique();
-            let mut prev_entry_hash = slot_1_hash;
-            let mut remaining_entry_hashes = HASHES_PER_TICK;
-            let mut entries: Vec<Entry> = [genesis_hash, slot_0_hash, slot_1_hash]
-                .into_iter()
-                .map(|recent_hash| {
-                    let tx =
-                        system_transaction::transfer(&mint_keypair, &to_pubkey, 1, recent_hash);
-                    remaining_entry_hashes = remaining_entry_hashes.checked_sub(1).unwrap();
-                    next_entry_mut(&mut prev_entry_hash, 1, vec![tx])
-                })
-                .collect();
-
-            entries.push(next_entry_mut(
-                &mut prev_entry_hash,
-                remaining_entry_hashes,
-                vec![],
-            ));
-            entries.push(next_entry_mut(
-                &mut prev_entry_hash,
-                HASHES_PER_TICK,
-                vec![],
-            ));
-            entries
-        };
-        let slot_2_hash = slot_2_entries.last().unwrap().hash;
-        confirm_slot_entries_for_tests(&slot_2_bank, slot_2_entries, true, slot_1_hash).unwrap();
-        assert_eq!(slot_2_bank.tick_height(), slot_2_bank.max_tick_height());
-        assert_eq!(slot_2_bank.last_blockhash(), slot_2_hash);
-        assert_eq!(slot_2_bank.get_hash_age(&genesis_hash), Some(3));
-        assert_eq!(slot_2_bank.get_hash_age(&slot_0_hash), Some(2));
-        assert_eq!(slot_2_bank.get_hash_age(&slot_1_hash), Some(1));
-        assert_eq!(slot_2_bank.get_hash_age(&slot_2_hash), Some(0));
-    }
-
-    #[test]
     fn test_confirm_slot_entries_progress_num_txs_indexes() {
         let GenesisConfigInfo {
             genesis_config,
@@ -4549,7 +4463,7 @@ pub mod tests {
         assert_eq!(slot_0_bank.get_hash_age(&genesis_hash), Some(1));
         assert_eq!(slot_0_bank.get_hash_age(&slot_0_hash), Some(0));
 
-        let slot_2_bank = Arc::new(Bank::new_from_parent(&slot_0_bank, &collector_id, 2));
+        let slot_2_bank = Arc::new(Bank::new_from_parent(slot_0_bank, &collector_id, 2));
         assert_eq!(slot_2_bank.slot(), 2);
         assert_eq!(slot_2_bank.tick_height(), 2);
         assert_eq!(slot_2_bank.max_tick_height(), 6);

@@ -1,5 +1,6 @@
 use {
     criterion::{criterion_group, criterion_main, Criterion},
+    curve25519_dalek::scalar::Scalar,
     solana_zk_token_sdk::{
         encryption::{
             elgamal::ElGamalKeypair,
@@ -10,8 +11,9 @@ use {
             transfer::FeeParameters, BatchedGroupedCiphertext2HandlesValidityProofData,
             BatchedRangeProofU128Data, BatchedRangeProofU256Data, BatchedRangeProofU64Data,
             CiphertextCiphertextEqualityProofData, CiphertextCommitmentEqualityProofData,
-            GroupedCiphertext2HandlesValidityProofData, PubkeyValidityData, RangeProofU64Data,
-            TransferData, TransferWithFeeData, WithdrawData, ZeroBalanceProofData, ZkProofData,
+            FeeSigmaProofData, GroupedCiphertext2HandlesValidityProofData, PubkeyValidityData,
+            RangeProofU64Data, TransferData, TransferWithFeeData, WithdrawData,
+            ZeroBalanceProofData, ZkProofData,
         },
     },
 };
@@ -182,6 +184,45 @@ fn bench_batched_grouped_ciphertext_validity(c: &mut Criterion) {
     .unwrap();
 
     c.bench_function("batched_grouped_ciphertext_validity", |b| {
+        b.iter(|| {
+            proof_data.verify_proof().unwrap();
+        })
+    });
+}
+
+#[allow(clippy::op_ref)]
+fn bench_fee_sigma(c: &mut Criterion) {
+    let transfer_amount: u64 = 1;
+    let max_fee: u64 = 3;
+
+    let fee_rate: u16 = 400;
+    let fee_amount: u64 = 1;
+    let delta_fee: u64 = 9600;
+
+    let (transfer_commitment, transfer_opening) = Pedersen::new(transfer_amount);
+    let (fee_commitment, fee_opening) = Pedersen::new(fee_amount);
+
+    let scalar_rate = Scalar::from(fee_rate);
+    let delta_commitment =
+        &fee_commitment * Scalar::from(10_000_u64) - &transfer_commitment * &scalar_rate;
+    let delta_opening = &fee_opening * &Scalar::from(10_000_u64) - &transfer_opening * &scalar_rate;
+
+    let (claimed_commitment, claimed_opening) = Pedersen::new(delta_fee);
+
+    let proof_data = FeeSigmaProofData::new(
+        &fee_commitment,
+        &delta_commitment,
+        &claimed_commitment,
+        &fee_opening,
+        &delta_opening,
+        &claimed_opening,
+        fee_amount,
+        delta_fee,
+        max_fee,
+    )
+    .unwrap();
+
+    c.bench_function("fee_sigma", |b| {
         b.iter(|| {
             proof_data.verify_proof().unwrap();
         })
@@ -414,5 +455,6 @@ criterion_group!(
     bench_batched_range_proof_u256,
     bench_transfer,
     bench_transfer_with_fee,
+    bench_fee_sigma,
 );
 criterion_main!(benches);

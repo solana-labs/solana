@@ -367,11 +367,11 @@ mod tests {
             let all_keys = Mutex::new(vec![]);
 
             let gen_rand_value = || {
-                let count = thread_rng().gen_range(0, max_slot_list_len);
+                let count = thread_rng().gen_range(0..max_slot_list_len);
                 let v = (0..count)
                     .map(|x| (x as usize, x as usize /*thread_rng().gen::<usize>()*/))
                     .collect::<Vec<_>>();
-                let range = thread_rng().gen_range(0, 100);
+                let range = thread_rng().gen_range(0..100);
                 // pick ref counts that are useful and common
                 let rc = if range < 50 {
                     1
@@ -380,7 +380,7 @@ mod tests {
                 } else if range < 70 {
                     2
                 } else {
-                    thread_rng().gen_range(0, MAX_LEGAL_REFCOUNT)
+                    thread_rng().gen_range(0..MAX_LEGAL_REFCOUNT)
                 };
 
                 (v, rc)
@@ -392,7 +392,7 @@ mod tests {
                     return None;
                 }
                 let len = keys.len();
-                Some(keys.remove(thread_rng().gen_range(0, len)))
+                Some(keys.remove(thread_rng().gen_range(0..len)))
             };
             let return_key = |key| {
                 let mut keys = all_keys.lock().unwrap();
@@ -445,11 +445,11 @@ mod tests {
             // verify consistency between hashmap and all bucket maps
             for i in 0..10000 {
                 initial = initial.saturating_sub(1);
-                if initial > 0 || thread_rng().gen_range(0, 5) == 0 {
+                if initial > 0 || thread_rng().gen_range(0..5) == 0 {
                     // insert
                     let mut to_add = 1;
                     if initial > 1 && use_batch_insert {
-                        to_add = thread_rng().gen_range(1, (initial / 4).max(2));
+                        to_add = thread_rng().gen_range(1..(initial / 4).max(2));
                         initial -= to_add;
                     }
 
@@ -481,12 +481,12 @@ mod tests {
                         hash_map.write().unwrap().insert(k, v);
                         return_key(k);
                     });
-                    let insert = thread_rng().gen_range(0, 2) == 0;
+                    let insert = thread_rng().gen_range(0..2) == 0;
                     maps.iter().for_each(|map| {
                         // batch insert can only work for the map with only 1 bucket so that we can batch add to a single bucket
                         let batch_insert_now = map.buckets.len() == 1
                             && use_batch_insert
-                            && thread_rng().gen_range(0, 2) == 0;
+                            && thread_rng().gen_range(0..2) == 0;
                         if batch_insert_now {
                             // batch insert into the map with 1 bucket 50% of the time
                             let mut batch_additions = additions
@@ -495,12 +495,12 @@ mod tests {
                                 .map(|(k, mut v)| (k, v.0.pop().unwrap()))
                                 .collect::<Vec<_>>();
                             let mut duplicates = 0;
-                            if batch_additions.len() > 1 && thread_rng().gen_range(0, 2) == 0 {
+                            if batch_additions.len() > 1 && thread_rng().gen_range(0..2) == 0 {
                                 // insert a duplicate sometimes
                                 let item_to_duplicate =
-                                    thread_rng().gen_range(0, batch_additions.len());
+                                    thread_rng().gen_range(0..batch_additions.len());
                                 let where_to_insert_duplicate =
-                                    thread_rng().gen_range(0, batch_additions.len());
+                                    thread_rng().gen_range(0..batch_additions.len());
                                 batch_additions.insert(
                                     where_to_insert_duplicate,
                                     batch_additions[item_to_duplicate],
@@ -541,13 +541,13 @@ mod tests {
                     // if we are using batch insert, it is illegal to update, delete, or addref/unref an account until all batch inserts are complete
                     continue;
                 }
-                if thread_rng().gen_range(0, 10) == 0 {
+                if thread_rng().gen_range(0..10) == 0 {
                     // update
                     if let Some(k) = get_key() {
                         let hm = hash_map.read().unwrap();
                         let (v, rc) = gen_rand_value();
                         let v_old = hm.get(&k);
-                        let insert = thread_rng().gen_range(0, 2) == 0;
+                        let insert = thread_rng().gen_range(0..2) == 0;
                         maps.iter().for_each(|map| {
                             if insert {
                                 map.insert(&k, (&v, rc))
@@ -563,7 +563,7 @@ mod tests {
                         return_key(k);
                     }
                 }
-                if thread_rng().gen_range(0, 20) == 0 {
+                if thread_rng().gen_range(0..20) == 0 {
                     // delete
                     if let Some(k) = get_key() {
                         let mut hm = hash_map.write().unwrap();
@@ -573,10 +573,10 @@ mod tests {
                         });
                     }
                 }
-                if thread_rng().gen_range(0, 10) == 0 {
+                if thread_rng().gen_range(0..10) == 0 {
                     // add/unref
                     if let Some(k) = get_key() {
-                        let mut inc = thread_rng().gen_range(0, 2) == 0;
+                        let mut inc = thread_rng().gen_range(0..2) == 0;
                         let mut hm = hash_map.write().unwrap();
                         let (v, mut rc) = hm.get(&k).map(|(v, rc)| (v.to_vec(), *rc)).unwrap();
                         if !inc && rc == 0 {

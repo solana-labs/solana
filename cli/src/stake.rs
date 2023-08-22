@@ -6,6 +6,7 @@ use {
             ProcessResult,
         },
         compute_unit_price::WithComputeUnitPrice,
+        feature::get_feature_activation_epoch,
         memo::WithMemo,
         nonce::check_nonce_account,
         spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
@@ -31,7 +32,9 @@ use {
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
-        request::DELINQUENT_VALIDATOR_SLOT_DISTANCE, response::RpcInflationReward,
+        config::RpcGetVoteAccountsConfig,
+        request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+        response::{RpcInflationReward, RpcVoteAccountStatus},
     },
     solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
@@ -40,20 +43,22 @@ use {
         clock::{Clock, UnixTimestamp, SECONDS_PER_DAY},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
+        feature_set,
         message::Message,
         pubkey::Pubkey,
         stake::{
             self,
             instruction::{self as stake_instruction, LockupArgs, StakeError},
-            state::{Authorized, Lockup, Meta, StakeActivationStatus, StakeAuthorize, StakeState},
+            state::{
+                Authorized, Lockup, Meta, StakeActivationStatus, StakeAuthorize, StakeStateV2,
+            },
             tools::{acceptable_reference_epoch_credits, eligible_for_deactivate_delinquent},
         },
-        stake_history::StakeHistory,
+        stake_history::{Epoch, StakeHistory},
         system_instruction::SystemError,
         sysvar::{clock, stake_history},
         transaction::Transaction,
     },
-    solana_vote_program::vote_state::VoteState,
     std::{ops::Deref, sync::Arc},
 };
 
@@ -1420,7 +1425,7 @@ pub fn process_create_stake_account(
         }
 
         let minimum_balance =
-            rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())?;
+            rpc_client.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
 
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
@@ -1498,8 +1503,8 @@ pub fn process_stake_authorize(
         let authority = config.signers[*authority];
         if let Some(current_stake_account) = current_stake_account {
             let authorized = match current_stake_account {
-                StakeState::Stake(Meta { authorized, .. }, ..) => Some(authorized),
-                StakeState::Initialized(Meta { authorized, .. }) => Some(authorized),
+                StakeStateV2::Stake(Meta { authorized, .. }, ..) => Some(authorized),
+                StakeStateV2::Initialized(Meta { authorized, .. }) => Some(authorized),
                 _ => None,
             };
             if let Some(authorized) = authorized {
@@ -1628,7 +1633,7 @@ pub fn process_deactivate_stake_account(
 
         let vote_account_address = match stake_account.state() {
             Ok(stake_state) => match stake_state {
-                StakeState::Stake(_, stake) => stake.delegation.voter_pubkey,
+                StakeStateV2::Stake(_, stake, _) => stake.delegation.voter_pubkey,
                 _ => {
                     return Err(CliError::BadParameter(format!(
                         "{stake_account_address} is not a delegated stake account",
@@ -1893,7 +1898,7 @@ pub fn process_split_stake(
         }
 
         let minimum_balance =
-            rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())?;
+            rpc_client.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
 
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
@@ -2114,8 +2119,8 @@ pub fn process_stake_set_lockup(
     if !sign_only {
         let state = get_stake_account_state(rpc_client, stake_account_pubkey, config.commitment)?;
         let lockup = match state {
-            StakeState::Stake(Meta { lockup, .. }, ..) => Some(lockup),
-            StakeState::Initialized(Meta { lockup, .. }) => Some(lockup),
+            StakeStateV2::Stake(Meta { lockup, .. }, ..) => Some(lockup),
+            StakeStateV2::Initialized(Meta { lockup, .. }) => Some(lockup),
             _ => None,
         };
         if let Some(lockup) = lockup {
@@ -2182,28 +2187,32 @@ fn u64_some_if_not_zero(n: u64) -> Option<u64> {
 
 pub fn build_stake_state(
     account_balance: u64,
-    stake_state: &StakeState,
+    stake_state: &StakeStateV2,
     use_lamports_unit: bool,
     stake_history: &StakeHistory,
     clock: &Clock,
+    new_rate_activation_epoch: Option<Epoch>,
 ) -> CliStakeState {
     match stake_state {
-        StakeState::Stake(
+        StakeStateV2::Stake(
             Meta {
                 rent_exempt_reserve,
                 authorized,
                 lockup,
             },
             stake,
+            _,
         ) => {
             let current_epoch = clock.epoch;
             let StakeActivationStatus {
                 effective,
                 activating,
                 deactivating,
-            } = stake
-                .delegation
-                .stake_activating_and_deactivating(current_epoch, Some(stake_history));
+            } = stake.delegation.stake_activating_and_deactivating(
+                current_epoch,
+                Some(stake_history),
+                new_rate_activation_epoch,
+            );
             let lockup = if lockup.is_in_force(clock, None) {
                 Some(lockup.into())
             } else {
@@ -2242,16 +2251,16 @@ pub fn build_stake_state(
                 ..CliStakeState::default()
             }
         }
-        StakeState::RewardsPool => CliStakeState {
+        StakeStateV2::RewardsPool => CliStakeState {
             stake_type: CliStakeType::RewardsPool,
             account_balance,
             ..CliStakeState::default()
         },
-        StakeState::Uninitialized => CliStakeState {
+        StakeStateV2::Uninitialized => CliStakeState {
             account_balance,
             ..CliStakeState::default()
         },
-        StakeState::Initialized(Meta {
+        StakeStateV2::Initialized(Meta {
             rent_exempt_reserve,
             authorized,
             lockup,
@@ -2279,7 +2288,7 @@ fn get_stake_account_state(
     rpc_client: &RpcClient,
     stake_account_pubkey: &Pubkey,
     commitment_config: CommitmentConfig,
-) -> Result<StakeState, Box<dyn std::error::Error>> {
+) -> Result<StakeStateV2, Box<dyn std::error::Error>> {
     let stake_account = rpc_client
         .get_account_with_commitment(stake_account_pubkey, commitment_config)?
         .value
@@ -2423,6 +2432,10 @@ pub fn process_show_stake_account(
             let clock: Clock = from_account(&clock_account).ok_or_else(|| {
                 CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
             })?;
+            let new_rate_activation_epoch = get_feature_activation_epoch(
+                rpc_client,
+                &feature_set::reduce_stake_warmup_cooldown::id(),
+            )?;
 
             let mut state = build_stake_state(
                 stake_account.lamports,
@@ -2430,6 +2443,7 @@ pub fn process_show_stake_account(
                 use_lamports_unit,
                 &stake_history,
                 &clock,
+                new_rate_activation_epoch,
             );
 
             if state.stake_type == CliStakeType::Stake && state.activation_epoch.is_some() {
@@ -2530,38 +2544,41 @@ pub fn process_delegate_stake(
     if !sign_only {
         // Sanity check the vote account to ensure it is attached to a validator that has recently
         // voted at the tip of the ledger
-        let vote_account_data = rpc_client
-            .get_account(vote_account_pubkey)
-            .map_err(|err| {
-                CliError::RpcRequestError(format!(
-                    "Vote account not found: {vote_account_pubkey}. error: {err}",
-                ))
-            })?
-            .data;
+        let get_vote_accounts_config = RpcGetVoteAccountsConfig {
+            vote_pubkey: Some(vote_account_pubkey.to_string()),
+            keep_unstaked_delinquents: Some(true),
+            commitment: Some(rpc_client.commitment()),
+            ..RpcGetVoteAccountsConfig::default()
+        };
+        let RpcVoteAccountStatus {
+            current,
+            delinquent,
+        } = rpc_client.get_vote_accounts_with_config(get_vote_accounts_config)?;
+        // filter should return at most one result
+        let rpc_vote_account =
+            current
+                .get(0)
+                .or_else(|| delinquent.get(0))
+                .ok_or(CliError::RpcRequestError(format!(
+                    "Vote account not found: {vote_account_pubkey}"
+                )))?;
 
-        let vote_state = VoteState::deserialize(&vote_account_data).map_err(|_| {
-            CliError::RpcRequestError(
-                "Account data could not be deserialized to vote state".to_string(),
-            )
-        })?;
-
-        let sanity_check_result = match vote_state.root_slot {
-            None => Err(CliError::BadParameter(
+        let activated_stake = rpc_vote_account.activated_stake;
+        let root_slot = rpc_vote_account.root_slot;
+        let min_root_slot = rpc_client
+            .get_slot()
+            .map(|slot| slot.saturating_sub(DELINQUENT_VALIDATOR_SLOT_DISTANCE))?;
+        let sanity_check_result = if root_slot >= min_root_slot || activated_stake == 0 {
+            Ok(())
+        } else if root_slot == 0 {
+            Err(CliError::BadParameter(
                 "Unable to delegate. Vote account has no root slot".to_string(),
-            )),
-            Some(root_slot) => {
-                let min_root_slot = rpc_client
-                    .get_slot()?
-                    .saturating_sub(DELINQUENT_VALIDATOR_SLOT_DISTANCE);
-                if root_slot < min_root_slot {
-                    Err(CliError::DynamicProgramError(format!(
-                        "Unable to delegate.  Vote account appears delinquent \
-                                 because its current root slot, {root_slot}, is less than {min_root_slot}"
-                    )))
-                } else {
-                    Ok(())
-                }
-            }
+            ))
+        } else {
+            Err(CliError::DynamicProgramError(format!(
+                "Unable to delegate.  Vote account appears delinquent \
+                 because its current root slot, {root_slot}, is less than {min_root_slot}"
+            )))
         };
 
         if let Err(err) = &sanity_check_result {

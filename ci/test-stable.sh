@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -eo pipefail
 cd "$(dirname "$0")/.."
 
 cargo="$(readlink -f "./cargo")"
@@ -35,7 +35,6 @@ case $testName in
 test-stable)
   if need_to_upload_test_result; then
     _ cargo test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
   else
     _ ci/intercept.sh cargo test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   fi
@@ -58,13 +57,26 @@ test-stable-sbf)
   # SBF solana-sdk legacy compile test
   "$cargo_build_sbf" --manifest-path sdk/Cargo.toml
 
+  # Ensure the minimum supported "rust-version" matches platform tools to fail
+  # quickly if users try to build with an older platform tools install
+  cargo_toml=sdk/program/Cargo.toml
+  source "scripts/read-cargo-variable.sh"
+  crate_rust_version=$(readCargoVariable rust-version $cargo_toml)
+  platform_tools_rust_version=$("$cargo_build_sbf" --version | grep rustc)
+  platform_tools_rust_version=$(echo "$platform_tools_rust_version" | cut -d\  -f2) # Remove "rustc " prefix from a string like "rustc 1.68.0-dev"
+  platform_tools_rust_version=$(echo "$platform_tools_rust_version" | cut -d- -f1)  # Remove "-dev" suffix from a string like "1.68.0-dev"
+
+  if [[ $crate_rust_version != "$platform_tools_rust_version" ]]; then
+    echo "Error: Update 'rust-version' field in '$cargo_toml' from $crate_rust_version to $platform_tools_rust_version"
+    exit 1
+  fi
+
   # SBF C program system tests
   _ make -C programs/sbf/c tests
   if need_to_upload_test_result; then
     _ cargo test \
       --manifest-path programs/sbf/Cargo.toml \
       --no-default-features --features=sbf_c,sbf_rust -- -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
   else
     _ cargo test \
       --manifest-path programs/sbf/Cargo.toml \
@@ -91,7 +103,7 @@ test-stable-sbf)
   # latest mainbeta release version.
   solana_program_count=$(grep -c 'solana-program v' cargo.log)
   rm -f cargo.log
-  if ((solana_program_count > 14)); then
+  if ((solana_program_count > 18)); then
       echo "Regression of build redundancy ${solana_program_count}."
       echo "Review dependency features that trigger redundant rebuilds of solana-program."
       exit 1
@@ -140,7 +152,6 @@ test-stable-perf)
   _ cargo build --bins ${V:+--verbose}
   if need_to_upload_test_result; then
     _ cargo test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
   else
     _ cargo test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
   fi
@@ -150,7 +161,6 @@ test-local-cluster)
   _ cargo build --release --bins ${V:+--verbose}
   if need_to_upload_test_result; then
     _ cargo test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
   else
     _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --nocapture --test-threads=1
   fi
@@ -160,7 +170,6 @@ test-local-cluster-flakey)
   _ cargo build --release --bins ${V:+--verbose}
   if need_to_upload_test_result; then
     _ cargo test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
   else
     _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --nocapture --test-threads=1
   fi
@@ -170,7 +179,6 @@ test-local-cluster-slow-1)
   _ cargo build --release --bins ${V:+--verbose}
   if need_to_upload_test_result; then
     _ cargo test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
   else
     _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --nocapture --test-threads=1
   fi
@@ -180,7 +188,6 @@ test-local-cluster-slow-2)
   _ cargo build --release --bins ${V:+--verbose}
   if need_to_upload_test_result; then
     _ cargo test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
   else
     _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --nocapture --test-threads=1
   fi
@@ -202,11 +209,10 @@ test-wasm)
 test-docs)
   if need_to_upload_test_result; then
     _ cargo test --jobs "$JOBS" --all --doc --exclude solana-local-cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
-    exit "${PIPESTATUS[0]}"
   else
     _ cargo test --jobs "$JOBS" --all --doc --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
-    exit 0
   fi
+  exit 0
   ;;
 *)
   echo "Error: Unknown test: $testName"

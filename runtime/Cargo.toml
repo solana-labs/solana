@@ -11,6 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 arrayref = { workspace = true }
+base64 = { workspace = true }
 bincode = { workspace = true }
 blake3 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
@@ -22,6 +23,7 @@ dashmap = { workspace = true, features = ["rayon", "raw-api"] }
 dir-diff = { workspace = true }
 flate2 = { workspace = true }
 fnv = { workspace = true }
+fs-err = { workspace = true }
 im = { workspace = true, features = ["rayon", "serde"] }
 index_list = { workspace = true }
 itertools = { workspace = true }
@@ -43,12 +45,15 @@ rayon = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
+serde_json = { workspace = true }
 siphasher = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-address-lookup-table-program = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-bucket-map = { workspace = true }
 solana-compute-budget-program = { workspace = true }
 solana-config-program = { workspace = true }
+solana-cost-model = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
 solana-loader-v4-program = { workspace = true }
@@ -60,6 +65,7 @@ solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-system-program = { workspace = true }
+solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 solana-zk-token-proof-program = { workspace = true }
 solana-zk-token-sdk = { workspace = true }
@@ -82,7 +88,11 @@ ed25519-dalek = { workspace = true }
 libsecp256k1 = { workspace = true }
 memoffset = { workspace = true }
 rand_chacha = { workspace = true }
+solana-accounts-db = { workspace = true, features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }
+# See order-crates-for-publishing.py for using this unusual `path = "."`
+solana-runtime = { path = ".", features = ["dev-context-only-utils"] }
+solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
 test-case = { workspace = true }
 
@@ -91,6 +101,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
 rustc_version = { workspace = true }
+
+[features]
+dev-context-only-utils = []
 
 [[bench]]
 name = "prioritization_fee_cache"
