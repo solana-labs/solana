@@ -61,7 +61,7 @@ const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
 const MINIMUM_TICKS_PER_SLOT: u64 = 2;
 
 pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
-    return App::new(crate_name!()).about(crate_description!())
+    let app = App::new(crate_name!()).about(crate_description!())
         .version(version)
         .setting(AppSettings::VersionlessSubcommands)
         .setting(AppSettings::InferSubcommands)
@@ -1626,8 +1626,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 )
                 .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")
-        ).
-        subcommand(
+        )
+        .subcommand(
             SubCommand::with_name("set-public-address")
                 .about("Specify addresses to advertise in gossip")
                 .arg(
@@ -1654,6 +1654,22 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 )
                 .after_help("Note: At least one arg must be used. Using multiple is ok"),
         );
+    #[cfg(feature = "dev_extensions")]
+    let app = app.subcommand(
+        SubCommand::with_name("set-ancestor-hashes")
+            .about("Configure validator ancestor hashes parameters")
+            .arg(
+                Arg::with_name("sample_size")
+                    .long("sample-size")
+                    .value_name("NUMBER")
+                    .takes_value(true)
+                    .help("Set the validator ancestor hashes sample size"),
+            )
+            .after_help(
+                "Note: the new value only applies to the currently running validator instance",
+            ),
+    );
+    app
 }
 
 /// Deprecated argument description should be moved into the [`deprecated_arguments()`] function,

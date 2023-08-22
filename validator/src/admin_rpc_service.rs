@@ -243,6 +243,59 @@ pub trait AdminRpc {
     ) -> Result<()>;
 }
 
+#[cfg(feature = "dev_extensions")]
+pub mod dev_extensions {
+    use {
+        super::*,
+        solana_core::repair::duplicate_repair_status::set_ancestor_hash_repair_sample_size_for_tests_only,
+    };
+
+    #[rpc]
+    pub trait DevExtensionsRpc {
+        type Metadata;
+
+        #[rpc(meta, name = "setAncestorHashesSampleSize")]
+        fn set_ancestor_hashes_sample_size(
+            &self,
+            meta: Self::Metadata,
+            sample_size: u32,
+        ) -> Result<()>;
+    }
+
+    pub struct DevExtensionsRpcImpl;
+    impl DevExtensionsRpc for DevExtensionsRpcImpl {
+        type Metadata = AdminRpcRequestMetadata;
+
+        fn set_ancestor_hashes_sample_size(
+            &self,
+            _meta: Self::Metadata,
+            sample_size: u32,
+        ) -> Result<()> {
+            debug!("set_ancestor_hashes_sample_size request received");
+            let sample_size = usize::try_from(sample_size).map_err(|e| {
+                jsonrpc_core::error::Error::invalid_params(format!(
+                    "Failed to parse sample size: {e}"
+                ))
+            })?;
+            set_ancestor_hash_repair_sample_size_for_tests_only(sample_size);
+            Ok(())
+        }
+    }
+
+    // Connect to the Admin RPC interface
+    pub async fn connect(ledger_path: &Path) -> std::result::Result<gen_client::Client, RpcError> {
+        let admin_rpc_path = admin_rpc_path(ledger_path);
+        if !admin_rpc_path.exists() {
+            Err(RpcError::Client(format!(
+                "{} does not exist",
+                admin_rpc_path.display()
+            )))
+        } else {
+            ipc::connect::<_, gen_client::Client>(&format!("{}", admin_rpc_path.display())).await
+        }
+    }
+}
+
 pub struct AdminRpcImpl;
 impl AdminRpc for AdminRpcImpl {
     type Metadata = AdminRpcRequestMetadata;
@@ -760,6 +813,12 @@ pub fn run(ledger_path: &Path, metadata: AdminRpcRequestMetadata) {
         .spawn(move || {
             let mut io = MetaIoHandler::default();
             io.extend_with(AdminRpcImpl.to_delegate());
+
+            #[cfg(feature = "dev_extensions")]
+            {
+                use dev_extensions::DevExtensionsRpc;
+                io.extend_with(dev_extensions::DevExtensionsRpcImpl.to_delegate());
+            }
 
             let validator_exit = metadata.validator_exit.clone();
             let server = ServerBuilder::with_meta_extractor(io, move |_req: &RequestContext| {

@@ -877,6 +877,24 @@ pub fn main() {
             );
             return;
         }
+        #[cfg(feature = "dev_extensions")]
+        ("set-ancestor-hashes", Some(subcommand_matches)) => {
+            let sample_size: u32 =
+                value_t_or_exit!(subcommand_matches, "sample_size", std::num::NonZeroU32).into();
+            let admin_client = admin_rpc_service::dev_extensions::connect(&ledger_path);
+            admin_rpc_service::runtime()
+                .block_on(async move {
+                    admin_client
+                        .await?
+                        .set_ancestor_hashes_sample_size(sample_size)
+                        .await
+                })
+                .unwrap_or_else(|err| {
+                    println!("set ancestor hashes sample size failed: {err}");
+                    exit(1);
+                });
+            return;
+        }
         _ => unreachable!(),
     };
 

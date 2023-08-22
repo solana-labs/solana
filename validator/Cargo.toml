@@ -78,3 +78,6 @@ signal-hook = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+
+[features]
+dev_extensions = []
