@@ -660,8 +660,7 @@ impl Consumer {
             .zip(batch.sanitized_transactions())
         {
             if let Err(TransactionError::InsufficientFundsForFee) = result {
-                self.invalid_fee_payer_filter
-                    .add(tx.message().account_keys()[0]);
+                self.invalid_fee_payer_filter.add(*tx.message().fee_payer());
             }
         }
 
