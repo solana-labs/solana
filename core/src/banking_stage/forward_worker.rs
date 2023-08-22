@@ -158,6 +158,7 @@ mod tests {
             cluster_info,
             Arc::new(ConnectionCache::new("test")),
             Arc::default(),
+            Arc::default(),
         );
 
         let (forward_sender, forward_receiver) = unbounded();

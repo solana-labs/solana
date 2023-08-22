@@ -6,6 +6,7 @@ use {
         ForwardOption,
     },
     crate::{
+        invalid_fee_payer_filter::InvalidFeePayerFilter,
         next_leader::{next_leader, next_leader_tpu_vote},
         tracer_packet_stats::TracerPacketStats,
     },
@@ -31,6 +32,7 @@ pub(crate) struct Forwarder {
     cluster_info: Arc<ClusterInfo>,
     connection_cache: Arc<ConnectionCache>,
     data_budget: Arc<DataBudget>,
+    invalid_fee_payer_filter: Arc<InvalidFeePayerFilter>,
 }
 
 impl Forwarder {
@@ -40,6 +42,7 @@ impl Forwarder {
         cluster_info: Arc<ClusterInfo>,
         connection_cache: Arc<ConnectionCache>,
         data_budget: Arc<DataBudget>,
+        invalid_fee_payer_filter: Arc<InvalidFeePayerFilter>,
     ) -> Self {
         Self {
             poh_recorder,
@@ -48,6 +51,7 @@ impl Forwarder {
             cluster_info,
             connection_cache,
             data_budget,
+            invalid_fee_payer_filter,
         }
     }
 
@@ -72,6 +76,7 @@ impl Forwarder {
         // already processed), then add to forwarding buffer.
         let filter_forwarding_result = unprocessed_transaction_storage
             .filter_forwardable_packets_and_add_batches(
+                &self.invalid_fee_payer_filter,
                 current_bank,
                 &mut forward_packet_batches_by_accounts,
             );
@@ -374,6 +379,7 @@ mod tests {
                 cluster_info.clone(),
                 Arc::new(ConnectionCache::new("connection_cache_test")),
                 Arc::new(data_budget),
+                Arc::default(),
             );
             let unprocessed_packet_batches: UnprocessedPacketBatches =
                 UnprocessedPacketBatches::from_iter(
@@ -458,6 +464,7 @@ mod tests {
             cluster_info,
             Arc::new(connection_cache),
             Arc::new(DataBudget::default()),
+            Arc::default(),
         );
         for (name, hold, expected_ids, expected_num_unprocessed) in test_cases {
             let stats = BankingStageStats::default();

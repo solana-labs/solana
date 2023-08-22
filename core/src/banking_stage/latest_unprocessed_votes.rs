@@ -3,6 +3,7 @@ use {
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     },
+    crate::invalid_fee_payer_filter::InvalidFeePayerFilter,
     itertools::Itertools,
     rand::{thread_rng, Rng},
     solana_perf::packet::Packet,
@@ -259,6 +260,7 @@ impl LatestUnprocessedVotes {
     /// Votes from validators with 0 stakes are ignored
     pub fn get_and_insert_forwardable_packets(
         &self,
+        invalid_fee_payer_filter: &InvalidFeePayerFilter,
         bank: Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> usize {
@@ -285,6 +287,12 @@ impl LatestUnprocessedVotes {
                                 bank.as_ref(),
                             )
                         {
+                            if invalid_fee_payer_filter
+                                .should_reject(sanitized_vote_transaction.message().fee_payer())
+                            {
+                                return false;
+                            }
+
                             if forward_packet_batches_by_accounts.try_add_packet(
                                 &sanitized_vote_transaction,
                                 deserialized_vote_packet,
@@ -752,8 +760,11 @@ mod tests {
         latest_unprocessed_votes.update_latest_vote(vote_b);
 
         // Don't forward 0 stake accounts
-        let forwarded = latest_unprocessed_votes
-            .get_and_insert_forwardable_packets(bank, &mut forward_packet_batches_by_accounts);
+        let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
+            &InvalidFeePayerFilter::default(),
+            bank,
+            &mut forward_packet_batches_by_accounts,
+        );
         assert_eq!(0, forwarded);
         assert_eq!(
             0,
@@ -775,6 +786,7 @@ mod tests {
 
         // Don't forward votes from gossip
         let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
+            &InvalidFeePayerFilter::default(),
             Arc::new(bank),
             &mut forward_packet_batches_by_accounts,
         );
@@ -800,6 +812,7 @@ mod tests {
 
         // Forward from TPU
         let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
+            &InvalidFeePayerFilter::default(),
             bank.clone(),
             &mut forward_packet_batches_by_accounts,
         );
@@ -816,8 +829,11 @@ mod tests {
         // Don't forward again
         let mut forward_packet_batches_by_accounts =
             ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
-        let forwarded = latest_unprocessed_votes
-            .get_and_insert_forwardable_packets(bank, &mut forward_packet_batches_by_accounts);
+        let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
+            &InvalidFeePayerFilter::default(),
+            bank,
+            &mut forward_packet_batches_by_accounts,
+        );
 
         assert_eq!(0, forwarded);
         assert_eq!(

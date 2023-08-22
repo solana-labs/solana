@@ -447,6 +447,7 @@ impl BankingStage {
                     cluster_info.clone(),
                     connection_cache.clone(),
                     data_budget.clone(),
+                    invalid_fee_payer_filter.clone(),
                 );
                 let consumer = Consumer::new(
                     invalid_fee_payer_filter,

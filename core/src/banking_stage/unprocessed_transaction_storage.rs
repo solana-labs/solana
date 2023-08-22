@@ -20,8 +20,11 @@ use {
     solana_measure::measure,
     solana_runtime::bank::Bank,
     solana_sdk::{
-        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, feature_set::FeatureSet, hash::Hash,
-        saturating_add_assign, transaction::SanitizedTransaction,
+        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET,
+        feature_set::FeatureSet,
+        hash::Hash,
+        saturating_add_assign,
+        transaction::{SanitizedTransaction, TransactionError},
     },
     std::{
         collections::HashMap,
@@ -328,17 +331,20 @@ impl UnprocessedTransactionStorage {
 
     pub fn filter_forwardable_packets_and_add_batches(
         &mut self,
+        invalid_fee_payer_filter: &InvalidFeePayerFilter,
         bank: Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
         match self {
             Self::LocalTransactionStorage(transaction_storage) => transaction_storage
                 .filter_forwardable_packets_and_add_batches(
+                    invalid_fee_payer_filter,
                     bank,
                     forward_packet_batches_by_accounts,
                 ),
             Self::VoteStorage(vote_storage) => vote_storage
                 .filter_forwardable_packets_and_add_batches(
+                    invalid_fee_payer_filter,
                     bank,
                     forward_packet_batches_by_accounts,
                 ),
@@ -427,13 +433,18 @@ impl VoteStorage {
 
     fn filter_forwardable_packets_and_add_batches(
         &mut self,
+        invalid_fee_payer_filter: &InvalidFeePayerFilter,
         bank: Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
         if matches!(self.vote_source, VoteSource::Tpu) {
             let total_forwardable_packets = self
                 .latest_unprocessed_votes
-                .get_and_insert_forwardable_packets(bank, forward_packet_batches_by_accounts);
+                .get_and_insert_forwardable_packets(
+                    invalid_fee_payer_filter,
+                    bank,
+                    forward_packet_batches_by_accounts,
+                );
             return FilterForwardingResults {
                 total_forwardable_packets,
                 ..FilterForwardingResults::default()
@@ -568,6 +579,7 @@ impl ThreadLocalUnprocessedPackets {
     /// Added valid and sanitized packets to forwarding queue.
     fn filter_forwardable_packets_and_add_batches(
         &mut self,
+        invalid_fee_payer_filter: &InvalidFeePayerFilter,
         bank: Arc<Bank>,
         forward_buffer: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
@@ -624,6 +636,7 @@ impl ThreadLocalUnprocessedPackets {
                             let (forwardable_transaction_indexes, filter_packets_time) = measure!(
                                 Self::filter_invalid_transactions(
                                     &sanitized_transactions,
+                                    invalid_fee_payer_filter,
                                     &bank,
                                     &mut total_dropped_packets
                                 ),
@@ -756,10 +769,20 @@ impl ThreadLocalUnprocessedPackets {
     /// Checks sanitized transactions against bank, returns valid transaction indexes
     fn filter_invalid_transactions(
         transactions: &[SanitizedTransaction],
+        invalid_fee_payer_filter: &InvalidFeePayerFilter,
         bank: &Bank,
         total_dropped_packets: &mut usize,
     ) -> Vec<usize> {
-        let filter = vec![Ok(()); transactions.len()];
+        let filter = transactions
+            .iter()
+            .map(|tx| {
+                if invalid_fee_payer_filter.should_reject(&tx.message().account_keys()[0]) {
+                    Err(TransactionError::InsufficientFundsForFee)
+                } else {
+                    Ok(())
+                }
+            })
+            .collect::<Vec<_>>();
         let results = bank.check_transactions_with_forwarding_delay(
             transactions,
             &filter,
@@ -1087,6 +1110,7 @@ mod tests {
                 total_forwardable_tracer_packets,
                 ..
             } = transaction_storage.filter_forwardable_packets_and_add_batches(
+                &InvalidFeePayerFilter::default(),
                 current_bank.clone(),
                 &mut forward_packet_batches_by_accounts,
             );
@@ -1125,6 +1149,7 @@ mod tests {
                 total_forwardable_tracer_packets,
                 ..
             } = transaction_storage.filter_forwardable_packets_and_add_batches(
+                &InvalidFeePayerFilter::default(),
                 current_bank.clone(),
                 &mut forward_packet_batches_by_accounts,
             );
@@ -1159,6 +1184,7 @@ mod tests {
                 total_forwardable_tracer_packets,
                 ..
             } = transaction_storage.filter_forwardable_packets_and_add_batches(
+                &InvalidFeePayerFilter::default(),
                 current_bank,
                 &mut forward_packet_batches_by_accounts,
             );
