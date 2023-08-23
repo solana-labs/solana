@@ -35,9 +35,9 @@ use {
     solana_vote_program::{
         vote_instruction,
         vote_state::{
-            process_slot_vote_unchecked, process_vote_unchecked, process_vote_unfiltered,
-            BlockTimestamp, LandedVote, Lockout, Vote, VoteState, VoteState1_14_11,
-            VoteStateUpdate, VoteStateVersions, VoteTransaction, MAX_LOCKOUT_HISTORY,
+            process_slot_vote_unchecked, process_vote_unchecked, BlockTimestamp, LandedVote,
+            Lockout, Vote, VoteState, VoteState1_14_11, VoteStateUpdate, VoteStateVersions,
+            VoteTransaction, MAX_LOCKOUT_HISTORY,
         },
     },
     std::{
@@ -521,7 +521,7 @@ impl Tower {
         last_voted_slot_in_bank: Option<Slot>,
     ) -> VoteTransaction {
         let vote = Vote::new(vec![slot], hash);
-        process_vote_unchecked(local_vote_state, vote);
+        let _ignored = process_vote_unchecked(local_vote_state, vote);
         let slots = if let Some(last_voted_slot) = last_voted_slot_in_bank {
             local_vote_state
                 .votes
@@ -583,16 +583,9 @@ impl Tower {
 
         if is_direct_vote_state_update_enabled {
             let vote = Vote::new(vec![vote_slot], vote_hash);
-            let epoch = self.vote_state.current_epoch();
-            let result = process_vote_unfiltered(
-                &mut self.vote_state,
-                &vote.slots,
-                &vote,
-                &[(vote_slot, vote_hash)],
-                epoch,
-            );
+            let result = process_vote_unchecked(&mut self.vote_state, vote);
             if result.is_err() {
-                warn!(
+                error!(
                     "Error while recording vote {} {} in local tower {:?}",
                     vote_slot, vote_hash, result
                 );
@@ -2564,7 +2557,7 @@ pub mod test {
             hash: Hash::default(),
             timestamp: None,
         };
-        vote_state::process_vote_unchecked(&mut local, vote);
+        let _ = vote_state::process_vote_unchecked(&mut local, vote);
         assert_eq!(local.votes.len(), 1);
         let vote =
             Tower::apply_vote_and_generate_vote_diff(&mut local, 1, Hash::default(), Some(0));
@@ -2580,7 +2573,7 @@ pub mod test {
             hash: Hash::default(),
             timestamp: None,
         };
-        vote_state::process_vote_unchecked(&mut local, vote);
+        let _ = vote_state::process_vote_unchecked(&mut local, vote);
         assert_eq!(local.votes.len(), 1);
 
         // First vote expired, so should be evicted from tower. Thus even with
