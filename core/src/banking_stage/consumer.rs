@@ -659,9 +659,35 @@ impl Consumer {
             .iter()
             .zip(batch.sanitized_transactions())
         {
-            // This fee-payer submitted an unexecutable, non-fee paying transaction. Reject them.
-            if result.is_err() {
-                self.invalid_fee_payer_filter.add(*tx.message().fee_payer());
+            // If this fee-payer submitted an unexecutable, non-fee paying transaction. Reject them.
+            if let Err(err) = result {
+                match err {
+                    TransactionError::AccountLoadedTwice
+                    | TransactionError::AccountNotFound
+                    | TransactionError::ProgramAccountNotFound
+                    | TransactionError::InsufficientFundsForFee
+                    | TransactionError::InvalidAccountForFee
+                    | TransactionError::MissingSignatureForFee
+                    | TransactionError::InvalidAccountIndex
+                    | TransactionError::SignatureFailure
+                    | TransactionError::InvalidProgramForExecution
+                    | TransactionError::SanitizeFailure
+                    | TransactionError::UnsupportedVersion
+                    | TransactionError::InvalidWritableAccount
+                    | TransactionError::TooManyAccountLocks
+                    | TransactionError::AddressLookupTableNotFound
+                    | TransactionError::InvalidAddressLookupTableOwner
+                    | TransactionError::InvalidAddressLookupTableData
+                    | TransactionError::InvalidAddressLookupTableIndex
+                    | TransactionError::InvalidRentPayingAccount
+                    | TransactionError::DuplicateInstruction(_)
+                    | TransactionError::InsufficientFundsForRent { .. }
+                    | TransactionError::MaxLoadedAccountsDataSizeExceeded
+                    | TransactionError::InvalidLoadedAccountsDataSizeLimit => {
+                        self.invalid_fee_payer_filter.add(*tx.message().fee_payer());
+                    }
+                    _ => {}
+                }
             }
         }
 
