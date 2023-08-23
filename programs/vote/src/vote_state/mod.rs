@@ -1083,10 +1083,36 @@ impl VoteState {
         }
     }
 
+<<<<<<< HEAD
     pub fn process_slot_vote_unchecked(&mut self, slot: Slot) {
         self.process_vote_unchecked(Vote::new(vec![slot], Hash::default()));
+=======
+pub fn process_vote_unfiltered(
+    vote_state: &mut VoteState,
+    vote_slots: &[Slot],
+    vote: &Vote,
+    slot_hashes: &[SlotHash],
+    epoch: Epoch,
+) -> Result<(), VoteError> {
+    check_slots_are_valid(vote_state, vote_slots, &vote.hash, slot_hashes)?;
+    vote_slots
+        .iter()
+        .for_each(|s| vote_state.process_next_vote_slot(*s, epoch));
+    Ok(())
+}
+
+pub fn process_vote(
+    vote_state: &mut VoteState,
+    vote: &Vote,
+    slot_hashes: &[SlotHash],
+    epoch: Epoch,
+) -> Result<(), VoteError> {
+    if vote.slots.is_empty() {
+        return Err(VoteError::EmptySlots);
+>>>>>>> 329c6f131b (tower: when syncing from vote state, update last_vote (#32944))
     }
 
+<<<<<<< HEAD
     pub fn nth_recent_vote(&self, position: usize) -> Option<&Lockout> {
         if position < self.votes.len() {
             let pos = self.votes.len() - 1 - position;
@@ -1095,6 +1121,22 @@ impl VoteState {
             None
         }
     }
+=======
+/// "unchecked" functions used by tests and Tower
+pub fn process_vote_unchecked(vote_state: &mut VoteState, vote: Vote) -> Result<(), VoteError> {
+    if vote.slots.is_empty() {
+        return Err(VoteError::EmptySlots);
+    }
+    let slot_hashes: Vec<_> = vote.slots.iter().rev().map(|x| (*x, vote.hash)).collect();
+    process_vote_unfiltered(
+        vote_state,
+        &vote.slots,
+        &vote,
+        &slot_hashes,
+        vote_state.current_epoch(),
+    )
+}
+>>>>>>> 329c6f131b (tower: when syncing from vote state, update last_vote (#32944))
 
     pub fn last_lockout(&self) -> Option<&Lockout> {
         self.votes.back()
@@ -1257,6 +1299,7 @@ impl VoteState {
     }
 }
 
+<<<<<<< HEAD
 pub mod serde_compact_vote_state_update {
     use {
         super::*,
@@ -1351,6 +1394,10 @@ pub mod serde_compact_vote_state_update {
             timestamp,
         })
     }
+=======
+pub fn process_slot_vote_unchecked(vote_state: &mut VoteState, slot: Slot) {
+    let _ = process_vote_unchecked(vote_state, Vote::new(vec![slot], Hash::default()));
+>>>>>>> 329c6f131b (tower: when syncing from vote state, update last_vote (#32944))
 }
 
 /// Authorize the given pubkey to withdraw or sign votes. This may be called multiple times,
@@ -2180,11 +2227,23 @@ mod tests {
             // Duplicate vote_state so that the new vote can be applied
             let mut vote_state_after_vote = vote_state.clone();
 
+<<<<<<< HEAD
             vote_state_after_vote.process_vote_unchecked(Vote {
                 slots: vote_group.clone(),
                 hash: Hash::new_unique(),
                 timestamp: None,
             });
+=======
+            process_vote_unchecked(
+                &mut vote_state_after_vote,
+                Vote {
+                    slots: vote_group.clone(),
+                    hash: Hash::new_unique(),
+                    timestamp: None,
+                },
+            )
+            .unwrap();
+>>>>>>> 329c6f131b (tower: when syncing from vote state, update last_vote (#32944))
 
             // Now use the resulting new vote state to perform a vote state update on vote_state
             assert_eq!(
