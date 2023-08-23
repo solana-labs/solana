@@ -16,7 +16,12 @@ use {
     },
     log::*,
     serde_json,
-    std::collections::BTreeMap,
+    std::{
+        collections::BTreeMap,
+        thread,
+        time::Duration,
+    }
+
 };
 
 const BOOTSTRAP_VALIDATOR_REPLICAS: i32 = 1;
@@ -121,6 +126,10 @@ async fn main() {
         Ok(_) => info!("bootstrap validator service deployed successfully"),
         Err(err) => error!("Error! Failed to deploy bootstrap validator service. err: {:?}", err)
     }
+
+    thread::sleep(Duration::from_secs(10));
+
+
 
     //Validator deployment and service creation/deployment
     let mut validator_selector = BTreeMap::new(); // Create a JSON map for label selector
