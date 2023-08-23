@@ -763,9 +763,6 @@ pub fn process_vote(
 
 /// "unchecked" functions used by tests and Tower
 pub fn process_vote_unchecked(vote_state: &mut VoteState, vote: Vote) -> Result<(), VoteError> {
-    if vote.slots.is_empty() {
-        return Err(VoteError::EmptySlots);
-    }
     let slot_hashes: Vec<_> = vote.slots.iter().rev().map(|x| (*x, vote.hash)).collect();
     process_vote(
         vote_state,
