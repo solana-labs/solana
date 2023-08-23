@@ -687,6 +687,10 @@ pub mod enable_poseidon_syscall {
     solana_sdk::declare_id!("FL9RsQA6TVUoh5xJQ9d936RHSebA1NLQqe3Zv9sXZRpr");
 }
 
+pub mod timely_vote_credits {
+    solana_sdk::declare_id!("2oXpeh141pPZCTCFHBsvCwG2BtaHZZAtrVhwaxSy6brS");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -851,6 +855,7 @@ lazy_static! {
         (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
         (revise_turbine_epoch_stakes::id(), "revise turbine epoch stakes"),
         (enable_poseidon_syscall::id(), "Enable Poseidon syscall"),
+        (timely_vote_credits::id(), "use timeliness of votes in determining credits to award"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
