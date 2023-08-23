@@ -766,10 +766,10 @@ impl<'a> AccountsHasher<'a> {
         })
     }
 
-    fn calculate_bin_map(
-        sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
+    fn calculate_bin_map<'b>(
+        sorted_data_by_pubkey: &'b [&[CalculateHashIntermediate]],
         max_bin: usize,
-    ) -> Vec<std::collections::HashMap<usize, (usize, Pubkey)>> {
+    ) -> Vec<std::collections::HashMap<usize, (usize, &'b Pubkey)>> {
         if max_bin == 0 {
             return vec![];
         }
@@ -796,7 +796,7 @@ impl<'a> AccountsHasher<'a> {
                             continue;
                         }
                     }
-                    out.entry(bin).or_insert((i, *pk));
+                    out.entry(bin).or_insert((i, pk));
                     last_bin = Some(bin)
                 }
                 out
@@ -1025,7 +1025,7 @@ impl<'a> AccountsHasher<'a> {
         sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
         pubkey_bin: usize,
         bins: usize,
-        bin_map: &Vec<std::collections::HashMap<usize, (usize, Pubkey)>>,
+        bin_map: &Vec<std::collections::HashMap<usize, (usize, &Pubkey)>>,
     ) -> (AccountHashesFile, u64) {
         let binner = PubkeyBinCalculator24::new(bins);
 
@@ -1042,7 +1042,7 @@ impl<'a> AccountsHasher<'a> {
 
         for (i, map) in bin_map.iter().enumerate() {
             if let Some((index, pubkey)) = map.get(&pubkey_bin) {
-                first_items.push(pubkey.to_owned());
+                first_items.push(*pubkey.to_owned());
                 first_item_to_pubkey_division.push(i);
                 indexes.push(index.to_owned());
             }
@@ -1394,7 +1394,7 @@ pub mod tests {
                         let expected_index = if bin == 0 { 0 } else { cumsum[bin - 1] };
                         let (index, key) = map.get(&bin).unwrap();
                         assert_eq!(*index, expected_index);
-                        assert_eq!(*key, expected_key);
+                        assert_eq!(**key, expected_key);
                     }
                 }
             }
