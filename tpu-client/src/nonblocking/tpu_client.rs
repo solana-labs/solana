@@ -50,33 +50,6 @@ use {
     solana_sdk::{message::Message, signers::Signers, transaction::TransactionError},
 };
 
-<<<<<<< HEAD
-#[cfg(feature = "spinner")]
-fn set_message_for_confirmed_transactions(
-    progress_bar: &ProgressBar,
-    confirmed_transactions: u32,
-    total_transactions: usize,
-    block_height: Option<u64>,
-    last_valid_block_height: u64,
-    status: &str,
-) {
-    progress_bar.set_message(format!(
-        "{:>5.1}% | {:<40}{}",
-        confirmed_transactions as f64 * 100. / total_transactions as f64,
-        status,
-        match block_height {
-            Some(block_height) => format!(
-                " [block height {}; re-sign in {} blocks]",
-                block_height,
-                last_valid_block_height.saturating_sub(block_height),
-            ),
-            None => String::new(),
-        },
-    ));
-}
-
-=======
->>>>>>> e1972f07fa (rpc-client: Encapsulate `set_message_for_confirmed_transactions` (#32941))
 #[derive(Error, Debug)]
 pub enum TpuSenderError {
     #[error("Pubsub error: {0:?}")]
