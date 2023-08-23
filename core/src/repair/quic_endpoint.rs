@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use {
     bincode::Options,
     crossbeam_channel::Sender,
