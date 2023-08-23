@@ -16,13 +16,16 @@ clap = { workspace = true }
 crossbeam-channel = { workspace = true }
 flate2 = { workspace = true }
 indexmap = { workspace = true, features = ["rayon"] }
+indicatif = { workspace = true }
 itertools = { workspace = true }
 k8s-openapi = { workspace = true }
 kube = { workspace = true }
+lazy_static = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
 matches = { workspace = true }
 num-traits = { workspace = true }
+reqwest = { workspace = true, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
