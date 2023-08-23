@@ -115,10 +115,16 @@ async fn main() {
         BOOTSTRAP_VALIDATOR_REPLICAS,
         &bootstrap_validator_selector,
     );
-    match deploy_deployment(client.clone(), namespace, &bootstrap_validator_deployment).await {
-        Ok(_) => info!("bootstrap validator deployment deployed successfully"),
-        Err(err) => error!("Error! Failed to deploy bootstrap validator deployment. err: {:?}", err)
-    }
+    let dep_name = match deploy_deployment(client.clone(), namespace, &bootstrap_validator_deployment).await {
+        Ok(dep) => {
+            info!("bootstrap validator deployment deployed successfully");
+            dep.metadata.name.unwrap()
+        }
+        Err(err) => {
+            error!("Error! Failed to deploy bootstrap validator deployment. err: {:?}", err);
+            err.to_string() //TODO: fix this, should handle this error better. shoudn't just return a string. should exit or something better
+        }
+    };
 
     let bootstrap_validator_service =
         create_bootstrap_validator_service(namespace, &bootstrap_validator_selector);
@@ -127,7 +133,12 @@ async fn main() {
         Err(err) => error!("Error! Failed to deploy bootstrap validator service. err: {:?}", err)
     }
 
-    thread::sleep(Duration::from_secs(10));
+    //TODO: handle this return val properly, don't just unwrap
+    while !check_deployment_ready(client.clone(), namespace, dep_name.as_str()).await.unwrap() {
+        info!("deployment: {} not ready...", dep_name);
+        thread::sleep(Duration::from_secs(1));
+    }
+    info!("deployment: {} Ready!", dep_name);
 
 
 
@@ -159,6 +170,20 @@ async fn main() {
     let _ = check_service_matching_deployment(client.clone(), "bootstrap-validator", namespace).await;
     let _ = check_service_matching_deployment(client, "validator", namespace).await;
 
+}
+
+async fn check_deployment_ready(
+    client: Client,
+    namespace: &str,
+    deployment_name: &str,
+) -> Result<bool, kube::Error> {
+    let deployments: Api<Deployment> = Api::namespaced(client.clone(), namespace);
+    let deployment = deployments.get(deployment_name).await?;
+
+    let desired_replicas = deployment.spec.as_ref().unwrap().replicas.unwrap_or(1);
+    let available_replicas = deployment.status.as_ref().unwrap().available_replicas.unwrap_or(0);
+
+    Ok(available_replicas >= desired_replicas)
 }
 
 async fn deploy_deployment(
