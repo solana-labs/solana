@@ -3,7 +3,10 @@ use {
     crate::{declare_syscall, serialization::account_data_region_memory_state},
     scopeguard::defer,
     solana_program_runtime::invoke_context::SerializedAccountMetadata,
-    solana_rbpf::memory_region::{MemoryRegion, MemoryState},
+    solana_rbpf::{
+        ebpf,
+        memory_region::{MemoryRegion, MemoryState},
+    },
     solana_sdk::{
         feature_set::enable_bpf_loader_set_authority_checked_ix,
         stable_layout::stable_instruction::StableInstruction,
@@ -176,9 +179,16 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
             )?;
 
             let ref_to_len_in_vm = if direct_mapping {
+                let vm_addr = (account_info.data.as_ptr() as *const u64 as u64)
+                    .saturating_add(size_of::<u64>() as u64);
+                // In the same vein as the other check_account_info_pointer() checks, we don't lock
+                // this pointer to a specific address but we don't want it to be inside accounts, or
+                // callees might be able to write to the pointed memory.
+                if vm_addr >= ebpf::MM_INPUT_START {
+                    return Err(SyscallError::InvalidPointer.into());
+                }
                 VmValue::VmAddress {
-                    vm_addr: (account_info.data.as_ptr() as *const u64 as u64)
-                        .saturating_add(size_of::<u64>() as u64),
+                    vm_addr,
                     memory_mapping,
                     check_aligned: invoke_context.get_check_aligned(),
                 }
@@ -337,6 +347,12 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
             .saturating_sub(account_info as *const _ as *const u64 as u64);
 
         let ref_to_len_in_vm = if direct_mapping {
+            // In the same vein as the other check_account_info_pointer() checks, we don't lock this
+            // pointer to a specific address but we don't want it to be inside accounts, or callees
+            // might be able to write to the pointed memory.
+            if data_len_vm_addr >= ebpf::MM_INPUT_START {
+                return Err(SyscallError::InvalidPointer.into());
+            }
             VmValue::VmAddress {
                 vm_addr: data_len_vm_addr,
                 memory_mapping,
