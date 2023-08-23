@@ -3,7 +3,7 @@ use {
         consensus::{heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, tree_diff::TreeDiff},
         repair::{
             repair_generic_traversal::{get_closest_completion, get_unknown_last_index},
-            repair_service::{BestRepairsStats, RepairTiming},
+            repair_service::{BestRepairsStats, RepairTiming, RepairService},
             repair_weighted_traversal,
             serve_repair::ShredRepairType,
         },
@@ -220,10 +220,11 @@ impl RepairWeight {
 
         if let Some(my_slots_to_repair) = slots_to_repair_for_wen_restart {
             info!("wen_restart repairing {:?}", my_slots_to_repair);
-            let repairs = my_slots_to_repair
-                .iter()
-                .map(|slot| ShredRepairType::WenRestart(slot.clone()))
-                .collect();
+            RepairService::generate_repairs_for_wen_restart(
+                blockstore,
+                &mut repairs,
+                max_new_shreds,
+                my_slots_to_repair);
             return repairs;
         }
 

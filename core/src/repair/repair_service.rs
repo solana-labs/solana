@@ -686,6 +686,25 @@ impl RepairService {
         }
     }
 
+    pub fn generate_repairs_for_wen_restart(
+        blockstore: &Blockstore,
+        repairs: &mut Vec<ShredRepairType>,
+        max_repairs: usize,
+        slots: &Vec<Slot>,
+    ) {
+        for slot in slots {
+            if let Some(slot_meta) = blockstore.meta(*slot).unwrap() {
+                let new_repairs = Self::generate_repairs_for_slot(
+                    blockstore,
+                    *slot,
+                    &slot_meta,
+                    max_repairs - repairs.len(),
+                );
+                repairs.extend(new_repairs);
+            }
+        }
+    }
+
     /// Generate repairs for all slots `x` in the repair_range.start <= x <= repair_range.end
     #[cfg(test)]
     pub fn generate_repairs_in_range(
