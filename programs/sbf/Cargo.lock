@@ -202,7 +202,7 @@ dependencies = [
  "derivative",
  "digest 0.10.7",
  "itertools",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-traits",
  "paste",
  "rustc_version",
@@ -225,7 +225,7 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7abe79b0e4288889c4574159ab790824d0033b9fdcb2a112a3182fac2e514565"
 dependencies = [
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-traits",
  "proc-macro2",
  "quote",
@@ -254,7 +254,7 @@ dependencies = [
  "ark-serialize-derive",
  "ark-std",
  "digest 0.10.7",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
 ]
 
 [[package]]
@@ -1257,7 +1257,7 @@ dependencies = [
  "asn1-rs",
  "displaydoc",
  "nom",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-traits",
  "rusticata-macros",
 ]
@@ -1506,7 +1506,7 @@ version = "3.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b166c9e378360dd5a6666a9604bb4f54ae0cac39023ffbac425e917a2a04fef"
 dependencies = [
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-traits",
  "proc-macro2",
  "quote",
@@ -2894,9 +2894,9 @@ dependencies = [
 
 [[package]]
 name = "num-bigint"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
+checksum = "608e7659b5c3d7cba262d894801b9ec9d00de989e8a82bd4bef91d08da45cdc0"
 dependencies = [
  "autocfg",
  "num-integer",
@@ -5332,7 +5332,7 @@ dependencies = [
  "libsecp256k1 0.6.0",
  "log",
  "memoffset 0.9.0",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-derive",
  "num-traits",
  "parking_lot 0.12.1",
