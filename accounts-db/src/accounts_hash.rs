@@ -780,6 +780,7 @@ impl<'a> AccountsHasher<'a> {
             .map(|hash_data| {
                 let mut out = std::collections::HashMap::new();
                 let mut last_pubkey = None;
+                let mut last_bin = None;
                 for (i, data) in hash_data.iter().enumerate() {
                     let pk = &data.pubkey;
                     if let Some(old_pk) = last_pubkey {
@@ -789,7 +790,14 @@ impl<'a> AccountsHasher<'a> {
                     }
                     last_pubkey = Some(pk);
                     let bin = binner.bin_from_pubkey(pk);
+
+                    if let Some(old_bin) = last_bin {
+                        if old_bin == bin {
+                            continue;
+                        }
+                    }
                     out.entry(bin).or_insert((i, pk));
+                    last_bin = Some(bin)
                 }
                 out
             })
