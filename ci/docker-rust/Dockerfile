@@ -24,6 +24,7 @@ RUN set -x \
       golang \
       unzip \
       lld \
+      protobuf-compiler \
       \
  && apt remove -y libcurl4-openssl-dev \
  && rm -rf /var/lib/apt/lists/* \
