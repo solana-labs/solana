@@ -48,7 +48,7 @@ jobs:
           source .github/scripts/downstream-project-spl-common.sh
 
           sudo apt update
-          sudo apt install libudev-dev binutils-dev libunwind-dev -y
+          sudo apt install libudev-dev binutils-dev libunwind-dev protobuf-compiler -y
 
           cargo check
 
@@ -96,7 +96,7 @@ jobs:
           source .github/scripts/downstream-project-spl-common.sh
 
           sudo apt update
-          sudo apt install libudev-dev binutils-dev libunwind-dev -y
+          sudo apt install libudev-dev binutils-dev libunwind-dev protobuf-compiler -y
 
           programStr="${{ tojson(matrix.arrays.required_programs) }}"
           IFS=', ' read -ra programs <<<"${programStr//[\[\]$'\n'$'\r' ]/}"
