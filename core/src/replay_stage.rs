@@ -2907,7 +2907,8 @@ impl ReplayStage {
                                 tower.vote_state.root_slot = bank_vote_state.root_slot;
                                 tower.vote_state.votes = bank_vote_state.votes;
 
-                                let last_voted_slot = tower.vote_state.last_voted_slot().unwrap_or(
+                                let last_voted_slot =
+                                    tower.vote_state.last_voted_slot().unwrap_or_else(||
                                     // If our local root is higher than the highest slot in `bank_vote_state` due to
                                     // supermajority roots, then it's expected that the vote state will be empty.
                                     // In this case we use the root as our last vote. This root cannot be None, because
@@ -2916,8 +2917,7 @@ impl ReplayStage {
                                     tower
                                         .vote_state
                                         .root_slot
-                                        .expect("root_slot cannot be None here"),
-                                );
+                                        .expect("root_slot cannot be None here"));
                                 // This is safe because `last_voted_slot` is now equal to
                                 // `bank_vote_state.last_voted_slot()` or `local_root`.
                                 // Since this vote state is contained in `bank`, which we have frozen,
