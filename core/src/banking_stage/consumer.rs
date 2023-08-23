@@ -659,31 +659,11 @@ impl Consumer {
             .iter()
             .zip(batch.sanitized_transactions())
         {
-            // If this fee-payer submitted an unexecutable, non-fee paying transaction. Reject them.
             if let Err(err) = result {
                 match err {
-                    TransactionError::AccountLoadedTwice
-                    | TransactionError::AccountNotFound
-                    | TransactionError::ProgramAccountNotFound
+                    TransactionError::AccountNotFound
                     | TransactionError::InsufficientFundsForFee
-                    | TransactionError::InvalidAccountForFee
-                    | TransactionError::MissingSignatureForFee
-                    | TransactionError::InvalidAccountIndex
-                    | TransactionError::SignatureFailure
-                    | TransactionError::InvalidProgramForExecution
-                    | TransactionError::SanitizeFailure
-                    | TransactionError::UnsupportedVersion
-                    | TransactionError::InvalidWritableAccount
-                    | TransactionError::TooManyAccountLocks
-                    | TransactionError::AddressLookupTableNotFound
-                    | TransactionError::InvalidAddressLookupTableOwner
-                    | TransactionError::InvalidAddressLookupTableData
-                    | TransactionError::InvalidAddressLookupTableIndex
-                    | TransactionError::InvalidRentPayingAccount
-                    | TransactionError::DuplicateInstruction(_)
-                    | TransactionError::InsufficientFundsForRent { .. }
-                    | TransactionError::MaxLoadedAccountsDataSizeExceeded
-                    | TransactionError::InvalidLoadedAccountsDataSizeLimit => {
+                    | TransactionError::InvalidAccountForFee => {
                         self.invalid_fee_payer_filter.add(*tx.message().fee_payer());
                     }
                     _ => {}
