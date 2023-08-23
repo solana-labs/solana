@@ -183,6 +183,8 @@ fn create_bootstrap_validator_deployment(
         ..Default::default()
     }];
 
+    let command = vec!["/workspace/start-bootstrap-validator.sh".to_string()];
+
     create_deployment(
         "bootstrap-validator",
         namespace,
@@ -191,6 +193,7 @@ fn create_bootstrap_validator_deployment(
         replicas,
         label_selector,
         env_var,
+        &command
     )
 }
 
@@ -236,6 +239,9 @@ fn create_validator_deployment(
         },
     ];
 
+    let command = vec!["/workspace/start-validator.sh".to_string()];
+
+
     create_deployment(
         "validator",
         namespace,
@@ -244,6 +250,7 @@ fn create_validator_deployment(
         replicas,
         label_selector,
         env_vars,
+        &command,
     )
 }
 
@@ -255,6 +262,7 @@ fn create_deployment(
     replicas: i32,
     label_selector: &BTreeMap<String, String>,
     env_vars: Vec<EnvVar>,
+    command: &Vec<String>,
 ) -> Deployment {
     // Define the pod spec
     let pod_spec = PodTemplateSpec {
@@ -267,6 +275,7 @@ fn create_deployment(
                 name: container_name.to_string(),
                 image: Some(image_name.to_string()),
                 env: Some(env_vars),
+                command: Some(command.clone()),
                 ..Default::default()
             }],
             ..Default::default()
