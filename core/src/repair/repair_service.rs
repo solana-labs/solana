@@ -701,6 +701,8 @@ impl RepairService {
                     max_repairs - repairs.len(),
                 );
                 repairs.extend(new_repairs);
+            } else {
+                repairs.push(ShredRepairType::Shred(*slot, 0));
             }
         }
     }
