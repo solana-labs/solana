@@ -8288,10 +8288,10 @@ impl Bank {
                     let state = UpgradeableLoaderState::Program {
                         programdata_address: old_data_address,
                     };
-                    if let Ok(data_len) = bincode::serialized_size(&state) {
-                        let mut created_program_account = Account {
+                    if let Ok(data) = bincode::serialize(&state) {
+                        let created_program_account = Account {
                             lamports,
-                            data: vec![0u8; data_len as usize],
+                            data,
                             owner: bpf_loader_upgradeable::id(),
                             executable: true,
                             rent_epoch: new_account.rent_epoch(),
@@ -8301,11 +8301,9 @@ impl Bank {
                         // lamports for the empty account that will now house the
                         // PDA, and we can properly serialize the program account's
                         // state
-                        if new_account.lamports() >= lamports
-                            && created_program_account.serialize_data(&state).is_ok()
-                        {
-                            let change_in_cap = new_account.lamports().saturating_sub(lamports);
+                        if new_account.lamports() >= lamports {
                             datapoint_info!(datapoint_name, ("slot", self.slot, i64));
+                            let change_in_cap = new_account.lamports().saturating_sub(lamports);
 
                             // Replace the old data account with the new one
                             // If the old data account does not exist, it will be created
