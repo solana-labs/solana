@@ -708,7 +708,7 @@ pub fn process_new_vote_state(
     Ok(())
 }
 
-fn process_vote_unfiltered(
+pub fn process_vote_unfiltered(
     vote_state: &mut VoteState,
     vote_slots: &[Slot],
     vote: &Vote,
@@ -745,18 +745,18 @@ pub fn process_vote(
 }
 
 /// "unchecked" functions used by tests and Tower
-pub fn process_vote_unchecked(vote_state: &mut VoteState, vote: Vote) {
+pub fn process_vote_unchecked(vote_state: &mut VoteState, vote: Vote) -> Result<(), VoteError> {
     if vote.slots.is_empty() {
-        return;
+        return Err(VoteError::EmptySlots);
     }
     let slot_hashes: Vec<_> = vote.slots.iter().rev().map(|x| (*x, vote.hash)).collect();
-    let _ignored = process_vote_unfiltered(
+    process_vote_unfiltered(
         vote_state,
         &vote.slots,
         &vote,
         &slot_hashes,
         vote_state.current_epoch(),
-    );
+    )
 }
 
 #[cfg(test)]
@@ -767,7 +767,7 @@ pub fn process_slot_votes_unchecked(vote_state: &mut VoteState, slots: &[Slot]) 
 }
 
 pub fn process_slot_vote_unchecked(vote_state: &mut VoteState, slot: Slot) {
-    process_vote_unchecked(vote_state, Vote::new(vec![slot], Hash::default()));
+    let _ = process_vote_unchecked(vote_state, Vote::new(vec![slot], Hash::default()));
 }
 
 /// Authorize the given pubkey to withdraw or sign votes. This may be called multiple times,
@@ -1684,7 +1684,8 @@ mod tests {
                     hash: Hash::new_unique(),
                     timestamp: None,
                 },
-            );
+            )
+            .unwrap();
 
             // Now use the resulting new vote state to perform a vote state update on vote_state
             assert_eq!(
