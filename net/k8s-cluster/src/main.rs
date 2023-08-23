@@ -19,6 +19,8 @@ use {
     std::collections::BTreeMap,
 };
 
+const BOOTSTRAP_VALIDATOR_REPLICAS: i32 = 1;
+
 fn parse_matches() -> ArgMatches<'static> {
     App::new(crate_name!())
         .about(crate_description!())
@@ -31,13 +33,6 @@ fn parse_matches() -> ArgMatches<'static> {
                 .help("namespace to deploy test cluster"),
         )
         .arg(
-            Arg::with_name("app_name")
-                .long("app-name")
-                .takes_value(true)
-                .required(true)
-                .help("Name of the application"),
-        )
-        .arg(
             Arg::with_name("number_of_replicas")
                 .long("replicas")
                 .takes_value(true)
@@ -45,15 +40,29 @@ fn parse_matches() -> ArgMatches<'static> {
                 .help("Number of validator replicas to deploy"),
         )
         .arg(
-            Arg::with_name("container_name")
-                .long("container")
+            Arg::with_name("bootstrap_container_name")
+                .long("bootstrap-container")
+                .takes_value(true)
+                .required(true)
+                .help("Bootstrap Validator Container name"),
+        )
+        .arg(
+            Arg::with_name("bootstrap_image_name")
+                .long("bootstrap-image")
+                .takes_value(true)
+                .required(true)
+                .help("Docker Image of Bootstrap Validator to deploy"),
+        )
+        .arg(
+            Arg::with_name("validator_container_name")
+                .long("validator-container")
                 .takes_value(true)
                 .required(true)
                 .help("Validator Container name"),
         )
         .arg(
-            Arg::with_name("image_name")
-                .long("image")
+            Arg::with_name("validator_image_name")
+                .long("validator-image")
                 .takes_value(true)
                 .required(true)
                 .help("Docker Image of Validator to deploy"),
@@ -69,41 +78,285 @@ async fn main() {
     solana_logger::setup();
     let matches = parse_matches();
     let namespace = matches.value_of("cluster_namespace").unwrap_or_default();
-    let app_name = matches
-        .value_of("app_name")
-        .expect("Application name is required");
     let replicas = value_t_or_exit!(matches, "number_of_replicas", i32);
-    let container_name = matches
-        .value_of("container_name")
-        .expect("Container name is required");
-    let image_name = matches
-        .value_of("image_name")
-        .expect("Image name is required");
+    let bootstrap_container_name = matches
+        .value_of("bootstrap_container_name")
+        .expect("Bootstrap container name is required");
+    let bootstrap_image_name = matches
+        .value_of("bootstrap_image_name")
+        .expect("Bootstrap image name is required");
+    let validator_container_name = matches
+        .value_of("validator_container_name")
+        .expect("Validator container name is required");
+    let validator_image_name = matches
+        .value_of("validator_image_name")
+        .expect("Validator image name is required");
 
     info!("namespace: {}", namespace);
 
     let client = Client::try_default().await.unwrap();
 
-    let mut label_selector = BTreeMap::new(); // Create a JSON map for label selector
-    label_selector.insert("app.kubernetes.io/name".to_string(), app_name.to_string());
+    //Bootstrap validator deployment and service creation/deployment
+    let mut bootstrap_validator_selector = BTreeMap::new(); // Create a JSON map for label selector
+    bootstrap_validator_selector.insert(
+        "app.kubernetes.io/name".to_string(),
+        "bootstrap-validator".to_string(),
+    );
 
-    let _ = create_deployment(
-        client.clone(),
-        app_name,
+    let bootstrap_validator_deployment = create_bootstrap_validator_deployment(
+        namespace,
+        bootstrap_container_name,
+        bootstrap_image_name,
+        BOOTSTRAP_VALIDATOR_REPLICAS,
+        &bootstrap_validator_selector,
+    );
+    match deploy_deployment(client.clone(), namespace, &bootstrap_validator_deployment).await {
+        Ok(_) => info!("bootstrap validator deployment deployed successfully"),
+        Err(err) => error!("Error! Failed to deploy bootstrap validator deployment. err: {:?}", err)
+    }
+
+    let bootstrap_validator_service =
+        create_bootstrap_validator_service(namespace, &bootstrap_validator_selector);
+    match deploy_service(client.clone(), namespace, &bootstrap_validator_service).await {
+        Ok(_) => info!("bootstrap validator service deployed successfully"),
+        Err(err) => error!("Error! Failed to deploy bootstrap validator service. err: {:?}", err)
+    }
+
+    //Validator deployment and service creation/deployment
+    let mut validator_selector = BTreeMap::new(); // Create a JSON map for label selector
+    validator_selector.insert(
+        "app.kubernetes.io/name".to_string(),
+        "validator".to_string(),
+    );
+
+    let validator_deployment = create_validator_deployment(
+        namespace,
+        validator_container_name,
+        validator_image_name,
+        replicas,
+        &validator_selector,
+    );
+    match deploy_deployment(client.clone(), namespace, &validator_deployment).await {
+        Ok(_) => info!("validator deployment deployed successfully"),
+        Err(err) => error!("Error! Failed to deploy validator deployment. err: {:?}", err)
+    }
+
+    let validator_service = create_validator_service(namespace, &validator_selector);
+    match deploy_service(client.clone(), namespace, &validator_service).await {
+        Ok(_) => info!("validator service deployed successfully"),
+        Err(err) => error!("Error! Failed to deploy validator service. err: {:?}", err)
+    }
+
+    let _ = check_service_matching_deployment(client.clone(), "bootstrap-validator", namespace).await;
+    let _ = check_service_matching_deployment(client, "validator", namespace).await;
+
+}
+
+async fn deploy_deployment(
+    client: Client,
+    namespace: &str,
+    deployment: &Deployment,
+) -> Result<Deployment, kube::Error> {
+    let api: Api<Deployment> = Api::namespaced(client.clone(), namespace);
+    let post_params = PostParams::default();
+    info!("creating deployment!");
+    // Apply the Deployment
+    api.create(&post_params, deployment).await
+}
+
+fn create_bootstrap_validator_deployment(
+    namespace: &str,
+    container_name: &str,
+    image_name: &str,
+    replicas: i32,
+    label_selector: &BTreeMap<String, String>,
+) -> Deployment {
+    let env_var = vec![EnvVar {
+        name: "MY_POD_IP".to_string(),
+        value_from: Some(EnvVarSource {
+            field_ref: Some(ObjectFieldSelector {
+                field_path: "status.podIP".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }];
+
+    create_deployment(
+        "bootstrap-validator",
         namespace,
         container_name,
         image_name,
         replicas,
-        &label_selector,
+        label_selector,
+        env_var,
     )
-    .await;
+}
 
-    info!("Deployment created successfully in the specified namespace!");
+fn create_validator_deployment(
+    namespace: &str,
+    container_name: &str,
+    image_name: &str,
+    replicas: i32,
+    label_selector: &BTreeMap<String, String>,
+) -> Deployment {
+    let env_vars = vec![
+        EnvVar {
+            name: "NAMESPACE".to_string(),
+            value_from: Some(EnvVarSource {
+                field_ref: Some(ObjectFieldSelector {
+                    field_path: "metadata.namespace".to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        EnvVar {
+            name: "BOOTSTRAP_RPC_PORT".to_string(),
+            value: Some(format!(
+                "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899"
+            )),
+            ..Default::default()
+        },
+        EnvVar {
+            name: "BOOTSTRAP_GOSSIP_PORT".to_string(),
+            value: Some(format!(
+                "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001"
+            )),
+            ..Default::default()
+        },
+        EnvVar {
+            name: "BOOTSTRAP_FAUCET_PORT".to_string(),
+            value: Some(format!(
+                "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900"
+            )),
+            ..Default::default()
+        },
+    ];
 
-    let _ = create_service(client.clone(), app_name, namespace, &label_selector).await;
-    info!("Service created successfully in the specified namespace!");
+    create_deployment(
+        "validator",
+        namespace,
+        container_name,
+        image_name,
+        replicas,
+        label_selector,
+        env_vars,
+    )
+}
 
-    let _ = check_service_matching_deployment(client, app_name, namespace).await;
+fn create_deployment(
+    app_name: &str,
+    namespace: &str,
+    container_name: &str,
+    image_name: &str,
+    replicas: i32,
+    label_selector: &BTreeMap<String, String>,
+    env_vars: Vec<EnvVar>,
+) -> Deployment {
+    // Define the pod spec
+    let pod_spec = PodTemplateSpec {
+        metadata: Some(ObjectMeta {
+            labels: Some(label_selector.clone()),
+            ..Default::default()
+        }),
+        spec: Some(PodSpec {
+            containers: vec![Container {
+                name: container_name.to_string(),
+                image: Some(image_name.to_string()),
+                env: Some(env_vars),
+                ..Default::default()
+            }],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    //Define the deployment spec
+    let deployment_spec = DeploymentSpec {
+        replicas: Some(replicas),
+        selector: LabelSelector {
+            match_labels: Some(label_selector.clone()),
+            ..Default::default()
+        },
+        template: pod_spec,
+        ..Default::default()
+    };
+
+    //Build deployment
+    Deployment {
+        metadata: ObjectMeta {
+            name: Some(format!("{}-deployment", app_name)),
+            namespace: Some(namespace.to_string()),
+            ..Default::default()
+        },
+        spec: Some(deployment_spec),
+        ..Default::default()
+    }
+}
+
+async fn deploy_service(
+    client: Client,
+    namespace: &str,
+    service: &Service,
+) -> Result<Service, kube::Error> {
+    let post_params = PostParams::default();
+    // Create an API instance for Services in the specified namespace
+    let service_api: Api<Service> = Api::namespaced(client, namespace);
+
+    // Create the Service object in the cluster
+    service_api.create(&post_params, &service).await
+}
+
+fn create_validator_service(namespace: &str, label_selector: &BTreeMap<String, String>) -> Service {
+    create_service("validator", namespace, label_selector)
+}
+
+fn create_bootstrap_validator_service(
+    namespace: &str,
+    label_selector: &BTreeMap<String, String>,
+) -> Service {
+    create_service("bootstrap-validator", namespace, label_selector)
+}
+
+fn create_service(
+    service_name: &str,
+    namespace: &str,
+    label_selector: &BTreeMap<String, String>,
+) -> Service {
+    Service {
+        metadata: ObjectMeta {
+            name: Some(format!("{}-service", service_name).to_string()),
+            namespace: Some(namespace.to_string()),
+            ..Default::default()
+        },
+        spec: Some(ServiceSpec {
+            selector: Some(label_selector.clone()),
+            cluster_ip: Some("None".into()),
+            // cluster_ips: None,
+            ports: Some(vec![
+                ServicePort {
+                    port: 8899, // RPC Port
+                    name: Some("rpc-port".to_string()),
+                    ..Default::default()
+                },
+                ServicePort {
+                    port: 8001, //Gossip Port
+                    name: Some("gossip-port".to_string()),
+                    ..Default::default()
+                },
+                ServicePort {
+                    port: 9900, //Faucet Port
+                    name: Some("faucet-port".to_string()),
+                    ..Default::default()
+                },
+            ]),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
 }
 
 async fn check_service_matching_deployment(
@@ -161,117 +414,4 @@ async fn check_service_matching_deployment(
     }
 
     Ok(())
-}
-
-async fn create_deployment(
-    client: Client,
-    app_name: &str,
-    namespace: &str,
-    container_name: &str,
-    image_name: &str,
-    replicas: i32,
-    label_selector: &BTreeMap<String, String>,
-) -> Result<Deployment, kube::Error> {
-    let env_var = EnvVar {
-        name: "MY_POD_IP".to_string(),
-        value_from: Some(EnvVarSource {
-            field_ref: Some(ObjectFieldSelector {
-                field_path: "status.podIP".to_string(),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-
-    // Define the pod spec
-    let pod_spec = PodTemplateSpec {
-        metadata: Some(ObjectMeta {
-            labels: Some(label_selector.clone()),
-            ..Default::default()
-        }),
-        spec: Some(PodSpec {
-            containers: vec![Container {
-                name: container_name.to_string(),
-                image: Some(image_name.to_string()),
-                env: Some(vec![env_var]),
-                ..Default::default()
-            }],
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-
-    //Define the deployment spec
-    let deployment_spec = DeploymentSpec {
-        replicas: Some(replicas),
-        selector: LabelSelector {
-            match_labels: Some(label_selector.clone()),
-            ..Default::default()
-        },
-        template: pod_spec,
-        ..Default::default()
-    };
-
-    //Build deployment
-    let deployment = Deployment {
-        metadata: ObjectMeta {
-            name: Some(format!("{}-deployment", app_name)),
-            namespace: Some(namespace.to_string()),
-            ..Default::default()
-        },
-        spec: Some(deployment_spec),
-        ..Default::default()
-    };
-
-    let api: Api<Deployment> = Api::namespaced(client.clone(), namespace);
-    let post_params = PostParams::default();
-    info!("creating deployment!");
-    // Apply the Deployment
-    api.create(&post_params, &deployment).await
-}
-
-async fn create_service(
-    client: Client,
-    app_name: &str,
-    namespace: &str,
-    label_selector: &BTreeMap<String, String>,
-) -> Result<Service, kube::Error> {
-    let service = Service {
-        metadata: ObjectMeta {
-            name: Some(format!("{}-service", app_name).to_string()),
-            namespace: Some(namespace.to_string()),
-            ..Default::default()
-        },
-        spec: Some(ServiceSpec {
-            selector: Some(label_selector.clone()),
-            cluster_ip: Some("None".into()),
-            // cluster_ips: None,
-            ports: Some(vec![
-                ServicePort {
-                    port: 8899, // RPC Port
-                    name: Some("rpc-port".to_string()),
-                    ..Default::default()
-                },
-                ServicePort {
-                    port: 8001, //Gossip Port
-                    name: Some("gossip-port".to_string()),
-                    ..Default::default()
-                },
-                ServicePort {
-                    port: 9900, //Faucet Port
-                    name: Some("faucet-port".to_string()),
-                    ..Default::default()
-                },
-            ]),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-    let post_params = PostParams::default();
-    // Create an API instance for Services in the specified namespace
-    let service_api: Api<Service> = Api::namespaced(client, namespace);
-
-    // Create the Service object in the cluster
-    service_api.create(&post_params, &service).await
 }
