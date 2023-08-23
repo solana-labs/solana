@@ -229,7 +229,7 @@ mod tests {
         slot: u64,
         expected_error: Option<Error>,
         chunk_size: usize,
-    ) -> Result<impl Iterator<Item = DuplicateShred>, Error> {
+    ) -> Result<Box<dyn Iterator<Item = DuplicateShred>>, Error> {
         let my_keypair = match expected_error {
             Some(Error::InvalidSignature) => Arc::new(Keypair::new()),
             _ => keypair,
@@ -242,9 +242,6 @@ mod tests {
         let shred2 = match expected_error {
             Some(Error::SlotMismatch) => {
                 new_rand_shred(&mut rng, next_shred_index, &shredder1, &my_keypair)
-            }
-            Some(Error::ShredIndexMismatch) => {
-                new_rand_shred(&mut rng, next_shred_index + 1, &shredder, &my_keypair)
             }
             Some(Error::InvalidDuplicateShreds) => shred1.clone(),
             _ => new_rand_shred(&mut rng, next_shred_index, &shredder, &my_keypair),
@@ -261,7 +258,16 @@ mod tests {
             timestamp(), // wallclock
             chunk_size,  // max_size
         )?;
-        Ok(chunks)
+        if let Some(Error::ShredIndexMismatch) = expected_error {
+            Ok(Box::new(chunks.map(|mut duplicate_shred| {
+                if duplicate_shred.chunk_index() > 0 {
+                    duplicate_shred.shred_index += 1
+                }
+                duplicate_shred
+            })))
+        } else {
+            Ok(Box::new(chunks))
+        }
     }
 
     #[test]
