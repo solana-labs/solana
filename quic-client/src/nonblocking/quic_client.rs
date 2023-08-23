@@ -288,10 +288,11 @@ impl QuicClient {
         stats: &ClientStats,
         connection_stats: Arc<ConnectionCacheStats>,
     ) -> Result<Arc<Connection>, QuicError> {
+        let mut measure_send_packet = Measure::start("send_packet_us");
+        let mut measure_prepare_connection = Measure::start("prepare_connection");
         let mut connection_try_count = 0;
         let mut last_connection_id = 0;
         let mut last_error = None;
-
         while connection_try_count < 2 {
             let connection = {
                 let mut conn_guard = self.connection.lock().await;
@@ -390,8 +391,28 @@ impl QuicClient {
             }
 
             last_connection_id = connection.stable_id();
+            measure_prepare_connection.stop();
+
             match Self::_send_buffer_using_conn(data, &connection).await {
                 Ok(()) => {
+                    measure_send_packet.stop();
+                    stats.successful_packets.fetch_add(1, Ordering::Relaxed);
+                    stats
+                        .send_packets_us
+                        .fetch_add(measure_send_packet.as_us(), Ordering::Relaxed);
+                    stats
+                        .prepare_connection_us
+                        .fetch_add(measure_prepare_connection.as_us(), Ordering::Relaxed);
+                    trace!(
+                        "Succcessfully sent to {} with id {}, thread: {:?}, data len: {}, send_packet_us: {} prepare_connection_us: {}",
+                        self.addr,
+                        connection.stable_id(),
+                        thread::current().id(),
+                        data.len(),
+                        measure_send_packet.as_us(),
+                        measure_prepare_connection.as_us(),
+                    );
+
                     return Ok(connection);
                 }
                 Err(err) => match err {
