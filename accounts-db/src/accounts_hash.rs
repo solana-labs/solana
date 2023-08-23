@@ -1335,6 +1335,69 @@ pub mod tests {
     }
 
     #[test]
+    fn test_calculate_bin_map() {
+        for (bins, expected_count) in [1, 2, 4].into_iter().zip([5, 20, 120]) {
+            let bins: usize = bins;
+            let mut count = 0usize;
+
+            // # pubkeys in each bin are permutations of these
+            // 0 means none in this bin
+            // large number (20) means the found key will be well before or after the expected index based on an assumption of uniform distribution
+            for counts in [0, 1, 2, 20, 0].into_iter().permutations(bins) {
+                count += 1;
+
+                let hash_data = counts
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(bin, count)| {
+                        let binner = PubkeyBinCalculator24::new(bins);
+                        (0..*count).map(move |_| {
+                            CalculateHashIntermediate::new(
+                                Hash::default(),
+                                0,
+                                binner.lowest_pubkey_from_bin(bin, bins),
+                            )
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                let hash_data = vec![hash_data];
+                let slice = convert_to_slice(&hash_data);
+
+                let bin_map = AccountsHasher::calculate_bin_map(&slice, bins);
+                assert_eq!(bin_map.len(), 1);
+
+                let map = &bin_map[0];
+                let non_empty_bins: usize =
+                    counts.iter().map(|x| if *x != 0 { 1 } else { 0 }).sum();
+                assert_eq!(map.len(), non_empty_bins);
+
+                let cumsum: Vec<usize> = counts
+                    .iter()
+                    .scan(0, |acc, &x| {
+                        *acc += x;
+                        Some(*acc)
+                    })
+                    .collect();
+
+                let binner = PubkeyBinCalculator24::new(bins);
+                for bin in 0..bins {
+                    if counts[bin] != 0 {
+                        let expected_key = binner.lowest_pubkey_from_bin(bin, bins);
+                        let expected_index = if bin == 0 { 0 } else { cumsum[bin - 1] };
+                        let (index, key) = map.get(&bin).unwrap();
+                        assert_eq!(*index, expected_index);
+                        assert_eq!(**key, expected_key);
+                    }
+                }
+            }
+            assert_eq!(
+                count, expected_count,
+                "too few iterations in test. bins: {bins}"
+            );
+        }
+    }
+
+    #[test]
     fn test_account_hashes_file() {
         let dir_for_temp_cache_files = tempdir().unwrap();
         // 0 hashes
