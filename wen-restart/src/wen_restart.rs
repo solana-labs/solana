@@ -13,7 +13,7 @@ use {
     solana_sdk::{clock::Slot, hash::Hash},
     solana_vote_program::vote_state::VoteTransaction,
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         sync::{Arc, RwLock, RwLockReadGuard},
         thread::sleep,
         time::Duration,
@@ -107,6 +107,7 @@ pub fn wen_restart(
     let my_pubkey = cluster_info.id();
     let mut last_voted_fork_slots_aggregate =
         LastVotedForkSlotsAggregate::new(root_bank.slot(), &last_voted_fork, &my_pubkey);
+    let mut is_full_slots = HashSet::new();
     // Aggregate LastVotedForkSlots until seeing this message from 80% of the validators.
     info!("wen_restart aggregating RestartLastVotedForkSlots");
     loop {
@@ -121,7 +122,19 @@ pub fn wen_restart(
             let filtered_slots: Vec<Slot> = new_slots
                 .into_iter()
                 .map(|(slot, _)| slot)
-                .filter(|slot| slot > &root_slot && my_bank_forks.bank_hash(slot.clone()).is_none())
+                .filter(|slot| {
+                    if slot <= &root_slot || is_full_slots.contains(slot) {
+                        return false;
+                    }
+                    let is_full = match blockstore.meta(*slot) {
+                        Ok(Some(slot_meta)) => slot_meta.is_full(),
+                        _ => false,
+                    };
+                    if is_full {
+                        is_full_slots.insert(slot.clone());
+                    }
+                    !is_full
+                })
                 .collect();
             if !filtered_slots.is_empty() {
                 if let Err(err) = restart_slots_to_repair_sender.send(filtered_slots) {
@@ -150,9 +163,23 @@ pub fn wen_restart(
         let (slots_to_repair, not_active_percentage, _) =
             last_voted_fork_slots_aggregate.aggregate(Vec::default(), &mut epoch_stakes_map);
         let new_slots = slots_to_repair.unwrap();
-        let filtered_slots: Vec<u64> = new_slots.iter().filter(|(slot, _)| {
-            slot > &root_slot && my_bank_forks.bank_hash(slot.clone()).is_none()
-        }).map(|(slot, _)| slot.clone()).collect();
+        let filtered_slots: Vec<Slot> = new_slots
+        .iter()
+        .map(|(slot, _)| slot.clone())
+        .filter(|slot| {
+            if slot <= &root_slot || is_full_slots.contains(slot) {
+                return false;
+            }
+            let is_full = match blockstore.meta(*slot) {
+                Ok(Some(slot_meta)) => slot_meta.is_full(),
+                _ => false,
+            };
+            if is_full {
+                is_full_slots.insert(slot.clone());
+            }
+            !is_full
+        })
+        .collect();
         info!("wen_restart waiting for all slots frozen, slots to repair {:?}", &filtered_slots);
         if filtered_slots.is_empty() {
             info!("wen_restart all slots frozen");
