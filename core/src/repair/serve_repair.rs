@@ -480,7 +480,7 @@ impl ServeRepair {
                         "OrphanWithNonce",
                     )
                 }
-                | RepairProtocol::WenRestart {
+                RepairProtocol::WenRestart {
                     header: RepairRequestHeader { nonce, .. },
                     slot,
                 } => {
