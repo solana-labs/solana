@@ -577,7 +577,7 @@ where
                         ));
                     }
 
-                    // Send them all at once
+                    // Start the process of sending them all
                     let results = join_all(futures).await;
 
                     progress.set_message_for_confirmed_transactions(
