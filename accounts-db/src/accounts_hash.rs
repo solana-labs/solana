@@ -1025,7 +1025,7 @@ impl<'a> AccountsHasher<'a> {
         sorted_data_by_pubkey: &[&[CalculateHashIntermediate]],
         pubkey_bin: usize,
         bins: usize,
-        bin_map: &Vec<std::collections::HashMap<usize, (usize, &Pubkey)>>,
+        bin_map: &[std::collections::HashMap<usize, (usize, &Pubkey)>],
     ) -> (AccountHashesFile, u64) {
         let binner = PubkeyBinCalculator24::new(bins);
 
@@ -1857,7 +1857,7 @@ pub mod tests {
             account_maps,
             0,
             1,
-            &AccountsHasher::calculate_bin_map(&account_maps, 1),
+            &AccountsHasher::calculate_bin_map(account_maps, 1),
         )
     }
 
