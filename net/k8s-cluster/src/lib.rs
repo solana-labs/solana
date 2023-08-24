@@ -18,14 +18,15 @@ use {
 };
 
 lazy_static! {
+    #[derive(Debug)]
     static ref SOLANA_ROOT: PathBuf = get_solana_root();
     #[derive(Debug)]
-    static ref RUSTFLAGS: String = get_rust_flags();
+    static ref RUST_FLAGS: &'static str = get_rust_flags();
 }
 
 pub fn initialize_globals() {
     let _ = *SOLANA_ROOT; // Force initialization of lazy_static
-    let _ = *RUSTFLAGS;
+    let _ = *RUST_FLAGS;
 }
 
 pub mod config;
@@ -49,8 +50,15 @@ pub fn get_solana_root() -> PathBuf {
     // panic!("Failed to get Solana root directory");
 }
 
-pub fn get_rust_flags() -> String {
-    env::var("RUSTFLAGS").ok().unwrap_or_default()
+pub fn get_rust_flags() -> &'static str {
+    // env::var("RUSTFLAGS").ok().unwrap_or_default())
+    match env::var("RUSTFLAGS").ok() {
+        Some(value) => {
+            info!("env var rust flags: {}", value);
+            Box::leak(value.into_boxed_str())
+        },
+        None => "",
+    }
 }
 
 

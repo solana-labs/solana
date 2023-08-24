@@ -1,9 +1,13 @@
+use clap::ArgSettings;
+
+
 use {
     super::initialize_globals,
     crate::{
         cat_file,
         extract_release_archive,
         download_to_temp,
+        SOLANA_ROOT,
     },
     log::*,
     std::{
@@ -89,14 +93,52 @@ impl<'a> Deploy<'a> {
         let local: DateTime<Local> = Local::now();
         info!("--- Build started at {}", local.format("%Y-%m-%d %H:%M"));
         let build_variant: &str = if self.config.debug_build { "--debug" } else { "" };
-        let profiler_flags = if self.config.profile_build {
-            format!("{}{:?}{}", "RUSTFLAGS='-C force-frame-pointers=y -g ", super::RUSTFLAGS, "'")
-        } else {
-            "".to_string()
-        };
+        if self.config.profile_build {
+            // format!("{}{:?}{}", "RUSTFLAGS='-C force-frame-pointers=y -g ", super::RUSTFLAGS, "'")
+            // format!("{}", "RUSTFLAGS='-C force-frame-pointers=y -g '")
 
-        // let command = format!("{} {}", profiler_flags );
-        // let status = std::process::Command::new()
+            // let rustflags = "-C force-frame-pointers=y -D warnings";
+            info!("rust flags in build: {}", *super::RUST_FLAGS);
+            let rustflags = format!("{}{}{}", "RUSTFLAGS='-C force-frame-pointers=y -g ",  *super::RUST_FLAGS, "'");
+            info!("rust flags: {}", rustflags);
+            std::env::set_var("RUSTFLAGS", rustflags);
+            info!("rust flags updated: {}", std::env::var("RUSTFLAGS").ok().unwrap());
+        }
+
+        let cargo_install_all_path = super::SOLANA_ROOT.join("scripts/cargo-install-all.sh");
+        // let command = PathBuf::from(format!("{} {:?}", profiler_flags, cargo_install_all_path));
+        let install_directory = super::SOLANA_ROOT.join("farf");
+        let arguments = format!("{:?} {} {}", install_directory, build_variant, "--validator-only");
+
+        // info!("command: {:?}", command);
+        info!("args: {}", arguments);
+
+        let status = std::process::Command::new("./cargo-install-all.sh")
+            .current_dir(super::SOLANA_ROOT.join("scripts"))
+            .arg(arguments)
+            .status()
+            .expect("Failed to build validator executable");
+
+
+        // info!("profiler_flags: {}", profiler_flags);
+        // let rustflags = "-C force-frame-pointers=y";
+        // std::env::set_var("RUSTFLAGS", rustflags);
+
+        // let command = PathBuf::from(format!("{} {:?}", profiler_flags, "ls"));
+        // let command = PathBuf::from(format!("{}", "ls"));
+        // let status = std::process::Command::new(command)
+        //     .current_dir("scripts")
+        //     .status()
+        //     .expect("Failed to build validator executable");
+        
+        if status.success() {
+            info!("successfully build validator binary");
+        } else {
+            error!("Failed to build executable!");
+        }
+        
+
+
 
 
 

@@ -96,6 +96,11 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("debug-build")
                 .help("Enable debug build"),
         )
+        .arg(
+            Arg::with_name("profile_build")
+                .long("profile-build")
+                .help("Enable Profile Build flags"),
+        )
         .get_matches()
 }
 
