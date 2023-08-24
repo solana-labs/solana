@@ -58,7 +58,7 @@ impl<'a> Proof<'a> {
                 None
             }
         });
-        matches!(result, Some(_))
+        result.is_some()
     }
 }
 
