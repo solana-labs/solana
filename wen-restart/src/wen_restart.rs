@@ -134,10 +134,7 @@ pub fn wen_restart(
                     if slot <= &root_slot || is_full_slots.contains(slot) {
                         return false;
                     }
-                    let is_full = match blockstore.meta(*slot) {
-                        Ok(Some(slot_meta)) => slot_meta.is_full(),
-                        _ => false,
-                    };
+                    let is_full = my_bank_forks.get(*slot).map_or(false, |bank| bank.is_frozen());
                     if is_full {
                         is_full_slots.insert(slot.clone());
                     }
@@ -178,10 +175,7 @@ pub fn wen_restart(
             if slot <= &root_slot || is_full_slots.contains(slot) {
                 return false;
             }
-            let is_full = match blockstore.meta(*slot) {
-                Ok(Some(slot_meta)) => slot_meta.is_full(),
-                _ => false,
-            };
+            let is_full = my_bank_forks.get(*slot).map_or(false, |bank| bank.is_frozen());
             if is_full {
                 is_full_slots.insert(slot.clone());
             }
