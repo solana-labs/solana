@@ -382,11 +382,13 @@ impl PohRecorder {
     }
 
     /// Return the leader and slot pair after `slots` slots.
-    pub fn leader_and_slot_after_n_slots(&self, slots: u64) -> Option<(Pubkey, Slot)> {
-        let current_slot = self.slot_for_tick_height(self.tick_height);
+    pub fn leader_and_slot_after_n_slots(&self, slots_in_the_future: u64) -> Option<(Pubkey, Slot)> {
+        let target_slot = self
+            .slot_for_tick_height(self.tick_height)
+            .checked_add(slots_in_the_future)?;
         self.leader_schedule_cache
-            .slot_leader_at(current_slot + slots, None)
-            .map(|leader| (leader, current_slot + slots))
+            .slot_leader_at(target_slot, None)
+            .map(|leader| (leader, target_slot))
     }
 
     pub fn next_slot_leader(&self) -> Option<Pubkey> {
