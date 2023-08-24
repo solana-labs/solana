@@ -16,8 +16,9 @@ use {
         stable_log, timings::ExecuteTimings,
     },
     solana_rbpf::{
+        elf::FunctionRegistry,
         memory_region::{AccessType, MemoryMapping},
-        vm::{BuiltinProgram, Config, ProgramResult, PROGRAM_ENVIRONMENT_KEY_SHIFT},
+        vm::{BuiltinFunction, BuiltinProgram, Config, ProgramResult},
     },
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
@@ -139,9 +140,9 @@ fn consume_compute_meter(invoke_context: &InvokeContext, amount: u64) -> Result<
 macro_rules! register_feature_gated_function {
     ($result:expr, $is_feature_active:expr, $name:expr, $call:expr $(,)?) => {
         if $is_feature_active {
-            $result.register_function($name, $call)
+            $result.register_function_hashed($name, $call)
         } else {
-            Ok(())
+            Ok(0)
         }
     };
 }
@@ -167,7 +168,6 @@ pub fn create_program_runtime_environment_v1<'a>(
     // When adding new features for RBPF here,
     // also add them to `Bank::apply_builtin_program_feature_transitions()`.
 
-    use rand::Rng;
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
@@ -180,10 +180,7 @@ pub fn create_program_runtime_environment_v1<'a>(
         reject_broken_elfs: reject_deployment_of_broken_elfs,
         noop_instruction_rate: 256,
         sanitize_user_provided_values: true,
-        runtime_environment_key: rand::thread_rng()
-            .gen::<i32>()
-            .checked_shr(PROGRAM_ENVIRONMENT_KEY_SHIFT)
-            .unwrap_or(0),
+        encrypt_runtime_environment: true,
         external_internal_function_hash_collision: feature_set
             .is_active(&error_on_syscall_bpf_function_hash_collisions::id()),
         reject_callx_r10: feature_set.is_active(&reject_callx_r10::id()),
@@ -194,44 +191,44 @@ pub fn create_program_runtime_environment_v1<'a>(
         aligned_memory_mapping: !feature_set.is_active(&bpf_account_data_direct_mapping::id()),
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
-    let mut result = BuiltinProgram::new_loader(config);
+    let mut result = FunctionRegistry::<BuiltinFunction<InvokeContext>>::default();
 
     // Abort
-    result.register_function(b"abort", SyscallAbort::call)?;
+    result.register_function_hashed(*b"abort", SyscallAbort::call)?;
 
     // Panic
-    result.register_function(b"sol_panic_", SyscallPanic::call)?;
+    result.register_function_hashed(*b"sol_panic_", SyscallPanic::call)?;
 
     // Logging
-    result.register_function(b"sol_log_", SyscallLog::call)?;
-    result.register_function(b"sol_log_64_", SyscallLogU64::call)?;
-    result.register_function(b"sol_log_compute_units_", SyscallLogBpfComputeUnits::call)?;
-    result.register_function(b"sol_log_pubkey", SyscallLogPubkey::call)?;
+    result.register_function_hashed(*b"sol_log_", SyscallLog::call)?;
+    result.register_function_hashed(*b"sol_log_64_", SyscallLogU64::call)?;
+    result.register_function_hashed(*b"sol_log_compute_units_", SyscallLogBpfComputeUnits::call)?;
+    result.register_function_hashed(*b"sol_log_pubkey", SyscallLogPubkey::call)?;
 
     // Program defined addresses (PDA)
-    result.register_function(
-        b"sol_create_program_address",
+    result.register_function_hashed(
+        *b"sol_create_program_address",
         SyscallCreateProgramAddress::call,
     )?;
-    result.register_function(
-        b"sol_try_find_program_address",
+    result.register_function_hashed(
+        *b"sol_try_find_program_address",
         SyscallTryFindProgramAddress::call,
     )?;
 
     // Sha256
-    result.register_function(b"sol_sha256", SyscallSha256::call)?;
+    result.register_function_hashed(*b"sol_sha256", SyscallSha256::call)?;
 
     // Keccak256
-    result.register_function(b"sol_keccak256", SyscallKeccak256::call)?;
+    result.register_function_hashed(*b"sol_keccak256", SyscallKeccak256::call)?;
 
     // Secp256k1 Recover
-    result.register_function(b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
+    result.register_function_hashed(*b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
 
     // Blake3
     register_feature_gated_function!(
         result,
         blake3_syscall_enabled,
-        b"sol_blake3",
+        *b"sol_blake3",
         SyscallBlake3::call,
     )?;
 
@@ -239,78 +236,78 @@ pub fn create_program_runtime_environment_v1<'a>(
     register_feature_gated_function!(
         result,
         curve25519_syscall_enabled,
-        b"sol_curve_validate_point",
+        *b"sol_curve_validate_point",
         SyscallCurvePointValidation::call,
     )?;
     register_feature_gated_function!(
         result,
         curve25519_syscall_enabled,
-        b"sol_curve_group_op",
+        *b"sol_curve_group_op",
         SyscallCurveGroupOps::call,
     )?;
     register_feature_gated_function!(
         result,
         curve25519_syscall_enabled,
-        b"sol_curve_multiscalar_mul",
+        *b"sol_curve_multiscalar_mul",
         SyscallCurveMultiscalarMultiplication::call,
     )?;
 
     // Sysvars
-    result.register_function(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
-    result.register_function(
-        b"sol_get_epoch_schedule_sysvar",
+    result.register_function_hashed(*b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
+    result.register_function_hashed(
+        *b"sol_get_epoch_schedule_sysvar",
         SyscallGetEpochScheduleSysvar::call,
     )?;
     register_feature_gated_function!(
         result,
         !disable_fees_sysvar,
-        b"sol_get_fees_sysvar",
+        *b"sol_get_fees_sysvar",
         SyscallGetFeesSysvar::call,
     )?;
-    result.register_function(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
+    result.register_function_hashed(*b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
 
     register_feature_gated_function!(
         result,
         last_restart_slot_syscall_enabled,
-        b"sol_get_last_restart_slot",
+        *b"sol_get_last_restart_slot",
         SyscallGetLastRestartSlotSysvar::call,
     )?;
 
     register_feature_gated_function!(
         result,
         epoch_rewards_syscall_enabled,
-        b"sol_get_epoch_rewards_sysvar",
+        *b"sol_get_epoch_rewards_sysvar",
         SyscallGetEpochRewardsSysvar::call,
     )?;
 
     // Memory ops
-    result.register_function(b"sol_memcpy_", SyscallMemcpy::call)?;
-    result.register_function(b"sol_memmove_", SyscallMemmove::call)?;
-    result.register_function(b"sol_memcmp_", SyscallMemcmp::call)?;
-    result.register_function(b"sol_memset_", SyscallMemset::call)?;
+    result.register_function_hashed(*b"sol_memcpy_", SyscallMemcpy::call)?;
+    result.register_function_hashed(*b"sol_memmove_", SyscallMemmove::call)?;
+    result.register_function_hashed(*b"sol_memcmp_", SyscallMemcmp::call)?;
+    result.register_function_hashed(*b"sol_memset_", SyscallMemset::call)?;
 
     // Processed sibling instructions
-    result.register_function(
-        b"sol_get_processed_sibling_instruction",
+    result.register_function_hashed(
+        *b"sol_get_processed_sibling_instruction",
         SyscallGetProcessedSiblingInstruction::call,
     )?;
 
     // Stack height
-    result.register_function(b"sol_get_stack_height", SyscallGetStackHeight::call)?;
+    result.register_function_hashed(*b"sol_get_stack_height", SyscallGetStackHeight::call)?;
 
     // Return data
-    result.register_function(b"sol_set_return_data", SyscallSetReturnData::call)?;
-    result.register_function(b"sol_get_return_data", SyscallGetReturnData::call)?;
+    result.register_function_hashed(*b"sol_set_return_data", SyscallSetReturnData::call)?;
+    result.register_function_hashed(*b"sol_get_return_data", SyscallGetReturnData::call)?;
 
     // Cross-program invocation
-    result.register_function(b"sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
-    result.register_function(b"sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
+    result.register_function_hashed(*b"sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
+    result.register_function_hashed(*b"sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
 
     // Memory allocator
     register_feature_gated_function!(
         result,
         !disable_deploy_of_alloc_free_syscall,
-        b"sol_alloc_free_",
+        *b"sol_alloc_free_",
         SyscallAllocFree::call,
     )?;
 
@@ -318,7 +315,7 @@ pub fn create_program_runtime_environment_v1<'a>(
     register_feature_gated_function!(
         result,
         enable_alt_bn128_syscall,
-        b"sol_alt_bn128_group_op",
+        *b"sol_alt_bn128_group_op",
         SyscallAltBn128::call,
     )?;
 
@@ -326,7 +323,7 @@ pub fn create_program_runtime_environment_v1<'a>(
     register_feature_gated_function!(
         result,
         enable_big_mod_exp_syscall,
-        b"sol_big_mod_exp",
+        *b"sol_big_mod_exp",
         SyscallBigModExp::call,
     )?;
 
@@ -334,14 +331,14 @@ pub fn create_program_runtime_environment_v1<'a>(
     register_feature_gated_function!(
         result,
         enable_poseidon_syscall,
-        b"sol_poseidon",
+        *b"sol_poseidon",
         SyscallPoseidon::call,
     )?;
 
     // Log data
-    result.register_function(b"sol_log_data", SyscallLogData::call)?;
+    result.register_function_hashed(*b"sol_log_data", SyscallLogData::call)?;
 
-    Ok(result)
+    Ok(BuiltinProgram::new_loader(config, result))
 }
 
 fn address_is_aligned<T>(address: u64) -> bool {
