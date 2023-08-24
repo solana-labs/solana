@@ -466,11 +466,11 @@ impl LoadedPrograms {
                         existing.ix_usage_counter.load(Ordering::Relaxed),
                         Ordering::Relaxed,
                     );
-                    second_level.swap_remove(entry_index);
+                    second_level.remove(entry_index);
                 } else if existing.is_tombstone() && !entry.is_tombstone() {
                     // The old entry is tombstone and the new one is not. Let's give the new entry
                     // a chance.
-                    second_level.swap_remove(entry_index);
+                    second_level.remove(entry_index);
                 } else {
                     self.stats.replacements.fetch_add(1, Ordering::Relaxed);
                     return (true, existing.clone());
