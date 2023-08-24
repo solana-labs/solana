@@ -268,6 +268,7 @@ fn send_wire_transaction_futures<'a, P, M, C>(
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
 {
     const SEND_TIMEOUT_INTERVAL: Duration = Duration::from_secs(5);
     let sleep_duration = SEND_TRANSACTION_INTERVAL.saturating_mul(index as u32);
@@ -341,6 +342,7 @@ async fn sleep_and_send_wire_transaction_to_addr<P, M, C>(
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
 {
     sleep(sleep_duration).await;
     let conn = connection_cache.get_nonblocking_connection(&addr);
