@@ -289,7 +289,7 @@ serde_with = { version = "2.3.3", default-features = false }
 sha2 = "0.10.7"
 sha3 = "0.10.4"
 signal-hook = "0.3.17"
-siphasher = "0.3.10"
+siphasher = "0.3.11"
 smpl_jwt = "0.7.1"
 socket2 = "0.5.3"
 soketto = "0.7"
