@@ -12,7 +12,9 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 bincode = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
+bzip2 = { workspace = true }
 clap = { workspace = true }
+console = { workspace = true }
 crossbeam-channel = { workspace = true }
 flate2 = { workspace = true }
 indexmap = { workspace = true, features = ["rayon"] }
@@ -54,8 +56,11 @@ solana-tpu-client = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 static_assertions = { workspace = true }
+tar = { workspace = true }
+tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+url = { workspace = true }
 
 [dev-dependencies]
 num_cpus = { workspace = true }
