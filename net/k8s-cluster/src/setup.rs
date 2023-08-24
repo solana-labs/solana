@@ -94,28 +94,27 @@ impl<'a> Deploy<'a> {
         info!("--- Build started at {}", local.format("%Y-%m-%d %H:%M"));
         let build_variant: &str = if self.config.debug_build { "--debug" } else { "" };
         if self.config.profile_build {
-            // format!("{}{:?}{}", "RUSTFLAGS='-C force-frame-pointers=y -g ", super::RUSTFLAGS, "'")
-            // format!("{}", "RUSTFLAGS='-C force-frame-pointers=y -g '")
-
-            // let rustflags = "-C force-frame-pointers=y -D warnings";
-            info!("rust flags in build: {}", *super::RUST_FLAGS);
-            let rustflags = format!("{}{}{}", "RUSTFLAGS='-C force-frame-pointers=y -g ",  *super::RUST_FLAGS, "'");
-            info!("rust flags: {}", rustflags);
-            std::env::set_var("RUSTFLAGS", rustflags);
-            info!("rust flags updated: {}", std::env::var("RUSTFLAGS").ok().unwrap());
+            error!("Profile Build not implemented yet");
+            // info!("rust flags in build: {}", *super::RUST_FLAGS);
+            // let rustflags = format!("{}{}{}", "RUSTFLAGS='-C force-frame-pointers=y -g ",  *super::RUST_FLAGS, "'");
+            // info!("rust flags: {}", rustflags);
+            // std::env::set_var("RUSTFLAGS", rustflags);
+            // info!("rust flags updated: {}", std::env::var("RUSTFLAGS").ok().unwrap());
         }
 
-        let cargo_install_all_path = super::SOLANA_ROOT.join("scripts/cargo-install-all.sh");
+        // let cargo_install_all_path = super::SOLANA_ROOT.join("scripts/cargo-install-all.sh");
         // let command = PathBuf::from(format!("{} {:?}", profiler_flags, cargo_install_all_path));
         let install_directory = super::SOLANA_ROOT.join("farf");
-        let arguments = format!("{:?} {} {}", install_directory, build_variant, "--validator-only");
+        // let arguments = format!("{:?} {} {}", install_directory, build_variant, "--validator-only");
 
         // info!("command: {:?}", command);
-        info!("args: {}", arguments);
+        // info!("args: {}", arguments);
 
         let status = std::process::Command::new("./cargo-install-all.sh")
             .current_dir(super::SOLANA_ROOT.join("scripts"))
-            .arg(arguments)
+            .arg(install_directory)
+            .arg(build_variant)
+            .arg("--validator-only")
             .status()
             .expect("Failed to build validator executable");
 
