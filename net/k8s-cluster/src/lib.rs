@@ -19,26 +19,41 @@ use {
 
 lazy_static! {
     static ref SOLANA_ROOT: PathBuf = get_solana_root();
+    #[derive(Debug)]
+    static ref RUSTFLAGS: String = get_rust_flags();
 }
 
 pub fn initialize_globals() {
     let _ = *SOLANA_ROOT; // Force initialization of lazy_static
+    let _ = *RUSTFLAGS;
 }
 
 pub mod config;
 pub mod setup;
 
 pub fn get_solana_root() -> PathBuf {
-    if let Ok(current_dir) = env::current_dir() {
-        if let Ok(canonical_dir) = fs::canonicalize(&current_dir) {
-            return canonical_dir
-                .parent()
-                .unwrap_or(&canonical_dir)
-                .to_path_buf();
-        }
-    }
-    panic!("Failed to get Solana root directory");
+    PathBuf::from(env::var("CARGO_MANIFEST_DIR")
+        .expect("$CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("Failed to get Solana root directory")
+        .to_path_buf()
+    // if let Ok(current_dir) = env::current_dir() {
+    //     if let Ok(canonical_dir) = fs::canonicalize(&current_dir) {
+    //         return canonical_dir
+    //             .parent()
+    //             .unwrap_or(&canonical_dir)
+    //             .to_path_buf();
+    //     }
+    // }
+    // panic!("Failed to get Solana root directory");
 }
+
+pub fn get_rust_flags() -> String {
+    env::var("RUSTFLAGS").ok().unwrap_or_default()
+}
+
+
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
 static PACKAGE: Emoji = Emoji("📦 ", "");
