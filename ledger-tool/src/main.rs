@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    crate::{args::*, bigtable::*, ledger_path::*, ledger_utils::*, output::*, program::*},
+    crate::{args::*, bigtable::*, entry_util::*, ledger_path::*, ledger_utils::*, output::*, program::*},
     chrono::{DateTime, Utc},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
@@ -104,6 +104,7 @@ use {
 
 mod args;
 mod bigtable;
+mod entry_util;
 mod ledger_path;
 mod ledger_utils;
 mod output;
@@ -167,6 +168,31 @@ fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutpu
             }
         }
     }
+}
+
+fn print_slot_entries_conflicts(
+    blockstore: &Blockstore,
+    slot: Slot,
+    verbose_level: u64,
+    bank: &Bank,
+) -> Result<(), String> {
+    if blockstore.is_dead(slot) {
+        return Err("Dead slot".to_string());
+    }
+
+    let (entries, _num_shreds, _is_full) = blockstore
+        .get_slot_entries_with_shred_info(slot, 0, false)
+        .map_err(|err| format!(" Slot: {slot}, Failed to load entries, err {err:?}"))?;
+
+    if verbose_level >= 0 {
+        // collect each entry's accoutn locks (read/write locks)
+        entries.iter().enumerate().for_each(|(entry_index, entry)| {
+            let entry_account_locks = get_entry_account_locks(entry, bank);
+            print_entry_account_locks(entry_index, &entry_account_locks);
+        });
+    }
+
+    Ok(())
 }
 
 fn output_entry(
@@ -2158,6 +2184,26 @@ fn main() {
             )
         )
         .program_subcommand()
+        .subcommand(
+            SubCommand::with_name("print-slot-entries-conflicts")
+            .about("Print slots' entries account conflicts, helps to analyse if \
+                    there are benefit to parallelize non-conflicting entries in replay.")
+            .arg(&hard_forks_arg)
+            .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
+            .arg(
+                Arg::with_name("slots")
+                    .index(1)
+                    .value_name("SLOTS")
+                    .validator(is_slot)
+                    .multiple(true)
+                    .takes_value(true)
+            )
+        )
         .get_matches();
 
     info!("{} {}", crate_name!(), solana_version::version!());
@@ -4211,6 +4257,56 @@ fn main() {
                 let sst_file_name = arg_matches.value_of("file_name");
                 if let Err(err) = print_blockstore_file_metadata(&blockstore, &sst_file_name) {
                     eprintln!("{err}");
+                }
+            }
+            ("print-slot-entries-conflicts", Some(arg_matches)) => {
+                let process_options = ProcessOptions {
+                    new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                    halt_at_slot: Some(0),
+                    run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
+                    ..ProcessOptions::default()
+                };
+                let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    get_access_type(&process_options),
+                    wal_recovery_mode,
+                    force_update_to_open,
+                    enforce_ulimit_nofile,
+                );
+                let blockstore = Arc::new(blockstore);
+
+                let (bank_forks, ..) = load_and_process_ledger(
+                    arg_matches,
+                    &genesis_config,
+                    blockstore.clone(),
+                    process_options,
+                    snapshot_archive_path,
+                    incremental_snapshot_archive_path,
+                )
+                .unwrap_or_else(|err| {
+                    eprintln!("Failed to load ledger: {err:?}");
+                    exit(1);
+                });
+                // using working_bank to verify transactions, should be sufficient for most cases.
+                let bank = bank_forks.read().unwrap().working_bank();
+
+                let mut slots: Vec<u64> = vec![];
+                if !arg_matches.is_present("slots") {
+                    if let Ok(metas) = blockstore.slot_meta_iterator(0) {
+                        slots = metas.map(|(slot, _)| slot).collect();
+                    }
+                } else {
+                    slots = values_t_or_exit!(arg_matches, "slots", Slot);
+                }
+
+                for slot in slots {
+                    if let Err(err) = 
+                    print_slot_entries_conflicts(&blockstore, slot, verbose_level, &bank)
+                    {
+                        println!("{err}");
+                    }
                 }
             }
             ("", _) => {

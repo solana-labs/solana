@@ -79,8 +79,8 @@ pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
 
 #[derive(Debug, Default, AbiExample)]
 pub struct AccountLocks {
-    write_locks: HashSet<Pubkey>,
-    readonly_locks: HashMap<Pubkey, u64>,
+    pub write_locks: HashSet<Pubkey>,
+    pub readonly_locks: HashMap<Pubkey, u64>,
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
@@ -92,21 +92,21 @@ pub enum RewardInterval {
 }
 
 impl AccountLocks {
-    fn is_locked_readonly(&self, key: &Pubkey) -> bool {
+    pub fn is_locked_readonly(&self, key: &Pubkey) -> bool {
         self.readonly_locks
             .get(key)
             .map_or(false, |count| *count > 0)
     }
 
-    fn is_locked_write(&self, key: &Pubkey) -> bool {
+    pub fn is_locked_write(&self, key: &Pubkey) -> bool {
         self.write_locks.contains(key)
     }
 
-    fn insert_new_readonly(&mut self, key: &Pubkey) {
+    pub fn insert_new_readonly(&mut self, key: &Pubkey) {
         assert!(self.readonly_locks.insert(*key, 1).is_none());
     }
 
-    fn lock_readonly(&mut self, key: &Pubkey) -> bool {
+    pub fn lock_readonly(&mut self, key: &Pubkey) -> bool {
         self.readonly_locks.get_mut(key).map_or(false, |count| {
             *count += 1;
             true

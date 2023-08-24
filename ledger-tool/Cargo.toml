@@ -21,6 +21,7 @@ histogram = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 num_cpus = { workspace = true }
+rayon = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
