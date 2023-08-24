@@ -1,6 +1,6 @@
 //! Integers that serialize to variable size.
 
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     serde::{
         de::{Error as _, SeqAccess, Visitor},

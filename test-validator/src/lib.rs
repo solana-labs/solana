@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     base64::{prelude::BASE64_STANDARD, Engine},
     crossbeam_channel::Receiver,

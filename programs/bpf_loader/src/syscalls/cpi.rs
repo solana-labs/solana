@@ -1632,7 +1632,7 @@ fn account_realloc_region<'a>(
 }
 
 #[allow(clippy::indexing_slicing)]
-#[allow(clippy::integer_arithmetic)]
+#[allow(clippy::arithmetic_side_effects)]
 #[cfg(test)]
 mod tests {
     use {
