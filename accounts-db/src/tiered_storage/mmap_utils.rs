@@ -31,7 +31,7 @@ pub fn get_slice(map: &Mmap, offset: usize, size: usize) -> std::io::Result<(&[u
     }
     let data = &map[offset..next];
     let next = u64_align!(next);
-    let ptr = data.as_ptr() as *const u8;
+    let ptr = data.as_ptr();
 
     Ok((unsafe { std::slice::from_raw_parts(ptr, size) }, next))
 }

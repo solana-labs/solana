@@ -300,7 +300,7 @@ pub fn bank_from_snapshot_archives(
     if let Some(ref mut unarchive_preparation_result) = unarchived_incremental_snapshot {
         let incremental_snapshot_storages =
             std::mem::take(&mut unarchive_preparation_result.storage);
-        storage.extend(incremental_snapshot_storages.into_iter());
+        storage.extend(incremental_snapshot_storages);
     }
 
     let storage_and_next_append_vec_id = StorageAndNextAppendVecId {

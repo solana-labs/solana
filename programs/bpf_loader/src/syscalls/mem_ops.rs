@@ -196,13 +196,7 @@ fn memmove_non_contiguous(
         memory_mapping,
         reverse,
         |src_host_addr, dst_host_addr, chunk_len| {
-            unsafe {
-                std::ptr::copy(
-                    src_host_addr as *const u8,
-                    dst_host_addr as *mut u8,
-                    chunk_len,
-                )
-            };
+            unsafe { std::ptr::copy(src_host_addr, dst_host_addr as *mut u8, chunk_len) };
             Ok(0)
         },
     )
@@ -237,8 +231,8 @@ fn memcmp_non_contiguous(
         false,
         |s1_addr, s2_addr, chunk_len| {
             let res = unsafe {
-                let s1 = slice::from_raw_parts(s1_addr as *const u8, chunk_len);
-                let s2 = slice::from_raw_parts(s2_addr as *const u8, chunk_len);
+                let s1 = slice::from_raw_parts(s1_addr, chunk_len);
+                let s2 = slice::from_raw_parts(s2_addr, chunk_len);
                 // Safety:
                 // memcmp is marked unsafe since it assumes that s1 and s2 are exactly chunk_len
                 // long. The whole point of iter_memory_pair_chunks is to find same length chunks

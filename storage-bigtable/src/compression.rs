@@ -48,28 +48,24 @@ pub fn decompress(data: &[u8]) -> Result<Vec<u8>, io::Error> {
 
 pub fn compress(method: CompressionMethod, data: &[u8]) -> Result<Vec<u8>, io::Error> {
     let mut compressed_data = bincode::serialize(&method).unwrap();
-    compressed_data.extend(
-        match method {
-            CompressionMethod::Bzip2 => {
-                let mut e = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::best());
-                e.write_all(data)?;
-                e.finish()?
-            }
-            CompressionMethod::Gzip => {
-                let mut e =
-                    flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-                e.write_all(data)?;
-                e.finish()?
-            }
-            CompressionMethod::Zstd => {
-                let mut e = zstd::stream::write::Encoder::new(Vec::new(), 0).unwrap();
-                e.write_all(data)?;
-                e.finish()?
-            }
-            CompressionMethod::NoCompression => data.to_vec(),
+    compressed_data.extend(match method {
+        CompressionMethod::Bzip2 => {
+            let mut e = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::best());
+            e.write_all(data)?;
+            e.finish()?
         }
-        .into_iter(),
-    );
+        CompressionMethod::Gzip => {
+            let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            e.write_all(data)?;
+            e.finish()?
+        }
+        CompressionMethod::Zstd => {
+            let mut e = zstd::stream::write::Encoder::new(Vec::new(), 0).unwrap();
+            e.write_all(data)?;
+            e.finish()?
+        }
+        CompressionMethod::NoCompression => data.to_vec(),
+    });
 
     Ok(compressed_data)
 }

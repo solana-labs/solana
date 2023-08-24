@@ -1385,7 +1385,7 @@ pub fn process_close_vote_account(
     if let Some(vote_account) = vote_account_status
         .current
         .into_iter()
-        .chain(vote_account_status.delinquent.into_iter())
+        .chain(vote_account_status.delinquent)
         .next()
     {
         if vote_account.activated_stake != 0 {

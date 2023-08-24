@@ -10,7 +10,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut protos = Vec::new();
     for proto_file in &proto_files {
         let proto = proto_base_path.join(proto_file);
-        println!("cargo::rerun-if-changed={}", proto.display());
+        println!("cargo:rerun-if-changed={}", proto.display());
         protos.push(proto);
     }
 

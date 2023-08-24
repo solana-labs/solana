@@ -208,7 +208,7 @@ impl ShredFetchStage {
             turbine_disabled.clone(),
         );
 
-        tvu_threads.extend(repair_receiver.into_iter());
+        tvu_threads.extend(repair_receiver);
         tvu_threads.push(tvu_filter);
         tvu_threads.push(repair_handler);
 

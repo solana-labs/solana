@@ -427,7 +427,7 @@ impl AppendVec {
         Some((
             //UNSAFE: This unsafe creates a slice that represents a chunk of self.map memory
             //The lifetime of this slice is tied to &self, since it points to self.map memory
-            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, size) },
+            unsafe { std::slice::from_raw_parts(data.as_ptr(), size) },
             next,
         ))
     }
@@ -615,7 +615,7 @@ impl AppendVec {
             let ptrs = [
                 (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
                 (account_meta_ptr as *const u8, mem::size_of::<AccountMeta>()),
-                (hash_ptr as *const u8, mem::size_of::<Hash>()),
+                (hash_ptr, mem::size_of::<Hash>()),
                 (data_ptr, data_len),
             ];
             if let Some(res) = self.append_ptrs_locked(&mut offset, &ptrs) {

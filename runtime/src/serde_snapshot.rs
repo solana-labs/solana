@@ -176,7 +176,7 @@ impl<T> SnapshotAccountsDbFields<T> {
                     })?;
 
                 let mut combined_storages = full_snapshot_storages;
-                combined_storages.extend(incremental_snapshot_storages.into_iter());
+                combined_storages.extend(incremental_snapshot_storages);
 
                 Ok(AccountsDbFields(
                     combined_storages,

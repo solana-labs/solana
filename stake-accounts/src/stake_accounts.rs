@@ -138,7 +138,7 @@ fn move_stake_account(
         new_withdraw_authority_pubkey,
     );
 
-    instructions.extend(authorize_instructions.into_iter());
+    instructions.extend(authorize_instructions);
     let message = Message::new(&instructions, Some(fee_payer_pubkey));
     Some(message)
 }

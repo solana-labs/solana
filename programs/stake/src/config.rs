@@ -1,12 +1,12 @@
 //! config for staking
 //!  carries variables that the stake program cares about
+#[allow(deprecated)]
+use solana_sdk::stake::config;
 #[deprecated(
     since = "1.8.0",
     note = "Please use `solana_sdk::stake::config` or `solana_program::stake::config` instead"
 )]
 pub use solana_sdk::stake::config::*;
-#[allow(deprecated)]
-use solana_sdk::stake::config::{self, Config};
 use {
     bincode::deserialize,
     solana_config_program::{create_config_account, get_config_data},
