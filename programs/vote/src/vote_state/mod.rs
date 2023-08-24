@@ -1071,9 +1071,9 @@ impl VoteState {
     }
 
     /// "unchecked" functions used by tests and Tower
-    pub fn process_vote_unchecked(&mut self, vote: Vote) {
+    pub fn process_vote_unchecked(&mut self, vote: Vote) -> Result<(), VoteError> {
         let slot_hashes: Vec<_> = vote.slots.iter().rev().map(|x| (*x, vote.hash)).collect();
-        let _ignored = self.process_vote(&vote, &slot_hashes, self.current_epoch(), None);
+        self.process_vote(&vote, &slot_hashes, self.current_epoch(), None)
     }
 
     #[cfg(test)]
@@ -1084,7 +1084,7 @@ impl VoteState {
     }
 
     pub fn process_slot_vote_unchecked(&mut self, slot: Slot) {
-        self.process_vote_unchecked(Vote::new(vec![slot], Hash::default()));
+        let _ = self.process_vote_unchecked(Vote::new(vec![slot], Hash::default()));
     }
 
     pub fn nth_recent_vote(&self, position: usize) -> Option<&Lockout> {
@@ -2180,11 +2180,13 @@ mod tests {
             // Duplicate vote_state so that the new vote can be applied
             let mut vote_state_after_vote = vote_state.clone();
 
-            vote_state_after_vote.process_vote_unchecked(Vote {
-                slots: vote_group.clone(),
-                hash: Hash::new_unique(),
-                timestamp: None,
-            });
+            vote_state_after_vote
+                .process_vote_unchecked(Vote {
+                    slots: vote_group.clone(),
+                    hash: Hash::new_unique(),
+                    timestamp: None,
+                })
+                .unwrap();
 
             // Now use the resulting new vote state to perform a vote state update on vote_state
             assert_eq!(
