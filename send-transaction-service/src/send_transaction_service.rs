@@ -789,17 +789,12 @@ impl SendTransactionService {
         config: &'a Config,
         protocol: Protocol,
     ) -> Vec<(&'a SocketAddr, Slot)> {
-        let addresses = leader_info.as_ref().map(|leader_info| {
-            leader_info.get_leader_tpus_with_slots(config.leader_forward_count, protocol)
-        });
-        addresses
-            .map(|address_list| {
-                if address_list.is_empty() {
-                    vec![(tpu_address, 0)]
-                } else {
-                    address_list
-                }
+        leader_info
+            .as_ref()
+            .map(|leader_info| {
+                leader_info.get_leader_tpus_with_slots(config.leader_forward_count, protocol)
             })
+            .filter(|addresses| !addresses.is_empty())
             .unwrap_or_else(|| vec![(tpu_address, 0)])
     }
 
