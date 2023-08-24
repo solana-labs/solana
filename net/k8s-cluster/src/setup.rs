@@ -5,22 +5,11 @@ use {
         extract_release_archive,
         download_to_temp,
     },
-    bzip2::bufread::BzDecoder,
-    console::{style, Emoji},
-    indicatif::{ProgressBar, ProgressStyle},
     log::*,
-    reqwest::{self, Response},
-    solana_sdk::hash::{Hash, Hasher},
     std::{
         fs,
-        fs::File,
-        io::{self, BufReader, Cursor, Read},
-        path::{Path, PathBuf},
-        time::Duration,
+        path::PathBuf,
     },
-    tar::Archive,
-    tempfile::TempDir,
-    url::Url,
 };
 
 #[derive(Clone, Debug)]
