@@ -12,7 +12,7 @@ use {
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{clock::Epoch, pubkey::Pubkey},
-    std::sync::Arc,
+    std::rc::Rc,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -56,7 +56,7 @@ impl InflationSubCommands for App<'_, '_> {
 pub fn parse_inflation_subcommand(
     matches: &ArgMatches<'_>,
     _default_signer: &DefaultSigner,
-    _wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    _wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let command = match matches.subcommand() {
         ("rewards", Some(matches)) => {
