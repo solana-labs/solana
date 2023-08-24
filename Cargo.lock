@@ -6293,6 +6293,7 @@ dependencies = [
  "bincode",
  "bv",
  "bzip2",
+ "chrono",
  "clap 2.33.3",
  "console",
  "crossbeam-channel",

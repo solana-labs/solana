@@ -18,7 +18,7 @@ use {
     serde_json,
     solana_k8s_cluster::{
         config::SetupConfig,
-        setup::{Deploy, DeployConfig},
+        setup::{Deploy, BuildConfig},
     },
     std::{collections::BTreeMap, process, thread, time::Duration},
 };
@@ -91,6 +91,11 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("do-build")
                 .help("Enable building for building from local repo"),
         )
+        .arg(
+            Arg::with_name("debug_build")
+                .long("debug-build")
+                .help("Enable debug build"),
+        )
         .get_matches()
 }
 
@@ -106,12 +111,14 @@ async fn main() {
         namespace: matches.value_of("cluster_namespace").unwrap_or_default(),
         num_validators: value_t_or_exit!(matches, "number_of_validators", i32),
     };
-    let deploy_config = DeployConfig {
+    let build_config = BuildConfig {
         release_channel: matches.value_of("release_channel").unwrap_or_default(),
         deploy_method: matches.value_of("deploy_method").unwrap(),
         do_build: matches.is_present("do_build"),
+        debug_build: matches.is_present("debug_build"),
+        profile_build: matches.is_present("profile_build"),
     };
-    let deploy = Deploy::new(deploy_config);
+    let deploy = Deploy::new(build_config);
     deploy.prepare().await;
 
     process::exit(1);

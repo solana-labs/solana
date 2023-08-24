@@ -10,25 +10,25 @@ use {
         fs,
         path::PathBuf,
     },
+    chrono::prelude::*,
 };
 
 #[derive(Clone, Debug)]
-pub struct DeployConfig<'a> {
+pub struct BuildConfig<'a> {
     pub release_channel: &'a str,
     pub deploy_method: &'a str,
     pub do_build: bool,
+    pub debug_build: bool,
+    pub profile_build: bool,
 }
 
 #[derive(Clone, Debug)]
 pub struct Deploy<'a> {
-    config: DeployConfig<'a>,
+    config: BuildConfig<'a>,
 }
 
-
-
-
 impl<'a> Deploy<'a> {
-    pub fn new(config: DeployConfig<'a>) -> Self {
+    pub fn new(config: BuildConfig<'a>) -> Self {
         initialize_globals();
         Deploy { config }
     }
@@ -86,6 +86,21 @@ impl<'a> Deploy<'a> {
 
     fn build(&self) {
         info!("building!");
+        let local: DateTime<Local> = Local::now();
+        info!("--- Build started at {}", local.format("%Y-%m-%d %H:%M"));
+        let build_variant: &str = if self.config.debug_build { "--debug" } else { "" };
+        let profiler_flags = if self.config.profile_build {
+            format!("{}{:?}{}", "RUSTFLAGS='-C force-frame-pointers=y -g ", super::RUSTFLAGS, "'")
+        } else {
+            "".to_string()
+        };
+
+        // let command = format!("{} {}", profiler_flags );
+        // let status = std::process::Command::new()
+
+
+
+
     }
 
     async fn download_release_from_channel(&self, file_name: &str) -> Result<(), String> {
@@ -93,7 +108,8 @@ impl<'a> Deploy<'a> {
             "Downloading release from channel: {}",
             self.config.release_channel
         );
-        let file_path = super::SOLANA_ROOT.join("solana-release.tar.bz2");
+        let tar_file = format!("{}{}", file_name, ".tar.bz2");
+        let file_path = super::SOLANA_ROOT.join(tar_file.as_str());
         // Remove file
         if let Err(err) = fs::remove_file(&file_path) {
             if err.kind() != std::io::ErrorKind::NotFound {
@@ -109,7 +125,7 @@ impl<'a> Deploy<'a> {
         );
         info!("update_download_url: {}", update_download_url);
 
-        let _ = download_to_temp(update_download_url.as_str(), format!("{}{}", file_name, ".tar.bz2").as_str())
+        let _ = download_to_temp(update_download_url.as_str(), tar_file.as_str())
             .await
             .map_err(|err| format!("Unable to download {update_download_url}: {err}"))?;
 
