@@ -834,11 +834,55 @@ impl<'a> AccountsHasher<'a> {
         (hashes, lamports_total)
     }
 
+    fn get_item2<'b>(
+        min_index: usize,
+        bin: usize,
+        sorted_data_by_pubkey: &[&'b [CalculateHashIntermediate]],
+        first_items: &mut Vec<(usize, usize, &'b Pubkey)>,
+        binner: &PubkeyBinCalculator24,
+    ) -> &'b CalculateHashIntermediate {
+        let (division_index, mut index, key) = first_items[min_index];
+        let division_data = &sorted_data_by_pubkey[division_index];
+        index += 1;
+        let mut end;
+        loop {
+            end = index >= division_data.len();
+            if end {
+                break;
+            }
+            // still more items where we found the previous key, so just increment the index for that slot group, skipping all pubkeys that are equal
+            let next_key = &division_data[index].pubkey;
+            if next_key == key {
+                index += 1;
+                continue; // duplicate entries of same pubkey, so keep skipping
+            }
+
+            if binner.bin_from_pubkey(next_key) > bin {
+                // the next pubkey is not in our bin
+                end = true;
+                break;
+            }
+
+            // point to the next pubkey > key
+            first_items[min_index] = (division_index, index, next_key);
+            break;
+        }
+        if end {
+            // stop looking in this vector - we exhausted it
+            first_items.remove(min_index);
+        }
+
+        // this is the previous first item that was requested
+        &division_data[index - 1]
+    }
+
     /// returns the item referenced by `min_index`
     ///   updates `indexes` to skip over the pubkey and its duplicates
     ///   updates `first_items` to point to the next pubkey
     /// or removes the entire pubkey division entries (for `min_index`) if the referenced pubkey is the last entry in the same `bin`
     ///     removed from: `first_items`, `indexes`, and `first_item_pubkey_division`
+    ///
+    #[allow(dead_code)]
     fn get_item<'b>(
         min_index: usize,
         bin: usize,
@@ -982,11 +1026,10 @@ impl<'a> AccountsHasher<'a> {
         let binner = PubkeyBinCalculator24::new(bins);
 
         let len = sorted_data_by_pubkey.len();
-        let mut indexes = Vec::with_capacity(len);
+
+        // (division_index, index, &pubkey) - 32 bytes
         let mut first_items = Vec::with_capacity(len);
-        // map from index of an item in first_items[] to index of the corresponding item in sorted_data_by_pubkey[]
-        // this will change as items in sorted_data_by_pubkey[] are exhausted
-        let mut first_item_to_pubkey_division = Vec::with_capacity(len);
+
         let mut hashes = AccountHashesFile {
             count_and_writer: None,
             dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
@@ -999,10 +1042,8 @@ impl<'a> AccountsHasher<'a> {
                 let first_pubkey_in_bin =
                     Self::find_first_pubkey_in_bin(hash_data, pubkey_bin, bins, &binner, stats);
                 if let Some(first_pubkey_in_bin) = first_pubkey_in_bin {
-                    let k = hash_data[first_pubkey_in_bin].pubkey;
-                    first_items.push(k);
-                    first_item_to_pubkey_division.push(i);
-                    indexes.push(first_pubkey_in_bin);
+                    let k = &hash_data[first_pubkey_in_bin].pubkey;
+                    first_items.push((i, first_pubkey_in_bin, k))
                 }
             });
         let mut overall_sum = 0;
@@ -1013,14 +1054,14 @@ impl<'a> AccountsHasher<'a> {
         while !first_items.is_empty() {
             let loop_stop = { first_items.len() - 1 }; // we increment at the beginning of the loop
             let mut min_index = 0;
-            let mut min_pubkey = first_items[min_index];
+            let mut min_pubkey = first_items[min_index].2;
             let mut first_item_index = 0; // we will start iterating at item 1. +=1 is first instruction in loop
 
             // this loop iterates over each slot group to find the minimum pubkey at the maximum slot
             // it also identifies duplicate pubkey entries at lower slots and remembers those to skip them after
             while first_item_index < loop_stop {
                 first_item_index += 1;
-                let key = &first_items[first_item_index];
+                let key = &first_items[first_item_index].2;
                 let cmp = min_pubkey.cmp(key);
                 match cmp {
                     std::cmp::Ordering::Less => {
@@ -1039,13 +1080,11 @@ impl<'a> AccountsHasher<'a> {
                 min_index = first_item_index;
             }
             // get the min item, add lamports, get hash
-            let item = Self::get_item(
+            let item = Self::get_item2(
                 min_index,
                 pubkey_bin,
-                &mut first_items,
                 sorted_data_by_pubkey,
-                &mut indexes,
-                &mut first_item_to_pubkey_division,
+                &mut first_items,
                 &binner,
             );
 
@@ -1074,13 +1113,11 @@ impl<'a> AccountsHasher<'a> {
                 // reverse this list because get_item can remove first_items[*i] when *i is exhausted
                 //  and that would mess up subsequent *i values
                 duplicate_pubkey_indexes.iter().rev().for_each(|i| {
-                    Self::get_item(
+                    Self::get_item2(
                         *i,
                         pubkey_bin,
-                        &mut first_items,
                         sorted_data_by_pubkey,
-                        &mut indexes,
-                        &mut first_item_to_pubkey_division,
+                        &mut first_items,
                         &binner,
                     );
                 });
