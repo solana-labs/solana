@@ -1261,8 +1261,8 @@ impl Validator {
                         None,
                         true,
                     );
-                    let working_bank = bank_forks.read().unwrap().working_bank();
-                    working_bank.register_hard_fork(new_root_slot);
+                    let hard_fork_bank = bank_forks.read().unwrap().get(new_root_slot).unwrap();
+                    hard_fork_bank.register_hard_fork(new_root_slot);
                     loop {
                         if get_incremental_snapshot_archives(&config.snapshot_config.incremental_snapshot_archives_dir)
                             .iter()
@@ -1276,7 +1276,7 @@ impl Validator {
                     config.turbine_disabled.swap(false, Ordering::Relaxed);
                     let new_shred_version = compute_shred_version(
                         &genesis_config.hash(),
-                        Some(&working_bank.hard_forks()),
+                        Some(&hard_fork_bank.hard_forks()),
                     );
                     *tvu_shred_version.write().unwrap() = new_shred_version;
                     cluster_info
