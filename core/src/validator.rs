@@ -1252,17 +1252,21 @@ impl Validator {
             ) {
                 Ok(new_root_slot) => {
                     info!(
-                        "wen_restart set_root and generate snapshot {}",
+                        "wen_restart add hard forks, set_root and generate snapshot {}",
                         new_root_slot
                     );
-                    bank_forks.write().unwrap().set_root(
-                        new_root_slot,
-                        &accounts_background_request_sender,
-                        None,
-                        true,
-                    );
-                    let hard_fork_bank = bank_forks.read().unwrap().get(new_root_slot).unwrap();
-                    hard_fork_bank.register_hard_fork(new_root_slot);
+                    {
+                        let mut my_bank_forks = bank_forks.write().unwrap();
+                        let root_bank = my_bank_forks.root_bank();
+                        root_bank.register_hard_fork(new_root_slot);
+                        my_bank_forks.set_root(
+                            new_root_slot,
+                            &accounts_background_request_sender,
+                            None,
+                            true,
+                        );
+                    }
+                    info!("wen_restart waiting for new snapshot to be generated on {}", new_root_slot);
                     loop {
                         if get_incremental_snapshot_archives(&config.snapshot_config.incremental_snapshot_archives_dir)
                             .iter()
@@ -1271,12 +1275,12 @@ impl Validator {
                             info!("wen_restart snapshot generated {}", new_root_slot);
                             break;
                         }
-                        sleep(Duration::from_millis(100));
+                        sleep(Duration::from_millis(1000));
                     }
                     config.turbine_disabled.swap(false, Ordering::Relaxed);
                     let new_shred_version = compute_shred_version(
                         &genesis_config.hash(),
-                        Some(&hard_fork_bank.hard_forks()),
+                        Some(&bank_forks.read().unwrap().root_bank().hard_forks()),
                     );
                     *tvu_shred_version.write().unwrap() = new_shred_version;
                     cluster_info
