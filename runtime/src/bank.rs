@@ -8069,6 +8069,7 @@ impl Bank {
             feature_set::enable_partitioned_epoch_reward::id(),
             feature_set::disable_deploy_of_alloc_free_syscall::id(),
             feature_set::last_restart_slot_sysvar::id(),
+            feature_set::delay_visibility_of_program_deployment::id(),
         ];
         if !only_apply_transitions_for_new_features
             || FEATURES_AFFECTING_RBPF
