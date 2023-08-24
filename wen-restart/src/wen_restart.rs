@@ -102,9 +102,9 @@ pub fn wen_restart(
         }
     }
     info!(
-        "Starting repair and restart protocol last vote {} {:?}",
+        "wen_restart last voted fork {} {:?}",
         last_voted_slot,
-        last_voted_fork.len()
+        last_voted_fork
     );
     last_voted_fork.sort();
     cluster_info.push_last_voted_fork_slots(&last_voted_fork, last_vote.hash());
