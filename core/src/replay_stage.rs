@@ -67,7 +67,6 @@ use {
     },
     solana_sdk::{
         clock::{BankId, Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
-        feature_set,
         genesis_config::ClusterType,
         hash::Hash,
         pubkey::Pubkey,
@@ -2123,7 +2122,7 @@ impl ReplayStage {
             datapoint_info!("replay_stage-voted_empty_bank", ("slot", bank.slot(), i64));
         }
         trace!("handle votable bank {}", bank.slot());
-        let new_root = tower.record_bank_vote(bank, vote_account_pubkey);
+        let new_root = tower.record_bank_vote(bank);
 
         if let Some(new_root) = new_root {
             // get the root bank before squash
@@ -2303,14 +2302,11 @@ impl ReplayStage {
 
         // Send our last few votes along with the new one
         // Compact the vote state update before sending
-        let should_compact = bank
-            .feature_set
-            .is_active(&feature_set::compact_vote_state_updates::id());
-        let vote = match (should_compact, vote) {
-            (true, VoteTransaction::VoteStateUpdate(vote_state_update)) => {
+        let vote = match vote {
+            VoteTransaction::VoteStateUpdate(vote_state_update) => {
                 VoteTransaction::CompactVoteStateUpdate(vote_state_update)
             }
-            (_, vote) => vote,
+            vote => vote,
         };
         let vote_ix = switch_fork_decision
             .to_vote_instruction(
@@ -3024,10 +3020,7 @@ impl ReplayStage {
                 if !is_computed {
                     // Check if our tower is behind, if so (and the feature migration flag is in use)
                     // overwrite with the newer bank.
-                    if let (true, Some(vote_account)) = (
-                        Tower::is_direct_vote_state_update_enabled(bank),
-                        bank.get_vote_account(my_vote_pubkey),
-                    ) {
+                    if let Some(vote_account) = bank.get_vote_account(my_vote_pubkey) {
                         if let Ok(mut bank_vote_state) = vote_account.vote_state().cloned() {
                             if bank_vote_state.last_voted_slot()
                                 > tower.vote_state.last_voted_slot()
@@ -6297,10 +6290,7 @@ pub(crate) mod tests {
         assert_eq!(reset_fork.unwrap(), 4);
 
         // Record the vote for 5 which is not on the heaviest fork.
-        tower.record_bank_vote(
-            &bank_forks.read().unwrap().get(5).unwrap(),
-            &Pubkey::default(),
-        );
+        tower.record_bank_vote(&bank_forks.read().unwrap().get(5).unwrap());
 
         // 4 should be the heaviest slot, but should not be votable
         // because of lockout. 5 is the heaviest slot on the same fork as the last vote.
@@ -6447,10 +6437,7 @@ pub(crate) mod tests {
         assert_eq!(reset_fork.unwrap(), 4);
 
         // Record the vote for 4
-        tower.record_bank_vote(
-            &bank_forks.read().unwrap().get(4).unwrap(),
-            &Pubkey::default(),
-        );
+        tower.record_bank_vote(&bank_forks.read().unwrap().get(4).unwrap());
 
         // Mark 4 as duplicate, 3 should be the heaviest slot, but should not be votable
         // because of lockout
@@ -6684,10 +6671,7 @@ pub(crate) mod tests {
             ..
         } = vote_simulator;
 
-        tower.record_bank_vote(
-            &bank_forks.read().unwrap().get(first_vote).unwrap(),
-            &Pubkey::default(),
-        );
+        tower.record_bank_vote(&bank_forks.read().unwrap().get(first_vote).unwrap());
 
         // Simulate another version of slot 2 was duplicate confirmed
         let our_bank2_hash = bank_forks.read().unwrap().bank_hash(2).unwrap();
@@ -7079,7 +7063,7 @@ pub(crate) mod tests {
         // Simulate landing a vote for slot 0 landing in slot 1
         let bank1 = Arc::new(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1));
         bank1.fill_bank_with_ticks_for_tests();
-        tower.record_bank_vote(&bank0, &my_vote_pubkey);
+        tower.record_bank_vote(&bank0);
         ReplayStage::push_vote(
             &bank0,
             &my_vote_pubkey,
@@ -7149,7 +7133,7 @@ pub(crate) mod tests {
 
         // Simulate submitting a new vote for bank 1 to the network, but the vote
         // not landing
-        tower.record_bank_vote(&bank1, &my_vote_pubkey);
+        tower.record_bank_vote(&bank1);
         ReplayStage::push_vote(
             &bank1,
             &my_vote_pubkey,
@@ -7344,7 +7328,7 @@ pub(crate) mod tests {
         progress: &mut ProgressMap,
     ) -> Arc<Bank> {
         let my_vote_pubkey = &my_vote_keypair[0].pubkey();
-        tower.record_bank_vote(&parent_bank, my_vote_pubkey);
+        tower.record_bank_vote(&parent_bank);
         ReplayStage::push_vote(
             &parent_bank,
             my_vote_pubkey,
