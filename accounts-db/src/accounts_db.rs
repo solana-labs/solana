@@ -3487,8 +3487,7 @@ impl AccountsDb {
 
         let (reclaims, pubkeys_removed_from_accounts_index2) =
             self.purge_keys_exact(pubkey_to_slot_set.iter());
-        pubkeys_removed_from_accounts_index
-            .extend(pubkeys_removed_from_accounts_index2.into_iter());
+        pubkeys_removed_from_accounts_index.extend(pubkeys_removed_from_accounts_index2);
 
         // Don't reset from clean, since the pubkeys in those stores may need to be unref'ed
         // and those stores may be used for background hashing.
@@ -7358,7 +7357,7 @@ impl AccountsDb {
                 let mut sort_time = Measure::start("sort_storages");
                 let min_root = self.accounts_index.min_alive_root();
                 let storages = SortedStorages::new_with_slots(
-                    combined_maps.iter().zip(slots.into_iter()),
+                    combined_maps.iter().zip(slots),
                     min_root,
                     Some(slot),
                 );
@@ -7824,7 +7823,7 @@ impl AccountsDb {
             let (storages, slots) =
                 self.get_snapshot_storages(base_slot.checked_add(1).unwrap()..=slot);
             let sorted_storages =
-                SortedStorages::new_with_slots(storages.iter().zip(slots.into_iter()), None, None);
+                SortedStorages::new_with_slots(storages.iter().zip(slots), None, None);
             let calculated_incremental_accounts_hash = self.calculate_incremental_accounts_hash(
                 &calc_config,
                 &sorted_storages,

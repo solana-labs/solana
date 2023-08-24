@@ -485,7 +485,7 @@ impl AdminRpc for AdminRpcImpl {
             .staked_map_id;
         let mut write_staked_nodes = meta.staked_nodes_overrides.write().unwrap();
         write_staked_nodes.clear();
-        write_staked_nodes.extend(loaded_config.into_iter());
+        write_staked_nodes.extend(loaded_config);
         info!("Staked nodes overrides loaded from {}", path);
         debug!("overrides map: {:?}", write_staked_nodes);
         Ok(())

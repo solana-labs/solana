@@ -2385,7 +2385,7 @@ pub fn return_signers_data(tx: &Transaction, config: &ReturnSignersConfig) -> Cl
     tx.signatures
         .iter()
         .zip(tx.message.account_keys.iter())
-        .zip(verify_results.into_iter())
+        .zip(verify_results)
         .for_each(|((sig, key), res)| {
             if res {
                 signers.push(format!("{key}={sig}"))
