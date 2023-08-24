@@ -614,13 +614,15 @@ pub fn ed25519_verify(
     // power-of-two number around that accounting for the fact that the CPU
     // may be busy doing other things while being a real validator
     // TODO: dynamically adjust this crossover
-    if valid_packet_count < 64
-        || 100usize
-            .wrapping_mul(valid_packet_count)
-            .wrapping_div(total_packet_count)
-            < 90
-    {
-        return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
+    let maybe_valid_percentage = 100usize
+        .wrapping_mul(valid_packet_count)
+        .checked_div(total_packet_count);
+    let Some(valid_percentage) = maybe_valid_percentage else {
+        return;
+    };
+    if valid_percentage < 90 || valid_packet_count < 64 {
+        ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
+        return;
     }
 
     let (signature_offsets, pubkey_offsets, msg_start_offsets, msg_sizes, sig_lens) =
