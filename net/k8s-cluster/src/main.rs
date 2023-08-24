@@ -1,12 +1,5 @@
 use {
     clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
-    solana_k8s_cluster::{
-        config::SetupConfig,
-        setup::{
-            Deploy,
-            DeployConfig,
-        },
-    },
     k8s_openapi::{
         api::{
             apps::v1::{Deployment, DeploymentSpec},
@@ -23,13 +16,11 @@ use {
     },
     log::*,
     serde_json,
-    std::{
-        collections::BTreeMap,
-        thread,
-        time::Duration,
-        process,
-    }
-
+    solana_k8s_cluster::{
+        config::SetupConfig,
+        setup::{Deploy, DeployConfig},
+    },
+    std::{collections::BTreeMap, process, thread, time::Duration},
 };
 
 const BOOTSTRAP_VALIDATOR_REPLICAS: i32 = 1;
@@ -98,7 +89,7 @@ fn parse_matches() -> ArgMatches<'static> {
         .arg(
             Arg::with_name("do_build")
                 .long("do-build")
-                .help("Enable building for building from local repo")
+                .help("Enable building for building from local repo"),
         )
         .get_matches()
 }
@@ -140,7 +131,6 @@ async fn main() {
 
     info!("namespace: {}", setup_config.namespace);
 
-
     let client = Client::try_default().await.unwrap();
 
     //Bootstrap validator deployment and service creation/deployment
@@ -157,32 +147,51 @@ async fn main() {
         BOOTSTRAP_VALIDATOR_REPLICAS,
         &bootstrap_validator_selector,
     );
-    let dep_name = match deploy_deployment(client.clone(), setup_config.namespace, &bootstrap_validator_deployment).await {
+    let dep_name = match deploy_deployment(
+        client.clone(),
+        setup_config.namespace,
+        &bootstrap_validator_deployment,
+    )
+    .await
+    {
         Ok(dep) => {
             info!("bootstrap validator deployment deployed successfully");
             dep.metadata.name.unwrap()
         }
         Err(err) => {
-            error!("Error! Failed to deploy bootstrap validator deployment. err: {:?}", err);
+            error!(
+                "Error! Failed to deploy bootstrap validator deployment. err: {:?}",
+                err
+            );
             err.to_string() //TODO: fix this, should handle this error better. shoudn't just return a string. should exit or something better
         }
     };
 
     let bootstrap_validator_service =
         create_bootstrap_validator_service(setup_config.namespace, &bootstrap_validator_selector);
-    match deploy_service(client.clone(), setup_config.namespace, &bootstrap_validator_service).await {
+    match deploy_service(
+        client.clone(),
+        setup_config.namespace,
+        &bootstrap_validator_service,
+    )
+    .await
+    {
         Ok(_) => info!("bootstrap validator service deployed successfully"),
-        Err(err) => error!("Error! Failed to deploy bootstrap validator service. err: {:?}", err)
+        Err(err) => error!(
+            "Error! Failed to deploy bootstrap validator service. err: {:?}",
+            err
+        ),
     }
 
     //TODO: handle this return val properly, don't just unwrap
-    while !check_deployment_ready(client.clone(), setup_config.namespace, dep_name.as_str()).await.unwrap() {
+    while !check_deployment_ready(client.clone(), setup_config.namespace, dep_name.as_str())
+        .await
+        .unwrap()
+    {
         info!("deployment: {} not ready...", dep_name);
         thread::sleep(Duration::from_secs(1));
     }
     info!("deployment: {} Ready!", dep_name);
-
-
 
     //Validator deployment and service creation/deployment
     let mut validator_selector = BTreeMap::new(); // Create a JSON map for label selector
@@ -198,20 +207,33 @@ async fn main() {
         setup_config.num_validators,
         &validator_selector,
     );
-    match deploy_deployment(client.clone(), setup_config.namespace, &validator_deployment).await {
+    match deploy_deployment(
+        client.clone(),
+        setup_config.namespace,
+        &validator_deployment,
+    )
+    .await
+    {
         Ok(_) => info!("validator deployment deployed successfully"),
-        Err(err) => error!("Error! Failed to deploy validator deployment. err: {:?}", err)
+        Err(err) => error!(
+            "Error! Failed to deploy validator deployment. err: {:?}",
+            err
+        ),
     }
 
     let validator_service = create_validator_service(setup_config.namespace, &validator_selector);
     match deploy_service(client.clone(), setup_config.namespace, &validator_service).await {
         Ok(_) => info!("validator service deployed successfully"),
-        Err(err) => error!("Error! Failed to deploy validator service. err: {:?}", err)
+        Err(err) => error!("Error! Failed to deploy validator service. err: {:?}", err),
     }
 
-    let _ = check_service_matching_deployment(client.clone(), "bootstrap-validator", setup_config.namespace).await;
+    let _ = check_service_matching_deployment(
+        client.clone(),
+        "bootstrap-validator",
+        setup_config.namespace,
+    )
+    .await;
     let _ = check_service_matching_deployment(client, "validator", setup_config.namespace).await;
-
 }
 
 async fn check_deployment_ready(
@@ -223,7 +245,12 @@ async fn check_deployment_ready(
     let deployment = deployments.get(deployment_name).await?;
 
     let desired_validators = deployment.spec.as_ref().unwrap().replicas.unwrap_or(1);
-    let available_validators = deployment.status.as_ref().unwrap().available_replicas.unwrap_or(0);
+    let available_validators = deployment
+        .status
+        .as_ref()
+        .unwrap()
+        .available_replicas
+        .unwrap_or(0);
 
     Ok(available_validators >= desired_validators)
 }
@@ -269,7 +296,7 @@ fn create_bootstrap_validator_deployment(
         num_bootstrap_validators,
         label_selector,
         env_var,
-        &command
+        &command,
     )
 }
 
