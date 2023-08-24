@@ -1,11 +1,10 @@
 use {
     lazy_static::lazy_static,
     bzip2::bufread::BzDecoder,
-    console::{style, Emoji},
+    console::Emoji,
     indicatif::{ProgressBar, ProgressStyle},
     log::*,
-    reqwest::{self, Response},
-    solana_sdk::hash::{Hash, Hasher},
+    reqwest,
     std::{
         env,
         fs,
@@ -15,7 +14,6 @@ use {
         time::Duration,
     },
     tar::Archive,
-    tempfile::TempDir,
     url::Url,
 };
 
