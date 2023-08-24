@@ -37,32 +37,40 @@ fn select_heaviest_fork(
 ) -> Option<(Slot, Hash, f64)> {
     let new_slots_map: HashMap<Slot, f64> = new_slots.into_iter().collect();
     let descendants = my_bank_forks.descendants();
-    let mut selected_bank = my_bank_forks.root_bank();
+    let mut current_bank = my_bank_forks.root_bank().clone();
     loop {
-        let current_slot = selected_bank.slot();
+        let current_slot = current_bank.slot();
         match descendants.get(&current_slot) {
             None => break,
-            Some(children) => {
+            Some(my_descendants) => {
                 let mut selected_slot = 0;
                 let mut selected_weight: f64 = 0.0;
-                children.iter().for_each(|slot| {
-                    let weight = new_slots_map.get(slot).unwrap_or(&0.0);
-                    if weight > &selected_weight {
-                        selected_weight = *weight;
-                        selected_slot = slot.clone();
+                let mut selected_bank = current_bank.clone();
+                my_descendants.iter().for_each(|slot| {
+                    if let Some(my_bank) = my_bank_forks.get(*slot) {
+                        if let Some(parent) = my_bank.parent() {
+                            if parent.slot() == current_slot {
+                                let weight = new_slots_map.get(slot).unwrap_or(&0.0);
+                                if weight > &selected_weight {
+                                    selected_weight = *weight;
+                                    selected_slot = slot.clone();
+                                    selected_bank = my_bank.clone();
+                                }
+                            }
+                        }
                     }
                 });
                 if selected_weight + not_active_percentage > 0.62 {
-                    selected_bank = my_bank_forks.get(selected_slot).unwrap();
+                    current_bank = selected_bank;
                 } else {
                     break;
                 }
-            }
+            },
         }
     }
-    let slot = selected_bank.slot();
+    let slot = current_bank.slot();
     if let Some(percent) = new_slots_map.get(&slot) {
-        return Some((slot, selected_bank.hash(), *percent));
+        return Some((slot, current_bank.hash(), *percent));
     } else {
         return None;
     }
