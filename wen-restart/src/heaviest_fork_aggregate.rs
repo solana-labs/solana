@@ -32,8 +32,6 @@ impl HeaviestForkAggregate {
         heaviest_fork_list: Vec<(Slot, Hash, Percent)>,
         epoch_stakes_map: &mut EpochStakesMap,
     ) -> (f64, usize) {
-        let node_stakes = epoch_stakes_map.epoch_stakes(None);
-        let total_epoch_stake = node_stakes.total_stake();
         heaviest_fork_list
             .into_iter()
             .for_each(|(slot, hash, percent)| {
@@ -41,8 +39,10 @@ impl HeaviestForkAggregate {
                 self.aggregate.entry((slot, hash)).or_insert(HashSet::new()).insert(pubkey);
                 self.active_peers.insert(pubkey);
             });
-        let mut stake_on_my_vote = 0;
+        let mut my_ratio = 0.0;
         for ((slot, hash), peers) in self.aggregate.iter() {
+            let node_stakes = epoch_stakes_map.epoch_stakes(Some(*slot));
+            let total_epoch_stake = node_stakes.total_stake();
             let total_stake = peers.iter().map(|pubkey| {
                 node_stakes
                     .node_id_to_vote_accounts()
@@ -52,11 +52,12 @@ impl HeaviestForkAggregate {
             })
             .reduce(|a, b| a + b)
             .unwrap();
+            let ratio = total_stake as f64 / total_epoch_stake as f64;
             if slot == &self.my_slot && hash == &self.my_hash {
-                stake_on_my_vote = total_stake;
+                my_ratio = ratio;
             }
-            info!("HeaviestFork: ({}, {}) : {} {:?}", slot, hash, total_stake, peers);
+            info!("HeaviestFork: ({}, {}) : {} {:?}", slot, hash, ratio, peers);
         }
-        return (stake_on_my_vote as f64 / total_epoch_stake as f64, self.active_peers.len());
+        return (my_ratio, self.active_peers.len());
     }
 }
