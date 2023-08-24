@@ -7,7 +7,7 @@ use {
         pubkey::Pubkey,
         signature::Signer,
     },
-    std::{error::Error, sync::Arc},
+    std::{error::Error, rc::Rc},
 };
 
 pub(crate) struct NewArgs<P, K> {
@@ -82,7 +82,7 @@ pub(crate) struct Args<P, K> {
 }
 
 fn resolve_stake_authority(
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Box<dyn Signer>, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -90,7 +90,7 @@ fn resolve_stake_authority(
 }
 
 fn resolve_withdraw_authority(
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Box<dyn Signer>, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -98,7 +98,7 @@ fn resolve_withdraw_authority(
 }
 
 fn resolve_new_stake_authority(
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Pubkey, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -106,7 +106,7 @@ fn resolve_new_stake_authority(
 }
 
 fn resolve_new_withdraw_authority(
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Pubkey, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -114,7 +114,7 @@ fn resolve_new_withdraw_authority(
 }
 
 fn resolve_fee_payer(
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Box<dyn Signer>, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -122,7 +122,7 @@ fn resolve_fee_payer(
 }
 
 fn resolve_custodian(
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Box<dyn Signer>, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -130,7 +130,7 @@ fn resolve_custodian(
 }
 
 fn resolve_new_custodian(
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     key_url: &Option<String>,
 ) -> Result<Option<Pubkey>, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -145,7 +145,7 @@ fn resolve_new_custodian(
 }
 
 fn resolve_base_pubkey(
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Pubkey, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -153,7 +153,7 @@ fn resolve_base_pubkey(
 }
 
 fn resolve_new_base_keypair(
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Box<dyn Signer>, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -161,7 +161,7 @@ fn resolve_new_base_keypair(
 }
 
 fn resolve_authorize_args(
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     args: &AuthorizeArgs<String, String>,
 ) -> Result<AuthorizeArgs<Pubkey, Box<dyn Signer>>, Box<dyn Error>> {
     let resolved_args = AuthorizeArgs {
@@ -183,7 +183,7 @@ fn resolve_authorize_args(
 }
 
 fn resolve_set_lockup_args(
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     args: &SetLockupArgs<String, String>,
 ) -> Result<SetLockupArgs<Pubkey, Box<dyn Signer>>, Box<dyn Error>> {
     let resolved_args = SetLockupArgs {
@@ -201,7 +201,7 @@ fn resolve_set_lockup_args(
 }
 
 fn resolve_rebase_args(
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     args: &RebaseArgs<String, String>,
 ) -> Result<RebaseArgs<Pubkey, Box<dyn Signer>>, Box<dyn Error>> {
     let resolved_args = RebaseArgs {

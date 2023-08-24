@@ -40,7 +40,7 @@ use {
         vote_instruction::{self, withdraw, CreateVoteAccountConfig},
         vote_state::{VoteAuthorize, VoteInit, VoteState, VoteStateVersions},
     },
-    std::sync::Arc,
+    std::rc::Rc,
 };
 
 pub trait VoteSubCommands {
@@ -421,7 +421,7 @@ impl VoteSubCommands for App<'_, '_> {
 pub fn parse_create_vote_account(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let (vote_account, vote_account_pubkey) = signer_of(matches, "vote_account", wallet_manager)?;
     let seed = matches.value_of("seed").map(|s| s.to_string());
@@ -490,7 +490,7 @@ pub fn parse_create_vote_account(
 pub fn parse_vote_authorize(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     vote_authorize: VoteAuthorize,
     checked: bool,
 ) -> Result<CliCommandInfo, CliError> {
@@ -551,7 +551,7 @@ pub fn parse_vote_authorize(
 pub fn parse_vote_update_validator(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
@@ -598,7 +598,7 @@ pub fn parse_vote_update_validator(
 pub fn parse_vote_update_commission(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
@@ -643,7 +643,7 @@ pub fn parse_vote_update_commission(
 
 pub fn parse_vote_get_account_command(
     matches: &ArgMatches<'_>,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
@@ -666,7 +666,7 @@ pub fn parse_vote_get_account_command(
 pub fn parse_withdraw_from_vote_account(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
@@ -722,7 +722,7 @@ pub fn parse_withdraw_from_vote_account(
 pub fn parse_close_vote_account(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();

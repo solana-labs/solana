@@ -25,7 +25,7 @@ use {
         cell::{Ref, RefCell, RefMut},
         collections::HashSet,
         pin::Pin,
-        sync::Arc,
+        rc::Rc,
     },
 };
 
@@ -142,7 +142,7 @@ impl TransactionAccounts {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransactionContext {
     account_keys: Pin<Box<[Pubkey]>>,
-    accounts: Arc<TransactionAccounts>,
+    accounts: Rc<TransactionAccounts>,
     instruction_stack_capacity: usize,
     instruction_trace_capacity: usize,
     instruction_stack: Vec<usize>,
@@ -173,7 +173,7 @@ impl TransactionContext {
             .unzip();
         Self {
             account_keys: Pin::new(account_keys.into_boxed_slice()),
-            accounts: Arc::new(TransactionAccounts::new(accounts, rent.is_some())),
+            accounts: Rc::new(TransactionAccounts::new(accounts, rent.is_some())),
             instruction_stack_capacity,
             instruction_trace_capacity,
             instruction_stack: Vec::with_capacity(instruction_stack_capacity),
@@ -194,13 +194,13 @@ impl TransactionContext {
             return Err(InstructionError::CallDepth);
         }
 
-        Ok(Arc::try_unwrap(self.accounts)
+        Ok(Rc::try_unwrap(self.accounts)
             .expect("transaction_context.accounts has unexpected outstanding refs")
             .into_accounts())
     }
 
     #[cfg(not(target_os = "solana"))]
-    pub fn accounts(&self) -> &Arc<TransactionAccounts> {
+    pub fn accounts(&self) -> &Rc<TransactionAccounts> {
         &self.accounts
     }
 
@@ -1208,7 +1208,7 @@ pub struct ExecutionRecord {
 #[cfg(not(target_os = "solana"))]
 impl From<TransactionContext> for ExecutionRecord {
     fn from(context: TransactionContext) -> Self {
-        let accounts = Arc::try_unwrap(context.accounts)
+        let accounts = Rc::try_unwrap(context.accounts)
             .expect("transaction_context.accounts has unexpectd outstanding refs");
         let touched_account_count = accounts.touched_count() as u64;
         let accounts = accounts.into_accounts();

@@ -59,7 +59,7 @@ use {
         sysvar::{clock, stake_history},
         transaction::Transaction,
     },
-    std::{ops::Deref, sync::Arc},
+    std::{ops::Deref, rc::Rc},
 };
 
 pub const STAKE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
@@ -740,7 +740,7 @@ impl StakeSubCommands for App<'_, '_> {
 pub fn parse_create_stake_account(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     checked: bool,
 ) -> Result<CliCommandInfo, CliError> {
     let seed = matches.value_of("seed").map(|s| s.to_string());
@@ -816,7 +816,7 @@ pub fn parse_create_stake_account(
 pub fn parse_stake_delegate_stake(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -871,7 +871,7 @@ pub fn parse_stake_delegate_stake(
 pub fn parse_stake_authorize(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     checked: bool,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
@@ -1000,7 +1000,7 @@ pub fn parse_stake_authorize(
 pub fn parse_split_stake(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -1051,7 +1051,7 @@ pub fn parse_split_stake(
 pub fn parse_merge_stake(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -1098,7 +1098,7 @@ pub fn parse_merge_stake(
 pub fn parse_stake_deactivate_stake(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -1146,7 +1146,7 @@ pub fn parse_stake_deactivate_stake(
 pub fn parse_stake_withdraw_stake(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -1201,7 +1201,7 @@ pub fn parse_stake_withdraw_stake(
 pub fn parse_stake_set_lockup(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     checked: bool,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
@@ -1269,7 +1269,7 @@ pub fn parse_stake_set_lockup(
 
 pub fn parse_show_stake_account(
     matches: &ArgMatches<'_>,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
