@@ -180,13 +180,28 @@ fn print_slot_entries_conflicts(
         return Err("Dead slot".to_string());
     }
 
-    let (entries, _num_shreds, _is_full) = blockstore
+    let (entries, num_shreds, is_full) = blockstore
         .get_slot_entries_with_shred_info(slot, 0, false)
         .map_err(|err| format!(" Slot: {slot}, Failed to load entries, err {err:?}"))?;
+
+    println!(
+        "Slot {}, num_shreds: {}, num_entries: {}, is_full: {}",
+        slot,
+        num_shreds,
+        entries.len(),
+        is_full,
+    );
 
     if verbose_level >= 0 {
         // collect each entry's accoutn locks (read/write locks)
         entries.iter().enumerate().for_each(|(entry_index, entry)| {
+            println!(
+                "  Entry {} - num_hashes: {}, hash: {}, transactions: {}",
+                entry_index,
+                entry.num_hashes,
+                entry.hash,
+                entry.transactions.len()
+            );
             let entry_account_locks = get_entry_account_locks(entry, bank);
             print_entry_account_locks(entry_index, &entry_account_locks);
         });

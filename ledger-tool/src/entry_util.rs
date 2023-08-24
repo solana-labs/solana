@@ -92,13 +92,22 @@ fn add_to_entry_account_locks(
         })
         .collect();
 */
-pub fn has_account_lock_conflict(
-    lh: &[Result<TransactionAccountLocks>],
-    rh: &[Result<TransactionAccountLocks>],
+pub fn does_entry_account_locks_conflict(
+    lh: &AccountLocks,
+    rh: &AccountLocks,
     ) -> bool {
-    // if any rh.write in either lh.write or lh.read, return true
-    // if any rh.read in lh.write, return true
-    // otherwise return false
+    for k in rh.write_locks.iter() {
+        if lh.is_locked_write(k) || lh.is_locked_readonly(k) {
+            return true;
+        }
+    }
+
+    for (k, _) in rh.readonly_locks.iter() {
+        if lh.is_locked_write(k) {
+            return true;
+        }
+    }
+
     false
 }
 
