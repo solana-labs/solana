@@ -1593,4 +1593,34 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
     }
+
+    #[test]
+    fn test_small_header() {
+        let program_address = Pubkey::new_unique();
+        let transaction_accounts = vec![
+            // The program data account
+            (
+                program_address,
+                AccountSharedData::new(
+                    1,
+                    LoaderV4State::program_data_offset() - 1,
+                    &loader_v4::id(),
+                ),
+            ),
+            // The program authority
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(10000, 0, &Pubkey::default()),
+            ),
+        ];
+
+        // Trigger check_program_account
+        process_instruction(
+            vec![],
+            &bincode::serialize(&LoaderV4Instruction::Retract).unwrap(),
+            transaction_accounts,
+            &[(0, false, true), (1, true, false)],
+            Err(InstructionError::AccountDataTooSmall),
+        );
+    }
 }
