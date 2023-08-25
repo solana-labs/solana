@@ -1,14 +1,13 @@
 use {
-    lazy_static::lazy_static,
     bzip2::bufread::BzDecoder,
     console::Emoji,
     indicatif::{ProgressBar, ProgressStyle},
+    lazy_static::lazy_static,
     log::*,
     reqwest,
     std::{
         env,
-        fs,
-        fs::File,
+        fs::{self, File},
         io::{self, BufReader, Cursor, Read},
         path::{Path, PathBuf},
         time::Duration,
@@ -20,48 +19,36 @@ use {
 lazy_static! {
     #[derive(Debug)]
     static ref SOLANA_ROOT: PathBuf = get_solana_root();
-    #[derive(Debug)]
-    static ref RUST_FLAGS: &'static str = get_rust_flags();
+    // #[derive(Debug)]
+    // static ref RUST_FLAGS: &'static str = get_rust_flags();
 }
 
 pub fn initialize_globals() {
     let _ = *SOLANA_ROOT; // Force initialization of lazy_static
-    let _ = *RUST_FLAGS;
+    // let _ = *RUST_FLAGS;
 }
 
 pub mod config;
 pub mod setup;
 
 pub fn get_solana_root() -> PathBuf {
-    PathBuf::from(env::var("CARGO_MANIFEST_DIR")
-        .expect("$CARGO_MANIFEST_DIR"))
+    PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("$CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(Path::parent)
         .expect("Failed to get Solana root directory")
         .to_path_buf()
-    // if let Ok(current_dir) = env::current_dir() {
-    //     if let Ok(canonical_dir) = fs::canonicalize(&current_dir) {
-    //         return canonical_dir
-    //             .parent()
-    //             .unwrap_or(&canonical_dir)
-    //             .to_path_buf();
-    //     }
-    // }
-    // panic!("Failed to get Solana root directory");
 }
 
-pub fn get_rust_flags() -> &'static str {
-    // env::var("RUSTFLAGS").ok().unwrap_or_default())
-    match env::var("RUSTFLAGS").ok() {
-        Some(value) => {
-            info!("env var rust flags: {}", value);
-            Box::leak(value.into_boxed_str())
-        },
-        None => "",
-    }
-}
-
-
+// pub fn get_rust_flags() -> &'static str {
+//     // env::var("RUSTFLAGS").ok().unwrap_or_default())
+//     match env::var("RUSTFLAGS").ok() {
+//         Some(value) => {
+//             info!("env var rust flags: {}", value);
+//             Box::leak(value.into_boxed_str())
+//         }
+//         None => "",
+//     }
+// }
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
 static PACKAGE: Emoji = Emoji("📦 ", "");
@@ -116,7 +103,10 @@ pub fn extract_release_archive(
     Ok(())
 }
 
-pub async fn download_to_temp(url: &str, file_name: &str,) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn download_to_temp(
+    url: &str,
+    file_name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(format!("{TRUCK}Downloading..."));
 
