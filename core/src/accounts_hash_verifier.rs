@@ -130,6 +130,7 @@ impl AccountsHashVerifier {
                         .unwrap_or(0)
                 );
                 info!("AccountsHashVerifier has stopped");
+                panic!("Done");
             })
             .unwrap();
         Self {
