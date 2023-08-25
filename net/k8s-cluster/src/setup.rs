@@ -2,19 +2,21 @@ use clap::ArgSettings;
 
 
 use {
-    super::initialize_globals,
+    chrono::prelude::*,
     crate::{
         cat_file,
         extract_release_archive,
         download_to_temp,
         SOLANA_ROOT,
     },
+    git2::{Repository, DescribeOptions, DescribeFormatOptions},
     log::*,
     std::{
         fs,
         path::PathBuf,
+        time::Instant,
     },
-    chrono::prelude::*,
+    super::initialize_globals,
 };
 
 #[derive(Clone, Debug)]
@@ -90,8 +92,7 @@ impl<'a> Deploy<'a> {
 
     fn build(&self) {
         info!("building!");
-        let local: DateTime<Local> = Local::now();
-        info!("--- Build started at {}", local.format("%Y-%m-%d %H:%M"));
+        let start_time = Instant::now();
         let build_variant: &str = if self.config.debug_build { "--debug" } else { "" };
         if self.config.profile_build {
             error!("Profile Build not implemented yet");
@@ -102,14 +103,7 @@ impl<'a> Deploy<'a> {
             // info!("rust flags updated: {}", std::env::var("RUSTFLAGS").ok().unwrap());
         }
 
-        // let cargo_install_all_path = super::SOLANA_ROOT.join("scripts/cargo-install-all.sh");
-        // let command = PathBuf::from(format!("{} {:?}", profiler_flags, cargo_install_all_path));
         let install_directory = super::SOLANA_ROOT.join("farf");
-        // let arguments = format!("{:?} {} {}", install_directory, build_variant, "--validator-only");
-
-        // info!("command: {:?}", command);
-        // info!("args: {}", arguments);
-
         let status = std::process::Command::new("./cargo-install-all.sh")
             .current_dir(super::SOLANA_ROOT.join("scripts"))
             .arg(install_directory)
@@ -117,18 +111,6 @@ impl<'a> Deploy<'a> {
             .arg("--validator-only")
             .status()
             .expect("Failed to build validator executable");
-
-
-        // info!("profiler_flags: {}", profiler_flags);
-        // let rustflags = "-C force-frame-pointers=y";
-        // std::env::set_var("RUSTFLAGS", rustflags);
-
-        // let command = PathBuf::from(format!("{} {:?}", profiler_flags, "ls"));
-        // let command = PathBuf::from(format!("{}", "ls"));
-        // let status = std::process::Command::new(command)
-        //     .current_dir("scripts")
-        //     .status()
-        //     .expect("Failed to build validator executable");
         
         if status.success() {
             info!("successfully build validator binary");
@@ -136,11 +118,46 @@ impl<'a> Deploy<'a> {
             error!("Failed to build executable!");
         }
         
+        let solana_repo = Repository::open(super::SOLANA_ROOT.as_path()).expect("Failed to open repository");
+        let commit = solana_repo
+            .revparse_single("HEAD")
+            .unwrap()
+            .id();
+        let branch = solana_repo
+            .head()
+            .expect("Failed to get branch for HEAD")
+            .shorthand()
+            .expect("Failed to get shortened branch name")
+            .to_string();
+        // unwrap().name().unwrap_or_default().to_string();
 
+        let mut note = branch;
+        // Iterate over all tags in the repository
+        for tag in &solana_repo.tag_names(None).expect("Failed to retrieve tag names") {
+            if let Some(tag_name) = tag {
+                // Get the target object of the tag
+                let tag_object = solana_repo.revparse_single(&tag_name).expect("Failed to parse tag").id();
+                // Check if the commit associated with the tag is the same as the current commit
+                if tag_object == commit {
+                    println!("The current commit is associated with tag: {}", tag_name);
+                    note = tag_object.to_string();
+                    break;
+                } 
+            }
+        }
+        info!("commit, note: {}, {}", commit, note);
 
-
-
-
+        // Write to version.yml
+        let content = format!(
+            "channel: devbuild {}\ncommit: {}",
+            note,
+            commit.to_string()
+        );
+        std::fs::write(super::SOLANA_ROOT.join("farf/version.yml"), content)
+            .expect("Failed to write version.yml");
+        
+ 
+        info!("Build took {:.3?} seconds", start_time.elapsed());
 
     }
 

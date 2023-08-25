@@ -196,6 +196,7 @@ fs-err = "2.9.0"
 futures = "0.3.28"
 futures-util = "0.3.28"
 gag = "1.0.0"
+git2 = "0.17.2"
 generic-array = { version = "0.14.7", default-features = false }
 gethostname = "0.2.3"
 getrandom = "0.2.10"
