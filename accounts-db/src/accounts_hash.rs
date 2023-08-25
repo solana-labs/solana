@@ -1,5 +1,3 @@
-use itertools::Itertools;
-
 use {
     crate::{
         accounts_db::{AccountStorageEntry, IncludeSlotInHash, PUBKEY_BINS_FOR_CALCULATING_HASHES},
@@ -846,8 +844,7 @@ impl<'a> AccountsHasher<'a> {
         sorted_data_by_pubkey: &[&'b [CalculateHashIntermediate]],
         binner: &PubkeyBinCalculator24,
         slot_pk_cursor: &(usize, usize, Pubkey),
-        //first_item_map: &mut std::collections::BTreeMap<usize, (usize, Pubkey)>,
-        first_item_map: &mut std::collections::HashMap<usize, (usize, Pubkey)>,
+        first_item_map: &mut std::collections::BTreeMap<usize, (usize, Pubkey)>,
     ) -> &'b CalculateHashIntermediate {
         let key = slot_pk_cursor.2;
         let division_index = slot_pk_cursor.0;
@@ -1043,8 +1040,7 @@ impl<'a> AccountsHasher<'a> {
         };
 
         // slot_group_index --> (offset, pubkey)
-        //let mut first_item_map = std::collections::BTreeMap::new();
-        let mut first_item_map = std::collections::HashMap::new();
+        let mut first_item_map = std::collections::BTreeMap::new();
 
         // initialize 'first_items', which holds the current lowest item in each slot group
         sorted_data_by_pubkey
@@ -1065,7 +1061,7 @@ impl<'a> AccountsHasher<'a> {
         // this loop runs once per unique pubkey contained in any slot group
         while !first_item_map.is_empty() {
             let mut min_slot_pk_cursor = None;
-            for (slot_group_index, (offset, pk)) in first_item_map.iter().sorted() {
+            for (slot_group_index, (offset, pk)) in first_item_map.iter() {
                 if min_slot_pk_cursor.is_none() {
                     min_slot_pk_cursor = Some((*slot_group_index, *offset, *pk));
                     continue;
