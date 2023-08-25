@@ -443,7 +443,7 @@ impl LoadedPrograms {
         key: Pubkey,
         entry: Arc<LoadedProgram>,
     ) -> (bool, Arc<LoadedProgram>) {
-        let second_level = self.entries.entry(key).or_insert_with(Vec::new);
+        let second_level = self.entries.entry(key).or_default();
         let index = second_level
             .iter()
             .position(|at| at.effective_slot >= entry.effective_slot);
