@@ -111,40 +111,6 @@ impl AccountHashesFile {
         );
         count_and_writer.0 += 1;
     }
-
-    pub fn init(&mut self) {
-        if self.count_and_writer.is_none() {
-            // we have hashes to write but no file yet, so create a file that will auto-delete on drop
-            self.count_and_writer = Some((
-                0,
-                BufWriter::new(
-                    tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
-                        panic!(
-                            "Unable to create file within {}: {err}",
-                            self.dir_for_temp_cache_files.display()
-                        )
-                    }),
-                ),
-            ));
-        }
-    }
-
-    pub fn write2(&mut self, hash: &Hash) {
-        let count_and_writer = self.count_and_writer.as_mut().unwrap();
-        assert_eq!(
-            std::mem::size_of::<Hash>(),
-            count_and_writer
-                .1
-                .write(hash.as_ref())
-                .unwrap_or_else(|err| {
-                    panic!(
-                        "Unable to write file within {}: {err}",
-                        self.dir_for_temp_cache_files.display()
-                    )
-                })
-        );
-        count_and_writer.0 += 1;
-    }
 }
 
 /// parameters to calculate accounts hash
@@ -1071,8 +1037,6 @@ impl<'a> AccountsHasher<'a> {
             count_and_writer: None,
             dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
         };
-        hashes.init();
-
         // initialize 'first_items', which holds the current lowest item in each slot group
         sorted_data_by_pubkey
             .iter()
@@ -1134,7 +1098,7 @@ impl<'a> AccountsHasher<'a> {
                     overall_sum = Self::checked_cast_for_capitalization(
                         item.lamports as u128 + overall_sum as u128,
                     );
-                    hashes.write2(&item.hash);
+                    hashes.write(&item.hash);
                 }
             } else {
                 // if lamports == 0, check if they should be included
@@ -1143,7 +1107,7 @@ impl<'a> AccountsHasher<'a> {
                     // the hash of its pubkey
                     let hash = blake3::hash(bytemuck::bytes_of(&item.pubkey));
                     let hash = Hash::new_from_array(hash.into());
-                    hashes.write2(&hash);
+                    hashes.write(&hash);
                 }
             }
 
