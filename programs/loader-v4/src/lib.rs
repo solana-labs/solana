@@ -223,11 +223,11 @@ fn check_program_account(
         ic_logger_msg!(log_collector, "Authority did not sign");
         return Err(InstructionError::MissingRequiredSignature);
     }
-    if state.authority_address.is_none() {
+    if state.authority_address == Pubkey::default() {
         ic_logger_msg!(log_collector, "Program is finalized");
         return Err(InstructionError::Immutable);
     }
-    if state.authority_address != Some(*authority_address) {
+    if state.authority_address != *authority_address {
         ic_logger_msg!(log_collector, "Incorrect authority provided");
         return Err(InstructionError::IncorrectAuthority);
     }
@@ -318,7 +318,7 @@ pub fn process_instruction_write(
         let state = get_state_mut(program.get_data_mut()?)?;
         state.slot = invoke_context.get_sysvar_cache().get_clock()?.slot;
         state.is_deployed = false;
-        state.authority_address = Some(*authority_address);
+        state.authority_address = *authority_address;
     }
     program
         .get_data_mut()?
@@ -544,7 +544,10 @@ pub fn process_instruction_transfer_authority(
         return Err(InstructionError::MissingRequiredSignature);
     }
     let state = get_state_mut(program.get_data_mut()?)?;
-    state.authority_address = new_authority_address;
+    state.authority_address = match new_authority_address {
+        Some(new_authority_address) => new_authority_address,
+        None => Pubkey::default(),
+    };
     Ok(())
 }
 
@@ -739,7 +742,7 @@ mod tests {
 
     fn load_program_account_from_elf(
         is_deployed: bool,
-        authority_address: Option<Pubkey>,
+        authority_address: Pubkey,
         path: &str,
     ) -> AccountSharedData {
         let path = Path::new("test_elfs/out/").join(path).with_extension("so");
@@ -780,7 +783,7 @@ mod tests {
         let transaction_accounts = vec![
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(true, Some(authority_address), "noop"),
+                load_program_account_from_elf(true, authority_address, "noop"),
             ),
             (
                 authority_address,
@@ -788,7 +791,7 @@ mod tests {
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(false, None, "noop"),
+                load_program_account_from_elf(false, Pubkey::default(), "noop"),
             ),
             (
                 clock::id(),
@@ -882,7 +885,7 @@ mod tests {
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(true, Some(authority_address), "noop"),
+                load_program_account_from_elf(true, authority_address, "noop"),
             ),
             (
                 clock::id(),
@@ -1103,7 +1106,7 @@ mod tests {
         let transaction_accounts = vec![
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(false, Some(authority_address), "noop"),
+                load_program_account_from_elf(false, authority_address, "noop"),
             ),
             (
                 authority_address,
@@ -1115,7 +1118,7 @@ mod tests {
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(true, Some(authority_address), "noop"),
+                load_program_account_from_elf(true, authority_address, "noop"),
             ),
             (
                 clock::id(),
@@ -1201,7 +1204,7 @@ mod tests {
         let mut transaction_accounts = vec![
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(false, Some(authority_address), "rodata"),
+                load_program_account_from_elf(false, authority_address, "rodata"),
             ),
             (
                 authority_address,
@@ -1209,7 +1212,7 @@ mod tests {
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(false, Some(authority_address), "noop"),
+                load_program_account_from_elf(false, authority_address, "noop"),
             ),
             (
                 Pubkey::new_unique(),
@@ -1217,7 +1220,7 @@ mod tests {
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(false, Some(authority_address), "invalid"),
+                load_program_account_from_elf(false, authority_address, "invalid"),
             ),
             (clock::id(), clock(1000)),
             (
@@ -1337,7 +1340,7 @@ mod tests {
         let mut transaction_accounts = vec![
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(true, Some(authority_address), "rodata"),
+                load_program_account_from_elf(true, authority_address, "rodata"),
             ),
             (
                 authority_address,
@@ -1349,7 +1352,7 @@ mod tests {
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(false, Some(authority_address), "rodata"),
+                load_program_account_from_elf(false, authority_address, "rodata"),
             ),
             (clock::id(), clock(1000)),
             (
@@ -1409,7 +1412,7 @@ mod tests {
         let transaction_accounts = vec![
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(true, Some(authority_address), "rodata"),
+                load_program_account_from_elf(true, authority_address, "rodata"),
             ),
             (
                 authority_address,
@@ -1488,7 +1491,7 @@ mod tests {
         let transaction_accounts = vec![
             (
                 program_address,
-                load_program_account_from_elf(true, None, "rodata"),
+                load_program_account_from_elf(true, Pubkey::default(), "rodata"),
             ),
             (
                 Pubkey::new_unique(),
@@ -1500,11 +1503,11 @@ mod tests {
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(false, None, "rodata"),
+                load_program_account_from_elf(false, Pubkey::default(), "rodata"),
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(true, None, "invalid"),
+                load_program_account_from_elf(true, Pubkey::default(), "invalid"),
             ),
         ];
 
