@@ -86,7 +86,8 @@ impl AccountHashesFile {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
             self.count_and_writer = Some((
                 0,
-                BufWriter::new(
+                BufWriter::with_capacity(
+                    256 * 1024,
                     tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
                         panic!(
                             "Unable to create file within {}: {err}",
