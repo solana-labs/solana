@@ -1527,6 +1527,13 @@ impl ReplayStage {
             // and are looking up the signature for this slot?
             root_bank.clear_slot_signatures(slot);
 
+            // Remove cached entries of the programs that were deployed in this slot.
+            root_bank
+                .loaded_programs_cache
+                .write()
+                .unwrap()
+                .prune_by_deployment_slot(slot);
+
             // Clear the slot-related data in blockstore. This will:
             // 1) Clear old shreds allowing new ones to be inserted
             // 2) Clear the "dead" flag allowing ReplayStage to start replaying
