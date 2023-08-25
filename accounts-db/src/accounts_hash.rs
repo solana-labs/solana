@@ -844,10 +844,10 @@ impl<'a> AccountsHasher<'a> {
         let (division_index, mut index, key) = first_items[min_index];
         let division_data = &sorted_data_by_pubkey[division_index];
         index += 1;
-        let mut end;
+
+        let mut next_min = None;
         loop {
-            end = index >= division_data.len();
-            if end {
+            if index >= division_data.len() {
                 break;
             }
             // still more items where we found the previous key, so just increment the index for that slot group, skipping all pubkeys that are equal
@@ -859,15 +859,18 @@ impl<'a> AccountsHasher<'a> {
 
             if binner.bin_from_pubkey(next_key) > bin {
                 // the next pubkey is not in our bin
-                end = true;
                 break;
             }
 
             // point to the next pubkey > key
-            first_items[min_index] = (division_index, index, next_key);
+            //first_items[min_index] = (division_index, index, next_key);
+            next_min = Some((index, next_key));
             break;
         }
-        if end {
+
+        if let Some((index, next_key)) = next_min {
+            first_items[min_index] = (division_index, index, next_key);
+        } else {
             // stop looking in this vector - we exhausted it
             first_items.remove(min_index);
         }
@@ -1061,7 +1064,7 @@ impl<'a> AccountsHasher<'a> {
             // it also identifies duplicate pubkey entries at lower slots and remembers those to skip them after
             while first_item_index < loop_stop {
                 first_item_index += 1;
-                let key = &first_items[first_item_index].2;
+                let key = first_items[first_item_index].2;
                 let cmp = min_pubkey.cmp(key);
                 match cmp {
                     std::cmp::Ordering::Less => {
@@ -1073,7 +1076,7 @@ impl<'a> AccountsHasher<'a> {
                     }
                     std::cmp::Ordering::Greater => {
                         // this is the new min pubkey
-                        min_pubkey = *key;
+                        min_pubkey = key;
                     }
                 }
                 // this is the new index of the min entry

@@ -28,9 +28,10 @@ impl PubkeyBinCalculator24 {
         }
     }
 
+    #[inline]
     pub(crate) fn bin_from_pubkey(&self, pubkey: &Pubkey) -> usize {
         let as_ref = pubkey.as_ref();
-        ((as_ref[0] as usize * 256 + as_ref[1] as usize) * 256 + as_ref[2] as usize)
+        ((as_ref[0] as usize) << 16 | (as_ref[1] as usize) << 8 | (as_ref[2] as usize))
             >> self.shift_bits
     }
 
