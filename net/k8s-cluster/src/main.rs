@@ -1,3 +1,5 @@
+use docker_api::Docker;
+
 use {
     clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     k8s_openapi::{
@@ -19,6 +21,7 @@ use {
     solana_k8s_cluster::{
         config::SetupConfig,
         setup::{BuildConfig, Deploy},
+        docker::DockerConfig,
     },
     std::{collections::BTreeMap, process, thread, time::Duration},
 };
@@ -100,6 +103,11 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("profile-build")
                 .help("Enable Profile Build flags"),
         )
+        .arg(
+            Arg::with_name("docker_build")
+                .long("docker-build")
+                .help("Build Docker images"),
+        )
         .get_matches()
 }
 
@@ -121,7 +129,18 @@ async fn main() {
         do_build: matches.is_present("do_build"),
         debug_build: matches.is_present("debug_build"),
         profile_build: matches.is_present("profile_build"),
+        docker_build: matches.is_present("docker_build"),
     };
+
+    if build_config.docker_build {
+        let docker = DockerConfig::new(build_config.deploy_method);
+        // docker.container_create_inspect_remove().await;
+        docker.image_create_inspect_delete().await;
+    }
+
+
+    process::exit(1);
+
     let deploy = Deploy::new(build_config);
     match deploy.prepare().await {
         Ok(_) => info!("Validator setup prepared successfully"),
@@ -131,7 +150,9 @@ async fn main() {
         }
     }
 
-    process::exit(1);
+    // let
+
+    // process::exit(1);
 
     let bootstrap_container_name = matches
         .value_of("bootstrap_container_name")

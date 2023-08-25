@@ -30,6 +30,7 @@ pub fn initialize_globals() {
 
 pub mod config;
 pub mod setup;
+pub mod docker;
 
 pub fn get_solana_root() -> PathBuf {
     PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("$CARGO_MANIFEST_DIR"))

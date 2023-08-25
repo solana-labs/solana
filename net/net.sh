@@ -157,7 +157,7 @@ initLogDir() { # Initializes the netLogDir global variable.  Idempotent
 
   netLogDir="$netDir"/log
   declare netLogDateDir
-  netLogDateDir="$netDir"/log-$(date +"%Y-%m-%d_%H_%M_%S")
+  netLogDateDir="$netDir"/log-$(date +"%Y-%m-%d_%H_%M_netLogDir%S")
   if [[ -d $netLogDir && ! -L $netLogDir ]]; then
     echo "Warning: moving $netLogDir to make way for symlink."
     mv "$netLogDir" "$netDir"/log.old
