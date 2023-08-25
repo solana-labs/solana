@@ -833,6 +833,7 @@ impl<'a> AccountsHasher<'a> {
 
     /// Given the item location, return the item in the `CalculatedHashIntermediate` slices and the next item location in the same bin.
     /// If the end of the `CalculatedHashIntermediate` slice is reached or all the accounts in current bin have been exhausted, return `None` for next item location.
+    #[inline]
     fn get_item<'b>(
         sorted_data_by_pubkey: &[&'b [CalculateHashIntermediate]],
         bin: usize,
@@ -840,36 +841,25 @@ impl<'a> AccountsHasher<'a> {
         item_loc: &ItemLocation<'b>,
     ) -> (&'b CalculateHashIntermediate, Option<ItemLocation<'b>>) {
         let division_data = &sorted_data_by_pubkey[item_loc.pointer.slot_group_index];
-        let mut index = item_loc.pointer.offset;
-        index += 1;
-        let mut next = None;
+        let offset = item_loc.pointer.offset;
 
-        while index < division_data.len() {
-            // still more items where we found the previous key, so just increment the index for that slot group, skipping all pubkeys that are equal
-            let next_key = &division_data[index].pubkey;
-            if next_key == item_loc.key {
-                index += 1;
-                continue; // duplicate entries of same pubkey, so keep skipping
-            }
-
-            if binner.bin_from_pubkey(next_key) > bin {
-                // the next pubkey is not in our bin
-                break;
-            }
-
-            // point to the next pubkey > key
-            next = Some(ItemLocation {
-                key: next_key,
-                pointer: SlotGroupPointer {
-                    slot_group_index: item_loc.pointer.slot_group_index,
-                    offset: index,
-                },
-            });
-            break;
+        if offset == division_data.len() - 1 /* This is the last element */
+            || binner.bin_from_pubkey(&division_data[offset + 1].pubkey) > bin
+        /* or Next element is in a different bin */
+        {
+            (&division_data[offset], None)
+        } else {
+            (
+                &division_data[offset],
+                Some(ItemLocation {
+                    key: &division_data[offset + 1].pubkey,
+                    pointer: SlotGroupPointer {
+                        slot_group_index: item_loc.pointer.slot_group_index,
+                        offset: offset + 1,
+                    },
+                }),
+            )
         }
-
-        // this is the previous first item that was requested
-        (&division_data[index - 1], next)
     }
 
     /// `hash_data` must be sorted by `binner.bin_from_pubkey()`
@@ -1292,7 +1282,10 @@ impl From<IncrementalAccountsHash> for SerdeIncrementalAccountsHash {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, itertools::Itertools, std::str::FromStr, tempfile::tempdir};
+    use {
+        super::*, crate::accounts_db::AccountsDb, itertools::Itertools, std::str::FromStr,
+        tempfile::tempdir,
+    };
 
     lazy_static! {
         static ref ACTIVE_STATS: ActiveStats = ActiveStats::default();
@@ -1569,6 +1562,10 @@ mod tests {
         };
         account_maps.insert(1, val);
 
+        let mut t = vec![account_maps];
+        AccountsDb::sort_slot_storage_scan(&mut t);
+        account_maps = t[0].to_vec();
+
         let result = accounts_hash
             .rest_of_hash_calculation(&for_rest(&account_maps), &mut HashStats::default());
         let expected_hash = Hash::from_str("7NNPg5A8Xsg1uv4UFm6KZNwsipyyUnmgCrznP6MBWoBZ").unwrap();
@@ -1725,7 +1722,25 @@ mod tests {
                     let accounts = accounts.clone();
                     let slice = &accounts[start..end];
 
-                    let slice2 = vec![slice.to_vec()];
+                    let human_readable = slice
+                        .iter()
+                        .map(|v| {
+                            let mut s = (if v.pubkey == key_a {
+                                "a"
+                            } else if v.pubkey == key_b {
+                                "b"
+                            } else {
+                                "c"
+                            })
+                            .to_string();
+
+                            s.push_str(&v.lamports.to_string());
+                            s
+                        })
+                        .collect::<String>();
+
+                    let mut slice2 = vec![slice.to_vec()];
+                    AccountsDb::sort_slot_storage_scan(&mut slice2);
                     let slice = &slice2[..];
                     let slice_temp = convert_to_slice(&slice2);
                     let (hashes2, lamports2) =
@@ -1733,7 +1748,8 @@ mod tests {
                     let slice3 = convert_to_slice(&slice2);
                     let (hashes3, lamports3) =
                         hash.de_dup_accounts_in_parallel(&slice3, 0, 1, &HashStats::default());
-                    let vec = slice.to_vec();
+                    let mut vec = slice.to_vec();
+                    AccountsDb::sort_slot_storage_scan(&mut vec);
                     let slice4 = convert_to_slice(&vec);
                     let mut max_bin = end - start;
                     if !max_bin.is_power_of_two() {
@@ -1777,23 +1793,6 @@ mod tests {
                     assert_eq!(lamports2, lamports4);
                     assert_eq!(lamports2, lamports5);
                     assert_eq!(lamports2, lamports6);
-
-                    let human_readable = slice[0]
-                        .iter()
-                        .map(|v| {
-                            let mut s = (if v.pubkey == key_a {
-                                "a"
-                            } else if v.pubkey == key_b {
-                                "b"
-                            } else {
-                                "c"
-                            })
-                            .to_string();
-
-                            s.push_str(&v.lamports.to_string());
-                            s
-                        })
-                        .collect::<String>();
 
                     let hash_result_as_string = format!("{hashes2:?}");
 
@@ -1911,7 +1910,8 @@ mod tests {
         };
         account_maps.push(val); // has to be after previous entry since account_maps are in slot order
 
-        let vecs = vec![account_maps.to_vec()];
+        let mut vecs = vec![account_maps.to_vec()];
+        AccountsDb::sort_slot_storage_scan(&mut vecs);
         let slice = convert_to_slice(&vecs);
         let (hashfile, lamports) = test_de_dup_accounts_in_parallel(&slice);
         assert_eq!((get_vec(hashfile), lamports), (vec![], 0));

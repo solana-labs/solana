@@ -7625,12 +7625,44 @@ impl AccountsDb {
         Ok(result)
     }
 
-    fn sort_slot_storage_scan(accum: &mut BinnedHashData) -> u64 {
+    pub(crate) fn sort_slot_storage_scan(accum: &mut BinnedHashData) -> u64 {
+        let dedup = |items: &mut Vec<CalculateHashIntermediate>| {
+            let n = items.len();
+            if n < 2 {
+                return;
+            }
+
+            let mut last_key = items[n - 1].pubkey;
+            let n_dups = unsafe {
+                let mut write = items.as_mut_ptr().add(n - 2);
+                let mut curr = write;
+
+                while curr >= items.as_mut_ptr() {
+                    let curr_key = curr.as_ref().unwrap().pubkey;
+                    if curr_key == last_key {
+                        curr = curr.sub(1);
+                    } else {
+                        std::ptr::copy(curr, write, 1);
+                        curr = curr.sub(1);
+                        write = write.sub(1);
+                        last_key = curr_key;
+                    }
+                }
+
+                write.offset_from(curr) as usize
+            };
+
+            items.drain(..n_dups);
+        };
+
         let time = AtomicU64::new(0);
         accum.iter_mut().for_each(|items| {
             let mut sort_time = Measure::start("sort");
             // sort_by vs unstable because slot and write_version are already in order
             items.sort_by(AccountsHasher::compare_two_hash_entries);
+
+            // remove adjacent dup items, so that downstream processing doesn't need to deal with dups.
+            dedup(items);
             sort_time.stop();
             time.fetch_add(sort_time.as_us(), Ordering::Relaxed);
         });
@@ -18226,5 +18258,85 @@ pub mod tests {
     fn compute_merkle_root(hashes: impl IntoIterator<Item = Hash>) -> Hash {
         let hashes = hashes.into_iter().collect();
         AccountsHasher::compute_merkle_root_recurse(hashes, MERKLE_FANOUT)
+    }
+
+    #[test]
+    fn test_sort_storage_scan() {
+        let pubkey0 = Pubkey::from([0u8; 32]);
+        let pubkey1 = Pubkey::from([1u8; 32]);
+        let pubkey2 = Pubkey::from([2u8; 32]);
+
+        // Case 1
+        // input: [2, 2, 2, 1, 1, 0, 0]
+        let mut input = vec![
+            CalculateHashIntermediate {
+                hash: Hash::default(),
+                lamports: 1,
+                pubkey: pubkey2,
+            };
+            3
+        ];
+
+        input.extend(vec![
+            CalculateHashIntermediate {
+                hash: Hash::default(),
+                lamports: 1,
+                pubkey: pubkey1,
+            };
+            2
+        ]);
+
+        input.extend(vec![
+            CalculateHashIntermediate {
+                hash: Hash::default(),
+                lamports: 1,
+                pubkey: pubkey0,
+            };
+            2
+        ]);
+
+        let mut input = vec![input];
+
+        // expected: [0, 1, 2]
+        let expected = vec![
+            CalculateHashIntermediate {
+                hash: Hash::default(),
+                lamports: 1,
+                pubkey: pubkey0,
+            },
+            CalculateHashIntermediate {
+                hash: Hash::default(),
+                lamports: 1,
+                pubkey: pubkey1,
+            },
+            CalculateHashIntermediate {
+                hash: Hash::default(),
+                lamports: 1,
+                pubkey: pubkey2,
+            },
+        ];
+        let expected = vec![expected];
+        let _ = AccountsDb::sort_slot_storage_scan(&mut input);
+        assert_eq!(input, expected);
+
+        // Case 2
+        // input [1, 1, ...]
+        let mut input = vec![vec![
+            CalculateHashIntermediate {
+                hash: Hash::default(),
+                lamports: 1,
+                pubkey: pubkey1,
+            };
+            10
+        ]];
+
+        // expected [1]
+        let expected = vec![vec![CalculateHashIntermediate {
+            hash: Hash::default(),
+            lamports: 1,
+            pubkey: pubkey1,
+        }]];
+        let _ = AccountsDb::sort_slot_storage_scan(&mut input);
+        assert_eq!(input, expected);
     }
 }
