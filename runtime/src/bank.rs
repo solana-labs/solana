@@ -90,6 +90,7 @@ use {
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
     },
+    solana_receipt_tree::ReceiptTree,
     solana_sdk::{
         account::{
             create_account_shared_data_with_fields as create_account, from_account, Account,
@@ -836,6 +837,7 @@ impl PartialEq for Bank {
             accounts_data_size_delta_off_chain: _,
             fee_structure: _,
             incremental_snapshot_persistence: _,
+            receipt_tree: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this ParitalEq is accordingly updated.
@@ -1090,6 +1092,8 @@ pub struct Bank {
     pub fee_structure: FeeStructure,
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
+
+    pub receipt_tree: ReceiptTree,
 }
 
 struct VoteWithStakeDelegations {
@@ -1278,6 +1282,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
+            receipt_tree: ReceiptTree::default(),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1604,6 +1609,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
+            receipt_tree: ReceiptTree::default(),
         };
 
         let (_, ancestors_time) = measure!(
@@ -1947,6 +1953,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
+            receipt_tree: RwLock::new(ReceiptTree::default()),
         };
         bank.finish_init(
             genesis_config,
@@ -4239,6 +4246,10 @@ impl Bank {
         } else {
             None
         };
+
+        let status_code: u8 = if status.is_ok() { 1 } else { 0 };
+        self.receipt_tree
+            .append_leaf(&[tx.signature().as_ref(), status_code.to_be_bytes().as_ref()]);
 
         TransactionExecutionResult::Executed {
             details: TransactionExecutionDetails {
@@ -6612,12 +6623,13 @@ impl Bank {
             .bank_hash_info_at(self.slot(), &self.rewrites_skipped_this_slot);
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
-
+        self.receipt_tree.get_root();
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
             accounts_delta_hash.hash.as_ref(),
             &signature_count_buf,
             self.last_blockhash().as_ref(),
+            self.receipt_tree.root.as_ref()
         ]);
 
         let buf = self

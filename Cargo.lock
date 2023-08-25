@@ -3883,16 +3883,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "receipt-tree"
-version = "0.1.0"
-dependencies = [
- "firedancer-sys",
- "log",
- "rand 0.8.5",
- "solana-sdk 1.14.24",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5995,6 +5985,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-receipt-tree"
+version = "1.14.24"
+dependencies = [
+ "firedancer-sys",
+ "log",
+ "rand 0.8.5",
+ "solana-sdk 1.14.24",
+]
+
+[[package]]
 name = "solana-remote-wallet"
 version = "1.14.24"
 dependencies = [
@@ -6140,6 +6140,7 @@ dependencies = [
  "solana-metrics",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
+ "solana-receipt-tree",
  "solana-sdk 1.14.24",
  "solana-stake-program",
  "solana-vote-program",

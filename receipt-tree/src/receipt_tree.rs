@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use {
     firedancer_sys::ballet::{
         fd_bmtree32_commit_append, fd_bmtree32_commit_fini, fd_bmtree32_commit_t,
@@ -22,6 +24,19 @@ pub fn hash_leaf(node: &mut fd_bmtree32_node, data: &mut &[&[u8]]) {
 pub struct ReceiptTree {
     pub tree: fd_bmtree32_commit_t,
     pub root: [u8; 32],
+}
+impl Default for ReceiptTree{
+    fn default() -> Self {
+        ReceiptTree::new()
+    }
+}
+impl Debug for ReceiptTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReceiptTree")
+            .field("leaves", &self.tree.leaf_cnt)
+            .field("root", &self.root)
+            .finish()
+    }
 }
 impl ReceiptTree {
     /// Creates an empty tree
@@ -56,7 +71,9 @@ impl ReceiptTree {
         let byte = unsafe { fd_bmtree32_commit_fini(&mut self.tree) };
         let root = unsafe { from_raw_parts(byte, 32) };
         match slice_to_array_32(root) {
-            Ok(hash) => Ok(Hash::new_from_array(*hash)),
+            Ok(hash) => {
+                self.root = *hash;
+                Ok(Hash::new_from_array(*hash))},
             Err(e) => Err(e),
         }
     }
