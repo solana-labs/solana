@@ -25,7 +25,7 @@ lazy_static! {
 
 pub fn initialize_globals() {
     let _ = *SOLANA_ROOT; // Force initialization of lazy_static
-    // let _ = *RUST_FLAGS;
+                          // let _ = *RUST_FLAGS;
 }
 
 pub mod config;
@@ -37,6 +37,13 @@ pub fn get_solana_root() -> PathBuf {
         .and_then(Path::parent)
         .expect("Failed to get Solana root directory")
         .to_path_buf()
+}
+
+#[macro_export]
+macro_rules! boxed_error {
+    ($message:expr) => {
+        Box::new(std::io::Error::new(std::io::ErrorKind::Other, $message)) as Box<dyn Error>
+    };
 }
 
 // pub fn get_rust_flags() -> &'static str {

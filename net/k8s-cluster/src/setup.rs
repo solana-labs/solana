@@ -1,9 +1,11 @@
+use crate::boxed_error;
+
 use {
     super::initialize_globals,
     crate::{cat_file, download_to_temp, extract_release_archive, SOLANA_ROOT},
     git2::Repository,
     log::*,
-    std::{fs, path::PathBuf, time::Instant},
+    std::{error::Error, fs, path::PathBuf, time::Instant},
 };
 
 #[derive(Clone, Debug)]
@@ -26,7 +28,7 @@ impl<'a> Deploy<'a> {
         Deploy { config }
     }
 
-    pub async fn prepare(&self) {
+    pub async fn prepare(&self) -> Result<(), Box<dyn Error>> {
         match self.config.deploy_method {
             "tar" => {
                 let file_name = "solana-release";
@@ -34,22 +36,34 @@ impl<'a> Deploy<'a> {
                     Ok(tar_directory) => {
                         info!("Sucessfuly setup tar file");
                         cat_file(&tar_directory.join("version.yml")).unwrap();
-                    },
-                    Err(_) => error!("Failed to setup tar file! Did you set --release-channel? \
-                        Or is there a solana-release.tar.bz2 file already in your solana/ root directory?"),
+                    }
+                    Err(err) => {
+                        error!("Failed to setup tar file! Did you set --release-channel? \
+                        Or is there a solana-release.tar.bz2 file already in your solana/ root directory?");
+                        return Err(err);
+                    }
                 }
             }
-            "local" => self.setup_local_deploy(),
+            "local" => {
+                match self.setup_local_deploy() {
+                    Ok(_) => (),
+                    Err(err) => return Err(err),
+                };
+            },
             "skip" => (),
-            _ => error!(
-                "Internal error: Invalid deploy_method: {}",
-                self.config.deploy_method
-            ),
+            _ => {
+                let error = format!(
+                    "{} {}",
+                    "Internal error: Invalid deploy_method:", self.config.deploy_method
+                );
+                return Err(boxed_error!(error));
+            }
         }
-        info!("Completed Prepare Deploy")
+        info!("Completed Prepare Deploy");
+        Ok(())
     }
 
-    async fn setup_tar_deploy(&self, file_name: &str) -> Result<PathBuf, String> {
+    async fn setup_tar_deploy(&self, file_name: &str) -> Result<PathBuf, Box<dyn Error>> {
         info!("tar file deploy");
         let tar_file = format!("{}{}", file_name, ".tar.bz2");
         if !self.config.release_channel.is_empty() {
@@ -57,6 +71,8 @@ impl<'a> Deploy<'a> {
                 Ok(_) => info!("Successfully downloaded tar release from channel"),
                 Err(_) => error!("Failed to download tar release"),
             }
+        } else {
+            info!("No release channel set. Attempting to extract a local version of solana-release.tar.bz2...");
         }
 
         // Extract it and load the release version metadata
@@ -71,17 +87,21 @@ impl<'a> Deploy<'a> {
         Ok(temp_release_dir)
     }
 
-    fn setup_local_deploy(&self) {
+    fn setup_local_deploy(&self) -> Result<(), Box<dyn Error>> {
         info!("local deploy");
         if self.config.do_build {
             info!("call build()");
-            self.build();
+            match self.build() {
+                Ok(_) => (),
+                Err(err) => return Err(err),
+            };
         } else {
             info!("Build skipped due to --no-build");
         }
+        Ok(())
     }
 
-    fn build(&self) {
+    fn build(&self) -> Result<(), Box<dyn Error>> {
         info!("building!");
         let start_time = Instant::now();
         let build_variant: &str = if self.config.debug_build {
@@ -90,7 +110,9 @@ impl<'a> Deploy<'a> {
             ""
         };
         if self.config.profile_build {
-            error!("Profile Build not implemented yet");
+            return Err(boxed_error!("Profile Build not implemented yet"));
+
+            // error!("Profile Build not implemented yet");
             // info!("rust flags in build: {}", *super::RUST_FLAGS);
             // let rustflags = format!("{}{}{}", "RUSTFLAGS='-C force-frame-pointers=y -g ",  *super::RUST_FLAGS, "'");
             // info!("rust flags: {}", rustflags);
@@ -99,18 +121,22 @@ impl<'a> Deploy<'a> {
         }
 
         let install_directory = SOLANA_ROOT.join("farf");
-        let status = std::process::Command::new("./cargo-install-all.sh")
+        match std::process::Command::new("./cargo-install-all.sh")
             .current_dir(SOLANA_ROOT.join("scripts"))
             .arg(install_directory)
             .arg(build_variant)
             .arg("--validator-only")
             .status()
-            .expect("Failed to build validator executable");
 
-        if status.success() {
-            info!("successfully build validator binary");
-        } else {
-            error!("Failed to build executable!");
+        {
+            Ok(result) => {
+                if result.success() { 
+                    info!("Successfully build validator") 
+                } else { 
+                    return Err(boxed_error!("Failed to build validator"));
+                }
+            }
+            Err(err) => return Err(Box::new(err))
         }
 
         let solana_repo =
@@ -137,7 +163,7 @@ impl<'a> Deploy<'a> {
                     .id();
                 // Check if the commit associated with the tag is the same as the current commit
                 if tag_object == commit {
-                    println!("The current commit is associated with tag: {}", tag_name);
+                    info!("The current commit is associated with tag: {}", tag_name);
                     note = tag_object.to_string();
                     break;
                 }
@@ -150,6 +176,7 @@ impl<'a> Deploy<'a> {
             .expect("Failed to write version.yml");
 
         info!("Build took {:.3?} seconds", start_time.elapsed());
+        Ok(())
     }
 
     async fn download_release_from_channel(&self, file_name: &str) -> Result<(), String> {
