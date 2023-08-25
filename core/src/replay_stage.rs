@@ -1527,7 +1527,7 @@ impl ReplayStage {
                 .loaded_programs_cache
                 .write()
                 .unwrap()
-                .prune_slot(slot);
+                .prune_by_deployment_slot(slot);
 
             if let Some(bank_hash) = blockstore.get_bank_hash(slot) {
                 // If a descendant was successfully replayed and chained from a duplicate it must
