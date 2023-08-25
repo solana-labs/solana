@@ -111,6 +111,38 @@ impl AccountHashesFile {
         );
         count_and_writer.0 += 1;
     }
+
+    pub fn write_batch(&mut self, hashes: &[Hash]) {
+        if self.count_and_writer.is_none() {
+            // we have hashes to write but no file yet, so create a file that will auto-delete on drop
+            self.count_and_writer = Some((
+                0,
+                BufWriter::new(
+                    tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
+                        panic!(
+                            "Unable to create file within {}: {err}",
+                            self.dir_for_temp_cache_files.display()
+                        )
+                    }),
+                ),
+            ));
+        }
+        let n = hashes.len();
+        let size = n * std::mem::size_of::<Hash>();
+        let count_and_writer = self.count_and_writer.as_mut().unwrap();
+
+        let hash_bytes = unsafe { std::slice::from_raw_parts(hashes.as_ptr() as *const u8, size) };
+        assert_eq!(
+            size,
+            count_and_writer.1.write(hash_bytes).unwrap_or_else(|err| {
+                panic!(
+                    "Unable to write file within {}: {err}",
+                    self.dir_for_temp_cache_files.display()
+                )
+            })
+        );
+        count_and_writer.0 += n;
+    }
 }
 
 /// parameters to calculate accounts hash
@@ -1033,10 +1065,6 @@ impl<'a> AccountsHasher<'a> {
         // (division_index, index, &pubkey) - 32 bytes
         let mut first_items = Vec::with_capacity(len);
 
-        let mut hashes = AccountHashesFile {
-            count_and_writer: None,
-            dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
-        };
         // initialize 'first_items', which holds the current lowest item in each slot group
         sorted_data_by_pubkey
             .iter()
@@ -1052,6 +1080,8 @@ impl<'a> AccountsHasher<'a> {
         let mut overall_sum = 0;
         let mut duplicate_pubkey_indexes = Vec::with_capacity(len);
         let filler_accounts_enabled = self.filler_accounts_enabled();
+
+        let mut hashes_to_write = vec![];
 
         // this loop runs once per unique pubkey contained in any slot group
         while !first_items.is_empty() {
@@ -1098,7 +1128,7 @@ impl<'a> AccountsHasher<'a> {
                     overall_sum = Self::checked_cast_for_capitalization(
                         item.lamports as u128 + overall_sum as u128,
                     );
-                    hashes.write(&item.hash);
+                    hashes_to_write.push(item.hash);
                 }
             } else {
                 // if lamports == 0, check if they should be included
@@ -1107,7 +1137,8 @@ impl<'a> AccountsHasher<'a> {
                     // the hash of its pubkey
                     let hash = blake3::hash(bytemuck::bytes_of(&item.pubkey));
                     let hash = Hash::new_from_array(hash.into());
-                    hashes.write(&hash);
+
+                    hashes_to_write.push(hash);
                 }
             }
 
@@ -1128,7 +1159,16 @@ impl<'a> AccountsHasher<'a> {
             }
         }
 
-        (hashes, overall_sum)
+        let mut hash_file = AccountHashesFile {
+            count_and_writer: None,
+            dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
+        };
+
+        if !hashes_to_write.is_empty() {
+            hash_file.write_batch(&hashes_to_write);
+        }
+
+        (hash_file, overall_sum)
     }
 
     fn is_filler_account(&self, pubkey: &Pubkey) -> bool {
