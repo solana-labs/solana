@@ -159,6 +159,9 @@ pub struct HashStats {
     pub sum_ancient_scans_us: AtomicU64,
     pub count_ancient_scans: AtomicU64,
     pub pubkey_bin_search_us: AtomicU64,
+    pub min_pk_scan_us: AtomicU64,
+    pub hash_writes_us: AtomicU64,
+    pub skip_duplicates_us: AtomicU64,
 }
 impl HashStats {
     pub fn calc_storage_size_quartiles(&mut self, storages: &[Arc<AccountStorageEntry>]) {
@@ -258,6 +261,21 @@ impl HashStats {
             (
                 "pubkey_bin_search_us",
                 self.pubkey_bin_search_us.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "min_pk_scan_us",
+                self.min_pk_scan_us.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "hash_writes_us",
+                self.hash_writes_us.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "skip_duplicates_us",
+                self.skip_duplicates_us.load(Ordering::Relaxed),
                 i64
             ),
         );
@@ -1018,74 +1036,92 @@ impl<'a> AccountsHasher<'a> {
 
             // this loop iterates over each slot group to find the minimum pubkey at the maximum slot
             // it also identifies duplicate pubkey entries at lower slots and remembers those to skip them after
-            while first_item_index < loop_stop {
-                first_item_index += 1;
-                let key = &first_items[first_item_index];
-                let cmp = min_pubkey.cmp(key);
-                match cmp {
-                    std::cmp::Ordering::Less => {
-                        continue; // we still have the min item
+            let (_, min_pk_scan_us) = measure_us!({
+                while first_item_index < loop_stop {
+                    first_item_index += 1;
+                    let key = &first_items[first_item_index];
+                    let cmp = min_pubkey.cmp(key);
+                    match cmp {
+                        std::cmp::Ordering::Less => {
+                            continue; // we still have the min item
+                        }
+                        std::cmp::Ordering::Equal => {
+                            // we found the same pubkey in a later slot, so remember the lower slot as a duplicate
+                            duplicate_pubkey_indexes.push(min_index);
+                        }
+                        std::cmp::Ordering::Greater => {
+                            // this is the new min pubkey
+                            min_pubkey = *key;
+                        }
                     }
-                    std::cmp::Ordering::Equal => {
-                        // we found the same pubkey in a later slot, so remember the lower slot as a duplicate
-                        duplicate_pubkey_indexes.push(min_index);
-                    }
-                    std::cmp::Ordering::Greater => {
-                        // this is the new min pubkey
-                        min_pubkey = *key;
-                    }
+                    // this is the new index of the min entry
+                    min_index = first_item_index;
                 }
-                // this is the new index of the min entry
-                min_index = first_item_index;
-            }
-            // get the min item, add lamports, get hash
-            let item = Self::get_item(
-                min_index,
-                pubkey_bin,
-                &mut first_items,
-                sorted_data_by_pubkey,
-                &mut indexes,
-                &mut first_item_to_pubkey_division,
-                &binner,
-            );
+            });
 
-            // add lamports and get hash
-            if item.lamports != 0 {
-                // do not include filler accounts in the hash
-                if !(filler_accounts_enabled && self.is_filler_account(&item.pubkey)) {
-                    overall_sum = Self::checked_cast_for_capitalization(
-                        item.lamports as u128 + overall_sum as u128,
-                    );
-                    hashes.write(&item.hash);
-                }
-            } else {
-                // if lamports == 0, check if they should be included
-                if self.zero_lamport_accounts == ZeroLamportAccounts::Included {
-                    // For incremental accounts hash, the hash of a zero lamport account is
-                    // the hash of its pubkey
-                    let hash = blake3::hash(bytemuck::bytes_of(&item.pubkey));
-                    let hash = Hash::new_from_array(hash.into());
-                    hashes.write(&hash);
-                }
-            }
+            stats
+                .min_pk_scan_us
+                .fetch_add(min_pk_scan_us, Ordering::Relaxed);
 
-            if !duplicate_pubkey_indexes.is_empty() {
-                // skip past duplicate keys in earlier slots
-                // reverse this list because get_item can remove first_items[*i] when *i is exhausted
-                //  and that would mess up subsequent *i values
-                duplicate_pubkey_indexes.iter().rev().for_each(|i| {
-                    Self::get_item(
-                        *i,
-                        pubkey_bin,
-                        &mut first_items,
-                        sorted_data_by_pubkey,
-                        &mut indexes,
-                        &mut first_item_to_pubkey_division,
-                        &binner,
-                    );
-                });
-                duplicate_pubkey_indexes.clear();
-            }
+            let (_, hash_writes_us) = measure_us!({
+                // get the min item, add lamports, get hash
+                let item = Self::get_item(
+                    min_index,
+                    pubkey_bin,
+                    &mut first_items,
+                    sorted_data_by_pubkey,
+                    &mut indexes,
+                    &mut first_item_to_pubkey_division,
+                    &binner,
+                );
+
+                // add lamports and get hash
+                if item.lamports != 0 {
+                    // do not include filler accounts in the hash
+                    if !(filler_accounts_enabled && self.is_filler_account(&item.pubkey)) {
+                        overall_sum = Self::checked_cast_for_capitalization(
+                            item.lamports as u128 + overall_sum as u128,
+                        );
+                        hashes.write(&item.hash);
+                    }
+                } else {
+                    // if lamports == 0, check if they should be included
+                    if self.zero_lamport_accounts == ZeroLamportAccounts::Included {
+                        // For incremental accounts hash, the hash of a zero lamport account is
+                        // the hash of its pubkey
+                        let hash = blake3::hash(bytemuck::bytes_of(&item.pubkey));
+                        let hash = Hash::new_from_array(hash.into());
+                        hashes.write(&hash);
+                    }
+                }
+            });
+
+            stats
+                .hash_writes_us
+                .fetch_add(hash_writes_us, Ordering::Relaxed);
+
+            let (_, skip_duplicates_us) = measure_us!({
+                if !duplicate_pubkey_indexes.is_empty() {
+                    // skip past duplicate keys in earlier slots
+                    // reverse this list because get_item can remove first_items[*i] when *i is exhausted
+                    //  and that would mess up subsequent *i values
+                    duplicate_pubkey_indexes.iter().rev().for_each(|i| {
+                        Self::get_item(
+                            *i,
+                            pubkey_bin,
+                            &mut first_items,
+                            sorted_data_by_pubkey,
+                            &mut indexes,
+                            &mut first_item_to_pubkey_division,
+                            &binner,
+                        );
+                    });
+                    duplicate_pubkey_indexes.clear();
+                }
+            });
+            stats
+                .skip_duplicates_us
+                .fetch_add(skip_duplicates_us, Ordering::Relaxed);
         }
 
         (hashes, overall_sum)
