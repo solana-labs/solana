@@ -171,7 +171,7 @@ fi
 # Add Solidity Compiler
 if [[ -z "$validatorOnly" ]]; then
   base="https://github.com/hyperledger/solang/releases/download"
-  version="v0.3.1"
+  version="v0.3.2"
   curlopt="-sSfL --retry 5 --retry-delay 2 --retry-connrefused"
 
   case $(uname -s) in
