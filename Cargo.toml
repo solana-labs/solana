@@ -93,6 +93,7 @@ members = [
 
 exclude = [
     "programs/bpf",
+    "firedancer"
 ]
 
 # This prevents a Travis CI error when building for Windows.

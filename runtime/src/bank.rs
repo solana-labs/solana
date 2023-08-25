@@ -33,6 +33,8 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
+use std::sync::Mutex;
+
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
@@ -1093,7 +1095,7 @@ pub struct Bank {
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
-    pub receipt_tree: ReceiptTree,
+    pub receipt_tree: Arc<Mutex<ReceiptTree>>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1282,7 +1284,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            receipt_tree: ReceiptTree::default(),
+            receipt_tree: Arc::new(Mutex::new(ReceiptTree::new())),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1609,7 +1611,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
-            receipt_tree: ReceiptTree::default(),
+            receipt_tree: Arc::new(Mutex::new(ReceiptTree::default())),
         };
 
         let (_, ancestors_time) = measure!(
@@ -1953,7 +1955,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            receipt_tree: RwLock::new(ReceiptTree::default()),
+            receipt_tree: Arc::new(Mutex::new(ReceiptTree::default())),
         };
         bank.finish_init(
             genesis_config,
@@ -4248,8 +4250,9 @@ impl Bank {
         };
 
         let status_code: u8 = if status.is_ok() { 1 } else { 0 };
-        self.receipt_tree
-            .append_leaf(&[tx.signature().as_ref(), status_code.to_be_bytes().as_ref()]);
+       if let Ok(mut receipt_tree) =  self.receipt_tree.lock(){
+        receipt_tree.append_leaf(&[tx.signature().as_ref(), status_code.to_be_bytes().as_ref()]);
+       }
 
         TransactionExecutionResult::Executed {
             details: TransactionExecutionDetails {
@@ -6623,13 +6626,16 @@ impl Bank {
             .bank_hash_info_at(self.slot(), &self.rewrites_skipped_this_slot);
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
-        self.receipt_tree.get_root();
+        let mut receipt_root = [0u8; 32];
+        if let Ok(mut receipt_tree) = self.receipt_tree.lock() {
+            receipt_root = receipt_tree.get_root_mutable().unwrap().to_bytes();
+        }
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
             accounts_delta_hash.hash.as_ref(),
             &signature_count_buf,
             self.last_blockhash().as_ref(),
-            self.receipt_tree.root.as_ref()
+            receipt_root.as_ref()
         ]);
 
         let buf = self

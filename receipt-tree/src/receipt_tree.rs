@@ -67,16 +67,26 @@ impl ReceiptTree {
         }
     }
     /// Finalise the commitment and get the 32 byte root
-    pub fn get_root(&mut self) -> Result<Hash, TryFromSliceError> {
+    pub fn get_root_mutable(&mut self) -> Result<Hash, TryFromSliceError> {
         let byte = unsafe { fd_bmtree32_commit_fini(&mut self.tree) };
         let root = unsafe { from_raw_parts(byte, 32) };
         match slice_to_array_32(root) {
             Ok(hash) => {
-                self.root = *hash;
                 Ok(Hash::new_from_array(*hash))},
             Err(e) => Err(e),
         }
     }
+    // /// Finalise the commitment and get the 32 byte root
+    // pub fn get_root() -> Result<Hash, TryFromSliceError> {
+    //     let mut tree = ReceiptTree::new();
+    //     let byte = unsafe { fd_bmtree32_commit_fini(&mut tree.tree) };
+    //     let root = unsafe { from_raw_parts(byte, 32) };
+    //     match slice_to_array_32(root) {
+    //         Ok(hash) => {
+    //             Ok(Hash::new_from_array(*hash))},
+    //         Err(e) => Err(e),
+    //     }
+    // }
 }
 fn convert_to_array<T>(v: Vec<T>) -> [T; 63] {
     v.try_into()
@@ -117,7 +127,7 @@ mod tests {
         let data: Vec<(Vec<u8>, u8)> = sigs.into_iter().zip(statuses.clone().into_iter()).collect();
         let mut receipt_tree = ReceiptTree::new();
         receipt_tree.append_leaf(&[data[0].0.as_slice(), &data[0].1.to_be_bytes()]);
-        let root = receipt_tree.get_root();
+        let root = receipt_tree.get_root_mutable();
         match root {
             Ok(hash) => {
                 println!("Hash: {:?}", hash.to_string());
@@ -141,7 +151,7 @@ mod tests {
             receipt_tree.append_leaf(&[data[i].0.as_slice(), &data[i].1.to_be_bytes()]);
         }
 
-        let root = receipt_tree.get_root();
+        let root = receipt_tree.get_root_mutable();
         match root {
             Ok(hash) => {
                 println!("Hash: {:?}", hash.to_string());
