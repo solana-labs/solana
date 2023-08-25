@@ -75,32 +75,29 @@ impl TpuInfo for ClusterTpuInfo {
     ) -> Vec<(&SocketAddr, Slot)> {
         let recorder = self.poh_recorder.read().unwrap();
         let leaders: Vec<_> = (0..max_count)
-            .filter_map(|future_slot_count| {
+            .filter_map(|future_slot| {
+                let future_slot = max_count.wrapping_sub(future_slot);
                 NUM_CONSECUTIVE_LEADER_SLOTS
-                    .checked_mul(future_slot_count)
+                    .checked_mul(future_slot)
                     .and_then(|slots_in_the_future| {
                         recorder.leader_and_slot_after_n_slots(slots_in_the_future)
                     })
             })
             .collect();
         drop(recorder);
-        let mut unique_leaders = vec![];
-        let mut leader_slot_map: HashMap<&Pubkey, Slot> = HashMap::default();
-        for (leader_id, leader_slot) in leaders.iter() {
-            if let Some(addr) =
+        let addrs_to_slots = leaders
+            .into_iter()
+            .filter_map(|(leader_id, leader_slot)| {
                 self.recent_peers
-                    .get(leader_id)
+                    .get(&leader_id)
                     .map(|(udp_tpu, quic_tpu)| match protocol {
-                        Protocol::UDP => udp_tpu,
-                        Protocol::QUIC => quic_tpu,
+                        Protocol::UDP => (udp_tpu, leader_slot),
+                        Protocol::QUIC => (quic_tpu, leader_slot),
                     })
-            {
-                if !leader_slot_map.contains_key(leader_id) {
-                    unique_leaders.push((addr, *leader_slot));
-                    leader_slot_map.insert(leader_id, *leader_slot);
-                }
-            }
-        }
+            })
+            .collect::<HashMap<_, _>>();
+        let mut unique_leaders = addrs_to_slots.into_iter().collect::<Vec<_>>();
+        unique_leaders.sort_by_key(|(_addr, slot)| *slot);
         unique_leaders
     }
 }
