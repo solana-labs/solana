@@ -1562,7 +1562,7 @@ dependencies = [
  "prost",
  "tokio",
  "tokio-stream",
- "tonic 0.9.2",
+ "tonic",
  "tonic-build",
  "tower",
  "tower-service",
@@ -6083,7 +6083,7 @@ dependencies = [
  "solana-transaction-status",
  "thiserror",
  "tokio",
- "tonic 0.8.3",
+ "tonic",
  "zstd",
 ]
 
@@ -6992,40 +6992,6 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f219fad3b929bef19b1f86fbc0358d35daed8f2cac972037ac0dc10bbb8d5fb"
-dependencies = [
- "async-stream",
- "async-trait",
- "axum",
- "base64 0.13.1",
- "bytes",
- "futures-core",
- "futures-util",
- "h2",
- "http",
- "http-body",
- "hyper",
- "hyper-timeout",
- "percent-encoding 2.3.0",
- "pin-project",
- "prost",
- "prost-derive",
- "rustls-pemfile 1.0.0",
- "tokio",
- "tokio-rustls 0.23.2",
- "tokio-stream",
- "tokio-util 0.7.1",
- "tower",
- "tower-layer",
- "tower-service",
- "tracing",
- "tracing-futures",
-]
-
-[[package]]
-name = "tonic"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3082666a3a6433f7f511c7192923fa1fe07c69332d3c6a2e6bb040b569199d5a"
@@ -7132,16 +7098,6 @@ checksum = "f54c8ca710e81886d498c2fd3331b56c93aa248d49de2222ad2742247c60072f"
 dependencies = [
  "lazy_static",
  "valuable",
-]
-
-[[package]]
-name = "tracing-futures"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
-dependencies = [
- "pin-project",
- "tracing",
 ]
 
 [[package]]
