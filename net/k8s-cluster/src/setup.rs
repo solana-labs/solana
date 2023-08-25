@@ -1,8 +1,6 @@
-use crate::boxed_error;
-
 use {
     super::initialize_globals,
-    crate::{cat_file, download_to_temp, extract_release_archive, SOLANA_ROOT},
+    crate::{boxed_error, cat_file, download_to_temp, extract_release_archive, SOLANA_ROOT},
     git2::Repository,
     log::*,
     std::{error::Error, fs, path::PathBuf, time::Instant},
@@ -49,7 +47,7 @@ impl<'a> Deploy<'a> {
                     Ok(_) => (),
                     Err(err) => return Err(err),
                 };
-            },
+            }
             "skip" => (),
             _ => {
                 let error = format!(
@@ -127,16 +125,15 @@ impl<'a> Deploy<'a> {
             .arg(build_variant)
             .arg("--validator-only")
             .status()
-
         {
             Ok(result) => {
-                if result.success() { 
-                    info!("Successfully build validator") 
-                } else { 
+                if result.success() {
+                    info!("Successfully build validator")
+                } else {
                     return Err(boxed_error!("Failed to build validator"));
                 }
             }
-            Err(err) => return Err(Box::new(err))
+            Err(err) => return Err(Box::new(err)),
         }
 
         let solana_repo =
@@ -179,7 +176,7 @@ impl<'a> Deploy<'a> {
         Ok(())
     }
 
-    async fn download_release_from_channel(&self, file_name: &str) -> Result<(), String> {
+    async fn download_release_from_channel(&self, file_name: &str) -> Result<(), Box<dyn Error>> {
         info!(
             "Downloading release from channel: {}",
             self.config.release_channel
@@ -189,7 +186,10 @@ impl<'a> Deploy<'a> {
         // Remove file
         if let Err(err) = fs::remove_file(&file_path) {
             if err.kind() != std::io::ErrorKind::NotFound {
-                error!("Error while removing file: {:?}", err);
+                return Err(boxed_error!(format!(
+                    "{}: {:?}",
+                    "Error while removing file:", err
+                )));
             }
         }
 
