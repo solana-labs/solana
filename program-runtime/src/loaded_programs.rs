@@ -534,6 +534,18 @@ impl LoadedPrograms {
         self.remove_programs_with_no_entries();
     }
 
+    pub fn prune_by_deployment_slot(&mut self, slot: Slot) {
+        self.entries.retain(|_key, second_level| {
+            *second_level = second_level
+                .iter()
+                .filter(|entry| entry.deployment_slot != slot)
+                .cloned()
+                .collect();
+            !second_level.is_empty()
+        });
+        self.remove_programs_with_no_entries();
+    }
+
     /// Before rerooting the blockstore this removes all programs of orphan forks
     pub fn prune<F: ForkGraph>(&mut self, fork_graph: &F, new_root: Slot) {
         let previous_root = self.latest_root;
@@ -1932,6 +1944,105 @@ mod tests {
                 .deployment_slot,
             0
         );
+    }
+
+    #[test]
+    fn test_prune_by_deployment_slot() {
+        let mut cache = LoadedPrograms::default();
+
+        // Fork graph created for the test
+        //                   0
+        //                 /   \
+        //                10    5
+        //                |
+        //                20
+
+        // Deploy program on slot 0, and slot 5.
+        // Prune the fork that has slot 5. The cache should still have the program
+        // deployed at slot 0.
+        let mut fork_graph = TestForkGraphSpecific::default();
+        fork_graph.insert_fork(&[0, 10, 20]);
+        fork_graph.insert_fork(&[0, 5]);
+
+        let program1 = Pubkey::new_unique();
+        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(5, 6)).0);
+
+        let program2 = Pubkey::new_unique();
+        assert!(!cache.replenish(program2, new_test_loaded_program(10, 11)).0);
+
+        let working_slot = TestWorkingSlot::new(20, &[0, 10, 20]);
+        let (found, _missing) = cache.extract(
+            &working_slot,
+            vec![
+                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0, 20));
+        assert!(match_slot(&found, &program2, 10, 20));
+
+        let working_slot = TestWorkingSlot::new(6, &[0, 5, 6]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![
+                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 5, 6));
+        assert!(missing.contains(&(program2, 1)));
+
+        // Pruning slot 5 will remove program1 entry deployed at slot 5.
+        // On fork chaining from slot 5, the entry deployed at slot 0 will become visible.
+        cache.prune_by_deployment_slot(5);
+
+        let working_slot = TestWorkingSlot::new(20, &[0, 10, 20]);
+        let (found, _missing) = cache.extract(
+            &working_slot,
+            vec![
+                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0, 20));
+        assert!(match_slot(&found, &program2, 10, 20));
+
+        let working_slot = TestWorkingSlot::new(6, &[0, 5, 6]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![
+                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0, 6));
+        assert!(missing.contains(&(program2, 1)));
+
+        // Pruning slot 10 will remove program2 entry deployed at slot 10.
+        // As there is no other entry for program2, extract() will return it as missing.
+        cache.prune_by_deployment_slot(10);
+
+        let working_slot = TestWorkingSlot::new(20, &[0, 10, 20]);
+        let (found, _missing) = cache.extract(
+            &working_slot,
+            vec![
+                (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+                (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0, 20));
+        assert!(missing.contains(&(program2, 1)));
     }
 
     #[test]
