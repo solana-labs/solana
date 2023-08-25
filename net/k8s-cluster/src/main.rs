@@ -18,7 +18,7 @@ use {
     serde_json,
     solana_k8s_cluster::{
         config::SetupConfig,
-        setup::{Deploy, BuildConfig},
+        setup::{BuildConfig, Deploy},
     },
     std::{collections::BTreeMap, process, thread, time::Duration},
 };
@@ -83,8 +83,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("deploy-method")
                 .takes_value(true)
                 .possible_values(&["local", "tar", "skip"])
-                .default_value("local")
-                .help("Deploy method. tar, local, skip. [default: local]"),
+                .default_value("local"), // .help("Deploy method. tar, local, skip. [default: local]"),
         )
         .arg(
             Arg::with_name("do_build")
