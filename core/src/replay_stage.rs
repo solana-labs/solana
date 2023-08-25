@@ -605,6 +605,7 @@ impl ReplayStage {
                 let mut replay_active_banks_time = Measure::start("replay_active_banks_time");
                 let mut ancestors = bank_forks.read().unwrap().ancestors();
                 let mut descendants = bank_forks.read().unwrap().descendants();
+                let is_in_wen_restart = in_wen_restart.load(Ordering::Relaxed);
                 let did_complete_bank = Self::replay_active_banks(
                     &blockstore,
                     &bank_forks,
@@ -782,6 +783,11 @@ impl ReplayStage {
                     );
                 }
                 compute_slot_stats_time.stop();
+
+                // During Wen Restart, we skip all votes to avoid disturbing internal state.
+                if is_in_wen_restart {
+                    continue;
+                }
 
                 let mut select_forks_time = Measure::start("select_forks_time");
                 let (heaviest_bank, heaviest_bank_on_same_voted_fork) =
