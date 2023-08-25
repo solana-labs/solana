@@ -534,6 +534,18 @@ impl LoadedPrograms {
         self.remove_programs_with_no_entries();
     }
 
+    pub fn prune_slot(&mut self, slot: Slot) {
+        self.entries.retain(|_key, second_level| {
+            *second_level = second_level
+                .iter()
+                .filter(|entry| entry.deployment_slot != slot)
+                .cloned()
+                .collect();
+            !second_level.is_empty()
+        });
+        self.remove_programs_with_no_entries();
+    }
+
     /// Before rerooting the blockstore this removes all programs of orphan forks
     pub fn prune<F: ForkGraph>(&mut self, fork_graph: &F, new_root: Slot) {
         let previous_root = self.latest_root;
