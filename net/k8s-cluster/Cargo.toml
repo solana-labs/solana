@@ -17,7 +17,10 @@ chrono = { workspace = true, features = ["default"] }
 clap = { workspace = true }
 console = { workspace = true }
 crossbeam-channel = { workspace = true }
+docker-api = { workspace = true }
+env_logger = { workspace = true }
 flate2 = { workspace = true }
+futures-util = { workspace = true }
 git2 = { workspace = true } 
 indexmap = { workspace = true, features = ["rayon"] }
 indicatif = { workspace = true }
@@ -28,6 +31,7 @@ lazy_static = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
 matches = { workspace = true }
+nix = { workspace = true }
 num-traits = { workspace = true }
 reqwest = { workspace = true, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
 rand = { workspace = true }

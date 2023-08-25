@@ -13,6 +13,7 @@ pub struct BuildConfig<'a> {
     pub do_build: bool,
     pub debug_build: bool,
     pub profile_build: bool,
+    pub docker_build: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -208,5 +209,11 @@ impl<'a> Deploy<'a> {
         Ok(())
     }
 
-    // async
+
+    pub fn deploy(
+        &self,
+    ) -> Result<(), Box<dyn Error>> {
+
+        Ok(())
+    }
 }
