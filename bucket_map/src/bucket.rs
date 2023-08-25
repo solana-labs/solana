@@ -183,7 +183,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     /// if entry does not exist, return just the index of an empty entry appropriate for this key
     /// returns (existing entry, index of the found or empty entry)
     fn find_index_entry_mut(
-        index: &mut BucketStorage<IndexBucket<T>>,
+        index: &BucketStorage<IndexBucket<T>>,
         key: &Pubkey,
         random: u64,
     ) -> Result<(Option<IndexEntryPlaceInBucket<T>>, u64), BucketMapError> {
@@ -410,7 +410,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
         }
         let max_search = self.index.max_search();
-        let (elem, elem_ix) = Self::find_index_entry_mut(&mut self.index, key, self.random)?;
+        let (elem, elem_ix) = Self::find_index_entry_mut(&self.index, key, self.random)?;
         let elem = if let Some(elem) = elem {
             elem
         } else {
