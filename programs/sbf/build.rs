@@ -42,10 +42,11 @@ fn main() {
         return;
     }
 
+    let build_profile = env::var("PROFILE").expect("`PROFILE` envvar to be set");
+    let install_dir = format!("target/{build_profile}/sbf");
     let sbf_c = env::var("CARGO_FEATURE_SBF_C").is_ok();
     if sbf_c {
-        let install_dir = "OUT_DIR=../target/".to_string() + &env::var("PROFILE").unwrap() + "/sbf";
-
+        let install_dir = format!("OUT_DIR=../{install_dir}");
         println!("cargo:warning=(not a warning) Building C-based on-chain programs");
         assert!(Command::new("make")
             .current_dir("c")
@@ -60,8 +61,6 @@ fn main() {
 
     let sbf_rust = env::var("CARGO_FEATURE_SBF_RUST").is_ok();
     if sbf_rust {
-        let install_dir = "target/".to_string() + &env::var("PROFILE").unwrap() + "/sbf";
-
         let rust_programs = [
             "128bit",
             "alloc",
