@@ -893,6 +893,7 @@ pub fn should_discard_shred(
     root: Slot,
     max_slot: Slot,
     shred_version: u16,
+    my_slots_to_repair_for_wen_restart: &Option<Vec<Slot>>,
     stats: &mut ShredFetchStats,
 ) -> bool {
     debug_assert!(root < max_slot);
@@ -924,6 +925,12 @@ pub fn should_discard_shred(
             if slot > max_slot {
                 stats.slot_out_of_range += 1;
                 return true;
+            }
+            if let Some(my_slots) = my_slots_to_repair_for_wen_restart {
+                if !my_slots.contains(&slot) {
+                    stats.slot_out_of_range += 1;
+                    return true;
+                }
             }
             slot
         }

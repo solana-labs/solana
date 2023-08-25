@@ -1181,8 +1181,12 @@ impl Validator {
         .unwrap();
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
-        let (restart_slots_to_repair_sender, restart_slots_to_repair_receiver) =
-            crossbeam_channel::unbounded::<Vec<Slot>>();
+        let slots_to_repair_for_wen_restart: Option<Arc<RwLock<Option<Vec<Slot>>>>> =
+            if config.wen_restart {
+                Some(Arc::new(RwLock::new(Some(Vec::new()))))
+            } else {
+                None
+            };
         let in_wen_restart = Arc::new(AtomicBool::new(config.wen_restart));
         let tvu = Tvu::new(
             vote_account,
@@ -1235,7 +1239,7 @@ impl Validator {
             banking_tracer.clone(),
             turbine_quic_endpoint_sender.clone(),
             turbine_quic_endpoint_receiver,
-            restart_slots_to_repair_receiver,
+            slots_to_repair_for_wen_restart.clone(),
             in_wen_restart.clone(),
         )?;
 
@@ -1248,7 +1252,7 @@ impl Validator {
                 blockstore.clone(),
                 cluster_info.clone(),
                 bank_forks.clone(),
-                restart_slots_to_repair_sender,
+                slots_to_repair_for_wen_restart.unwrap(),
             ) {
                 Ok(new_root_slot) => {
                     info!(

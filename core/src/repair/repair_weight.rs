@@ -214,17 +214,17 @@ impl RepairWeight {
         max_closest_completion_repairs: usize,
         repair_timing: &mut RepairTiming,
         stats: &mut BestRepairsStats,
-        slots_to_repair_for_wen_restart: &Option<Vec<Slot>>,
+        slots_to_repair_for_wen_restart: Option<Vec<Slot>>,
     ) -> Vec<ShredRepairType> {
         let mut repairs = vec![];
 
-        if let Some(my_slots_to_repair) = slots_to_repair_for_wen_restart {
-            info!("wen_restart repairing {:?}", my_slots_to_repair);
+        if let Some(current_slots) = slots_to_repair_for_wen_restart {
             RepairService::generate_repairs_for_wen_restart(
                 blockstore,
-                &mut repairs,
                 max_new_shreds,
-                my_slots_to_repair);
+                current_slots,
+                &mut repairs,
+            );
             return repairs;
         }
 

@@ -43,6 +43,7 @@ impl ShredFetchStage {
         flags: PacketFlags,
         repair_context: Option<(&UdpSocket, &ClusterInfo)>,
         turbine_disabled: Arc<AtomicBool>,
+        slots_to_repair_for_wen_restart: Option<Arc<RwLock<Option<Vec<Slot>>>>>,
     ) {
         const STATS_SUBMIT_CADENCE: Duration = Duration::from_secs(1);
         let mut last_updated = Instant::now();
@@ -60,9 +61,21 @@ impl ShredFetchStage {
             )
         };
         let mut stats = ShredFetchStats::default();
+        let mut is_in_wen_restart = slots_to_repair_for_wen_restart.is_some();
 
         for mut packet_batch in recvr {
             let cur_shred_version = *shred_version.read().unwrap();
+            let mut my_slots_to_repair_for_wen_restart = None;
+            if is_in_wen_restart {
+                my_slots_to_repair_for_wen_restart = match slots_to_repair_for_wen_restart.clone() {
+                    None => None,
+                    Some(slots_rw) => slots_rw.read().unwrap().clone(),
+                };
+                if my_slots_to_repair_for_wen_restart.is_none() {
+                    is_in_wen_restart = false;
+                }
+            }
+    
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
                 last_updated = Instant::now();
                 let root_bank = {
@@ -122,6 +135,7 @@ impl ShredFetchStage {
         flags: PacketFlags,
         repair_context: Option<(Arc<UdpSocket>, Arc<ClusterInfo>)>,
         turbine_disabled: Arc<AtomicBool>,
+        slots_to_repair_for_wen_restart: Option<Arc<RwLock<Option<Vec<Slot>>>>>,
     ) -> (Vec<JoinHandle<()>>, JoinHandle<()>) {
         let (packet_sender, packet_receiver) = unbounded();
         let streamers = sockets
@@ -154,6 +168,7 @@ impl ShredFetchStage {
                     flags,
                     repair_context,
                     turbine_disabled,
+                    slots_to_repair_for_wen_restart,
                 )
             })
             .unwrap();
@@ -171,6 +186,7 @@ impl ShredFetchStage {
         cluster_info: Arc<ClusterInfo>,
         turbine_disabled: Arc<AtomicBool>,
         exit: Arc<AtomicBool>,
+        slots_to_repair_for_wen_restart: Option<Arc<RwLock<Option<Vec<Slot>>>>>,
     ) -> Self {
         let recycler = PacketBatchRecycler::warmed(100, 1024);
 
@@ -185,6 +201,7 @@ impl ShredFetchStage {
             PacketFlags::empty(),
             None, // repair_context
             turbine_disabled.clone(),
+            slots_to_repair_for_wen_restart.clone(),
         );
 
         let (repair_receiver, repair_handler) = Self::packet_modifier(
@@ -198,6 +215,7 @@ impl ShredFetchStage {
             PacketFlags::REPAIR,
             Some((repair_socket, cluster_info)),
             turbine_disabled.clone(),
+            slots_to_repair_for_wen_restart.clone(),
         );
 
         tvu_threads.extend(repair_receiver);
@@ -224,6 +242,7 @@ impl ShredFetchStage {
                         PacketFlags::empty(),
                         None, // repair_context
                         turbine_disabled,
+                        slots_to_repair_for_wen_restart.clone(),
                     )
                 })
                 .unwrap(),

@@ -35,7 +35,6 @@ use {
         timing::timestamp,
     },
     solana_streamer::sendmmsg::{batch_send, SendPktsError},
-    solana_wen_restart::wen_restart::RestartSlotsToRepairReceiver,
     std::{
         collections::{HashMap, HashSet},
         iter::Iterator,
@@ -213,8 +212,7 @@ pub struct RepairInfo {
     pub repair_validators: Option<HashSet<Pubkey>>,
     // Validators which should be given priority when serving
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
-    pub wen_restart_repair_receiver: RestartSlotsToRepairReceiver,
-    pub in_wen_restart: Arc<AtomicBool>,
+    pub slots_to_repair_for_wen_restart: Option<Arc<RwLock<Option<Vec<Slot>>>>>,
 }
 
 pub struct RepairSlotRange {
@@ -308,8 +306,8 @@ impl RepairService {
         let mut last_stats = Instant::now();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
         let mut popular_pruned_forks_requests = HashSet::new();
-        let mut wen_restart_slots_to_repair: Option<Vec<Slot>> = Some(Vec::new());
-        let mut in_wen_restart = repair_info.in_wen_restart.load(Ordering::Relaxed);
+        let mut in_wen_restart = repair_info.slots_to_repair_for_wen_restart.is_some();
+        let slots_to_repair_for_wen_restart = repair_info.slots_to_repair_for_wen_restart.clone();
 
         while !exit.load(Ordering::Relaxed) {
             let mut set_root_elapsed;
@@ -381,19 +379,16 @@ impl RepairService {
                 );
                 add_votes_elapsed.stop();
 
+                let mut my_slots_to_repair_for_wen_restart: Option<Vec<Slot>> = None;
                 if in_wen_restart {
-                    in_wen_restart = repair_info.in_wen_restart.load(Ordering::Relaxed);
-                    if in_wen_restart {
-                        repair_info.wen_restart_repair_receiver.try_iter().for_each(
-                            |new_slots| {
-                                wen_restart_slots_to_repair = Some(new_slots);
-                            },
-                        );
+                    my_slots_to_repair_for_wen_restart = match slots_to_repair_for_wen_restart.as_ref() {
+                        None => None,
+                        Some(slots_rw) => slots_rw.read().unwrap().clone(),
+                    };
+                    if my_slots_to_repair_for_wen_restart.is_none() {
+                        in_wen_restart = false;
                     }
-                } else if wen_restart_slots_to_repair.is_some() {
-                    wen_restart_slots_to_repair = None;
                 }
-
                 let repairs = repair_weight.get_best_weighted_repairs(
                     blockstore,
                     root_bank.epoch_stakes_map(),
@@ -404,7 +399,7 @@ impl RepairService {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut repair_timing,
                     &mut best_repairs_stats,
-                    &wen_restart_slots_to_repair,
+                    my_slots_to_repair_for_wen_restart,
                 );
 
                 let mut popular_pruned_forks = repair_weight.get_popular_pruned_forks(
@@ -688,21 +683,21 @@ impl RepairService {
 
     pub fn generate_repairs_for_wen_restart(
         blockstore: &Blockstore,
-        repairs: &mut Vec<ShredRepairType>,
         max_repairs: usize,
-        slots: &Vec<Slot>,
+        slots: Vec<Slot>,
+        repairs: &mut Vec<ShredRepairType>,
     ) {
         for slot in slots {
-            if let Some(slot_meta) = blockstore.meta(*slot).unwrap() {
+            if let Some(slot_meta) = blockstore.meta(slot).unwrap() {
                 let new_repairs = Self::generate_repairs_for_slot(
                     blockstore,
-                    *slot,
+                    slot,
                     &slot_meta,
                     max_repairs - repairs.len(),
                 );
                 repairs.extend(new_repairs);
             } else {
-                repairs.push(ShredRepairType::Shred(*slot, 0));
+                repairs.push(ShredRepairType::Shred(slot, 0));
             }
         }
     }

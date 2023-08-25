@@ -5,7 +5,6 @@ use {
         heaviest_fork_aggregate::HeaviestForkAggregate,
         last_voted_fork_slots_aggregate::{LastVotedForkSlotsAggregate, SlotsToRepairList},
     },
-    crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     log::*,
     solana_gossip::{cluster_info::ClusterInfo, crds::Cursor},
     solana_ledger::blockstore::Blockstore,
@@ -19,9 +18,6 @@ use {
         time::Duration,
     },
 };
-
-pub type RestartSlotsToRepairSender = CrossbeamSender<Vec<Slot>>;
-pub type RestartSlotsToRepairReceiver = CrossbeamReceiver<Vec<Slot>>;
 
 // The number of ancestor slots sent is hard coded at 81000, because that's
 // 400ms * 81000 = 9 hours, we assume most restart decisions to be made in 9
@@ -81,7 +77,7 @@ pub fn wen_restart(
     blockstore: Arc<Blockstore>,
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
-    restart_slots_to_repair_sender: RestartSlotsToRepairSender,
+    slots_to_repair_for_wen_restart: Arc<RwLock<Option<Vec<Slot>>>>,
 ) -> Result<Slot, Box<dyn std::error::Error>> {
     // repair and restart option does not work without last voted slot.
     let last_voted_slot = last_vote.last_voted_slot().unwrap();
@@ -141,11 +137,7 @@ pub fn wen_restart(
                     !is_full
                 })
                 .collect();
-            if !filtered_slots.is_empty() {
-                if let Err(err) = restart_slots_to_repair_sender.send(filtered_slots) {
-                    error!("Unable to send slots {:?}", err);
-                }
-            }
+            *slots_to_repair_for_wen_restart.write().unwrap() = Some(filtered_slots);
         }
         info!(
             "wen_restart aggregating RestartLastVotedForkSlots currently {} peers total stake percentage {}",
@@ -194,12 +186,13 @@ pub fn wen_restart(
                 my_selected_hash = hash;
                 break;
             }
-        } else if let Err(err) = restart_slots_to_repair_sender.send(filtered_slots) {
-            error!("Unable to send slots {:?}", err);
+        } else {
+            *slots_to_repair_for_wen_restart.write().unwrap() = Some(filtered_slots);
         }
         sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
     }
-    restart_slots_to_repair_sender.send(Vec::new())?;
+    // Signal that no more repairs should happen
+    *slots_to_repair_for_wen_restart.write().unwrap() = None;
     // Aggregate heaviest fork and sanity check.
     let mut heaviest_fork_aggregate =
         HeaviestForkAggregate::new(my_pubkey, my_selected_slot, my_selected_hash);

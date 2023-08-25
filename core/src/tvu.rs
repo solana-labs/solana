@@ -48,7 +48,6 @@ use {
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
     solana_turbine::retransmit_stage::RetransmitStage,
-    solana_wen_restart::wen_restart::RestartSlotsToRepairReceiver,
     std::{
         collections::HashSet,
         net::{SocketAddr, UdpSocket},
@@ -139,7 +138,7 @@ impl Tvu {
         banking_tracer: Arc<BankingTracer>,
         turbine_quic_endpoint_sender: AsyncSender<(SocketAddr, Bytes)>,
         turbine_quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
-        wen_restart_repair_receiver: RestartSlotsToRepairReceiver,
+        slots_to_repair_for_wen_restart: Option<Arc<RwLock<Option<Vec<Slot>>>>>,
         in_wen_restart: Arc<AtomicBool>,
     ) -> Result<Self, String> {
         let TvuSockets {
@@ -164,6 +163,7 @@ impl Tvu {
             cluster_info.clone(),
             turbine_disabled,
             exit.clone(),
+            slots_to_repair_for_wen_restart.clone(),
         );
 
         let (verified_sender, verified_receiver) = unbounded();
@@ -205,8 +205,7 @@ impl Tvu {
                 repair_whitelist: tvu_config.repair_whitelist,
                 cluster_info: cluster_info.clone(),
                 cluster_slots: cluster_slots.clone(),
-                wen_restart_repair_receiver,
-                in_wen_restart: in_wen_restart.clone(),
+                slots_to_repair_for_wen_restart,
             };
             WindowService::new(
                 blockstore.clone(),
