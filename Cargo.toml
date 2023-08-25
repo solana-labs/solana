@@ -61,6 +61,7 @@ members = [
     "programs/zk-token-proof-tests",
     "rayon-threadlimit",
     "rbpf-cli",
+    "receipt-tree",
     "remote-wallet",
     "rpc",
     "rpc-test",

@@ -1,0 +1,14 @@
+[package]
+name = "receipt-tree"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+firedancer-sys = {path ="../firedancer/ffi/rust/firedancer-sys"}
+solana-sdk = { path = "../sdk", version = "=1.14.24" }
+log = "0.4.17"
+
+[dev-dependencies]
+rand = "0.8.5"

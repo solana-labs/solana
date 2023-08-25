@@ -1,0 +1,3 @@
+[submodule "firedancer"]
+	path = firedancer
+	url = git@github.com:tinydancer-io/firedancer.git
