@@ -1,6 +1,8 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    crate::{args::*, bigtable::*, entry_util::*, ledger_path::*, ledger_utils::*, output::*, program::*},
+    crate::{
+        args::*, bigtable::*, entry_util::*, ledger_path::*, ledger_utils::*, output::*, program::*,
+    },
     chrono::{DateTime, Utc},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
@@ -180,32 +182,49 @@ fn print_slot_entries_conflicts(
         return Err("Dead slot".to_string());
     }
 
-    let (entries, num_shreds, is_full) = blockstore
+    let (entries, num_shreds, _is_full) = blockstore
         .get_slot_entries_with_shred_info(slot, 0, false)
         .map_err(|err| format!(" Slot: {slot}, Failed to load entries, err {err:?}"))?;
 
-    println!(
-        "Slot {}, num_shreds: {}, num_entries: {}, is_full: {}",
-        slot,
-        num_shreds,
-        entries.len(),
-        is_full,
-    );
-
-    if verbose_level >= 0 {
-        // collect each entry's accoutn locks (read/write locks)
-        entries.iter().enumerate().for_each(|(entry_index, entry)| {
-            println!(
-                "  Entry {} - num_hashes: {}, hash: {}, transactions: {}",
-                entry_index,
-                entry.num_hashes,
-                entry.hash,
-                entry.transactions.len()
-            );
+    let entries_account_locks: Vec<_> = entries
+        .iter()
+        .enumerate()
+        .map(|(entry_index, entry)| {
             let entry_account_locks = get_entry_account_locks(entry, bank);
-            print_entry_account_locks(entry_index, &entry_account_locks);
+            if verbose_level >= 2 {
+                println!(
+                    "  Entry {} - num_hashes: {}, hash: {}, transactions: {}",
+                    entry_index,
+                    entry.num_hashes,
+                    entry.hash,
+                    entry.transactions.len()
+                );
+                print_entry_account_locks(entry_index, &entry_account_locks);
+            }
+            entry_account_locks
+        })
+        .collect();
+
+    let deps = collect_entry_account_locks_conflicts(&entries_account_locks);
+    let mut non_tick_entry_count: usize = 0;
+    let mut non_conflict_entry_count: usize = 0;
+    deps.iter()
+        .enumerate()
+        .for_each(|(entry_index, entry_deps)| {
+            if let Some(entry_deps) = entry_deps {
+                if verbose_level >= 1 {
+                    println!("Slot {} Entry {:?} [{:?}]", slot, entry_index, entry_deps);
+                }
+                non_tick_entry_count += 1;
+                if entry_deps.len() == 0 {
+                    non_conflict_entry_count += 1;
+                }
+            }
         });
-    }
+
+    println!("Slot {} num_shreds {} num_entries {} num_transaction_entries {} num_non_conflict_entries {} [{}%]",
+             slot, num_shreds, entries.len(), non_tick_entry_count, non_conflict_entry_count,
+             (non_conflict_entry_count*100).checked_div(non_tick_entry_count).unwrap_or(0));
 
     Ok(())
 }
@@ -4317,8 +4336,8 @@ fn main() {
                 }
 
                 for slot in slots {
-                    if let Err(err) = 
-                    print_slot_entries_conflicts(&blockstore, slot, verbose_level, &bank)
+                    if let Err(err) =
+                        print_slot_entries_conflicts(&blockstore, slot, verbose_level, &bank)
                     {
                         println!("{err}");
                     }

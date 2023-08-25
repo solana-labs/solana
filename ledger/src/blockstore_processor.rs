@@ -494,6 +494,7 @@ fn process_entries(
                 if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
                     // If it's a tick that will cause a new blockhash to be created,
                     // execute the group and register the tick
+                    println!("====== batched executed at block boundary");
                     execute_batches(
                         bank,
                         &batches,
@@ -535,6 +536,11 @@ fn process_entries(
                             batch,
                             transaction_indexes,
                         });
+                        println!(
+                            "====== entry batched, startign_index {}, num_transactions {}",
+                            starting_index,
+                            transactions.len()
+                        );
                         // done with this entry
                         break;
                     }
@@ -557,6 +563,7 @@ fn process_entries(
                     } else {
                         // else we have an entry that conflicts with a prior entry
                         // execute the current queue and try to process this entry again
+                        println!("====== batched executed at lock conflicts");
                         execute_batches(
                             bank,
                             &batches,
@@ -572,6 +579,8 @@ fn process_entries(
             }
         }
     }
+
+    println!("====== batched executed at end of entries");
     execute_batches(
         bank,
         &batches,
