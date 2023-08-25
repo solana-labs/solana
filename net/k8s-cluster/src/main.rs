@@ -123,7 +123,13 @@ async fn main() {
         profile_build: matches.is_present("profile_build"),
     };
     let deploy = Deploy::new(build_config);
-    deploy.prepare().await;
+    match deploy.prepare().await {
+        Ok(_) => info!("Validator setup prepared successfully"),
+        Err(err) => {
+            error!("Exiting........ {}", err);
+            return;
+        }
+    }
 
     process::exit(1);
 
