@@ -516,7 +516,7 @@ where
     (SerializableBankAndStorage::<newer::Context> {
         bank,
         snapshot_storages: storage,
-        phantom: std::marker::PhantomData::default(),
+        phantom: std::marker::PhantomData,
     })
     .serialize(s)
 }
