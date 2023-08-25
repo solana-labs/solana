@@ -1,3 +1,4 @@
 
-pub mod receipt_tree;
+mod receipt_tree;
+pub use receipt_tree::*;
 

@@ -1,6 +1,6 @@
 [package]
-name = "receipt-tree"
-version = "0.1.0"
+name = "solana-receipt-tree"
+version = "1.14.24"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
