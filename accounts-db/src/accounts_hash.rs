@@ -128,7 +128,7 @@ impl AccountHashesFile {
             ));
         }
         let n = hashes.len();
-        let size = n * std::mem::size_of::<Hash>();
+        let size = std::mem::size_of_val(hashes);
         let count_and_writer = self.count_and_writer.as_mut().unwrap();
 
         let hash_bytes = unsafe { std::slice::from_raw_parts(hashes.as_ptr() as *const u8, size) };
