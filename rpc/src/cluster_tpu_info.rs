@@ -96,7 +96,7 @@ impl TpuInfo for ClusterTpuInfo {
                     })
             })
             .collect::<HashMap<_, _>>();
-        let mut unique_leaders = addrs_to_slots.into_iter().collect::<Vec<_>>();
+        let mut unique_leaders = Vec::from_iter(addrs_to_slots);
         unique_leaders.sort_by_key(|(_addr, slot)| *slot);
         unique_leaders
     }
