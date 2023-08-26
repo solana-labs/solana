@@ -1032,15 +1032,46 @@ impl<'a> AccountsHasher<'a> {
         let mut working_set = std::collections::BTreeMap::new();
 
         // initialize 'working_set', which holds the current lowest item in each slot group
+        // working_set should be initialized in reverse order of slot_groups. Later slot_groups are
+        // processed first. For each slot_group, if the lowest item for current slot group is
+        // already in working_set (i.e. inserted by a later slot group), the next lowest items
+        // in this slot group are searched and checked until either one that is not the
+        // working_set are found, which will then be inserted, or no next lowest items are found.
         sorted_data_by_pubkey
             .iter()
             .enumerate()
+            .rev()
             .for_each(|(i, hash_data)| {
                 let first_pubkey_in_bin =
                     Self::find_first_pubkey_in_bin(hash_data, pubkey_bin, bins, &binner, stats);
+
                 if let Some(first_pubkey_in_bin) = first_pubkey_in_bin {
-                    let k = hash_data[first_pubkey_in_bin].pubkey;
-                    working_set.insert(k, (i, first_pubkey_in_bin));
+                    let mut key = Some(hash_data[first_pubkey_in_bin].pubkey);
+                    let mut offset = first_pubkey_in_bin;
+
+                    while let Some(k) = key {
+                        if !working_set.contains_key(&k) {
+                            // found a new key, insert into working_set
+                            working_set.insert(k, (i, offset));
+                            break;
+                        } else {
+                            // key already exist in working_set, find next key.
+                            let (_item, new_next) = Self::get_item2(
+                                sorted_data_by_pubkey,
+                                pubkey_bin,
+                                &binner,
+                                i,
+                                offset,
+                                &k,
+                            );
+                            if let Some((new_key, _, new_offset)) = new_next {
+                                key = Some(new_key);
+                                offset = new_offset;
+                            } else {
+                                key = None;
+                            }
+                        }
+                    }
                 }
             });
         let mut overall_sum = 0;
