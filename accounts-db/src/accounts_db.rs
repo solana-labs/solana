@@ -4741,10 +4741,7 @@ impl AccountsDb {
         It is a performance optimization to not send the ENTIRE old/pre-shrunk append vec to clean in the normal case.
         */
 
-        let mut uncleaned_pubkeys = self
-            .uncleaned_pubkeys
-            .entry(slot)
-            .or_insert_with(Vec::default);
+        let mut uncleaned_pubkeys = self.uncleaned_pubkeys.entry(slot).or_default();
         uncleaned_pubkeys.extend(pubkeys);
     }
 
@@ -8522,7 +8519,7 @@ impl AccountsDb {
                 .lock()
                 .unwrap()
                 .entry(accounts.target_slot())
-                .or_insert_with(BankHashStats::default)
+                .or_default()
                 .accumulate(&stats);
         }
 
@@ -9490,9 +9487,7 @@ impl AccountsDb {
         let mut storage_size_accounts_map_flatten_time =
             Measure::start("storage_size_accounts_map_flatten_time");
         if !accounts_map.is_empty() {
-            let mut info = storage_info
-                .entry(store_id)
-                .or_insert_with(StorageSizeAndCount::default);
+            let mut info = storage_info.entry(store_id).or_default();
             info.stored_size += storage_info_local.stored_size;
             info.count += storage_info_local.count;
         }

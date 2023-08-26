@@ -197,7 +197,7 @@ pub(crate) fn check_output_file(path: &str, db: &PickleDb) {
             new_stake_account_address: info
                 .new_stake_account_address
                 .map(|x| x.to_string())
-                .unwrap_or_else(|| "".to_string()),
+                .unwrap_or_default(),
             finalized_date: info.finalized_date,
             signature: info.transaction.signatures[0].to_string(),
         })

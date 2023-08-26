@@ -346,7 +346,7 @@ impl Tower {
             for vote in &vote_state.votes {
                 lockout_intervals
                     .entry(vote.lockout.last_locked_out_slot())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push((vote.slot(), key));
             }
 

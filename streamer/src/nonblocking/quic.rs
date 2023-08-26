@@ -1026,7 +1026,7 @@ impl ConnectionTable {
         last_update: u64,
         max_connections_per_peer: usize,
     ) -> Option<(Arc<AtomicU64>, Arc<AtomicBool>)> {
-        let connection_entry = self.table.entry(key).or_insert_with(Vec::new);
+        let connection_entry = self.table.entry(key).or_default();
         let has_connection_capacity = connection_entry
             .len()
             .checked_add(1)
