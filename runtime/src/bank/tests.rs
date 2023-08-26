@@ -9192,35 +9192,29 @@ fn test_vote_epoch_panic() {
     let stake_keypair = keypair_from_seed(&[2u8; 32]).unwrap();
 
     let mut setup_ixs = Vec::new();
-    setup_ixs.extend(
-        vote_instruction::create_account_with_config(
-            &mint_keypair.pubkey(),
-            &vote_keypair.pubkey(),
-            &VoteInit {
-                node_pubkey: mint_keypair.pubkey(),
-                authorized_voter: vote_keypair.pubkey(),
-                authorized_withdrawer: mint_keypair.pubkey(),
-                commission: 0,
-            },
-            1_000_000_000,
-            vote_instruction::CreateVoteAccountConfig {
-                space: VoteStateVersions::vote_state_size_of(true) as u64,
-                ..vote_instruction::CreateVoteAccountConfig::default()
-            },
-        )
-        .into_iter(),
-    );
-    setup_ixs.extend(
-        stake_instruction::create_account_and_delegate_stake(
-            &mint_keypair.pubkey(),
-            &stake_keypair.pubkey(),
-            &vote_keypair.pubkey(),
-            &Authorized::auto(&mint_keypair.pubkey()),
-            &Lockup::default(),
-            1_000_000_000_000,
-        )
-        .into_iter(),
-    );
+    setup_ixs.extend(vote_instruction::create_account_with_config(
+        &mint_keypair.pubkey(),
+        &vote_keypair.pubkey(),
+        &VoteInit {
+            node_pubkey: mint_keypair.pubkey(),
+            authorized_voter: vote_keypair.pubkey(),
+            authorized_withdrawer: mint_keypair.pubkey(),
+            commission: 0,
+        },
+        1_000_000_000,
+        vote_instruction::CreateVoteAccountConfig {
+            space: VoteStateVersions::vote_state_size_of(true) as u64,
+            ..vote_instruction::CreateVoteAccountConfig::default()
+        },
+    ));
+    setup_ixs.extend(stake_instruction::create_account_and_delegate_stake(
+        &mint_keypair.pubkey(),
+        &stake_keypair.pubkey(),
+        &vote_keypair.pubkey(),
+        &Authorized::auto(&mint_keypair.pubkey()),
+        &Lockup::default(),
+        1_000_000_000_000,
+    ));
     setup_ixs.push(vote_instruction::withdraw(
         &vote_keypair.pubkey(),
         &mint_keypair.pubkey(),

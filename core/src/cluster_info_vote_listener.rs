@@ -1197,7 +1197,7 @@ mod tests {
         let all_expected_slots: BTreeSet<_> = gossip_vote_slots
             .clone()
             .into_iter()
-            .chain(replay_vote_slots.clone().into_iter())
+            .chain(replay_vote_slots.clone())
             .collect();
         let mut pubkey_to_votes: HashMap<Pubkey, BTreeSet<Slot>> = HashMap::new();
         for (received_pubkey, new_votes) in verified_vote_receiver.try_iter() {

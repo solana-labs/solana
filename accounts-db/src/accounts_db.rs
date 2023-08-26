@@ -17752,7 +17752,7 @@ pub mod tests {
         let slot0 = 0;
         let dropped_roots = vec![slot0];
         db.accounts_index.add_root(slot0);
-        db.accounts_index.add_uncleaned_roots([slot0].into_iter());
+        db.accounts_index.add_uncleaned_roots([slot0]);
         assert!(db.accounts_index.is_uncleaned_root(slot0));
         assert!(db.accounts_index.is_alive_root(slot0));
         db.handle_dropped_roots_for_ancient(dropped_roots.into_iter());

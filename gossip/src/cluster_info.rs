@@ -3359,10 +3359,7 @@ mod tests {
         let recycler = PacketBatchRecycler::default();
         let packets = cluster_info
             .handle_ping_messages(
-                remote_nodes
-                    .iter()
-                    .map(|(_, socket)| *socket)
-                    .zip(pings.into_iter()),
+                remote_nodes.iter().map(|(_, socket)| *socket).zip(pings),
                 &recycler,
             )
             .unwrap();
