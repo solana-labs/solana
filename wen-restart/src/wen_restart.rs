@@ -191,8 +191,6 @@ pub fn wen_restart(
         }
         sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
     }
-    // Signal that no more repairs should happen
-    *slots_to_repair_for_wen_restart.write().unwrap() = None;
     // Aggregate heaviest fork and sanity check.
     let mut heaviest_fork_aggregate =
         HeaviestForkAggregate::new(my_pubkey, my_selected_slot, my_selected_hash);

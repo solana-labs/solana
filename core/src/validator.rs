@@ -1252,7 +1252,7 @@ impl Validator {
                 blockstore.clone(),
                 cluster_info.clone(),
                 bank_forks.clone(),
-                slots_to_repair_for_wen_restart.unwrap(),
+                slots_to_repair_for_wen_restart.clone().unwrap(),
             ) {
                 Ok(new_root_slot) => {
                     info!(
@@ -1294,6 +1294,8 @@ impl Validator {
                         "wen_restart finished, shred_version now {}",
                         new_shred_version
                     );
+                    // All shreds should be accepted, no more special repairs.
+                    *slots_to_repair_for_wen_restart.unwrap().write().unwrap() = None;
                     in_wen_restart.swap(false, Ordering::Relaxed);
                     ()
                 }
