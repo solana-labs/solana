@@ -76,6 +76,7 @@ _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace -
   --deny=clippy::integer_arithmetic \
   --deny=clippy::manual_let_else \
   --deny=clippy::used_underscore_binding \
+  --allow=clippy::items-after-test-module \
   "${nightly_clippy_allows[@]}"
 
 # temporarily run stable clippy as well to scan the codebase for
@@ -89,6 +90,7 @@ _ scripts/cargo-for-all-lock-files.sh -- clippy --workspace  --tests --bins --ex
   --deny=clippy::default_trait_access \
   --deny=clippy::integer_arithmetic \
   --deny=clippy::manual_let_else \
+  --allow=clippy::items-after-test-module \
   --deny=clippy::used_underscore_binding
 
 if [[ -n $CI ]]; then
