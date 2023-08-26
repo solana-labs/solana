@@ -571,7 +571,7 @@ pub mod tests {
                     let remaining2 = entries.saturating_sub(entries0 + entries1);
                     for entries2 in 0..=remaining2 {
                         let remaining3 = entries.saturating_sub(entries0 + entries1 + entries2);
-                        let entries_by_level = vec![entries0, entries1, entries2, remaining3];
+                        let entries_by_level = [entries0, entries1, entries2, remaining3];
                         let mut overall_index = 0;
                         let mut expected_slots = Vec::default();
                         let slots_and_accounts = entries_by_level

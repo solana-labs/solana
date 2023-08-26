@@ -787,7 +787,7 @@ pub mod tests {
         // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
         let account = AccountSharedData::default();
         let slot = 0 as Slot;
-        let pubkeys = vec![Pubkey::default()];
+        let pubkeys = [Pubkey::default()];
         let hashes = Vec::<Hash>::default();
         let write_versions = Vec::default();
         let mut accounts = vec![(&pubkeys[0], &account)];
@@ -808,10 +808,10 @@ pub mod tests {
         // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
         let account = AccountSharedData::default();
         let slot = 0 as Slot;
-        let pubkeys = vec![Pubkey::from([5; 32]), Pubkey::from([6; 32])];
+        let pubkeys = [Pubkey::from([5; 32]), Pubkey::from([6; 32])];
         let hashes = vec![Hash::new(&[3; 32]), Hash::new(&[4; 32])];
         let write_versions = vec![42, 43];
-        let accounts = vec![(&pubkeys[0], &account), (&pubkeys[1], &account)];
+        let accounts = [(&pubkeys[0], &account), (&pubkeys[1], &account)];
         let accounts2 = (slot, &accounts[..], INCLUDE_SLOT_IN_HASH_TESTS);
         let storable =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
@@ -842,7 +842,7 @@ pub mod tests {
         let pubkey = Pubkey::default();
         let hashes = vec![Hash::default()];
         let write_versions = vec![0];
-        let accounts = vec![(&pubkey, &account)];
+        let accounts = [(&pubkey, &account)];
         let accounts2 = (slot, &accounts[..], INCLUDE_SLOT_IN_HASH_TESTS);
         let storable =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
@@ -861,7 +861,7 @@ pub mod tests {
         }
         .to_account_shared_data();
         // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
-        let accounts = vec![(&pubkey, &account)];
+        let accounts = [(&pubkey, &account)];
         let accounts2 = (slot, &accounts[..], INCLUDE_SLOT_IN_HASH_TESTS);
         let storable =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(

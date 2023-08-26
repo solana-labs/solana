@@ -2007,7 +2007,7 @@ pub mod tests {
 
     #[test]
     fn test_should_enable_cf_compaction() {
-        let columns_to_compact = vec![
+        let columns_to_compact = [
             columns::TransactionStatus::NAME,
             columns::AddressSignatures::NAME,
         ];

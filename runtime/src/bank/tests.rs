@@ -9519,7 +9519,7 @@ fn test_get_largest_accounts() {
     }
 
     // Exclude more, and non-sequential, accounts
-    let exclude: HashSet<_> = vec![pubkeys[0], pubkeys[2], pubkeys[4]]
+    let exclude: HashSet<_> = [pubkeys[0], pubkeys[2], pubkeys[4]]
         .iter()
         .cloned()
         .collect();

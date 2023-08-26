@@ -2241,7 +2241,7 @@ pub mod tests {
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blockstore.set_roots(vec![0, 1, 4].iter()).unwrap();
+        blockstore.set_roots([0, 1, 4].iter()).unwrap();
 
         let opts = ProcessOptions {
             run_verification: true,
@@ -2321,7 +2321,7 @@ pub mod tests {
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blockstore.set_roots(vec![0, 1].iter()).unwrap();
+        blockstore.set_roots([0, 1].iter()).unwrap();
 
         let opts = ProcessOptions {
             run_verification: true,
@@ -3528,7 +3528,7 @@ pub mod tests {
             genesis_config.ticks_per_slot,
             genesis_config.hash(),
         );
-        blockstore.set_roots(vec![0, 1].iter()).unwrap();
+        blockstore.set_roots([0, 1].iter()).unwrap();
 
         // Specify halting at slot 0
         let opts = ProcessOptions {
@@ -3580,7 +3580,7 @@ pub mod tests {
             last_hash =
                 fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, i + 1, i, last_hash);
         }
-        blockstore.set_roots(vec![3, 5].iter()).unwrap();
+        blockstore.set_roots([3, 5].iter()).unwrap();
 
         // Set up bank1
         let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
