@@ -638,7 +638,7 @@ impl Blockstore {
     }
 
     fn recover_shreds(
-        index: &mut Index,
+        index: &Index,
         erasure_meta: &ErasureMeta,
         prev_inserted_shreds: &HashMap<ShredId, Shred>,
         recovered_shreds: &mut Vec<Shred>,

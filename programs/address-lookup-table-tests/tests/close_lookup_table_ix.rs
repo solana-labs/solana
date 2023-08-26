@@ -20,7 +20,7 @@ mod common;
 #[tokio::test]
 async fn test_close_lookup_table() {
     let mut context = setup_test_context().await;
-    overwrite_slot_hashes_with_slots(&mut context, &[]);
+    overwrite_slot_hashes_with_slots(&context, &[]);
 
     let lookup_table_address = Pubkey::new_unique();
     let authority_keypair = Keypair::new();

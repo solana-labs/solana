@@ -306,7 +306,7 @@ fn test_bank_forks_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clu
     );
 }
 
-fn goto_end_of_slot(bank: &mut Bank) {
+fn goto_end_of_slot(bank: &Bank) {
     let mut tick_hash = bank.last_blockhash();
     loop {
         tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
