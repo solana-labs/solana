@@ -2098,7 +2098,7 @@ pub mod tests {
                     });
                     let alive_storages = storages
                         .iter()
-                        .filter_map(|storage| alives[storage.slot() as usize].then_some(storage))
+                        .filter(|storage| alives[storage.slot() as usize])
                         .collect::<Vec<_>>();
                     let alive_bytes_expected = alive_storages
                         .iter()
