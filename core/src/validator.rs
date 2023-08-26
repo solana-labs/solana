@@ -1086,7 +1086,6 @@ impl Validator {
         // from before the restart will be rejected.
         let tvu_shred_version = Arc::new(RwLock::new(node.info.shred_version()));
         if config.wen_restart {
-//            config.turbine_disabled.swap(true, Ordering::Relaxed);
             node.info
                 .set_shred_version((node.info.shred_version() + 1) % 0xffff);
             assert!(
@@ -1281,7 +1280,6 @@ impl Validator {
                         }
                         sleep(Duration::from_millis(1000));
                     }
-                    config.turbine_disabled.swap(false, Ordering::Relaxed);
                     let new_shred_version = compute_shred_version(
                         &genesis_config.hash(),
                         Some(&bank_forks.read().unwrap().root_bank().hard_forks()),
