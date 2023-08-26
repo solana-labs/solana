@@ -2427,7 +2427,7 @@ pub struct PubkeyHashAccount {
 }
 
 impl AccountsDb {
-    pub const ACCOUNTS_HASH_CACHE_DIR: &str = "accounts_hash_cache";
+    pub const ACCOUNTS_HASH_CACHE_DIR: &'static str = "accounts_hash_cache";
 
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None)
