@@ -1324,9 +1324,9 @@ mod test {
             )
         },
         duplicate_state_update_5: {
-            let duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_status = BankStatus::Frozen(duplicate_confirmed_hash.unwrap());
-            let duplicate_state = DuplicateState::new(duplicate_confirmed_hash, bank_status);
+            let duplicate_confirmed_hash = Hash::new_unique();
+            let bank_status = BankStatus::Frozen(duplicate_confirmed_hash);
+            let duplicate_state = DuplicateState::new(Some(duplicate_confirmed_hash), bank_status);
             (
                 SlotStateUpdate::Duplicate(duplicate_state),
                 Vec::<ResultingStateChange>::new()
@@ -1447,9 +1447,9 @@ mod test {
         },
         epoch_slots_frozen_state_update_10: {
             let epoch_slots_frozen_hash = Hash::new_unique();
-            let duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_status = BankStatus::Frozen(duplicate_confirmed_hash.unwrap());
-            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, false);
+            let duplicate_confirmed_hash = Hash::new_unique();
+            let bank_status = BankStatus::Frozen(duplicate_confirmed_hash);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, Some(duplicate_confirmed_hash), bank_status, false);
             (
                 SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
                 Vec::<ResultingStateChange>::new()
