@@ -1972,6 +1972,10 @@ impl ClusterInfo {
     // Returns a predicate checking if the pull request is from a valid
     // address, and if the address have responded to a ping request. Also
     // appends ping packets for the addresses which need to be (re)verified.
+    //
+    // allow lint false positive trait bound requirement (`CryptoRng` only
+    // implemented on `&'a mut T`
+    #[rustversion::attr(since(1.73), allow(clippy::needless_pass_by_ref_mut))]
     fn check_pull_request<'a, R>(
         &'a self,
         now: Instant,
