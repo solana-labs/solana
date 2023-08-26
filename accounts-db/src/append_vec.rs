@@ -694,6 +694,7 @@ pub mod tests {
         fn set_data_len_unsafe(&self, new_data_len: u64) {
             // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
             unsafe {
+                #[allow(invalid_reference_casting)]
                 std::ptr::write(
                     std::mem::transmute::<*const u64, *mut u64>(&self.meta.data_len),
                     new_data_len,
@@ -711,6 +712,7 @@ pub mod tests {
         fn set_executable_as_byte(&self, new_executable_byte: u8) {
             // UNSAFE: Force to interpret mmap-backed &bool as &u8 to write some crafted value;
             unsafe {
+                #[allow(invalid_reference_casting)]
                 std::ptr::write(
                     std::mem::transmute::<*const bool, *mut u8>(&self.account_meta.executable),
                     new_executable_byte,
