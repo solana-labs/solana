@@ -175,7 +175,9 @@ pub fn wen_restart(
         })
         .collect();
         info!("wen_restart waiting for all slots frozen, slots to repair {:?}", &filtered_slots);
-        if filtered_slots.is_empty() {
+        let all_slots_frozen = filtered_slots.is_empty();
+        *slots_to_repair_for_wen_restart.write().unwrap() = Some(filtered_slots);
+        if all_slots_frozen {
             info!("wen_restart all slots frozen");
             if let Some((slot, hash, percent)) =
                 select_heaviest_fork(new_slots, my_bank_forks, not_active_percentage)
@@ -186,8 +188,6 @@ pub fn wen_restart(
                 my_selected_hash = hash;
                 break;
             }
-        } else {
-            *slots_to_repair_for_wen_restart.write().unwrap() = Some(filtered_slots);
         }
         sleep(Duration::from_millis(LISTEN_INTERVAL_MS));
     }
