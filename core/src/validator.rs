@@ -1262,6 +1262,9 @@ impl Validator {
                         let mut my_bank_forks = bank_forks.write().unwrap();
                         let root_bank = my_bank_forks.root_bank();
                         root_bank.register_hard_fork(new_root_slot);
+                        let new_root_bank = my_bank_forks.get(new_root_slot).unwrap();
+                        new_root_bank.rehash();
+                        info!("wen_restart: new hash for slot {} after adding hard fork {}", new_root_slot, new_root_bank.hash());
                         my_bank_forks.set_root(
                             new_root_slot,
                             &accounts_background_request_sender,
