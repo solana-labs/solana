@@ -4895,7 +4895,7 @@ impl Bank {
         let log_messages: Option<TransactionLogMessages> =
             log_collector.and_then(|log_collector| {
                 Rc::try_unwrap(log_collector)
-                    .map(|log_collector| log_collector.into_inner().into())
+                    .map(|log_collector| log_collector.into_inner().into_messages())
                     .ok()
             });
 
