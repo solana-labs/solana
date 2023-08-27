@@ -10,8 +10,8 @@ use {
     solana_metrics::datapoint_warn,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
-        hash::Hash, nonce_account, pubkey::Pubkey, saturating_add_assign, signature::Signature,
-        timing::AtomicInterval, transport::TransportError,
+        clock::Slot, hash::Hash, nonce_account, pubkey::Pubkey, saturating_add_assign,
+        signature::Signature, timing::AtomicInterval, transport::TransportError,
     },
     std::{
         collections::{
@@ -565,7 +565,7 @@ impl SendTransactionService {
         stats: &SendTransactionServiceStats,
     ) {
         // Processing the transactions in batch
-        let addresses = Self::get_tpu_addresses(
+        let addresses = Self::get_tpu_addresses_with_slots(
             tpu_address,
             leader_info,
             config,
@@ -574,11 +574,17 @@ impl SendTransactionService {
 
         let wire_transactions = transactions
             .iter()
-            .map(|(_, transaction_info)| transaction_info.wire_transaction.as_ref())
+            .map(|(_, transaction_info)| {
+                debug!(
+                    "Sending transacation {} to (address, slot): {:?}",
+                    transaction_info.signature, addresses,
+                );
+                transaction_info.wire_transaction.as_ref()
+            })
             .collect::<Vec<&[u8]>>();
 
         for address in &addresses {
-            Self::send_transactions(address, &wire_transactions, connection_cache, stats);
+            Self::send_transactions(address.0, &wire_transactions, connection_cache, stats);
         }
     }
 
@@ -775,6 +781,21 @@ impl SendTransactionService {
                 }
             })
             .unwrap_or_else(|| vec![tpu_address])
+    }
+
+    fn get_tpu_addresses_with_slots<'a, T: TpuInfo>(
+        tpu_address: &'a SocketAddr,
+        leader_info: Option<&'a T>,
+        config: &'a Config,
+        protocol: Protocol,
+    ) -> Vec<(&'a SocketAddr, Slot)> {
+        leader_info
+            .as_ref()
+            .map(|leader_info| {
+                leader_info.get_leader_tpus_with_slots(config.leader_forward_count, protocol)
+            })
+            .filter(|addresses| !addresses.is_empty())
+            .unwrap_or_else(|| vec![(tpu_address, 0)])
     }
 
     pub fn join(self) -> thread::Result<()> {
