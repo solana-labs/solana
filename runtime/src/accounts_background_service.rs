@@ -138,6 +138,7 @@ impl Debug for SnapshotRequest {
 pub enum SnapshotRequestKind {
     Snapshot,
     EpochAccountsHash,
+    WenRestartSnapshot,
 }
 
 pub struct SnapshotRequestHandler {
@@ -391,8 +392,9 @@ impl SnapshotRequestHandler {
         let mut snapshot_time = Measure::start("snapshot_time");
         let snapshot_storages = snapshot_bank_utils::get_snapshot_storages(&snapshot_root_bank);
         let accounts_package = match request_kind {
-            SnapshotRequestKind::Snapshot => match &accounts_package_kind {
-                AccountsPackageKind::Snapshot(_) => {
+            SnapshotRequestKind::Snapshot
+            | SnapshotRequestKind::WenRestartSnapshot => match &accounts_package_type {
+                AccountsPackageType::Snapshot(_) => {
                     let bank_snapshot_info = snapshot_bank_utils::add_bank_snapshot(
                         &self.snapshot_config.bank_snapshots_dir,
                         &snapshot_root_bank,
@@ -431,7 +433,7 @@ impl SnapshotRequestHandler {
                     snapshot_storages,
                     accounts_hash_for_testing,
                 )
-            }
+            },
         };
         let send_result = self.accounts_package_sender.send(accounts_package);
         if let Err(err) = send_result {
@@ -765,7 +767,10 @@ fn new_accounts_package_kind(
 ) -> AccountsPackageKind {
     let block_height = snapshot_request.snapshot_root_bank.block_height();
     match snapshot_request.request_kind {
-        SnapshotRequestKind::EpochAccountsHash => AccountsPackageKind::EpochAccountsHash,
+        SnapshotRequestKind::EpochAccountsHash => AccountsPackageType::EpochAccountsHash,
+        SnapshotRequestKind::WenRestartSnapshot => AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(
+            last_full_snapshot_slot.unwrap(),
+        )),
         _ => {
             if snapshot_utils::should_take_full_snapshot(
                 block_height,
