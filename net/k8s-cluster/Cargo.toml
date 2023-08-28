@@ -20,6 +20,7 @@ crossbeam-channel = { workspace = true }
 docker-api = { workspace = true }
 env_logger = { workspace = true }
 flate2 = { workspace = true }
+fs_extra = { workspace = true }
 futures-util = { workspace = true }
 git2 = { workspace = true } 
 indexmap = { workspace = true, features = ["rayon"] }
@@ -47,18 +48,10 @@ solana-client = { workspace = true }
 solana-entry = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
-solana-ledger = { workspace = true }
 solana-logger = { workspace = true }
-solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
 solana-net-utils = { workspace = true }
-solana-perf = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
-solana-runtime = { workspace = true }
-solana-sdk = { workspace = true }
-solana-streamer = { workspace = true }
-solana-thin-client = { workspace = true }
-solana-tpu-client = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 static_assertions = { workspace = true }
