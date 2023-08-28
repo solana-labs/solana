@@ -1934,7 +1934,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         self.roots_tracker.read().unwrap().min_alive_root()
     }
 
-    pub fn reset_uncleaned_roots(&self, max_clean_root: Option<Slot>) -> HashSet<Slot> {
+    pub(crate) fn reset_uncleaned_roots(&self, max_clean_root: Option<Slot>) {
         let mut cleaned_roots = HashSet::new();
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         w_roots_tracker.uncleaned_roots.retain(|root| {
@@ -1947,7 +1947,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             // Only keep the slots that have yet to be cleaned
             !is_cleaned
         });
-        std::mem::replace(&mut w_roots_tracker.previous_uncleaned_roots, cleaned_roots)
+        w_roots_tracker.previous_uncleaned_roots = cleaned_roots;
     }
 
     #[cfg(test)]
