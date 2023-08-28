@@ -5,7 +5,7 @@ use {
     },
     bincode::serialize,
     dashmap::DashMap,
-    futures_util::future::TryFutureExt,
+    futures_util::future::{join_all, TryFutureExt},
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
     solana_rpc_client::spinner::{self, SendTransactionProgress},
     solana_rpc_client_api::{
@@ -236,6 +236,7 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
     context: &SendingContext,
 ) -> Result<()> {
     let current_transaction_count = messages_with_index.len();
+    let mut futures = vec![];
     // send all the transaction messages
     for (counter, (index, message)) in messages_with_index.iter().enumerate() {
         let mut transaction = Transaction::new_unsigned(message.clone());
@@ -247,43 +248,46 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
             .expect("Transaction should be signable");
         let serialized_transaction = serialize(&transaction).expect("Transaction should serailize");
         let signature = transaction.signatures[0];
-        send_transaction_with_rpc_fallback(
-            rpc_client,
-            tpu_client,
-            transaction,
-            serialized_transaction.clone(),
-            context,
-            *index,
-        )
-        .and_then(move |_| async move {
-            // send to confirm the transaction
-            context.unconfirmed_transasction_map.insert(
-                signature,
-                TransactionData {
-                    index: *index,
-                    serialized_transaction,
-                    last_valid_block_height: blockhashdata.last_valid_block_height,
-                    message: message.clone(),
-                },
-            );
-            if let Some(progress_bar) = progress_bar {
-                let progress = progress_from_context_and_block_height(
-                    context,
-                    blockhashdata.last_valid_block_height,
+        futures.push(
+            send_transaction_with_rpc_fallback(
+                rpc_client,
+                tpu_client,
+                transaction,
+                serialized_transaction.clone(),
+                context,
+                *index,
+            )
+            .and_then(move |_| async move {
+                // send to confirm the transaction
+                context.unconfirmed_transasction_map.insert(
+                    signature,
+                    TransactionData {
+                        index: *index,
+                        serialized_transaction,
+                        last_valid_block_height: blockhashdata.last_valid_block_height,
+                        message: message.clone(),
+                    },
                 );
-                progress.set_message_for_confirmed_transactions(
-                    progress_bar,
-                    &format!(
-                        "Sending {}/{} transactions",
-                        counter + 1,
-                        current_transaction_count,
-                    ),
-                );
-            }
-            Ok(())
-        })
-        .await?;
+                if let Some(progress_bar) = progress_bar {
+                    let progress = progress_from_context_and_block_height(
+                        context,
+                        blockhashdata.last_valid_block_height,
+                    );
+                    progress.set_message_for_confirmed_transactions(
+                        progress_bar,
+                        &format!(
+                            "Sending {}/{} transactions",
+                            counter + 1,
+                            current_transaction_count,
+                        ),
+                    );
+                }
+                Ok(())
+            }),
+        );
     }
+    // collect to convert Vec<Result<_>> to Result<Vec<_>>
+    join_all(futures).await.into_iter().collect::<Result<_>>()?;
     Ok(())
 }
 
