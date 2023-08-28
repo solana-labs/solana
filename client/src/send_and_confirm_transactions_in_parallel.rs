@@ -5,6 +5,7 @@ use {
     },
     bincode::serialize,
     dashmap::DashMap,
+    futures_util::future::TryFutureExt,
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
     solana_rpc_client::spinner::{self, SendTransactionProgress},
     solana_rpc_client_api::{
@@ -251,36 +252,37 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
             tpu_client,
             transaction,
             serialized_transaction.clone(),
-            &context,
+            context,
             *index,
         )
+        .and_then(move |_| async move {
+            // send to confirm the transaction
+            context.unconfirmed_transasction_map.insert(
+                signature,
+                TransactionData {
+                    index: *index,
+                    serialized_transaction,
+                    last_valid_block_height: blockhashdata.last_valid_block_height,
+                    message: message.clone(),
+                },
+            );
+            if let Some(progress_bar) = progress_bar {
+                let progress = progress_from_context_and_block_height(
+                    context,
+                    blockhashdata.last_valid_block_height,
+                );
+                progress.set_message_for_confirmed_transactions(
+                    progress_bar,
+                    &format!(
+                        "Sending {}/{} transactions",
+                        counter + 1,
+                        current_transaction_count,
+                    ),
+                );
+            }
+            Ok(())
+        })
         .await?;
-
-        // send to confirm the transaction
-        context.unconfirmed_transasction_map.insert(
-            signature,
-            TransactionData {
-                index: *index,
-                serialized_transaction,
-                last_valid_block_height: blockhashdata.last_valid_block_height,
-                message: message.clone(),
-            },
-        );
-
-        if let Some(progress_bar) = progress_bar {
-            let progress = progress_from_context_and_block_height(
-                context,
-                blockhashdata.last_valid_block_height,
-            );
-            progress.set_message_for_confirmed_transactions(
-                progress_bar,
-                &format!(
-                    "Sending {}/{} transactions",
-                    counter + 1,
-                    current_transaction_count,
-                ),
-            );
-        }
     }
     Ok(())
 }
