@@ -469,9 +469,12 @@ impl TransferWithFeeProof {
 
         // generate ciphertext validity proof
         let ciphertext_amount_validity_proof = BatchedGroupedCiphertext2HandlesValidityProof::new(
-            (destination_pubkey, auditor_pubkey),
-            (transfer_amount_lo, transfer_amount_hi),
-            (opening_lo, opening_hi),
+            destination_pubkey,
+            auditor_pubkey,
+            transfer_amount_lo,
+            transfer_amount_hi,
+            opening_lo,
+            opening_hi,
             transcript,
         );
 
@@ -522,9 +525,12 @@ impl TransferWithFeeProof {
 
         // generate ciphertext validity proof for fee ciphertexts
         let fee_ciphertext_validity_proof = BatchedGroupedCiphertext2HandlesValidityProof::new(
-            (destination_pubkey, withdraw_withheld_authority_pubkey),
-            (fee_amount_lo, fee_amount_hi),
-            (opening_fee_lo, opening_fee_hi),
+            destination_pubkey,
+            withdraw_withheld_authority_pubkey,
+            fee_amount_lo,
+            fee_amount_hi,
+            opening_fee_lo,
+            opening_fee_hi,
             transcript,
         );
 
@@ -611,19 +617,14 @@ impl TransferWithFeeProof {
 
         // verify that the transfer amount is encrypted correctly
         ciphertext_amount_validity_proof.verify(
-            (destination_pubkey, auditor_pubkey),
-            (
-                ciphertext_lo.get_commitment(),
-                ciphertext_hi.get_commitment(),
-            ),
-            (
-                ciphertext_lo.get_destination_handle(),
-                ciphertext_hi.get_destination_handle(),
-            ),
-            (
-                ciphertext_lo.get_auditor_handle(),
-                ciphertext_hi.get_auditor_handle(),
-            ),
+            destination_pubkey,
+            auditor_pubkey,
+            ciphertext_lo.get_commitment(),
+            ciphertext_hi.get_commitment(),
+            ciphertext_lo.get_destination_handle(),
+            ciphertext_hi.get_destination_handle(),
+            ciphertext_lo.get_auditor_handle(),
+            ciphertext_hi.get_auditor_handle(),
             transcript,
         )?;
 
@@ -661,19 +662,14 @@ impl TransferWithFeeProof {
 
         // verify ciphertext validity proof for fee ciphertexts
         fee_ciphertext_validity_proof.verify(
-            (destination_pubkey, withdraw_withheld_authority_pubkey),
-            (
-                fee_ciphertext_lo.get_commitment(),
-                fee_ciphertext_hi.get_commitment(),
-            ),
-            (
-                fee_ciphertext_lo.get_destination_handle(),
-                fee_ciphertext_hi.get_destination_handle(),
-            ),
-            (
-                fee_ciphertext_lo.get_withdraw_withheld_authority_handle(),
-                fee_ciphertext_hi.get_withdraw_withheld_authority_handle(),
-            ),
+            destination_pubkey,
+            withdraw_withheld_authority_pubkey,
+            fee_ciphertext_lo.get_commitment(),
+            fee_ciphertext_hi.get_commitment(),
+            fee_ciphertext_lo.get_destination_handle(),
+            fee_ciphertext_hi.get_destination_handle(),
+            fee_ciphertext_lo.get_withdraw_withheld_authority_handle(),
+            fee_ciphertext_hi.get_withdraw_withheld_authority_handle(),
             transcript,
         )?;
 

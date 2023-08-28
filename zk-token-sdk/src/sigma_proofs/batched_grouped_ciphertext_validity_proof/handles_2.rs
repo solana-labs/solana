@@ -1,9 +1,13 @@
-//! The ciphertext validity sigma proof system.
+//! The batched ciphertext with 2 handles validity sigma proof system.
 //!
-//! The ciphertext validity proof is defined with respect to a Pedersen commitment and two
-//! decryption handles. The proof certifies that a given Pedersen commitment can be decrypted using
-//! ElGamal private keys that are associated with each of the two decryption handles. To generate
-//! the proof, a prover must provide the Pedersen opening associated with the commitment.
+//! A batched grouped ciphertext validity proof certifies the validity of two instances of a
+//! standard grouped ciphertext validity proof. An instance of a standard grouped ciphertext with 2
+//! handles validity proof consists of one ciphertext and three decryption handles: `(commitment,
+//! destination_handle, auditor_handle)`. An instance of a batched grouped ciphertext with 3
+//! handles validity proof consist of a pair of `(commitment_0, destination_handle_0,
+//! auditor_handle_0)` and `(commitment_1, destination_handle_1, auditor_handle_1)`. The proof
+//! certifies the anagolous decryptable properties for each one of these pairs of commitment and
+//! decryption handles.
 //!
 //! The protocol guarantees computational soundness (by the hardness of discrete log) and perfect
 //! zero-knowledge in the random oracle model.
@@ -26,14 +30,6 @@ use {
 };
 
 /// Batched grouped ciphertext validity proof with two handles.
-///
-/// A batched grouped ciphertext validity proof certifies the validity of two instances of a
-/// standard ciphertext validity proof. An instance of a standard validity proof consists of one
-/// ciphertext and two decryption handles: `(commitment, destination_handle, auditor_handle)`. An
-/// instance of a batched ciphertext validity proof is a pair `(commitment_0,
-/// destination_handle_0, auditor_handle_0)` and `(commitment_1, destination_handle_1,
-/// auditor_handle_1)`. The proof certifies the analogous decryptable properties for each one of
-/// these pairs of commitment and decryption handles.
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct BatchedGroupedCiphertext2HandlesValidityProof(GroupedCiphertext2HandlesValidityProof);
@@ -46,9 +42,12 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
     /// The function simply batches the input openings and invokes the standard grouped ciphertext
     /// validity proof constructor.
     pub fn new<T: Into<Scalar>>(
-        (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
-        (amount_lo, amount_hi): (T, T),
-        (opening_lo, opening_hi): (&PedersenOpening, &PedersenOpening),
+        destination_pubkey: &ElGamalPubkey,
+        auditor_pubkey: &ElGamalPubkey,
+        amount_lo: T,
+        amount_hi: T,
+        opening_lo: &PedersenOpening,
+        opening_hi: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
         transcript.batched_grouped_ciphertext_validity_proof_domain_separator();
@@ -59,7 +58,8 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
         let batched_opening = opening_lo + &(opening_hi * &t);
 
         BatchedGroupedCiphertext2HandlesValidityProof(GroupedCiphertext2HandlesValidityProof::new(
-            (destination_pubkey, auditor_pubkey),
+            destination_pubkey,
+            auditor_pubkey,
             batched_message,
             &batched_opening,
             transcript,
@@ -75,10 +75,14 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
     /// This function is randomized. It uses `OsRng` internally to generate random scalars.
     pub fn verify(
         self,
-        (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
-        (commitment_lo, commitment_hi): (&PedersenCommitment, &PedersenCommitment),
-        (destination_handle_lo, destination_handle_hi): (&DecryptHandle, &DecryptHandle),
-        (auditor_handle_lo, auditor_handle_hi): (&DecryptHandle, &DecryptHandle),
+        destination_pubkey: &ElGamalPubkey,
+        auditor_pubkey: &ElGamalPubkey,
+        commitment_lo: &PedersenCommitment,
+        commitment_hi: &PedersenCommitment,
+        destination_handle_lo: &DecryptHandle,
+        destination_handle_hi: &DecryptHandle,
+        auditor_handle_lo: &DecryptHandle,
+        auditor_handle_hi: &DecryptHandle,
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofError> {
         transcript.batched_grouped_ciphertext_validity_proof_domain_separator();
@@ -93,8 +97,10 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
 
         validity_proof.verify(
             &batched_commitment,
-            (destination_pubkey, auditor_pubkey),
-            (&destination_batched_handle, &auditor_batched_handle),
+            destination_pubkey,
+            auditor_pubkey,
+            &destination_batched_handle,
+            &auditor_batched_handle,
             transcript,
         )
     }
@@ -139,18 +145,25 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = BatchedGroupedCiphertext2HandlesValidityProof::new(
-            (destination_pubkey, auditor_pubkey),
-            (amount_lo, amount_hi),
-            (&open_lo, &open_hi),
+            destination_pubkey,
+            auditor_pubkey,
+            amount_lo,
+            amount_hi,
+            &open_lo,
+            &open_hi,
             &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
-                (destination_pubkey, auditor_pubkey),
-                (&commitment_lo, &commitment_hi),
-                (&destination_handle_lo, &destination_handle_hi),
-                (&auditor_handle_lo, &auditor_handle_hi),
+                destination_pubkey,
+                auditor_pubkey,
+                &commitment_lo,
+                &commitment_hi,
+                &destination_handle_lo,
+                &destination_handle_hi,
+                &auditor_handle_lo,
+                &auditor_handle_hi,
                 &mut verifier_transcript,
             )
             .is_ok());

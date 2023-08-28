@@ -5,7 +5,6 @@
 //! decryption handles. To generate the proof, a prover must provide the Pedersen opening
 //! associated with the grouped ciphertext's commitment.
 //!
-//! Currently, the grouped-ciphertext validity proof is restricted to ciphertexts with two handles.
 //! In accordance with the SPL Token program application, the first decryption handle associated
 //! with the proof is referred to as the "destination" handle and the second decryption handle is
 //! referred to as the "auditor" handle.
@@ -76,7 +75,8 @@ impl GroupedCiphertext2HandlesValidityProofData {
         let mut transcript = context.new_transcript();
 
         let proof = GroupedCiphertext2HandlesValidityProof::new(
-            (destination_pubkey, auditor_pubkey),
+            destination_pubkey,
+            auditor_pubkey,
             amount,
             opening,
             &mut transcript,
@@ -113,8 +113,10 @@ impl ZkProofData<GroupedCiphertext2HandlesValidityProofContext>
         proof
             .verify(
                 &grouped_ciphertext.commitment,
-                (&destination_pubkey, &auditor_pubkey),
-                (destination_handle, auditor_handle),
+                &destination_pubkey,
+                &auditor_pubkey,
+                destination_handle,
+                auditor_handle,
                 &mut transcript,
             )
             .map_err(|e| e.into())

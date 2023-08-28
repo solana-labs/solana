@@ -5,12 +5,10 @@
 //! grouped-ciphertext validity proof is shorter and more efficient than two individual
 //! grouped-ciphertext validity proofs.
 //!
-//! Currently, the batched grouped-ciphertext validity proof is restricted to ciphertexts with two
-//! handles. In accordance with the SPL Token program application, the first decryption handle
-//! associated with the proof is referred to as the "destination" handle and the second decryption
-//! handle is referred to as the "auditor" handle. Furthermore, the first grouped ciphertext is
-//! referred to as the "lo" ciphertext and the second grouped ciphertext is referred to as the "hi"
-//! ciphertext.
+//! In accordance with the SPL Token program application, the first decryption handle associated
+//! with the proof is referred to as the "destination" handle and the second decryption handle is
+//! referred to as the "auditor" handle. Furthermore, the first grouped ciphertext is referred to
+//! as the "lo" ciphertext and the second grouped ciphertext is referred to as the "hi" ciphertext.
 
 #[cfg(not(target_os = "solana"))]
 use {
@@ -85,9 +83,12 @@ impl BatchedGroupedCiphertext2HandlesValidityProofData {
         let mut transcript = context.new_transcript();
 
         let proof = BatchedGroupedCiphertext2HandlesValidityProof::new(
-            (destination_pubkey, auditor_pubkey),
-            (amount_lo, amount_hi),
-            (opening_lo, opening_hi),
+            destination_pubkey,
+            auditor_pubkey,
+            amount_lo,
+            amount_hi,
+            opening_lo,
+            opening_hi,
             &mut transcript,
         )
         .into();
@@ -126,13 +127,14 @@ impl ZkProofData<BatchedGroupedCiphertext2HandlesValidityProofContext>
 
         proof
             .verify(
-                (&destination_pubkey, &auditor_pubkey),
-                (
-                    &grouped_ciphertext_lo.commitment,
-                    &grouped_ciphertext_hi.commitment,
-                ),
-                (destination_handle_lo, destination_handle_hi),
-                (auditor_handle_lo, auditor_handle_hi),
+                &destination_pubkey,
+                &auditor_pubkey,
+                &grouped_ciphertext_lo.commitment,
+                &grouped_ciphertext_hi.commitment,
+                destination_handle_lo,
+                destination_handle_hi,
+                auditor_handle_lo,
+                auditor_handle_hi,
                 &mut transcript,
             )
             .map_err(|e| e.into())

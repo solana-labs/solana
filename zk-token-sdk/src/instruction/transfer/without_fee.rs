@@ -315,9 +315,12 @@ impl TransferProof {
 
         // generate ciphertext validity proof
         let validity_proof = BatchedGroupedCiphertext2HandlesValidityProof::new(
-            (destination_pubkey, auditor_pubkey),
-            (transfer_amount_lo, transfer_amount_hi),
-            (opening_lo, opening_hi),
+            destination_pubkey,
+            auditor_pubkey,
+            transfer_amount_lo,
+            transfer_amount_hi,
+            opening_lo,
+            opening_hi,
             transcript,
         );
 
@@ -392,19 +395,14 @@ impl TransferProof {
 
         // verify validity proof
         aggregated_validity_proof.verify(
-            (destination_pubkey, auditor_pubkey),
-            (
-                ciphertext_lo.get_commitment(),
-                ciphertext_hi.get_commitment(),
-            ),
-            (
-                ciphertext_lo.get_destination_handle(),
-                ciphertext_hi.get_destination_handle(),
-            ),
-            (
-                ciphertext_lo.get_auditor_handle(),
-                ciphertext_hi.get_auditor_handle(),
-            ),
+            destination_pubkey,
+            auditor_pubkey,
+            ciphertext_lo.get_commitment(),
+            ciphertext_hi.get_commitment(),
+            ciphertext_lo.get_destination_handle(),
+            ciphertext_hi.get_destination_handle(),
+            ciphertext_lo.get_auditor_handle(),
+            ciphertext_hi.get_auditor_handle(),
             transcript,
         )?;
 

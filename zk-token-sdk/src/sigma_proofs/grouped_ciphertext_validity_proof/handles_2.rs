@@ -1,4 +1,4 @@
-//! The ciphertext validity sigma proof system.
+//! The grouped ciphertext with 2 handles validity sigma proof system.
 //!
 //! The ciphertext validity proof is defined with respect to a Pedersen commitment and two
 //! decryption handles. The proof certifies that a given Pedersen commitment can be decrypted using
@@ -7,6 +7,10 @@
 //!
 //! The protocol guarantees computational soundness (by the hardness of discrete log) and perfect
 //! zero-knowledge in the random oracle model.
+//!
+//! In accordance with its application to the SPL Token program, the first decryption handle
+//! associated with the proof is referred to as the "destination" handle, and the second as the
+//! "auditor" handle.
 
 #[cfg(not(target_os = "solana"))]
 use {
@@ -63,13 +67,14 @@ impl GroupedCiphertext2HandlesValidityProof {
     /// Note that the proof constructor does not take the actual Pedersen commitment or decryption
     /// handles as input; it only takes the associated Pedersen opening instead.
     ///
-    /// * `(destination_pubkey, auditor_pubkey)` - The ElGamal public keys associated with the decryption
-    /// handles
+    /// * `destination_pubkey` - The destination ElGamal public key
+    /// * `auditor_pubkey` - The auditor ElGamal public key
     /// * `amount` - The committed message in the commitment
     /// * `opening` - The opening associated with the Pedersen commitment
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new<T: Into<Scalar>>(
-        (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey), // TODO: rename auditor_pubkey
+        destination_pubkey: &ElGamalPubkey,
+        auditor_pubkey: &ElGamalPubkey,
         amount: T,
         opening: &PedersenOpening,
         transcript: &mut Transcript,
@@ -118,15 +123,18 @@ impl GroupedCiphertext2HandlesValidityProof {
     /// Verifies a grouped ciphertext validity proof for 2 handles.
     ///
     /// * `commitment` - The Pedersen commitment
-    /// * `(destination_pubkey, auditor_pubkey)` - The ElGamal pubkeys associated with the decryption
-    /// handles
-    /// * `(destination_handle, auditor_handle)` - The decryption handles
+    /// * `destination_pubkey` - The destination ElGamal public key
+    /// * `auditor_pubkey` - The auditor ElGamal public key
+    /// * `destination_handle` - The destination decryption handle
+    /// * `auditor_handle` - The auditor decryption handle
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn verify(
         self,
         commitment: &PedersenCommitment,
-        (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
-        (destination_handle, auditor_handle): (&DecryptHandle, &DecryptHandle),
+        destination_pubkey: &ElGamalPubkey,
+        auditor_pubkey: &ElGamalPubkey,
+        destination_handle: &DecryptHandle,
+        auditor_handle: &DecryptHandle,
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofError> {
         transcript.grouped_ciphertext_validity_proof_domain_separator();
@@ -134,6 +142,8 @@ impl GroupedCiphertext2HandlesValidityProof {
         // include Y_0, Y_1, Y_2 to transcript and extract challenges
         transcript.validate_and_append_point(b"Y_0", &self.Y_0)?;
         transcript.validate_and_append_point(b"Y_1", &self.Y_1)?;
+        // the point `Y_2` is defined with respect to the auditor public key and can be zero if the
+        // auditor public key is zero
         transcript.validate_and_append_point(b"Y_2", &self.Y_2)?;
 
         let c = transcript.challenge_scalar(b"c");
@@ -252,7 +262,8 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = GroupedCiphertext2HandlesValidityProof::new(
-            (destination_pubkey, auditor_pubkey),
+            destination_pubkey,
+            auditor_pubkey,
             amount,
             &opening,
             &mut prover_transcript,
@@ -261,8 +272,10 @@ mod test {
         assert!(proof
             .verify(
                 &commitment,
-                (destination_pubkey, auditor_pubkey),
-                (&destination_handle, &auditor_handle),
+                destination_pubkey,
+                auditor_pubkey,
+                &destination_handle,
+                &auditor_handle,
                 &mut verifier_transcript,
             )
             .is_ok());
@@ -286,7 +299,8 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = GroupedCiphertext2HandlesValidityProof::new(
-            (&destination_pubkey, auditor_pubkey),
+            &destination_pubkey,
+            auditor_pubkey,
             amount,
             &opening,
             &mut prover_transcript,
@@ -295,8 +309,10 @@ mod test {
         assert!(proof
             .verify(
                 &commitment,
-                (&destination_pubkey, auditor_pubkey),
-                (&destination_handle, &auditor_handle),
+                &destination_pubkey,
+                auditor_pubkey,
+                &destination_handle,
+                &auditor_handle,
                 &mut verifier_transcript,
             )
             .is_err());
@@ -317,7 +333,8 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = GroupedCiphertext2HandlesValidityProof::new(
-            (destination_pubkey, &auditor_pubkey),
+            destination_pubkey,
+            &auditor_pubkey,
             amount,
             &opening,
             &mut prover_transcript,
@@ -326,8 +343,10 @@ mod test {
         assert!(proof
             .verify(
                 &commitment,
-                (destination_pubkey, &auditor_pubkey),
-                (&destination_handle, &auditor_handle),
+                destination_pubkey,
+                &auditor_pubkey,
+                &destination_handle,
+                &auditor_handle,
                 &mut verifier_transcript,
             )
             .is_err());
@@ -350,7 +369,8 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = GroupedCiphertext2HandlesValidityProof::new(
-            (destination_pubkey, auditor_pubkey),
+            destination_pubkey,
+            auditor_pubkey,
             amount,
             &opening,
             &mut prover_transcript,
@@ -359,8 +379,10 @@ mod test {
         assert!(proof
             .verify(
                 &commitment,
-                (destination_pubkey, auditor_pubkey),
-                (&destination_handle, &auditor_handle),
+                destination_pubkey,
+                auditor_pubkey,
+                &destination_handle,
+                &auditor_handle,
                 &mut verifier_transcript,
             )
             .is_ok());
@@ -382,7 +404,8 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = GroupedCiphertext2HandlesValidityProof::new(
-            (destination_pubkey, auditor_pubkey),
+            destination_pubkey,
+            auditor_pubkey,
             amount,
             &opening,
             &mut prover_transcript,
@@ -391,8 +414,10 @@ mod test {
         assert!(proof
             .verify(
                 &commitment,
-                (destination_pubkey, auditor_pubkey),
-                (&destination_handle, &auditor_handle),
+                destination_pubkey,
+                auditor_pubkey,
+                &destination_handle,
+                &auditor_handle,
                 &mut verifier_transcript,
             )
             .is_ok());
