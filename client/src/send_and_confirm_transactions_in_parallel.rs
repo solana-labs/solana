@@ -33,6 +33,7 @@ use {
 
 const BLOCKHASH_REFRESH_RATE: Duration = Duration::from_secs(10);
 const TPU_RESEND_REFRESH_RATE: Duration = Duration::from_secs(2);
+const SEND_INTERVAL: Duration = Duration::from_millis(10);
 type QuicTpuClient = TpuClient<QuicPool, QuicConnectionManager, QuicConfig>;
 
 #[derive(Clone, Debug)]
@@ -187,7 +188,9 @@ async fn send_transaction_with_rpc_fallback(
     serialized_transaction: Vec<u8>,
     context: &SendingContext,
     index: usize,
+    counter: usize,
 ) -> Result<()> {
+    tokio::time::sleep(SEND_INTERVAL.saturating_mul(counter as u32)).await;
     let send_over_rpc = if let Some(tpu_client) = tpu_client {
         !tpu_client
             .send_wire_transaction(serialized_transaction.clone())
@@ -256,6 +259,7 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
                 serialized_transaction.clone(),
                 context,
                 *index,
+                counter,
             )
             .and_then(move |_| async move {
                 // send to confirm the transaction
