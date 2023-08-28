@@ -1,4 +1,4 @@
-//! Instructions for the SBF loader.
+//! Instructions for the v4 built-in loader program.
 
 #[repr(u8)]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
