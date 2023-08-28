@@ -10,6 +10,7 @@ use {
     solana_rpc_client_api::{
         client_error::ErrorKind,
         request::{RpcError, RpcResponseErrorData, MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS},
+        response::RpcSimulateTransactionResult,
     },
     solana_sdk::{
         hash::Hash,
@@ -214,19 +215,18 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
                         context.error_map.insert(*index, transaction_error.clone());
                         continue;
                     }
-                    ErrorKind::RpcError(rpc_error) => {
-                        if let RpcError::RpcResponseError {
-                            data:
-                                RpcResponseErrorData::SendTransactionPreflightFailure(simulation_result),
-                            ..
-                        } = rpc_error
-                        {
-                            if let Some(transaction_error) = &simulation_result.err {
-                                context.error_map.insert(*index, transaction_error.clone());
-                                continue;
-                            }
-                        }
-                        return Err(TpuSenderError::from(e));
+                    ErrorKind::RpcError(RpcError::RpcResponseError {
+                        data:
+                            RpcResponseErrorData::SendTransactionPreflightFailure(
+                                RpcSimulateTransactionResult {
+                                    err: Some(transaction_error),
+                                    ..
+                                },
+                            ),
+                        ..
+                    }) => {
+                        context.error_map.insert(*index, transaction_error.clone());
+                        continue;
                     }
                     _ => {
                         return Err(TpuSenderError::from(e));
