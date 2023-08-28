@@ -137,6 +137,7 @@ async fn main() {
         namespace: matches.value_of("cluster_namespace").unwrap_or_default(),
         num_validators: value_t_or_exit!(matches, "number_of_validators", i32),
     };
+
     let build_config = BuildConfig {
         release_channel: matches.value_of("release_channel").unwrap_or_default(),
         deploy_method: matches.value_of("deploy_method").unwrap(),
@@ -150,6 +151,15 @@ async fn main() {
         base_image: matches.value_of("base_image").unwrap_or_default(),
         tag: matches.value_of("image_tag").unwrap_or_default(),
     };
+
+    let deploy = Deploy::new(build_config.clone());
+    match deploy.prepare().await {
+        Ok(_) => info!("Validator setup prepared successfully"),
+        Err(err) => {
+            error!("Exiting........ {}", err);
+            return;
+        }
+    }
 
     if build_config.docker_build {
         let docker = DockerConfig::new(docker_image_config, build_config.deploy_method);
@@ -169,18 +179,10 @@ async fn main() {
 
     process::exit(1);
 
-    let deploy = Deploy::new(build_config);
-    match deploy.prepare().await {
-        Ok(_) => info!("Validator setup prepared successfully"),
-        Err(err) => {
-            error!("Exiting........ {}", err);
-            return;
-        }
-    }
 
     // let
 
-    // process::exit(1);
+    process::exit(1);
 
     let bootstrap_container_name = matches
         .value_of("bootstrap_container_name")
