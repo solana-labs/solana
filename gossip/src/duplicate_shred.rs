@@ -29,8 +29,10 @@ pub struct DuplicateShred {
     pub(crate) from: Pubkey,
     pub(crate) wallclock: u64,
     pub(crate) slot: Slot,
-    // Shred index of the first shred in the proof
-    pub(crate) shred_index: u32,
+
+    #[allow(dead_code)]
+    shred_index: u32,
+
     shred_type: ShredType,
     // Serialized DuplicateSlotProof split into chunks.
     num_chunks: u8,
@@ -63,6 +65,10 @@ pub enum Error {
     InvalidDuplicateShreds,
     #[error("invalid duplicate slot proof")]
     InvalidDuplicateSlotProof,
+    #[error("invalid erasure meta conflict")]
+    InvalidErasureMetaConflict,
+    #[error("invalid last index conflict")]
+    InvalidLastIndexConflict,
     #[error("invalid signature")]
     InvalidSignature,
     #[error("invalid size limit")]
@@ -75,8 +81,6 @@ pub enum Error {
     MissingDataChunk,
     #[error("(de)serialization error")]
     SerializationError(#[from] bincode::Error),
-    #[error("shred index mismatch")]
-    ShredIndexMismatch,
     #[error("shred type mismatch")]
     ShredTypeMismatch,
     #[error("slot mismatch")]
@@ -85,10 +89,6 @@ pub enum Error {
     TryFromIntError(#[from] TryFromIntError),
     #[error("unknown slot leader: {0}")]
     UnknownSlotLeader(Slot),
-    #[error("invalid last index conflict")]
-    InvalidLastIndexConflict,
-    #[error("invalid erasure meta conflict")]
-    InvalidErasureMetaConflict,
 }
 
 /// Check that `shred1` and `shred2` indicate a valid duplicate proof
@@ -168,7 +168,7 @@ where
     }
     let other_shred = Shred::new_from_serialized_shred(other_payload)?;
     check_shreds(leader_schedule, &shred, &other_shred)?;
-    let (slot, shred_index, shred_type) = (shred.slot(), shred.index(), shred.shred_type());
+    let (slot, shred_type) = (shred.slot(), shred.shred_type());
     let proof = DuplicateSlotProof {
         shred1: shred.into_payload(),
         shred2: other_shred.into_payload(),
@@ -188,28 +188,25 @@ where
             from: self_pubkey,
             wallclock,
             slot,
-            shred_index,
             shred_type,
             num_chunks,
             chunk_index: i as u8,
             chunk,
+            shred_index: 0,
         });
     Ok(chunks)
 }
 
 // Returns a predicate checking if a duplicate-shred chunk matches
-// (slot, shred_index, shred_type) and has valid chunk_index.
+// (slot, shred_type) and has valid chunk_index.
 fn check_chunk(
     slot: Slot,
-    shred_index: u32,
     shred_type: ShredType,
     num_chunks: u8,
 ) -> impl Fn(&DuplicateShred) -> Result<(), Error> {
     move |dup| {
         if dup.slot != slot {
             Err(Error::SlotMismatch)
-        } else if dup.shred_index != shred_index {
-            Err(Error::ShredIndexMismatch)
         } else if dup.shred_type != shred_type {
             Err(Error::ShredTypeMismatch)
         } else if dup.num_chunks != num_chunks {
@@ -233,14 +230,13 @@ pub(crate) fn into_shreds(
     let mut chunks = chunks.into_iter();
     let DuplicateShred {
         slot,
-        shred_index,
         shred_type,
         num_chunks,
         chunk_index,
         chunk,
         ..
     } = chunks.next().ok_or(Error::InvalidDuplicateShreds)?;
-    let check_chunk = check_chunk(slot, shred_index, shred_type, num_chunks);
+    let check_chunk = check_chunk(slot, shred_type, num_chunks);
     let mut data = HashMap::new();
     data.insert(chunk_index, chunk);
     for chunk in chunks {
@@ -268,8 +264,6 @@ pub(crate) fn into_shreds(
     let shred2 = Shred::new_from_serialized_shred(proof.shred2)?;
     if shred1.slot() != slot || shred2.slot() != slot {
         Err(Error::SlotMismatch)
-    } else if shred1.index() != shred_index && shred2.index() != shred_index {
-        Err(Error::ShredIndexMismatch)
     } else if shred1.shred_type() != shred_type || shred2.shred_type() != shred_type {
         Err(Error::ShredTypeMismatch)
     } else {
@@ -310,11 +304,11 @@ pub(crate) mod tests {
             from: Pubkey::new_unique(),
             wallclock: u64::MAX,
             slot: Slot::MAX,
-            shred_index: u32::MAX,
             shred_type: ShredType::Data,
             num_chunks: u8::MAX,
             chunk_index: u8::MAX,
             chunk: Vec::default(),
+            shred_index: 0,
         };
         assert_eq!(
             bincode::serialize(&dup).unwrap().len(),
@@ -431,7 +425,7 @@ pub(crate) mod tests {
         wallclock: u64,
         max_size: usize, // Maximum serialized size of each DuplicateShred.
     ) -> Result<impl Iterator<Item = DuplicateShred>, Error> {
-        let (slot, shred_index, shred_type) = (shred.slot(), shred.index(), shred.shred_type());
+        let (slot, shred_type) = (shred.slot(), shred.shred_type());
         let proof = DuplicateSlotProof {
             shred1: shred.into_payload(),
             shred2: other_shred.into_payload(),
@@ -447,11 +441,11 @@ pub(crate) mod tests {
                 from: self_pubkey,
                 wallclock,
                 slot,
-                shred_index,
                 shred_type,
                 num_chunks,
                 chunk_index: i as u8,
                 chunk,
+                shred_index: 0,
             });
         Ok(chunks)
     }

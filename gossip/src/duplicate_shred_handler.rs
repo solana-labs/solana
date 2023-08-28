@@ -229,7 +229,7 @@ mod tests {
         slot: u64,
         expected_error: Option<Error>,
         chunk_size: usize,
-    ) -> Result<Box<dyn Iterator<Item = DuplicateShred>>, Error> {
+    ) -> Result<impl Iterator<Item = DuplicateShred>, Error> {
         let my_keypair = match expected_error {
             Some(Error::InvalidSignature) => Arc::new(Keypair::new()),
             _ => keypair,
@@ -258,16 +258,7 @@ mod tests {
             timestamp(), // wallclock
             chunk_size,  // max_size
         )?;
-        if let Some(Error::ShredIndexMismatch) = expected_error {
-            Ok(Box::new(chunks.map(|mut duplicate_shred| {
-                if duplicate_shred.chunk_index() > 0 {
-                    duplicate_shred.shred_index += 1
-                }
-                duplicate_shred
-            })))
-        } else {
-            Ok(Box::new(chunks))
-        }
+        Ok(chunks)
     }
 
     #[test]
@@ -319,7 +310,6 @@ mod tests {
         for error in [
             Error::InvalidSignature,
             Error::SlotMismatch,
-            Error::ShredIndexMismatch,
             Error::InvalidDuplicateShreds,
         ] {
             match create_duplicate_proof(
