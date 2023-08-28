@@ -150,7 +150,7 @@ use {
         inflation::Inflation,
         instruction::InstructionError,
         lamports::LamportsError,
-        loader_v4::{self, LoaderV4State},
+        loader_v4::{self, LoaderV4State, LoaderV4Status},
         message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::LAMPORTS_PER_SOL,
@@ -4621,7 +4621,9 @@ impl Bank {
         if loader_v4::check_id(program_account.owner()) {
             return solana_loader_v4_program::get_state(program_account.data())
                 .ok()
-                .and_then(|state| state.is_deployed.then_some(state.slot))
+                .and_then(|state| {
+                    (!matches!(state.status, LoaderV4Status::Retracted)).then_some(state.slot)
+                })
                 .map(|slot| ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot))
                 .unwrap_or(ProgramAccountLoadResult::InvalidV4Program);
         }
