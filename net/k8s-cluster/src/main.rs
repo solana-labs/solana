@@ -176,12 +176,6 @@ async fn main() {
         }
     }
 
-
-    process::exit(1);
-
-
-    // let
-
     process::exit(1);
 
     let bootstrap_container_name = matches
