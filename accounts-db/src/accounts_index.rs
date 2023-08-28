@@ -1950,31 +1950,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         w_roots_tracker.previous_uncleaned_roots = cleaned_roots;
     }
 
-    #[cfg(test)]
-    pub fn clear_uncleaned_roots(&self, max_clean_root: Option<Slot>) -> HashSet<Slot> {
-        let mut cleaned_roots = HashSet::new();
-        let mut w_roots_tracker = self.roots_tracker.write().unwrap();
-        w_roots_tracker.uncleaned_roots.retain(|root| {
-            let is_cleaned = max_clean_root
-                .map(|max_clean_root| *root <= max_clean_root)
-                .unwrap_or(true);
-            if is_cleaned {
-                cleaned_roots.insert(*root);
-            }
-            // Only keep the slots that have yet to be cleaned
-            !is_cleaned
-        });
-        cleaned_roots
-    }
-
-    pub fn is_uncleaned_root(&self, slot: Slot) -> bool {
-        self.roots_tracker
-            .read()
-            .unwrap()
-            .uncleaned_roots
-            .contains(&slot)
-    }
-
     pub fn num_alive_roots(&self) -> usize {
         self.roots_tracker.read().unwrap().alive_roots.len()
     }
@@ -1982,11 +1957,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     pub fn all_alive_roots(&self) -> Vec<Slot> {
         let tracker = self.roots_tracker.read().unwrap();
         tracker.alive_roots.get_all()
-    }
-
-    #[cfg(test)]
-    pub fn clear_roots(&self) {
-        self.roots_tracker.write().unwrap().alive_roots.clear()
     }
 
     pub fn clone_uncleaned_roots(&self) -> HashSet<Slot> {
@@ -3901,6 +3871,34 @@ pub mod tests {
                 UPSERT_POPULATE_RECLAIMS,
             );
             assert!(gc.is_empty());
+        }
+
+        pub fn clear_uncleaned_roots(&self, max_clean_root: Option<Slot>) -> HashSet<Slot> {
+            let mut cleaned_roots = HashSet::new();
+            let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+            w_roots_tracker.uncleaned_roots.retain(|root| {
+                let is_cleaned = max_clean_root
+                    .map(|max_clean_root| *root <= max_clean_root)
+                    .unwrap_or(true);
+                if is_cleaned {
+                    cleaned_roots.insert(*root);
+                }
+                // Only keep the slots that have yet to be cleaned
+                !is_cleaned
+            });
+            cleaned_roots
+        }
+
+        pub(crate) fn is_uncleaned_root(&self, slot: Slot) -> bool {
+            self.roots_tracker
+                .read()
+                .unwrap()
+                .uncleaned_roots
+                .contains(&slot)
+        }
+
+        pub fn clear_roots(&self) {
+            self.roots_tracker.write().unwrap().alive_roots.clear()
         }
     }
 
