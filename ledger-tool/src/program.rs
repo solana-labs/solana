@@ -177,7 +177,7 @@ impl ProgramSubCommand for App<'_, '_> {
                 .arg(
                     Arg::with_name("input")
                         .help(
-                            r##"Input for the program to run on, where FILE is a name of a JSON file
+                            r#"Input for the program to run on, where FILE is a name of a JSON file
 with input data, or BYTES is the number of 0-valued bytes to allocate for program parameters"
 
 The input data for a program execution have to be in JSON format
@@ -196,7 +196,7 @@ and the following fields are required
     ],
     "instruction_data": [31, 32, 23, 24]
 }
-"##,
+"#,
                         )
                         .short("i")
                         .long("input")

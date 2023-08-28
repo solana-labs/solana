@@ -150,7 +150,7 @@ use {
         inflation::Inflation,
         instruction::InstructionError,
         lamports::LamportsError,
-        loader_v4::{self, LoaderV4State},
+        loader_v4::{self, LoaderV4State, LoaderV4Status},
         message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::LAMPORTS_PER_SOL,
@@ -2116,6 +2116,16 @@ impl Bank {
             .is_active(&feature_set::last_restart_slot_sysvar::id());
 
         if feature_flag {
+            // First, see what the currently stored last restart slot is. This
+            // account may not exist yet if the feature was just activated.
+            let current_last_restart_slot = self
+                .get_account(&sysvar::last_restart_slot::id())
+                .and_then(|account| {
+                    let lrs: Option<LastRestartSlot> = from_account(&account);
+                    lrs
+                })
+                .map(|account| account.last_restart_slot);
+
             let last_restart_slot = {
                 let slot = self.slot;
                 let hard_forks_r = self.hard_forks.read().unwrap();
@@ -2129,12 +2139,16 @@ impl Bank {
                     .map(|(slot, _)| *slot)
                     .unwrap_or(0)
             };
-            self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
-                create_account(
-                    &LastRestartSlot { last_restart_slot },
-                    self.inherit_specially_retained_account_fields(account),
-                )
-            });
+
+            // Only need to write if the last restart has changed
+            if current_last_restart_slot != Some(last_restart_slot) {
+                self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
+                    create_account(
+                        &LastRestartSlot { last_restart_slot },
+                        self.inherit_specially_retained_account_fields(account),
+                    )
+                });
+            }
         }
     }
 
@@ -4607,7 +4621,9 @@ impl Bank {
         if loader_v4::check_id(program_account.owner()) {
             return solana_loader_v4_program::get_state(program_account.data())
                 .ok()
-                .and_then(|state| state.is_deployed.then_some(state.slot))
+                .and_then(|state| {
+                    (!matches!(state.status, LoaderV4Status::Retracted)).then_some(state.slot)
+                })
                 .map(|slot| ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot))
                 .unwrap_or(ProgramAccountLoadResult::InvalidV4Program);
         }
@@ -4881,7 +4897,7 @@ impl Bank {
         let log_messages: Option<TransactionLogMessages> =
             log_collector.and_then(|log_collector| {
                 Rc::try_unwrap(log_collector)
-                    .map(|log_collector| log_collector.into_inner().into())
+                    .map(|log_collector| log_collector.into_inner().into_messages())
                     .ok()
             });
 
@@ -8055,6 +8071,7 @@ impl Bank {
             feature_set::enable_partitioned_epoch_reward::id(),
             feature_set::disable_deploy_of_alloc_free_syscall::id(),
             feature_set::last_restart_slot_sysvar::id(),
+            feature_set::delay_visibility_of_program_deployment::id(),
         ];
         if !only_apply_transitions_for_new_features
             || FEATURES_AFFECTING_RBPF

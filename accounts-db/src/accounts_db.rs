@@ -604,6 +604,7 @@ struct SlotIndexGenerationInfo {
 
 #[derive(Default, Debug)]
 struct GenerateIndexTimings {
+    pub total_time_us: u64,
     pub index_time: u64,
     pub scan_time: u64,
     pub insertion_time_us: u64,
@@ -633,6 +634,7 @@ impl GenerateIndexTimings {
     pub fn report(&self) {
         datapoint_info!(
             "generate_index",
+            ("overall_us", self.total_time_us, i64),
             // we cannot accurately measure index insertion time because of many threads and lock contention
             ("total_us", self.index_time, i64),
             ("scan_stores_us", self.scan_time, i64),
@@ -3487,8 +3489,7 @@ impl AccountsDb {
 
         let (reclaims, pubkeys_removed_from_accounts_index2) =
             self.purge_keys_exact(pubkey_to_slot_set.iter());
-        pubkeys_removed_from_accounts_index
-            .extend(pubkeys_removed_from_accounts_index2.into_iter());
+        pubkeys_removed_from_accounts_index.extend(pubkeys_removed_from_accounts_index2);
 
         // Don't reset from clean, since the pubkeys in those stores may need to be unref'ed
         // and those stores may be used for background hashing.
@@ -7358,7 +7359,7 @@ impl AccountsDb {
                 let mut sort_time = Measure::start("sort_storages");
                 let min_root = self.accounts_index.min_alive_root();
                 let storages = SortedStorages::new_with_slots(
-                    combined_maps.iter().zip(slots.into_iter()),
+                    combined_maps.iter().zip(slots),
                     min_root,
                     Some(slot),
                 );
@@ -7824,7 +7825,7 @@ impl AccountsDb {
             let (storages, slots) =
                 self.get_snapshot_storages(base_slot.checked_add(1).unwrap()..=slot);
             let sorted_storages =
-                SortedStorages::new_with_slots(storages.iter().zip(slots.into_iter()), None, None);
+                SortedStorages::new_with_slots(storages.iter().zip(slots), None, None);
             let calculated_incremental_accounts_hash = self.calculate_incremental_accounts_hash(
                 &calc_config,
                 &sorted_storages,
@@ -9103,6 +9104,7 @@ impl AccountsDb {
         verify: bool,
         genesis_config: &GenesisConfig,
     ) -> IndexGenerationInfo {
+        let mut total_time = Measure::start("generate_index");
         let mut slots = self.storage.all_slots();
         slots.sort_unstable();
         if let Some(limit) = limit_load_slot_count_from_snapshot {
@@ -9259,7 +9261,7 @@ impl AccountsDb {
                 .sum();
 
             let mut index_flush_us = 0;
-            let mut total_duplicate_slot_keys = 0;
+            let total_duplicate_slot_keys = AtomicU64::default();
             let mut populate_duplicate_keys_us = 0;
             if pass == 0 {
                 // tell accounts index we are done adding the initial accounts at startup
@@ -9271,20 +9273,19 @@ impl AccountsDb {
                 populate_duplicate_keys_us = measure_us!({
                     // this has to happen before visit_duplicate_pubkeys_during_startup below
                     // get duplicate keys from acct idx. We have to wait until we've finished flushing.
-                    for (slot, key) in self
-                        .accounts_index
-                        .populate_and_retrieve_duplicate_keys_from_startup()
-                        .into_iter()
-                        .flatten()
-                    {
-                        total_duplicate_slot_keys += 1;
-                        match self.uncleaned_pubkeys.entry(slot) {
-                            Occupied(mut occupied) => occupied.get_mut().push(key),
-                            Vacant(vacant) => {
-                                vacant.insert(vec![key]);
+                    self.accounts_index
+                        .populate_and_retrieve_duplicate_keys_from_startup(|slot_keys| {
+                            total_duplicate_slot_keys
+                                .fetch_add(slot_keys.len() as u64, Ordering::Relaxed);
+                            for (slot, key) in slot_keys {
+                                match self.uncleaned_pubkeys.entry(slot) {
+                                    Occupied(mut occupied) => occupied.get_mut().push(key),
+                                    Vacant(vacant) => {
+                                        vacant.insert(vec![key]);
+                                    }
+                                }
                             }
-                        }
-                    }
+                        });
                 })
                 .1;
             }
@@ -9300,7 +9301,7 @@ impl AccountsDb {
                 total_items,
                 rent_paying,
                 amount_to_top_off_rent,
-                total_duplicate_slot_keys,
+                total_duplicate_slot_keys: total_duplicate_slot_keys.load(Ordering::Relaxed),
                 populate_duplicate_keys_us,
                 total_including_duplicates: total_including_duplicates.load(Ordering::Relaxed),
                 storage_size_accounts_map_us: storage_info_timings.storage_size_accounts_map_us,
@@ -9358,6 +9359,8 @@ impl AccountsDb {
 
                 self.set_storage_count_and_alive_bytes(storage_info, &mut timings);
             }
+            total_time.stop();
+            timings.total_time_us = total_time.as_us();
             timings.report();
         }
 

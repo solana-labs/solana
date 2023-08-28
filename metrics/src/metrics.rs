@@ -527,10 +527,7 @@ pub mod test_mocks {
             assert!(!points.is_empty());
 
             let new_points = points.len();
-            self.points_written
-                .lock()
-                .unwrap()
-                .extend(points.into_iter());
+            self.points_written.lock().unwrap().extend(points);
 
             info!(
                 "Writing {} points ({} total)",

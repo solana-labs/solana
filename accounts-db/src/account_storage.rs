@@ -103,7 +103,7 @@ impl AccountStorage {
     pub fn initialize(&mut self, all_storages: AccountStorageMap) {
         assert!(self.map.is_empty());
         assert!(self.no_shrink_in_progress());
-        self.map.extend(all_storages.into_iter())
+        self.map.extend(all_storages)
     }
 
     /// remove the append vec at 'slot'

@@ -1738,7 +1738,7 @@ declare_syscall!(
 
         let base = translate_slice::<u8>(
             memory_mapping,
-            params.base as *const _ as *const u8 as u64,
+            params.base as *const _ as u64,
             params.base_len,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
@@ -1746,7 +1746,7 @@ declare_syscall!(
 
         let exponent = translate_slice::<u8>(
             memory_mapping,
-            params.exponent as *const _ as *const u8 as u64,
+            params.exponent as *const _ as u64,
             params.exponent_len,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
@@ -1754,7 +1754,7 @@ declare_syscall!(
 
         let modulus = translate_slice::<u8>(
             memory_mapping,
-            params.modulus as *const _ as *const u8 as u64,
+            params.modulus as *const _ as u64,
             params.modulus_len,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),

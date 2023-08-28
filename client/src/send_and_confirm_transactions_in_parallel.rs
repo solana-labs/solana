@@ -6,7 +6,7 @@ use {
     bincode::serialize,
     dashmap::DashMap,
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
-    solana_rpc_client::spinner,
+    solana_rpc_client::spinner::{self, SendTransactionProgress},
     solana_rpc_client_api::{
         client_error::ErrorKind,
         request::{RpcError, RpcResponseErrorData, MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS},
@@ -18,13 +18,10 @@ use {
         signers::Signers,
         transaction::{Transaction, TransactionError},
     },
-    solana_tpu_client::{
-        nonblocking::tpu_client::set_message_for_confirmed_transactions,
-        tpu_client::{Result, TpuSenderError},
-    },
+    solana_tpu_client::tpu_client::{Result, TpuSenderError},
     std::{
         sync::{
-            atomic::{AtomicU32, AtomicU64, Ordering},
+            atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc,
         },
         time::Duration,
@@ -103,7 +100,7 @@ fn create_transaction_confirmation_task(
     current_block_height: Arc<AtomicU64>,
     unconfirmed_transasction_map: Arc<DashMap<Signature, TransactionData>>,
     errors_map: Arc<DashMap<usize, TransactionError>>,
-    num_confirmed_transactions: Arc<AtomicU32>,
+    num_confirmed_transactions: Arc<AtomicUsize>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         // check transactions that are not expired or have just expired between two checks
@@ -160,9 +157,24 @@ struct SendingContext {
     unconfirmed_transasction_map: Arc<DashMap<Signature, TransactionData>>,
     error_map: Arc<DashMap<usize, TransactionError>>,
     blockhash_data_rw: Arc<RwLock<BlockHashData>>,
-    num_confirmed_transactions: Arc<AtomicU32>,
+    num_confirmed_transactions: Arc<AtomicUsize>,
     total_transactions: usize,
     current_block_height: Arc<AtomicU64>,
+}
+fn progress_from_context_and_block_height(
+    context: &SendingContext,
+    last_valid_block_height: u64,
+) -> SendTransactionProgress {
+    SendTransactionProgress {
+        confirmed_transactions: context
+            .num_confirmed_transactions
+            .load(std::sync::atomic::Ordering::Relaxed),
+        total_transactions: context.total_transactions,
+        block_height: context
+            .current_block_height
+            .load(std::sync::atomic::Ordering::Relaxed),
+        last_valid_block_height,
+    }
 }
 
 async fn sign_all_messages_and_send<T: Signers + ?Sized>(
@@ -235,14 +247,12 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
         );
 
         if let Some(progress_bar) = progress_bar {
-            set_message_for_confirmed_transactions(
-                progress_bar,
-                context
-                    .num_confirmed_transactions
-                    .load(std::sync::atomic::Ordering::Relaxed),
-                context.total_transactions,
-                None,
+            let progress = progress_from_context_and_block_height(
+                context,
                 blockhashdata.last_valid_blockheight,
+            );
+            progress.set_message_for_confirmed_transactions(
+                progress_bar,
                 &format!(
                     "Sending {}/{} transactions",
                     counter + 1,
@@ -260,9 +270,7 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
     context: &SendingContext,
 ) {
     let unconfirmed_transasction_map = context.unconfirmed_transasction_map.clone();
-    let num_confirmed_transactions = context.num_confirmed_transactions.clone();
     let current_block_height = context.current_block_height.clone();
-    let total_transactions = context.total_transactions;
 
     let transactions_to_confirm = unconfirmed_transasction_map.len();
     let max_valid_block_height = unconfirmed_transasction_map
@@ -272,12 +280,9 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
 
     if let Some(mut max_valid_block_height) = max_valid_block_height {
         if let Some(progress_bar) = progress_bar {
-            set_message_for_confirmed_transactions(
+            let progress = progress_from_context_and_block_height(context, max_valid_block_height);
+            progress.set_message_for_confirmed_transactions(
                 progress_bar,
-                num_confirmed_transactions.load(std::sync::atomic::Ordering::Relaxed),
-                total_transactions,
-                Some(current_block_height.load(Ordering::Relaxed)),
-                max_valid_block_height,
                 &format!(
                     "Waiting for next block, {transactions_to_confirm} transactions pending..."
                 ),
@@ -291,12 +296,10 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
             let blockheight = current_block_height.load(Ordering::Relaxed);
 
             if let Some(progress_bar) = progress_bar {
-                set_message_for_confirmed_transactions(
+                let progress =
+                    progress_from_context_and_block_height(context, max_valid_block_height);
+                progress.set_message_for_confirmed_transactions(
                     progress_bar,
-                    num_confirmed_transactions.load(std::sync::atomic::Ordering::Relaxed),
-                    total_transactions,
-                    Some(blockheight),
-                    max_valid_block_height,
                     "Checking transaction status...",
                 );
             }
@@ -332,12 +335,9 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
         }
 
         if let Some(progress_bar) = progress_bar {
-            set_message_for_confirmed_transactions(
+            let progress = progress_from_context_and_block_height(context, max_valid_block_height);
+            progress.set_message_for_confirmed_transactions(
                 progress_bar,
-                num_confirmed_transactions.load(std::sync::atomic::Ordering::Relaxed),
-                total_transactions,
-                Some(current_block_height.load(Ordering::Relaxed)),
-                max_valid_block_height,
                 "Checking transaction status...",
             );
         }
@@ -391,7 +391,7 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
 
     let unconfirmed_transasction_map = Arc::new(DashMap::<Signature, TransactionData>::new());
     let error_map = Arc::new(DashMap::new());
-    let num_confirmed_transactions = Arc::new(AtomicU32::new(0));
+    let num_confirmed_transactions = Arc::new(AtomicUsize::new(0));
     // tasks which confirms the transactions that were sent
     let transaction_confirming_task = create_transaction_confirmation_task(
         rpc_client.clone(),

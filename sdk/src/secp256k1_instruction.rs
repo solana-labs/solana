@@ -860,15 +860,13 @@ pub fn new_secp256k1_instruction(
     let signature_arr = signature.serialize();
     assert_eq!(signature_arr.len(), SIGNATURE_SERIALIZED_SIZE);
 
-    let mut instruction_data = vec![];
-    instruction_data.resize(
-        DATA_START
-            .saturating_add(eth_pubkey.len())
-            .saturating_add(signature_arr.len())
-            .saturating_add(message_arr.len())
-            .saturating_add(1),
-        0,
-    );
+    let instruction_data_len = DATA_START
+        .saturating_add(eth_pubkey.len())
+        .saturating_add(signature_arr.len())
+        .saturating_add(message_arr.len())
+        .saturating_add(1);
+    let mut instruction_data = vec![0; instruction_data_len];
+
     let eth_address_offset = DATA_START;
     instruction_data[eth_address_offset..eth_address_offset.saturating_add(eth_pubkey.len())]
         .copy_from_slice(&eth_pubkey);

@@ -199,7 +199,7 @@ pub fn create_vm<'a, 'b>(
 ) -> Result<EbpfVm<'a, InvokeContext<'b>>, Box<dyn std::error::Error>> {
     let stack_size = stack.len();
     let heap_size = heap.len();
-    let accounts = Arc::clone(invoke_context.transaction_context.accounts());
+    let accounts = Rc::clone(invoke_context.transaction_context.accounts());
     let memory_mapping = create_memory_mapping(
         program,
         stack,
@@ -332,7 +332,7 @@ fn create_memory_mapping<'a, 'b, C: ContextObject>(
         MemoryRegion::new_writable(heap.as_slice_mut(), MM_HEAP_START),
     ]
     .into_iter()
-    .chain(additional_regions.into_iter())
+    .chain(additional_regions)
     .collect();
 
     Ok(if let Some(cow_cb) = cow_cb {

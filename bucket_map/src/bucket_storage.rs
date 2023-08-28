@@ -409,7 +409,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
 
                 unsafe {
                     let dst = dst_slice.as_ptr() as *mut u8;
-                    let src = src_slice.as_ptr() as *const u8;
+                    let src = src_slice.as_ptr();
                     std::ptr::copy_nonoverlapping(src, dst, old_bucket.cell_size as usize);
                 };
             }

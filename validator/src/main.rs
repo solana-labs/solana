@@ -1450,7 +1450,7 @@ pub fn main() {
         if let Some(account_shrink_snapshot_paths) = account_shrink_snapshot_paths {
             account_snapshot_paths
                 .into_iter()
-                .chain(account_shrink_snapshot_paths.into_iter())
+                .chain(account_shrink_snapshot_paths)
                 .collect()
         } else {
             account_snapshot_paths

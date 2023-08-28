@@ -34,6 +34,7 @@ use {
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::Slot,
+        genesis_config::ClusterType,
         hash::{Hash, HASH_BYTES},
         packet::PACKET_DATA_SIZE,
         pubkey::{Pubkey, PUBKEY_BYTES},
@@ -212,7 +213,7 @@ impl RepairRequestHeader {
 pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
-#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize, strum_macros::Display)]
+#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
 #[frozen_abi(digest = "3VzVe3kMrG6ijkVPyCGeJVA9hQjWcFEZbAQPc5Zizrjm")]
 pub enum RepairProtocol {
     LegacyWindowIndex(LegacyContactInfo, Slot, u64),
@@ -335,8 +336,15 @@ pub struct ServeRepair {
 // Cache entry for repair peers for a slot.
 pub(crate) struct RepairPeers {
     asof: Instant,
-    peers: Vec<(Pubkey, /*ContactInfo.serve_repair:*/ SocketAddr)>,
+    peers: Vec<Node>,
     weighted_index: WeightedIndex<u64>,
+}
+
+struct Node {
+    pubkey: Pubkey,
+    serve_repair: SocketAddr,
+    #[allow(dead_code)]
+    serve_repair_quic: SocketAddr,
 }
 
 impl RepairPeers {
@@ -348,8 +356,12 @@ impl RepairPeers {
             .iter()
             .zip(weights)
             .filter_map(|(peer, &weight)| {
-                let addr = peer.serve_repair(Protocol::UDP).ok()?;
-                Some(((*peer.pubkey(), addr), weight))
+                let node = Node {
+                    pubkey: *peer.pubkey(),
+                    serve_repair: peer.serve_repair(Protocol::UDP).ok()?,
+                    serve_repair_quic: peer.serve_repair(Protocol::QUIC).ok()?,
+                };
+                Some((node, weight))
             })
             .unzip();
         if peers.is_empty() {
@@ -363,9 +375,9 @@ impl RepairPeers {
         })
     }
 
-    fn sample<R: Rng>(&self, rng: &mut R) -> (Pubkey, SocketAddr) {
+    fn sample<R: Rng>(&self, rng: &mut R) -> &Node {
         let index = self.weighted_index.sample(rng);
-        self.peers[index]
+        &self.peers[index]
     }
 }
 
@@ -508,11 +520,8 @@ impl ServeRepair {
         my_id: &Pubkey,
         socket_addr_space: &SocketAddrSpace,
     ) -> Result<RepairRequestWithMeta> {
-        let request: RepairProtocol = match packet.deserialize_slice(..) {
-            Ok(request) => request,
-            Err(_) => {
-                return Err(Error::from(RepairVerifyError::Malformed));
-            }
+        let Ok(request) = packet.deserialize_slice(..) else {
+            return Err(Error::from(RepairVerifyError::Malformed));
         };
         let from_addr = packet.meta().socket_addr();
         if !ContactInfo::is_valid_address(&from_addr, socket_addr_space) {
@@ -520,7 +529,7 @@ impl ServeRepair {
         }
         Self::verify_signed_packet(my_id, packet, &request)?;
         if request.sender() == my_id {
-            error!("self repair: from_addr={from_addr} my_id={my_id} request={request}");
+            error!("self repair: from_addr={from_addr} my_id={my_id} request={request:?}");
             return Err(Error::from(RepairVerifyError::SelfRepair));
         }
         let stake = *epoch_staked_nodes
@@ -804,7 +813,7 @@ impl ServeRepair {
                 let mut last_print = Instant::now();
                 let mut stats = ServeRepairStats::default();
                 let data_budget = DataBudget::default();
-                loop {
+                while !exit.load(Ordering::Relaxed) {
                     let result = self.run_listen(
                         &mut ping_cache,
                         &recycler,
@@ -821,9 +830,6 @@ impl ServeRepair {
                             return;
                         }
                     };
-                    if exit.load(Ordering::Relaxed) {
-                        return;
-                    }
                     if last_print.elapsed().as_secs() > 2 {
                         self.report_reset_stats(&mut stats);
                         last_print = Instant::now();
@@ -1026,6 +1032,7 @@ impl ServeRepair {
         repair_validators: &Option<HashSet<Pubkey>>,
         outstanding_requests: &mut OutstandingShredRepairs,
         identity_keypair: &Keypair,
+        repair_protocol: Protocol,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
@@ -1041,11 +1048,11 @@ impl ServeRepair {
                 peers_cache.get(&slot).unwrap()
             }
         };
-        let (peer, addr) = repair_peers.sample(&mut rand::thread_rng());
+        let peer = repair_peers.sample(&mut rand::thread_rng());
         let nonce = outstanding_requests.add_request(repair_request, timestamp());
         let out = self.map_repair_request(
             &repair_request,
-            &peer,
+            &peer.pubkey,
             repair_stats,
             nonce,
             identity_keypair,
@@ -1055,7 +1062,10 @@ impl ServeRepair {
             identity_keypair.pubkey(),
             repair_request
         );
-        Ok((addr, out))
+        match repair_protocol {
+            Protocol::UDP => Ok((peer.serve_repair, out)),
+            Protocol::QUIC => todo!(),
+        }
     }
 
     pub(crate) fn repair_request_ancestor_hashes_sample_peers(
@@ -1063,6 +1073,7 @@ impl ServeRepair {
         slot: Slot,
         cluster_slots: &ClusterSlots,
         repair_validators: &Option<HashSet<Pubkey>>,
+        repair_protocol: Protocol,
     ) -> Result<Vec<(Pubkey, SocketAddr)>> {
         let repair_peers: Vec<_> = self.repair_peers(repair_validators, slot);
         if repair_peers.is_empty() {
@@ -1076,7 +1087,7 @@ impl ServeRepair {
             .shuffle(&mut rand::thread_rng())
             .map(|i| index[i])
             .filter_map(|i| {
-                let addr = repair_peers[i].serve_repair(Protocol::UDP).ok()?;
+                let addr = repair_peers[i].serve_repair(repair_protocol).ok()?;
                 Some((*repair_peers[i].pubkey(), addr))
             })
             .take(get_ancestor_hash_repair_sample_size())
@@ -1084,7 +1095,8 @@ impl ServeRepair {
         Ok(peers)
     }
 
-    pub fn repair_request_duplicate_compute_best_peer(
+    #[cfg(test)]
+    pub(crate) fn repair_request_duplicate_compute_best_peer(
         &self,
         slot: Slot,
         cluster_slots: &ClusterSlots,
@@ -1344,6 +1356,11 @@ impl ServeRepair {
             vec![packet],
         ))
     }
+}
+
+#[inline]
+pub(crate) fn get_repair_protocol(_: ClusterType) -> Protocol {
+    Protocol::UDP
 }
 
 #[cfg(test)]
@@ -1703,10 +1720,10 @@ mod tests {
             packet
         };
         let request: RepairProtocol = packet.deserialize_slice(..).unwrap();
-        assert!(matches!(
+        assert_matches!(
             ServeRepair::verify_signed_packet(&my_keypair.pubkey(), &packet, &request),
             Err(Error::RepairVerify(RepairVerifyError::IdMismatch))
-        ));
+        );
 
         // outside time window
         let packet = {
@@ -1725,10 +1742,10 @@ mod tests {
             packet
         };
         let request: RepairProtocol = packet.deserialize_slice(..).unwrap();
-        assert!(matches!(
+        assert_matches!(
             ServeRepair::verify_signed_packet(&other_keypair.pubkey(), &packet, &request),
             Err(Error::RepairVerify(RepairVerifyError::TimeSkew))
-        ));
+        );
 
         // bad signature
         let packet = {
@@ -1745,10 +1762,10 @@ mod tests {
             packet
         };
         let request: RepairProtocol = packet.deserialize_slice(..).unwrap();
-        assert!(matches!(
+        assert_matches!(
             ServeRepair::verify_signed_packet(&other_keypair.pubkey(), &packet, &request),
             Err(Error::RepairVerify(RepairVerifyError::SigVerify))
-        ));
+        );
     }
 
     #[test]
@@ -1901,6 +1918,7 @@ mod tests {
             &None,
             &mut outstanding_requests,
             &identity_keypair,
+            Protocol::UDP, // repair_protocol
         );
         assert_matches!(rv, Err(Error::ClusterInfo(ClusterInfoError::NoPeers)));
 
@@ -1919,6 +1937,8 @@ mod tests {
         nxt.set_rpc((Ipv4Addr::LOCALHOST, 1241)).unwrap();
         nxt.set_rpc_pubsub((Ipv4Addr::LOCALHOST, 1242)).unwrap();
         nxt.set_serve_repair(serve_repair_addr).unwrap();
+        nxt.set_serve_repair_quic((Ipv4Addr::LOCALHOST, 1237))
+            .unwrap();
         cluster_info.insert_info(nxt.clone());
         let rv = serve_repair
             .repair_request(
@@ -1929,6 +1949,7 @@ mod tests {
                 &None,
                 &mut outstanding_requests,
                 &identity_keypair,
+                Protocol::UDP, // repair_protocol
             )
             .unwrap();
         assert_eq!(nxt.serve_repair(Protocol::UDP).unwrap(), serve_repair_addr);
@@ -1949,6 +1970,8 @@ mod tests {
         nxt.set_rpc((Ipv4Addr::LOCALHOST, 1241)).unwrap();
         nxt.set_rpc_pubsub((Ipv4Addr::LOCALHOST, 1242)).unwrap();
         nxt.set_serve_repair(serve_repair_addr2).unwrap();
+        nxt.set_serve_repair_quic((Ipv4Addr::LOCALHOST, 1237))
+            .unwrap();
         cluster_info.insert_info(nxt);
         let mut one = false;
         let mut two = false;
@@ -1963,6 +1986,7 @@ mod tests {
                     &None,
                     &mut outstanding_requests,
                     &identity_keypair,
+                    Protocol::UDP, // repair_protocol
                 )
                 .unwrap();
             if rv.0 == serve_repair_addr {
@@ -2232,8 +2256,8 @@ mod tests {
         for pubkey in &[solana_sdk::pubkey::new_rand(), *me.pubkey()] {
             let known_validators = Some(vec![*pubkey].into_iter().collect());
             assert!(serve_repair.repair_peers(&known_validators, 1).is_empty());
-            assert!(serve_repair
-                .repair_request(
+            assert_matches!(
+                serve_repair.repair_request(
                     &cluster_slots,
                     ShredRepairType::Shred(0, 0),
                     &mut LruCache::new(100),
@@ -2241,8 +2265,10 @@ mod tests {
                     &known_validators,
                     &mut OutstandingShredRepairs::default(),
                     &identity_keypair,
-                )
-                .is_err());
+                    Protocol::UDP, // repair_protocol
+                ),
+                Err(Error::ClusterInfo(ClusterInfoError::NoPeers))
+            );
         }
 
         // If known validator exists in gossip, should return repair successfully
@@ -2250,8 +2276,8 @@ mod tests {
         let repair_peers = serve_repair.repair_peers(&known_validators, 1);
         assert_eq!(repair_peers.len(), 1);
         assert_eq!(repair_peers[0].pubkey(), contact_info2.pubkey());
-        assert!(serve_repair
-            .repair_request(
+        assert_matches!(
+            serve_repair.repair_request(
                 &cluster_slots,
                 ShredRepairType::Shred(0, 0),
                 &mut LruCache::new(100),
@@ -2259,8 +2285,10 @@ mod tests {
                 &known_validators,
                 &mut OutstandingShredRepairs::default(),
                 &identity_keypair,
-            )
-            .is_ok());
+                Protocol::UDP, // repair_protocol
+            ),
+            Ok(_)
+        );
 
         // Using no known validators should default to all
         // validator's available in gossip, excluding myself
@@ -2272,8 +2300,8 @@ mod tests {
         assert_eq!(repair_peers.len(), 2);
         assert!(repair_peers.contains(contact_info2.pubkey()));
         assert!(repair_peers.contains(contact_info3.pubkey()));
-        assert!(serve_repair
-            .repair_request(
+        assert_matches!(
+            serve_repair.repair_request(
                 &cluster_slots,
                 ShredRepairType::Shred(0, 0),
                 &mut LruCache::new(100),
@@ -2281,8 +2309,10 @@ mod tests {
                 &None,
                 &mut OutstandingShredRepairs::default(),
                 &identity_keypair,
-            )
-            .is_ok());
+                Protocol::UDP, // repair_protocol
+            ),
+            Ok(_)
+        );
     }
 
     #[test]

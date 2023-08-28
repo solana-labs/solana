@@ -9,7 +9,7 @@ use {
             packet_threshold::DynamicPacketToProcessThreshold,
             repair_service::{AncestorDuplicateSlotsSender, RepairInfo, RepairStatsGroup},
             serve_repair::{
-                AncestorHashesRepairType, AncestorHashesResponse, RepairProtocol, ServeRepair,
+                self, AncestorHashesRepairType, AncestorHashesResponse, RepairProtocol, ServeRepair,
             },
         },
         replay_stage::DUPLICATE_THRESHOLD,
@@ -17,7 +17,7 @@ use {
     bincode::serialize,
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     dashmap::{mapref::entry::Entry::Occupied, DashMap},
-    solana_gossip::{cluster_info::ClusterInfo, ping_pong::Pong},
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::Protocol, ping_pong::Pong},
     solana_ledger::blockstore::Blockstore,
     solana_perf::{
         packet::{deserialize_from_with_limit, Packet, PacketBatch},
@@ -26,6 +26,7 @@ use {
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
+        genesis_config::ClusterType,
         pubkey::Pubkey,
         signature::Signable,
         signer::keypair::Keypair,
@@ -207,11 +208,8 @@ impl AncestorHashesService {
         Self { thread_hdls }
     }
 
-    pub fn join(self) -> thread::Result<()> {
-        for thread_hdl in self.thread_hdls {
-            thread_hdl.join()?;
-        }
-        Ok(())
+    pub(crate) fn join(self) -> thread::Result<()> {
+        self.thread_hdls.into_iter().try_for_each(JoinHandle::join)
     }
 
     /// Listen for responses to our ancestors hashes repair requests
@@ -232,7 +230,7 @@ impl AncestorHashesService {
                 let mut last_stats_report = Instant::now();
                 let mut stats = AncestorHashesResponsesStats::default();
                 let mut packet_threshold = DynamicPacketToProcessThreshold::default();
-                loop {
+                while !exit.load(Ordering::Relaxed) {
                     let keypair = cluster_info.keypair().clone();
                     let result = Self::process_new_packets_from_channel(
                         &ancestor_hashes_request_statuses,
@@ -253,9 +251,6 @@ impl AncestorHashesService {
                             return;
                         }
                     };
-                    if exit.load(Ordering::Relaxed) {
-                        return;
-                    }
                     if last_stats_report.elapsed().as_secs() > 2 {
                         stats.report();
                         last_stats_report = Instant::now();
@@ -639,6 +634,7 @@ impl AncestorHashesService {
         request_throttle: &mut Vec<u64>,
     ) {
         let root_bank = repair_info.bank_forks.read().unwrap().root_bank();
+        let cluster_type = root_bank.cluster_type();
         for (slot, request_type) in retryable_slots_receiver.try_iter() {
             datapoint_info!("ancestor-repair-retry", ("slot", slot, i64));
             if request_type.is_pruned() {
@@ -732,6 +728,7 @@ impl AncestorHashesService {
                 outstanding_requests,
                 identity_keypair,
                 request_type,
+                cluster_type,
             ) {
                 request_throttle.push(timestamp());
                 if request_type.is_pruned() {
@@ -808,46 +805,53 @@ impl AncestorHashesService {
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         identity_keypair: &Keypair,
         request_type: AncestorRequestType,
+        cluster_type: ClusterType,
     ) -> bool {
-        let sampled_validators = serve_repair.repair_request_ancestor_hashes_sample_peers(
+        let repair_protocol = serve_repair::get_repair_protocol(cluster_type);
+        let Ok(sampled_validators) = serve_repair.repair_request_ancestor_hashes_sample_peers(
             duplicate_slot,
             cluster_slots,
             repair_validators,
-        );
+            repair_protocol,
+        ) else {
+            return false;
+        };
 
-        if let Ok(sampled_validators) = sampled_validators {
-            for (pubkey, socket_addr) in sampled_validators.iter() {
-                repair_stats
-                    .ancestor_requests
-                    .update(pubkey, duplicate_slot, 0);
-                let nonce = outstanding_requests
-                    .write()
-                    .unwrap()
-                    .add_request(AncestorHashesRepairType(duplicate_slot), timestamp());
-                let request_bytes = serve_repair.ancestor_repair_request_bytes(
-                    identity_keypair,
-                    pubkey,
-                    duplicate_slot,
-                    nonce,
-                );
-                if let Ok(request_bytes) = request_bytes {
+        for (pubkey, socket_addr) in &sampled_validators {
+            repair_stats
+                .ancestor_requests
+                .update(pubkey, duplicate_slot, 0);
+            let nonce = outstanding_requests
+                .write()
+                .unwrap()
+                .add_request(AncestorHashesRepairType(duplicate_slot), timestamp());
+            let Ok(request_bytes) = serve_repair.ancestor_repair_request_bytes(
+                identity_keypair,
+                pubkey,
+                duplicate_slot,
+                nonce,
+            ) else {
+                continue;
+            };
+            match repair_protocol {
+                Protocol::UDP => {
                     let _ = ancestor_hashes_request_socket.send_to(&request_bytes, socket_addr);
                 }
+                Protocol::QUIC => todo!(),
             }
-
-            let ancestor_request_status = AncestorRequestStatus::new(
-                sampled_validators
-                    .into_iter()
-                    .map(|(_pk, socket_addr)| socket_addr),
-                duplicate_slot,
-                request_type,
-            );
-            assert!(!ancestor_hashes_request_statuses.contains_key(&duplicate_slot));
-            ancestor_hashes_request_statuses.insert(duplicate_slot, ancestor_request_status);
-            true
-        } else {
-            false
         }
+
+        let ancestor_request_status = AncestorRequestStatus::new(
+            sampled_validators
+                .into_iter()
+                .map(|(_pk, socket_addr)| socket_addr),
+            duplicate_slot,
+            request_type,
+        );
+        assert!(ancestor_hashes_request_statuses
+            .insert(duplicate_slot, ancestor_request_status)
+            .is_none());
+        true
     }
 }
 
@@ -1451,6 +1455,7 @@ mod test {
             &outstanding_requests,
             &requester_cluster_info.keypair(),
             AncestorRequestType::DeadDuplicateConfirmed,
+            ClusterType::Development,
         );
         assert!(ancestor_hashes_request_statuses.is_empty());
 
@@ -1499,6 +1504,7 @@ mod test {
             &outstanding_requests,
             &requester_cluster_info.keypair(),
             AncestorRequestType::DeadDuplicateConfirmed,
+            ClusterType::Development,
         );
 
         assert_eq!(ancestor_hashes_request_statuses.len(), 1);
@@ -1559,6 +1565,7 @@ mod test {
             &outstanding_requests,
             &requester_cluster_info.keypair(),
             AncestorRequestType::PopularPruned,
+            ClusterType::Development,
         );
 
         assert_eq!(ancestor_hashes_request_statuses.len(), 1);

@@ -521,7 +521,7 @@ impl Tower {
         last_voted_slot_in_bank: Option<Slot>,
     ) -> VoteTransaction {
         let vote = Vote::new(vec![slot], hash);
-        process_vote_unchecked(local_vote_state, vote);
+        let _ignored = process_vote_unchecked(local_vote_state, vote);
         let slots = if let Some(last_voted_slot) = last_voted_slot_in_bank {
             local_vote_state
                 .votes
@@ -554,6 +554,23 @@ impl Tower {
         )
     }
 
+    /// If we've recently updated the vote state by applying a new vote
+    /// or syncing from a bank, generate the proper last_vote.
+    pub(crate) fn update_last_vote_from_vote_state(&mut self, vote_hash: Hash) {
+        let mut new_vote = VoteTransaction::from(VoteStateUpdate::new(
+            self.vote_state
+                .votes
+                .iter()
+                .map(|vote| vote.lockout)
+                .collect(),
+            self.vote_state.root_slot,
+            vote_hash,
+        ));
+
+        new_vote.set_timestamp(self.maybe_timestamp(self.last_voted_slot().unwrap_or_default()));
+        self.last_vote = new_vote;
+    }
+
     fn record_bank_vote_and_update_lockouts(
         &mut self,
         vote_slot: Slot,
@@ -564,29 +581,28 @@ impl Tower {
         trace!("{} record_vote for {}", self.node_pubkey, vote_slot);
         let old_root = self.root();
 
-        let mut new_vote = if is_direct_vote_state_update_enabled {
+        if is_direct_vote_state_update_enabled {
             let vote = Vote::new(vec![vote_slot], vote_hash);
-            process_vote_unchecked(&mut self.vote_state, vote);
-            VoteTransaction::from(VoteStateUpdate::new(
-                self.vote_state
-                    .votes
-                    .iter()
-                    .map(|vote| vote.lockout)
-                    .collect(),
-                self.vote_state.root_slot,
-                vote_hash,
-            ))
+            let result = process_vote_unchecked(&mut self.vote_state, vote);
+            if result.is_err() {
+                error!(
+                    "Error while recording vote {} {} in local tower {:?}",
+                    vote_slot, vote_hash, result
+                );
+            }
+            self.update_last_vote_from_vote_state(vote_hash);
         } else {
-            Self::apply_vote_and_generate_vote_diff(
+            let mut new_vote = Self::apply_vote_and_generate_vote_diff(
                 &mut self.vote_state,
                 vote_slot,
                 vote_hash,
                 last_voted_slot_in_bank,
-            )
-        };
+            );
 
-        new_vote.set_timestamp(self.maybe_timestamp(self.last_voted_slot().unwrap_or_default()));
-        self.last_vote = new_vote;
+            new_vote
+                .set_timestamp(self.maybe_timestamp(self.last_voted_slot().unwrap_or_default()));
+            self.last_vote = new_vote;
+        };
 
         let new_root = self.root();
 
@@ -2541,7 +2557,7 @@ pub mod test {
             hash: Hash::default(),
             timestamp: None,
         };
-        vote_state::process_vote_unchecked(&mut local, vote);
+        let _ = vote_state::process_vote_unchecked(&mut local, vote);
         assert_eq!(local.votes.len(), 1);
         let vote =
             Tower::apply_vote_and_generate_vote_diff(&mut local, 1, Hash::default(), Some(0));
@@ -2557,7 +2573,7 @@ pub mod test {
             hash: Hash::default(),
             timestamp: None,
         };
-        vote_state::process_vote_unchecked(&mut local, vote);
+        let _ = vote_state::process_vote_unchecked(&mut local, vote);
         assert_eq!(local.votes.len(), 1);
 
         // First vote expired, so should be evicted from tower. Thus even with

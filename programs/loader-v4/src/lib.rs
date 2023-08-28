@@ -26,7 +26,7 @@ use {
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set,
         instruction::InstructionError,
-        loader_v4::{self, LoaderV4State, DEPLOYMENT_COOLDOWN_IN_SLOTS},
+        loader_v4::{self, LoaderV4State, LoaderV4Status, DEPLOYMENT_COOLDOWN_IN_SLOTS},
         loader_v4_instruction::LoaderV4Instruction,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
@@ -223,13 +223,13 @@ fn check_program_account(
         ic_logger_msg!(log_collector, "Authority did not sign");
         return Err(InstructionError::MissingRequiredSignature);
     }
-    if state.authority_address.is_none() {
-        ic_logger_msg!(log_collector, "Program is finalized");
-        return Err(InstructionError::Immutable);
-    }
-    if state.authority_address != Some(*authority_address) {
+    if state.authority_address != *authority_address {
         ic_logger_msg!(log_collector, "Incorrect authority provided");
         return Err(InstructionError::IncorrectAuthority);
+    }
+    if matches!(state.status, LoaderV4Status::Finalized) {
+        ic_logger_msg!(log_collector, "Program is finalized");
+        return Err(InstructionError::Immutable);
     }
     Ok(*state)
 }
@@ -270,7 +270,7 @@ pub fn process_instruction_write(
             &program,
             authority_address,
         )?;
-        if state.is_deployed {
+        if !matches!(state.status, LoaderV4Status::Retracted) {
             ic_logger_msg!(log_collector, "Program is not retracted");
             return Err(InstructionError::InvalidArgument);
         }
@@ -317,8 +317,8 @@ pub fn process_instruction_write(
     if is_initialization {
         let state = get_state_mut(program.get_data_mut()?)?;
         state.slot = invoke_context.get_sysvar_cache().get_clock()?.slot;
-        state.is_deployed = false;
-        state.authority_address = Some(*authority_address);
+        state.status = LoaderV4Status::Retracted;
+        state.authority_address = *authority_address;
     }
     program
         .get_data_mut()?
@@ -350,7 +350,7 @@ pub fn process_instruction_truncate(
         &program,
         authority_address,
     )?;
-    if state.is_deployed {
+    if !matches!(state.status, LoaderV4Status::Retracted) {
         ic_logger_msg!(log_collector, "Program is not retracted");
         return Err(InstructionError::InvalidArgument);
     }
@@ -405,7 +405,7 @@ pub fn process_instruction_deploy(
         );
         return Err(InstructionError::InvalidArgument);
     }
-    if state.is_deployed {
+    if !matches!(state.status, LoaderV4Status::Retracted) {
         ic_logger_msg!(log_collector, "Destination program is not retracted");
         return Err(InstructionError::InvalidArgument);
     }
@@ -416,7 +416,7 @@ pub fn process_instruction_deploy(
             source_program,
             authority_address,
         )?;
-        if source_state.is_deployed {
+        if !matches!(source_state.status, LoaderV4Status::Retracted) {
             ic_logger_msg!(log_collector, "Source program is not retracted");
             return Err(InstructionError::InvalidArgument);
         }
@@ -467,7 +467,7 @@ pub fn process_instruction_deploy(
     }
     let state = get_state_mut(program.get_data_mut()?)?;
     state.slot = current_slot;
-    state.is_deployed = true;
+    state.status = LoaderV4Status::Deployed;
 
     if let Some(old_entry) = invoke_context.find_program_in_cache(program.get_key()) {
         executor.tx_usage_counter.store(
@@ -509,12 +509,12 @@ pub fn process_instruction_retract(
         );
         return Err(InstructionError::InvalidArgument);
     }
-    if !state.is_deployed {
+    if matches!(state.status, LoaderV4Status::Retracted) {
         ic_logger_msg!(log_collector, "Program is not deployed");
         return Err(InstructionError::InvalidArgument);
     }
     let state = get_state_mut(program.get_data_mut()?)?;
-    state.is_deployed = false;
+    state.status = LoaderV4Status::Retracted;
     Ok(())
 }
 
@@ -544,7 +544,14 @@ pub fn process_instruction_transfer_authority(
         return Err(InstructionError::MissingRequiredSignature);
     }
     let state = get_state_mut(program.get_data_mut()?)?;
-    state.authority_address = new_authority_address;
+    if let Some(new_authority_address) = new_authority_address {
+        state.authority_address = new_authority_address;
+    } else if matches!(state.status, LoaderV4Status::Deployed) {
+        state.status = LoaderV4Status::Finalized;
+    } else {
+        ic_logger_msg!(log_collector, "Program must be deployed to be finalized");
+        return Err(InstructionError::InvalidArgument);
+    }
     Ok(())
 }
 
@@ -601,7 +608,7 @@ pub fn process_instruction_inner(
             return Err(Box::new(InstructionError::InvalidAccountData));
         }
         let state = get_state(program.get_data())?;
-        if !state.is_deployed {
+        if matches!(state.status, LoaderV4Status::Retracted) {
             ic_logger_msg!(log_collector, "Program is not deployed");
             return Err(Box::new(InstructionError::InvalidArgument));
         }
@@ -645,7 +652,6 @@ mod tests {
                 create_account_shared_data_for_test, AccountSharedData, ReadableAccount,
                 WritableAccount,
             },
-            account_utils::StateMut,
             instruction::AccountMeta,
             slot_history::Slot,
             sysvar::{clock, rent},
@@ -738,8 +744,8 @@ mod tests {
     }
 
     fn load_program_account_from_elf(
-        is_deployed: bool,
-        authority_address: Option<Pubkey>,
+        authority_address: Pubkey,
+        status: LoaderV4Status,
         path: &str,
     ) -> AccountSharedData {
         let path = Path::new("test_elfs/out/").join(path).with_extension("so");
@@ -754,13 +760,10 @@ mod tests {
             account_size,
             &loader_v4::id(),
         );
-        program_account
-            .set_state(&loader_v4::LoaderV4State {
-                slot: 0,
-                is_deployed,
-                authority_address,
-            })
-            .unwrap();
+        let state = get_state_mut(program_account.data_as_mut_slice()).unwrap();
+        state.slot = 0;
+        state.authority_address = authority_address;
+        state.status = status;
         program_account.data_as_mut_slice()[loader_v4::LoaderV4State::program_data_offset()..]
             .copy_from_slice(&elf_bytes);
         program_account
@@ -780,7 +783,7 @@ mod tests {
         let transaction_accounts = vec![
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(true, Some(authority_address), "noop"),
+                load_program_account_from_elf(authority_address, LoaderV4Status::Deployed, "noop"),
             ),
             (
                 authority_address,
@@ -788,7 +791,7 @@ mod tests {
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(false, None, "noop"),
+                load_program_account_from_elf(authority_address, LoaderV4Status::Finalized, "noop"),
             ),
             (
                 clock::id(),
@@ -882,7 +885,7 @@ mod tests {
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(true, Some(authority_address), "noop"),
+                load_program_account_from_elf(authority_address, LoaderV4Status::Deployed, "noop"),
             ),
             (
                 clock::id(),
@@ -1103,7 +1106,7 @@ mod tests {
         let transaction_accounts = vec![
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(false, Some(authority_address), "noop"),
+                load_program_account_from_elf(authority_address, LoaderV4Status::Retracted, "noop"),
             ),
             (
                 authority_address,
@@ -1115,7 +1118,7 @@ mod tests {
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(true, Some(authority_address), "noop"),
+                load_program_account_from_elf(authority_address, LoaderV4Status::Deployed, "noop"),
             ),
             (
                 clock::id(),
@@ -1201,7 +1204,11 @@ mod tests {
         let mut transaction_accounts = vec![
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(false, Some(authority_address), "rodata"),
+                load_program_account_from_elf(
+                    authority_address,
+                    LoaderV4Status::Retracted,
+                    "rodata",
+                ),
             ),
             (
                 authority_address,
@@ -1209,7 +1216,7 @@ mod tests {
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(false, Some(authority_address), "noop"),
+                load_program_account_from_elf(authority_address, LoaderV4Status::Retracted, "noop"),
             ),
             (
                 Pubkey::new_unique(),
@@ -1217,7 +1224,11 @@ mod tests {
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(false, Some(authority_address), "invalid"),
+                load_program_account_from_elf(
+                    authority_address,
+                    LoaderV4Status::Retracted,
+                    "invalid",
+                ),
             ),
             (clock::id(), clock(1000)),
             (
@@ -1337,7 +1348,11 @@ mod tests {
         let mut transaction_accounts = vec![
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(true, Some(authority_address), "rodata"),
+                load_program_account_from_elf(
+                    authority_address,
+                    LoaderV4Status::Deployed,
+                    "rodata",
+                ),
             ),
             (
                 authority_address,
@@ -1349,7 +1364,11 @@ mod tests {
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(false, Some(authority_address), "rodata"),
+                load_program_account_from_elf(
+                    authority_address,
+                    LoaderV4Status::Retracted,
+                    "rodata",
+                ),
             ),
             (clock::id(), clock(1000)),
             (
@@ -1409,7 +1428,23 @@ mod tests {
         let transaction_accounts = vec![
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(true, Some(authority_address), "rodata"),
+                load_program_account_from_elf(
+                    authority_address,
+                    LoaderV4Status::Deployed,
+                    "rodata",
+                ),
+            ),
+            (
+                Pubkey::new_unique(),
+                load_program_account_from_elf(
+                    authority_address,
+                    LoaderV4Status::Retracted,
+                    "rodata",
+                ),
+            ),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(0, 0, &loader_v4::id()),
             ),
             (
                 authority_address,
@@ -1418,10 +1453,6 @@ mod tests {
             (
                 Pubkey::new_unique(),
                 AccountSharedData::new(0, 0, &Pubkey::new_unique()),
-            ),
-            (
-                Pubkey::new_unique(),
-                AccountSharedData::new(0, 0, &loader_v4::id()),
             ),
             (
                 clock::id(),
@@ -1438,7 +1469,7 @@ mod tests {
             vec![],
             &bincode::serialize(&LoaderV4Instruction::TransferAuthority).unwrap(),
             transaction_accounts.clone(),
-            &[(0, false, true), (1, true, false), (2, true, false)],
+            &[(0, false, true), (3, true, false), (4, true, false)],
             Ok(()),
         );
         assert_eq!(
@@ -1452,7 +1483,7 @@ mod tests {
             vec![],
             &bincode::serialize(&LoaderV4Instruction::TransferAuthority).unwrap(),
             transaction_accounts.clone(),
-            &[(0, false, true), (1, true, false)],
+            &[(0, false, true), (3, true, false)],
             Ok(()),
         );
         assert_eq!(
@@ -1461,12 +1492,21 @@ mod tests {
         );
         assert_eq!(accounts[0].lamports(), transaction_accounts[0].1.lamports());
 
+        // Error: Program must be deployed to be finalized
+        process_instruction(
+            vec![],
+            &bincode::serialize(&LoaderV4Instruction::TransferAuthority).unwrap(),
+            transaction_accounts.clone(),
+            &[(1, false, true), (3, true, false)],
+            Err(InstructionError::InvalidArgument),
+        );
+
         // Error: Program is uninitialized
         process_instruction(
             vec![],
             &bincode::serialize(&LoaderV4Instruction::TransferAuthority).unwrap(),
             transaction_accounts.clone(),
-            &[(3, false, true), (1, true, false), (2, true, false)],
+            &[(2, false, true), (3, true, false), (4, true, false)],
             Err(InstructionError::InvalidAccountData),
         );
 
@@ -1475,7 +1515,7 @@ mod tests {
             vec![],
             &bincode::serialize(&LoaderV4Instruction::TransferAuthority).unwrap(),
             transaction_accounts,
-            &[(0, false, true), (1, true, false), (2, false, false)],
+            &[(0, false, true), (3, true, false), (4, false, false)],
             Err(InstructionError::MissingRequiredSignature),
         );
 
@@ -1485,10 +1525,15 @@ mod tests {
     #[test]
     fn test_execute_program() {
         let program_address = Pubkey::new_unique();
+        let authority_address = Pubkey::new_unique();
         let transaction_accounts = vec![
             (
                 program_address,
-                load_program_account_from_elf(true, None, "rodata"),
+                load_program_account_from_elf(
+                    authority_address,
+                    LoaderV4Status::Finalized,
+                    "rodata",
+                ),
             ),
             (
                 Pubkey::new_unique(),
@@ -1500,11 +1545,19 @@ mod tests {
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(false, None, "rodata"),
+                load_program_account_from_elf(
+                    authority_address,
+                    LoaderV4Status::Retracted,
+                    "rodata",
+                ),
             ),
             (
                 Pubkey::new_unique(),
-                load_program_account_from_elf(true, None, "invalid"),
+                load_program_account_from_elf(
+                    authority_address,
+                    LoaderV4Status::Finalized,
+                    "invalid",
+                ),
             ),
         ];
 

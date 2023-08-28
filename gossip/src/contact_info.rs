@@ -527,9 +527,7 @@ fn sanitize_entries(addrs: &[IpAddr], sockets: &[SocketEntry]) -> Result<(), Err
     // Verify that port offsets don't overflow.
     if sockets
         .iter()
-        .fold(Some(0u16), |offset, entry| {
-            offset?.checked_add(entry.offset)
-        })
+        .try_fold(0u16, |offset, entry| offset.checked_add(entry.offset))
         .is_none()
     {
         return Err(Error::PortOffsetsOverflow);
