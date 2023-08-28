@@ -156,8 +156,8 @@ impl<'a> DockerConfig<'a> {
         let dockerfile = format!(
 r#" 
 FROM {}             
-RUN apt update
-RUN apt install -y iputils-ping curl vim bzip2 
+RUN apt-get update
+RUN apt-get install -y iputils-ping curl vim bzip2 
 
 RUN useradd -ms /bin/bash solana
 RUN adduser solana sudo
