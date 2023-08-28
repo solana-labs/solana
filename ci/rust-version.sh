@@ -29,7 +29,7 @@ fi
 if [[ -n $RUST_NIGHTLY_VERSION ]]; then
   nightly_version="$RUST_NIGHTLY_VERSION"
 else
-  nightly_version=2023-04-19
+  nightly_version=2023-08-25
 fi
 
 
