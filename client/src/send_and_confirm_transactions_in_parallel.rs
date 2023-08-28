@@ -181,7 +181,7 @@ fn progress_from_context_and_block_height(
 
 async fn sign_all_messages_and_send<T: Signers + ?Sized>(
     progress_bar: &Option<indicatif::ProgressBar>,
-    rpc_client: Arc<RpcClient>,
+    rpc_client: &RpcClient,
     tpu_client: &Option<QuicTpuClient>,
     messages_with_index: Vec<(usize, Message)>,
     signers: &T,
@@ -439,7 +439,7 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
 
         sign_all_messages_and_send(
             &progress_bar,
-            rpc_client.clone(),
+            &rpc_client,
             &tpu_client,
             messages_with_index,
             signers,
