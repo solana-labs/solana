@@ -430,6 +430,7 @@ impl BankingStage {
                     ),
                 };
 
+                let invalid_fee_payer_filter = invalid_fee_payer_filter.clone();
                 let mut packet_receiver = PacketReceiver::new(
                     id,
                     packet_receiver,
@@ -467,6 +468,7 @@ impl BankingStage {
                             &decision_maker,
                             &forwarder,
                             &consumer,
+                            &invalid_fee_payer_filter,
                             id,
                             unprocessed_transaction_storage,
                         );
@@ -548,6 +550,7 @@ impl BankingStage {
         decision_maker: &DecisionMaker,
         forwarder: &Forwarder,
         consumer: &Consumer,
+        invalid_fee_payer_filter: &InvalidFeePayerFilter,
         id: u32,
         mut unprocessed_transaction_storage: UnprocessedTransactionStorage,
     ) {
@@ -590,6 +593,7 @@ impl BankingStage {
                 Err(RecvTimeoutError::Disconnected) => break,
             }
             banking_stage_stats.report(1000);
+            invalid_fee_payer_filter.reset_on_interval();
         }
     }
 

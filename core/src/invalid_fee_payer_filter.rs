@@ -5,31 +5,27 @@
 
 use {
     dashmap::DashSet,
-    solana_sdk::pubkey::Pubkey,
-    std::{
-        sync::{
-            atomic::{AtomicBool, AtomicUsize, Ordering},
-            Arc,
-        },
-        thread::{sleep, Builder, JoinHandle},
-        time::Duration,
-    },
+    solana_sdk::{pubkey::Pubkey, timing::AtomicInterval},
+    std::sync::atomic::{AtomicUsize, Ordering},
 };
 
 #[derive(Default)]
 pub struct InvalidFeePayerFilter {
     recent_invalid_fee_payers: DashSet<Pubkey>,
-    reject_count: Arc<AtomicUsize>,
+    stats: InvalidFeePayerFilterStats,
 }
 
 impl InvalidFeePayerFilter {
-    /// Reset the filter - this should be called periodically.
-    pub fn reset(&self) {
-        self.recent_invalid_fee_payers.clear();
+    /// Reset the filter if enough time has passed since last reset.
+    pub fn reset_on_interval(&self) {
+        if self.stats.try_report() {
+            self.recent_invalid_fee_payers.clear();
+        }
     }
 
     /// Add a pubkey to the filter.
     pub fn add(&self, pubkey: Pubkey) {
+        self.stats.num_added.fetch_add(1, Ordering::Relaxed);
         self.recent_invalid_fee_payers.insert(pubkey);
     }
 
@@ -37,58 +33,43 @@ impl InvalidFeePayerFilter {
     pub fn should_reject(&self, pubkey: &Pubkey) -> bool {
         let should_reject = self.recent_invalid_fee_payers.contains(pubkey);
         if should_reject {
-            self.reject_count.fetch_add(1, Ordering::Relaxed);
+            self.stats.num_rejects.fetch_add(1, Ordering::Relaxed);
         }
         should_reject
     }
 }
 
-/// Simple wrapper thread that periodically resets the filter.
-pub struct InvalidFeePayerFilterThread {
-    thread_hdl: JoinHandle<()>,
+#[derive(Default)]
+struct InvalidFeePayerFilterStats {
+    interval: AtomicInterval,
+    num_added: AtomicUsize,
+    num_rejects: AtomicUsize,
 }
 
-impl InvalidFeePayerFilterThread {
-    pub fn new(exit: Arc<AtomicBool>) -> (Self, Arc<InvalidFeePayerFilter>) {
-        let invalid_fee_payer_filter = Arc::new(InvalidFeePayerFilter::default());
-        let reject_count = invalid_fee_payer_filter.reject_count.clone();
+impl InvalidFeePayerFilterStats {
+    fn try_report(&self) -> bool {
+        const REPORT_INTERVAL_MS: u64 = 2000;
 
-        let thread_hdl = Builder::new()
-            .name("solInvFeePay".to_string())
-            .spawn({
-                let invalid_fee_payer_filter = invalid_fee_payer_filter.clone();
-                move || {
-                    const RESET_INTERVAL: Duration = Duration::from_secs(2);
-                    while !exit.load(Ordering::Relaxed) {
-                        let num_rejects = reject_count.swap(0, Ordering::Relaxed);
-                        let num_invalid_fee_payers =
-                            invalid_fee_payer_filter.recent_invalid_fee_payers.len();
-
-                        if num_rejects > 0 {
-                            datapoint_info!(
-                                "invalid_fee_payer_filter",
-                                ("invalid_fee_payers", num_invalid_fee_payers, i64),
-                                ("rejects", num_rejects, i64),
-                            );
-                        }
-
-                        invalid_fee_payer_filter.reset();
-                        sleep(RESET_INTERVAL);
-                    }
-                }
-            })
-            .unwrap();
-        (Self { thread_hdl }, invalid_fee_payer_filter)
-    }
-
-    pub fn join(self) -> std::thread::Result<()> {
-        self.thread_hdl.join()
+        if self.interval.should_update(REPORT_INTERVAL_MS) {
+            let num_added = self.num_added.swap(0, Ordering::Relaxed);
+            if num_added > 0 {
+                let num_rejects = self.num_rejects.swap(0, Ordering::Relaxed);
+                datapoint_info!(
+                    "invalid_fee_payer_filter_stats",
+                    ("added", num_added, i64),
+                    ("rejects", num_rejects, i64),
+                );
+            }
+            true
+        } else {
+            false
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use {super::*, solana_sdk::pubkey::Pubkey};
+    use {super::*, solana_sdk::pubkey::Pubkey, std::sync::Arc};
 
     #[test]
     fn test_invalid_fee_payer_filter() {
@@ -101,7 +82,7 @@ mod tests {
         assert!(invalid_fee_payer_filter.should_reject(&pubkey1));
         assert!(!invalid_fee_payer_filter.should_reject(&pubkey2));
 
-        invalid_fee_payer_filter.reset();
+        invalid_fee_payer_filter.reset_on_interval();
         assert!(!invalid_fee_payer_filter.should_reject(&pubkey1));
         assert!(!invalid_fee_payer_filter.should_reject(&pubkey2));
     }

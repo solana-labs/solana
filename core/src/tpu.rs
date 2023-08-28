@@ -11,7 +11,7 @@ use {
             GossipVerifiedVoteHashSender, VerifiedVoteSender, VoteTracker,
         },
         fetch_stage::FetchStage,
-        invalid_fee_payer_filter::InvalidFeePayerFilterThread,
+        invalid_fee_payer_filter::InvalidFeePayerFilter,
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
         staked_nodes_updater_service::StakedNodesUpdaterService,
@@ -74,7 +74,6 @@ pub struct Tpu {
     tpu_entry_notifier: Option<TpuEntryNotifier>,
     staked_nodes_updater_service: StakedNodesUpdaterService,
     tracer_thread_hdl: TracerThread,
-    invalid_fee_payer_thread: InvalidFeePayerFilterThread,
 }
 
 impl Tpu {
@@ -190,8 +189,7 @@ impl Tpu {
         )
         .unwrap();
 
-        let (invalid_fee_payer_thread, invalid_fee_payer_filter) =
-            InvalidFeePayerFilterThread::new(exit.clone());
+        let invalid_fee_payer_filter = Arc::new(InvalidFeePayerFilter::default());
 
         let sigverify_stage = {
             let verifier = TransactionSigVerifier::new(non_vote_sender);
@@ -277,7 +275,6 @@ impl Tpu {
             tpu_entry_notifier,
             staked_nodes_updater_service,
             tracer_thread_hdl,
-            invalid_fee_payer_thread,
         }
     }
 
@@ -291,7 +288,6 @@ impl Tpu {
             self.staked_nodes_updater_service.join(),
             self.tpu_quic_t.join(),
             self.tpu_forwards_quic_t.join(),
-            self.invalid_fee_payer_thread.join(),
         ];
         let broadcast_result = self.broadcast_stage.join();
         for result in results {
