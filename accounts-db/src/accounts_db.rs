@@ -9261,7 +9261,7 @@ impl AccountsDb {
                 .sum();
 
             let mut index_flush_us = 0;
-            let mut total_duplicate_slot_keys = 0;
+            let total_duplicate_slot_keys = AtomicU64::default();
             let mut populate_duplicate_keys_us = 0;
             if pass == 0 {
                 // tell accounts index we are done adding the initial accounts at startup
@@ -9273,20 +9273,19 @@ impl AccountsDb {
                 populate_duplicate_keys_us = measure_us!({
                     // this has to happen before visit_duplicate_pubkeys_during_startup below
                     // get duplicate keys from acct idx. We have to wait until we've finished flushing.
-                    for (slot, key) in self
-                        .accounts_index
-                        .populate_and_retrieve_duplicate_keys_from_startup()
-                        .into_iter()
-                        .flatten()
-                    {
-                        total_duplicate_slot_keys += 1;
-                        match self.uncleaned_pubkeys.entry(slot) {
-                            Occupied(mut occupied) => occupied.get_mut().push(key),
-                            Vacant(vacant) => {
-                                vacant.insert(vec![key]);
+                    self.accounts_index
+                        .populate_and_retrieve_duplicate_keys_from_startup(|slot_keys| {
+                            total_duplicate_slot_keys
+                                .fetch_add(slot_keys.len() as u64, Ordering::Relaxed);
+                            for (slot, key) in slot_keys {
+                                match self.uncleaned_pubkeys.entry(slot) {
+                                    Occupied(mut occupied) => occupied.get_mut().push(key),
+                                    Vacant(vacant) => {
+                                        vacant.insert(vec![key]);
+                                    }
+                                }
                             }
-                        }
-                    }
+                        });
                 })
                 .1;
             }
@@ -9302,7 +9301,7 @@ impl AccountsDb {
                 total_items,
                 rent_paying,
                 amount_to_top_off_rent,
-                total_duplicate_slot_keys,
+                total_duplicate_slot_keys: total_duplicate_slot_keys.load(Ordering::Relaxed),
                 populate_duplicate_keys_us,
                 total_including_duplicates: total_including_duplicates.load(Ordering::Relaxed),
                 storage_size_accounts_map_us: storage_info_timings.storage_size_accounts_map_us,
