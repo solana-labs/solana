@@ -467,9 +467,11 @@ impl LoadedPrograms {
                         Ordering::Relaxed,
                     );
                     second_level.remove(entry_index);
-                } else if existing.is_tombstone() && !entry.is_tombstone() {
-                    // The old entry is tombstone and the new one is not. Let's give the new entry
-                    // a chance.
+                } else if existing.is_tombstone() != entry.is_tombstone() {
+                    // Either the old entry is tombstone and the new one is not.
+                    // (Let's give the new entry a chance).
+                    // Or, the old entry is not a tombstone and the new one is a tombstone.
+                    // (Remove the old entry, as the tombstone makes it obsolete).
                     second_level.remove(entry_index);
                 } else {
                     self.stats.replacements.fetch_add(1, Ordering::Relaxed);
