@@ -789,8 +789,11 @@ async fn test_grouped_ciphertext_3_handles_validity() {
 
     let amount: u64 = 55;
     let opening = PedersenOpening::new_rand();
-    let grouped_ciphertext =
-        GroupedElGamal::encrypt_with([source_pubkey, destination_pubkey, auditor_pubkey], amount, &opening);
+    let grouped_ciphertext = GroupedElGamal::encrypt_with(
+        [source_pubkey, destination_pubkey, auditor_pubkey],
+        amount,
+        &opening,
+    );
 
     let success_proof_data = GroupedCiphertext3HandlesValidityProofData::new(
         source_pubkey,
@@ -853,10 +856,16 @@ async fn test_batched_grouped_ciphertext_3_handles_validity() {
     let opening_lo = PedersenOpening::new_rand();
     let opening_hi = PedersenOpening::new_rand();
 
-    let grouped_ciphertext_lo =
-        GroupedElGamal::encrypt_with([source_pubkey, destination_pubkey, auditor_pubkey], amount_lo, &opening_lo);
-    let grouped_ciphertext_hi =
-        GroupedElGamal::encrypt_with([source_pubkey, destination_pubkey, auditor_pubkey], amount_hi, &opening_hi);
+    let grouped_ciphertext_lo = GroupedElGamal::encrypt_with(
+        [source_pubkey, destination_pubkey, auditor_pubkey],
+        amount_lo,
+        &opening_lo,
+    );
+    let grouped_ciphertext_hi = GroupedElGamal::encrypt_with(
+        [source_pubkey, destination_pubkey, auditor_pubkey],
+        amount_hi,
+        &opening_hi,
+    );
 
     let success_proof_data = BatchedGroupedCiphertext3HandlesValidityProofData::new(
         source_pubkey,

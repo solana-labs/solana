@@ -21,8 +21,6 @@ pub use {
     batched_grouped_ciphertext_validity::{
         BatchedGroupedCiphertext2HandlesValidityProofContext,
         BatchedGroupedCiphertext2HandlesValidityProofData,
-    },
-    batched_grouped_ciphertext_validity::{
         BatchedGroupedCiphertext3HandlesValidityProofContext,
         BatchedGroupedCiphertext3HandlesValidityProofData,
     },
@@ -41,8 +39,6 @@ pub use {
     fee_sigma::{FeeSigmaProofContext, FeeSigmaProofData},
     grouped_ciphertext_validity::{
         GroupedCiphertext2HandlesValidityProofContext, GroupedCiphertext2HandlesValidityProofData,
-    },
-    grouped_ciphertext_validity::{
         GroupedCiphertext3HandlesValidityProofContext, GroupedCiphertext3HandlesValidityProofData,
     },
     pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
