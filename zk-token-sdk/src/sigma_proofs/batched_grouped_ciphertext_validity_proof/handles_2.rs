@@ -73,6 +73,7 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
     /// components prior to invoking this constructor.
     ///
     /// This function is randomized. It uses `OsRng` internally to generate random scalars.
+    #[allow(clippy::too_many_arguments)]
     pub fn verify(
         self,
         destination_pubkey: &ElGamalPubkey,

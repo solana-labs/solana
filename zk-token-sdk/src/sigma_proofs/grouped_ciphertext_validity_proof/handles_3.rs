@@ -339,7 +339,7 @@ mod test {
         let proof = GroupedCiphertext3HandlesValidityProof::new(
             &source_pubkey,
             &destination_pubkey,
-            &auditor_pubkey,
+            auditor_pubkey,
             amount,
             &opening,
             &mut prover_transcript,
