@@ -35,7 +35,7 @@ type QuicTpuClient = TpuClient<QuicPool, QuicConnectionManager, QuicConfig>;
 
 #[derive(Clone, Debug)]
 struct TransactionData {
-    last_valid_blockheight: u64,
+    last_valid_block_height: u64,
     message: Message,
     index: usize,
     serialized_transaction: Vec<u8>,
@@ -44,7 +44,7 @@ struct TransactionData {
 #[derive(Clone, Debug, Copy)]
 struct BlockHashData {
     pub blockhash: Hash,
-    pub last_valid_blockheight: u64,
+    pub last_valid_block_height: u64,
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -77,18 +77,18 @@ fn create_blockhash_data_updating_task(
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         loop {
-            if let Ok((blockhash, last_valid_blockheight)) = rpc_client
+            if let Ok((blockhash, last_valid_block_height)) = rpc_client
                 .get_latest_blockhash_with_commitment(rpc_client.commitment())
                 .await
             {
                 *blockhash_data_rw.write().await = BlockHashData {
                     blockhash,
-                    last_valid_blockheight,
+                    last_valid_block_height,
                 };
             }
 
-            if let Ok(blockheight) = rpc_client.get_block_height().await {
-                current_block_height.store(blockheight, Ordering::Relaxed);
+            if let Ok(block_height) = rpc_client.get_block_height().await {
+                current_block_height.store(block_height, Ordering::Relaxed);
             }
             tokio::time::sleep(BLOCKHASH_REFRESH_RATE).await;
         }
@@ -112,10 +112,10 @@ fn create_transaction_confirmation_task(
                 let transactions_to_verify: Vec<Signature> = unconfirmed_transasction_map
                     .iter()
                     .filter(|x| {
-                        let is_not_expired = current_block_height <= x.last_valid_blockheight;
+                        let is_not_expired = current_block_height <= x.last_valid_block_height;
                         // transaction expired between last and current check
-                        let is_recently_expired = last_block_height <= x.last_valid_blockheight
-                            && current_block_height > x.last_valid_blockheight;
+                        let is_recently_expired = last_block_height <= x.last_valid_block_height
+                            && current_block_height > x.last_valid_block_height;
                         is_not_expired || is_recently_expired
                     })
                     .map(|x| *x.key())
@@ -241,7 +241,7 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
             TransactionData {
                 index: *index,
                 serialized_transaction,
-                last_valid_blockheight: blockhashdata.last_valid_blockheight,
+                last_valid_block_height: blockhashdata.last_valid_block_height,
                 message: message.clone(),
             },
         );
@@ -249,7 +249,7 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
         if let Some(progress_bar) = progress_bar {
             let progress = progress_from_context_and_block_height(
                 context,
-                blockhashdata.last_valid_blockheight,
+                blockhashdata.last_valid_block_height,
             );
             progress.set_message_for_confirmed_transactions(
                 progress_bar,
@@ -275,7 +275,7 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
     let transactions_to_confirm = unconfirmed_transasction_map.len();
     let max_valid_block_height = unconfirmed_transasction_map
         .iter()
-        .map(|x| x.last_valid_blockheight)
+        .map(|x| x.last_valid_block_height)
         .max();
 
     if let Some(mut max_valid_block_height) = max_valid_block_height {
@@ -293,7 +293,7 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
         while !unconfirmed_transasction_map.is_empty()
             && current_block_height.load(Ordering::Relaxed) <= max_valid_block_height
         {
-            let blockheight = current_block_height.load(Ordering::Relaxed);
+            let block_height = current_block_height.load(Ordering::Relaxed);
 
             if let Some(progress_bar) = progress_bar {
                 let progress =
@@ -310,7 +310,7 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
                 // any transactions sent over RPC will be automatically rebroadcast by the RPC server
                 let txs_to_resend_over_tpu = unconfirmed_transasction_map
                     .iter()
-                    .filter(|x| blockheight < x.last_valid_blockheight)
+                    .filter(|x| block_height < x.last_valid_block_height)
                     .map(|x| x.serialized_transaction.clone())
                     .collect();
                 let _ = tpu_client
@@ -327,7 +327,7 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
             if let Some(max_valid_block_height_in_remaining_transaction) =
                 unconfirmed_transasction_map
                     .iter()
-                    .map(|x| x.last_valid_blockheight)
+                    .map(|x| x.last_valid_block_height)
                     .max()
             {
                 max_valid_block_height = max_valid_block_height_in_remaining_transaction;
@@ -355,12 +355,12 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
     config: SendAndConfirmConfig,
 ) -> Result<Vec<Option<TransactionError>>> {
     // get current blockhash and corresponding last valid block height
-    let (blockhash, last_valid_blockheight) = rpc_client
+    let (blockhash, last_valid_block_height) = rpc_client
         .get_latest_blockhash_with_commitment(rpc_client.commitment())
         .await?;
     let blockhash_data_rw = Arc::new(RwLock::new(BlockHashData {
         blockhash,
-        last_valid_blockheight,
+        last_valid_block_height,
     }));
 
     // check if all the messages are signable by the signers
@@ -372,7 +372,7 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
         })
         .collect::<std::result::Result<Vec<()>, SignerError>>()?;
 
-    // get current blockheight
+    // get current block height
     let block_height = rpc_client.get_block_height().await?;
     let current_block_height = Arc::new(AtomicU64::new(block_height));
 
@@ -382,7 +382,7 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
         progress_bar
     });
 
-    // blockhash and blockheight update task
+    // blockhash and block height update task
     let block_data_task = create_blockhash_data_updating_task(
         rpc_client.clone(),
         blockhash_data_rw.clone(),
