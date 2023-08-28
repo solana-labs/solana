@@ -9326,12 +9326,8 @@ impl AccountsDb {
                     .collect::<Vec<_>>()
                     .par_chunks(4096)
                     .map(|pubkeys| {
-                        let (count, uncleaned_roots_this_group) = self
-                            .visit_duplicate_pubkeys_during_startup(
-                                pubkeys,
-                                &rent_collector,
-                                &timings,
-                            );
+                        let (count, uncleaned_roots_this_group) =
+                            self.visit_duplicate_pubkeys_during_startup(pubkeys);
                         let mut uncleaned_roots = uncleaned_roots.lock().unwrap();
                         uncleaned_roots_this_group.into_iter().for_each(|slot| {
                             uncleaned_roots.insert(slot);
@@ -9399,19 +9395,14 @@ impl AccountsDb {
     /// Used during generate_index() to:
     /// 1. get the _duplicate_ accounts data len from the given pubkeys
     /// 2. get the slots that contained duplicate pubkeys
-    /// 3. update rent stats
+    /// Note that there could be rent paying accounts that are duplicates.
+    /// It is not free to correct those stats here, so we don't correct them.
+    /// (timings.amount_to_top_off_rent, timings.rent_paying)
     /// Note this should only be used when ALL entries in the accounts index are roots.
     /// returns (data len sum of all older duplicates, slots that contained duplicate pubkeys)
-    fn visit_duplicate_pubkeys_during_startup(
-        &self,
-        pubkeys: &[Pubkey],
-        rent_collector: &RentCollector,
-        timings: &GenerateIndexTimings,
-    ) -> (u64, HashSet<Slot>) {
+    fn visit_duplicate_pubkeys_during_startup(&self, pubkeys: &[Pubkey]) -> (u64, HashSet<Slot>) {
         let mut accounts_data_len_from_duplicates = 0;
         let mut uncleaned_slots = HashSet::<Slot>::default();
-        let mut removed_rent_paying = 0;
-        let mut removed_top_off = 0;
         pubkeys.iter().for_each(|pubkey| {
             if let Some(entry) = self.accounts_index.get_account_read_entry(pubkey) {
                 let slot_list = entry.slot_list();
@@ -9438,21 +9429,9 @@ impl AccountsDb {
                     );
                     let loaded_account = accessor.check_and_get_loaded_account();
                     accounts_data_len_from_duplicates += loaded_account.data().len();
-                    if let Some(lamports_to_top_off) =
-                        Self::stats_for_rent_payers(pubkey, &loaded_account, rent_collector)
-                    {
-                        removed_rent_paying += 1;
-                        removed_top_off += lamports_to_top_off;
-                    }
                 });
             }
         });
-        timings
-            .rent_paying
-            .fetch_sub(removed_rent_paying, Ordering::Relaxed);
-        timings
-            .amount_to_top_off_rent
-            .fetch_sub(removed_top_off, Ordering::Relaxed);
         (accounts_data_len_from_duplicates as u64, uncleaned_slots)
     }
 
