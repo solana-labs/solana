@@ -122,6 +122,12 @@ fn parse_matches() -> ArgMatches<'static> {
                 .default_value("k8s-cluster-image")
                 .help("Docker image tag. tag will be prepended with `bootstrap-` and `validator-` to distinguish between both images"),
         )
+        .arg(
+            Arg::with_name("prebuild_genesis")
+                .long("prebuild-genesis")
+                .help("Prebuild gensis. Generates keys for validators and writes to file"),
+        )
+        
         .get_matches()
 }
 

@@ -58,19 +58,18 @@ loadConfigFile() {
 
   # shellcheck source=/dev/null
   source "$configFile"
-  echo "config file: $configFile"
-  # [[ -n "$publicNetwork" ]] || usage "Config file invalid, publicNetwork unspecified: $configFile"
-  # [[ -n "$netBasename" ]] || usage "Config file invalid, netBasename unspecified: $configFile"
-  # [[ -n $sshPrivateKey ]] || usage "Config file invalid, sshPrivateKey unspecified: $configFile"
-  # [[ ${#validatorIpList[@]} -gt 0 ]] || usage "Config file invalid, validatorIpList unspecified: $configFile"
-  # [[ ${#validatorIpListPrivate[@]} -gt 0 ]] || usage "Config file invalid, validatorIpListPrivate unspecified: $configFile"
-  # [[ ${#validatorIpList[@]} -eq ${#validatorIpListPrivate[@]} ]] || usage "Config file invalid, validatorIpList/validatorIpListPrivate length mismatch: $configFile"
+  [[ -n "$publicNetwork" ]] || usage "Config file invalid, publicNetwork unspecified: $configFile"
+  [[ -n "$netBasename" ]] || usage "Config file invalid, netBasename unspecified: $configFile"
+  [[ -n $sshPrivateKey ]] || usage "Config file invalid, sshPrivateKey unspecified: $configFile"
+  [[ ${#validatorIpList[@]} -gt 0 ]] || usage "Config file invalid, validatorIpList unspecified: $configFile"
+  [[ ${#validatorIpListPrivate[@]} -gt 0 ]] || usage "Config file invalid, validatorIpListPrivate unspecified: $configFile"
+  [[ ${#validatorIpList[@]} -eq ${#validatorIpListPrivate[@]} ]] || usage "Config file invalid, validatorIpList/validatorIpListPrivate length mismatch: $configFile"
 
-  # if $publicNetwork; then
-  #   entrypointIp=${validatorIpList[0]}
-  # else
-  #   entrypointIp=${validatorIpListPrivate[0]}
-  # fi
+  if $publicNetwork; then
+    entrypointIp=${validatorIpList[0]}
+  else
+    entrypointIp=${validatorIpListPrivate[0]}
+  fi
 
   # buildSshOptions
   configureMetrics
