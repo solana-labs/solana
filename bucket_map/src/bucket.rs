@@ -88,7 +88,7 @@ struct DataFileEntryToFree {
 }
 
 // >= 2 instances of BucketStorage per 'bucket' in the bucket map. 1 for index, >= 1 for data
-pub struct Bucket<T: Copy + 'static> {
+pub struct Bucket<T: Copy + PartialEq + 'static> {
     drives: Arc<Vec<PathBuf>>,
     /// index
     pub index: BucketStorage<IndexBucket<T>>,
@@ -109,7 +109,7 @@ pub struct Bucket<T: Copy + 'static> {
     at_least_one_entry_deleted: bool,
 }
 
-impl<'b, T: Clone + Copy + 'static> Bucket<T> {
+impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
     pub fn new(
         drives: Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
