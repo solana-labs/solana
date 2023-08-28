@@ -171,6 +171,7 @@ COPY ./{solana_build_directory}/bin/* /home/solana/.cargo/bin/
 COPY ./{solana_build_directory}/version.yml /home/solana/
 
 RUN mkdir -p /home/solana/config
+ENV PATH="/home/solana/.cargo/bin:${{PATH}}"
 
 WORKDIR /home/solana
 "#,
