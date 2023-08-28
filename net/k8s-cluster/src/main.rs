@@ -21,7 +21,7 @@ use {
     solana_k8s_cluster::{
         config::SetupConfig,
         setup::{BuildConfig, Deploy},
-        docker::DockerConfig,
+        docker::{DockerConfig, DockerImageConfig},
     },
     std::{collections::BTreeMap, process, thread, time::Duration},
 };
@@ -108,6 +108,20 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("docker-build")
                 .help("Build Docker images"),
         )
+        .arg(
+            Arg::with_name("base_image")
+                .long("base-image")
+                .takes_value(true)
+                .default_value("ubuntu:20.04")
+                .help("Docker base image"),
+        )
+        .arg(
+            Arg::with_name("image_tag")
+                .long("image-tag")
+                .takes_value(true)
+                .default_value("k8s-cluster-image")
+                .help("Docker image tag. tag will be prepended with `bootstrap-` and `validator-` to distinguish between both images"),
+        )
         .get_matches()
 }
 
@@ -132,15 +146,23 @@ async fn main() {
         docker_build: matches.is_present("docker_build"),
     };
 
+    let docker_image_config = DockerImageConfig {
+        base_image: matches.value_of("base_image").unwrap_or_default(),
+        tag: matches.value_of("image_tag").unwrap_or_default(),
+    };
+
     if build_config.docker_build {
-        let docker = DockerConfig::new(build_config.deploy_method);
-        // docker.container_create_inspect_remove().await;
-        match docker.image_create_inspect_delete().await {
-            Ok(_) => info!("Validator Docker image built successfully"),
-            Err(err) => {
-                error!("Exiting........ {}", err);
-                return;
+        let docker = DockerConfig::new(docker_image_config, build_config.deploy_method);
+        let image_types = vec!["bootstrap", "validator"];
+        for image_type in image_types {
+            match docker.build_image(image_type).await {
+                Ok(_) => info!("Validator Docker image built successfully"),
+                Err(err) => {
+                    error!("Exiting........ {}", err);
+                    return;
+                }
             }
+    
         }
     }
 
