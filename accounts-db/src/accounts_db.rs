@@ -2438,7 +2438,10 @@ impl AccountsDb {
         base_working_path: Option<PathBuf>,
     ) -> Self {
         let num_threads = get_thread_count();
-        const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 400_000_000; // 400M bytes
+        // 400M bytes
+        const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 400_000_000;
+        // read only cache does not update lru on read of an entry unless it has been at least this many ms since the last lru update
+        const READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE: u32 = 100;
 
         let (base_working_path, accounts_hash_cache_path, temp_accounts_hash_cache_path) =
             match base_working_path {
@@ -2483,7 +2486,10 @@ impl AccountsDb {
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
             sender_bg_hasher: None,
-            read_only_accounts_cache: ReadOnlyAccountsCache::new(MAX_READ_ONLY_CACHE_DATA_SIZE),
+            read_only_accounts_cache: ReadOnlyAccountsCache::new(
+                MAX_READ_ONLY_CACHE_DATA_SIZE,
+                READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE,
+            ),
             recycle_stores: RwLock::new(RecycleStores::default()),
             uncleaned_pubkeys: DashMap::new(),
             next_id: AtomicAppendVecId::new(0),
