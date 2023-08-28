@@ -552,40 +552,10 @@ pub mod clean_up_delegation_errors {
     solana_sdk::declare_id!("Bj2jmUsM2iRhfdLLDSTkhM5UQRQvQHm57HSmPibPtEyu");
 }
 
-<<<<<<< HEAD
-=======
-pub mod vote_state_add_vote_latency {
-    solana_sdk::declare_id!("7axKe5BTYBDD87ftzWbk5DfzWMGyRvqmWTduuo22Yaqy");
-}
-
-pub mod checked_arithmetic_in_fee_validation {
-    solana_sdk::declare_id!("5Pecy6ie6XGm22pc9d4P9W5c31BugcFBuy6hsP2zkETv");
-}
-
-pub mod last_restart_slot_sysvar {
-    solana_sdk::declare_id!("HooKD5NC9QNxk25QuzCssB8ecrEzGt6eXEPBUxWp1LaR");
-}
-
-pub mod reduce_stake_warmup_cooldown {
-    use solana_program::{epoch_schedule::EpochSchedule, stake_history::Epoch};
-    solana_sdk::declare_id!("GwtDQBghCTBgmX2cpEGNPxTEBUTQRaDMGTr5qychdGMj");
-
-    pub trait NewWarmupCooldownRateEpoch {
-        fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch>;
-    }
-    impl NewWarmupCooldownRateEpoch for super::FeatureSet {
-        fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch> {
-            self.activated_slot(&id())
-                .map(|slot| epoch_schedule.get_epoch(slot))
-        }
-    }
-}
-
 pub mod revise_turbine_epoch_stakes {
     solana_sdk::declare_id!("BTWmtJC8U5ZLMbBUUA1k6As62sYjPEjAiNAT55xYGdJU");
 }
 
->>>>>>> d5c2dacd07 (revises turbine epoch stakes for shreds propagation (#32743))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -718,15 +688,7 @@ lazy_static! {
         (disable_builtin_loader_ownership_chains::id(), "disable builtin loader ownership chains #29956"),
         (enable_request_heap_frame_ix::id(), "Enable transaction to request heap frame using compute budget instruction #30076"),
         (clean_up_delegation_errors::id(), "Return InsufficientDelegation instead of InsufficientFunds or InsufficientStake where applicable #31206"),
-<<<<<<< HEAD
-=======
-        (vote_state_add_vote_latency::id(), "replace Lockout with LandedVote (including vote latency) in vote state #31264"),
-        (checked_arithmetic_in_fee_validation::id(), "checked arithmetic in fee validation #31273"),
-        (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
-        (last_restart_slot_sysvar::id(), "enable new sysvar last_restart_slot"),
-        (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
         (revise_turbine_epoch_stakes::id(), "revise turbine epoch stakes"),
->>>>>>> d5c2dacd07 (revises turbine epoch stakes for shreds propagation (#32743))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
