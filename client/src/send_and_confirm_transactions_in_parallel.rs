@@ -179,6 +179,53 @@ fn progress_from_context_and_block_height(
     }
 }
 
+async fn send_transaction_with_rpc_fallback(
+    rpc_client: &RpcClient,
+    tpu_client: &Option<QuicTpuClient>,
+    transaction: Transaction,
+    serialized_transaction: Vec<u8>,
+    context: &SendingContext,
+    index: usize,
+) -> Result<()> {
+    let send_over_rpc = if let Some(tpu_client) = tpu_client {
+        !tpu_client
+            .send_wire_transaction(serialized_transaction.clone())
+            .await
+    } else {
+        true
+    };
+    if send_over_rpc {
+        if let Err(e) = rpc_client.send_transaction(&transaction).await {
+            match &e.kind {
+                ErrorKind::Io(_) | ErrorKind::Reqwest(_) => {
+                    // fall through on io error, we will retry the transaction
+                }
+                ErrorKind::TransactionError(transaction_error) => {
+                    context.error_map.insert(index, transaction_error.clone());
+                    return Ok(());
+                }
+                ErrorKind::RpcError(RpcError::RpcResponseError {
+                    data:
+                        RpcResponseErrorData::SendTransactionPreflightFailure(
+                            RpcSimulateTransactionResult {
+                                err: Some(transaction_error),
+                                ..
+                            },
+                        ),
+                    ..
+                }) => {
+                    context.error_map.insert(index, transaction_error.clone());
+                    return Ok(());
+                }
+                _ => {
+                    return Err(TpuSenderError::from(e));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 async fn sign_all_messages_and_send<T: Signers + ?Sized>(
     progress_bar: &Option<indicatif::ProgressBar>,
     rpc_client: &RpcClient,
@@ -198,44 +245,17 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
             .try_sign(signers, blockhashdata.blockhash)
             .expect("Transaction should be signable");
         let serialized_transaction = serialize(&transaction).expect("Transaction should serailize");
-        let send_over_rpc = if let Some(tpu_client) = tpu_client {
-            !tpu_client
-                .send_wire_transaction(serialized_transaction.clone())
-                .await
-        } else {
-            true
-        };
-        if send_over_rpc {
-            if let Err(e) = rpc_client.send_transaction(&transaction).await {
-                match &e.kind {
-                    ErrorKind::Io(_) | ErrorKind::Reqwest(_) => {
-                        // fall through on io error, we will retry the transaction
-                    }
-                    ErrorKind::TransactionError(transaction_error) => {
-                        context.error_map.insert(*index, transaction_error.clone());
-                        continue;
-                    }
-                    ErrorKind::RpcError(RpcError::RpcResponseError {
-                        data:
-                            RpcResponseErrorData::SendTransactionPreflightFailure(
-                                RpcSimulateTransactionResult {
-                                    err: Some(transaction_error),
-                                    ..
-                                },
-                            ),
-                        ..
-                    }) => {
-                        context.error_map.insert(*index, transaction_error.clone());
-                        continue;
-                    }
-                    _ => {
-                        return Err(TpuSenderError::from(e));
-                    }
-                }
-            }
-        }
-
         let signature = transaction.signatures[0];
+        send_transaction_with_rpc_fallback(
+            rpc_client,
+            tpu_client,
+            transaction,
+            serialized_transaction.clone(),
+            &context,
+            *index,
+        )
+        .await?;
+
         // send to confirm the transaction
         context.unconfirmed_transasction_map.insert(
             signature,
