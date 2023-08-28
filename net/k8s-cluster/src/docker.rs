@@ -1,6 +1,7 @@
 use {
     crate::{boxed_error, initialize_globals, SOLANA_ROOT},
-    docker_api::{self, api, Docker, opts, models::ImageBuildChunk},
+    docker_api::{self, api, Docker, opts, models::ImageBuildChunk, Images},
+    fs_extra,
     futures_util::{StreamExt, TryStreamExt},
     log::*,
     std::{
@@ -8,6 +9,7 @@ use {
         path::{Path, PathBuf},
         error::Error,
         fs,
+        process::{Command, Stdio, Output},
     },
     tempfile::TempDir,
 };
@@ -119,36 +121,104 @@ impl<'a> DockerConfig<'a> {
         // assert!(inspect_result.is_err());
     }
 
+    pub fn setup_build_directory(
+        &self,
+        source_directory: PathBuf,
+        build_directory: PathBuf,
+    )  -> Result<(), Box<dyn Error>> {
+        // if build_directory.exists() {
+        //     fs::remove_dir_all(&build_directory)?;
+        // }
+        // fs::create_dir_all(&build_directory)?;
+
+        let solana_build_directory = if self.deploy_method == "tar" {
+            "solana-release"
+        } else {
+            "farf"
+        };
+
+        let bin_dir = format!("{solana_build_directory}/bin");
+        let version = format!("{solana_build_directory}/version.yml");
+        
+        // List of files and folders to copy
+        let docs_to_copy: Vec<PathBuf> = vec![
+            SOLANA_ROOT.join("fetch-perf-libs.sh"),
+            SOLANA_ROOT.join("fetch-spl.sh"),
+            SOLANA_ROOT.join("scripts"),
+            SOLANA_ROOT.join("net"),
+            SOLANA_ROOT.join("multinode-demo"),
+            SOLANA_ROOT.join(bin_dir.as_str()),
+            SOLANA_ROOT.join(version.as_str()),
+        ];
+
+        let options = fs_extra::dir::CopyOptions::new(); //Initialize default values for CopyOptions
+        fs_extra::copy_items(&docs_to_copy, build_directory, &options)?;
+
+
+         // Loop through the items and copy them
+        // for item in docs_to_copy {
+        //     let source_path = source_directory.join(item);
+        //     let destination_path = build_directory.join(item);
+
+        //     if source_path.is_dir() {
+        //         fs::copy(&source_path, &destination_path)?;
+        //     } else if source_path.is_file() {
+        //         fs::copy(&source_path, &destination_path)?;
+        //     }
+        // }
+
+        Ok(())
+
+
+        
+    }
+
     pub async fn image_create_inspect_delete(&self) -> Result<(), Box<dyn Error>> {
         let docker = self.init_runtime();
 
-        let image = match self.create_base_image(&docker, "test-greg", None).await {
-            Ok(res) => res,
+        // self.setup_build_directory(SOLANA_ROOT.join(""), SOLANA_ROOT.join("dockerfile-build"))?;
+        // self.setup_build_directory(SOLANA_ROOT.join(""), SOLANA_ROOT.join("tmp-dir-docker/bootstrap"))?;
+
+        
+
+        match self.create_base_image(&docker, "test-greg", None).await {
+            Ok(res) => {
+                if res.status.success() {
+                    info!("Successfully created base Image");
+                    return Ok(());
+                } else {
+                    error!("Failed to build base image");
+                    return Err(boxed_error!(String::from_utf8_lossy(&res.stderr)));
+                }
+            },
             Err(err) => return Err(err),
         };
     
         // let image = self.create_base_image(&docker, "test-greg", None).await;
-        assert!(image.inspect().await.is_ok());
-        let delete_res = image
-            .remove(
-                &opts::ImageRemoveOpts::builder()
-                    .force(true)
-                    .noprune(true)
-                    .build(),
-            )
-            .await;
-        info!("delete res: {delete_res:#?}");
-        assert!(delete_res.is_ok());
-        assert!(image.inspect().await.is_err());
+        // assert!(image.inspect().await.is_ok());
+        // let delete_res = image
+        //     .remove(
+        //         &opts::ImageRemoveOpts::builder()
+        //             .force(true)
+        //             .noprune(true)
+        //             .build(),
+        //     )
+        //     .await;
+        // info!("delete res: {delete_res:#?}");
+        // assert!(delete_res.is_ok());
+        // assert!(image.inspect().await.is_err());
         Ok(())
     }
 
+    // #[cfg(feature = "par-compress")]
     pub async fn create_base_image(
         &self,
         docker: &Docker,
         tag: &str,
         opts: Option<opts::ImageBuildOpts>,
-    ) -> Result<api::Image, Box<dyn Error>> {
+    // ) -> Result<api::Image, Box<dyn Error>> {
+    ) -> Result<Output, Box<dyn Error>> {
+
         let images = docker.images();
         let _ = images
             .get(tag)
@@ -165,28 +235,85 @@ impl<'a> DockerConfig<'a> {
             Err(err) => return Err(err),
         };
 
+        info!("Tmp: {}", dockerfile_path.as_path().display());
+        info!("Exists: {}", dockerfile_path.as_path().exists());
+
+        // match self.setup_build_directory(SOLANA_ROOT.join(""), dockerfile_path) {
+        //     Ok(res) => info!("setup success!"),
+        //     Err(err) => error!("err: {}", err),
+        // };
+
+        let image_name = "greg-test";
+        let dockerfile = dockerfile_path.join("Dockerfile");
+        let context_path = SOLANA_ROOT.display().to_string();
+        let command = format!("docker build -t {} -f {:?} {}", image_name, dockerfile, context_path);
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(&command)
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("Failed to execute command")
+            .wait_with_output();
+
+        match output {
+            Ok(res) => Ok(res),
+            Err(err) => Err(Box::new(err)),
+    
+        }
+        
+
+
+            
+        // let stdout = output.stdout.take().expect("Failed to get stdout handle");
+        // let stderr = output.stderr.take().expect("Failed to get stderr handle");
+
+
+
+        // if output.status.success() {
+        //     let stdout = String::from_utf8_lossy(&output.stdout);
+        //     println!("Command output:\n{}", stdout);
+        // } else {
+        //     let stderr = String::from_utf8_lossy(&output.stderr);
+        //     println!("Command failed with error:\n{}", stderr);
+        // }
+
+        // Ok(())
+        
+
         //copy up a dir
-        fs::copy(dockerfile_path.join("Dockerfile"), SOLANA_ROOT.join("Dockerfile"))?;
+        // fs::copy(dockerfile_path.join("Dockerfile"), SOLANA_ROOT.join("Dockerfile"))?;
+        // fs::copy(dockerfile_path.join("Dockerfile"), SOLANA_ROOT.join("dockerfile-build/Dockerfile"))?;
 
-        println!("Tmp: {}", dockerfile_path.as_path().display());
-        println!("Exists: {}", dockerfile_path.as_path().exists());
 
-        let opts = opts.unwrap_or_else(|| opts::ImageBuildOpts::builder(SOLANA_ROOT.as_path()).tag(tag).build());
+
+        // println!("Tmp: {}", dockerfile_path.as_path().display());
+        // println!("Exists: {}", dockerfile_path.as_path().exists());
+        // let solana_root = SOLANA_ROOT.join("");
+
+        
+        // info!("dockerfile-build-path: {:?}", SOLANA_ROOT.join("tmp-dir-docker/bootstrap"));
+        // let opts = opts.unwrap_or_else(|| opts::ImageBuildOpts::builder(SOLANA_ROOT.join("tmp-dir-docker/bootstrap")).tag(tag).build());
+        // info!("here");
+
+        // // TODO this is super slow when we try to build Dockerfile from main solana repo
+        // // Sooo. let's create a temp directory, copy everything into it that we need. and then copy 
+        // // the Dockerfile into that folder. And then we build from there.
+        // let mut image_stream = images.build(&opts);
+        // let mut digest = None;
+        // info!("suh");
+        // while let Some(chunk) = image_stream.next().await {
+        //     println!("{chunk:?}");
+        //     assert!(chunk.is_ok());
+        //     if matches!(chunk, Ok(ImageBuildChunk::Digest { .. })) {
+        //         digest = Some(chunk);
+        //     }
+        // }
     
-        let mut image_stream = images.build(&opts);
-        let mut digest = None;
-        while let Some(chunk) = image_stream.next().await {
-            println!("{chunk:?}");
-            assert!(chunk.is_ok());
-            if matches!(chunk, Ok(ImageBuildChunk::Digest { .. })) {
-                digest = Some(chunk);
-            }
-        }
-    
-        match digest.unwrap().unwrap() {
-            ImageBuildChunk::Digest { aux } => Ok(docker.images().get(aux.id)),
-            chunk => panic!("invalid chunk {chunk:?}"),
-        }
+        // match digest.unwrap().unwrap() {
+        //     ImageBuildChunk::Digest { aux } => Ok(docker.images().get(aux.id)),
+        //     chunk => panic!("invalid chunk {chunk:?}"),
+        // }
     }
 
     // TODO maybe don't save this in some random temp dir in case we want to access 
@@ -195,7 +322,7 @@ impl<'a> DockerConfig<'a> {
         if !(validator_type != "validator" || validator_type != "bootstrap") {
             return Err(boxed_error!("Invalid validator type. Exiting..."));
         }
-        let docker_path = format!("{}/{}", "tmp-dir-docker", validator_type);
+        let docker_path = format!("{}/{}", "docker-build", validator_type);
 
         let temp_release_dir = SOLANA_ROOT.join(docker_path);
         if temp_release_dir.exists() {
@@ -234,7 +361,7 @@ COPY ./net ./multinode-demo /home/solana/
 RUN mkdir -p /home/solana/.cargo/bin
 
 COPY ./{solana_build_directory}/bin/* /home/solana/.cargo/bin/
-COPY ./{solana_build_directory}/version.yaml /home/solana/
+COPY ./{solana_build_directory}/version.yml /home/solana/
 
 RUN mkdir -p /home/solana/config
 

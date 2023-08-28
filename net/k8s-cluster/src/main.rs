@@ -135,7 +135,13 @@ async fn main() {
     if build_config.docker_build {
         let docker = DockerConfig::new(build_config.deploy_method);
         // docker.container_create_inspect_remove().await;
-        docker.image_create_inspect_delete().await;
+        match docker.image_create_inspect_delete().await {
+            Ok(_) => info!("Validator Docker image built successfully"),
+            Err(err) => {
+                error!("Exiting........ {}", err);
+                return;
+            }
+        }
     }
 
 
