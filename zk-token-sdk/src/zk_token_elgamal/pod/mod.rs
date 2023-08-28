@@ -20,9 +20,10 @@ pub use {
     pedersen::PedersenCommitment,
     range_proof::{RangeProofU128, RangeProofU256, RangeProofU64},
     sigma_proofs::{
-        BatchedGroupedCiphertext2HandlesValidityProof, CiphertextCiphertextEqualityProof,
+        BatchedGroupedCiphertext2HandlesValidityProof,
+        BatchedGroupedCiphertext3HandlesValidityProof, CiphertextCiphertextEqualityProof,
         CiphertextCommitmentEqualityProof, FeeSigmaProof, GroupedCiphertext2HandlesValidityProof,
-        PubkeyValidityProof, ZeroBalanceProof,
+        GroupedCiphertext3HandlesValidityProof, PubkeyValidityProof, ZeroBalanceProof,
     },
 };
 
