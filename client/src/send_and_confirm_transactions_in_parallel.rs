@@ -53,6 +53,7 @@ pub struct SendAndConfirmConfig {
     pub resign_txs_count: Option<usize>,
 }
 
+/// Sends and confirms transactions concurrently in a sync context
 pub fn send_and_confirm_transactions_in_parallel_blocking<T: Signers + ?Sized>(
     rpc_client: Arc<BlockingRpcClient>,
     tpu_client: Option<QuicTpuClient>,
@@ -344,9 +345,11 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
     }
 }
 
-/// This is a new method which will be able to send and confirm a large amount of transactions
+/// Sends and confirms transactions concurrently
+///
 /// The sending and confirmation of transactions is done in parallel tasks
-/// The signer sign the transaction just before sending so that blockhash is not expired
+/// The method signs transactions just before sending so that blockhash does not
+/// expire.
 pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
     rpc_client: Arc<RpcClient>,
     tpu_client: Option<QuicTpuClient>,
