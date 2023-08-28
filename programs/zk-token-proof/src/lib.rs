@@ -274,5 +274,28 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
             ic_msg!(invoke_context, "VerifyFeeSigma");
             process_verify_proof::<FeeSigmaProofData, FeeSigmaProofContext>(invoke_context)
         }
+        ProofInstruction::VerifyGroupedCiphertext3HandlesValidity => {
+            invoke_context
+                .consume_checked(8_057)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            ic_msg!(invoke_context, "VerifyGroupedCiphertext3HandlesValidity");
+            process_verify_proof::<
+                GroupedCiphertext3HandlesValidityProofData,
+                GroupedCiphertext3HandlesValidityProofContext,
+            >(invoke_context)
+        }
+        ProofInstruction::VerifyBatchedGroupedCiphertext3HandlesValidity => {
+            invoke_context
+                .consume_checked(16_384)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            ic_msg!(
+                invoke_context,
+                "VerifyBatchedGroupedCiphertext3HandlesValidity"
+            );
+            process_verify_proof::<
+                BatchedGroupedCiphertext3HandlesValidityProofData,
+                BatchedGroupedCiphertext3HandlesValidityProofContext,
+            >(invoke_context)
+        }
     }
 });
