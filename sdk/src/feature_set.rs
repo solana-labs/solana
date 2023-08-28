@@ -680,6 +680,10 @@ pub mod reduce_stake_warmup_cooldown {
     }
 }
 
+pub mod revise_turbine_epoch_stakes {
+    solana_sdk::declare_id!("BTWmtJC8U5ZLMbBUUA1k6As62sYjPEjAiNAT55xYGdJU");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -842,6 +846,7 @@ lazy_static! {
         (checked_arithmetic_in_fee_validation::id(), "checked arithmetic in fee validation #31273"),
         (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
         (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
+        (revise_turbine_epoch_stakes::id(), "revise turbine epoch stakes"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
