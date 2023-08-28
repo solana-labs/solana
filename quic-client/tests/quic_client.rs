@@ -332,7 +332,8 @@ mod tests {
         let port = 8010;
         let tpu_addr = SocketAddr::new(addr, port);
         let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
-        for _i in 0..1 {
+        let mut clients = Vec::default();
+        for _i in 0..2000 {
             let client = QuicClientConnection::new(
                 Arc::new(QuicLazyInitializedEndpoint::default()),
                 tpu_addr,
@@ -340,9 +341,10 @@ mod tests {
             );
 
             // Send a full size packet with single byte writes.
-            let num_expected_packets: usize = 3000;
+            let num_expected_packets: usize = 1;
             let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
             assert!(client.send_data_batch(&packets).await.is_ok());
+            clients.push(client);
         }
     }
 }
