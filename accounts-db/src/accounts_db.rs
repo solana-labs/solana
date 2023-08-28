@@ -604,6 +604,7 @@ struct SlotIndexGenerationInfo {
 
 #[derive(Default, Debug)]
 struct GenerateIndexTimings {
+    pub total_time_us: u64,
     pub index_time: u64,
     pub scan_time: u64,
     pub insertion_time_us: u64,
@@ -633,6 +634,7 @@ impl GenerateIndexTimings {
     pub fn report(&self) {
         datapoint_info!(
             "generate_index",
+            ("overall_us", self.total_time_us, i64),
             // we cannot accurately measure index insertion time because of many threads and lock contention
             ("total_us", self.index_time, i64),
             ("scan_stores_us", self.scan_time, i64),
@@ -9102,6 +9104,7 @@ impl AccountsDb {
         verify: bool,
         genesis_config: &GenesisConfig,
     ) -> IndexGenerationInfo {
+        let mut total_time = Measure::start("generate_index");
         let mut slots = self.storage.all_slots();
         slots.sort_unstable();
         if let Some(limit) = limit_load_slot_count_from_snapshot {
@@ -9357,6 +9360,8 @@ impl AccountsDb {
 
                 self.set_storage_count_and_alive_bytes(storage_info, &mut timings);
             }
+            total_time.stop();
+            timings.total_time_us = total_time.as_us();
             timings.report();
         }
 
