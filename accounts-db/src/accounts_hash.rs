@@ -1050,9 +1050,10 @@ impl<'a> AccountsHasher<'a> {
                     let mut offset = first_pubkey_in_bin;
 
                     while let Some(k) = key {
-                        if !working_set.contains_key(&k) {
+                        if let std::collections::btree_map::Entry::Vacant(e) = working_set.entry(k)
+                        {
                             // found a new key, insert into working_set
-                            working_set.insert(k, (i, offset));
+                            e.insert((i, offset));
                             break;
                         } else {
                             // key already exist in working_set, find next key.
