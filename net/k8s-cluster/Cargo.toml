@@ -12,17 +12,29 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 bincode = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
+bzip2 = { workspace = true }
+chrono = { workspace = true, features = ["default"] }
 clap = { workspace = true }
+console = { workspace = true }
 crossbeam-channel = { workspace = true }
+docker-api = { workspace = true }
+env_logger = { workspace = true }
 flate2 = { workspace = true }
+fs_extra = { workspace = true }
+futures-util = { workspace = true }
+git2 = { workspace = true } 
 indexmap = { workspace = true, features = ["rayon"] }
+indicatif = { workspace = true }
 itertools = { workspace = true }
 k8s-openapi = { workspace = true }
 kube = { workspace = true }
+lazy_static = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
 matches = { workspace = true }
+nix = { workspace = true }
 num-traits = { workspace = true }
+reqwest = { workspace = true, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
@@ -36,23 +48,18 @@ solana-client = { workspace = true }
 solana-entry = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
-solana-ledger = { workspace = true }
 solana-logger = { workspace = true }
-solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
 solana-net-utils = { workspace = true }
-solana-perf = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
-solana-runtime = { workspace = true }
-solana-sdk = { workspace = true }
-solana-streamer = { workspace = true }
-solana-thin-client = { workspace = true }
-solana-tpu-client = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 static_assertions = { workspace = true }
+tar = { workspace = true }
+tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+url = { workspace = true }
 
 [dev-dependencies]
 num_cpus = { workspace = true }

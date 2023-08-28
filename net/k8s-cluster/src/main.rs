@@ -1,3 +1,5 @@
+use docker_api::Docker;
+
 use {
     clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     k8s_openapi::{
@@ -16,12 +18,12 @@ use {
     },
     log::*,
     serde_json,
-    std::{
-        collections::BTreeMap,
-        thread,
-        time::Duration,
-    }
-
+    solana_k8s_cluster::{
+        config::SetupConfig,
+        setup::{BuildConfig, Deploy},
+        docker::{DockerConfig, DockerImageConfig},
+    },
+    std::{collections::BTreeMap, process, thread, time::Duration},
 };
 
 const BOOTSTRAP_VALIDATOR_REPLICAS: i32 = 1;
@@ -38,8 +40,8 @@ fn parse_matches() -> ArgMatches<'static> {
                 .help("namespace to deploy test cluster"),
         )
         .arg(
-            Arg::with_name("number_of_replicas")
-                .long("replicas")
+            Arg::with_name("number_of_validators")
+                .long("num-validators")
                 .takes_value(true)
                 .default_value("1")
                 .help("Number of validator replicas to deploy"),
@@ -72,6 +74,60 @@ fn parse_matches() -> ArgMatches<'static> {
                 .required(true)
                 .help("Docker Image of Validator to deploy"),
         )
+        .arg(
+            Arg::with_name("release_channel")
+                .long("release-channel")
+                .takes_value(true)
+                .default_value("")
+                .help("Optional: release version. e.g. v1.16.5"),
+        )
+        .arg(
+            Arg::with_name("deploy_method")
+                .long("deploy-method")
+                .takes_value(true)
+                .possible_values(&["local", "tar", "skip"])
+                .default_value("local"), // .help("Deploy method. tar, local, skip. [default: local]"),
+        )
+        .arg(
+            Arg::with_name("do_build")
+                .long("do-build")
+                .help("Enable building for building from local repo"),
+        )
+        .arg(
+            Arg::with_name("debug_build")
+                .long("debug-build")
+                .help("Enable debug build"),
+        )
+        .arg(
+            Arg::with_name("profile_build")
+                .long("profile-build")
+                .help("Enable Profile Build flags"),
+        )
+        .arg(
+            Arg::with_name("docker_build")
+                .long("docker-build")
+                .help("Build Docker images"),
+        )
+        .arg(
+            Arg::with_name("base_image")
+                .long("base-image")
+                .takes_value(true)
+                .default_value("ubuntu:20.04")
+                .help("Docker base image"),
+        )
+        .arg(
+            Arg::with_name("image_tag")
+                .long("image-tag")
+                .takes_value(true)
+                .default_value("k8s-cluster-image")
+                .help("Docker image tag. tag will be prepended with `bootstrap-` and `validator-` to distinguish between both images"),
+        )
+        .arg(
+            Arg::with_name("prebuild_genesis")
+                .long("prebuild-genesis")
+                .help("Prebuild gensis. Generates keys for validators and writes to file"),
+        )
+        
         .get_matches()
 }
 
@@ -82,8 +138,52 @@ async fn main() {
     }
     solana_logger::setup();
     let matches = parse_matches();
-    let namespace = matches.value_of("cluster_namespace").unwrap_or_default();
-    let replicas = value_t_or_exit!(matches, "number_of_replicas", i32);
+
+    let setup_config = SetupConfig {
+        namespace: matches.value_of("cluster_namespace").unwrap_or_default(),
+        num_validators: value_t_or_exit!(matches, "number_of_validators", i32),
+    };
+
+    let build_config = BuildConfig {
+        release_channel: matches.value_of("release_channel").unwrap_or_default(),
+        deploy_method: matches.value_of("deploy_method").unwrap(),
+        do_build: matches.is_present("do_build"),
+        debug_build: matches.is_present("debug_build"),
+        profile_build: matches.is_present("profile_build"),
+        docker_build: matches.is_present("docker_build"),
+    };
+
+    let docker_image_config = DockerImageConfig {
+        base_image: matches.value_of("base_image").unwrap_or_default(),
+        tag: matches.value_of("image_tag").unwrap_or_default(),
+    };
+
+    let deploy = Deploy::new(build_config.clone());
+    match deploy.prepare().await {
+        Ok(_) => info!("Validator setup prepared successfully"),
+        Err(err) => {
+            error!("Exiting........ {}", err);
+            return;
+        }
+    }
+
+    if build_config.docker_build {
+        let docker = DockerConfig::new(docker_image_config, build_config.deploy_method);
+        let image_types = vec!["bootstrap", "validator"];
+        for image_type in image_types {
+            match docker.build_image(image_type).await {
+                Ok(_) => info!("Validator Docker image built successfully"),
+                Err(err) => {
+                    error!("Exiting........ {}", err);
+                    return;
+                }
+            }
+    
+        }
+    }
+
+    process::exit(1);
+
     let bootstrap_container_name = matches
         .value_of("bootstrap_container_name")
         .expect("Bootstrap container name is required");
@@ -97,7 +197,7 @@ async fn main() {
         .value_of("validator_image_name")
         .expect("Validator image name is required");
 
-    info!("namespace: {}", namespace);
+    info!("namespace: {}", setup_config.namespace);
 
     let client = Client::try_default().await.unwrap();
 
@@ -109,38 +209,57 @@ async fn main() {
     );
 
     let bootstrap_validator_deployment = create_bootstrap_validator_deployment(
-        namespace,
+        setup_config.namespace,
         bootstrap_container_name,
         bootstrap_image_name,
         BOOTSTRAP_VALIDATOR_REPLICAS,
         &bootstrap_validator_selector,
     );
-    let dep_name = match deploy_deployment(client.clone(), namespace, &bootstrap_validator_deployment).await {
+    let dep_name = match deploy_deployment(
+        client.clone(),
+        setup_config.namespace,
+        &bootstrap_validator_deployment,
+    )
+    .await
+    {
         Ok(dep) => {
             info!("bootstrap validator deployment deployed successfully");
             dep.metadata.name.unwrap()
         }
         Err(err) => {
-            error!("Error! Failed to deploy bootstrap validator deployment. err: {:?}", err);
+            error!(
+                "Error! Failed to deploy bootstrap validator deployment. err: {:?}",
+                err
+            );
             err.to_string() //TODO: fix this, should handle this error better. shoudn't just return a string. should exit or something better
         }
     };
 
     let bootstrap_validator_service =
-        create_bootstrap_validator_service(namespace, &bootstrap_validator_selector);
-    match deploy_service(client.clone(), namespace, &bootstrap_validator_service).await {
+        create_bootstrap_validator_service(setup_config.namespace, &bootstrap_validator_selector);
+    match deploy_service(
+        client.clone(),
+        setup_config.namespace,
+        &bootstrap_validator_service,
+    )
+    .await
+    {
         Ok(_) => info!("bootstrap validator service deployed successfully"),
-        Err(err) => error!("Error! Failed to deploy bootstrap validator service. err: {:?}", err)
+        Err(err) => error!(
+            "Error! Failed to deploy bootstrap validator service. err: {:?}",
+            err
+        ),
     }
 
     //TODO: handle this return val properly, don't just unwrap
-    while !check_deployment_ready(client.clone(), namespace, dep_name.as_str()).await.unwrap() {
+    while !check_deployment_ready(client.clone(), setup_config.namespace, dep_name.as_str())
+        .await
+        .unwrap()
+    {
         info!("deployment: {} not ready...", dep_name);
         thread::sleep(Duration::from_secs(1));
     }
     info!("deployment: {} Ready!", dep_name);
-
-
 
     //Validator deployment and service creation/deployment
     let mut validator_selector = BTreeMap::new(); // Create a JSON map for label selector
@@ -150,26 +269,39 @@ async fn main() {
     );
 
     let validator_deployment = create_validator_deployment(
-        namespace,
+        setup_config.namespace,
         validator_container_name,
         validator_image_name,
-        replicas,
+        setup_config.num_validators,
         &validator_selector,
     );
-    match deploy_deployment(client.clone(), namespace, &validator_deployment).await {
+    match deploy_deployment(
+        client.clone(),
+        setup_config.namespace,
+        &validator_deployment,
+    )
+    .await
+    {
         Ok(_) => info!("validator deployment deployed successfully"),
-        Err(err) => error!("Error! Failed to deploy validator deployment. err: {:?}", err)
+        Err(err) => error!(
+            "Error! Failed to deploy validator deployment. err: {:?}",
+            err
+        ),
     }
 
-    let validator_service = create_validator_service(namespace, &validator_selector);
-    match deploy_service(client.clone(), namespace, &validator_service).await {
+    let validator_service = create_validator_service(setup_config.namespace, &validator_selector);
+    match deploy_service(client.clone(), setup_config.namespace, &validator_service).await {
         Ok(_) => info!("validator service deployed successfully"),
-        Err(err) => error!("Error! Failed to deploy validator service. err: {:?}", err)
+        Err(err) => error!("Error! Failed to deploy validator service. err: {:?}", err),
     }
 
-    let _ = check_service_matching_deployment(client.clone(), "bootstrap-validator", namespace).await;
-    let _ = check_service_matching_deployment(client, "validator", namespace).await;
-
+    let _ = check_service_matching_deployment(
+        client.clone(),
+        "bootstrap-validator",
+        setup_config.namespace,
+    )
+    .await;
+    let _ = check_service_matching_deployment(client, "validator", setup_config.namespace).await;
 }
 
 async fn check_deployment_ready(
@@ -180,10 +312,15 @@ async fn check_deployment_ready(
     let deployments: Api<Deployment> = Api::namespaced(client.clone(), namespace);
     let deployment = deployments.get(deployment_name).await?;
 
-    let desired_replicas = deployment.spec.as_ref().unwrap().replicas.unwrap_or(1);
-    let available_replicas = deployment.status.as_ref().unwrap().available_replicas.unwrap_or(0);
+    let desired_validators = deployment.spec.as_ref().unwrap().replicas.unwrap_or(1);
+    let available_validators = deployment
+        .status
+        .as_ref()
+        .unwrap()
+        .available_replicas
+        .unwrap_or(0);
 
-    Ok(available_replicas >= desired_replicas)
+    Ok(available_validators >= desired_validators)
 }
 
 async fn deploy_deployment(
@@ -202,7 +339,7 @@ fn create_bootstrap_validator_deployment(
     namespace: &str,
     container_name: &str,
     image_name: &str,
-    replicas: i32,
+    num_bootstrap_validators: i32,
     label_selector: &BTreeMap<String, String>,
 ) -> Deployment {
     let env_var = vec![EnvVar {
@@ -224,10 +361,10 @@ fn create_bootstrap_validator_deployment(
         namespace,
         container_name,
         image_name,
-        replicas,
+        num_bootstrap_validators,
         label_selector,
         env_var,
-        &command
+        &command,
     )
 }
 
@@ -235,7 +372,7 @@ fn create_validator_deployment(
     namespace: &str,
     container_name: &str,
     image_name: &str,
-    replicas: i32,
+    num_validators: i32,
     label_selector: &BTreeMap<String, String>,
 ) -> Deployment {
     let env_vars = vec![
@@ -275,13 +412,12 @@ fn create_validator_deployment(
 
     let command = vec!["/workspace/start-validator.sh".to_string()];
 
-
     create_deployment(
         "validator",
         namespace,
         container_name,
         image_name,
-        replicas,
+        num_validators,
         label_selector,
         env_vars,
         &command,
@@ -293,7 +429,7 @@ fn create_deployment(
     namespace: &str,
     container_name: &str,
     image_name: &str,
-    replicas: i32,
+    num_validators: i32,
     label_selector: &BTreeMap<String, String>,
     env_vars: Vec<EnvVar>,
     command: &Vec<String>,
@@ -319,7 +455,7 @@ fn create_deployment(
 
     //Define the deployment spec
     let deployment_spec = DeploymentSpec {
-        replicas: Some(replicas),
+        replicas: Some(num_validators),
         selector: LabelSelector {
             match_labels: Some(label_selector.clone()),
             ..Default::default()
