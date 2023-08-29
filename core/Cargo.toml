@@ -23,6 +23,7 @@ crossbeam-channel = { workspace = true }
 dashmap = { workspace = true, features = ["rayon", "raw-api"] }
 eager = { workspace = true }
 etcd-client = { workspace = true, features = ["tls"] }
+futures = { workspace = true }
 histogram = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
@@ -34,8 +35,11 @@ quinn = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
+rcgen = { workspace = true }
 rolling-file = { workspace = true }
+rustls = { workspace = true }
 serde = { workspace = true }
+serde_bytes = { workspace = true }
 serde_derive = { workspace = true }
 solana-accounts-db = { workspace = true }
 solana-address-lookup-table-program = { workspace = true }
