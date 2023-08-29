@@ -91,7 +91,7 @@ pub async fn add_lookup_table_account(
     account
 }
 
-pub fn overwrite_slot_hashes_with_slots(context: &mut ProgramTestContext, slots: &[Slot]) {
+pub fn overwrite_slot_hashes_with_slots(context: &ProgramTestContext, slots: &[Slot]) {
     let mut slot_hashes = SlotHashes::default();
     for slot in slots {
         slot_hashes.add(*slot, Hash::new_unique());

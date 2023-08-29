@@ -1933,7 +1933,7 @@ mod tests {
                 assert_eq!(loaded_transaction.program_indices.len(), 1);
                 assert_eq!(loaded_transaction.program_indices[0].len(), 0);
             }
-            (Err(e), _nonce) => Err(e).unwrap(),
+            (Err(e), _nonce) => panic!("{e}"),
         }
     }
 
@@ -2282,7 +2282,7 @@ mod tests {
                     }
                 }
             }
-            (Err(e), _nonce) => Err(e).unwrap(),
+            (Err(e), _nonce) => panic!("{e}"),
         }
     }
 

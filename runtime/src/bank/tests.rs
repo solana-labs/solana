@@ -517,7 +517,7 @@ fn test_credit_debit_rent_no_side_effect_on_hash() {
 
 fn store_accounts_for_rent_test(
     bank: &Bank,
-    keypairs: &mut [Keypair],
+    keypairs: &[Keypair],
     mock_program_id: Pubkey,
     generic_rent_due_for_system_account: u64,
 ) {
@@ -1294,7 +1294,7 @@ fn test_rent_complex() {
 
     store_accounts_for_rent_test(
         &bank,
-        &mut keypairs,
+        &keypairs,
         mock_program_id,
         generic_rent_due_for_system_account,
     );
@@ -2720,7 +2720,7 @@ fn test_bank_tx_fee() {
     let (expected_fee_collected, expected_fee_burned) =
         genesis_config.fee_rate_governor.burn(expected_fee_paid);
 
-    let mut bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
 
     let capitalization = bank.capitalization();
 
@@ -2741,7 +2741,7 @@ fn test_bank_tx_fee() {
     );
 
     assert_eq!(bank.get_balance(&leader), initial_balance);
-    goto_end_of_slot(&mut bank);
+    goto_end_of_slot(&bank);
     assert_eq!(bank.signature_count(), 1);
     assert_eq!(
         bank.get_balance(&leader),
@@ -2769,7 +2769,7 @@ fn test_bank_tx_fee() {
     );
 
     // Verify that an InstructionError collects fees, too
-    let mut bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
+    let bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
     let mut tx = system_transaction::transfer(&mint_keypair, &key, 1, bank.last_blockhash());
     // Create a bogus instruction to system_program to cause an instruction error
     tx.message.instructions[0].data[0] = 40;
@@ -2781,7 +2781,7 @@ fn test_bank_tx_fee() {
         bank.get_balance(&mint_keypair.pubkey()),
         mint - arbitrary_transfer_amount - 2 * expected_fee_paid
     ); // mint_keypair still pays a fee
-    goto_end_of_slot(&mut bank);
+    goto_end_of_slot(&bank);
     assert_eq!(bank.signature_count(), 1);
 
     // Profit! 2 transaction signatures processed at 3 lamports each
@@ -2834,7 +2834,7 @@ fn test_bank_tx_compute_unit_fee() {
     let (expected_fee_collected, expected_fee_burned) =
         genesis_config.fee_rate_governor.burn(expected_fee_paid);
 
-    let mut bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
 
     let capitalization = bank.capitalization();
 
@@ -2854,7 +2854,7 @@ fn test_bank_tx_compute_unit_fee() {
     );
 
     assert_eq!(bank.get_balance(&leader), initial_balance);
-    goto_end_of_slot(&mut bank);
+    goto_end_of_slot(&bank);
     assert_eq!(bank.signature_count(), 1);
     assert_eq!(
         bank.get_balance(&leader),
@@ -2882,7 +2882,7 @@ fn test_bank_tx_compute_unit_fee() {
     );
 
     // Verify that an InstructionError collects fees, too
-    let mut bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
+    let bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
     let mut tx = system_transaction::transfer(&mint_keypair, &key, 1, bank.last_blockhash());
     // Create a bogus instruction to system_program to cause an instruction error
     tx.message.instructions[0].data[0] = 40;
@@ -2894,7 +2894,7 @@ fn test_bank_tx_compute_unit_fee() {
         bank.get_balance(&mint_keypair.pubkey()),
         mint - arbitrary_transfer_amount - 2 * expected_fee_paid
     ); // mint_keypair still pays a fee
-    goto_end_of_slot(&mut bank);
+    goto_end_of_slot(&bank);
     assert_eq!(bank.signature_count(), 1);
 
     // Profit! 2 transaction signatures processed at 3 lamports each
@@ -2932,14 +2932,14 @@ fn test_bank_blockhash_fee_structure() {
         .target_lamports_per_signature = 5000;
     genesis_config.fee_rate_governor.target_signatures_per_slot = 0;
 
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    goto_end_of_slot(&mut bank);
+    let bank = Bank::new_for_tests(&genesis_config);
+    goto_end_of_slot(&bank);
     let cheap_blockhash = bank.last_blockhash();
     let cheap_lamports_per_signature = bank.get_lamports_per_signature();
     assert_eq!(cheap_lamports_per_signature, 0);
 
-    let mut bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
-    goto_end_of_slot(&mut bank);
+    let bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
+    goto_end_of_slot(&bank);
     let expensive_blockhash = bank.last_blockhash();
     let expensive_lamports_per_signature = bank.get_lamports_per_signature();
     assert!(cheap_lamports_per_signature < expensive_lamports_per_signature);
@@ -2984,14 +2984,14 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         .target_lamports_per_signature = 1000;
     genesis_config.fee_rate_governor.target_signatures_per_slot = 1;
 
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    goto_end_of_slot(&mut bank);
+    let bank = Bank::new_for_tests(&genesis_config);
+    goto_end_of_slot(&bank);
     let cheap_blockhash = bank.last_blockhash();
     let cheap_lamports_per_signature = bank.get_lamports_per_signature();
     assert_eq!(cheap_lamports_per_signature, 0);
 
-    let mut bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
-    goto_end_of_slot(&mut bank);
+    let bank = Bank::new_from_parent(Arc::new(bank), &leader, 1);
+    goto_end_of_slot(&bank);
     let expensive_blockhash = bank.last_blockhash();
     let expensive_lamports_per_signature = bank.get_lamports_per_signature();
     assert!(cheap_lamports_per_signature < expensive_lamports_per_signature);
@@ -5000,7 +5000,7 @@ fn get_nonce_blockhash(bank: &Bank, nonce_pubkey: &Pubkey) -> Option<Hash> {
 }
 
 fn nonce_setup(
-    bank: &mut Arc<Bank>,
+    bank: &Arc<Bank>,
     mint_keypair: &Keypair,
     custodian_lamports: u64,
     nonce_lamports: u64,
@@ -5057,7 +5057,7 @@ where
     }
 
     let (custodian_keypair, nonce_keypair) = nonce_setup(
-        &mut bank,
+        &bank,
         &mint_keypair,
         custodian_lamports,
         nonce_lamports,
@@ -5756,7 +5756,7 @@ fn test_nonce_fee_calculator_updates() {
 
     // Deliberately use bank 0 to initialize nonce account, so that nonce account fee_calculator indicates 0 fees
     let (custodian_keypair, nonce_keypair) =
-        nonce_setup(&mut bank, &mint_keypair, 500_000, 100_000, None).unwrap();
+        nonce_setup(&bank, &mint_keypair, 500_000, 100_000, None).unwrap();
     let custodian_pubkey = custodian_keypair.pubkey();
     let nonce_pubkey = nonce_keypair.pubkey();
 
@@ -5824,7 +5824,7 @@ fn test_nonce_fee_calculator_updates_tx_wide_cap() {
 
     // Deliberately use bank 0 to initialize nonce account, so that nonce account fee_calculator indicates 0 fees
     let (custodian_keypair, nonce_keypair) =
-        nonce_setup(&mut bank, &mint_keypair, 500_000, 100_000, None).unwrap();
+        nonce_setup(&bank, &mint_keypair, 500_000, 100_000, None).unwrap();
     let custodian_pubkey = custodian_keypair.pubkey();
     let nonce_pubkey = nonce_keypair.pubkey();
 
@@ -9192,35 +9192,29 @@ fn test_vote_epoch_panic() {
     let stake_keypair = keypair_from_seed(&[2u8; 32]).unwrap();
 
     let mut setup_ixs = Vec::new();
-    setup_ixs.extend(
-        vote_instruction::create_account_with_config(
-            &mint_keypair.pubkey(),
-            &vote_keypair.pubkey(),
-            &VoteInit {
-                node_pubkey: mint_keypair.pubkey(),
-                authorized_voter: vote_keypair.pubkey(),
-                authorized_withdrawer: mint_keypair.pubkey(),
-                commission: 0,
-            },
-            1_000_000_000,
-            vote_instruction::CreateVoteAccountConfig {
-                space: VoteStateVersions::vote_state_size_of(true) as u64,
-                ..vote_instruction::CreateVoteAccountConfig::default()
-            },
-        )
-        .into_iter(),
-    );
-    setup_ixs.extend(
-        stake_instruction::create_account_and_delegate_stake(
-            &mint_keypair.pubkey(),
-            &stake_keypair.pubkey(),
-            &vote_keypair.pubkey(),
-            &Authorized::auto(&mint_keypair.pubkey()),
-            &Lockup::default(),
-            1_000_000_000_000,
-        )
-        .into_iter(),
-    );
+    setup_ixs.extend(vote_instruction::create_account_with_config(
+        &mint_keypair.pubkey(),
+        &vote_keypair.pubkey(),
+        &VoteInit {
+            node_pubkey: mint_keypair.pubkey(),
+            authorized_voter: vote_keypair.pubkey(),
+            authorized_withdrawer: mint_keypair.pubkey(),
+            commission: 0,
+        },
+        1_000_000_000,
+        vote_instruction::CreateVoteAccountConfig {
+            space: VoteStateVersions::vote_state_size_of(true) as u64,
+            ..vote_instruction::CreateVoteAccountConfig::default()
+        },
+    ));
+    setup_ixs.extend(stake_instruction::create_account_and_delegate_stake(
+        &mint_keypair.pubkey(),
+        &stake_keypair.pubkey(),
+        &vote_keypair.pubkey(),
+        &Authorized::auto(&mint_keypair.pubkey()),
+        &Lockup::default(),
+        1_000_000_000_000,
+    ));
     setup_ixs.push(vote_instruction::withdraw(
         &vote_keypair.pubkey(),
         &mint_keypair.pubkey(),
@@ -9519,7 +9513,7 @@ fn test_get_largest_accounts() {
     }
 
     // Exclude more, and non-sequential, accounts
-    let exclude: HashSet<_> = vec![pubkeys[0], pubkeys[2], pubkeys[4]]
+    let exclude: HashSet<_> = [pubkeys[0], pubkeys[2], pubkeys[4]]
         .iter()
         .cloned()
         .collect();
@@ -12109,7 +12103,7 @@ fn test_runtime_feature_enable_with_program_cache() {
     genesis_config
         .accounts
         .remove(&feature_set::reject_callx_r10::id());
-    let mut root_bank = Bank::new_for_tests(&genesis_config);
+    let root_bank = Bank::new_for_tests(&genesis_config);
 
     // Test a basic transfer
     let amount = genesis_config.rent.minimum_balance(0);
@@ -12138,7 +12132,7 @@ fn test_runtime_feature_enable_with_program_cache() {
     let transaction1 = Transaction::new(&signers1, message1, root_bank.last_blockhash());
 
     // Advance the bank so the next transaction can be submitted.
-    goto_end_of_slot(&mut root_bank);
+    goto_end_of_slot(&root_bank);
     let mut bank = new_from_parent(Arc::new(root_bank));
 
     // Compose second instruction using the same program with a different block hash
@@ -12334,7 +12328,7 @@ fn test_rewards_point_calculation() {
     let (bank, _, _) = create_reward_bank(expected_num_delegations);
 
     let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
-    let mut rewards_metrics = RewardsMetrics::default();
+    let rewards_metrics = RewardsMetrics::default();
     let expected_rewards = 100_000_000_000;
 
     let stakes: RwLockReadGuard<Stakes<StakeAccount<Delegation>>> = bank.stakes_cache.stakes();
@@ -12344,7 +12338,7 @@ fn test_rewards_point_calculation() {
         &reward_calculate_param,
         expected_rewards,
         &thread_pool,
-        &mut rewards_metrics,
+        &rewards_metrics,
     );
 
     assert!(point_value.is_some());
@@ -12361,7 +12355,7 @@ fn test_rewards_point_calculation_empty() {
     let bank = Bank::new_for_tests(&genesis_config);
 
     let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
-    let mut rewards_metrics: RewardsMetrics = RewardsMetrics::default();
+    let rewards_metrics: RewardsMetrics = RewardsMetrics::default();
     let expected_rewards = 100_000_000_000;
     let stakes: RwLockReadGuard<Stakes<StakeAccount<Delegation>>> = bank.stakes_cache.stakes();
     let reward_calculate_param = bank.get_epoch_reward_calculate_param_info(&stakes);
@@ -12370,7 +12364,7 @@ fn test_rewards_point_calculation_empty() {
         &reward_calculate_param,
         expected_rewards,
         &thread_pool,
-        &mut rewards_metrics,
+        &rewards_metrics,
     );
 
     assert!(point_value.is_none());
@@ -13071,10 +13065,9 @@ fn test_store_vote_accounts_partitioned() {
         }
     });
 
-    let mut metrics = RewardsMetrics::default();
+    let metrics = RewardsMetrics::default();
 
-    let stored_vote_accounts =
-        bank.store_vote_accounts_partitioned(vote_rewards_account, &mut metrics);
+    let stored_vote_accounts = bank.store_vote_accounts_partitioned(vote_rewards_account, &metrics);
     assert_eq!(expected_vote_rewards_num, stored_vote_accounts.len());
 
     // load accounts to make sure they were stored correctly
@@ -13094,9 +13087,9 @@ fn test_store_vote_accounts_partitioned_empty() {
 
     let expected = 0;
     let vote_rewards = VoteRewardsAccounts::default();
-    let mut metrics = RewardsMetrics::default();
+    let metrics = RewardsMetrics::default();
 
-    let stored_vote_accounts = bank.store_vote_accounts_partitioned(vote_rewards, &mut metrics);
+    let stored_vote_accounts = bank.store_vote_accounts_partitioned(vote_rewards, &metrics);
     assert_eq!(expected, stored_vote_accounts.len());
 }
 

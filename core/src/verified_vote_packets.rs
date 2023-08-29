@@ -624,7 +624,7 @@ mod tests {
         let second_vote = VoteStateUpdate::from(vec![(2, 4), (4, 3), (11, 1)]);
         let third_vote = VoteStateUpdate::from(vec![(2, 5), (4, 4), (11, 3), (12, 2), (13, 1)]);
 
-        for vote in vec![second_vote.clone(), first_vote.clone()] {
+        for vote in [second_vote.clone(), first_vote.clone()] {
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
                 vote: VoteTransaction::from(vote),

@@ -2071,7 +2071,7 @@ pub mod tests {
         let can_randomly_shrink = false;
         for method in TestCollectInfo::iter() {
             for slot1_is_alive in [false, true] {
-                let alives = vec![false /*dummy*/, slot1_is_alive, !slot1_is_alive];
+                let alives = [false /*dummy*/, slot1_is_alive, !slot1_is_alive];
                 let slots = 2;
                 // 1_040_000 is big enough relative to page size to cause shrink ratio to be triggered
                 for data_size in [None, Some(1_040_000)] {
@@ -2098,7 +2098,7 @@ pub mod tests {
                     });
                     let alive_storages = storages
                         .iter()
-                        .filter_map(|storage| alives[storage.slot() as usize].then_some(storage))
+                        .filter(|storage| alives[storage.slot() as usize])
                         .collect::<Vec<_>>();
                     let alive_bytes_expected = alive_storages
                         .iter()
@@ -2362,7 +2362,7 @@ pub mod tests {
         let can_randomly_shrink = false;
         for method in TestCollectInfo::iter() {
             for slot1_shrink in [false, true] {
-                let shrinks = vec![false /*dummy*/, slot1_shrink, !slot1_shrink];
+                let shrinks = [false /*dummy*/, slot1_shrink, !slot1_shrink];
                 let slots = 2;
                 // 1_040_000 is big enough relative to page size to cause shrink ratio to be triggered
                 let data_sizes = shrinks

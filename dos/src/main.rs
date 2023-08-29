@@ -343,7 +343,7 @@ fn create_sender_thread(
 fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
     tx_sender: &Sender<TransactionBatchMsg>,
     send_batch_size: usize,
-    transaction_generator: &mut TransactionGenerator,
+    transaction_generator: &TransactionGenerator,
     client: Option<Arc<T>>,
     payer: Option<Keypair>,
 ) -> thread::JoinHandle<()> {
@@ -589,7 +589,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
         client.as_ref(),
     );
 
-    let mut transaction_generator = TransactionGenerator::new(transaction_params);
+    let transaction_generator = TransactionGenerator::new(transaction_params);
     let (tx_sender, tx_receiver) = unbounded();
 
     let sender_thread = create_sender_thread(tx_receiver, iterations, &target, tpu_use_quic);
@@ -599,7 +599,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
             create_generator_thread(
                 &tx_sender,
                 send_batch_size,
-                &mut transaction_generator,
+                &transaction_generator,
                 client.clone(),
                 payer,
             )

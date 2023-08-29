@@ -1834,7 +1834,7 @@ mod tests {
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
                     UnprocessedPacketBatches::from_iter(
-                        deserialized_packets.into_iter(),
+                        deserialized_packets,
                         num_conflicting_transactions,
                     ),
                     ThreadType::Transactions,
@@ -1912,7 +1912,7 @@ mod tests {
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
                     UnprocessedPacketBatches::from_iter(
-                        deserialized_packets.into_iter(),
+                        deserialized_packets,
                         num_conflicting_transactions,
                     ),
                     ThreadType::Transactions,
@@ -1964,7 +1964,7 @@ mod tests {
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
                     UnprocessedPacketBatches::from_iter(
-                        deserialized_packets.into_iter(),
+                        deserialized_packets,
                         num_conflicting_transactions,
                     ),
                     ThreadType::Transactions,

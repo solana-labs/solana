@@ -164,9 +164,7 @@ fn sort_data_coding_into_fec_sets(
         // Make sure there are no duplicates for same key
         assert!(!data_slot_and_index.contains(&key));
         data_slot_and_index.insert(key);
-        let fec_entry = fec_data
-            .entry(shred.fec_set_index())
-            .or_insert_with(Vec::new);
+        let fec_entry = fec_data.entry(shred.fec_set_index()).or_default();
         fec_entry.push(shred);
     }
     for shred in coding_shreds {
@@ -175,9 +173,7 @@ fn sort_data_coding_into_fec_sets(
         // Make sure there are no duplicates for same key
         assert!(!coding_slot_and_index.contains(&key));
         coding_slot_and_index.insert(key);
-        let fec_entry = fec_coding
-            .entry(shred.fec_set_index())
-            .or_insert_with(Vec::new);
+        let fec_entry = fec_coding.entry(shred.fec_set_index()).or_default();
         fec_entry.push(shred);
     }
 }

@@ -2963,7 +2963,7 @@ impl Bank {
         reward_calculate_params: &EpochRewardCalculateParamInfo,
         rewards: u64,
         thread_pool: &ThreadPool,
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) -> Option<PointValue> {
         let EpochRewardCalculateParamInfo {
             stake_history,
@@ -3023,7 +3023,7 @@ impl Bank {
         rewards: u64,
         stake_history: &StakeHistory,
         thread_pool: &ThreadPool,
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) -> Option<PointValue> {
         let (points, measure) = measure!(thread_pool.install(|| {
             vote_with_stake_delegations_map
@@ -3291,7 +3291,7 @@ impl Bank {
         &self,
         thread_pool: &ThreadPool,
         stake_rewards: &[StakeReward],
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) {
         // store stake account even if stake_reward is 0
         // because credits observed has changed
@@ -3352,7 +3352,7 @@ impl Bank {
     fn store_vote_accounts_partitioned(
         &self,
         vote_account_rewards: VoteRewardsAccounts,
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) -> Vec<(Pubkey, RewardInfo)> {
         let (_, measure_us) = measure_us!({
             // reformat data to make it not sparse.
@@ -3378,7 +3378,7 @@ impl Bank {
     fn store_vote_accounts(
         &self,
         vote_account_rewards: VoteRewards,
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) -> Vec<(Pubkey, RewardInfo)> {
         let (vote_rewards, measure) = measure!(vote_account_rewards
             .into_iter()
@@ -8447,7 +8447,7 @@ pub mod test_utils {
         solana_sdk::{hash::hashv, pubkey::Pubkey},
         solana_vote_program::vote_state::{self, BlockTimestamp, VoteStateVersions},
     };
-    pub fn goto_end_of_slot(bank: &mut Bank) {
+    pub fn goto_end_of_slot(bank: &Bank) {
         let mut tick_hash = bank.last_blockhash();
         loop {
             tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);

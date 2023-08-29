@@ -2417,7 +2417,7 @@ pub struct PubkeyHashAccount {
 }
 
 impl AccountsDb {
-    pub const ACCOUNTS_HASH_CACHE_DIR: &str = "accounts_hash_cache";
+    pub const ACCOUNTS_HASH_CACHE_DIR: &'static str = "accounts_hash_cache";
 
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None)
@@ -4731,10 +4731,7 @@ impl AccountsDb {
         It is a performance optimization to not send the ENTIRE old/pre-shrunk append vec to clean in the normal case.
         */
 
-        let mut uncleaned_pubkeys = self
-            .uncleaned_pubkeys
-            .entry(slot)
-            .or_insert_with(Vec::default);
+        let mut uncleaned_pubkeys = self.uncleaned_pubkeys.entry(slot).or_default();
         uncleaned_pubkeys.extend(pubkeys);
     }
 
@@ -8512,7 +8509,7 @@ impl AccountsDb {
                 .lock()
                 .unwrap()
                 .entry(accounts.target_slot())
-                .or_insert_with(BankHashStats::default)
+                .or_default()
                 .accumulate(&stats);
         }
 
@@ -9480,9 +9477,7 @@ impl AccountsDb {
         let mut storage_size_accounts_map_flatten_time =
             Measure::start("storage_size_accounts_map_flatten_time");
         if !accounts_map.is_empty() {
-            let mut info = storage_info
-                .entry(store_id)
-                .or_insert_with(StorageSizeAndCount::default);
+            let mut info = storage_info.entry(store_id).or_default();
             info.stored_size += storage_info_local.stored_size;
             info.count += storage_info_local.count;
         }
@@ -10385,7 +10380,7 @@ pub mod tests {
             CalculateHashIntermediate::new(Hash::default(), 256, pubkey255),
         ];
 
-        let expected_hashes = vec![
+        let expected_hashes = [
             Hash::from_str("5K3NW73xFHwgTWVe4LyCg4QfQda8f88uZj2ypDx2kmmH").unwrap(),
             Hash::from_str("84ozw83MZ8oeSF4hRAg7SeW1Tqs9LMXagX1BrDRjtZEx").unwrap(),
             Hash::from_str("5XqtnEJ41CG2JWNp7MAg9nxkRUAnyjLxfsKsdrLxQUbC").unwrap(),
@@ -10730,7 +10725,7 @@ pub mod tests {
         let slot = MAX_ITEMS_PER_CHUNK as Slot;
         let (storages, raw_expected) =
             sample_storages_and_account_in_slot(slot, &accounts_db, INCLUDE_SLOT_IN_HASH_TESTS);
-        let storage_data = vec![(&storages[0], slot)];
+        let storage_data = [(&storages[0], slot)];
 
         let sorted_storages =
             SortedStorages::new_debug(&storage_data[..], 0, MAX_ITEMS_PER_CHUNK as usize + 1);
@@ -10827,7 +10822,7 @@ pub mod tests {
         }
 
         let bins = 256;
-        let bin_locations = vec![0, 127, 128, 255];
+        let bin_locations = [0, 127, 128, 255];
         let range = 1;
         for bin in 0..bins {
             let accounts_db = AccountsDb::new_single_for_tests();
@@ -10869,7 +10864,7 @@ pub mod tests {
         let slot = MAX_ITEMS_PER_CHUNK as Slot;
         let (storages, raw_expected) =
             sample_storages_and_account_in_slot(slot, &accounts_db, INCLUDE_SLOT_IN_HASH_TESTS);
-        let storage_data = vec![(&storages[0], slot)];
+        let storage_data = [(&storages[0], slot)];
 
         let sorted_storages =
             SortedStorages::new_debug(&storage_data[..], 0, MAX_ITEMS_PER_CHUNK as usize + 1);
@@ -14542,7 +14537,7 @@ pub mod tests {
                 })
                 .unwrap();
             assert_eq!(account_info.0, slot);
-            let reclaims = vec![account_info];
+            let reclaims = [account_info];
             accounts_db.remove_dead_accounts(reclaims.iter(), None, None, true);
             let after_size = storage0.alive_bytes.load(Ordering::Acquire);
             assert_eq!(before_size, after_size + account.stored_size());
@@ -16260,7 +16255,7 @@ pub mod tests {
                     &mut purged_stored_account_slots,
                     &pubkeys_removed_from_accounts_index,
                 );
-                for (pk, slots) in vec![(pk1, vec![slot1, slot2]), (pk2, vec![slot1])] {
+                for (pk, slots) in [(pk1, vec![slot1, slot2]), (pk2, vec![slot1])] {
                     let result = purged_stored_account_slots.remove(&pk).unwrap();
                     assert_eq!(result, slots.into_iter().collect::<HashSet<_>>());
                 }
@@ -17742,7 +17737,7 @@ pub mod tests {
         let slot0 = 0;
         let dropped_roots = vec![slot0];
         db.accounts_index.add_root(slot0);
-        db.accounts_index.add_uncleaned_roots([slot0].into_iter());
+        db.accounts_index.add_uncleaned_roots([slot0]);
         assert!(db.accounts_index.is_uncleaned_root(slot0));
         assert!(db.accounts_index.is_alive_root(slot0));
         db.handle_dropped_roots_for_ancient(dropped_roots.into_iter());

@@ -1468,7 +1468,7 @@ fn assert_instruction_count() {
 }
 
 #[test]
-#[cfg(any(feature = "sbf_rust"))]
+#[cfg(feature = "sbf_rust")]
 fn test_program_sbf_instruction_introspection() {
     solana_logger::setup();
 
@@ -3718,7 +3718,7 @@ fn test_program_sbf_realloc_invoke() {
 }
 
 #[test]
-#[cfg(any(feature = "sbf_rust"))]
+#[cfg(feature = "sbf_rust")]
 fn test_program_sbf_processed_inner_instruction() {
     solana_logger::setup();
 

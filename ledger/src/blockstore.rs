@@ -638,7 +638,7 @@ impl Blockstore {
     }
 
     fn recover_shreds(
-        index: &mut Index,
+        index: &Index,
         erasure_meta: &ErasureMeta,
         prev_inserted_shreds: &HashMap<ShredId, Shred>,
         recovered_shreds: &mut Vec<Shred>,
@@ -5409,7 +5409,7 @@ pub mod tests {
         } = Blockstore::open_with_signal(ledger_path.path(), BlockstoreOptions::default()).unwrap();
 
         let entries_per_slot = 10;
-        let slots = vec![2, 5, 10];
+        let slots = [2, 5, 10];
         let mut all_shreds = make_chaining_slot_entries(&slots[..], entries_per_slot);
 
         // Get the shreds for slot 10, chaining to slot 5
@@ -5766,7 +5766,7 @@ pub mod tests {
         assert_eq!(&roots, &blockstore_roots(&blockstore));
 
         // Mark additional root
-        let new_roots = vec![16];
+        let new_roots = [16];
         let roots = vec![0, 2, 4, 6, 8, 10, 12, 16];
         blockstore.set_roots(new_roots.iter()).unwrap();
         assert_eq!(&roots, &blockstore_roots(&blockstore));
@@ -6835,7 +6835,7 @@ pub mod tests {
     fn test_is_skipped() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-        let roots = vec![2, 4, 7, 12, 15];
+        let roots = [2, 4, 7, 12, 15];
         blockstore.set_roots(roots.iter()).unwrap();
 
         for i in 0..20 {
@@ -7032,7 +7032,7 @@ pub mod tests {
                 true,     // merkle_variant
             );
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            blockstore.set_roots(vec![slot].iter()).unwrap();
+            blockstore.set_roots([slot].iter()).unwrap();
         }
         assert_eq!(blockstore.get_first_available_block().unwrap(), 0);
         assert_eq!(blockstore.lowest_slot_with_genesis(), 0);
@@ -7081,7 +7081,7 @@ pub mod tests {
             .insert_shreds(unrooted_shreds, None, false)
             .unwrap();
         blockstore
-            .set_roots(vec![slot - 1, slot, slot + 1].iter())
+            .set_roots([slot - 1, slot, slot + 1].iter())
             .unwrap();
 
         let parent_meta = SlotMeta::default();
@@ -7671,7 +7671,7 @@ pub mod tests {
         let meta3 = SlotMeta::new(3, Some(2));
         blockstore.meta_cf.put(3, &meta3).unwrap();
 
-        blockstore.set_roots(vec![0, 2].iter()).unwrap();
+        blockstore.set_roots([0, 2].iter()).unwrap();
 
         // Initialize index 0, including:
         //   signature2 in non-root and root,
@@ -7854,7 +7854,7 @@ pub mod tests {
         let meta3 = SlotMeta::new(3, Some(2));
         blockstore.meta_cf.put(3, &meta3).unwrap();
 
-        blockstore.set_roots(vec![0, 1, 2, 3].iter()).unwrap();
+        blockstore.set_roots([0, 1, 2, 3].iter()).unwrap();
 
         let lowest_cleanup_slot = 1;
         let lowest_available_slot = lowest_cleanup_slot + 1;
@@ -7971,7 +7971,7 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         blockstore.insert_shreds(shreds, None, false).unwrap();
-        blockstore.set_roots(vec![slot - 1, slot].iter()).unwrap();
+        blockstore.set_roots([slot - 1, slot].iter()).unwrap();
 
         let expected_transactions: Vec<VersionedTransactionWithStatusMeta> = entries
             .iter()
@@ -8237,7 +8237,7 @@ pub mod tests {
                 )
                 .unwrap();
         }
-        blockstore.set_roots(vec![slot0, slot1].iter()).unwrap();
+        blockstore.set_roots([slot0, slot1].iter()).unwrap();
 
         let all0 = blockstore
             .get_confirmed_signatures_for_address(address0, 0, 50)
@@ -8330,7 +8330,7 @@ pub mod tests {
                 )
                 .unwrap();
         }
-        blockstore.set_roots(vec![21, 22, 23, 24].iter()).unwrap();
+        blockstore.set_roots([21, 22, 23, 24].iter()).unwrap();
         let mut past_slot = 0;
         for (slot, _) in blockstore.find_address_signatures(address0, 1, 25).unwrap() {
             assert!(slot >= past_slot);
@@ -8508,9 +8508,7 @@ pub mod tests {
         }
 
         // Leave one slot unrooted to test only returns confirmed signatures
-        blockstore
-            .set_roots(vec![1, 2, 4, 5, 6, 7, 8].iter())
-            .unwrap();
+        blockstore.set_roots([1, 2, 4, 5, 6, 7, 8].iter()).unwrap();
         let highest_super_majority_root = 8;
 
         // Fetch all rooted signatures for address 0 at once...

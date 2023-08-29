@@ -215,7 +215,7 @@ impl AggregateCommitmentService {
                 if *a <= root {
                     commitment
                         .entry(*a)
-                        .or_insert_with(BlockCommitment::default)
+                        .or_default()
                         .increase_rooted_stake(lamports);
                 } else {
                     ancestors_index = i;
@@ -229,7 +229,7 @@ impl AggregateCommitmentService {
             while ancestors[ancestors_index] <= vote.slot() {
                 commitment
                     .entry(ancestors[ancestors_index])
-                    .or_insert_with(BlockCommitment::default)
+                    .or_default()
                     .increase_confirmation_stake(vote.confirmation_count() as usize, lamports);
                 ancestors_index += 1;
 
