@@ -116,7 +116,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
         stats: Arc<BucketMapStats>,
         count: Arc<AtomicU64>,
     ) -> Self {
-        let index = BucketStorage::new(
+        let (index, _file_name) = BucketStorage::new(
             Arc::clone(&drives),
             1,
             std::mem::size_of::<IndexEntry<T>>() as u64,
@@ -569,7 +569,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                 count += 1;
                 // grow relative to the current capacity
                 let new_capacity = (current_capacity * 110 / 100).max(anticipated_size);
-                let mut index = BucketStorage::new_with_capacity(
+                let (mut index, _file_name) = BucketStorage::new_with_capacity(
                     Arc::clone(&self.drives),
                     1,
                     std::mem::size_of::<IndexEntry<T>>() as u64,
@@ -649,14 +649,17 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
         if self.data.get(ix).is_none() {
             for i in self.data.len()..ix {
                 // insert empty data buckets
-                self.add_data_bucket(BucketStorage::new(
-                    Arc::clone(&self.drives),
-                    1 << i,
-                    Self::elem_size(),
-                    self.index.max_search,
-                    Arc::clone(&self.stats.data),
-                    Arc::default(),
-                ));
+                self.add_data_bucket(
+                    BucketStorage::new(
+                        Arc::clone(&self.drives),
+                        1 << i,
+                        Self::elem_size(),
+                        self.index.max_search,
+                        Arc::clone(&self.stats.data),
+                        Arc::default(),
+                    )
+                    .0,
+                );
             }
             self.add_data_bucket(bucket);
         } else {
@@ -671,7 +674,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
     /// grow a data bucket
     /// The application of the new bucket is deferred until the next write lock.
     pub fn grow_data(&self, data_index: u64, current_capacity_pow2: u8) {
-        let new_bucket = BucketStorage::new_resized(
+        let (new_bucket, _file_name) = BucketStorage::new_resized(
             &self.drives,
             self.index.max_search,
             self.data.get(data_index as usize),
@@ -798,6 +801,7 @@ mod tests {
             Arc::default(),
             Arc::default(),
         )
+        .0
     }
 
     #[test]
