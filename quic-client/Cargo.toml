@@ -32,5 +32,6 @@ tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 crossbeam-channel = { workspace = true }
+rayon = { workspace = true }
 solana-logger = { workspace = true }
 solana-perf = { workspace = true }

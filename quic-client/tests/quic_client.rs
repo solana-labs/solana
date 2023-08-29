@@ -3,6 +3,10 @@ mod tests {
     use {
         crossbeam_channel::{unbounded, Receiver},
         log::*,
+        rayon::{
+            iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+            ThreadPool,
+        },
         solana_connection_cache::connection_cache_stats::ConnectionCacheStats,
         solana_perf::packet::PacketBatch,
         solana_quic_client::nonblocking::quic_client::{
@@ -333,7 +337,14 @@ mod tests {
         let tpu_addr = SocketAddr::new(addr, port);
         let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
         let mut clients = Vec::default();
-        for i in 0..8001 {
+
+        let thread_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(512)
+            .thread_name(|i| format!("concame{i:02}"))
+            .build()
+            .unwrap();
+
+        for i in 0..8000 {
             println!("Connection {i}");
             let client = QuicClientConnection::new(
                 Arc::new(QuicLazyInitializedEndpoint::default()),
@@ -343,8 +354,14 @@ mod tests {
 
             // Send a full size packet with single byte writes.
             let num_expected_packets: usize = 1;
-            let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
-            assert!(client.send_data_batch(&packets).await.is_ok());
+
+            thread_pool.install(
+                || {
+                    let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
+                    assert!(client.send_data_batch(&packets).await.is_ok());        
+                }
+            );
+
             clients.push(client);
         }
     }
