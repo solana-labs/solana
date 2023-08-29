@@ -552,6 +552,10 @@ pub mod clean_up_delegation_errors {
     solana_sdk::declare_id!("Bj2jmUsM2iRhfdLLDSTkhM5UQRQvQHm57HSmPibPtEyu");
 }
 
+pub mod revise_turbine_epoch_stakes {
+    solana_sdk::declare_id!("BTWmtJC8U5ZLMbBUUA1k6As62sYjPEjAiNAT55xYGdJU");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -684,6 +688,7 @@ lazy_static! {
         (disable_builtin_loader_ownership_chains::id(), "disable builtin loader ownership chains #29956"),
         (enable_request_heap_frame_ix::id(), "Enable transaction to request heap frame using compute budget instruction #30076"),
         (clean_up_delegation_errors::id(), "Return InsufficientDelegation instead of InsufficientFunds or InsufficientStake where applicable #31206"),
+        (revise_turbine_epoch_stakes::id(), "revise turbine epoch stakes"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -419,7 +419,7 @@ impl<T: 'static> ClusterNodesCache<T> {
         working_bank: &Bank,
         cluster_info: &ClusterInfo,
     ) -> Arc<ClusterNodes<T>> {
-        let epoch = root_bank.get_leader_schedule_epoch(shred_slot);
+        let epoch = get_epoch(shred_slot, root_bank);
         let entry = self.get_cache_entry(epoch);
         // Hold the lock on the entry here so that, if needed, only
         // one thread recomputes cluster-nodes for this epoch.
@@ -434,7 +434,7 @@ impl<T: 'static> ClusterNodesCache<T> {
             .find_map(|bank| bank.epoch_staked_nodes(epoch));
         if epoch_staked_nodes.is_none() {
             inc_new_counter_debug!("cluster_nodes-unknown_epoch_staked_nodes", 1);
-            if epoch != root_bank.get_leader_schedule_epoch(root_bank.slot()) {
+            if epoch != get_epoch(root_bank.slot(), root_bank) {
                 return self.get(root_bank.slot(), root_bank, working_bank, cluster_info);
             }
             inc_new_counter_info!("cluster_nodes-unknown_epoch_staked_nodes_root", 1);
@@ -445,6 +445,18 @@ impl<T: 'static> ClusterNodesCache<T> {
         ));
         *entry = Some((Instant::now(), Arc::clone(&nodes)));
         nodes
+    }
+}
+
+fn get_epoch(shred_slot: Slot, root_bank: &Bank) -> Epoch {
+    if check_feature_activation(
+        &feature_set::revise_turbine_epoch_stakes::id(),
+        shred_slot,
+        root_bank,
+    ) {
+        root_bank.epoch_schedule().get_epoch(shred_slot)
+    } else {
+        root_bank.get_leader_schedule_epoch(shred_slot)
     }
 }
 
