@@ -9263,7 +9263,9 @@ impl AccountsDb {
             let mut index_flush_us = 0;
             let total_duplicate_slot_keys = AtomicU64::default();
             let mut populate_duplicate_keys_us = 0;
-            let unique_pubkeys_by_bin = Mutex::new(Vec::default());
+            // outer vec is accounts index bin (determined by pubkey value)
+            // inner vec is the pubkeys within that bin that are present in > 1 slot
+            let unique_pubkeys_by_bin = Mutex::new(Vec::<Vec<Pubkey>>::default());
             if pass == 0 {
                 // tell accounts index we are done adding the initial accounts at startup
                 let mut m = Measure::start("accounts_index_idle_us");
@@ -9278,8 +9280,8 @@ impl AccountsDb {
                         .populate_and_retrieve_duplicate_keys_from_startup(|slot_keys| {
                             total_duplicate_slot_keys
                                 .fetch_add(slot_keys.len() as u64, Ordering::Relaxed);
-                            let mut unique_keys = HashSet::<Pubkey>::default();
-                            unique_keys.extend(slot_keys.iter().map(|(_, key)| *key));
+                            let unique_keys =
+                                HashSet::<Pubkey>::from_iter(slot_keys.iter().map(|(_, key)| *key));
                             for (slot, key) in slot_keys {
                                 match self.uncleaned_pubkeys.entry(slot) {
                                     Occupied(mut occupied) => occupied.get_mut().push(key),
@@ -9299,6 +9301,7 @@ impl AccountsDb {
                 })
                 .1;
             }
+            let unique_pubkeys_by_bin = unique_pubkeys_by_bin.into_inner().unwrap();
 
             let storage_info_timings = storage_info_timings.into_inner().unwrap();
             let mut timings = GenerateIndexTimings {
@@ -9325,7 +9328,6 @@ impl AccountsDb {
                 Measure::start("handle accounts data len duplicates");
             let uncleaned_roots = Mutex::new(HashSet::<Slot>::default());
             if pass == 0 {
-                let unique_pubkeys_by_bin = unique_pubkeys_by_bin.into_inner().unwrap();
                 let accounts_data_len_from_duplicates = unique_pubkeys_by_bin
                     .par_iter()
                     .map(|unique_keys| {
