@@ -2567,6 +2567,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-range-header"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "add0ab9360ddbd88cfeb3bd9574a1d85cfdfa14db10b3e21d3700dbc4328758f"
+
+[[package]]
 name = "httparse"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3006,7 +3012,7 @@ version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95578de7d6eac4fba42114bc751e38c59a739968769df1be56feba6f17fd148e"
 dependencies = [
- "base64 0.21.2",
+ "base64 0.21.3",
  "bytes",
  "chrono",
  "http",
@@ -3075,7 +3081,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.1",
  "tower",
- "tower-http 0.4.0",
+ "tower-http",
  "tracing",
 ]
 
@@ -6465,6 +6471,7 @@ dependencies = [
  "serial_test",
  "solana-bloom",
  "solana-clap-utils",
+ "solana-clap-v3-utils",
  "solana-client",
  "solana-entry",
  "solana-frozen-abi",
@@ -6473,12 +6480,14 @@ dependencies = [
  "solana-metrics",
  "solana-net-utils",
  "solana-rayon-threadlimit",
+ "solana-sdk",
  "solana-version",
  "solana-vote-program",
  "static_assertions",
  "tar",
  "tempfile",
  "thiserror",
+ "tiny-bip39",
  "tokio",
  "url 2.4.0",
 ]

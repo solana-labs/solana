@@ -28,8 +28,8 @@ pub fn initialize_globals() {
                           // let _ = *RUST_FLAGS;
 }
 
-pub mod config;
 pub mod setup;
+pub mod release;
 pub mod docker;
 
 pub fn get_solana_root() -> PathBuf {

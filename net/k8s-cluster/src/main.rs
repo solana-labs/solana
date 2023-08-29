@@ -1,5 +1,3 @@
-use docker_api::Docker;
-
 use {
     clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     k8s_openapi::{
@@ -19,8 +17,8 @@ use {
     log::*,
     serde_json,
     solana_k8s_cluster::{
-        config::SetupConfig,
-        setup::{BuildConfig, Deploy},
+        setup::{SetupConfig, Genesis},
+        release::{BuildConfig, Deploy},
         docker::{DockerConfig, DockerImageConfig},
     },
     std::{collections::BTreeMap, process, thread, time::Duration},
@@ -142,6 +140,7 @@ async fn main() {
     let setup_config = SetupConfig {
         namespace: matches.value_of("cluster_namespace").unwrap_or_default(),
         num_validators: value_t_or_exit!(matches, "number_of_validators", i32),
+        prebuild_genesis: matches.is_present("prebuild_genesis"),
     };
 
     let build_config = BuildConfig {
@@ -152,6 +151,14 @@ async fn main() {
         profile_build: matches.is_present("profile_build"),
         docker_build: matches.is_present("docker_build"),
     };
+
+    let genesis = Genesis::new(setup_config.clone());
+    genesis.generate();
+
+    
+
+    
+    process::exit(1);
 
     let docker_image_config = DockerImageConfig {
         base_image: matches.value_of("base_image").unwrap_or_default(),
