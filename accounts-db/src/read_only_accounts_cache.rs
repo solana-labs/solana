@@ -118,7 +118,7 @@ impl ReadOnlyAccountsCache {
                 entry.set_index(queue.insert_last(key));
                 entry
                     .last_update_time
-                    .store(ReadOnlyAccountCacheEntry::timestamp(), Ordering::Relaxed);
+                    .store(ReadOnlyAccountCacheEntry::timestamp(), Ordering::Release);
             }
             let account = entry.account.clone();
             drop(entry);
@@ -223,7 +223,7 @@ impl ReadOnlyAccountCacheEntry {
 
     /// ms since `last_update_time` timestamp
     fn ms_since_last_update(&self) -> u32 {
-        Self::timestamp().wrapping_sub(self.last_update_time.load(Ordering::Relaxed))
+        Self::timestamp().wrapping_sub(self.last_update_time.load(Ordering::Acquire))
     }
 }
 
