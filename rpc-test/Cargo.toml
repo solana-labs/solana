@@ -30,7 +30,7 @@ solana-streamer = { workspace = true }
 solana-test-validator = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-transaction-status = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
+tokio = { version = "~1.14.1", features = ["full"] }
 
 [dev-dependencies]
 solana-logger = { workspace = true }
