@@ -331,6 +331,13 @@ pub fn create_program_runtime_environment_v1<'a>(
     Ok(result)
 }
 
+fn address_is_aligned<T>(address: u64) -> bool {
+    (address as *mut T as usize)
+        .checked_rem(align_of::<T>())
+        .map(|rem| rem == 0)
+        .expect("T to be non-zero aligned")
+}
+
 fn translate(
     memory_mapping: &MemoryMapping,
     access_type: AccessType,
@@ -348,7 +355,7 @@ fn translate_type_inner<'a, T>(
 ) -> Result<&'a mut T, Error> {
     let host_addr = translate(memory_mapping, access_type, vm_addr, size_of::<T>() as u64)?;
 
-    if check_aligned && (host_addr as *mut T as usize).wrapping_rem(align_of::<T>()) != 0 {
+    if check_aligned && !address_is_aligned::<T>(host_addr) {
         return Err(SyscallError::UnalignedPointer.into());
     }
     Ok(unsafe { &mut *(host_addr as *mut T) })
@@ -388,7 +395,7 @@ fn translate_slice_inner<'a, T>(
 
     let host_addr = translate(memory_mapping, access_type, vm_addr, total_size)?;
 
-    if check_aligned && (host_addr as *mut T as usize).wrapping_rem(align_of::<T>()) != 0 {
+    if check_aligned && !address_is_aligned::<T>(host_addr) {
         return Err(SyscallError::UnalignedPointer.into());
     }
     Ok(unsafe { from_raw_parts_mut(host_addr as *mut T, len as usize) })
@@ -761,9 +768,11 @@ declare_syscall!(
                     invoke_context.get_check_size(),
                 )?;
                 let cost = compute_budget.mem_op_base_cost.max(
-                    compute_budget
-                        .sha256_byte_cost
-                        .saturating_mul((val.len() as u64).saturating_div(2)),
+                    compute_budget.sha256_byte_cost.saturating_mul(
+                        (val.len() as u64)
+                            .checked_div(2)
+                            .expect("div by non-zero literal"),
+                    ),
                 );
                 consume_compute_meter(invoke_context, cost)?;
                 hasher.hash(bytes);
@@ -824,9 +833,11 @@ declare_syscall!(
                     invoke_context.get_check_size(),
                 )?;
                 let cost = compute_budget.mem_op_base_cost.max(
-                    compute_budget
-                        .sha256_byte_cost
-                        .saturating_mul((val.len() as u64).saturating_div(2)),
+                    compute_budget.sha256_byte_cost.saturating_mul(
+                        (val.len() as u64)
+                            .checked_div(2)
+                            .expect("div by non-zero literal"),
+                    ),
                 );
                 consume_compute_meter(invoke_context, cost)?;
                 hasher.hash(bytes);
@@ -1321,9 +1332,11 @@ declare_syscall!(
                     invoke_context.get_check_size(),
                 )?;
                 let cost = compute_budget.mem_op_base_cost.max(
-                    compute_budget
-                        .sha256_byte_cost
-                        .saturating_mul((val.len() as u64).saturating_div(2)),
+                    compute_budget.sha256_byte_cost.saturating_mul(
+                        (val.len() as u64)
+                            .checked_div(2)
+                            .expect("div by non-zero literal"),
+                    ),
                 );
                 consume_compute_meter(invoke_context, cost)?;
                 hasher.hash(bytes);
@@ -1349,7 +1362,8 @@ declare_syscall!(
         let budget = invoke_context.get_compute_budget();
 
         let cost = len
-            .saturating_div(budget.cpi_bytes_per_unit)
+            .checked_div(budget.cpi_bytes_per_unit)
+            .unwrap_or(u64::MAX)
             .saturating_add(budget.syscall_base_cost);
         consume_compute_meter(invoke_context, cost)?;
 
@@ -1403,7 +1417,8 @@ declare_syscall!(
         if length != 0 {
             let cost = length
                 .saturating_add(size_of::<Pubkey>() as u64)
-                .saturating_div(budget.cpi_bytes_per_unit);
+                .checked_div(budget.cpi_bytes_per_unit)
+                .unwrap_or(u64::MAX);
             consume_compute_meter(invoke_context, cost)?;
 
             let return_data_result = translate_slice_mut::<u8>(
@@ -1636,7 +1651,9 @@ declare_syscall!(
                 ALT_BN128_MULTIPLICATION_OUTPUT_LEN,
             ),
             ALT_BN128_PAIRING => {
-                let ele_len = input_size.saturating_div(ALT_BN128_PAIRING_ELEMENT_LEN as u64);
+                let ele_len = input_size
+                    .checked_div(ALT_BN128_PAIRING_ELEMENT_LEN as u64)
+                    .expect("div by non-zero constant");
                 let cost = budget
                     .alt_bn128_pairing_one_pair_cost_first
                     .saturating_add(
@@ -1732,7 +1749,8 @@ declare_syscall!(
             budget.syscall_base_cost.saturating_add(
                 input_len
                     .saturating_mul(input_len)
-                    .saturating_div(budget.big_modular_exponentiation_cost),
+                    .checked_div(budget.big_modular_exponentiation_cost)
+                    .unwrap_or(u64::MAX),
             ),
         )?;
 
@@ -2405,10 +2423,7 @@ mod tests {
             );
             let address = result.unwrap();
             assert_ne!(address, 0);
-            assert_eq!(
-                (address as *const u8 as usize).wrapping_rem(align_of::<T>()),
-                0
-            );
+            assert!(address_is_aligned::<T>(address));
         }
         aligned::<u8>();
         aligned::<u16>();
@@ -4031,5 +4046,12 @@ mod tests {
     pub fn bytes_of_slice_mut<T>(val: &mut [T]) -> &mut [u8] {
         let size = val.len().wrapping_mul(mem::size_of::<T>());
         unsafe { slice::from_raw_parts_mut(val.as_mut_ptr().cast(), size) }
+    }
+
+    #[test]
+    fn test_address_is_aligned() {
+        for address in 0..std::mem::size_of::<u64>() {
+            assert_eq!(address_is_aligned::<u64>(address as u64), address == 0);
+        }
     }
 }

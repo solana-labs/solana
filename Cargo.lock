@@ -5428,6 +5428,7 @@ dependencies = [
  "bzip2",
  "cargo_metadata",
  "clap 3.2.23",
+ "itertools",
  "log",
  "predicates",
  "regex",
@@ -5454,6 +5455,7 @@ version = "1.17.0"
 dependencies = [
  "cargo_metadata",
  "clap 3.2.23",
+ "itertools",
  "log",
  "solana-logger",
 ]

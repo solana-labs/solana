@@ -183,7 +183,8 @@ pub fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: 
             .saturating_add(PAGE_SIZE_KB.saturating_mul(KIBIBYTE).saturating_sub(1));
     }
     rounded_heap_size
-        .saturating_div(PAGE_SIZE_KB.saturating_mul(KIBIBYTE))
+        .checked_div(PAGE_SIZE_KB.saturating_mul(KIBIBYTE))
+        .expect("PAGE_SIZE_KB * KIBIBYTE > 0")
         .saturating_sub(1)
         .saturating_mul(heap_cost)
 }

@@ -1,3 +1,4 @@
+#![allow(clippy::arithmetic_side_effects)]
 //! Secp256k1Recover Syscall test
 
 extern crate solana_program;
