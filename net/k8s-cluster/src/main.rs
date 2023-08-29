@@ -17,9 +17,9 @@ use {
     log::*,
     serde_json,
     solana_k8s_cluster::{
-        setup::{SetupConfig, Genesis},
-        release::{BuildConfig, Deploy},
         docker::{DockerConfig, DockerImageConfig},
+        release::{BuildConfig, Deploy},
+        setup::{Genesis, SetupConfig},
     },
     std::{collections::BTreeMap, process, thread, time::Duration},
 };
@@ -125,7 +125,6 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("prebuild-genesis")
                 .help("Prebuild gensis. Generates keys for validators and writes to file"),
         )
-        
         .get_matches()
 }
 
@@ -152,12 +151,31 @@ async fn main() {
         docker_build: matches.is_present("docker_build"),
     };
 
-    let genesis = Genesis::new(setup_config.clone());
-    genesis.generate();
+    let mut genesis = Genesis::new(setup_config.clone());
+    // genesis.generate();
+    match genesis.generate_faucet() {
+        Ok(_) => (),
+        Err(err) => {
+            error!("generate faucet error! {}", err);
+            return;
+        }
+    }
+    match genesis.generate_accounts("bootstrap") {
+        Ok(_) => (),
+        Err(err) => {
+            error!("generate accounts error! {}", err);
+            return;
+        }
+    }
 
-    
+    match genesis.generate() {
+        Ok(_) => (),
+        Err(err) => {
+            error!("generate genesis error! {}", err);
+            return;
+        }
+    }
 
-    
     process::exit(1);
 
     let docker_image_config = DockerImageConfig {
@@ -185,7 +203,6 @@ async fn main() {
                     return;
                 }
             }
-    
         }
     }
 

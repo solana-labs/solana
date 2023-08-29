@@ -40,6 +40,8 @@ args=(
                         "$SOLANA_CONFIG_DIR"/bootstrap-validator/vote-account.json
                         "$SOLANA_CONFIG_DIR"/bootstrap-validator/stake-account.json
 )
+echo "ARGS!"
+echo "$args"
 
 "$SOLANA_ROOT"/fetch-spl.sh
 if [[ -r spl-genesis-args.sh ]]; then

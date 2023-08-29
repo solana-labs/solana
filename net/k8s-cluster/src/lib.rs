@@ -28,9 +28,9 @@ pub fn initialize_globals() {
                           // let _ = *RUST_FLAGS;
 }
 
-pub mod setup;
-pub mod release;
 pub mod docker;
+pub mod release;
+pub mod setup;
 
 pub fn get_solana_root() -> PathBuf {
     PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("$CARGO_MANIFEST_DIR"))
