@@ -11,7 +11,6 @@ use {
     },
 };
 
-pub const DEFAULT_IMAGE: &str = "ubuntu:20.04";
 const URI_ENV_VAR: &str = "unix:///var/run/docker.sock";
 
 #[derive(Clone, Debug)]

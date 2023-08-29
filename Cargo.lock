@@ -501,10 +501,6 @@ dependencies = [
  "serde",
  "sync_wrapper",
  "tower",
-<<<<<<< HEAD
- "tower-http 0.3.5",
-=======
->>>>>>> master
  "tower-layer",
  "tower-service",
 ]
@@ -566,6 +562,12 @@ name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
+
+[[package]]
+name = "base64"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ea22880d78093b0cbe17c89f64a7d457941e65759157ec6cb31a31d652b05e5"
 
 [[package]]
 name = "base64"
@@ -2571,6 +2573,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-range-header"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "add0ab9360ddbd88cfeb3bd9574a1d85cfdfa14db10b3e21d3700dbc4328758f"
+
+[[package]]
 name = "httparse"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3010,7 +3018,7 @@ version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95578de7d6eac4fba42114bc751e38c59a739968769df1be56feba6f17fd148e"
 dependencies = [
- "base64 0.21.2",
+ "base64 0.21.3",
  "bytes",
  "chrono",
  "http",
@@ -3079,7 +3087,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.1",
  "tower",
- "tower-http 0.4.0",
+ "tower-http",
  "tracing",
 ]
 
@@ -6435,6 +6443,7 @@ dependencies = [
  "serial_test",
  "solana-bloom",
  "solana-clap-utils",
+ "solana-clap-v3-utils",
  "solana-client",
  "solana-entry",
  "solana-frozen-abi",
@@ -6443,12 +6452,14 @@ dependencies = [
  "solana-metrics",
  "solana-net-utils",
  "solana-rayon-threadlimit",
+ "solana-sdk",
  "solana-version",
  "solana-vote-program",
  "static_assertions",
  "tar",
  "tempfile",
  "thiserror",
+ "tiny-bip39",
  "tokio",
  "url 2.4.0",
 ]
@@ -8586,26 +8597,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-name = "tower-http"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f873044bf02dd1e8239e9c1293ea39dad76dc594ec16185d0a1bf31d8dc8d858"
-dependencies = [
- "bitflags 1.3.2",
- "bytes",
- "futures-core",
- "futures-util",
- "http",
- "http-body",
- "http-range-header",
- "pin-project-lite",
- "tower",
- "tower-layer",
- "tower-service",
-]
-
-[[package]]
 name = "tower-http"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8627,8 +8618,6 @@ dependencies = [
 ]
 
 [[package]]
-=======
->>>>>>> master
 name = "tower-layer"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

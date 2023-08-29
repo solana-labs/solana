@@ -44,6 +44,7 @@ serde_derive = { workspace = true }
 serde_json = { workspace = true }
 solana-bloom = { workspace = true }
 solana-clap-utils = { workspace = true }
+solana-clap-v3-utils = { workspace = true }
 solana-client = { workspace = true }
 solana-entry = { workspace = true }
 solana-frozen-abi = { workspace = true }
@@ -52,12 +53,14 @@ solana-logger = { workspace = true }
 solana-metrics = { workspace = true }
 solana-net-utils = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
+solana-sdk = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 static_assertions = { workspace = true }
 tar = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
+tiny-bip39 = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 url = { workspace = true }
 
