@@ -282,7 +282,7 @@ pub mod stake_deactivate_delinquent_instruction {
 }
 
 pub mod stake_redelegate_instruction {
-    solana_sdk::declare_id!("3EPmAX94PvVJCjMeFfRFvj4avqCPL8vv3TGsZQg7ydMx");
+    solana_sdk::declare_id!("GUrp5BKMyDazsAp9mBoVD6orE5ihXNRPC3jkBRfx6Lq7");
 }
 
 pub mod vote_withdraw_authority_may_change_authorized_voter {
