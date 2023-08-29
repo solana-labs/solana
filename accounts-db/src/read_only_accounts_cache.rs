@@ -25,7 +25,7 @@ type ReadOnlyCacheKey = (Pubkey, Slot);
 struct ReadOnlyAccountCacheEntry {
     account: AccountSharedData,
     /// Index of the entry in the eviction queue.
-    index: AtomicU32, // Index of the entry in the eviction queue.
+    index: AtomicU32,
     /// lower bits of last timestamp when eviction queue was updated, in ms
     last_update_time: AtomicU32,
 }
