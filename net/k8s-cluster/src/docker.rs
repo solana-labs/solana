@@ -1,13 +1,13 @@
 use {
     crate::{boxed_error, initialize_globals, SOLANA_ROOT},
-    docker_api::{self, Docker, opts},
+    docker_api::{self, opts, Docker},
     log::*,
     std::{
         env,
-        path::PathBuf,
         error::Error,
         fs,
-        process::{Command, Stdio, Output},
+        path::PathBuf,
+        process::{Command, Output, Stdio},
     },
 };
 
@@ -25,10 +25,7 @@ pub struct DockerConfig<'a> {
 }
 
 impl<'a> DockerConfig<'a> {
-    pub fn new(
-        image_config: DockerImageConfig<'a>, 
-        deploy_method: &'a str
-    ) -> Self {
+    pub fn new(image_config: DockerImageConfig<'a>, deploy_method: &'a str) -> Self {
         initialize_globals();
         DockerConfig {
             image_config,
@@ -76,7 +73,7 @@ impl<'a> DockerConfig<'a> {
                     error!("Failed to build base image");
                     return Err(boxed_error!(String::from_utf8_lossy(&res.stderr)));
                 }
-            },
+            }
             Err(err) => return Err(err),
         };
     }
@@ -98,7 +95,7 @@ impl<'a> DockerConfig<'a> {
                     .build(),
             )
             .await;
-    
+
         let docker_path = SOLANA_ROOT.join(format!("{}/{}", "docker-build", validator_type));
 
         let dockerfile_path = match self.create_dockerfile(validator_type, docker_path, None) {
@@ -114,7 +111,10 @@ impl<'a> DockerConfig<'a> {
         // so we result to using std::process::Command
         let dockerfile = dockerfile_path.join("Dockerfile");
         let context_path = SOLANA_ROOT.display().to_string();
-        let command = format!("docker build -t {} -f {:?} {}", tag, dockerfile, context_path);
+        let command = format!(
+            "docker build -t {} -f {:?} {}",
+            tag, dockerfile, context_path
+        );
         match Command::new("sh")
             .arg("-c")
             .arg(&command)
@@ -133,10 +133,13 @@ impl<'a> DockerConfig<'a> {
         &self,
         validator_type: &str,
         docker_path: PathBuf,
-        content: Option<&str>
-    ) -> Result<PathBuf, Box<dyn std::error::Error>>  {
+        content: Option<&str>,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         if !(validator_type != "validator" || validator_type != "bootstrap") {
-            return Err(boxed_error!(format!("Invalid validator type: {}. Exiting...", validator_type)));
+            return Err(boxed_error!(format!(
+                "Invalid validator type: {}. Exiting...",
+                validator_type
+            )));
         }
 
         if docker_path.exists() {
@@ -149,11 +152,11 @@ impl<'a> DockerConfig<'a> {
         } else {
             "farf"
         };
-        
+
         // SOLANA_ROOT.
         //TODO: implement SKIP
         let dockerfile = format!(
-r#" 
+            r#" 
 FROM {}             
 RUN apt-get update
 RUN apt-get install -y iputils-ping curl vim bzip2 
@@ -174,7 +177,8 @@ ENV PATH="/home/solana/.cargo/bin:${{PATH}}"
 
 WORKDIR /home/solana
 "#,
-        self.image_config.base_image);
+            self.image_config.base_image
+        );
 
         info!("dockerfile: {}", dockerfile);
 
@@ -185,7 +189,6 @@ WORKDIR /home/solana
         .expect("saved Dockerfile");
         Ok(docker_path)
     }
-    
 }
 
 // RUN apt install -y iputils-ping curl vim bzip2 psmisc \
