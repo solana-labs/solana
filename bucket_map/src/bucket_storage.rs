@@ -137,7 +137,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         max_search: MaxSearch,
         stats: Arc<BucketStats>,
         count: Arc<AtomicU64>,
-    ) -> Self {
+    ) -> (Self, u128) {
         let offset = O::offset_to_first_data();
         let size_of_u64 = std::mem::size_of::<u64>();
         assert_eq!(
@@ -147,16 +147,19 @@ impl<O: BucketOccupied> BucketStorage<O> {
         );
         let cell_size = elem_size * num_elems + offset as u64;
         let bytes = Self::allocate_to_fill_page(&mut capacity, cell_size);
-        let (mmap, path) = Self::new_map(&drives, bytes, &stats);
-        Self {
-            path,
-            mmap,
-            cell_size,
-            count,
-            stats,
-            max_search,
-            contents: O::new(capacity),
-        }
+        let (mmap, path, file_name) = Self::new_map(&drives, bytes, &stats);
+        (
+            Self {
+                path,
+                mmap,
+                cell_size,
+                count,
+                stats,
+                max_search,
+                contents: O::new(capacity),
+            },
+            file_name,
+        )
     }
 
     fn allocate_to_fill_page(capacity: &mut Capacity, cell_size: u64) -> u64 {
@@ -187,7 +190,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         max_search: MaxSearch,
         stats: Arc<BucketStats>,
         count: Arc<AtomicU64>,
-    ) -> Self {
+    ) -> (Self, u128) {
         Self::new_with_capacity(
             drives,
             num_elems,
@@ -335,11 +338,12 @@ impl<O: BucketOccupied> BucketStorage<O> {
     }
 
     /// allocate a new memory mapped file of size `bytes` on one of `drives`
-    fn new_map(drives: &[PathBuf], bytes: u64, stats: &BucketStats) -> (MmapMut, PathBuf) {
+    fn new_map(drives: &[PathBuf], bytes: u64, stats: &BucketStats) -> (MmapMut, PathBuf, u128) {
         let mut measure_new_file = Measure::start("measure_new_file");
         let r = thread_rng().gen_range(0..drives.len());
         let drive = &drives[r];
-        let pos = format!("{}", thread_rng().gen_range(0..u128::MAX),);
+        let file_random = thread_rng().gen_range(0..u128::MAX);
+        let pos = format!("{}", file_random,);
         let file = drive.join(pos);
         let mut data = OpenOptions::new()
             .read(true)
@@ -368,7 +372,11 @@ impl<O: BucketOccupied> BucketStorage<O> {
         data.flush().unwrap(); // can we skip this?
         measure_flush.stop();
         let mut measure_mmap = Measure::start("measure_mmap");
-        let res = (unsafe { MmapMut::map_mut(&data).unwrap() }, file);
+        let res = (
+            unsafe { MmapMut::map_mut(&data).unwrap() },
+            file,
+            file_random,
+        );
         measure_mmap.stop();
         stats
             .new_file_us
@@ -433,8 +441,8 @@ impl<O: BucketOccupied> BucketStorage<O> {
         num_elems: u64,
         elem_size: u64,
         stats: &Arc<BucketStats>,
-    ) -> Self {
-        let mut new_bucket = Self::new_with_capacity(
+    ) -> (Self, u128) {
+        let (mut new_bucket, file_name) = Self::new_with_capacity(
             Arc::clone(drives),
             num_elems,
             elem_size,
@@ -449,7 +457,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
             new_bucket.copy_contents(bucket);
         }
         new_bucket.update_max_size();
-        new_bucket
+        (new_bucket, file_name)
     }
 
     /// Return the number of bytes currently allocated
@@ -484,7 +492,8 @@ mod test {
             1,
             Arc::default(),
             Arc::default(),
-        );
+        )
+        .0;
         let ix = 0;
         assert!(storage.is_free(ix));
         assert!(storage.occupy(ix, false).is_ok());
