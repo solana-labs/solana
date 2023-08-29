@@ -1243,14 +1243,7 @@ pub mod test {
         let conn2 = make_client_endpoint(&server_address, None).await;
         let mut s1 = conn1.open_uni().await.unwrap();
         let s2 = conn2.open_uni().await;
-        if s2.is_err() {
-            // It has been noticed if there is already connection open against the server, this open_uni can fail
-            // with ApplicationClosed(ApplicationClose) error due to CONNECTION_CLOSE_CODE_TOO_MANY before writing to
-            // the stream -- expect it.
-            let s2 = s2.err().unwrap();
-            assert!(matches!(s2, quinn::ConnectionError::ApplicationClosed(_)));
-        } else {
-            let mut s2 = s2.unwrap();
+        if let Ok(mut s2) = s2 {
             s1.write_all(&[0u8]).await.unwrap();
             s1.finish().await.unwrap();
             // Send enough data to create more than 1 chunks.
@@ -1263,6 +1256,12 @@ pub mod test {
             s2.finish()
                 .await
                 .expect_err("shouldn't be able to open 2 connections");
+        } else {
+            // It has been noticed if there is already connection open against the server, this open_uni can fail
+            // with ApplicationClosed(ApplicationClose) error due to CONNECTION_CLOSE_CODE_TOO_MANY before writing to
+            // the stream -- expect it.
+            let s2 = s2.err().unwrap();
+            assert!(matches!(s2, quinn::ConnectionError::ApplicationClosed(_)));
         }
     }
 
