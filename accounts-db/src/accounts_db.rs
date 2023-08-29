@@ -1877,7 +1877,6 @@ struct FlushStats {
 struct LatestAccountsIndexRootsStats {
     roots_len: AtomicUsize,
     uncleaned_roots_len: AtomicUsize,
-    previous_uncleaned_roots_len: AtomicUsize,
     roots_range: AtomicU64,
     rooted_cleaned_count: AtomicUsize,
     unrooted_cleaned_count: AtomicUsize,
@@ -1892,10 +1891,6 @@ impl LatestAccountsIndexRootsStats {
         }
         if let Some(value) = accounts_index_roots_stats.uncleaned_roots_len {
             self.uncleaned_roots_len.store(value, Ordering::Relaxed);
-        }
-        if let Some(value) = accounts_index_roots_stats.previous_uncleaned_roots_len {
-            self.previous_uncleaned_roots_len
-                .store(value, Ordering::Relaxed);
         }
         if let Some(value) = accounts_index_roots_stats.roots_range {
             self.roots_range.store(value, Ordering::Relaxed);
@@ -1929,11 +1924,6 @@ impl LatestAccountsIndexRootsStats {
             (
                 "uncleaned_roots_len",
                 self.uncleaned_roots_len.load(Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "previous_uncleaned_roots_len",
-                self.previous_uncleaned_roots_len.load(Ordering::Relaxed) as i64,
                 i64
             ),
             (

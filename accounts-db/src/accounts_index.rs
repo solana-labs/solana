@@ -451,7 +451,6 @@ pub struct RootsTracker {
     /// Range is approximately the last N slots where N is # slots per epoch.
     pub alive_roots: RollingBitField,
     uncleaned_roots: HashSet<Slot>,
-    previous_uncleaned_roots: HashSet<Slot>,
 }
 
 impl Default for RootsTracker {
@@ -468,7 +467,6 @@ impl RootsTracker {
         Self {
             alive_roots: RollingBitField::new(max_width),
             uncleaned_roots: HashSet::new(),
-            previous_uncleaned_roots: HashSet::new(),
         }
     }
 
@@ -481,7 +479,6 @@ impl RootsTracker {
 pub struct AccountsIndexRootsStats {
     pub roots_len: Option<usize>,
     pub uncleaned_roots_len: Option<usize>,
-    pub previous_uncleaned_roots_len: Option<usize>,
     pub roots_range: Option<u64>,
     pub rooted_cleaned_count: usize,
     pub unrooted_cleaned_count: usize,
@@ -1896,23 +1893,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     pub fn clean_dead_slot(&self, slot: Slot) -> bool {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         let removed_from_unclean_roots = w_roots_tracker.uncleaned_roots.remove(&slot);
-        let removed_from_previous_uncleaned_roots =
-            w_roots_tracker.previous_uncleaned_roots.remove(&slot);
         if !w_roots_tracker.alive_roots.remove(&slot) {
             if removed_from_unclean_roots {
                 error!("clean_dead_slot-removed_from_unclean_roots: {}", slot);
                 inc_new_counter_error!("clean_dead_slot-removed_from_unclean_roots", 1, 1);
-            }
-            if removed_from_previous_uncleaned_roots {
-                error!(
-                    "clean_dead_slot-removed_from_previous_uncleaned_roots: {}",
-                    slot
-                );
-                inc_new_counter_error!(
-                    "clean_dead_slot-removed_from_previous_uncleaned_roots",
-                    1,
-                    1
-                );
             }
             false
         } else {
@@ -1926,7 +1910,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         let roots_tracker = self.roots_tracker.read().unwrap();
         stats.roots_len = Some(roots_tracker.alive_roots.len());
         stats.uncleaned_roots_len = Some(roots_tracker.uncleaned_roots.len());
-        stats.previous_uncleaned_roots_len = Some(roots_tracker.previous_uncleaned_roots.len());
         stats.roots_range = Some(roots_tracker.alive_roots.range_width());
     }
 
@@ -1947,7 +1930,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             // Only keep the slots that have yet to be cleaned
             !is_cleaned
         });
-        w_roots_tracker.previous_uncleaned_roots = cleaned_roots;
     }
 
     pub fn num_alive_roots(&self) -> usize {
@@ -2962,68 +2944,23 @@ pub mod tests {
         index.add_uncleaned_roots([0, 1].into_iter());
         assert_eq!(2, index.roots_tracker.read().unwrap().uncleaned_roots.len());
 
-        assert_eq!(
-            0,
-            index
-                .roots_tracker
-                .read()
-                .unwrap()
-                .previous_uncleaned_roots
-                .len()
-        );
         index.reset_uncleaned_roots(None);
         assert_eq!(2, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(0, index.roots_tracker.read().unwrap().uncleaned_roots.len());
-        assert_eq!(
-            2,
-            index
-                .roots_tracker
-                .read()
-                .unwrap()
-                .previous_uncleaned_roots
-                .len()
-        );
 
         index.add_root(2);
         index.add_root(3);
         index.add_uncleaned_roots([2, 3].into_iter());
         assert_eq!(4, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(2, index.roots_tracker.read().unwrap().uncleaned_roots.len());
-        assert_eq!(
-            2,
-            index
-                .roots_tracker
-                .read()
-                .unwrap()
-                .previous_uncleaned_roots
-                .len()
-        );
 
         index.clean_dead_slot(1);
         assert_eq!(3, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(2, index.roots_tracker.read().unwrap().uncleaned_roots.len());
-        assert_eq!(
-            1,
-            index
-                .roots_tracker
-                .read()
-                .unwrap()
-                .previous_uncleaned_roots
-                .len()
-        );
 
         index.clean_dead_slot(2);
         assert_eq!(2, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(1, index.roots_tracker.read().unwrap().uncleaned_roots.len());
-        assert_eq!(
-            1,
-            index
-                .roots_tracker
-                .read()
-                .unwrap()
-                .previous_uncleaned_roots
-                .len()
-        );
     }
 
     #[test]
