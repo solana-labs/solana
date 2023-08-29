@@ -9246,19 +9246,18 @@ impl AccountsDb {
             index_time.stop();
 
             info!("rent_collector: {:?}", rent_collector);
-            let mut min_bin_size = usize::MAX;
-            let mut max_bin_size = usize::MIN;
-            let total_items = self
+            let (total_items, min_bin_size, max_bin_size) = self
                 .accounts_index
                 .account_maps
                 .iter()
-                .map(|map_bin| {
-                    let len = map_bin.len_for_stats();
-                    min_bin_size = std::cmp::min(min_bin_size, len);
-                    max_bin_size = std::cmp::max(max_bin_size, len);
-                    len
-                })
-                .sum();
+                .map(|map_bin| map_bin.len_for_stats())
+                .fold((0, usize::MAX, usize::MIN), |acc, len| {
+                    (
+                        acc.0 + len,
+                        std::cmp::min(acc.1, len),
+                        std::cmp::max(acc.2, len),
+                    )
+                });
 
             let mut index_flush_us = 0;
             let total_duplicate_slot_keys = AtomicU64::default();
