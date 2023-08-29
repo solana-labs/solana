@@ -32,7 +32,7 @@ solana-sdk = { workspace = true }
 solana-storage-proto = { workspace = true }
 solana-transaction-status = { workspace = true }
 thiserror = { workspace = true }
-tokio = { version = "1.14.1" }
+tokio = { workspace = true }
 tonic = { workspace = true, features = ["tls", "transport"] }
 zstd = { workspace = true }
 

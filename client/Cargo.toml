@@ -34,7 +34,7 @@ solana-thin-client = { workspace = true }
 solana-tpu-client = { workspace = true, features = ["default"] }
 solana-udp-client = { workspace = true }
 thiserror = { workspace = true }
-tokio = { version = "1.14.1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 crossbeam-channel = { workspace = true }
