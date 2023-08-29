@@ -333,7 +333,8 @@ mod tests {
         let tpu_addr = SocketAddr::new(addr, port);
         let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
         let mut clients = Vec::default();
-        for _i in 0..9 {
+        for i in 0..8001 {
+            println!("Connection {i}");
             let client = QuicClientConnection::new(
                 Arc::new(QuicLazyInitializedEndpoint::default()),
                 tpu_addr,
