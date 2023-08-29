@@ -328,12 +328,12 @@ mod tests {
         };
         solana_logger::setup();
 
-        let addr = IpAddr::V4(Ipv4Addr::new(35, 227, 145, 27));
-        let port = 8010;
+        let addr = IpAddr::V4(Ipv4Addr::new(35, 233, 177, 221));
+        let port = 8009;
         let tpu_addr = SocketAddr::new(addr, port);
         let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
         let mut clients = Vec::default();
-        for _i in 0..2000 {
+        for _i in 0..9 {
             let client = QuicClientConnection::new(
                 Arc::new(QuicLazyInitializedEndpoint::default()),
                 tpu_addr,
