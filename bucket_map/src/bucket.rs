@@ -282,34 +282,26 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
     /// for each item in `items`, get the hash value when hashed with `random`.
     /// Return a vec of tuples:
     /// (hash_value, key, value)
-    fn index_entries(
-        items: impl Iterator<Item = (Pubkey, T)>,
-        count: usize,
-        random: u64,
-    ) -> Vec<(u64, Pubkey, T)> {
-        let mut inserts = Vec::with_capacity(count);
-        items.for_each(|(key, v)| {
+    fn index_entries(items: &[(Pubkey, T)], random: u64) -> Vec<(u64, usize)> {
+        let mut inserts = Vec::with_capacity(items.len());
+        items.iter().enumerate().for_each(|(i, (key, _v))| {
             let ix = Self::bucket_index_ix(&key, random);
-            inserts.push((ix, key, v));
+            inserts.push((ix, i));
         });
         inserts
     }
 
     /// insert all of `items` into the index.
     /// return duplicates
-    pub(crate) fn batch_insert_non_duplicates(
-        &mut self,
-        items: impl Iterator<Item = (Pubkey, T)>,
-        count: usize,
-    ) -> Vec<(Pubkey, T, T)> {
+    pub(crate) fn batch_insert_non_duplicates(&mut self, items: &[(Pubkey, T)]) -> Vec<(usize, T)> {
         assert!(
             !self.at_least_one_entry_deleted,
             "efficient batch insertion can only occur prior to any deletes"
         );
         let current_len = self.index.count.load(Ordering::Relaxed);
-        let anticipated = count as u64;
+        let anticipated = items.len() as u64;
         self.set_anticipated_count((anticipated).saturating_add(current_len));
-        let mut entries = Self::index_entries(items, count, self.random);
+        let mut entries = Self::index_entries(items, self.random);
         let mut duplicates = Vec::default();
         // insert, but resizes may be necessary
         loop {
@@ -322,6 +314,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
             let result = Self::batch_insert_non_duplicates_internal(
                 &mut self.index,
                 &self.data,
+                items,
                 &mut entries,
                 &mut duplicates,
             );
@@ -330,7 +323,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                     // everything added
                     self.set_anticipated_count(0);
                     self.index.count.fetch_add(
-                        count.saturating_sub(duplicates.len()) as u64,
+                        items.len().saturating_sub(duplicates.len()) as u64,
                         Ordering::Relaxed,
                     );
                     return duplicates;
@@ -352,15 +345,17 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
     pub fn batch_insert_non_duplicates_internal(
         index: &mut BucketStorage<IndexBucket<T>>,
         data_buckets: &[BucketStorage<DataBucket>],
-        reverse_sorted_entries: &mut Vec<(u64, Pubkey, T)>,
-        duplicates: &mut Vec<(Pubkey, T, T)>,
+        items: &[(Pubkey, T)],
+        reverse_sorted_entries: &mut Vec<(u64, usize)>,
+        duplicates: &mut Vec<(usize, T)>,
     ) -> Result<(), BucketMapError> {
         let max_search = index.max_search();
         let cap = index.capacity();
         let search_end = max_search.min(cap);
 
         // pop one entry at a time to insert
-        'outer: while let Some((ix_entry_raw, k, v)) = reverse_sorted_entries.pop() {
+        'outer: while let Some((ix_entry_raw, i)) = reverse_sorted_entries.pop() {
+            let (k, v) = &items[i];
             let ix_entry = ix_entry_raw % cap;
             // search for an empty spot starting at `ix_entry`
             for search in 0..search_end {
@@ -378,17 +373,17 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                     continue 'outer; // this 'insertion' is completed: inserted successfully
                 } else {
                     // occupied, see if the key already exists here
-                    if elem.key(index) == &k {
+                    if elem.key(index) == k {
                         let (v_existing, _ref_count_existing) =
                             elem.read_value(index, data_buckets);
-                        duplicates.push((k, v, *v_existing.first().unwrap()));
+                        duplicates.push((i, *v_existing.first().unwrap()));
                         continue 'outer; // this 'insertion' is completed: found a duplicate entry
                     }
                 }
             }
             // search loop ended without finding a spot to insert this key
             // so, remember the item we were trying to insert for next time after resizing
-            reverse_sorted_entries.push((ix_entry_raw, k, v));
+            reverse_sorted_entries.push((ix_entry_raw, i));
             return Err(BucketMapError::IndexNoSpace(cap));
         }
 

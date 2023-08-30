@@ -103,7 +103,7 @@ pub struct InMemAccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<
     flushing_active: AtomicBool,
 
     /// info to streamline initial index generation
-    startup_info: StartupInfo<T>,
+    startup_info: StartupInfo<T, U>,
 
     /// possible evictions for next few slots coming up
     possible_evictions: RwLock<PossibleEvictions<T>>,
@@ -140,9 +140,9 @@ struct StartupInfoDuplicates<T: IndexValue> {
 }
 
 #[derive(Default, Debug)]
-struct StartupInfo<T: IndexValue> {
+struct StartupInfo<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     /// entries to add next time we are flushing to disk
-    insert: Mutex<Vec<(Pubkey, (Slot, T))>>,
+    insert: Mutex<Vec<(Pubkey, (Slot, U))>>,
     /// pubkeys with more than 1 entry
     duplicates: Mutex<StartupInfoDuplicates<T>>,
 }
@@ -681,7 +681,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         // todo: avoid reallocs and just allocate another vec instead of likely resizing this one over and over
         items
             .into_iter()
-            .for_each(|(k, (slot, v))| insert.push((k, (slot, v))));
+            .for_each(|(k, (slot, v))| insert.push((k, (slot, v.into()))));
     }
 
     pub fn insert_new_entry_if_missing_with_lock(
@@ -1070,19 +1070,15 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         // merge all items into the disk index now
         let disk = self.bucket.as_ref().unwrap();
         let mut count = insert.len() as u64;
-        for (k, entry, duplicate_entry) in disk.batch_insert_non_duplicates(
-            insert
-                .into_iter()
-                .map(|(k, (slot, v))| (k, (slot, v.into()))),
-            count as usize,
-        ) {
-            duplicates.duplicates.push((entry.0, k, entry.1.into()));
+        for (i, duplicate_entry) in disk.batch_insert_non_duplicates(&insert) {
+            let (k, entry) = &insert[i];
+            duplicates.duplicates.push((entry.0, *k, entry.1.into()));
             // accurately account for there being a duplicate for the first entry that was previously added to the disk index.
             // That entry could not have known yet that it was a duplicate.
             // It is important to capture each slot with a duplicate because of slot limits applied to clean.
             duplicates
                 .duplicates_put_on_disk
-                .insert((duplicate_entry.0, k));
+                .insert((duplicate_entry.0, *k));
             count -= 1;
         }
 
