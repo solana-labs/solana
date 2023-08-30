@@ -5372,6 +5372,7 @@ dependencies = [
  "log",
  "memoffset 0.9.0",
  "rand 0.8.5",
+ "scopeguard",
  "solana-measure",
  "solana-program-runtime",
  "solana-sdk",
