@@ -621,6 +621,8 @@ struct GenerateIndexTimings {
     pub accounts_data_len_dedup_time_us: u64,
     pub total_duplicate_slot_keys: u64,
     pub populate_duplicate_keys_us: u64,
+    pub total_slots: u64,
+    pub slots_to_clean: u64,
 }
 
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -688,6 +690,8 @@ impl GenerateIndexTimings {
                 self.populate_duplicate_keys_us as i64,
                 i64
             ),
+            ("total_slots", self.total_slots, i64),
+            ("slots_to_clean", self.slots_to_clean, i64),
         );
     }
 }
@@ -9312,6 +9316,7 @@ impl AccountsDb {
                 storage_size_accounts_map_us: storage_info_timings.storage_size_accounts_map_us,
                 storage_size_accounts_map_flatten_us: storage_info_timings
                     .storage_size_accounts_map_flatten_us,
+                total_slots: slots.len() as u64,
                 ..GenerateIndexTimings::default()
             };
 
@@ -9350,8 +9355,10 @@ impl AccountsDb {
             accounts_data_len_dedup_timer.stop();
             timings.accounts_data_len_dedup_time_us = accounts_data_len_dedup_timer.as_us();
 
+            let uncleaned_roots = uncleaned_roots.into_inner().unwrap();
+            timings.slots_to_clean = uncleaned_roots.len() as u64;
+
             if pass == 0 {
-                let uncleaned_roots = uncleaned_roots.into_inner().unwrap();
                 // Need to add these last, otherwise older updates will be cleaned
                 for root in &slots {
                     self.accounts_index.add_root(*root);
