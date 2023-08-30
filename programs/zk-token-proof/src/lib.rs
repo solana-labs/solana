@@ -134,6 +134,11 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
 
     match instruction {
         ProofInstruction::CloseContextState => {
+            if native_programs_consume_cu {
+                invoke_context
+                    .consume_checked(3_300)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            }
             ic_msg!(invoke_context, "CloseContextState");
             process_close_proof_context(invoke_context)
         }
