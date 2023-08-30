@@ -125,7 +125,7 @@ impl<T: Clone + Copy + PartialEq + std::fmt::Debug> BucketApi<T> {
     }
 
     /// batch insert of `items`. Assumption is a single slot list element and ref_count == 1.
-    /// For any pubkeys that already exist, the failed insertion data and the existing data are returned.
+    /// For any pubkeys that already exist, the index in `items` of the failed insertion and the existing data (previously put in the index) are returned.
     pub fn batch_insert_non_duplicates(&self, items: &[(Pubkey, T)]) -> Vec<(usize, T)> {
         let mut bucket = self.get_write_bucket();
         bucket.as_mut().unwrap().batch_insert_non_duplicates(items)
