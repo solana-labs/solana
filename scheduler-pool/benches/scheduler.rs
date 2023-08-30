@@ -107,8 +107,8 @@ fn run_bench<
         ..
     } = create_genesis_config(1_000_000_000);
     let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
-    let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-    let pool = SchedulerPool::new(None, None, None, _ignored_prioritization_fee_cache);
+    let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+    let pool = SchedulerPool::new(None, None, None, ignored_prioritization_fee_cache);
     let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
 
     let mut scheduler = create_scheduler(pool, context.clone());
@@ -144,8 +144,8 @@ mod blocking_ref {
             ..
         } = create_genesis_config(1_000_000_000);
         let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-        let pool = SchedulerPool::new(None, None, None, _ignored_prioritization_fee_cache);
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let pool = SchedulerPool::new(None, None, None, ignored_prioritization_fee_cache);
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
 
         let mut scheduler = PooledScheduler::<_, DefaultScheduleExecutionArg>::spawn(
@@ -594,8 +594,8 @@ mod thread_utilization {
             TransactionWithIndexForBench::new((tx0, index))
         };
 
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-        let pool = SchedulerPool::new(None, None, None, _ignored_prioritization_fee_cache);
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let pool = SchedulerPool::new(None, None, None, ignored_prioritization_fee_cache);
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
         let mut scheduler =
             NonblockingScheduler::spawn(pool, context.clone(), WORKER_THREAD_COUNT, SleepyHandler);
@@ -876,8 +876,8 @@ mod thread_utilization {
             TransactionWithIndexForBench::new((tx0, 0))
         };
 
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-        let pool = SchedulerPool::new(None, None, None, _ignored_prioritization_fee_cache);
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let pool = SchedulerPool::new(None, None, None, ignored_prioritization_fee_cache);
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
         let (completion_sender, completion_receiver) = crossbeam_channel::unbounded();
         let handler = SleepyHandlerWithCompletionSignal(completion_sender);

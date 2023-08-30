@@ -266,7 +266,7 @@ pub fn load_and_process_ledger(
         BlockVerificationMethod::UnifiedScheduler => {
             let no_transaction_status_sender = None;
             let no_replay_vote_sender = None::<ReplayVoteSender>;
-            let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+            let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
             bank_forks
                 .write()
                 .unwrap()
@@ -274,7 +274,7 @@ pub fn load_and_process_ledger(
                     process_options.runtime_config.log_messages_bytes_limit,
                     no_transaction_status_sender,
                     no_replay_vote_sender,
-                    _ignored_prioritization_fee_cache,
+                    ignored_prioritization_fee_cache,
                 ));
         }
     }

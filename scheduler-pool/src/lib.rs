@@ -344,9 +344,9 @@ mod tests {
     fn test_scheduler_pool_new() {
         solana_logger::setup();
 
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
-            DefaultSchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+            DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
 
         // this indirectly proves that there should be circular link because there's only one Arc
         // at this moment now
@@ -359,9 +359,9 @@ mod tests {
     fn test_scheduler_spawn() {
         solana_logger::setup();
 
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
-            DefaultSchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+            DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank);
         let scheduler = pool.take_from_pool(context);
@@ -374,9 +374,9 @@ mod tests {
     fn test_scheduler_pool_filo() {
         solana_logger::setup();
 
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
-            DefaultSchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+            DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
@@ -407,9 +407,9 @@ mod tests {
     fn test_scheduler_pool_context_drop_unless_reinitialized() {
         solana_logger::setup();
 
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
-            DefaultSchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+            DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
@@ -432,9 +432,9 @@ mod tests {
     fn test_scheduler_pool_context_replace() {
         solana_logger::setup();
 
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
-            DefaultSchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+            DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
         let old_bank = &Arc::new(Bank::default_for_tests());
         let new_bank = &Arc::new(Bank::default_for_tests());
         assert!(!Arc::ptr_eq(old_bank, new_bank));
@@ -463,9 +463,9 @@ mod tests {
 
         let bank = Bank::default_for_tests();
         let mut bank_forks = BankForks::new(bank);
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
-            DefaultSchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+            DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
         bank_forks.install_scheduler_pool(pool);
     }
 
@@ -477,9 +477,9 @@ mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let child_bank = Bank::new_from_parent(bank.clone(), &Pubkey::default(), 1);
 
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
-            DefaultSchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+            DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
 
         let bank = Bank::default_for_tests();
         let mut bank_forks = BankForks::new(bank);
@@ -517,9 +517,9 @@ mod tests {
             genesis_config.hash(),
         ));
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
-            DefaultSchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+            DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
 
         assert_eq!(bank.transaction_count(), 0);
@@ -547,9 +547,9 @@ mod tests {
             genesis_config.hash(),
         ));
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
-            DefaultSchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+            DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
 
         assert_eq!(bank.transaction_count(), 0);
@@ -719,12 +719,12 @@ mod tests {
         }
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
 
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::<
             AsyncScheduler<TRIGGER_RACE_CONDITION>,
             DefaultTransactionHandler,
             DefaultScheduleExecutionArg,
-        >::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+        >::new_dyn(None, None, None, ignored_prioritization_fee_cache);
         let scheduler = pool.take_from_pool(context);
 
         let bank = BankWithScheduler::new_for_test(bank, Some(scheduler));

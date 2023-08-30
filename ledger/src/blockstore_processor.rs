@@ -4658,7 +4658,7 @@ pub mod tests {
         };
 
         let mut batch_execution_timing = BatchExecutionTiming::default();
-        let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
+        let ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
         assert!(process_batches(
             &bank,
             &[batch_with_indexes],
@@ -4666,7 +4666,7 @@ pub mod tests {
             None,
             &mut batch_execution_timing,
             None,
-            &_ignored_prioritization_fee_cache
+            &ignored_prioritization_fee_cache
         )
         .is_ok());
     }
