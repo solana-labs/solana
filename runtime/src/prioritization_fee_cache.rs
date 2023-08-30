@@ -4,17 +4,18 @@ use {
         transaction_priority_details::GetTransactionPriorityDetails,
     },
     crossbeam_channel::{unbounded, Receiver, Sender},
+    dashmap::DashMap,
     log::*,
     lru::LruCache,
     solana_measure::measure,
     solana_sdk::{
-        clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::SanitizedTransaction,
+        clock::{BankId, Slot}, pubkey::Pubkey, saturating_add_assign, transaction::SanitizedTransaction,
     },
     std::{
         collections::HashMap,
         sync::{
             atomic::{AtomicU64, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, RwLock,
         },
         thread::{Builder, JoinHandle},
     },
@@ -36,9 +37,6 @@ struct PrioritizationFeeCacheMetrics {
     // Accumulated time spent on acquiring cache write lock.
     total_cache_lock_elapsed_us: AtomicU64,
 
-    // Accumulated time spent on acquiring each block entry's lock..
-    total_entry_lock_elapsed_us: AtomicU64,
-
     // Accumulated time spent on updating block prioritization fees.
     total_entry_update_elapsed_us: AtomicU64,
 
@@ -59,11 +57,6 @@ impl PrioritizationFeeCacheMetrics {
 
     fn accumulate_total_cache_lock_elapsed_us(&self, val: u64) {
         self.total_cache_lock_elapsed_us
-            .fetch_add(val, Ordering::Relaxed);
-    }
-
-    fn accumulate_total_entry_lock_elapsed_us(&self, val: u64) {
-        self.total_entry_lock_elapsed_us
             .fetch_add(val, Ordering::Relaxed);
     }
 
@@ -98,11 +91,6 @@ impl PrioritizationFeeCacheMetrics {
                 i64
             ),
             (
-                "total_entry_lock_elapsed_us",
-                self.total_entry_lock_elapsed_us.swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
                 "total_entry_update_elapsed_us",
                 self.total_entry_update_elapsed_us
                     .swap(0, Ordering::Relaxed) as i64,
@@ -121,20 +109,26 @@ impl PrioritizationFeeCacheMetrics {
 enum CacheServiceUpdate {
     TransactionUpdate {
         slot: Slot,
+        bank_id: BankId,
         transaction_fee: u64,
         writable_accounts: Arc<Vec<Pubkey>>,
     },
     BankFrozen {
         slot: Slot,
+        bank_id: BankId,
     },
     Exit,
 }
+
+/// Potentially there are more than one bank that updates Prioritization Fee
+/// for a slot. The updates are tracked and finalized by bank_id.
+type SlotPrioritizationFee = DashMap<BankId, PrioritizationFee>;
 
 /// Stores up to MAX_NUM_RECENT_BLOCKS recent block's prioritization fee,
 /// A separate internal thread `service_thread` handles additional tasks when a bank is frozen,
 /// and collecting stats and reporting metrics.
 pub struct PrioritizationFeeCache {
-    cache: Arc<RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>>,
+    cache: Arc<RwLock<LruCache<Slot, Arc<SlotPrioritizationFee>>>>,
     service_thread: Option<JoinHandle<()>>,
     sender: Sender<CacheServiceUpdate>,
     metrics: Arc<PrioritizationFeeCacheMetrics>,
@@ -184,14 +178,14 @@ impl PrioritizationFeeCache {
 
     /// Get prioritization fee entry, create new entry if necessary
     fn get_prioritization_fee(
-        cache: Arc<RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>>,
+        cache: Arc<RwLock<LruCache<Slot, Arc<SlotPrioritizationFee>>>>,
         slot: &Slot,
-    ) -> Arc<Mutex<PrioritizationFee>> {
+    ) -> Arc<SlotPrioritizationFee> {
         let mut cache = cache.write().unwrap();
         match cache.get(slot) {
             Some(entry) => Arc::clone(entry),
             None => {
-                let entry = Arc::new(Mutex::new(PrioritizationFee::default()));
+                let entry = Arc::new(SlotPrioritizationFee::default());
                 cache.put(*slot, Arc::clone(&entry));
                 entry
             }
@@ -241,6 +235,7 @@ impl PrioritizationFeeCache {
                     self.sender
                         .send(CacheServiceUpdate::TransactionUpdate {
                             slot: bank.slot(),
+                            bank_id: bank.bank_id(),
                             transaction_fee: priority_details.priority,
                             writable_accounts,
                         })
@@ -264,9 +259,9 @@ impl PrioritizationFeeCache {
 
     /// Finalize prioritization fee when it's bank is completely replayed from blockstore,
     /// by pruning irrelevant accounts to save space, and marking its availability for queries.
-    pub fn finalize_priority_fee(&self, slot: Slot) {
+    pub fn finalize_priority_fee(&self, slot: Slot, bank_id: BankId) {
         self.sender
-            .send(CacheServiceUpdate::BankFrozen { slot })
+            .send(CacheServiceUpdate::BankFrozen { slot, bank_id })
             .unwrap_or_else(|err| {
                 warn!(
                     "prioritization fee cache signalling bank frozen failed: {:?}",
@@ -278,53 +273,57 @@ impl PrioritizationFeeCache {
     /// Internal function is invoked by worker thread to update slot's minimum prioritization fee,
     /// Cache lock contends here.
     fn update_cache(
-        cache: Arc<RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>>,
+        cache: Arc<RwLock<LruCache<Slot, Arc<SlotPrioritizationFee>>>>,
         slot: &Slot,
+        bank_id: &BankId,
         transaction_fee: u64,
         writable_accounts: Arc<Vec<Pubkey>>,
         metrics: Arc<PrioritizationFeeCacheMetrics>,
     ) {
-        let (block_prioritization_fee, cache_lock_time) =
+        let (slot_prioritization_fee, cache_lock_time) =
             measure!(Self::get_prioritization_fee(cache, slot), "cache_lock_time");
 
-        let (mut block_prioritization_fee, entry_lock_time) =
-            measure!(block_prioritization_fee.lock().unwrap(), "entry_lock_time");
-
-        let (_, entry_update_time) = measure!(
-            block_prioritization_fee.update(transaction_fee, &writable_accounts),
+        let (_, entry_update_time) = measure!({
+            let mut block_prioritization_fee = slot_prioritization_fee
+                .entry(*bank_id)
+                .or_insert(PrioritizationFee::default());
+            block_prioritization_fee.update(transaction_fee, &writable_accounts) },
             "entry_update_time"
         );
         metrics.accumulate_total_cache_lock_elapsed_us(cache_lock_time.as_us());
-        metrics.accumulate_total_entry_lock_elapsed_us(entry_lock_time.as_us());
         metrics.accumulate_total_entry_update_elapsed_us(entry_update_time.as_us());
     }
 
     fn finalize_slot(
-        cache: Arc<RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>>,
+        cache: Arc<RwLock<LruCache<Slot, Arc<SlotPrioritizationFee>>>>,
         slot: &Slot,
+        bank_id: &BankId,
         metrics: Arc<PrioritizationFeeCacheMetrics>,
     ) {
-        let (block_prioritization_fee, cache_lock_time) =
+        let (slot_prioritization_fee, cache_lock_time) =
             measure!(Self::get_prioritization_fee(cache, slot), "cache_lock_time");
-
-        let (mut block_prioritization_fee, entry_lock_time) =
-            measure!(block_prioritization_fee.lock().unwrap(), "entry_lock_time");
 
         // prune cache by evicting write account entry from prioritization fee if its fee is less
         // or equal to block's minimum transaction fee, because they are irrelevant in calculating
         // block minimum fee.
-        let (_, slot_finalize_time) = measure!(
-            block_prioritization_fee.mark_block_completed(),
+        let (_, slot_finalize_time) = measure!( {
+            // retain prioritization fee for OC-ed bank
+            slot_prioritization_fee.retain(|id, _| id == bank_id);
+            let mut block_prioritization_fee = slot_prioritization_fee
+                .entry(*bank_id)
+                .or_insert(PrioritizationFee::default());
+            let result = block_prioritization_fee.mark_block_completed();
+            block_prioritization_fee.report_metrics(*slot);
+            result
+            },
             "slot_finalize_time"
         );
-        block_prioritization_fee.report_metrics(*slot);
         metrics.accumulate_total_cache_lock_elapsed_us(cache_lock_time.as_us());
-        metrics.accumulate_total_entry_lock_elapsed_us(entry_lock_time.as_us());
         metrics.accumulate_total_block_finalize_elapsed_us(slot_finalize_time.as_us());
     }
 
     fn service_loop(
-        cache: Arc<RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>>,
+        cache: Arc<RwLock<LruCache<Slot, Arc<SlotPrioritizationFee>>>>,
         receiver: Receiver<CacheServiceUpdate>,
         metrics: Arc<PrioritizationFeeCacheMetrics>,
     ) {
@@ -332,17 +331,19 @@ impl PrioritizationFeeCache {
             match update {
                 CacheServiceUpdate::TransactionUpdate {
                     slot,
+                    bank_id,
                     transaction_fee,
                     writable_accounts,
                 } => Self::update_cache(
                     cache.clone(),
                     &slot,
+                    &bank_id,
                     transaction_fee,
                     writable_accounts,
                     metrics.clone(),
                 ),
-                CacheServiceUpdate::BankFrozen { slot } => {
-                    Self::finalize_slot(cache.clone(), &slot, metrics.clone());
+                CacheServiceUpdate::BankFrozen { slot, bank_id } => {
+                    Self::finalize_slot(cache.clone(), &slot, &bank_id, metrics.clone());
 
                     metrics.report(slot);
                 }
@@ -359,7 +360,7 @@ impl PrioritizationFeeCache {
             .read()
             .unwrap()
             .iter()
-            .filter(|(_slot, prioritization_fee)| prioritization_fee.lock().unwrap().is_finalized())
+            .filter(|(_slot, slot_prioritization_fee)| slot_prioritization_fee.iter().any(|prioritization_fee| prioritization_fee.is_finalized()))
             .count()
     }
 
@@ -368,8 +369,8 @@ impl PrioritizationFeeCache {
             .read()
             .unwrap()
             .iter()
-            .filter_map(|(slot, prioritization_fee)| {
-                let prioritization_fee_read = prioritization_fee.lock().unwrap();
+            .filter_map(|(slot, slot_prioritization_fee)| {
+                slot_prioritization_fee.iter().find_map(|prioritization_fee_read| {
                 prioritization_fee_read.is_finalized().then(|| {
                     let mut fee = prioritization_fee_read
                         .get_min_transaction_fee()
@@ -382,6 +383,7 @@ impl PrioritizationFeeCache {
                         }
                     }
                     Some((*slot, fee))
+                })
                 })
             })
             .flatten()
