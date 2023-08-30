@@ -1,4 +1,3 @@
-pub use crate::legacy_contact_info::LegacyContactInfo;
 use {
     crate::crds_value::MAX_WALLCLOCK,
     matches::{assert_matches, debug_assert_matches},
@@ -19,21 +18,27 @@ use {
     },
     thiserror::Error,
 };
+pub use {
+    crate::legacy_contact_info::LegacyContactInfo, solana_client::connection_cache::Protocol,
+};
+
+pub const SOCKET_ADDR_UNSPECIFIED: SocketAddr =
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), /*port:*/ 0u16);
 
 const SOCKET_TAG_GOSSIP: u8 = 0;
-const SOCKET_TAG_REPAIR: u8 = 1;
 const SOCKET_TAG_RPC: u8 = 2;
 const SOCKET_TAG_RPC_PUBSUB: u8 = 3;
 const SOCKET_TAG_SERVE_REPAIR: u8 = 4;
+const SOCKET_TAG_SERVE_REPAIR_QUIC: u8 = 1;
 const SOCKET_TAG_TPU: u8 = 5;
 const SOCKET_TAG_TPU_FORWARDS: u8 = 6;
 const SOCKET_TAG_TPU_FORWARDS_QUIC: u8 = 7;
 const SOCKET_TAG_TPU_QUIC: u8 = 8;
 const SOCKET_TAG_TPU_VOTE: u8 = 9;
 const SOCKET_TAG_TVU: u8 = 10;
-const SOCKET_TAG_TVU_FORWARDS: u8 = 11;
+const SOCKET_TAG_TVU_QUIC: u8 = 11;
 const_assert_eq!(SOCKET_CACHE_SIZE, 12);
-const SOCKET_CACHE_SIZE: usize = SOCKET_TAG_TVU_FORWARDS as usize + 1usize;
+const SOCKET_CACHE_SIZE: usize = SOCKET_TAG_TVU_QUIC as usize + 1usize;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -61,7 +66,7 @@ pub enum Error {
     UnusedIpAddr(IpAddr),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, AbiExample, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ContactInfo {
     pubkey: Pubkey,
     #[serde(with = "serde_varint")]
@@ -77,6 +82,8 @@ pub struct ContactInfo {
     // All sockets have a unique key and a valid IP address index.
     #[serde(with = "short_vec")]
     sockets: Vec<SocketEntry>,
+    #[serde(with = "short_vec")]
+    extensions: Vec<Extension>,
     #[serde(skip_serializing)]
     cache: [SocketAddr; SOCKET_CACHE_SIZE],
 }
@@ -88,6 +95,9 @@ struct SocketEntry {
     #[serde(with = "serde_varint")]
     offset: u16, // Port offset with respect to the previous entry.
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+enum Extension {}
 
 // As part of deserialization, self.addrs and self.sockets should be cross
 // verified and self.cache needs to be populated. This type serves as a
@@ -105,12 +115,25 @@ struct ContactInfoLite {
     addrs: Vec<IpAddr>,
     #[serde(with = "short_vec")]
     sockets: Vec<SocketEntry>,
+    #[serde(with = "short_vec")]
+    extensions: Vec<Extension>,
 }
 
 macro_rules! get_socket {
     ($name:ident, $key:ident) => {
         pub fn $name(&self) -> Result<SocketAddr, Error> {
             let socket = self.cache[usize::from($key)];
+            sanitize_socket(&socket)?;
+            Ok(socket)
+        }
+    };
+    ($name:ident, $udp:ident, $quic:ident) => {
+        pub fn $name(&self, protocol: Protocol) -> Result<SocketAddr, Error> {
+            let key = match protocol {
+                Protocol::QUIC => $quic,
+                Protocol::UDP => $udp,
+            };
+            let socket = self.cache[usize::from(key)];
             sanitize_socket(&socket)?;
             Ok(socket)
         }
@@ -167,7 +190,8 @@ impl ContactInfo {
             version: solana_version::Version::default(),
             addrs: Vec::<IpAddr>::default(),
             sockets: Vec::<SocketEntry>::default(),
-            cache: [socket_addr_unspecified(); SOCKET_CACHE_SIZE],
+            extensions: Vec::<Extension>::default(),
+            cache: [SOCKET_ADDR_UNSPECIFIED; SOCKET_CACHE_SIZE],
         }
     }
 
@@ -199,23 +223,27 @@ impl ContactInfo {
     }
 
     get_socket!(gossip, SOCKET_TAG_GOSSIP);
-    get_socket!(repair, SOCKET_TAG_REPAIR);
     get_socket!(rpc, SOCKET_TAG_RPC);
     get_socket!(rpc_pubsub, SOCKET_TAG_RPC_PUBSUB);
-    get_socket!(serve_repair, SOCKET_TAG_SERVE_REPAIR);
-    get_socket!(tpu, SOCKET_TAG_TPU);
-    get_socket!(tpu_forwards, SOCKET_TAG_TPU_FORWARDS);
-    get_socket!(tpu_forwards_quic, SOCKET_TAG_TPU_FORWARDS_QUIC);
-    get_socket!(tpu_quic, SOCKET_TAG_TPU_QUIC);
+    get_socket!(
+        serve_repair,
+        SOCKET_TAG_SERVE_REPAIR,
+        SOCKET_TAG_SERVE_REPAIR_QUIC
+    );
+    get_socket!(tpu, SOCKET_TAG_TPU, SOCKET_TAG_TPU_QUIC);
+    get_socket!(
+        tpu_forwards,
+        SOCKET_TAG_TPU_FORWARDS,
+        SOCKET_TAG_TPU_FORWARDS_QUIC
+    );
     get_socket!(tpu_vote, SOCKET_TAG_TPU_VOTE);
-    get_socket!(tvu, SOCKET_TAG_TVU);
-    get_socket!(tvu_forwards, SOCKET_TAG_TVU_FORWARDS);
+    get_socket!(tvu, SOCKET_TAG_TVU, SOCKET_TAG_TVU_QUIC);
 
     set_socket!(set_gossip, SOCKET_TAG_GOSSIP);
-    set_socket!(set_repair, SOCKET_TAG_REPAIR);
     set_socket!(set_rpc, SOCKET_TAG_RPC);
     set_socket!(set_rpc_pubsub, SOCKET_TAG_RPC_PUBSUB);
     set_socket!(set_serve_repair, SOCKET_TAG_SERVE_REPAIR);
+    set_socket!(set_serve_repair_quic, SOCKET_TAG_SERVE_REPAIR_QUIC);
     set_socket!(set_tpu, SOCKET_TAG_TPU, SOCKET_TAG_TPU_QUIC);
     set_socket!(
         set_tpu_forwards,
@@ -224,17 +252,20 @@ impl ContactInfo {
     );
     set_socket!(set_tpu_vote, SOCKET_TAG_TPU_VOTE);
     set_socket!(set_tvu, SOCKET_TAG_TVU);
-    set_socket!(set_tvu_forwards, SOCKET_TAG_TVU_FORWARDS);
+    set_socket!(set_tvu_quic, SOCKET_TAG_TVU_QUIC);
 
-    remove_socket!(remove_serve_repair, SOCKET_TAG_SERVE_REPAIR);
+    remove_socket!(
+        remove_serve_repair,
+        SOCKET_TAG_SERVE_REPAIR,
+        SOCKET_TAG_SERVE_REPAIR_QUIC
+    );
     remove_socket!(remove_tpu, SOCKET_TAG_TPU, SOCKET_TAG_TPU_QUIC);
     remove_socket!(
         remove_tpu_forwards,
         SOCKET_TAG_TPU_FORWARDS,
         SOCKET_TAG_TPU_FORWARDS_QUIC
     );
-    remove_socket!(remove_tvu, SOCKET_TAG_TVU);
-    remove_socket!(remove_tvu_forwards, SOCKET_TAG_TVU_FORWARDS);
+    remove_socket!(remove_tvu, SOCKET_TAG_TVU, SOCKET_TAG_TVU_QUIC);
 
     #[cfg(test)]
     fn get_socket(&self, key: u8) -> Result<SocketAddr, Error> {
@@ -313,7 +344,7 @@ impl ContactInfo {
             }
             self.maybe_remove_addr(entry.index);
             if let Some(entry) = self.cache.get_mut(usize::from(key)) {
-                *entry = socket_addr_unspecified();
+                *entry = SOCKET_ADDR_UNSPECIFIED;
             }
         }
     }
@@ -340,8 +371,7 @@ impl ContactInfo {
         let mut node = Self::new(*pubkey, wallclock, /*shred_version:*/ 0u16);
         node.set_gossip((Ipv4Addr::LOCALHOST, 8000)).unwrap();
         node.set_tvu((Ipv4Addr::LOCALHOST, 8001)).unwrap();
-        node.set_tvu_forwards((Ipv4Addr::LOCALHOST, 8002)).unwrap();
-        node.set_repair((Ipv4Addr::LOCALHOST, 8007)).unwrap();
+        node.set_tvu_quic((Ipv4Addr::LOCALHOST, 8002)).unwrap();
         node.set_tpu((Ipv4Addr::LOCALHOST, 8003)).unwrap(); // quic: 8009
         node.set_tpu_forwards((Ipv4Addr::LOCALHOST, 8004)).unwrap(); // quic: 8010
         node.set_tpu_vote((Ipv4Addr::LOCALHOST, 8005)).unwrap();
@@ -350,6 +380,8 @@ impl ContactInfo {
         node.set_rpc_pubsub((Ipv4Addr::LOCALHOST, DEFAULT_RPC_PUBSUB_PORT))
             .unwrap();
         node.set_serve_repair((Ipv4Addr::LOCALHOST, 8008)).unwrap();
+        node.set_serve_repair_quic((Ipv4Addr::LOCALHOST, 8006))
+            .unwrap();
         node
     }
 
@@ -364,8 +396,7 @@ impl ContactInfo {
         let (addr, port) = (socket.ip(), socket.port());
         node.set_gossip((addr, port + 1)).unwrap();
         node.set_tvu((addr, port + 2)).unwrap();
-        node.set_tvu_forwards((addr, port + 3)).unwrap();
-        node.set_repair((addr, port + 4)).unwrap();
+        node.set_tvu_quic((addr, port + 3)).unwrap();
         node.set_tpu((addr, port)).unwrap(); // quic: port + 6
         node.set_tpu_forwards((addr, port + 5)).unwrap(); // quic: port + 11
         node.set_tpu_vote((addr, port + 7)).unwrap();
@@ -373,6 +404,7 @@ impl ContactInfo {
         node.set_rpc_pubsub((addr, DEFAULT_RPC_PUBSUB_PORT))
             .unwrap();
         node.set_serve_repair((addr, port + 8)).unwrap();
+        node.set_serve_repair_quic((addr, port + 4)).unwrap();
         node
     }
 }
@@ -399,6 +431,7 @@ impl TryFrom<ContactInfoLite> for ContactInfo {
             version,
             addrs,
             sockets,
+            extensions,
         } = node;
         sanitize_entries(&addrs, &sockets)?;
         let mut node = ContactInfo {
@@ -409,19 +442,18 @@ impl TryFrom<ContactInfoLite> for ContactInfo {
             version,
             addrs,
             sockets,
-            cache: [socket_addr_unspecified(); SOCKET_CACHE_SIZE],
+            extensions,
+            cache: [SOCKET_ADDR_UNSPECIFIED; SOCKET_CACHE_SIZE],
         };
         // Populate node.cache.
         let mut port = 0u16;
         for &SocketEntry { key, index, offset } in &node.sockets {
             port += offset;
-            let entry = match node.cache.get_mut(usize::from(key)) {
-                None => continue,
-                Some(entry) => entry,
+            let Some(entry) = node.cache.get_mut(usize::from(key)) else {
+                continue;
             };
-            let addr = match node.addrs.get(usize::from(index)) {
-                None => continue,
-                Some(&addr) => addr,
+            let Some(&addr) = node.addrs.get(usize::from(index)) else {
+                continue;
             };
             let socket = SocketAddr::new(addr, port);
             if sanitize_socket(&socket).is_ok() {
@@ -441,41 +473,7 @@ impl Sanitize for ContactInfo {
     }
 }
 
-impl TryFrom<&ContactInfo> for LegacyContactInfo {
-    type Error = Error;
-
-    fn try_from(node: &ContactInfo) -> Result<Self, Self::Error> {
-        macro_rules! unwrap_socket {
-            ($name:ident) => {
-                node.$name().ok().unwrap_or_else(socket_addr_unspecified)
-            };
-        }
-        sanitize_quic_offset(&node.tpu().ok(), &node.tpu_quic().ok())?;
-        sanitize_quic_offset(&node.tpu_forwards().ok(), &node.tpu_forwards_quic().ok())?;
-        Ok(Self {
-            id: *node.pubkey(),
-            gossip: unwrap_socket!(gossip),
-            tvu: unwrap_socket!(tvu),
-            tvu_forwards: unwrap_socket!(tvu_forwards),
-            repair: unwrap_socket!(repair),
-            tpu: unwrap_socket!(tpu),
-            tpu_forwards: unwrap_socket!(tpu_forwards),
-            tpu_vote: unwrap_socket!(tpu_vote),
-            rpc: unwrap_socket!(rpc),
-            rpc_pubsub: unwrap_socket!(rpc_pubsub),
-            serve_repair: unwrap_socket!(serve_repair),
-            wallclock: node.wallclock(),
-            shred_version: node.shred_version(),
-        })
-    }
-}
-
-// Workaround until feature(const_socketaddr) is stable.
-fn socket_addr_unspecified() -> SocketAddr {
-    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), /*port:*/ 0u16)
-}
-
-fn sanitize_socket(socket: &SocketAddr) -> Result<(), Error> {
+pub(crate) fn sanitize_socket(socket: &SocketAddr) -> Result<(), Error> {
     if socket.port() == 0u16 {
         return Err(Error::InvalidPort(socket.port()));
     }
@@ -529,9 +527,7 @@ fn sanitize_entries(addrs: &[IpAddr], sockets: &[SocketEntry]) -> Result<(), Err
     // Verify that port offsets don't overflow.
     if sockets
         .iter()
-        .fold(Some(0u16), |offset, entry| {
-            offset?.checked_add(entry.offset)
-        })
+        .try_fold(0u16, |offset, entry| offset.checked_add(entry.offset))
         .is_none()
     {
         return Err(Error::PortOffsetsOverflow);
@@ -540,7 +536,7 @@ fn sanitize_entries(addrs: &[IpAddr], sockets: &[SocketEntry]) -> Result<(), Err
 }
 
 // Verifies that the other socket is at QUIC_PORT_OFFSET from the first one.
-fn sanitize_quic_offset(
+pub(crate) fn sanitize_quic_offset(
     socket: &Option<SocketAddr>, // udp
     other: &Option<SocketAddr>,  // quic: udp + QUIC_PORT_OFFSET
 ) -> Result<(), Error> {
@@ -550,7 +546,7 @@ fn sanitize_quic_offset(
 }
 
 // Returns the socket at QUIC_PORT_OFFSET from the given one.
-fn get_quic_socket(socket: &SocketAddr) -> Result<SocketAddr, Error> {
+pub(crate) fn get_quic_socket(socket: &SocketAddr) -> Result<SocketAddr, Error> {
     Ok(SocketAddr::new(
         socket.ip(),
         socket
@@ -558,6 +554,23 @@ fn get_quic_socket(socket: &SocketAddr) -> Result<SocketAddr, Error> {
             .checked_add(QUIC_PORT_OFFSET)
             .ok_or_else(|| Error::InvalidPort(socket.port()))?,
     ))
+}
+
+#[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+impl solana_frozen_abi::abi_example::AbiExample for ContactInfo {
+    fn example() -> Self {
+        Self {
+            pubkey: Pubkey::example(),
+            wallclock: u64::example(),
+            outset: u64::example(),
+            shred_version: u16::example(),
+            version: solana_version::Version::example(),
+            addrs: Vec::<IpAddr>::example(),
+            sockets: Vec::<SocketEntry>::example(),
+            extensions: vec![],
+            cache: <[SocketAddr; SOCKET_CACHE_SIZE]>::example(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -596,7 +609,7 @@ mod tests {
     fn new_rand_port<R: Rng>(rng: &mut R) -> u16 {
         let port = rng.gen::<u16>();
         let bits = u16::BITS - port.leading_zeros();
-        let shift = rng.gen_range(0u32, bits + 1u32);
+        let shift = rng.gen_range(0u32..bits + 1u32);
         port.checked_shr(shift).unwrap_or_default()
     }
 
@@ -664,8 +677,8 @@ mod tests {
                 .iter()
                 .map(|&key| SocketEntry {
                     key,
-                    index: rng.gen_range(0u8, addrs.len() as u8),
-                    offset: rng.gen_range(0u16, u16::MAX / 64),
+                    index: rng.gen_range(0u8..addrs.len() as u8),
+                    offset: rng.gen_range(0u16..u16::MAX / 64),
                 })
                 .collect();
             assert_matches!(
@@ -678,8 +691,8 @@ mod tests {
                 .iter()
                 .map(|&key| SocketEntry {
                     key,
-                    index: rng.gen_range(0u8, addrs.len() as u8),
-                    offset: rng.gen_range(0u16, u16::MAX / 256),
+                    index: rng.gen_range(0u8..addrs.len() as u8),
+                    offset: rng.gen_range(0u16..u16::MAX / 256),
                 })
                 .collect();
             assert_matches!(sanitize_entries(&addrs, &sockets), Ok(()));
@@ -699,13 +712,14 @@ mod tests {
             version: solana_version::Version::default(),
             addrs: Vec::default(),
             sockets: Vec::default(),
-            cache: [socket_addr_unspecified(); SOCKET_CACHE_SIZE],
+            extensions: Vec::default(),
+            cache: [SOCKET_ADDR_UNSPECIFIED; SOCKET_CACHE_SIZE],
         };
         let mut sockets = HashMap::<u8, SocketAddr>::new();
         for _ in 0..1 << 14 {
             let addr = addrs.choose(&mut rng).unwrap();
             let socket = SocketAddr::new(*addr, new_rand_port(&mut rng));
-            let key = rng.gen_range(KEYS.start, KEYS.end);
+            let key = rng.gen_range(KEYS.start..KEYS.end);
             if sanitize_socket(&socket).is_ok() {
                 sockets.insert(key, socket);
                 assert_matches!(node.set_socket(key, socket), Ok(()));
@@ -719,42 +733,51 @@ mod tests {
                 if usize::from(key) < SOCKET_CACHE_SIZE {
                     assert_eq!(
                         &node.cache[usize::from(key)],
-                        socket.unwrap_or(&socket_addr_unspecified())
+                        socket.unwrap_or(&SOCKET_ADDR_UNSPECIFIED)
                     )
                 }
             }
             assert_eq!(node.gossip().ok().as_ref(), sockets.get(&SOCKET_TAG_GOSSIP));
-            assert_eq!(node.repair().ok().as_ref(), sockets.get(&SOCKET_TAG_REPAIR));
             assert_eq!(node.rpc().ok().as_ref(), sockets.get(&SOCKET_TAG_RPC));
             assert_eq!(
                 node.rpc_pubsub().ok().as_ref(),
                 sockets.get(&SOCKET_TAG_RPC_PUBSUB)
             );
             assert_eq!(
-                node.serve_repair().ok().as_ref(),
+                node.serve_repair(Protocol::UDP).ok().as_ref(),
                 sockets.get(&SOCKET_TAG_SERVE_REPAIR)
             );
-            assert_eq!(node.tpu().ok().as_ref(), sockets.get(&SOCKET_TAG_TPU));
             assert_eq!(
-                node.tpu_forwards().ok().as_ref(),
+                node.serve_repair(Protocol::QUIC).ok().as_ref(),
+                sockets.get(&SOCKET_TAG_SERVE_REPAIR_QUIC)
+            );
+            assert_eq!(
+                node.tpu(Protocol::UDP).ok().as_ref(),
+                sockets.get(&SOCKET_TAG_TPU)
+            );
+            assert_eq!(
+                node.tpu(Protocol::QUIC).ok().as_ref(),
+                sockets.get(&SOCKET_TAG_TPU_QUIC)
+            );
+            assert_eq!(
+                node.tpu_forwards(Protocol::UDP).ok().as_ref(),
                 sockets.get(&SOCKET_TAG_TPU_FORWARDS)
             );
             assert_eq!(
-                node.tpu_forwards_quic().ok().as_ref(),
+                node.tpu_forwards(Protocol::QUIC).ok().as_ref(),
                 sockets.get(&SOCKET_TAG_TPU_FORWARDS_QUIC)
-            );
-            assert_eq!(
-                node.tpu_quic().ok().as_ref(),
-                sockets.get(&SOCKET_TAG_TPU_QUIC)
             );
             assert_eq!(
                 node.tpu_vote().ok().as_ref(),
                 sockets.get(&SOCKET_TAG_TPU_VOTE)
             );
-            assert_eq!(node.tvu().ok().as_ref(), sockets.get(&SOCKET_TAG_TVU));
             assert_eq!(
-                node.tvu_forwards().ok().as_ref(),
-                sockets.get(&SOCKET_TAG_TVU_FORWARDS)
+                node.tvu(Protocol::UDP).ok().as_ref(),
+                sockets.get(&SOCKET_TAG_TVU)
+            );
+            assert_eq!(
+                node.tvu(Protocol::QUIC).ok().as_ref(),
+                sockets.get(&SOCKET_TAG_TVU_QUIC)
             );
             // Assert that all IP addresses are unique.
             assert_eq!(
@@ -802,27 +825,56 @@ mod tests {
 
     fn cross_verify_with_legacy(node: &ContactInfo) {
         let old = LegacyContactInfo::try_from(node).unwrap();
-        assert_eq!(old.gossip, node.gossip().unwrap());
-        assert_eq!(old.repair, node.repair().unwrap());
-        assert_eq!(old.rpc, node.rpc().unwrap());
-        assert_eq!(old.rpc_pubsub, node.rpc_pubsub().unwrap());
-        assert_eq!(old.serve_repair, node.serve_repair().unwrap());
-        assert_eq!(old.tpu, node.tpu().unwrap());
-        assert_eq!(old.tpu_forwards, node.tpu_forwards().unwrap());
+        assert_eq!(old.gossip().unwrap(), node.gossip().unwrap());
+        assert_eq!(old.rpc().unwrap(), node.rpc().unwrap());
+        assert_eq!(old.rpc_pubsub().unwrap(), node.rpc_pubsub().unwrap());
         assert_eq!(
-            node.tpu_forwards_quic().unwrap(),
+            old.serve_repair(Protocol::QUIC).unwrap(),
+            node.serve_repair(Protocol::QUIC).unwrap()
+        );
+        assert_eq!(
+            old.serve_repair(Protocol::UDP).unwrap(),
+            node.serve_repair(Protocol::UDP).unwrap()
+        );
+        assert_eq!(
+            old.tpu(Protocol::QUIC).unwrap(),
+            node.tpu(Protocol::QUIC).unwrap()
+        );
+        assert_eq!(
+            old.tpu(Protocol::UDP).unwrap(),
+            node.tpu(Protocol::UDP).unwrap()
+        );
+        assert_eq!(
+            old.tpu_forwards(Protocol::QUIC).unwrap(),
+            node.tpu_forwards(Protocol::QUIC).unwrap()
+        );
+        assert_eq!(
+            old.tpu_forwards(Protocol::UDP).unwrap(),
+            node.tpu_forwards(Protocol::UDP).unwrap()
+        );
+        assert_eq!(
+            node.tpu_forwards(Protocol::QUIC).unwrap(),
             SocketAddr::new(
-                old.tpu_forwards.ip(),
-                old.tpu_forwards.port() + QUIC_PORT_OFFSET
+                old.tpu_forwards(Protocol::UDP).unwrap().ip(),
+                old.tpu_forwards(Protocol::UDP).unwrap().port() + QUIC_PORT_OFFSET
             )
         );
         assert_eq!(
-            node.tpu_quic().unwrap(),
-            SocketAddr::new(old.tpu.ip(), old.tpu.port() + QUIC_PORT_OFFSET)
+            node.tpu(Protocol::QUIC).unwrap(),
+            SocketAddr::new(
+                old.tpu(Protocol::UDP).unwrap().ip(),
+                old.tpu(Protocol::UDP).unwrap().port() + QUIC_PORT_OFFSET
+            )
         );
-        assert_eq!(old.tpu_vote, node.tpu_vote().unwrap());
-        assert_eq!(old.tvu, node.tvu().unwrap());
-        assert_eq!(old.tvu_forwards, node.tvu_forwards().unwrap());
+        assert_eq!(old.tpu_vote().unwrap(), node.tpu_vote().unwrap());
+        assert_eq!(
+            old.tvu(Protocol::QUIC).unwrap(),
+            node.tvu(Protocol::QUIC).unwrap()
+        );
+        assert_eq!(
+            old.tvu(Protocol::UDP).unwrap(),
+            node.tvu(Protocol::UDP).unwrap()
+        );
     }
 
     #[test]
@@ -886,23 +938,26 @@ mod tests {
             .unwrap();
         // TPU socket.
         node.set_tpu(socket).unwrap();
-        assert_eq!(node.tpu().unwrap(), socket);
+        assert_eq!(node.tpu(Protocol::UDP).unwrap(), socket);
         assert_eq!(
-            node.tpu_quic().unwrap(),
+            node.tpu(Protocol::QUIC).unwrap(),
             SocketAddr::new(socket.ip(), socket.port() + QUIC_PORT_OFFSET)
         );
         node.remove_tpu();
-        assert_matches!(node.tpu(), Err(Error::InvalidPort(0)));
-        assert_matches!(node.tpu_quic(), Err(Error::InvalidPort(0)));
+        assert_matches!(node.tpu(Protocol::UDP), Err(Error::InvalidPort(0)));
+        assert_matches!(node.tpu(Protocol::QUIC), Err(Error::InvalidPort(0)));
         // TPU forwards socket.
         node.set_tpu_forwards(socket).unwrap();
-        assert_eq!(node.tpu_forwards().unwrap(), socket);
+        assert_eq!(node.tpu_forwards(Protocol::UDP).unwrap(), socket);
         assert_eq!(
-            node.tpu_forwards_quic().unwrap(),
+            node.tpu_forwards(Protocol::QUIC).unwrap(),
             SocketAddr::new(socket.ip(), socket.port() + QUIC_PORT_OFFSET)
         );
         node.remove_tpu_forwards();
-        assert_matches!(node.tpu_forwards(), Err(Error::InvalidPort(0)));
-        assert_matches!(node.tpu_forwards_quic(), Err(Error::InvalidPort(0)));
+        assert_matches!(node.tpu_forwards(Protocol::UDP), Err(Error::InvalidPort(0)));
+        assert_matches!(
+            node.tpu_forwards(Protocol::QUIC),
+            Err(Error::InvalidPort(0))
+        );
     }
 }

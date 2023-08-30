@@ -168,4 +168,59 @@ mod test {
             Duration::from_millis(1000) * ticks_per_slot
         );
     }
+
+    #[test]
+    fn test_duration_as() {
+        // zero
+        let test_zero = Duration::from_nanos(0);
+        assert_eq!(duration_as_ns(&test_zero), 0);
+        assert_eq!(duration_as_us(&test_zero), 0);
+        assert_eq!(duration_as_ms(&test_zero), 0);
+        assert!((duration_as_s(&test_zero) - 0f32) <= f32::EPSILON);
+        // min non-zero for each unit
+        let test_1ns = Duration::from_nanos(1);
+        assert_eq!(duration_as_ns(&test_1ns), 1);
+        assert_eq!(duration_as_us(&test_1ns), 0);
+        assert_eq!(duration_as_ms(&test_1ns), 0);
+        assert!((duration_as_s(&test_1ns) - 0.000_000_001f32) <= f32::EPSILON);
+        let test_1ns = Duration::from_micros(1);
+        assert_eq!(duration_as_ns(&test_1ns), 1_000);
+        assert_eq!(duration_as_us(&test_1ns), 1);
+        assert_eq!(duration_as_ms(&test_1ns), 0);
+        assert!((duration_as_s(&test_1ns) - 0.000_001f32) <= f32::EPSILON);
+        let test_1ns = Duration::from_millis(1);
+        assert_eq!(duration_as_ns(&test_1ns), 1_000_000);
+        assert_eq!(duration_as_us(&test_1ns), 1_000);
+        assert_eq!(duration_as_ms(&test_1ns), 1);
+        assert!((duration_as_s(&test_1ns) - 0.001f32) <= f32::EPSILON);
+        let test_1ns = Duration::from_secs(1);
+        assert_eq!(duration_as_ns(&test_1ns), 1_000_000_000);
+        assert_eq!(duration_as_us(&test_1ns), 1_000_000);
+        assert_eq!(duration_as_ms(&test_1ns), 1_000);
+        assert!((duration_as_s(&test_1ns) - 1f32) <= f32::EPSILON);
+        // max without error for each unit (except secs, 'cause if you use floats
+        // you deserve to get got)
+        const DUR_MAX_SECS: u64 = Duration::MAX.as_secs();
+        const NS_PER_SEC: u64 = 1_000_000_000;
+        let max_as_ns_secs = DUR_MAX_SECS / NS_PER_SEC;
+        let max_as_ns_ns = (DUR_MAX_SECS % NS_PER_SEC) as u32;
+        let max_as_ns = Duration::new(max_as_ns_secs, max_as_ns_ns);
+        assert_eq!(max_as_ns_secs, 18_446_744_073);
+        assert_eq!(max_as_ns_ns, 709_551_615);
+        assert_eq!(duration_as_ns(&max_as_ns), u64::MAX);
+        const US_PER_SEC: u64 = 1_000_000;
+        let max_as_us_secs = DUR_MAX_SECS / US_PER_SEC;
+        let max_as_us_ns = (DUR_MAX_SECS % US_PER_SEC) as u32;
+        let max_as_us = Duration::new(max_as_us_secs, max_as_us_ns * 1_000);
+        assert_eq!(max_as_us_secs, 18_446_744_073_709);
+        assert_eq!(max_as_us_ns, 551_615);
+        assert_eq!(duration_as_us(&max_as_us), u64::MAX);
+        const MS_PER_SEC: u64 = 1_000;
+        let max_as_ms_secs = DUR_MAX_SECS / MS_PER_SEC;
+        let max_as_ms_ns = (DUR_MAX_SECS % MS_PER_SEC) as u32;
+        let max_as_ms = Duration::new(max_as_ms_secs, max_as_ms_ns * 1_000_000);
+        assert_eq!(max_as_ms_secs, 18_446_744_073_709_551);
+        assert_eq!(max_as_ms_ns, 615);
+        assert_eq!(duration_as_ms(&max_as_ms), u64::MAX);
+    }
 }

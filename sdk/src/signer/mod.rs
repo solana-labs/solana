@@ -14,6 +14,7 @@ use {
         error,
         fs::{self, File, OpenOptions},
         io::{Read, Write},
+        ops::Deref,
         path::Path,
     },
     thiserror::Error,
@@ -93,11 +94,36 @@ where
     }
 }
 
+impl<Container: Deref<Target = impl Signer>> Signer for Container {
+    #[inline]
+    fn pubkey(&self) -> Pubkey {
+        self.deref().pubkey()
+    }
+
+    fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
+        self.deref().try_pubkey()
+    }
+
+    fn sign_message(&self, message: &[u8]) -> Signature {
+        self.deref().sign_message(message)
+    }
+
+    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
+        self.deref().try_sign_message(message)
+    }
+
+    fn is_interactive(&self) -> bool {
+        self.deref().is_interactive()
+    }
+}
+
 impl PartialEq for dyn Signer {
     fn eq(&self, other: &dyn Signer) -> bool {
         self.pubkey() == other.pubkey()
     }
 }
+
+impl Eq for dyn Signer {}
 
 impl std::fmt::Debug for dyn Signer {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -144,6 +170,11 @@ pub trait EncodableKey: Sized {
 
         self.write(&mut f)
     }
+}
+
+/// The `SeedDerivable` trait defines the interface by which cryptographic keys/keypairs are
+/// derived from byte seeds, derivation paths, and passphrases.
+pub trait SeedDerivable: Sized {
     fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>>;
     fn from_seed_and_derivation_path(
         seed: &[u8],
@@ -153,6 +184,15 @@ pub trait EncodableKey: Sized {
         seed_phrase: &str,
         passphrase: &str,
     ) -> Result<Self, Box<dyn error::Error>>;
+}
+
+/// The `EncodableKeypair` trait extends `EncodableKey` for asymmetric keypairs, i.e. have
+/// associated public keys.
+pub trait EncodableKeypair: EncodableKey {
+    type Pubkey: ToString;
+
+    /// Returns an encodable representation of the associated public key.
+    fn encodable_pubkey(&self) -> Self::Pubkey;
 }
 
 #[cfg(test)]
@@ -171,5 +211,42 @@ mod tests {
             pubkeys(&unique_signers(vec![&alice, &bob, &alice])),
             pubkeys(&[&alice, &bob])
         );
+    }
+
+    #[test]
+    fn test_containers() {
+        use std::{rc::Rc, sync::Arc};
+
+        struct Foo<S: Signer> {
+            #[allow(unused)]
+            signer: S,
+        }
+
+        fn foo(_s: impl Signer) {}
+
+        let _arc_signer = Foo {
+            signer: Arc::new(Keypair::new()),
+        };
+        foo(Arc::new(Keypair::new()));
+
+        let _rc_signer = Foo {
+            signer: Rc::new(Keypair::new()),
+        };
+        foo(Rc::new(Keypair::new()));
+
+        let _ref_signer = Foo {
+            signer: &Keypair::new(),
+        };
+        foo(&Keypair::new());
+
+        let _box_signer = Foo {
+            signer: Box::new(Keypair::new()),
+        };
+        foo(Box::new(Keypair::new()));
+
+        let _signer = Foo {
+            signer: Keypair::new(),
+        };
+        foo(Keypair::new());
     }
 }

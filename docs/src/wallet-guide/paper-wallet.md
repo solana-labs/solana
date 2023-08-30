@@ -70,7 +70,7 @@ pubkey: 9ZNTfG4NyQgxy2SWjSiQoUyBPEvXT2xo7fKc5hPYYJ7b
 The value shown after `pubkey:` is your _wallet address_.
 
 **Note:** In working with paper wallets and file system wallets, the terms "pubkey"
-and "wallet address" are sometimes used interchangably.
+and "wallet address" are sometimes used interchangeably.
 
 > For added security, increase the seed phrase word count using the `--word-count` argument
 

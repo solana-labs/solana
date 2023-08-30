@@ -17,6 +17,7 @@ chrono-humanize = { workspace = true }
 crossbeam-channel = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-banks-client = { workspace = true }
 solana-banks-interface = { workspace = true }
 solana-banks-server = { workspace = true }

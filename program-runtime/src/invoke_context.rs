@@ -2,8 +2,8 @@ use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
         compute_budget::ComputeBudget,
-        executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
+        loaded_programs::{LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch},
         log_collector::LogCollector,
         pre_account::PreAccount,
         stable_log,
@@ -11,7 +11,12 @@ use {
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
     solana_measure::measure::Measure,
-    solana_rbpf::{ebpf::MM_HEAP_START, vm::ContextObject},
+    solana_rbpf::{
+        ebpf::MM_HEAP_START,
+        elf::SBPFVersion,
+        memory_region::MemoryMapping,
+        vm::{BuiltinFunction, Config, ContextObject, ProgramResult},
+    },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_deprecated,
@@ -35,9 +40,11 @@ use {
         cell::RefCell,
         fmt::{self, Debug},
         rc::Rc,
-        sync::Arc,
+        sync::{atomic::Ordering, Arc},
     },
 };
+
+pub type ProcessInstructionWithContext = BuiltinFunction<InvokeContext<'static>>;
 
 /// Adapter so we can unify the interfaces of built-in programs and syscalls
 #[macro_export]
@@ -45,45 +52,37 @@ macro_rules! declare_process_instruction {
     ($process_instruction:ident, $cu_to_consume:expr, |$invoke_context:ident| $inner:tt) => {
         pub fn $process_instruction(
             invoke_context: &mut $crate::invoke_context::InvokeContext,
-        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+            _arg0: u64,
+            _arg1: u64,
+            _arg2: u64,
+            _arg3: u64,
+            _arg4: u64,
+            _memory_mapping: &mut $crate::solana_rbpf::memory_region::MemoryMapping,
+            result: &mut $crate::solana_rbpf::vm::ProgramResult,
+        ) {
             fn process_instruction_inner(
                 $invoke_context: &mut $crate::invoke_context::InvokeContext,
             ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
                 $inner
             }
-            if invoke_context
-                .feature_set
-                .is_active(&solana_sdk::feature_set::native_programs_consume_cu::id())
+            let consumption_result = if $cu_to_consume > 0
+                && invoke_context
+                    .feature_set
+                    .is_active(&solana_sdk::feature_set::native_programs_consume_cu::id())
             {
-                invoke_context.consume_checked($cu_to_consume)?;
-            }
-            process_instruction_inner(invoke_context)
-                .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
+                invoke_context.consume_checked($cu_to_consume)
+            } else {
+                Ok(())
+            };
+            *result = consumption_result
+                .and_then(|_| {
+                    process_instruction_inner(invoke_context)
+                        .map(|_| 0)
+                        .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
+                })
+                .into();
         }
     };
-}
-
-pub type ProcessInstructionWithContext =
-    fn(&mut InvokeContext) -> Result<(), Box<dyn std::error::Error>>;
-
-#[derive(Clone)]
-pub struct BuiltinProgram {
-    pub program_id: Pubkey,
-    pub process_instruction: ProcessInstructionWithContext,
-}
-
-impl std::fmt::Debug for BuiltinProgram {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        // These are just type aliases for work around of Debug-ing above pointers
-        type ErasedProcessInstructionWithContext =
-            fn(&'static mut InvokeContext<'static>) -> Result<(), Box<dyn std::error::Error>>;
-
-        // rustc doesn't compile due to bug without this work around
-        // https://github.com/rust-lang/rust/issues/50280
-        // https://users.rust-lang.org/t/display-function-pointer/17073/2
-        let erased_instruction: ErasedProcessInstructionWithContext = self.process_instruction;
-        write!(f, "{}: {:p}", self.program_id, erased_instruction)
-    }
 }
 
 impl<'a> ContextObject for InvokeContext<'a> {
@@ -147,27 +146,38 @@ impl BpfAllocator {
 
 pub struct SyscallContext {
     pub allocator: BpfAllocator,
-    pub orig_account_lengths: Vec<usize>,
+    pub accounts_metadata: Vec<SerializedAccountMetadata>,
     pub trace_log: Vec<[u64; 12]>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SerializedAccountMetadata {
+    pub original_data_len: usize,
+    pub vm_data_addr: u64,
+    pub vm_key_addr: u64,
+    pub vm_lamports_addr: u64,
+    pub vm_owner_addr: u64,
 }
 
 pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
-    builtin_programs: &'a [BuiltinProgram],
     sysvar_cache: &'a SysvarCache,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
     compute_meter: RefCell<u64>,
     accounts_data_meter: AccountsDataMeter,
-    pub tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
+    pub programs_loaded_for_tx_batch: &'a LoadedProgramsForTxBatch,
+    pub programs_modified_by_tx: &'a mut LoadedProgramsForTxBatch,
+    pub programs_updated_only_for_global_cache: &'a mut LoadedProgramsForTxBatch,
     pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
     pub syscall_context: Vec<Option<SyscallContext>>,
+    traces: Vec<Vec<[u64; 12]>>,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -175,11 +185,12 @@ impl<'a> InvokeContext<'a> {
     pub fn new(
         transaction_context: &'a mut TransactionContext,
         rent: Rent,
-        builtin_programs: &'a [BuiltinProgram],
         sysvar_cache: &'a SysvarCache,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
-        tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
+        programs_loaded_for_tx_batch: &'a LoadedProgramsForTxBatch,
+        programs_modified_by_tx: &'a mut LoadedProgramsForTxBatch,
+        programs_updated_only_for_global_cache: &'a mut LoadedProgramsForTxBatch,
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
@@ -189,20 +200,30 @@ impl<'a> InvokeContext<'a> {
             transaction_context,
             rent,
             pre_accounts: Vec::new(),
-            builtin_programs,
             sysvar_cache,
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter: RefCell::new(compute_budget.compute_unit_limit),
             accounts_data_meter: AccountsDataMeter::new(prev_accounts_data_len),
-            tx_executor_cache,
+            programs_loaded_for_tx_batch,
+            programs_modified_by_tx,
+            programs_updated_only_for_global_cache,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
             blockhash,
             lamports_per_signature,
             syscall_context: Vec::new(),
+            traces: Vec::new(),
         }
+    }
+
+    pub fn find_program_in_cache(&self, pubkey: &Pubkey) -> Option<Arc<LoadedProgram>> {
+        // First lookup the cache of the programs modified by the current transaction. If not found, lookup
+        // the cache of the cache of the programs that are loaded for the transaction batch.
+        self.programs_modified_by_tx
+            .find(pubkey)
+            .or_else(|| self.programs_loaded_for_tx_batch.find(pubkey))
     }
 
     /// Push a stack frame onto the invocation stack
@@ -291,7 +312,9 @@ impl<'a> InvokeContext<'a> {
 
     /// Pop a stack frame from the invocation stack
     pub fn pop(&mut self) -> Result<(), InstructionError> {
-        self.syscall_context.pop();
+        if let Some(Some(syscall_context)) = self.syscall_context.pop() {
+            self.traces.push(syscall_context.trace_log);
+        }
         self.transaction_context.pop()
     }
 
@@ -717,54 +740,78 @@ impl<'a> InvokeContext<'a> {
             }
         };
 
-        for entry in self.builtin_programs {
-            if entry.program_id == builtin_id {
-                let program_id =
-                    *instruction_context.get_last_program_key(self.transaction_context)?;
-                self.transaction_context
-                    .set_return_data(program_id, Vec::new())?;
+        // The Murmur3 hash value (used by RBPF) of the string "entrypoint"
+        const ENTRYPOINT_KEY: u32 = 0x71E3CF81;
+        let entry = self
+            .programs_loaded_for_tx_batch
+            .find(&builtin_id)
+            .ok_or(InstructionError::UnsupportedProgramId)?;
+        let process_instruction = match &entry.program {
+            LoadedProgramType::Builtin(program) => program
+                .lookup_function(ENTRYPOINT_KEY)
+                .map(|(_name, process_instruction)| process_instruction),
+            _ => None,
+        }
+        .ok_or(InstructionError::UnsupportedProgramId)?;
+        entry.ix_usage_counter.fetch_add(1, Ordering::Relaxed);
 
-                let pre_remaining_units = self.get_remaining();
-                let logger = self.get_log_collector();
-                stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
-                let result = (entry.process_instruction)(self)
-                    .map(|()| {
-                        stable_log::program_success(&logger, &program_id);
-                    })
-                    .map_err(|err| {
-                        stable_log::program_failure(&logger, &program_id, err.as_ref());
-                        if let Some(err) = err.downcast_ref::<InstructionError>() {
-                            err.clone()
-                        } else {
-                            InstructionError::ProgramFailedToComplete
-                        }
-                    });
-                let post_remaining_units = self.get_remaining();
-                *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
-
-                if builtin_id == program_id
-                    && result.is_ok()
-                    && *compute_units_consumed == 0
-                    && self
-                        .feature_set
-                        .is_active(&native_programs_consume_cu::id())
-                {
-                    return Err(InstructionError::BuiltinProgramsMustConsumeComputeUnits);
-                }
-
-                process_executable_chain_time.stop();
-                saturating_add_assign!(
-                    timings
-                        .execute_accessories
-                        .process_instructions
-                        .process_executable_chain_us,
-                    process_executable_chain_time.as_us()
-                );
-                return result;
+        let program_id = *instruction_context.get_last_program_key(self.transaction_context)?;
+        self.transaction_context
+            .set_return_data(program_id, Vec::new())?;
+        let logger = self.get_log_collector();
+        stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
+        let pre_remaining_units = self.get_remaining();
+        let mock_config = Config::default();
+        let mut mock_memory_mapping =
+            MemoryMapping::new(Vec::new(), &mock_config, &SBPFVersion::V2).unwrap();
+        let mut result = ProgramResult::Ok(0);
+        process_instruction(
+            // Removes lifetime tracking
+            unsafe { std::mem::transmute::<&mut InvokeContext, &mut InvokeContext>(self) },
+            0,
+            0,
+            0,
+            0,
+            0,
+            &mut mock_memory_mapping,
+            &mut result,
+        );
+        let result = match result {
+            ProgramResult::Ok(_) => {
+                stable_log::program_success(&logger, &program_id);
+                Ok(())
             }
+            ProgramResult::Err(err) => {
+                stable_log::program_failure(&logger, &program_id, err.as_ref());
+                if let Some(err) = err.downcast_ref::<InstructionError>() {
+                    Err(err.clone())
+                } else {
+                    Err(InstructionError::ProgramFailedToComplete)
+                }
+            }
+        };
+        let post_remaining_units = self.get_remaining();
+        *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
+
+        if builtin_id == program_id
+            && result.is_ok()
+            && *compute_units_consumed == 0
+            && self
+                .feature_set
+                .is_active(&native_programs_consume_cu::id())
+        {
+            return Err(InstructionError::BuiltinProgramsMustConsumeComputeUnits);
         }
 
-        Err(InstructionError::UnsupportedProgramId)
+        process_executable_chain_time.stop();
+        saturating_add_assign!(
+            timings
+                .execute_accessories
+                .process_instructions
+                .process_executable_chain_us,
+            process_executable_chain_time.as_us()
+        );
+        result
     }
 
     /// Get this invocation's LogCollector
@@ -852,20 +899,29 @@ impl<'a> InvokeContext<'a> {
             .and_then(|syscall_context| syscall_context.as_mut())
             .ok_or(InstructionError::CallDepth)
     }
+
+    /// Return a references to traces
+    pub fn get_traces(&self) -> &Vec<Vec<[u64; 12]>> {
+        &self.traces
+    }
 }
 
 #[macro_export]
 macro_rules! with_mock_invoke_context {
-    ($invoke_context:ident, $transaction_context:ident, $transaction_accounts:expr) => {
+    (
+        $invoke_context:ident,
+        $transaction_context:ident,
+        $transaction_accounts:expr $(,)?
+    ) => {
         use {
             solana_sdk::{
                 account::ReadableAccount, feature_set::FeatureSet, hash::Hash, sysvar::rent::Rent,
                 transaction_context::TransactionContext,
             },
-            std::{cell::RefCell, rc::Rc, sync::Arc},
+            std::sync::Arc,
             $crate::{
-                compute_budget::ComputeBudget, executor_cache::TransactionExecutorCache,
-                invoke_context::InvokeContext, log_collector::LogCollector,
+                compute_budget::ComputeBudget, invoke_context::InvokeContext,
+                loaded_programs::LoadedProgramsForTxBatch, log_collector::LogCollector,
                 sysvar_cache::SysvarCache,
             },
         };
@@ -895,14 +951,18 @@ macro_rules! with_mock_invoke_context {
                 }
             }
         });
+        let programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let mut $invoke_context = InvokeContext::new(
             &mut $transaction_context,
             Rent::default(),
-            &[],
             &sysvar_cache,
             Some(LogCollector::new_ref()),
             compute_budget,
-            Rc::new(RefCell::new(TransactionExecutorCache::default())),
+            &programs_loaded_for_tx_batch,
+            &mut programs_modified_by_tx,
+            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
             0,
@@ -950,11 +1010,12 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
     let processor_account = AccountSharedData::new(0, 0, &native_loader::id());
     transaction_accounts.push((*loader_id, processor_account));
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-    let builtin_programs = &[BuiltinProgram {
-        program_id: *loader_id,
-        process_instruction,
-    }];
-    invoke_context.builtin_programs = builtin_programs;
+    let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+    programs_loaded_for_tx_batch.replenish(
+        *loader_id,
+        Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
+    );
+    invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
     pre_adjustments(&mut invoke_context);
     let result = invoke_context.process_instruction(
         instruction_data,
@@ -995,31 +1056,6 @@ mod tests {
         Resize {
             new_len: u64,
         },
-    }
-
-    #[test]
-    fn test_program_entry_debug() {
-        fn mock_process_instruction(
-            _invoke_context: &mut InvokeContext,
-        ) -> Result<(), Box<dyn std::error::Error>> {
-            Ok(())
-        }
-        fn mock_ix_processor(
-            _invoke_context: &mut InvokeContext,
-        ) -> Result<(), Box<dyn std::error::Error>> {
-            Ok(())
-        }
-        let builtin_programs = &[
-            BuiltinProgram {
-                program_id: solana_sdk::pubkey::new_rand(),
-                process_instruction: mock_process_instruction,
-            },
-            BuiltinProgram {
-                program_id: solana_sdk::pubkey::new_rand(),
-                process_instruction: mock_ix_processor,
-            },
-        ];
-        assert!(!format!("{builtin_programs:?}").is_empty());
     }
 
     const MOCK_BUILTIN_COMPUTE_UNIT_COST: u64 = 1;
@@ -1228,11 +1264,12 @@ mod tests {
             })
             .collect::<Vec<_>>();
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-        let builtin_programs = &[BuiltinProgram {
-            program_id: callee_program_id,
-            process_instruction,
-        }];
-        invoke_context.builtin_programs = builtin_programs;
+        let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+        programs_loaded_for_tx_batch.replenish(
+            callee_program_id,
+            Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
+        );
+        invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
 
         // Account modification tests
         let cases = vec![
@@ -1373,11 +1410,12 @@ mod tests {
             },
         ];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-        let builtin_programs = &[BuiltinProgram {
-            program_id: program_key,
-            process_instruction,
-        }];
-        invoke_context.builtin_programs = builtin_programs;
+        let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+        programs_loaded_for_tx_batch.replenish(
+            program_key,
+            Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
+        );
+        invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
 
         // Test: Resize the account to *the same size*, so not consuming any additional size; this must succeed
         {

@@ -11,15 +11,14 @@ use {
         crds_gossip_pull::{CrdsFilter, CrdsGossipPull},
         crds_value::CrdsValue,
     },
-    solana_sdk::hash,
+    solana_sdk::hash::Hash,
     std::sync::RwLock,
     test::Bencher,
 };
 
 #[bench]
 fn bench_hash_as_u64(bencher: &mut Bencher) {
-    let mut rng = thread_rng();
-    let hashes: Vec<_> = std::iter::repeat_with(|| hash::new_rand(&mut rng))
+    let hashes: Vec<_> = std::iter::repeat_with(Hash::new_unique)
         .take(1000)
         .collect();
     bencher.iter(|| {

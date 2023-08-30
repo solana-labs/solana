@@ -55,7 +55,7 @@ fn gen_batches(
 #[bench]
 #[ignore]
 fn bench_sigverify_low_packets_small_batch(bencher: &mut Bencher) {
-    let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD - 1;
+    let num_packets = sigverify::VERIFY_PACKET_CHUNK_SIZE - 1;
     let mut batches = gen_batches(false, 1, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
@@ -67,7 +67,7 @@ fn bench_sigverify_low_packets_small_batch(bencher: &mut Bencher) {
 #[bench]
 #[ignore]
 fn bench_sigverify_low_packets_large_batch(bencher: &mut Bencher) {
-    let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD - 1;
+    let num_packets = sigverify::VERIFY_PACKET_CHUNK_SIZE - 1;
     let mut batches = gen_batches(false, LARGE_BATCH_PACKET_COUNT, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
@@ -79,7 +79,7 @@ fn bench_sigverify_low_packets_large_batch(bencher: &mut Bencher) {
 #[bench]
 #[ignore]
 fn bench_sigverify_medium_packets_small_batch(bencher: &mut Bencher) {
-    let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 8;
+    let num_packets = sigverify::VERIFY_PACKET_CHUNK_SIZE * 8;
     let mut batches = gen_batches(false, 1, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
@@ -91,7 +91,7 @@ fn bench_sigverify_medium_packets_small_batch(bencher: &mut Bencher) {
 #[bench]
 #[ignore]
 fn bench_sigverify_medium_packets_large_batch(bencher: &mut Bencher) {
-    let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 8;
+    let num_packets = sigverify::VERIFY_PACKET_CHUNK_SIZE * 8;
     let mut batches = gen_batches(false, LARGE_BATCH_PACKET_COUNT, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
@@ -103,7 +103,7 @@ fn bench_sigverify_medium_packets_large_batch(bencher: &mut Bencher) {
 #[bench]
 #[ignore]
 fn bench_sigverify_high_packets_small_batch(bencher: &mut Bencher) {
-    let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 32;
+    let num_packets = sigverify::VERIFY_PACKET_CHUNK_SIZE * 32;
     let mut batches = gen_batches(false, 1, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
@@ -115,7 +115,7 @@ fn bench_sigverify_high_packets_small_batch(bencher: &mut Bencher) {
 #[bench]
 #[ignore]
 fn bench_sigverify_high_packets_large_batch(bencher: &mut Bencher) {
-    let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 32;
+    let num_packets = sigverify::VERIFY_PACKET_CHUNK_SIZE * 32;
     let mut batches = gen_batches(false, LARGE_BATCH_PACKET_COUNT, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
@@ -139,7 +139,7 @@ fn bench_sigverify_uneven(bencher: &mut Bencher) {
     // generate packet vector
     let mut batches = vec![];
     while current_packets < num_packets {
-        let mut len: usize = thread_rng().gen_range(1, 128);
+        let mut len: usize = thread_rng().gen_range(1..128);
         current_packets += len;
         if current_packets > num_packets {
             len -= current_packets - num_packets;

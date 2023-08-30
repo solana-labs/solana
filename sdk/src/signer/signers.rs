@@ -67,6 +67,26 @@ impl Signers for [Arc<dyn Signer>] {
     default_keypairs_impl!();
 }
 
+impl Signers for [Arc<dyn Signer>; 0] {
+    default_keypairs_impl!();
+}
+
+impl Signers for [Arc<dyn Signer>; 1] {
+    default_keypairs_impl!();
+}
+
+impl Signers for [Arc<dyn Signer>; 2] {
+    default_keypairs_impl!();
+}
+
+impl Signers for [Arc<dyn Signer>; 3] {
+    default_keypairs_impl!();
+}
+
+impl Signers for [Arc<dyn Signer>; 4] {
+    default_keypairs_impl!();
+}
+
 impl Signers for Vec<Arc<dyn Signer>> {
     default_keypairs_impl!();
 }

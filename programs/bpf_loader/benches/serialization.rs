@@ -126,7 +126,20 @@ fn bench_serialize_unaligned(bencher: &mut Bencher) {
         .get_current_instruction_context()
         .unwrap();
     bencher.iter(|| {
-        let _ = serialize_parameters(&transaction_context, instruction_context, true).unwrap();
+        let _ =
+            serialize_parameters(&transaction_context, instruction_context, true, false).unwrap();
+    });
+}
+
+#[bench]
+fn bench_serialize_unaligned_copy_account_data(bencher: &mut Bencher) {
+    let transaction_context = create_inputs(bpf_loader_deprecated::id(), 7);
+    let instruction_context = transaction_context
+        .get_current_instruction_context()
+        .unwrap();
+    bencher.iter(|| {
+        let _ =
+            serialize_parameters(&transaction_context, instruction_context, true, true).unwrap();
     });
 }
 
@@ -138,7 +151,21 @@ fn bench_serialize_aligned(bencher: &mut Bencher) {
         .unwrap();
 
     bencher.iter(|| {
-        let _ = serialize_parameters(&transaction_context, instruction_context, true).unwrap();
+        let _ =
+            serialize_parameters(&transaction_context, instruction_context, true, false).unwrap();
+    });
+}
+
+#[bench]
+fn bench_serialize_aligned_copy_account_data(bencher: &mut Bencher) {
+    let transaction_context = create_inputs(bpf_loader::id(), 7);
+    let instruction_context = transaction_context
+        .get_current_instruction_context()
+        .unwrap();
+
+    bencher.iter(|| {
+        let _ =
+            serialize_parameters(&transaction_context, instruction_context, true, true).unwrap();
     });
 }
 
@@ -149,7 +176,8 @@ fn bench_serialize_unaligned_max_accounts(bencher: &mut Bencher) {
         .get_current_instruction_context()
         .unwrap();
     bencher.iter(|| {
-        let _ = serialize_parameters(&transaction_context, instruction_context, true).unwrap();
+        let _ =
+            serialize_parameters(&transaction_context, instruction_context, true, false).unwrap();
     });
 }
 
@@ -161,6 +189,7 @@ fn bench_serialize_aligned_max_accounts(bencher: &mut Bencher) {
         .unwrap();
 
     bencher.iter(|| {
-        let _ = serialize_parameters(&transaction_context, instruction_context, true).unwrap();
+        let _ =
+            serialize_parameters(&transaction_context, instruction_context, true, false).unwrap();
     });
 }

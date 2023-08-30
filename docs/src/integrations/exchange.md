@@ -79,6 +79,8 @@ Discord, or Twillio. For details, run `solana-watchtower --help`.
 solana-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
 ```
 
+> You can find more information about the [best practices for Solana Watchtower](../validator/best-practices/monitoring.md#solana-watchtower) here in the docs.
+
 #### New Software Release Announcements
 
 We release new software frequently (around 1 release / week).
@@ -86,8 +88,8 @@ Sometimes newer versions include incompatible protocol changes, which
 necessitate timely software update to avoid errors in processing blocks.
 
 Our official release announcements for all kinds of releases (normal and
-security) are communicated via a discord channel called
-[`#mb-announcement`](https://discord.com/channels/428295358100013066/669406841830244375)
+security) are communicated via a [discord](https://solana.com/discord) channel called
+`#mb-announcement`
 (`mb` stands for `mainnet-beta`).
 
 Like staked validators, we expect any exchange-operated validators to be updated

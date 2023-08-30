@@ -5,7 +5,7 @@ extern crate test;
 
 use {
     log::*,
-    solana_program_runtime::invoke_context::InvokeContext,
+    solana_program_runtime::declare_process_instruction,
     solana_runtime::{
         bank::{test_utils::goto_end_of_slot_without_scheduler, *},
         bank_client::BankClient,
@@ -33,12 +33,6 @@ const NOOP_PROGRAM_ID: [u8; 32] = [
     98, 117, 105, 108, 116, 105, 110, 95, 112, 114, 111, 103, 114, 97, 109, 95, 105, 100, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
 ];
-
-fn process_instruction(
-    _invoke_context: &mut InvokeContext,
-) -> Result<(), Box<dyn std::error::Error>> {
-    Ok(())
-}
 
 pub fn create_builtin_transactions(
     bank_client: &BankClient,
@@ -84,12 +78,12 @@ pub fn create_native_loader_transactions(
         .collect()
 }
 
-fn sync_bencher(bank: &Arc<Bank>, _bank_client: &BankClient, transactions: &[Transaction]) {
+fn sync_bencher(bank: &Bank, _bank_client: &BankClient, transactions: &[Transaction]) {
     let results = bank.process_transactions(transactions.iter());
     assert!(results.iter().all(Result::is_ok));
 }
 
-fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &[Transaction]) {
+fn async_bencher(bank: &Bank, bank_client: &BankClient, transactions: &[Transaction]) {
     for transaction in transactions.iter().cloned() {
         bank_client.async_send_transaction(transaction).unwrap();
     }
@@ -119,7 +113,7 @@ fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &[Tra
 #[allow(clippy::type_complexity)]
 fn do_bench_transactions(
     bencher: &mut Bencher,
-    bench_work: &dyn Fn(&Arc<Bank>, &BankClient, &[Transaction]),
+    bench_work: &dyn Fn(&Bank, &BankClient, &[Transaction]),
     create_transactions: &dyn Fn(&BankClient, &Keypair) -> Vec<Transaction>,
 ) {
     solana_logger::setup();
@@ -131,15 +125,16 @@ fn do_bench_transactions(
     // freeze bank so that slot hashes is populated
     bank.freeze();
 
-    let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), 1);
-    bank.add_builtin(
-        "builtin_program",
-        &Pubkey::from(BUILTIN_PROGRAM_ID),
-        process_instruction,
-    );
+    declare_process_instruction!(process_instruction, 1, |_invoke_context| {
+        // Do nothing
+        Ok(())
+    });
+
+    let mut bank = Bank::new_from_parent(Arc::new(bank), &Pubkey::default(), 1);
+    bank.add_mockup_builtin(Pubkey::from(BUILTIN_PROGRAM_ID), process_instruction);
     bank.add_builtin_account("solana_noop_program", &Pubkey::from(NOOP_PROGRAM_ID), false);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let bank_client = BankClient::new_shared(bank.clone());
     let transactions = create_transactions(&bank_client, &mint_keypair);
 
     // Do once to fund accounts, load modules, etc...
@@ -194,7 +189,7 @@ fn bench_bank_update_recent_blockhashes(bencher: &mut Bencher) {
     // Prime blockhash_queue
     for i in 0..(MAX_RECENT_BLOCKHASHES + 1) {
         bank = Arc::new(Bank::new_from_parent(
-            &bank,
+            bank,
             &Pubkey::default(),
             (i + 1) as u64,
         ));

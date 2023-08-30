@@ -497,14 +497,37 @@ impl BanksClient {
             .map_err(Into::into)
     }
 
+    pub fn get_fee_for_message(
+        &mut self,
+        message: Message,
+    ) -> impl Future<Output = Result<Option<u64>, BanksClientError>> + '_ {
+        self.get_fee_for_message_with_commitment_and_context(
+            context::current(),
+            message,
+            CommitmentLevel::default(),
+        )
+    }
+
+    pub fn get_fee_for_message_with_commitment(
+        &mut self,
+        message: Message,
+        commitment: CommitmentLevel,
+    ) -> impl Future<Output = Result<Option<u64>, BanksClientError>> + '_ {
+        self.get_fee_for_message_with_commitment_and_context(
+            context::current(),
+            message,
+            commitment,
+        )
+    }
+
     pub fn get_fee_for_message_with_commitment_and_context(
         &mut self,
         ctx: Context,
-        commitment: CommitmentLevel,
         message: Message,
+        commitment: CommitmentLevel,
     ) -> impl Future<Output = Result<Option<u64>, BanksClientError>> + '_ {
         self.inner
-            .get_fee_for_message_with_commitment_and_context(ctx, commitment, message)
+            .get_fee_for_message_with_commitment_and_context(ctx, message, commitment)
             .map_err(Into::into)
     }
 }

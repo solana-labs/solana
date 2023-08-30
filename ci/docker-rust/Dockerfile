@@ -1,6 +1,6 @@
 # Note: when the rust version is changed also modify
 # ci/rust-version.sh to pick up the new image tag
-FROM rust:1.67.1
+FROM rust:1.69.0
 
 RUN set -x \
  && apt update \
@@ -13,6 +13,7 @@ RUN set -x \
       buildkite-agent \
       clang \
       cmake \
+      jq \
       lcov \
       libudev-dev \
       mscgen \
@@ -22,6 +23,8 @@ RUN set -x \
       sudo \
       golang \
       unzip \
+      lld \
+      protobuf-compiler \
       \
  && apt remove -y libcurl4-openssl-dev \
  && rm -rf /var/lib/apt/lists/* \
@@ -31,10 +34,12 @@ RUN set -x \
  && rustup component add clippy \
  && rustup target add wasm32-unknown-unknown \
  && cargo install cargo-audit \
+ && cargo install cargo-hack \
  && cargo install cargo-sort \
  && cargo install mdbook \
  && cargo install mdbook-linkcheck \
  && cargo install svgbob_cli \
- && cargo install --git https://github.com/rustwasm/wasm-pack --rev b4e619c8a13a8441b804895348afbfd4fb1a68a3 \
+ && cargo install wasm-pack \
+ && cargo install sccache \
  && rustc --version \
  && cargo --version

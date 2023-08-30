@@ -1,12 +1,19 @@
 use {
-    clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand},
+    clap::{
+        crate_description, crate_name, App, AppSettings, Arg, ArgGroup, ArgMatches, SubCommand,
+    },
     log::warn,
+    solana_accounts_db::{
+        accounts_db::{
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE, DEFAULT_ACCOUNTS_SHRINK_RATIO,
+        },
+        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+    },
     solana_clap_utils::{
         hidden_unless_forced,
         input_validators::{
-            is_keypair, is_keypair_or_ask_keyword, is_niceness_adjustment_valid, is_parsable,
-            is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
-            is_valid_percentage, is_within_range,
+            is_keypair, is_keypair_or_ask_keyword, is_parsable, is_pow2, is_pubkey,
+            is_pubkey_or_keypair, is_slot, is_url_or_moniker, is_valid_percentage, is_within_range,
             validate_maximum_full_snapshot_archives_to_retain,
             validate_maximum_incremental_snapshot_archives_to_retain,
         },
@@ -17,18 +24,17 @@ use {
         validator::{BlockProductionMethod, BlockVerificationMethod},
     },
     solana_faucet::faucet::{self, FAUCET_PORT},
+    solana_ledger::use_snapshot_archives_at_startup,
     solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     solana_rpc::{rpc::MAX_REQUEST_BODY_SIZE, rpc_pubsub_service::PubSubConfig},
     solana_rpc_client_api::request::MAX_MULTIPLE_ACCOUNTS,
     solana_runtime::{
-        accounts_db::{
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE, DEFAULT_ACCOUNTS_SHRINK_RATIO,
-        },
-        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-        snapshot_utils::{
-            SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
+        snapshot_bank_utils::{
             DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+        },
+        snapshot_utils::{
+            SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
         },
@@ -290,6 +296,16 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Use DIR as snapshot location [default: --ledger value]"),
         )
         .arg(
+            Arg::with_name(use_snapshot_archives_at_startup::cli::NAME)
+                .long(use_snapshot_archives_at_startup::cli::LONG_ARG)
+                .hidden(hidden_unless_forced())
+                .takes_value(true)
+                .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
+                .default_value(use_snapshot_archives_at_startup::cli::default_value())
+                .help(use_snapshot_archives_at_startup::cli::HELP)
+                .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP)
+        )
+        .arg(
             Arg::with_name("incremental_snapshot_archive_path")
                 .long("incremental-snapshot-archive-path")
                 .conflicts_with("no-incremental-snapshots")
@@ -382,6 +398,15 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                     when --entrypoint is not provided]"),
         )
         .arg(
+            Arg::with_name("public_tpu_forwards_addr")
+                .long("public-tpu-forwards-address")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host_port)
+                .help("Specify TPU Forwards address to advertise in gossip [default: ask --entrypoint or localhost\
+                    when --entrypoint is not provided]"),
+        )
+        .arg(
             Arg::with_name("public_rpc_addr")
                 .long("public-rpc-address")
                 .value_name("HOST:PORT")
@@ -463,7 +488,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("snapshot-packager-niceness-adjustment")
                 .value_name("ADJUSTMENT")
                 .takes_value(true)
-                .validator(is_niceness_adjustment_valid)
+                .validator(solana_perf::thread::is_niceness_adjustment_valid)
                 .default_value(&default_args.snapshot_packager_niceness_adjustment)
                 .help("Add this value to niceness of snapshot packager thread. Negative value \
                       increases priority, positive value decreases priority.")
@@ -530,21 +555,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("no-os-disk-stats-reporting")
                 .hidden(hidden_unless_forced())
                 .help("Disable reporting of OS disk statistics.")
-        )
-        .arg(
-            Arg::with_name("accounts-hash-interval-slots")
-                .long("accounts-hash-interval-slots")
-                .value_name("NUMBER")
-                .takes_value(true)
-                .default_value(&default_args.accounts_hash_interval_slots)
-                .help("Number of slots between generating accounts hash.")
-                .validator(|val| {
-                    if val.eq("0") {
-                        Err(String::from("Accounts hash interval cannot be zero"))
-                    } else {
-                        Ok(())
-                    }
-                }),
         )
         .arg(
             Arg::with_name("snapshot_version")
@@ -833,7 +843,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("rpc-niceness-adjustment")
                 .value_name("ADJUSTMENT")
                 .takes_value(true)
-                .validator(is_niceness_adjustment_valid)
+                .validator(solana_perf::thread::is_niceness_adjustment_valid)
                 .default_value(&default_args.rpc_niceness_adjustment)
                 .help("Add this value to niceness of RPC threads. Negative value \
                       increases priority, positive value decreases priority.")
@@ -1082,14 +1092,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Specify the configuration file for the Geyser plugin."),
         )
         .arg(
-            Arg::with_name("halt_on_known_validators_accounts_hash_mismatch")
-                .alias("halt-on-trusted-validators-accounts-hash-mismatch")
-                .long("halt-on-known-validators-accounts-hash-mismatch")
-                .requires("known_validators")
-                .takes_value(false)
-                .help("Abort the validator if a bank hash mismatch is detected within known validator set"),
-        )
-        .arg(
             Arg::with_name("snapshot_archive_format")
                 .long("snapshot-archive-format")
                 .alias("snapshot-compression") // Legacy name used by Solana v1.5.x and older
@@ -1122,12 +1124,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help(
                     "Mode to recovery the ledger db write ahead log."
                 ),
-        )
-        .arg(
-            Arg::with_name("no_bpf_jit")
-                .long("no-bpf-jit")
-                .takes_value(false)
-                .help("Disable the just-in-time compiler and instead use the interpreter for SBF"),
         )
         .arg(
             Arg::with_name("poh_pinned_cpu_core")
@@ -1245,6 +1241,21 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .validator(is_pow2)
                 .takes_value(true)
                 .help("Number of bins to divide the accounts index into"),
+        )
+        .arg(
+            Arg::with_name("partitioned_epoch_rewards_compare_calculation")
+                .long("partitioned-epoch-rewards-compare-calculation")
+                .takes_value(false)
+                .help("Do normal epoch rewards distribution, but also calculate rewards using the partitioned rewards code path and compare the resulting vote and stake accounts")
+                .hidden(hidden_unless_forced())
+        )
+        .arg(
+            Arg::with_name("partitioned_epoch_rewards_force_enable_single_slot")
+                .long("partitioned-epoch-rewards-force-enable-single-slot")
+                .takes_value(false)
+                .help("Force the partitioned rewards distribution, but distribute all rewards in the first slot in the epoch. This should match consensus with the normal rewards distribution.")
+                .conflicts_with("partitioned_epoch_rewards_compare_calculation")
+                .hidden(hidden_unless_forced())
         )
         .arg(
             Arg::with_name("accounts_index_path")
@@ -1617,17 +1628,31 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                          then this not a good time for a restart")
         ).
         subcommand(
-            SubCommand::with_name("set-public-tpu-address")
-                .about("Specify TPU address to advertise in gossip")
+            SubCommand::with_name("set-public-address")
+                .about("Specify addresses to advertise in gossip")
                 .arg(
-                    Arg::with_name("public_tpu_addr")
-                        .index(1)
+                    Arg::with_name("tpu_addr")
+                        .long("tpu")
                         .value_name("HOST:PORT")
                         .takes_value(true)
-                        .required(true)
                         .validator(solana_net_utils::is_host_port)
                         .help("TPU address to advertise in gossip")
-                ),
+                )
+                .arg(
+                    Arg::with_name("tpu_forwards_addr")
+                        .long("tpu-forwards")
+                        .value_name("HOST:PORT")
+                        .takes_value(true)
+                        .validator(solana_net_utils::is_host_port)
+                        .help("TPU Forwards address to advertise in gossip")
+                )
+                .group(
+                    ArgGroup::with_name("set_public_address_details")
+                        .args(&["tpu_addr", "tpu_forwards_addr"])
+                        .required(true)
+                        .multiple(true)
+                )
+                .after_help("Note: At least one arg must be used. Using multiple is ok"),
         );
 }
 
@@ -1691,10 +1716,18 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
             .help("Enables faster starting of validators by skipping startup clean and shrink."),
         usage_warning: "Enabled by default",
     );
-    add_arg!(Arg::with_name("bpf_jit")
-        .long("bpf-jit")
-        .takes_value(false)
-        .conflicts_with("no_bpf_jit"));
+    add_arg!(Arg::with_name("accounts_hash_interval_slots")
+        .long("accounts-hash-interval-slots")
+        .value_name("NUMBER")
+        .takes_value(true)
+        .help("Number of slots between verifying accounts hash.")
+        .validator(|val| {
+            if val.eq("0") {
+                Err(String::from("Accounts hash interval cannot be zero"))
+            } else {
+                Ok(())
+            }
+        }));
     add_arg!(
         Arg::with_name("disable_quic_servers")
             .long("disable-quic-servers")
@@ -1716,6 +1749,14 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
         Arg::with_name("enable_quic_servers")
             .long("enable-quic-servers"),
         usage_warning: "The quic server is now enabled by default.",
+    );
+    add_arg!(
+        Arg::with_name("halt_on_known_validators_accounts_hash_mismatch")
+            .alias("halt-on-trusted-validators-accounts-hash-mismatch")
+            .long("halt-on-known-validators-accounts-hash-mismatch")
+            .requires("known_validators")
+            .takes_value(false)
+            .help("Abort the validator if a bank hash mismatch is detected within known validator set"),
     );
     add_arg!(Arg::with_name("incremental_snapshots")
         .long("incremental-snapshots")
@@ -1851,7 +1892,6 @@ pub struct DefaultArgs {
 
     pub contact_debug_interval: String,
 
-    pub accounts_hash_interval_slots: String,
     pub accounts_filler_count: String,
     pub accounts_filler_size: String,
     pub accountsdb_repl_threads: String,
@@ -1940,7 +1980,6 @@ impl DefaultArgs {
             max_snapshot_download_abort: MAX_SNAPSHOT_DOWNLOAD_ABORT.to_string(),
             snapshot_archive_format: DEFAULT_ARCHIVE_COMPRESSION.to_string(),
             contact_debug_interval: "120000".to_string(),
-            accounts_hash_interval_slots: "100".to_string(),
             snapshot_version: SnapshotVersion::default(),
             rocksdb_shred_compaction: "level".to_string(),
             rocksdb_ledger_compression: "none".to_string(),
@@ -2133,6 +2172,12 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .help("Enable the unstable RPC PubSub `voteSubscribe` subscription"),
         )
         .arg(
+            Arg::with_name("rpc_pubsub_enable_block_subscription")
+                .long("rpc-pubsub-enable-block-subscription")
+                .takes_value(false)
+                .help("Enable the unstable RPC PubSub `blockSubscribe` subscription"),
+        )
+        .arg(
             Arg::with_name("bpf_program")
                 .long("bpf-program")
                 .value_names(&["ADDRESS_OR_KEYPAIR", "SBF_PROGRAM.SO"])
@@ -2197,12 +2242,6 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                         (see also the `--account` flag). \
                         If the ledger already exists then this parameter is silently ignored",
                 ),
-        )
-        .arg(
-            Arg::with_name("no_bpf_jit")
-                .long("no-bpf-jit")
-                .takes_value(false)
-                .help("Disable the just-in-time compiler and instead use the interpreter for SBF. Windows always disables JIT."),
         )
         .arg(
             Arg::with_name("ticks_per_slot")

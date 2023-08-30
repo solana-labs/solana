@@ -116,8 +116,7 @@ mod tests {
     }
 
     impl CpuStatsUpdater {
-        pub fn new(exit: &Arc<AtomicBool>) -> Self {
-            let exit = exit.clone();
+        pub fn new(exit: Arc<AtomicBool>) -> Self {
             let cpu_stats = Arc::new(CpuStats::default());
             let cpu_stats_clone = cpu_stats.clone();
 
@@ -370,14 +369,14 @@ mod tests {
                 receiver,
                 blockstore.clone(),
                 max_ledger_shreds,
-                &exit,
+                exit.clone(),
             ))
         } else {
             None
         };
 
         let exit_cpu = Arc::new(AtomicBool::new(false));
-        let sys = CpuStatsUpdater::new(&exit_cpu);
+        let sys = CpuStatsUpdater::new(exit_cpu.clone());
 
         let mut shreds = VecDeque::new();
 

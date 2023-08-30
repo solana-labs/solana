@@ -94,6 +94,11 @@ module.exports = {
         },
         {
           type: "doc",
+          id: "getstarted/overview",
+          label: "Overview",
+        },
+        {
+          type: "doc",
           id: "getstarted/hello-world",
           label: "Hello world",
         },
@@ -301,6 +306,11 @@ module.exports = {
           id: "developing/runtime-facilities/sysvars",
           label: "Sysvar Cluster Data",
         },
+        {
+          type: "doc",
+          label: "ZK Token Proof Program",
+          id: "developing/runtime-facilities/zk-token-proof",
+        }
       ],
     },
     {
@@ -323,11 +333,38 @@ module.exports = {
   ],
   validatorsSidebar: [
     "running-validator",
+    "validator/faq",
+    {
+      type: "category",
+      label: "Introduction",
+      collapsed: false,
+      items: [
+        "validator/overview/what-is-a-validator",
+        "validator/overview/what-is-an-rpc-node",
+        "validator/overview/running-validator-or-rpc-node",
+        "validator/overview/validator-prerequisites",
+        "validator/overview/validator-initiatives",
+      ],
+    },
     {
       type: "category",
       label: "Getting Started",
       collapsed: false,
-      items: ["running-validator/validator-reqs"],
+      items: [
+        "running-validator/validator-reqs",
+        "validator/get-started/setup-a-validator",
+        "validator/get-started/setup-an-rpc-node",
+      ],
+    },
+    {
+      type: "category",
+      label: "Best Practices",
+      collapsed: false,
+      items: [
+        "validator/best-practices/operations",
+        "validator/best-practices/monitoring",
+        "validator/best-practices/security",
+      ],
     },
     {
       type: "category",

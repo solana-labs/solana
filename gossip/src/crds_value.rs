@@ -139,13 +139,13 @@ impl Sanitize for CrdsData {
 /// Random timestamp for tests and benchmarks.
 pub(crate) fn new_rand_timestamp<R: Rng>(rng: &mut R) -> u64 {
     const DELAY: u64 = 10 * 60 * 1000; // 10 minutes
-    timestamp() - DELAY + rng.gen_range(0, 2 * DELAY)
+    timestamp() - DELAY + rng.gen_range(0..2 * DELAY)
 }
 
 impl CrdsData {
     /// New random CrdsData for tests and benchmarks.
     fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> CrdsData {
-        let kind = rng.gen_range(0, 7);
+        let kind = rng.gen_range(0..7);
         // TODO: Implement other kinds of CrdsData here.
         // TODO: Assign ranges to each arm proportional to their frequency in
         // the mainnet crds table.
@@ -156,9 +156,9 @@ impl CrdsData {
             2 => CrdsData::LegacySnapshotHashes(LegacySnapshotHashes::new_rand(rng, pubkey)),
             3 => CrdsData::AccountsHashes(AccountsHashes::new_rand(rng, pubkey)),
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
-            5 => CrdsData::Vote(rng.gen_range(0, MAX_VOTES), Vote::new_rand(rng, pubkey)),
+            5 => CrdsData::Vote(rng.gen_range(0..MAX_VOTES), Vote::new_rand(rng, pubkey)),
             _ => CrdsData::EpochSlots(
-                rng.gen_range(0, MAX_EPOCH_SLOTS),
+                rng.gen_range(0..MAX_EPOCH_SLOTS),
                 EpochSlots::new_rand(rng, pubkey),
             ),
         }
@@ -195,10 +195,10 @@ impl AccountsHashes {
 
     /// New random AccountsHashes for tests and benchmarks.
     pub(crate) fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
-        let num_hashes = rng.gen_range(0, MAX_LEGACY_SNAPSHOT_HASHES) + 1;
+        let num_hashes = rng.gen_range(0..MAX_LEGACY_SNAPSHOT_HASHES) + 1;
         let hashes = std::iter::repeat_with(|| {
-            let slot = 47825632 + rng.gen_range(0, 512);
-            let hash = solana_sdk::hash::new_rand(rng);
+            let slot = 47825632 + rng.gen_range(0..512);
+            let hash = Hash::new_unique();
             (slot, hash)
         })
         .take(num_hashes)
@@ -462,9 +462,8 @@ impl NodeInstance {
     // the same owner. Otherwise returns true if self has more recent timestamp
     // than other, and so overrides it.
     pub(crate) fn overrides(&self, other: &CrdsValue) -> Option<bool> {
-        let other = match &other.data {
-            CrdsData::NodeInstance(other) => other,
-            _ => return None,
+        let CrdsData::NodeInstance(other) = &other.data else {
+            return None;
         };
         if self.token == other.token || self.from != other.from {
             return None;
@@ -582,7 +581,7 @@ impl CrdsValue {
     /// This is used to time out push messages.
     pub fn wallclock(&self) -> u64 {
         match &self.data {
-            CrdsData::LegacyContactInfo(contact_info) => contact_info.wallclock,
+            CrdsData::LegacyContactInfo(contact_info) => contact_info.wallclock(),
             CrdsData::Vote(_, vote) => vote.wallclock,
             CrdsData::LowestSlot(_, obj) => obj.wallclock,
             CrdsData::LegacySnapshotHashes(hash) => hash.wallclock,
@@ -598,7 +597,7 @@ impl CrdsValue {
     }
     pub fn pubkey(&self) -> Pubkey {
         match &self.data {
-            CrdsData::LegacyContactInfo(contact_info) => contact_info.id,
+            CrdsData::LegacyContactInfo(contact_info) => *contact_info.pubkey(),
             CrdsData::Vote(_, vote) => vote.from,
             CrdsData::LowestSlot(_, slots) => slots.from,
             CrdsData::LegacySnapshotHashes(hash) => hash.from,
@@ -719,7 +718,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let v = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(LegacyContactInfo::default()));
         assert_eq!(v.wallclock(), 0);
-        let key = v.contact_info().unwrap().id;
+        let key = *v.contact_info().unwrap().pubkey();
         assert_eq!(v.label(), CrdsValueLabel::LegacyContactInfo(key));
 
         let v = Vote::new(Pubkey::default(), new_test_vote_tx(&mut rng), 0).unwrap();
@@ -802,7 +801,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let vote = vote_state::Vote::new(
             vec![1, 3, 7], // slots
-            solana_sdk::hash::new_rand(&mut rng),
+            Hash::new_unique(),
         );
         let ix = vote_instruction::vote(
             &Pubkey::new_unique(), // vote_pubkey
@@ -879,7 +878,7 @@ mod test {
         let mut rng = ChaChaRng::from_seed(seed);
         let keys: Vec<_> = repeat_with(Keypair::new).take(16).collect();
         let values: Vec<_> = repeat_with(|| {
-            let index = rng.gen_range(0, keys.len());
+            let index = rng.gen_range(0..keys.len());
             CrdsValue::new_rand(&mut rng, Some(&keys[index]))
         })
         .take(1 << 12)

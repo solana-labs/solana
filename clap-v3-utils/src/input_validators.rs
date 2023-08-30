@@ -387,25 +387,6 @@ where
     }
 }
 
-pub fn is_niceness_adjustment_valid<T>(value: T) -> Result<(), String>
-where
-    T: AsRef<str> + Display,
-{
-    let adjustment = value
-        .as_ref()
-        .parse::<i8>()
-        .map_err(|err| format!("error parsing niceness adjustment value '{value}': {err}"))?;
-    if solana_perf::thread::is_renice_allowed(adjustment) {
-        Ok(())
-    } else {
-        Err(String::from(
-            "niceness adjustment supported only on Linux; negative adjustment \
-             (priority increase) requires root or CAP_SYS_NICE (see `man 7 capabilities` \
-             for details)",
-        ))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -421,12 +402,5 @@ mod tests {
         assert!(is_derivation("4294967296").is_err());
         assert!(is_derivation("a/b").is_err());
         assert!(is_derivation("0/4294967296").is_err());
-    }
-
-    #[test]
-    fn test_is_niceness_adjustment_valid() {
-        assert_eq!(is_niceness_adjustment_valid("0"), Ok(()));
-        assert!(is_niceness_adjustment_valid("128").is_err());
-        assert!(is_niceness_adjustment_valid("-129").is_err());
     }
 }

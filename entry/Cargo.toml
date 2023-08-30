@@ -12,8 +12,7 @@ edition = { workspace = true }
 [dependencies]
 bincode = { workspace = true }
 crossbeam-channel = { workspace = true }
-dlopen = { workspace = true }
-dlopen_derive = { workspace = true }
+dlopen2 = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 rand = { workspace = true }

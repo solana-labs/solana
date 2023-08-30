@@ -11,13 +11,15 @@ use {
     solana_client::connection_cache::ConnectionCache,
     solana_core::{
         banking_stage::{
-            committer::Committer, consumer::Consumer, BankingStage, BankingStageStats,
+            committer::Committer,
+            consumer::Consumer,
+            leader_slot_metrics::LeaderSlotMetricsTracker,
+            qos_service::QosService,
+            unprocessed_packet_batches::*,
+            unprocessed_transaction_storage::{ThreadType, UnprocessedTransactionStorage},
+            BankingStage, BankingStageStats,
         },
         banking_trace::{BankingPacketBatch, BankingTracer},
-        leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
-        qos_service::QosService,
-        unprocessed_packet_batches::*,
-        unprocessed_transaction_storage::{ThreadType, UnprocessedTransactionStorage},
     },
     solana_entry::entry::{next_hash, Entry},
     solana_gossip::cluster_info::{ClusterInfo, Node},
@@ -27,7 +29,10 @@ use {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     },
-    solana_perf::{packet::to_packet_batches, test_tx::test_tx},
+    solana_perf::{
+        packet::{to_packet_batches, Packet},
+        test_tx::test_tx,
+    },
     solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry},
     solana_runtime::{
         bank::Bank, bank_forks::BankForks, installed_scheduler_pool::BankWithScheduler,
@@ -82,17 +87,23 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, _signal_receiver) =
-            create_test_recorder(&bank, &blockstore, None, None);
+            create_test_recorder(bank, blockstore, None, None);
 
         let recorder = poh_recorder.read().unwrap().new_recorder();
         let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
 
         let tx = test_tx();
         let transactions = vec![tx; 4194304];
-        let batches = transactions_to_deserialized_packets(&transactions).unwrap();
+        let batches = transactions
+            .iter()
+            .filter_map(|transaction| {
+                let packet = Packet::from_data(None, transaction).ok().unwrap();
+                DeserializedPacket::new(packet).ok()
+            })
+            .collect::<Vec<_>>();
         let batches_len = batches.len();
         let mut transaction_buffer = UnprocessedTransactionStorage::new_transaction_storage(
-            UnprocessedPacketBatches::from_iter(batches.into_iter(), 2 * batches_len),
+            UnprocessedPacketBatches::from_iter(batches, 2 * batches_len),
             ThreadType::Transactions,
         );
         let (s, _r) = unbounded();
@@ -122,10 +133,10 @@ fn make_accounts_txs(txes: usize, mint_keypair: &Keypair, hash: Hash) -> Vec<Tra
         .into_par_iter()
         .map(|_| {
             let mut new = dummy.clone();
-            let sig: Vec<_> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
+            let sig: [u8; 64] = std::array::from_fn(|_| thread_rng().gen::<u8>());
             new.message.account_keys[0] = pubkey::new_rand();
             new.message.account_keys[1] = pubkey::new_rand();
-            new.signatures = vec![Signature::new(&sig[0..64])];
+            new.signatures = vec![Signature::from(sig)];
             new
         })
         .collect()
@@ -272,7 +283,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, signal_receiver) =
-            create_test_recorder(&bank, &blockstore, None, None);
+            create_test_recorder(bank.clone(), blockstore, None, None);
         let cluster_info = {
             let keypair = Arc::new(Keypair::new());
             let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
@@ -289,7 +300,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             None,
             s,
             None,
-            Arc::new(ConnectionCache::default()),
+            Arc::new(ConnectionCache::new("connection_cache_test")),
             bank_forks,
             &Arc::new(PrioritizationFeeCache::new(0u64)),
         );

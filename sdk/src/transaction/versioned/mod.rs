@@ -115,11 +115,8 @@ impl VersionedTransaction {
         })
     }
 
-    pub fn sanitize(
-        &self,
-        require_static_program_ids: bool,
-    ) -> std::result::Result<(), SanitizeError> {
-        self.message.sanitize(require_static_program_ids)?;
+    pub fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        self.message.sanitize()?;
         self.sanitize_signatures()?;
         Ok(())
     }

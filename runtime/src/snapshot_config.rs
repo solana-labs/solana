@@ -1,5 +1,8 @@
 use {
-    crate::snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
+    crate::{
+        snapshot_bank_utils,
+        snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
+    },
     solana_sdk::clock::Slot,
     std::{num::NonZeroUsize, path::PathBuf},
 };
@@ -50,13 +53,13 @@ impl Default for SnapshotConfig {
         Self {
             usage: SnapshotUsage::LoadAndGenerate,
             full_snapshot_archive_interval_slots:
-                snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+                snapshot_bank_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             incremental_snapshot_archive_interval_slots:
-                snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+                snapshot_bank_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             full_snapshot_archives_dir: PathBuf::default(),
             incremental_snapshot_archives_dir: PathBuf::default(),
             bank_snapshots_dir: PathBuf::default(),
-            archive_format: ArchiveFormat::TarBzip2,
+            archive_format: ArchiveFormat::TarZstd,
             snapshot_version: SnapshotVersion::default(),
             maximum_full_snapshot_archives_to_retain:
                 snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,

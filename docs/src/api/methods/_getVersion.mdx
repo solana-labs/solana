@@ -25,8 +25,8 @@ Returns the current Solana version running on the node
 
 The result field will be a JSON object with the following fields:
 
-- `solana-core` - software version of solana-core
-- `feature-set` - unique identifier of the current software's feature set
+- `solana-core` - software version of solana-core as a `string`
+- `feature-set` - unique identifier of the current software's feature set as a `u32`
 
 </CodeParams>
 
@@ -43,7 +43,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ### Response:
 
 ```json
-{ "jsonrpc": "2.0", "result": { "solana-core": "1.15.0" }, "id": 1 }
+{ "jsonrpc": "2.0", "result": { "feature-set": 2891131721, "solana-core": "1.16.7" }, "id": 1 }
 ```
 
 </CodeSnippets>

@@ -92,7 +92,6 @@ pub struct BorrowedInstruction<'a> {
 #[cfg(not(target_os = "solana"))]
 bitflags! {
     struct InstructionsSysvarAccountMeta: u8 {
-        const NONE = 0b00000000;
         const IS_SIGNER = 0b00000001;
         const IS_WRITABLE = 0b00000010;
     }
@@ -126,7 +125,7 @@ fn serialize_instructions(instructions: &[BorrowedInstruction]) -> Vec<u8> {
         data[start..start + 2].copy_from_slice(&start_instruction_offset.to_le_bytes());
         append_u16(&mut data, instruction.accounts.len() as u16);
         for account_meta in &instruction.accounts {
-            let mut account_meta_flags = InstructionsSysvarAccountMeta::NONE;
+            let mut account_meta_flags = InstructionsSysvarAccountMeta::empty();
             if account_meta.is_signer {
                 account_meta_flags |= InstructionsSysvarAccountMeta::IS_SIGNER;
             }

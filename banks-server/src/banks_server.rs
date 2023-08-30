@@ -2,6 +2,7 @@ use {
     bincode::{deserialize, serialize},
     crossbeam_channel::{unbounded, Receiver, Sender},
     futures::{future, prelude::stream::StreamExt},
+    solana_accounts_db::transaction_results::TransactionExecutionResult,
     solana_banks_interface::{
         Banks, BanksRequest, BanksResponse, BanksTransactionResultWithMetadata,
         BanksTransactionResultWithSimulation, TransactionConfirmationStatus, TransactionMetadata,
@@ -9,7 +10,7 @@ use {
     },
     solana_client::connection_cache::ConnectionCache,
     solana_runtime::{
-        bank::{Bank, TransactionExecutionResult, TransactionSimulationResult},
+        bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
     },
@@ -33,7 +34,7 @@ use {
         convert::TryFrom,
         io,
         net::{Ipv4Addr, SocketAddr},
-        sync::{Arc, RwLock},
+        sync::{atomic::AtomicBool, Arc, RwLock},
         thread::Builder,
         time::Duration,
     },
@@ -85,8 +86,18 @@ impl BanksServer {
                 .into_iter()
                 .map(|info| deserialize(&info.wire_transaction).unwrap())
                 .collect();
-            let bank = bank_forks.read().unwrap().working_bank();
-            let _ = bank.try_process_transactions(transactions.iter());
+            loop {
+                let bank = bank_forks.read().unwrap().working_bank();
+                // bank forks lock released, now verify bank hasn't been frozen yet
+                // in the mean-time the bank can not be frozen until this tx batch
+                // has been processed
+                let lock = bank.freeze_lock();
+                if *lock == Hash::default() {
+                    let _ = bank.try_process_entry_transactions(transactions);
+                    // break out of inner loop and release bank freeze lock
+                    break;
+                }
+            }
         }
     }
 
@@ -168,7 +179,6 @@ fn simulate_transaction(
         MessageHash::Compute,
         Some(false), // is_simple_vote_tx
         bank,
-        true, // require_static_program_ids
     ) {
         Err(err) => {
             return BanksTransactionResultWithSimulation {
@@ -251,7 +261,7 @@ impl Banks for BanksServer {
             optimistically_confirmed_bank.get_signature_status_slot(&signature);
 
         let confirmations = if r_block_commitment_cache.root() >= slot
-            && r_block_commitment_cache.highest_confirmed_root() >= slot
+            && r_block_commitment_cache.highest_super_majority_root() >= slot
         {
             None
         } else {
@@ -320,7 +330,6 @@ impl Banks for BanksServer {
             MessageHash::Compute,
             Some(false), // is_simple_vote_tx
             bank.as_ref(),
-            true, // require_static_program_ids
         ) {
             Ok(tx) => tx,
             Err(err) => return Some(Err(err)),
@@ -402,8 +411,8 @@ impl Banks for BanksServer {
     async fn get_fee_for_message_with_commitment_and_context(
         self,
         _: Context,
-        commitment: CommitmentLevel,
         message: Message,
+        commitment: CommitmentLevel,
     ) -> Option<u64> {
         let bank = self.bank(commitment);
         let sanitized_message = SanitizedMessage::try_from(message).ok()?;
@@ -433,6 +442,7 @@ pub async fn start_tcp_server(
     bank_forks: Arc<RwLock<BankForks>>,
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     connection_cache: Arc<ConnectionCache>,
+    exit: Arc<AtomicBool>,
 ) -> io::Result<()> {
     // Note: These settings are copied straight from the tarpc example.
     let server = tcp::listen(listen_addr, Bincode::default)
@@ -460,6 +470,7 @@ pub async fn start_tcp_server(
                 &connection_cache,
                 5_000,
                 0,
+                exit.clone(),
             );
 
             let server = BanksServer::new(

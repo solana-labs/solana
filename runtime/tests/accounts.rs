@@ -2,7 +2,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_runtime::{
+    solana_accounts_db::{
         accounts_db::{AccountsDb, LoadHint, INCLUDE_SLOT_IN_HASH_TESTS},
         ancestors::Ancestors,
     },
@@ -11,6 +11,7 @@ use {
         clock::Slot,
         genesis_config::ClusterType,
         pubkey::Pubkey,
+        sysvar::epoch_schedule::EpochSchedule,
     },
     std::{
         collections::HashSet,
@@ -38,7 +39,7 @@ fn test_shrink_and_clean() {
             if exit_for_shrink.load(Ordering::Relaxed) {
                 break;
             }
-            accounts_for_shrink.shrink_all_slots(false, None);
+            accounts_for_shrink.shrink_all_slots(false, None, &EpochSchedule::default());
         });
 
         let mut alive_accounts = vec![];
@@ -50,7 +51,7 @@ fn test_shrink_and_clean() {
             while alive_accounts.len() <= 10 {
                 alive_accounts.push((
                     solana_sdk::pubkey::new_rand(),
-                    AccountSharedData::new(thread_rng().gen_range(0, 50), 0, &owner),
+                    AccountSharedData::new(thread_rng().gen_range(0..50), 0, &owner),
                 ));
             }
 
@@ -95,8 +96,8 @@ fn test_bad_bank_hash() {
         .into_par_iter()
         .map(|_| {
             let key = solana_sdk::pubkey::new_rand();
-            let lamports = thread_rng().gen_range(0, 100);
-            let some_data_len = thread_rng().gen_range(0, 1000);
+            let lamports = thread_rng().gen_range(0..100);
+            let some_data_len = thread_rng().gen_range(0..1000);
             let account = AccountSharedData::new(lamports, some_data_len, &key);
             (key, account)
         })
@@ -112,11 +113,11 @@ fn test_bad_bank_hash() {
             info!("i: {}", i);
             last_print = Instant::now();
         }
-        let num_accounts = thread_rng().gen_range(0, 100);
+        let num_accounts = thread_rng().gen_range(0..100);
         (0..num_accounts).for_each(|_| {
             let mut idx;
             loop {
-                idx = thread_rng().gen_range(0, max_accounts);
+                idx = thread_rng().gen_range(0..max_accounts);
                 if existing.contains(&idx) {
                     continue;
                 }
@@ -125,7 +126,7 @@ fn test_bad_bank_hash() {
             }
             accounts_keys[idx]
                 .1
-                .set_lamports(thread_rng().gen_range(0, 1000));
+                .set_lamports(thread_rng().gen_range(0..1000));
         });
 
         let account_refs: Vec<_> = existing

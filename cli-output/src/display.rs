@@ -1,5 +1,6 @@
 use {
     crate::cli_output::CliSignatureVerificationStatus,
+    base64::{prelude::BASE64_STANDARD, Engine},
     chrono::{DateTime, Local, NaiveDateTime, SecondsFormat, TimeZone, Utc},
     console::style,
     indicatif::{ProgressBar, ProgressStyle},
@@ -602,7 +603,7 @@ fn write_return_data<W: io::Write>(
     if let Some(return_data) = return_data {
         let (data, encoding) = &return_data.data;
         let raw_return_data = match encoding {
-            UiReturnDataEncoding::Base64 => base64::decode(data).map_err(|err| {
+            UiReturnDataEncoding::Base64 => BASE64_STANDARD.decode(data).map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
                     format!("could not parse data as {encoding:?}: {err:?}"),
@@ -836,7 +837,7 @@ mod test {
 
         assert_eq!(
             output,
-            r#"Block Time: 2021-08-10T22:16:31Z
+            r"Block Time: 2021-08-10T22:16:31Z
 Version: legacy
 Recent Blockhash: 11111111111111111111111111111111
 Signature 0: 5pkjrE4VBa3Bu9CMKXgh1U345cT1gGo8QBVRTzHAo6gHeiPae5BTbShP15g6NgqRMNqu8Qrhph1ATmrfC1Ley3rx (pass)
@@ -859,7 +860,7 @@ Return Data from Program 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR:
 Rewards:
   Address                                            Type        Amount            New Balance         \0
   4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi        rent        -◎0.000000100     ◎0.000009900       \0
-"#.replace("\\0", "") // replace marker used to subvert trailing whitespace linter on CI
+".replace("\\0", "") // replace marker used to subvert trailing whitespace linter on CI
         );
     }
 
@@ -915,7 +916,7 @@ Rewards:
 
         assert_eq!(
             output,
-            r#"Block Time: 2021-08-10T22:16:31Z
+            r"Block Time: 2021-08-10T22:16:31Z
 Version: 0
 Recent Blockhash: 11111111111111111111111111111111
 Signature 0: 5iEy3TT3ZhTA1NkuCY8GrQGNVY8d5m1bpjdh5FT3Ca4Py81fMipAZjafDuKJKrkw5q5UAAd8oPcgZ4nyXpHt4Fp7 (pass)
@@ -947,7 +948,7 @@ Return Data from Program 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR:
 Rewards:
   Address                                            Type        Amount            New Balance         \0
   CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8        rent        -◎0.000000100     ◎0.000014900       \0
-"#.replace("\\0", "") // replace marker used to subvert trailing whitespace linter on CI
+".replace("\\0", "") // replace marker used to subvert trailing whitespace linter on CI
         );
     }
 

@@ -4,10 +4,7 @@ use {
     chrono::{DateTime, Local},
     crossbeam_channel::{unbounded, Receiver, SendError, Sender, TryRecvError},
     rolling_file::{RollingCondition, RollingConditionBasic, RollingFileAppender},
-    solana_perf::{
-        packet::{to_packet_batches, PacketBatch},
-        test_tx::test_tx,
-    },
+    solana_perf::packet::PacketBatch,
     solana_sdk::{hash::Hash, slot_history::Slot},
     std::{
         fs::{create_dir_all, remove_dir_all},
@@ -20,7 +17,6 @@ use {
         thread::{self, sleep, JoinHandle},
         time::{Duration, SystemTime},
     },
-    tempfile::TempDir,
     thiserror::Error,
 };
 
@@ -358,8 +354,13 @@ impl TracedSender {
     }
 }
 
+#[cfg(any(test, feature = "dev-context-only-utils"))]
 pub mod for_test {
-    use super::*;
+    use {
+        super::*,
+        solana_perf::{packet::to_packet_batches, test_tx::test_tx},
+        tempfile::TempDir,
+    };
 
     pub fn sample_packet_batch() -> BankingPacketBatch {
         BankingPacketBatch::new((to_packet_batches(&vec![test_tx(); 4], 10), None))
@@ -400,6 +401,7 @@ mod tests {
             io::{BufReader, ErrorKind::UnexpectedEof},
             str::FromStr,
         },
+        tempfile::TempDir,
     };
 
     #[test]

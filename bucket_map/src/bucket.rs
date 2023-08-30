@@ -88,7 +88,7 @@ struct DataFileEntryToFree {
 }
 
 // >= 2 instances of BucketStorage per 'bucket' in the bucket map. 1 for index, >= 1 for data
-pub struct Bucket<T: Copy + 'static> {
+pub struct Bucket<T: Copy + PartialEq + 'static> {
     drives: Arc<Vec<PathBuf>>,
     /// index
     pub index: BucketStorage<IndexBucket<T>>,
@@ -109,14 +109,14 @@ pub struct Bucket<T: Copy + 'static> {
     at_least_one_entry_deleted: bool,
 }
 
-impl<'b, T: Clone + Copy + 'static> Bucket<T> {
+impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
     pub fn new(
         drives: Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
         stats: Arc<BucketMapStats>,
         count: Arc<AtomicU64>,
     ) -> Self {
-        let index = BucketStorage::new(
+        let (index, _file_name) = BucketStorage::new(
             Arc::clone(&drives),
             1,
             std::mem::size_of::<IndexEntry<T>>() as u64,
@@ -183,7 +183,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     /// if entry does not exist, return just the index of an empty entry appropriate for this key
     /// returns (existing entry, index of the found or empty entry)
     fn find_index_entry_mut(
-        index: &mut BucketStorage<IndexBucket<T>>,
+        index: &BucketStorage<IndexBucket<T>>,
         key: &Pubkey,
         random: u64,
     ) -> Result<(Option<IndexEntryPlaceInBucket<T>>, u64), BucketMapError> {
@@ -402,13 +402,15 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         data_len: usize,
         ref_count: RefCount,
     ) -> Result<(), BucketMapError> {
+        let num_slots = data_len as u64;
         let best_fit_bucket = MultipleSlots::data_bucket_from_num_slots(data_len as u64);
-        if self.data.get(best_fit_bucket as usize).is_none() {
+        let requires_data_bucket = num_slots > 1 || ref_count != 1;
+        if requires_data_bucket && self.data.get(best_fit_bucket as usize).is_none() {
             // fail early if the data bucket we need doesn't exist - we don't want the index entry partially allocated
             return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
         }
         let max_search = self.index.max_search();
-        let (elem, elem_ix) = Self::find_index_entry_mut(&mut self.index, key, self.random)?;
+        let (elem, elem_ix) = Self::find_index_entry_mut(&self.index, key, self.random)?;
         let elem = if let Some(elem) = elem {
             elem
         } else {
@@ -420,8 +422,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             elem_allocate.init(&mut self.index, key);
             elem_allocate
         };
-        let num_slots = data_len as u64;
-        if num_slots <= 1 && ref_count == 1 {
+        if !requires_data_bucket {
             // new data stored should be stored in IndexEntry and NOT in data file
             // new data len is 0 or 1
             if let OccupiedEnum::MultipleSlots(multiple_slots) =
@@ -457,7 +458,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
 
                 // write data
                 assert!(!current_bucket.is_free(elem_loc));
-                let slice: &mut [T] = current_bucket.get_mut_cell_slice(
+                let slice: &mut [T] = current_bucket.get_slice_mut(
                     elem_loc,
                     data_len as u64,
                     IncludeHeader::NoHeader,
@@ -482,7 +483,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         let best_bucket = &mut self.data[best_fit_bucket as usize];
         let cap_power = best_bucket.contents.capacity_pow2();
         let cap = best_bucket.capacity();
-        let pos = thread_rng().gen_range(0, cap);
+        let pos = thread_rng().gen_range(0..cap);
         let mut success = false;
         // max search is increased here by a lot for this search. The idea is that we just have to find an empty bucket somewhere.
         // We don't mind waiting on a new write (by searching longer). Writing is done in the background only.
@@ -511,8 +512,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 best_bucket.occupy(ix, false).unwrap();
                 if num_slots > 0 {
                     // copy slotlist into the data bucket
-                    let slice =
-                        best_bucket.get_mut_cell_slice(ix, num_slots, IncludeHeader::NoHeader);
+                    let slice = best_bucket.get_slice_mut(ix, num_slots, IncludeHeader::NoHeader);
                     slice.iter_mut().zip(data).for_each(|(dest, src)| {
                         *dest = *src;
                     });
@@ -569,7 +569,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 count += 1;
                 // grow relative to the current capacity
                 let new_capacity = (current_capacity * 110 / 100).max(anticipated_size);
-                let mut index = BucketStorage::new_with_capacity(
+                let (mut index, _file_name) = BucketStorage::new_with_capacity(
                     Arc::clone(&self.drives),
                     1,
                     std::mem::size_of::<IndexEntry<T>>() as u64,
@@ -649,14 +649,17 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         if self.data.get(ix).is_none() {
             for i in self.data.len()..ix {
                 // insert empty data buckets
-                self.add_data_bucket(BucketStorage::new(
-                    Arc::clone(&self.drives),
-                    1 << i,
-                    Self::elem_size(),
-                    self.index.max_search,
-                    Arc::clone(&self.stats.data),
-                    Arc::default(),
-                ));
+                self.add_data_bucket(
+                    BucketStorage::new(
+                        Arc::clone(&self.drives),
+                        1 << i,
+                        Self::elem_size(),
+                        self.index.max_search,
+                        Arc::clone(&self.stats.data),
+                        Arc::default(),
+                    )
+                    .0,
+                );
             }
             self.add_data_bucket(bucket);
         } else {
@@ -671,7 +674,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     /// grow a data bucket
     /// The application of the new bucket is deferred until the next write lock.
     pub fn grow_data(&self, data_index: u64, current_capacity_pow2: u8) {
-        let new_bucket = BucketStorage::new_resized(
+        let (new_bucket, _file_name) = BucketStorage::new_resized(
             &self.drives,
             self.index.max_search,
             self.data.get(data_index as usize),
@@ -733,14 +736,11 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     pub fn insert(&mut self, key: &Pubkey, value: (&[T], RefCount)) {
         let (new, refct) = value;
         loop {
-            let rv = self.try_write(key, new.iter(), new.len(), refct);
-            match rv {
-                Ok(_) => return,
-                Err(err) => {
-                    self.grow(err);
-                    self.handle_delayed_grows();
-                }
-            }
+            let Err(err) = self.try_write(key, new.iter(), new.len(), refct) else {
+                return;
+            };
+            self.grow(err);
+            self.handle_delayed_grows();
         }
     }
 
@@ -801,6 +801,7 @@ mod tests {
             Arc::default(),
             Arc::default(),
         )
+        .0
     }
 
     #[test]
@@ -906,7 +907,7 @@ mod tests {
                         .collect::<Vec<_>>();
                     let mut hashed = Bucket::index_entries(raw.clone().into_iter(), len, random);
                     let common_ix = 2; // both are put at same ix
-                    hashed.iter_mut().for_each(|mut v| {
+                    hashed.iter_mut().for_each(|v| {
                         v.0 = common_ix;
                     });
                     let hashed_raw = hashed.clone();

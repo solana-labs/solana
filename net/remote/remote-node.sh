@@ -107,9 +107,6 @@ cat >> ~/solana/on-reboot <<EOF
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
 
-  sudo RUST_LOG=info ~solana/.cargo/bin/solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
-  echo \$! > sys-tuner.pid
-
   (
     sudo SOLANA_METRICS_CONFIG="$SOLANA_METRICS_CONFIG" scripts/oom-monitor.sh
   ) > oom-monitor.log 2>&1 &

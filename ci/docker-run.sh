@@ -54,10 +54,10 @@ if [[ -n $CI ]]; then
       # sccache-related bugs
       echo "--- $0 ... (with sccache being DISABLED due to many (${BUILDKITE_RETRY_COUNT}) retries)"
     else
-      echo "--- $0 ... (with sccache enabled)"
+      echo "--- $0 ... (with sccache enabled with prefix: $SCCACHE_S3_KEY_PREFIX)"
       # sccache
       ARGS+=(
-        --env "RUSTC_WRAPPER=/home/.cargo/bin/sccache"
+        --env "RUSTC_WRAPPER=/usr/local/cargo/bin/sccache"
         --env AWS_ACCESS_KEY_ID
         --env AWS_SECRET_ACCESS_KEY
         --env SCCACHE_BUCKET
@@ -93,6 +93,8 @@ ARGS+=(
   --env BUILDKITE
   --env BUILDKITE_AGENT_ACCESS_TOKEN
   --env BUILDKITE_JOB_ID
+  --env BUILDKITE_PARALLEL_JOB
+  --env BUILDKITE_PARALLEL_JOB_COUNT
   --env CI
   --env CI_BRANCH
   --env CI_BASE_BRANCH
@@ -110,7 +112,7 @@ ARGS+=(
 # We normalize CI to `1`; but codecov expects it to be `true` to detect Buildkite...
 # Unfortunately, codecov.io fails sometimes:
 #   curl: (7) Failed to connect to codecov.io port 443: Connection timed out
-CODECOV_ENVS=$(CI=true bash <(while ! curl -sS --retry 5 --retry-delay 2 --retry-connrefused https://codecov.io/env; do sleep 10; done))
+CODECOV_ENVS=$(CI=true bash <(while ! curl -sS --retry 5 --retry-delay 2 --retry-connrefused --fail https://codecov.io/env; do sleep 10; done))
 
 if $INTERACTIVE; then
   if [[ -n $1 ]]; then

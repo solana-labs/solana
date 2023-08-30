@@ -65,12 +65,13 @@ impl VoteAccount {
         self.0.account.owner()
     }
 
-    pub fn vote_state(&self) -> &Result<VoteState, Error> {
+    pub fn vote_state(&self) -> Result<&VoteState, &Error> {
         // VoteState::deserialize deserializes a VoteStateVersions and then
         // calls VoteStateVersions::convert_to_current.
         self.0
             .vote_state
             .get_or_init(|| VoteState::deserialize(self.0.account.data()).map_err(Error::from))
+            .as_ref()
     }
 
     pub(crate) fn is_deserialized(&self) -> bool {
@@ -79,7 +80,7 @@ impl VoteAccount {
 
     /// VoteState.node_pubkey of this vote-account.
     pub fn node_pubkey(&self) -> Option<Pubkey> {
-        Some(self.vote_state().as_ref().ok()?.node_pubkey)
+        Some(self.vote_state().ok()?.node_pubkey)
     }
 }
 
@@ -178,9 +179,8 @@ impl VoteAccounts {
         if stake == 0u64 {
             return;
         }
-        let staked_nodes = match self.staked_nodes.get_mut() {
-            None => return,
-            Some(staked_nodes) => staked_nodes,
+        let Some(staked_nodes) = self.staked_nodes.get_mut() else {
+            return;
         };
         if let Some(node_pubkey) = vote_account.node_pubkey() {
             Arc::make_mut(staked_nodes)
@@ -194,9 +194,8 @@ impl VoteAccounts {
         if stake == 0u64 {
             return;
         }
-        let staked_nodes = match self.staked_nodes.get_mut() {
-            None => return,
-            Some(staked_nodes) => staked_nodes,
+        let Some(staked_nodes) = self.staked_nodes.get_mut() else {
+            return;
         };
         if let Some(node_pubkey) = vote_account.node_pubkey() {
             match Arc::make_mut(staked_nodes).entry(node_pubkey) {
@@ -361,9 +360,9 @@ mod tests {
     ) -> impl Iterator<Item = (Pubkey, (/*stake:*/ u64, VoteAccount))> + '_ {
         let nodes: Vec<_> = repeat_with(Pubkey::new_unique).take(num_nodes).collect();
         repeat_with(move || {
-            let node = nodes[rng.gen_range(0, nodes.len())];
+            let node = nodes[rng.gen_range(0..nodes.len())];
             let (account, _) = new_rand_vote_account(rng, Some(node));
-            let stake = rng.gen_range(0, 997);
+            let stake = rng.gen_range(0..997);
             let vote_account = VoteAccount::try_from(account).unwrap();
             (Pubkey::new_unique(), (stake, vote_account))
         })
@@ -395,9 +394,9 @@ mod tests {
         let lamports = account.lamports();
         let vote_account = VoteAccount::try_from(account).unwrap();
         assert_eq!(lamports, vote_account.lamports());
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
         // 2nd call to .vote_state() should return the cached value.
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
     }
 
     #[test]
@@ -405,7 +404,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let vote_account = VoteAccount::try_from(account.clone()).unwrap();
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
         // Assert than VoteAccount has the same wire format as Account.
         assert_eq!(
             bincode::serialize(&account).unwrap(),
@@ -419,13 +418,10 @@ mod tests {
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let data = bincode::serialize(&account).unwrap();
         let vote_account = VoteAccount::try_from(account).unwrap();
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
         let other_vote_account: VoteAccount = bincode::deserialize(&data).unwrap();
         assert_eq!(vote_account, other_vote_account);
-        assert_eq!(
-            vote_state,
-            *other_vote_account.vote_state().as_ref().unwrap()
-        );
+        assert_eq!(vote_state, *other_vote_account.vote_state().unwrap());
     }
 
     #[test]
@@ -433,15 +429,12 @@ mod tests {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let vote_account = VoteAccount::try_from(account).unwrap();
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
         let data = bincode::serialize(&vote_account).unwrap();
         let other_vote_account: VoteAccount = bincode::deserialize(&data).unwrap();
         // Assert that serialize->deserialized returns the same VoteAccount.
         assert_eq!(vote_account, other_vote_account);
-        assert_eq!(
-            vote_state,
-            *other_vote_account.vote_state().as_ref().unwrap()
-        );
+        assert_eq!(vote_state, *other_vote_account.vote_state().unwrap());
     }
 
     #[test]
@@ -496,7 +489,7 @@ mod tests {
         }
         // Remove some of the vote accounts.
         for k in 0..256 {
-            let index = rng.gen_range(0, accounts.len());
+            let index = rng.gen_range(0..accounts.len());
             let (pubkey, (_, _)) = accounts.swap_remove(index);
             vote_accounts.remove(&pubkey);
             if (k + 1) % 32 == 0 {
@@ -505,9 +498,9 @@ mod tests {
         }
         // Modify the stakes for some of the accounts.
         for k in 0..2048 {
-            let index = rng.gen_range(0, accounts.len());
+            let index = rng.gen_range(0..accounts.len());
             let (pubkey, (stake, _)) = &mut accounts[index];
-            let new_stake = rng.gen_range(0, 997);
+            let new_stake = rng.gen_range(0..997);
             if new_stake < *stake {
                 vote_accounts.sub_stake(pubkey, *stake - new_stake);
             } else {
@@ -520,7 +513,7 @@ mod tests {
         }
         // Remove everything.
         while !accounts.is_empty() {
-            let index = rng.gen_range(0, accounts.len());
+            let index = rng.gen_range(0..accounts.len());
             let (pubkey, (_, _)) = accounts.swap_remove(index);
             vote_accounts.remove(&pubkey);
             if accounts.len() % 32 == 0 {

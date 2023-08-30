@@ -23,12 +23,11 @@ pub struct LedgerMetricReportService {
 }
 
 impl LedgerMetricReportService {
-    pub fn new(blockstore: Arc<Blockstore>, exit: &Arc<AtomicBool>) -> Self {
-        let exit_signal = exit.clone();
+    pub fn new(blockstore: Arc<Blockstore>, exit: Arc<AtomicBool>) -> Self {
         let t_cf_metric = Builder::new()
             .name("solRocksCfMtrcs".to_string())
             .spawn(move || loop {
-                if exit_signal.load(Ordering::Relaxed) {
+                if exit.load(Ordering::Relaxed) {
                     break;
                 }
                 thread::sleep(Duration::from_millis(

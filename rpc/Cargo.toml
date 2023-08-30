@@ -30,6 +30,7 @@ serde_derive = { workspace = true }
 serde_json = { workspace = true }
 soketto = { workspace = true }
 solana-account-decoder = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-client = { workspace = true }
 solana-entry = { workspace = true }
 solana-faucet = { workspace = true }

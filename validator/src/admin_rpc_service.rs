@@ -9,15 +9,16 @@ use {
     jsonrpc_server_utils::tokio,
     log::*,
     serde::{de::Deserializer, Deserialize, Serialize},
+    solana_accounts_db::accounts_index::AccountIndex,
     solana_core::{
-        admin_rpc_post_init::AdminRpcRequestMetadataPostInit, consensus::Tower,
-        tower_storage::TowerStorage, validator::ValidatorStartProgress,
+        admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
+        consensus::{tower_storage::TowerStorage, Tower},
+        validator::ValidatorStartProgress,
     },
     solana_geyser_plugin_manager::GeyserPluginManagerRequest,
-    solana_gossip::contact_info::ContactInfo,
+    solana_gossip::contact_info::{ContactInfo, Protocol, SOCKET_ADDR_UNSPECIFIED},
     solana_rpc::rpc::verify_pubkey,
     solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
-    solana_runtime::accounts_index::AccountIndex,
     solana_sdk::{
         exit::Exit,
         pubkey::Pubkey,
@@ -27,7 +28,7 @@ use {
         collections::{HashMap, HashSet},
         error,
         fmt::{self, Display},
-        net::{IpAddr, Ipv4Addr, SocketAddr},
+        net::SocketAddr,
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
         thread::{self, Builder},
@@ -70,8 +71,8 @@ pub struct AdminRpcContactInfo {
     pub id: String,
     pub gossip: SocketAddr,
     pub tvu: SocketAddr,
-    pub tvu_forwards: SocketAddr,
-    pub repair: SocketAddr,
+    pub tvu_quic: SocketAddr,
+    pub serve_repair_quic: SocketAddr,
     pub tpu: SocketAddr,
     pub tpu_forwards: SocketAddr,
     pub tpu_vote: SocketAddr,
@@ -91,24 +92,25 @@ impl From<ContactInfo> for AdminRpcContactInfo {
     fn from(node: ContactInfo) -> Self {
         macro_rules! unwrap_socket {
             ($name:ident) => {
-                node.$name().unwrap_or_else(|_| {
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), /*port:*/ 0u16)
-                })
+                node.$name().unwrap_or(SOCKET_ADDR_UNSPECIFIED)
+            };
+            ($name:ident, $protocol:expr) => {
+                node.$name($protocol).unwrap_or(SOCKET_ADDR_UNSPECIFIED)
             };
         }
         Self {
             id: node.pubkey().to_string(),
             last_updated_timestamp: node.wallclock(),
             gossip: unwrap_socket!(gossip),
-            tvu: unwrap_socket!(tvu),
-            tvu_forwards: unwrap_socket!(tvu_forwards),
-            repair: unwrap_socket!(repair),
-            tpu: unwrap_socket!(tpu),
-            tpu_forwards: unwrap_socket!(tpu_forwards),
+            tvu: unwrap_socket!(tvu, Protocol::UDP),
+            tvu_quic: unwrap_socket!(tvu, Protocol::QUIC),
+            serve_repair_quic: unwrap_socket!(serve_repair, Protocol::QUIC),
+            tpu: unwrap_socket!(tpu, Protocol::UDP),
+            tpu_forwards: unwrap_socket!(tpu_forwards, Protocol::UDP),
             tpu_vote: unwrap_socket!(tpu_vote),
             rpc: unwrap_socket!(rpc),
             rpc_pubsub: unwrap_socket!(rpc_pubsub),
-            serve_repair: unwrap_socket!(serve_repair),
+            serve_repair: unwrap_socket!(serve_repair, Protocol::UDP),
             shred_version: node.shred_version(),
         }
     }
@@ -119,8 +121,7 @@ impl Display for AdminRpcContactInfo {
         writeln!(f, "Identity: {}", self.id)?;
         writeln!(f, "Gossip: {}", self.gossip)?;
         writeln!(f, "TVU: {}", self.tvu)?;
-        writeln!(f, "TVU Forwards: {}", self.tvu_forwards)?;
-        writeln!(f, "Repair: {}", self.repair)?;
+        writeln!(f, "TVU QUIC: {}", self.tvu_quic)?;
         writeln!(f, "TPU: {}", self.tpu)?;
         writeln!(f, "TPU Forwards: {}", self.tpu_forwards)?;
         writeln!(f, "TPU Votes: {}", self.tpu_vote)?;
@@ -232,6 +233,13 @@ pub trait AdminRpc {
         &self,
         meta: Self::Metadata,
         public_tpu_addr: SocketAddr,
+    ) -> Result<()>;
+
+    #[rpc(meta, name = "setPublicTpuForwardsAddress")]
+    fn set_public_tpu_forwards_address(
+        &self,
+        meta: Self::Metadata,
+        public_tpu_forwards_addr: SocketAddr,
     ) -> Result<()>;
 }
 
@@ -477,7 +485,7 @@ impl AdminRpc for AdminRpcImpl {
             .staked_map_id;
         let mut write_staked_nodes = meta.staked_nodes_overrides.write().unwrap();
         write_staked_nodes.clear();
-        write_staked_nodes.extend(loaded_config.into_iter());
+        write_staked_nodes.extend(loaded_config);
         info!("Staked nodes overrides loaded from {}", path);
         debug!("overrides map: {:?}", write_staked_nodes);
         Ok(())
@@ -606,15 +614,67 @@ impl AdminRpc for AdminRpcImpl {
         meta.with_post_init(|post_init| {
             post_init
                 .cluster_info
+                .my_contact_info()
+                .tpu(Protocol::UDP)
+                .map_err(|err| {
+                    error!(
+                        "The public TPU address isn't being published. \
+                        The node is likely in repair mode. \
+                        See help for --restricted-repair-only-mode for more information. \
+                        {err}"
+                    );
+                    jsonrpc_core::error::Error::internal_error()
+                })?;
+            post_init
+                .cluster_info
                 .set_tpu(public_tpu_addr)
                 .map_err(|err| {
                     error!("Failed to set public TPU address to {public_tpu_addr}: {err}");
                     jsonrpc_core::error::Error::internal_error()
                 })?;
+            let my_contact_info = post_init.cluster_info.my_contact_info();
             warn!(
-                "Public TPU addresses set to {} (udp) and {} (quic)",
-                post_init.cluster_info.my_contact_info().tpu().unwrap(),
-                post_init.cluster_info.my_contact_info().tpu_quic().unwrap(),
+                "Public TPU addresses set to {:?} (udp) and {:?} (quic)",
+                my_contact_info.tpu(Protocol::UDP),
+                my_contact_info.tpu(Protocol::QUIC),
+            );
+            Ok(())
+        })
+    }
+
+    fn set_public_tpu_forwards_address(
+        &self,
+        meta: Self::Metadata,
+        public_tpu_forwards_addr: SocketAddr,
+    ) -> Result<()> {
+        debug!("set_public_tpu_forwards_address rpc request received: {public_tpu_forwards_addr}");
+
+        meta.with_post_init(|post_init| {
+            post_init
+                .cluster_info
+                .my_contact_info()
+                .tpu_forwards(Protocol::UDP)
+                .map_err(|err| {
+                    error!(
+                        "The public TPU Forwards address isn't being published. \
+                        The node is likely in repair mode. \
+                        See help for --restricted-repair-only-mode for more information. \
+                        {err}"
+                    );
+                    jsonrpc_core::error::Error::internal_error()
+                })?;
+            post_init
+                .cluster_info
+                .set_tpu_forwards(public_tpu_forwards_addr)
+                .map_err(|err| {
+                    error!("Failed to set public TPU address to {public_tpu_forwards_addr}: {err}");
+                    jsonrpc_core::error::Error::internal_error()
+                })?;
+            let my_contact_info = post_init.cluster_info.my_contact_info();
+            warn!(
+                "Public TPU Forwards addresses set to {:?} (udp) and {:?} (quic)",
+                my_contact_info.tpu_forwards(Protocol::UDP),
+                my_contact_info.tpu_forwards(Protocol::QUIC),
             );
             Ok(())
         })
@@ -804,17 +864,17 @@ mod tests {
         super::*,
         rand::{distributions::Uniform, thread_rng, Rng},
         serde_json::Value,
-        solana_account_decoder::parse_token::spl_token_pubkey,
-        solana_core::tower_storage::NullTowerStorage,
+        solana_accounts_db::{
+            accounts_index::AccountSecondaryIndexes, inline_spl_token,
+            secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
+        },
+        solana_core::consensus::tower_storage::NullTowerStorage,
         solana_gossip::cluster_info::ClusterInfo,
         solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
         solana_rpc::rpc::create_validator_exit,
         solana_runtime::{
-            accounts_index::AccountSecondaryIndexes,
             bank::{Bank, BankTestConfig},
             bank_forks::BankForks,
-            inline_spl_token,
-            secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
         },
         solana_sdk::{
             account::{Account, AccountSharedData},
@@ -857,7 +917,7 @@ mod tests {
                 SocketAddrSpace::Unspecified,
             ));
             let exit = Arc::new(AtomicBool::new(false));
-            let validator_exit = create_validator_exit(&exit);
+            let validator_exit = create_validator_exit(exit);
             let (bank_forks, vote_keypair) = new_bank_forks_with_config(BankTestConfig {
                 secondary_indexes: config.account_indexes,
             });
@@ -942,7 +1002,7 @@ mod tests {
             let wallet1_pubkey = Pubkey::new_unique();
             let wallet2_pubkey = Pubkey::new_unique();
             let non_existent_pubkey = Pubkey::new_unique();
-            let delegate = spl_token_pubkey(&Pubkey::new_unique());
+            let delegate = Pubkey::new_unique();
 
             let mut num_default_spl_token_program_accounts = 0;
             let mut num_default_system_program_accounts = 0;
@@ -1004,14 +1064,14 @@ mod tests {
             // Add a token account
             let mut account1_data = vec![0; TokenAccount::get_packed_len()];
             let token_account1 = TokenAccount {
-                mint: spl_token_pubkey(&mint1_pubkey),
-                owner: spl_token_pubkey(&wallet1_pubkey),
+                mint: mint1_pubkey,
+                owner: wallet1_pubkey,
                 delegate: COption::Some(delegate),
                 amount: 420,
                 state: TokenAccountState::Initialized,
                 is_native: COption::None,
                 delegated_amount: 30,
-                close_authority: COption::Some(spl_token_pubkey(&wallet1_pubkey)),
+                close_authority: COption::Some(wallet1_pubkey),
             };
             TokenAccount::pack(token_account1, &mut account1_data).unwrap();
             let token_account1 = AccountSharedData::from(Account {
@@ -1025,11 +1085,11 @@ mod tests {
             // Add the mint
             let mut mint1_data = vec![0; Mint::get_packed_len()];
             let mint1_state = Mint {
-                mint_authority: COption::Some(spl_token_pubkey(&wallet1_pubkey)),
+                mint_authority: COption::Some(wallet1_pubkey),
                 supply: 500,
                 decimals: 2,
                 is_initialized: true,
-                freeze_authority: COption::Some(spl_token_pubkey(&wallet1_pubkey)),
+                freeze_authority: COption::Some(wallet1_pubkey),
             };
             Mint::pack(mint1_state, &mut mint1_data).unwrap();
             let mint_account1 = AccountSharedData::from(Account {
@@ -1043,14 +1103,14 @@ mod tests {
             // Add another token account with the different owner, but same delegate, and mint
             let mut account2_data = vec![0; TokenAccount::get_packed_len()];
             let token_account2 = TokenAccount {
-                mint: spl_token_pubkey(&mint1_pubkey),
-                owner: spl_token_pubkey(&wallet2_pubkey),
+                mint: mint1_pubkey,
+                owner: wallet2_pubkey,
                 delegate: COption::Some(delegate),
                 amount: 420,
                 state: TokenAccountState::Initialized,
                 is_native: COption::None,
                 delegated_amount: 30,
-                close_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
+                close_authority: COption::Some(wallet2_pubkey),
             };
             TokenAccount::pack(token_account2, &mut account2_data).unwrap();
             let token_account2 = AccountSharedData::from(Account {
@@ -1064,14 +1124,14 @@ mod tests {
             // Add another token account with the same owner and delegate but different mint
             let mut account3_data = vec![0; TokenAccount::get_packed_len()];
             let token_account3 = TokenAccount {
-                mint: spl_token_pubkey(&mint2_pubkey),
-                owner: spl_token_pubkey(&wallet2_pubkey),
+                mint: mint2_pubkey,
+                owner: wallet2_pubkey,
                 delegate: COption::Some(delegate),
                 amount: 42,
                 state: TokenAccountState::Initialized,
                 is_native: COption::None,
                 delegated_amount: 30,
-                close_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
+                close_authority: COption::Some(wallet2_pubkey),
             };
             TokenAccount::pack(token_account3, &mut account3_data).unwrap();
             let token_account3 = AccountSharedData::from(Account {
@@ -1085,11 +1145,11 @@ mod tests {
             // Add the new mint
             let mut mint2_data = vec![0; Mint::get_packed_len()];
             let mint2_state = Mint {
-                mint_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
+                mint_authority: COption::Some(wallet2_pubkey),
                 supply: 200,
                 decimals: 3,
                 is_initialized: true,
-                freeze_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
+                freeze_authority: COption::Some(wallet2_pubkey),
             };
             Mint::pack(mint2_state, &mut mint2_data).unwrap();
             let mint_account2 = AccountSharedData::from(Account {
@@ -1117,7 +1177,7 @@ mod tests {
             //               --mint_account1--               mint_account2
 
             if secondary_index_enabled {
-                // ----------- Test for a non-existant key -----------
+                // ----------- Test for a non-existent key -----------
                 let req = format!(
                     r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{non_existent_pubkey}"]}}"#,
                 );
@@ -1301,14 +1361,14 @@ mod tests {
                 let account_pubkey = Pubkey::new_unique();
                 // Add a token account
                 let token_state = TokenAccount {
-                    mint: spl_token_pubkey(&mint_pubkey),
-                    owner: spl_token_pubkey(&owner_pubkey),
-                    delegate: COption::Some(spl_token_pubkey(&delagate_pubkey)),
+                    mint: mint_pubkey,
+                    owner: owner_pubkey,
+                    delegate: COption::Some(delagate_pubkey),
                     amount: 100,
                     state: TokenAccountState::Initialized,
                     is_native: COption::None,
                     delegated_amount: 10,
-                    close_authority: COption::Some(spl_token_pubkey(&owner_pubkey)),
+                    close_authority: COption::Some(owner_pubkey),
                 };
                 TokenAccount::pack(token_state, &mut account_data).unwrap();
                 let token_account = AccountSharedData::from(Account {
@@ -1325,11 +1385,11 @@ mod tests {
                 .next()
                 .unwrap()];
             let mint_state = Mint {
-                mint_authority: COption::Some(spl_token_pubkey(&mint_authority_pubkey)),
+                mint_authority: COption::Some(mint_authority_pubkey),
                 supply: 100 * (num_token_accounts.unwrap_or(1) as u64),
                 decimals: 2,
                 is_initialized: true,
-                freeze_authority: COption::Some(spl_token_pubkey(&mint_authority_pubkey)),
+                freeze_authority: COption::Some(mint_authority_pubkey),
             };
             Mint::pack(mint_state, &mut mint_data).unwrap();
             let mint_account = AccountSharedData::from(Account {

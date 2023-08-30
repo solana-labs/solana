@@ -1,27 +1,24 @@
 use {
     crate::{
-        accounts::Accounts,
-        accounts_db::AccountStorageEntry,
-        accounts_hash::{AccountsHash, AccountsHashEnum},
         bank::Bank,
-        epoch_accounts_hash::EpochAccountsHash,
-        rent_collector::RentCollector,
         snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
         snapshot_hash::SnapshotHash,
-        snapshot_utils::{
-            self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion,
-            SNAPSHOT_STATUS_CACHE_FILENAME, TMP_BANK_SNAPSHOT_PREFIX,
-        },
+        snapshot_utils::{self, ArchiveFormat, BankSnapshotInfo, SnapshotVersion},
     },
     log::*,
+    solana_accounts_db::{
+        accounts::Accounts,
+        accounts_db::{AccountStorageEntry, IncludeSlotInHash, INCLUDE_SLOT_IN_HASH_TESTS},
+        accounts_hash::{AccountsHash, AccountsHashKind},
+        epoch_accounts_hash::EpochAccountsHash,
+        rent_collector::RentCollector,
+    },
     solana_sdk::{clock::Slot, feature_set, sysvar::epoch_schedule::EpochSchedule},
     std::{
-        fs,
         path::{Path, PathBuf},
         sync::Arc,
         time::Instant,
     },
-    tempfile::TempDir,
 };
 
 mod compare;
@@ -29,7 +26,7 @@ pub use compare::*;
 
 /// This struct packages up fields to send from AccountsBackgroundService to AccountsHashVerifier
 pub struct AccountsPackage {
-    pub package_type: AccountsPackageType,
+    pub package_kind: AccountsPackageKind,
     pub slot: Slot,
     pub block_height: Slot,
     pub snapshot_storages: Vec<Arc<AccountStorageEntry>>,
@@ -39,6 +36,7 @@ pub struct AccountsPackage {
     pub epoch_schedule: EpochSchedule,
     pub rent_collector: RentCollector,
     pub is_incremental_accounts_hash_feature_enabled: bool,
+    pub include_slot_in_hash: IncludeSlotInHash,
 
     /// Supplemental information needed for snapshots
     pub snapshot_info: Option<SupplementalSnapshotInfo>,
@@ -52,25 +50,24 @@ impl AccountsPackage {
     /// Package up bank files, storages, and slot deltas for a snapshot
     #[allow(clippy::too_many_arguments)]
     pub fn new_for_snapshot(
-        package_type: AccountsPackageType,
+        package_kind: AccountsPackageKind,
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
-        bank_snapshots_dir: impl AsRef<Path>,
         full_snapshot_archives_dir: impl AsRef<Path>,
         incremental_snapshot_archives_dir: impl AsRef<Path>,
         snapshot_storages: Vec<Arc<AccountStorageEntry>>,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
         accounts_hash_for_testing: Option<AccountsHash>,
-    ) -> Result<Self> {
-        if let AccountsPackageType::Snapshot(snapshot_type) = package_type {
+    ) -> Self {
+        if let AccountsPackageKind::Snapshot(snapshot_kind) = package_kind {
             info!(
-                "Package snapshot for bank {} has {} account storage entries (snapshot type: {:?})",
+                "Package snapshot for bank {} has {} account storage entries (snapshot kind: {:?})",
                 bank.slot(),
                 snapshot_storages.len(),
-                snapshot_type,
+                snapshot_kind,
             );
-            if let SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) = snapshot_type
+            if let SnapshotKind::IncrementalSnapshot(incremental_snapshot_base_slot) = snapshot_kind
             {
                 assert!(
                     bank.slot() > incremental_snapshot_base_slot,
@@ -79,30 +76,8 @@ impl AccountsPackage {
             }
         }
 
-        // Hard link the snapshot into a tmpdir, to ensure its not removed prior to packaging.
-        let snapshot_links = tempfile::Builder::new()
-            .prefix(&format!("{}{}-", TMP_BANK_SNAPSHOT_PREFIX, bank.slot()))
-            .tempdir_in(bank_snapshots_dir)?;
-        {
-            let snapshot_hardlink_dir = snapshot_links
-                .path()
-                .join(bank_snapshot_info.slot.to_string());
-            fs::create_dir_all(&snapshot_hardlink_dir)?;
-            let snapshot_path = bank_snapshot_info.snapshot_path();
-            let file_name = snapshot_utils::path_to_file_name_str(&snapshot_path)?;
-            fs::hard_link(&snapshot_path, snapshot_hardlink_dir.join(file_name))?;
-            let status_cache_path = bank_snapshot_info
-                .snapshot_dir
-                .join(SNAPSHOT_STATUS_CACHE_FILENAME);
-            let status_cache_file_name = snapshot_utils::path_to_file_name_str(&status_cache_path)?;
-            fs::hard_link(
-                &status_cache_path,
-                snapshot_links.path().join(status_cache_file_name),
-            )?;
-        }
-
         let snapshot_info = SupplementalSnapshotInfo {
-            snapshot_links,
+            bank_snapshot_dir: bank_snapshot_info.snapshot_dir.clone(),
             archive_format,
             snapshot_version,
             full_snapshot_archives_dir: full_snapshot_archives_dir.as_ref().to_path_buf(),
@@ -111,26 +86,44 @@ impl AccountsPackage {
                 .to_path_buf(),
             epoch_accounts_hash: bank.get_epoch_accounts_hash_to_serialize(),
         };
-        Ok(Self::_new(
-            package_type,
+        Self::_new(
+            package_kind,
             bank,
             snapshot_storages,
             accounts_hash_for_testing,
             Some(snapshot_info),
-        ))
+        )
+    }
+
+    /// Package up fields needed to verify an accounts hash
+    #[must_use]
+    pub fn new_for_accounts_hash_verifier(
+        package_kind: AccountsPackageKind,
+        bank: &Bank,
+        snapshot_storages: Vec<Arc<AccountStorageEntry>>,
+        accounts_hash_for_testing: Option<AccountsHash>,
+    ) -> Self {
+        assert_eq!(package_kind, AccountsPackageKind::AccountsHashVerifier);
+        Self::_new(
+            package_kind,
+            bank,
+            snapshot_storages,
+            accounts_hash_for_testing,
+            None,
+        )
     }
 
     /// Package up fields needed to compute an EpochAccountsHash
     #[must_use]
     pub fn new_for_epoch_accounts_hash(
-        package_type: AccountsPackageType,
+        package_kind: AccountsPackageKind,
         bank: &Bank,
         snapshot_storages: Vec<Arc<AccountStorageEntry>>,
         accounts_hash_for_testing: Option<AccountsHash>,
     ) -> Self {
-        assert_eq!(package_type, AccountsPackageType::EpochAccountsHash);
+        assert_eq!(package_kind, AccountsPackageKind::EpochAccountsHash);
         Self::_new(
-            package_type,
+            package_kind,
             bank,
             snapshot_storages,
             accounts_hash_for_testing,
@@ -139,7 +132,7 @@ impl AccountsPackage {
     }
 
     fn _new(
-        package_type: AccountsPackageType,
+        package_kind: AccountsPackageKind,
         bank: &Bank,
         snapshot_storages: Vec<Arc<AccountStorageEntry>>,
         accounts_hash_for_testing: Option<AccountsHash>,
@@ -149,7 +142,7 @@ impl AccountsPackage {
             .feature_set
             .is_active(&feature_set::incremental_snapshot_only_incremental_hash_calculation::id());
         Self {
-            package_type,
+            package_kind,
             slot: bank.slot(),
             block_height: bank.block_height(),
             snapshot_storages,
@@ -159,6 +152,7 @@ impl AccountsPackage {
             epoch_schedule: *bank.epoch_schedule(),
             rent_collector: bank.rent_collector().clone(),
             is_incremental_accounts_hash_feature_enabled,
+            include_slot_in_hash: bank.include_slot_in_hash(),
             snapshot_info,
             enqueued: Instant::now(),
         }
@@ -168,7 +162,7 @@ impl AccountsPackage {
     /// Only use for tests; many of the fields are invalid!
     pub fn default_for_tests() -> Self {
         Self {
-            package_type: AccountsPackageType::AccountsHashVerifier,
+            package_kind: AccountsPackageKind::AccountsHashVerifier,
             slot: Slot::default(),
             block_height: Slot::default(),
             snapshot_storages: Vec::default(),
@@ -178,8 +172,9 @@ impl AccountsPackage {
             epoch_schedule: EpochSchedule::default(),
             rent_collector: RentCollector::default(),
             is_incremental_accounts_hash_feature_enabled: bool::default(),
+            include_slot_in_hash: INCLUDE_SLOT_IN_HASH_TESTS,
             snapshot_info: Some(SupplementalSnapshotInfo {
-                snapshot_links: TempDir::new().unwrap(),
+                bank_snapshot_dir: PathBuf::default(),
                 archive_format: ArchiveFormat::Tar,
                 snapshot_version: SnapshotVersion::default(),
                 full_snapshot_archives_dir: PathBuf::default(),
@@ -190,17 +185,18 @@ impl AccountsPackage {
         }
     }
 
-    /// Returns the path to the snapshot links directory
+    /// Returns the path to the snapshot dir
     ///
-    /// NOTE 1: This path is within the TempDir created for the AccountsPackage, *not* the bank
-    ///         snapshots dir passed into `new_for_snapshot()` when creating the AccountsPackage.
-    /// NOTE 2: This fn will panic if the AccountsPackage is of type EpochAccountsHash.
-    pub fn snapshot_links_dir(&self) -> &Path {
-        match self.package_type {
-            AccountsPackageType::AccountsHashVerifier | AccountsPackageType::Snapshot(..) => {
-                self.snapshot_info.as_ref().unwrap().snapshot_links.path()
-            }
-            AccountsPackageType::EpochAccountsHash => {
+    /// NOTE: This fn will panic if the AccountsPackage is of type EpochAccountsHash.
+    pub fn bank_snapshot_dir(&self) -> &Path {
+        match self.package_kind {
+            AccountsPackageKind::AccountsHashVerifier | AccountsPackageKind::Snapshot(..) => self
+                .snapshot_info
+                .as_ref()
+                .unwrap()
+                .bank_snapshot_dir
+                .as_path(),
+            AccountsPackageKind::EpochAccountsHash => {
                 panic!("EAH accounts packages do not contain snapshot information")
             }
         }
@@ -210,7 +206,7 @@ impl AccountsPackage {
 impl std::fmt::Debug for AccountsPackage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AccountsPackage")
-            .field("type", &self.package_type)
+            .field("kind", &self.package_kind)
             .field("slot", &self.slot)
             .field("block_height", &self.block_height)
             .finish_non_exhaustive()
@@ -219,7 +215,7 @@ impl std::fmt::Debug for AccountsPackage {
 
 /// Supplemental information needed for snapshots
 pub struct SupplementalSnapshotInfo {
-    pub snapshot_links: TempDir,
+    pub bank_snapshot_dir: PathBuf,
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
     pub full_snapshot_archives_dir: PathBuf,
@@ -231,9 +227,9 @@ pub struct SupplementalSnapshotInfo {
 /// types of accounts packages, which are specified as variants in this enum.  All accounts
 /// packages do share some processing: such as calculating the accounts hash.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum AccountsPackageType {
+pub enum AccountsPackageKind {
     AccountsHashVerifier,
-    Snapshot(SnapshotType),
+    Snapshot(SnapshotKind),
     EpochAccountsHash,
 }
 
@@ -241,10 +237,10 @@ pub enum AccountsPackageType {
 pub struct SnapshotPackage {
     pub snapshot_archive_info: SnapshotArchiveInfo,
     pub block_height: Slot,
-    pub snapshot_links: TempDir,
+    pub bank_snapshot_dir: PathBuf,
     pub snapshot_storages: Vec<Arc<AccountStorageEntry>>,
     pub snapshot_version: SnapshotVersion,
-    pub snapshot_type: SnapshotType,
+    pub snapshot_kind: SnapshotKind,
 
     /// The instant this snapshot package was sent to the queue.
     /// Used to track how long snapshot packages wait before handling.
@@ -252,24 +248,28 @@ pub struct SnapshotPackage {
 }
 
 impl SnapshotPackage {
-    pub fn new(accounts_package: AccountsPackage, accounts_hash: AccountsHashEnum) -> Self {
-        let AccountsPackageType::Snapshot(snapshot_type) = accounts_package.package_type else {
-            panic!("The AccountsPackage must be of type Snapshot in order to make a SnapshotPackage!");
+    pub fn new(accounts_package: AccountsPackage, accounts_hash: AccountsHashKind) -> Self {
+        let AccountsPackageKind::Snapshot(snapshot_kind) = accounts_package.package_kind else {
+            panic!(
+                "The AccountsPackage must be of kind Snapshot in order to make a SnapshotPackage!"
+            );
         };
         let Some(snapshot_info) = accounts_package.snapshot_info else {
-            panic!("The AccountsPackage must have snapshot info in order to make a SnapshotPackage!");
+            panic!(
+                "The AccountsPackage must have snapshot info in order to make a SnapshotPackage!"
+            );
         };
         let snapshot_hash =
             SnapshotHash::new(&accounts_hash, snapshot_info.epoch_accounts_hash.as_ref());
         let mut snapshot_storages = accounts_package.snapshot_storages;
-        let snapshot_archive_path = match snapshot_type {
-            SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
+        let snapshot_archive_path = match snapshot_kind {
+            SnapshotKind::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
                 snapshot_info.full_snapshot_archives_dir,
                 accounts_package.slot,
                 &snapshot_hash,
                 snapshot_info.archive_format,
             ),
-            SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
+            SnapshotKind::IncrementalSnapshot(incremental_snapshot_base_slot) => {
                 snapshot_storages.retain(|storage| storage.slot() > incremental_snapshot_base_slot);
                 assert!(
                     snapshot_storages.iter().all(|storage| storage.slot() > incremental_snapshot_base_slot),
@@ -293,10 +293,10 @@ impl SnapshotPackage {
                 archive_format: snapshot_info.archive_format,
             },
             block_height: accounts_package.block_height,
-            snapshot_links: snapshot_info.snapshot_links,
+            bank_snapshot_dir: snapshot_info.bank_snapshot_dir,
             snapshot_storages,
             snapshot_version: snapshot_info.snapshot_version,
-            snapshot_type,
+            snapshot_kind,
             enqueued: Instant::now(),
         }
     }
@@ -305,7 +305,7 @@ impl SnapshotPackage {
 impl std::fmt::Debug for SnapshotPackage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SnapshotPackage")
-            .field("type", &self.snapshot_type)
+            .field("type", &self.snapshot_kind)
             .field("slot", &self.slot())
             .field("block_height", &self.block_height)
             .finish_non_exhaustive()
@@ -318,20 +318,20 @@ impl SnapshotArchiveInfoGetter for SnapshotPackage {
     }
 }
 
-/// Snapshots come in two flavors, Full and Incremental.  The IncrementalSnapshot has a Slot field,
+/// Snapshots come in two kinds, Full and Incremental.  The IncrementalSnapshot has a Slot field,
 /// which is the incremental snapshot base slot.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SnapshotType {
+pub enum SnapshotKind {
     FullSnapshot,
     IncrementalSnapshot(Slot),
 }
 
-impl SnapshotType {
+impl SnapshotKind {
     pub fn is_full_snapshot(&self) -> bool {
-        matches!(self, SnapshotType::FullSnapshot)
+        matches!(self, SnapshotKind::FullSnapshot)
     }
     pub fn is_incremental_snapshot(&self) -> bool {
-        matches!(self, SnapshotType::IncrementalSnapshot(_))
+        matches!(self, SnapshotKind::IncrementalSnapshot(_))
     }
 }
 

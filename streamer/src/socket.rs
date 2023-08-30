@@ -1,6 +1,6 @@
 use std::net::{IpAddr, SocketAddr};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 pub enum SocketAddrSpace {
     Unspecified,
     Global,
@@ -18,7 +18,7 @@ impl SocketAddrSpace {
     /// Returns true if the IP address is valid.
     #[must_use]
     pub fn check(&self, addr: &SocketAddr) -> bool {
-        if self == &SocketAddrSpace::Unspecified {
+        if matches!(self, SocketAddrSpace::Unspecified) {
             return true;
         }
         // TODO: remove these once IpAddr::is_global is stable.

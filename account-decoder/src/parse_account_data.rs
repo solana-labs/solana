@@ -1,13 +1,9 @@
 use {
     crate::{
         parse_address_lookup_table::parse_address_lookup_table,
-        parse_bpf_loader::parse_bpf_upgradeable_loader,
-        parse_config::parse_config,
-        parse_nonce::parse_nonce,
-        parse_stake::parse_stake,
-        parse_sysvar::parse_sysvar,
-        parse_token::{parse_token, spl_token_2022_id, spl_token_id},
-        parse_vote::parse_vote,
+        parse_bpf_loader::parse_bpf_upgradeable_loader, parse_config::parse_config,
+        parse_nonce::parse_nonce, parse_stake::parse_stake, parse_sysvar::parse_sysvar,
+        parse_token::parse_token, parse_vote::parse_vote,
     },
     inflector::Inflector,
     serde_json::Value,
@@ -38,8 +34,8 @@ lazy_static! {
         );
         m.insert(*CONFIG_PROGRAM_ID, ParsableAccount::Config);
         m.insert(*SYSTEM_PROGRAM_ID, ParsableAccount::Nonce);
-        m.insert(spl_token_id(), ParsableAccount::SplToken);
-        m.insert(spl_token_2022_id(), ParsableAccount::SplToken2022);
+        m.insert(spl_token::id(), ParsableAccount::SplToken);
+        m.insert(spl_token_2022::id(), ParsableAccount::SplToken2022);
         m.insert(*STAKE_PROGRAM_ID, ParsableAccount::Stake);
         m.insert(*SYSVAR_PROGRAM_ID, ParsableAccount::Sysvar);
         m.insert(*VOTE_PROGRAM_ID, ParsableAccount::Vote);

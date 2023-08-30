@@ -4,7 +4,6 @@ use {
         recvmmsg::{recv_mmsg, NUM_RCVMMSGS},
         socket::SocketAddrSpace,
     },
-    solana_metrics::inc_new_counter_debug,
     std::{
         io::Result,
         net::UdpSocket,
@@ -59,7 +58,6 @@ pub fn recv_from(batch: &mut PacketBatch, socket: &UdpSocket, max_wait: Duration
         }
     }
     batch.truncate(i);
-    inc_new_counter_debug!("packets-recv_count", i);
     Ok(i)
 }
 

@@ -3,18 +3,18 @@ use {
     crossbeam_channel::unbounded,
     itertools::Itertools,
     log::*,
+    solana_accounts_db::accounts_index::{AccountIndex, AccountSecondaryIndexes},
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of, value_of},
         input_validators::normalize_to_url_if_moniker,
     },
-    solana_core::tower_storage::FileTowerStorage,
+    solana_core::consensus::tower_storage::FileTowerStorage,
     solana_faucet::faucet::run_local_faucet_with_port,
     solana_rpc::{
         rpc::{JsonRpcConfig, RpcBigtableConfig},
         rpc_pubsub_service::PubSubConfig,
     },
     solana_rpc_client::rpc_client::RpcClient,
-    solana_runtime::accounts_index::{AccountIndex, AccountSecondaryIndexes},
     solana_sdk::{
         account::AccountSharedData,
         clock::Slot,
@@ -154,6 +154,7 @@ fn main() {
 
     let rpc_port = value_t_or_exit!(matches, "rpc_port", u16);
     let enable_vote_subscription = matches.is_present("rpc_pubsub_enable_vote_subscription");
+    let enable_block_subscription = matches.is_present("rpc_pubsub_enable_block_subscription");
     let faucet_port = value_t_or_exit!(matches, "faucet_port", u16);
     let ticks_per_slot = value_t!(matches, "ticks_per_slot", u64).ok();
     let slots_per_epoch = value_t!(matches, "slots_per_epoch", Slot).ok();
@@ -440,9 +441,9 @@ fn main() {
         )
         .pubsub_config(PubSubConfig {
             enable_vote_subscription,
+            enable_block_subscription,
             ..PubSubConfig::default()
         })
-        .bpf_jit(!matches.is_present("no_bpf_jit"))
         .rpc_port(rpc_port)
         .add_upgradeable_programs_with_path(&upgradeable_programs_to_load)
         .add_accounts_from_json_files(&accounts_to_load)

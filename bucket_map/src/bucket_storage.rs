@@ -92,9 +92,9 @@ impl<O: BucketOccupied> Drop for BucketStorage<O> {
     }
 }
 
-#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub(crate) enum IncludeHeader {
-    /// caller wants header
+    /// caller wants header included
     Header,
     /// caller wants header skipped
     NoHeader,
@@ -137,7 +137,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         max_search: MaxSearch,
         stats: Arc<BucketStats>,
         count: Arc<AtomicU64>,
-    ) -> Self {
+    ) -> (Self, u128) {
         let offset = O::offset_to_first_data();
         let size_of_u64 = std::mem::size_of::<u64>();
         assert_eq!(
@@ -147,16 +147,19 @@ impl<O: BucketOccupied> BucketStorage<O> {
         );
         let cell_size = elem_size * num_elems + offset as u64;
         let bytes = Self::allocate_to_fill_page(&mut capacity, cell_size);
-        let (mmap, path) = Self::new_map(&drives, bytes, &stats);
-        Self {
-            path,
-            mmap,
-            cell_size,
-            count,
-            stats,
-            max_search,
-            contents: O::new(capacity),
-        }
+        let (mmap, path, file_name) = Self::new_map(&drives, bytes, &stats);
+        (
+            Self {
+                path,
+                mmap,
+                cell_size,
+                count,
+                stats,
+                max_search,
+                contents: O::new(capacity),
+            },
+            file_name,
+        )
     }
 
     fn allocate_to_fill_page(capacity: &mut Capacity, cell_size: u64) -> u64 {
@@ -187,7 +190,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         max_search: MaxSearch,
         stats: Arc<BucketStats>,
         count: Arc<AtomicU64>,
-    ) -> Self {
+    ) -> (Self, u128) {
         Self::new_with_capacity(
             drives,
             num_elems,
@@ -266,42 +269,34 @@ impl<O: BucketOccupied> BucketStorage<O> {
     }
 
     pub(crate) fn get_header<T>(&self, ix: u64) -> &T {
-        let slice = self.get_cell_slice::<T>(ix, 1, IncludeHeader::Header);
+        let slice = self.get_slice::<T>(ix, 1, IncludeHeader::Header);
         // SAFETY: `get_cell_slice` ensures there's at least one element in the slice
         unsafe { slice.get_unchecked(0) }
     }
 
     pub(crate) fn get_header_mut<T>(&mut self, ix: u64) -> &mut T {
-        let slice = self.get_mut_cell_slice::<T>(ix, 1, IncludeHeader::Header);
+        let slice = self.get_slice_mut::<T>(ix, 1, IncludeHeader::Header);
         // SAFETY: `get_mut_cell_slice` ensures there's at least one element in the slice
         unsafe { slice.get_unchecked_mut(0) }
     }
 
     pub(crate) fn get<T>(&self, ix: u64) -> &T {
-        let slice = self.get_cell_slice::<T>(ix, 1, IncludeHeader::NoHeader);
+        let slice = self.get_slice::<T>(ix, 1, IncludeHeader::NoHeader);
         // SAFETY: `get_cell_slice` ensures there's at least one element in the slice
         unsafe { slice.get_unchecked(0) }
     }
 
     pub(crate) fn get_mut<T>(&mut self, ix: u64) -> &mut T {
-        let slice = self.get_mut_cell_slice::<T>(ix, 1, IncludeHeader::NoHeader);
+        let slice = self.get_slice_mut::<T>(ix, 1, IncludeHeader::NoHeader);
         // SAFETY: `get_mut_cell_slice` ensures there's at least one element in the slice
         unsafe { slice.get_unchecked_mut(0) }
     }
 
-    pub(crate) fn get_mut_from_parts<T>(item_slice: &mut [u8]) -> &mut T {
-        debug_assert!(std::mem::size_of::<T>() <= item_slice.len());
-        let item = item_slice.as_mut_ptr() as *mut T;
-        unsafe { &mut *item }
-    }
-
-    pub(crate) fn get_from_parts<T>(item_slice: &[u8]) -> &T {
-        debug_assert!(std::mem::size_of::<T>() <= item_slice.len());
-        let item = item_slice.as_ptr() as *const T;
-        unsafe { &*item }
-    }
-
-    pub(crate) fn get_cell_slice<T>(&self, ix: u64, len: u64, header: IncludeHeader) -> &[T] {
+    pub(crate) fn get_slice<T>(&self, ix: u64, len: u64, header: IncludeHeader) -> &[T] {
+        // If the caller is including the header, then `len` *must* be 1
+        debug_assert!(
+            (header == IncludeHeader::NoHeader) || (header == IncludeHeader::Header && len == 1)
+        );
         let start = self.get_start_offset(ix, header);
         let slice = {
             let size = std::mem::size_of::<T>() * len as usize;
@@ -317,12 +312,16 @@ impl<O: BucketOccupied> BucketStorage<O> {
         unsafe { std::slice::from_raw_parts(ptr, len as usize) }
     }
 
-    pub(crate) fn get_mut_cell_slice<T>(
+    pub(crate) fn get_slice_mut<T>(
         &mut self,
         ix: u64,
         len: u64,
         header: IncludeHeader,
     ) -> &mut [T] {
+        // If the caller is including the header, then `len` *must* be 1
+        debug_assert!(
+            (header == IncludeHeader::NoHeader) || (header == IncludeHeader::Header && len == 1)
+        );
         let start = self.get_start_offset(ix, header);
         let slice = {
             let size = std::mem::size_of::<T>() * len as usize;
@@ -339,11 +338,12 @@ impl<O: BucketOccupied> BucketStorage<O> {
     }
 
     /// allocate a new memory mapped file of size `bytes` on one of `drives`
-    fn new_map(drives: &[PathBuf], bytes: u64, stats: &BucketStats) -> (MmapMut, PathBuf) {
+    fn new_map(drives: &[PathBuf], bytes: u64, stats: &BucketStats) -> (MmapMut, PathBuf, u128) {
         let mut measure_new_file = Measure::start("measure_new_file");
-        let r = thread_rng().gen_range(0, drives.len());
+        let r = thread_rng().gen_range(0..drives.len());
         let drive = &drives[r];
-        let pos = format!("{}", thread_rng().gen_range(0, u128::MAX),);
+        let file_random = thread_rng().gen_range(0..u128::MAX);
+        let pos = format!("{}", file_random,);
         let file = drive.join(pos);
         let mut data = OpenOptions::new()
             .read(true)
@@ -372,7 +372,11 @@ impl<O: BucketOccupied> BucketStorage<O> {
         data.flush().unwrap(); // can we skip this?
         measure_flush.stop();
         let mut measure_mmap = Measure::start("measure_mmap");
-        let res = (unsafe { MmapMut::map_mut(&data).unwrap() }, file);
+        let res = (
+            unsafe { MmapMut::map_mut(&data).unwrap() },
+            file,
+            file_random,
+        );
         measure_mmap.stop();
         stats
             .new_file_us
@@ -413,7 +417,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
 
                 unsafe {
                     let dst = dst_slice.as_ptr() as *mut u8;
-                    let src = src_slice.as_ptr() as *const u8;
+                    let src = src_slice.as_ptr();
                     std::ptr::copy_nonoverlapping(src, dst, old_bucket.cell_size as usize);
                 };
             }
@@ -437,8 +441,8 @@ impl<O: BucketOccupied> BucketStorage<O> {
         num_elems: u64,
         elem_size: u64,
         stats: &Arc<BucketStats>,
-    ) -> Self {
-        let mut new_bucket = Self::new_with_capacity(
+    ) -> (Self, u128) {
+        let (mut new_bucket, file_name) = Self::new_with_capacity(
             Arc::clone(drives),
             num_elems,
             elem_size,
@@ -453,7 +457,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
             new_bucket.copy_contents(bucket);
         }
         new_bucket.update_max_size();
-        new_bucket
+        (new_bucket, file_name)
     }
 
     /// Return the number of bytes currently allocated
@@ -488,7 +492,8 @@ mod test {
             1,
             Arc::default(),
             Arc::default(),
-        );
+        )
+        .0;
         let ix = 0;
         assert!(storage.is_free(ix));
         assert!(storage.occupy(ix, false).is_ok());

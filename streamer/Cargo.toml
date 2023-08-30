@@ -25,7 +25,6 @@ percentage = { workspace = true }
 pkcs8 = { workspace = true, features = ["alloc"] }
 quinn = { workspace = true }
 quinn-proto = { workspace = true }
-quinn-udp = { workspace = true }
 rand = { workspace = true }
 rcgen = { workspace = true }
 rustls = { workspace = true, features = ["dangerous_configuration"] }

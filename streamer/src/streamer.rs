@@ -103,7 +103,7 @@ pub type Result<T> = std::result::Result<T, StreamerError>;
 
 fn recv_loop(
     socket: &UdpSocket,
-    exit: Arc<AtomicBool>,
+    exit: &AtomicBool,
     packet_batch_sender: &PacketBatchSender,
     recycler: &PacketBatchRecycler,
     stats: &StreamerReceiveStats,
@@ -113,7 +113,7 @@ fn recv_loop(
 ) -> Result<()> {
     loop {
         let mut packet_batch = if use_pinned_memory {
-            PacketBatch::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, stats.name)
+            PacketBatch::new_with_recycler(recycler, PACKETS_PER_BATCH, stats.name)
         } else {
             PacketBatch::with_capacity(PACKETS_PER_BATCH)
         };
@@ -173,7 +173,7 @@ pub fn receiver(
         .spawn(move || {
             let _ = recv_loop(
                 &socket,
-                exit,
+                &exit,
                 &packet_batch_sender,
                 &recycler,
                 &stats,

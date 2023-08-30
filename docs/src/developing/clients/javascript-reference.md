@@ -116,7 +116,7 @@ let signature = nacl.sign.detached(transactionBuffer, payer.secretKey);
 manualTransaction.addSignature(payer.publicKey, signature);
 
 let isVerifiedSignature = manualTransaction.verifySignatures();
-console.log(`The signatures were verifed: ${isVerifiedSignature}`);
+console.log(`The signatures were verified: ${isVerifiedSignature}`);
 
 // The signatures were verified: true
 

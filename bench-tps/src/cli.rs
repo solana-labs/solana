@@ -1,5 +1,4 @@
 use {
-    crate::spl_convert::FromOtherSolana,
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
     solana_clap_utils::{
         hidden_unless_forced,
@@ -44,6 +43,12 @@ pub struct InstructionPaddingConfig {
     pub data_size: u32,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum ComputeUnitPrice {
+    Fixed(u64),
+    Random,
+}
+
 /// Holds the configuration for a single run of the benchmark
 #[derive(PartialEq, Debug)]
 pub struct Config {
@@ -69,7 +74,7 @@ pub struct Config {
     pub external_client_type: ExternalClientType,
     pub use_quic: bool,
     pub tpu_connection_pool_size: usize,
-    pub use_randomized_compute_unit_price: bool,
+    pub compute_unit_price: Option<ComputeUnitPrice>,
     pub use_durable_nonce: bool,
     pub instruction_padding_config: Option<InstructionPaddingConfig>,
     pub num_conflict_groups: Option<usize>,
@@ -104,7 +109,7 @@ impl Default for Config {
             external_client_type: ExternalClientType::default(),
             use_quic: DEFAULT_TPU_USE_QUIC,
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
-            use_randomized_compute_unit_price: false,
+            compute_unit_price: None,
             use_durable_nonce: false,
             instruction_padding_config: None,
             num_conflict_groups: None,
@@ -334,9 +339,17 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                     or TpuClient sends"),
         )
         .arg(
+            Arg::with_name("compute_unit_price")
+            .long("compute-unit-price")
+            .takes_value(true)
+            .validator(|s| is_within_range(s, 0..))
+            .help("Sets constant compute-unit-price to transfer transactions"),
+        )
+        .arg(
             Arg::with_name("use_randomized_compute_unit_price")
                 .long("use-randomized-compute-unit-price")
                 .takes_value(false)
+                .conflicts_with("compute_unit_price")
                 .help("Sets random compute-unit-price in range [0..100] to transfer transactions"),
         )
         .arg(
@@ -465,8 +478,8 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
             .to_string()
             .parse()
             .map_err(|_| "can't parse keypair-multiplier")?;
-        if args.keypair_multiplier >= 2 {
-            return Err("args.keypair_multiplier must be lower than 2");
+        if args.keypair_multiplier < 2 {
+            return Err("args.keypair_multiplier must be greater than or equal to 2");
         }
     }
 
@@ -518,8 +531,14 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
             .map_err(|_| "can't parse target-slots-per-epoch")?;
     }
 
+    if let Some(str) = matches.value_of("compute_unit_price") {
+        args.compute_unit_price = Some(ComputeUnitPrice::Fixed(
+            str.parse().map_err(|_| "can't parse compute-unit-price")?,
+        ));
+    }
+
     if matches.is_present("use_randomized_compute_unit_price") {
-        args.use_randomized_compute_unit_price = true;
+        args.compute_unit_price = Some(ComputeUnitPrice::Random);
     }
 
     if matches.is_present("use_durable_nonce") {
@@ -530,7 +549,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         let program_id = matches
             .value_of("instruction_padding_program_id")
             .map(|target_str| target_str.parse().unwrap())
-            .unwrap_or_else(|| FromOtherSolana::from(spl_instruction_padding::ID));
+            .unwrap_or_else(|| spl_instruction_padding::ID);
         let data_size = data_size
             .parse()
             .map_err(|_| "Can't parse padded instruction data size")?;

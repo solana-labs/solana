@@ -15,10 +15,6 @@ impl AddressLoader for &Bank {
         self,
         address_table_lookups: &[MessageAddressTableLookup],
     ) -> Result<LoadedAddresses, AddressLoaderError> {
-        if !self.versioned_tx_message_enabled() {
-            return Err(AddressLoaderError::Disabled);
-        }
-
         let slot_hashes = self
             .sysvar_cache
             .read()

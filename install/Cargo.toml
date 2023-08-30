@@ -39,7 +39,7 @@ tempfile = { workspace = true }
 url = { workspace = true }
 
 [target."cfg(windows)".dependencies]
-winapi = { workspace = true }
+winapi = { workspace = true, features = ["minwindef", "winuser"] }
 winreg = { workspace = true }
 
 [package.metadata.docs.rs]

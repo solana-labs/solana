@@ -242,8 +242,9 @@ impl From<generated::Transaction> for VersionedTransaction {
             signatures: value
                 .signatures
                 .into_iter()
-                .map(|x| Signature::new(&x))
-                .collect(),
+                .map(Signature::try_from)
+                .collect::<Result<_, _>>()
+                .unwrap(),
             message: value.message.expect("message is required").into(),
         }
     }
@@ -768,6 +769,12 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                         account_index: transaction_details.index as u8,
                     });
                 }
+
+                35 => {
+                    return Ok(TransactionError::ProgramExecutionTemporarilyRestricted {
+                        account_index: transaction_details.index as u8,
+                    });
+                }
                 _ => {}
             }
         }
@@ -804,6 +811,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             29 => TransactionError::WouldExceedAccountDataTotalLimit,
             32 => TransactionError::MaxLoadedAccountsDataSizeExceeded,
             33 => TransactionError::InvalidLoadedAccountsDataSizeLimit,
+            34 => TransactionError::ResanitizationNeeded,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -912,6 +920,12 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::InvalidLoadedAccountsDataSizeLimit => {
                     tx_by_addr::TransactionErrorType::InvalidLoadedAccountsDataSizeLimit
+                }
+                TransactionError::ResanitizationNeeded => {
+                    tx_by_addr::TransactionErrorType::ResanitizationNeeded
+                }
+                TransactionError::ProgramExecutionTemporarilyRestricted { .. } => {
+                    tx_by_addr::TransactionErrorType::ProgramExecutionTemporarilyRestricted
                 }
             } as i32,
             instruction_error: match transaction_error {
@@ -1101,6 +1115,12 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                         index: account_index as u32,
                     })
                 }
+                TransactionError::ProgramExecutionTemporarilyRestricted { account_index } => {
+                    Some(tx_by_addr::TransactionDetails {
+                        index: account_index as u32,
+                    })
+                }
+
                 _ => None,
             },
         }
@@ -1139,7 +1159,8 @@ impl TryFrom<tx_by_addr::TransactionByAddrInfo> for TransactionByAddrInfo {
             .transpose()?;
 
         Ok(Self {
-            signature: Signature::new(&transaction_by_addr.signature),
+            signature: Signature::try_from(transaction_by_addr.signature)
+                .map_err(|_| "Invalid Signature")?,
             err,
             index: transaction_by_addr.index,
             memo: transaction_by_addr
@@ -1200,7 +1221,11 @@ mod test {
     #[test]
     fn test_transaction_by_addr_encode() {
         let info = TransactionByAddrInfo {
-            signature: Signature::new(&bs58::decode("Nfo6rgemG1KLbk1xuNwfrQTsdxaGfLuWURHNRy9LYnDrubG7LFQZaA5obPNas9LQ6DdorJqxh2LxA3PsnWdkSrL").into_vec().unwrap()),
+            signature: bs58::decode("Nfo6rgemG1KLbk1xuNwfrQTsdxaGfLuWURHNRy9LYnDrubG7LFQZaA5obPNas9LQ6DdorJqxh2LxA3PsnWdkSrL")
+                .into_vec()
+                .map(Signature::try_from)
+                .unwrap()
+                .unwrap(),
             err: None,
             index: 5,
             memo: Some("string".to_string()),
@@ -1795,7 +1820,8 @@ mod test {
         for error in all::<tx_by_addr::TransactionErrorType>() {
             match error {
                 tx_by_addr::TransactionErrorType::DuplicateInstruction
-                | tx_by_addr::TransactionErrorType::InsufficientFundsForRent => {
+                | tx_by_addr::TransactionErrorType::InsufficientFundsForRent
+                | tx_by_addr::TransactionErrorType::ProgramExecutionTemporarilyRestricted => {
                     let tx_by_addr_error = tx_by_addr::TransactionError {
                         transaction_error: error as i32,
                         instruction_error: None,

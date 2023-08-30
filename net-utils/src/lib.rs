@@ -29,7 +29,7 @@ pub struct UdpSocketPair {
 pub type PortRange = (u16, u16);
 
 pub const VALIDATOR_PORT_RANGE: PortRange = (8000, 10_000);
-pub const MINIMUM_VALIDATOR_PORT_RANGE_WIDTH: u16 = 13; // VALIDATOR_PORT_RANGE must be at least this wide
+pub const MINIMUM_VALIDATOR_PORT_RANGE_WIDTH: u16 = 14; // VALIDATOR_PORT_RANGE must be at least this wide
 
 pub(crate) const HEADER_LENGTH: usize = 4;
 pub(crate) const IP_ECHO_SERVER_RESPONSE_LENGTH: usize = HEADER_LENGTH + 23;
@@ -558,7 +558,7 @@ pub fn bind_two_in_range_with_offset(
 pub fn find_available_port_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<u16> {
     let (start, end) = range;
     let mut tries_left = end - start;
-    let mut rand_port = thread_rng().gen_range(start, end);
+    let mut rand_port = thread_rng().gen_range(start..end);
     loop {
         match bind_common(ip_addr, rand_port, false) {
             Ok(_) => {
@@ -620,7 +620,7 @@ mod tests {
         let address = IpAddr::from([
             525u16, 524u16, 523u16, 522u16, 521u16, 520u16, 519u16, 518u16,
         ]);
-        let mut data = vec![0u8; IP_ECHO_SERVER_RESPONSE_LENGTH];
+        let mut data = [0u8; IP_ECHO_SERVER_RESPONSE_LENGTH];
         bincode::serialize_into(&mut data[HEADER_LENGTH..], &address).unwrap();
         let response: Result<IpEchoServerResponse, _> =
             bincode::deserialize(&data[HEADER_LENGTH..]);

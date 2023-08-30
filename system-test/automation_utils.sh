@@ -127,22 +127,23 @@ function get_validator_confirmation_time {
 
 function collect_performance_statistics {
   execution_step "Collect performance statistics about run"
+  # total_transactions will be 0 when the node is leader, so exclude those
   declare q_mean_tps='
     SELECT ROUND(MEAN("median_sum")) as "mean_tps" FROM (
-      SELECT MEDIAN(sum_count) AS "median_sum" FROM (
-        SELECT SUM("count") AS "sum_count"
-          FROM "'$TESTNET_TAG'"."autogen"."bank-process_transactions"
-          WHERE time > now() - '"$TEST_DURATION_SECONDS"'s AND count > 0
+      SELECT MEDIAN(sum_total_transactions) AS "median_sum" FROM (
+        SELECT SUM("total_transactions") AS "sum_total_transactions"
+          FROM "'$TESTNET_TAG'"."autogen"."replay-slot-stats"
+          WHERE time > now() - '"$TEST_DURATION_SECONDS"'s AND total_transactions > 0
           GROUP BY time(1s), host_id)
       GROUP BY time(1s)
     )'
 
   declare q_max_tps='
     SELECT MAX("median_sum") as "max_tps" FROM (
-      SELECT MEDIAN(sum_count) AS "median_sum" FROM (
-        SELECT SUM("count") AS "sum_count"
-          FROM "'$TESTNET_TAG'"."autogen"."bank-process_transactions"
-          WHERE time > now() - '"$TEST_DURATION_SECONDS"'s AND count > 0
+      SELECT MEDIAN(sum_total_transactions) AS "median_sum" FROM (
+        SELECT SUM("total_transactions") AS "sum_total_transactions"
+          FROM "'$TESTNET_TAG'"."autogen"."replay-slot-stats"
+          WHERE time > now() - '"$TEST_DURATION_SECONDS"'s AND total_transactions > 0
           GROUP BY time(1s), host_id)
       GROUP BY time(1s)
     )'

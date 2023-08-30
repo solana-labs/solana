@@ -2,7 +2,7 @@
 title: Send and Receive Tokens
 ---
 
-This page decribes how to receive and send SOL tokens using the command line
+This page describes how to receive and send SOL tokens using the command line
 tools with a command line wallet such as a [paper wallet](../wallet-guide/paper-wallet.md),
 a [file system wallet](../wallet-guide/file-system-wallet.md), or a
 [hardware wallet](../wallet-guide/hardware-wallets.md). Before you begin, make sure

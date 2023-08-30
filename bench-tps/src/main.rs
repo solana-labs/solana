@@ -83,10 +83,16 @@ fn create_connection_cache(
     client_node_id: Option<&Keypair>,
 ) -> ConnectionCache {
     if !use_quic {
-        return ConnectionCache::with_udp(tpu_connection_pool_size);
+        return ConnectionCache::with_udp(
+            "bench-tps-connection_cache_udp",
+            tpu_connection_pool_size,
+        );
     }
     if client_node_id.is_none() {
-        return ConnectionCache::new(tpu_connection_pool_size);
+        return ConnectionCache::new_quic(
+            "bench-tps-connection_cache_quic",
+            tpu_connection_pool_size,
+        );
     }
 
     let rpc_client = Arc::new(RpcClient::new_with_commitment(
@@ -107,6 +113,7 @@ fn create_connection_cache(
         HashMap::<Pubkey, u64>::default(), // overrides
     )));
     ConnectionCache::new_with_client_options(
+        "bench-tps-connection_cache_quic",
         tpu_connection_pool_size,
         None,
         Some((client_node_id, bind_address)),
@@ -156,7 +163,7 @@ fn create_client(
                     info!("Searching for target_node: {:?}", target_node);
                     let mut target_client = None;
                     for node in nodes {
-                        if node.id == target_node {
+                        if node.pubkey() == &target_node {
                             target_client = Some(get_client(
                                 &[node],
                                 &SocketAddrSpace::Unspecified,
@@ -244,7 +251,7 @@ fn main() {
         external_client_type,
         use_quic,
         tpu_connection_pool_size,
-        use_randomized_compute_unit_price,
+        compute_unit_price,
         use_durable_nonce,
         instruction_padding_config,
         bind_address,
@@ -259,9 +266,7 @@ fn main() {
         let num_accounts = keypairs.len() as u64;
         let max_fee = FeeRateGovernor::new(*target_lamports_per_signature, 0)
             .max_lamports_per_signature
-            .saturating_add(max_lamports_for_prioritization(
-                *use_randomized_compute_unit_price,
-            ));
+            .saturating_add(max_lamports_for_prioritization(compute_unit_price));
         let num_lamports_per_account = (num_accounts - 1 + NUM_SIGNATURES_FOR_TXS * max_fee)
             / num_accounts
             + num_lamports_per_account;

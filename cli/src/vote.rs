@@ -31,16 +31,16 @@ use {
     solana_rpc_client_api::config::RpcGetVoteAccountsConfig,
     solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
-        account::Account, commitment_config::CommitmentConfig, message::Message,
+        account::Account, commitment_config::CommitmentConfig, feature, message::Message,
         native_token::lamports_to_sol, pubkey::Pubkey, system_instruction::SystemError,
         transaction::Transaction,
     },
     solana_vote_program::{
         vote_error::VoteError,
-        vote_instruction::{self, withdraw},
-        vote_state::{VoteAuthorize, VoteInit, VoteState},
+        vote_instruction::{self, withdraw, CreateVoteAccountConfig},
+        vote_state::{VoteAuthorize, VoteInit, VoteState, VoteStateVersions},
     },
-    std::sync::Arc,
+    std::rc::Rc,
 };
 
 pub trait VoteSubCommands {
@@ -421,7 +421,7 @@ impl VoteSubCommands for App<'_, '_> {
 pub fn parse_create_vote_account(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let (vote_account, vote_account_pubkey) = signer_of(matches, "vote_account", wallet_manager)?;
     let seed = matches.value_of("seed").map(|s| s.to_string());
@@ -490,7 +490,7 @@ pub fn parse_create_vote_account(
 pub fn parse_vote_authorize(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     vote_authorize: VoteAuthorize,
     checked: bool,
 ) -> Result<CliCommandInfo, CliError> {
@@ -551,7 +551,7 @@ pub fn parse_vote_authorize(
 pub fn parse_vote_update_validator(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
@@ -598,7 +598,7 @@ pub fn parse_vote_update_validator(
 pub fn parse_vote_update_commission(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
@@ -643,7 +643,7 @@ pub fn parse_vote_update_commission(
 
 pub fn parse_vote_get_account_command(
     matches: &ArgMatches<'_>,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
@@ -666,7 +666,7 @@ pub fn parse_vote_get_account_command(
 pub fn parse_withdraw_from_vote_account(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
@@ -722,7 +722,7 @@ pub fn parse_withdraw_from_vote_account(
 pub fn parse_close_vote_account(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
@@ -800,6 +800,13 @@ pub fn process_create_vote_account(
     let fee_payer = config.signers[fee_payer];
     let nonce_authority = config.signers[nonce_authority];
 
+    let is_feature_active = (!sign_only)
+        .then(solana_sdk::feature_set::vote_state_add_vote_latency::id)
+        .and_then(|feature_address| rpc_client.get_account(&feature_address).ok())
+        .and_then(|account| feature::from_account(&account))
+        .map_or(false, |feature| feature.activated_at.is_some());
+    let space = VoteStateVersions::vote_state_size_of(is_feature_active) as u64;
+
     let build_message = |lamports| {
         let vote_init = VoteInit {
             node_pubkey: identity_pubkey,
@@ -807,28 +814,27 @@ pub fn process_create_vote_account(
             authorized_withdrawer,
             commission,
         };
-
-        let ixs = if let Some(seed) = seed {
-            vote_instruction::create_account_with_seed(
-                &config.signers[0].pubkey(), // from
-                &vote_account_address,       // to
-                &vote_account_pubkey,        // base
-                seed,                        // seed
-                &vote_init,
-                lamports,
-            )
-            .with_memo(memo)
-            .with_compute_unit_price(compute_unit_price)
-        } else {
-            vote_instruction::create_account(
-                &config.signers[0].pubkey(),
-                &vote_account_pubkey,
-                &vote_init,
-                lamports,
-            )
-            .with_memo(memo)
-            .with_compute_unit_price(compute_unit_price)
+        let mut create_vote_account_config = CreateVoteAccountConfig {
+            space,
+            ..CreateVoteAccountConfig::default()
         };
+        let to = if let Some(seed) = seed {
+            create_vote_account_config.with_seed = Some((&vote_account_pubkey, seed));
+            &vote_account_address
+        } else {
+            &vote_account_pubkey
+        };
+
+        let ixs = vote_instruction::create_account_with_config(
+            &config.signers[0].pubkey(),
+            to,
+            &vote_init,
+            lamports,
+            create_vote_account_config,
+        )
+        .with_memo(memo)
+        .with_compute_unit_price(compute_unit_price);
+
         if let Some(nonce_account) = &nonce_account {
             Message::new_with_nonce(
                 ixs,
@@ -1379,7 +1385,7 @@ pub fn process_close_vote_account(
     if let Some(vote_account) = vote_account_status
         .current
         .into_iter()
-        .chain(vote_account_status.delinquent.into_iter())
+        .chain(vote_account_status.delinquent)
         .next()
     {
         if vote_account.activated_stake != 0 {

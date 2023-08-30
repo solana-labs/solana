@@ -117,7 +117,6 @@ pub struct TransactionParams {
 pub enum Mode {
     Gossip,
     Tvu,
-    TvuForwards,
     Tpu,
     TpuForwards,
     Repair,

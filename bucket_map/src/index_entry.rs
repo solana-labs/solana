@@ -46,19 +46,16 @@ pub struct BucketWithHeader {
 impl BucketOccupied for BucketWithHeader {
     fn occupy(&mut self, element: &mut [u8], ix: usize) {
         assert!(self.is_free(element, ix));
-        let entry: &mut DataBucketRefCountOccupiedHeader =
-            BucketStorage::<BucketWithHeader>::get_mut_from_parts(element);
+        let entry = get_mut_from_bytes::<DataBucketRefCountOccupiedHeader>(element);
         entry.packed_ref_count.set_occupied(OCCUPIED_OCCUPIED);
     }
     fn free(&mut self, element: &mut [u8], ix: usize) {
         assert!(!self.is_free(element, ix));
-        let entry: &mut DataBucketRefCountOccupiedHeader =
-            BucketStorage::<BucketWithHeader>::get_mut_from_parts(element);
+        let entry = get_mut_from_bytes::<DataBucketRefCountOccupiedHeader>(element);
         entry.packed_ref_count.set_occupied(OCCUPIED_FREE);
     }
     fn is_free(&self, element: &[u8], _ix: usize) -> bool {
-        let entry: &DataBucketRefCountOccupiedHeader =
-            BucketStorage::<BucketWithHeader>::get_from_parts(element);
+        let entry = get_from_bytes::<DataBucketRefCountOccupiedHeader>(element);
         entry.packed_ref_count.occupied() == OCCUPIED_FREE
     }
     fn offset_to_first_data() -> usize {
@@ -74,7 +71,7 @@ impl BucketOccupied for BucketWithHeader {
 
 /// allocated in `contents` in a BucketStorage
 #[derive(Debug)]
-pub struct IndexBucketUsingBitVecBits<T: 'static> {
+pub struct IndexBucketUsingBitVecBits<T: PartialEq + 'static> {
     /// 2 bits per entry that represent a 4 state enum tag
     pub enum_tag: BitVec,
     /// number of elements allocated
@@ -82,7 +79,7 @@ pub struct IndexBucketUsingBitVecBits<T: 'static> {
     _phantom: PhantomData<&'static T>,
 }
 
-impl<T: Copy + 'static> IndexBucketUsingBitVecBits<T> {
+impl<T: Copy + PartialEq + 'static> IndexBucketUsingBitVecBits<T> {
     /// set the 2 bits (first and second) in `enum_tag`
     fn set_bits(&mut self, ix: u64, first: bool, second: bool) {
         self.enum_tag.set(ix * 2, first);
@@ -105,7 +102,7 @@ impl<T: Copy + 'static> IndexBucketUsingBitVecBits<T> {
     }
 }
 
-impl<T: Copy + 'static> BucketOccupied for IndexBucketUsingBitVecBits<T> {
+impl<T: Copy + PartialEq + 'static> BucketOccupied for IndexBucketUsingBitVecBits<T> {
     fn occupy(&mut self, element: &mut [u8], ix: usize) {
         assert!(self.is_free(element, ix));
         self.set_enum_tag(ix as u64, OccupiedEnumTag::ZeroSlots);
@@ -143,7 +140,7 @@ impl<T: Copy + 'static> BucketOccupied for IndexBucketUsingBitVecBits<T> {
     }
 }
 
-impl<T> BucketCapacity for IndexBucketUsingBitVecBits<T> {
+impl<T: PartialEq> BucketCapacity for IndexBucketUsingBitVecBits<T> {
     fn capacity(&self) -> u64 {
         self.capacity
     }
@@ -315,7 +312,7 @@ struct PackedStorage {
     offset: B56,
 }
 
-impl<T: Copy + 'static> IndexEntryPlaceInBucket<T> {
+impl<T: Copy + PartialEq + 'static> IndexEntryPlaceInBucket<T> {
     pub(crate) fn get_slot_count_enum<'a>(
         &self,
         index_bucket: &'a BucketStorage<IndexBucket<T>>,
@@ -404,11 +401,7 @@ impl<T: Copy + 'static> IndexEntryPlaceInBucket<T> {
                 assert!(!data_bucket.is_free(loc));
 
                 ref_count = MultipleSlots::ref_count(data_bucket, loc);
-                data_bucket.get_cell_slice::<T>(
-                    loc,
-                    multiple_slots.num_slots,
-                    IncludeHeader::NoHeader,
-                )
+                data_bucket.get_slice::<T>(loc, multiple_slots.num_slots, IncludeHeader::NoHeader)
             }
             _ => {
                 panic!("trying to read data from a free entry");
@@ -428,6 +421,20 @@ impl<T: Copy + 'static> IndexEntryPlaceInBucket<T> {
         let entry: &IndexEntry<T> = index_bucket.get(self.ix);
         &entry.key
     }
+}
+
+fn get_from_bytes<T>(item_slice: &[u8]) -> &T {
+    debug_assert!(std::mem::size_of::<T>() <= item_slice.len());
+    let item = item_slice.as_ptr() as *const T;
+    debug_assert!(item as usize % std::mem::align_of::<T>() == 0);
+    unsafe { &*item }
+}
+
+fn get_mut_from_bytes<T>(item_slice: &mut [u8]) -> &mut T {
+    debug_assert!(std::mem::size_of::<T>() <= item_slice.len());
+    let item = item_slice.as_mut_ptr() as *mut T;
+    debug_assert!(item as usize % std::mem::align_of::<T>() == 0);
+    unsafe { &mut *item }
 }
 
 #[cfg(test)]

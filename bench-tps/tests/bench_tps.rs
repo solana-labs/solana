@@ -6,7 +6,6 @@ use {
         bench::{do_bench_tps, generate_and_fund_keypairs},
         cli::{Config, InstructionPaddingConfig},
         send_batch::generate_durable_nonce_accounts,
-        spl_convert::FromOtherSolana,
     },
     solana_client::{
         thin_client::ThinClient,
@@ -45,7 +44,7 @@ fn program_account(program_data: &[u8]) -> AccountSharedData {
 fn test_bench_tps_local_cluster(config: Config) {
     let native_instruction_processors = vec![];
     let additional_accounts = vec![(
-        FromOtherSolana::from(spl_instruction_padding::ID),
+        spl_instruction_padding::ID,
         program_account(include_bytes!("fixtures/spl_instruction_padding.so")),
     )];
 
@@ -81,7 +80,10 @@ fn test_bench_tps_local_cluster(config: Config) {
 
     let client = Arc::new(ThinClient::new(
         cluster.entry_point_info.rpc().unwrap(),
-        cluster.entry_point_info.tpu().unwrap(),
+        cluster
+            .entry_point_info
+            .tpu(cluster.connection_cache.protocol())
+            .unwrap(),
         cluster.connection_cache.clone(),
     ));
 
@@ -118,10 +120,7 @@ fn test_bench_tps_test_validator(config: Config) {
             ..Rent::default()
         })
         .faucet_addr(Some(faucet_addr))
-        .add_program(
-            "spl_instruction_padding",
-            FromOtherSolana::from(spl_instruction_padding::ID),
-        )
+        .add_program("spl_instruction_padding", spl_instruction_padding::ID)
         .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified)
         .expect("validator start failed");
 
@@ -193,7 +192,7 @@ fn test_bench_tps_local_cluster_with_padding() {
         tx_count: 100,
         duration: Duration::from_secs(10),
         instruction_padding_config: Some(InstructionPaddingConfig {
-            program_id: FromOtherSolana::from(spl_instruction_padding::ID),
+            program_id: spl_instruction_padding::ID,
             data_size: 0,
         }),
         ..Config::default()
@@ -207,7 +206,7 @@ fn test_bench_tps_tpu_client_with_padding() {
         tx_count: 100,
         duration: Duration::from_secs(10),
         instruction_padding_config: Some(InstructionPaddingConfig {
-            program_id: FromOtherSolana::from(spl_instruction_padding::ID),
+            program_id: spl_instruction_padding::ID,
             data_size: 0,
         }),
         ..Config::default()

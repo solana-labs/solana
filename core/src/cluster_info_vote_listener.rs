@@ -1,6 +1,7 @@
 use {
     crate::{
         banking_trace::{BankingPacketBatch, BankingPacketSender},
+        consensus::vote_stake_tracker::VoteStakeTracker,
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
         result::{Error, Result},
@@ -8,7 +9,6 @@ use {
         verified_vote_packets::{
             ValidatorGossipVotesIterator, VerifiedVoteMetadata, VerifiedVotePackets,
         },
-        vote_stake_tracker::VoteStakeTracker,
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Select, Sender},
     log::*,
@@ -36,6 +36,7 @@ use {
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
+        feature_set::allow_votes_to_directly_update_vote_state,
         hash::Hash,
         pubkey::Pubkey,
         signature::Signature,
@@ -264,18 +265,22 @@ impl ClusterInfoVoteListener {
                 })
                 .unwrap()
         };
-        let exit_ = exit.clone();
-        let bank_send_thread = Builder::new()
-            .name("solCiBankSend".to_string())
-            .spawn(move || {
-                let _ = Self::bank_send_loop(
-                    exit_,
-                    verified_vote_label_packets_receiver,
-                    poh_recorder,
-                    &verified_packets_sender,
-                );
-            })
-            .unwrap();
+        let bank_forks_clone = bank_forks.clone();
+        let bank_send_thread = {
+            let exit = exit.clone();
+            Builder::new()
+                .name("solCiBankSend".to_string())
+                .spawn(move || {
+                    let _ = Self::bank_send_loop(
+                        exit,
+                        verified_vote_label_packets_receiver,
+                        poh_recorder,
+                        &verified_packets_sender,
+                        bank_forks_clone,
+                    );
+                })
+                .unwrap()
+        };
 
         let send_thread = Builder::new()
             .name("solCiProcVotes".to_string())
@@ -377,10 +382,17 @@ impl ClusterInfoVoteListener {
         verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
         poh_recorder: Arc<RwLock<PohRecorder>>,
         verified_packets_sender: &BankingPacketSender,
+        bank_forks: Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
         let mut bank_vote_sender_state_option: Option<BankVoteSenderState> = None;
+        let mut is_tower_full_vote_enabled = bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .feature_set
+            .is_active(&allow_votes_to_directly_update_vote_state::id());
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -391,16 +403,11 @@ impl ClusterInfoVoteListener {
                 .read()
                 .unwrap()
                 .would_be_leader(3 * slot_hashes::MAX_ENTRIES as u64 * DEFAULT_TICKS_PER_SLOT);
-            let feature_set = poh_recorder
-                .read()
-                .unwrap()
-                .bank()
-                .map(|bank| bank.feature_set.clone());
 
             if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
                 would_be_leader,
-                feature_set,
+                is_tower_full_vote_enabled,
             ) {
                 match e {
                     Error::RecvTimeout(RecvTimeoutError::Disconnected)
@@ -415,14 +422,20 @@ impl ClusterInfoVoteListener {
                 // Always set this to avoid taking the poh lock too often
                 time_since_lock = Instant::now();
                 // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
-                let current_working_bank = poh_recorder.read().unwrap().bank();
-                if let Some(current_working_bank) = current_working_bank {
-                    Self::check_for_leader_bank_and_send_votes(
-                        &mut bank_vote_sender_state_option,
-                        current_working_bank,
-                        verified_packets_sender,
-                        &verified_vote_packets,
-                    )?;
+                Self::check_for_leader_bank_and_send_votes(
+                    &mut bank_vote_sender_state_option,
+                    poh_recorder.read().unwrap().bank(),
+                    verified_packets_sender,
+                    &verified_vote_packets,
+                )?;
+                // Check if we've crossed the feature boundary
+                if !is_tower_full_vote_enabled {
+                    is_tower_full_vote_enabled = bank_forks
+                        .read()
+                        .unwrap()
+                        .root_bank()
+                        .feature_set
+                        .is_active(&allow_votes_to_directly_update_vote_state::id());
                 }
             }
         }
@@ -430,10 +443,19 @@ impl ClusterInfoVoteListener {
 
     fn check_for_leader_bank_and_send_votes(
         bank_vote_sender_state_option: &mut Option<BankVoteSenderState>,
-        current_working_bank: Arc<Bank>,
+        current_working_bank: Option<Arc<Bank>>,
         verified_packets_sender: &BankingPacketSender,
         verified_vote_packets: &VerifiedVotePackets,
     ) -> Result<()> {
+        let Some(current_working_bank) = current_working_bank else {
+            // We are not the leader!
+            if let Some(bank_vote_sender_state) = bank_vote_sender_state_option {
+                // This ensures we report the last slot's metrics
+                bank_vote_sender_state.report_metrics();
+                *bank_vote_sender_state_option = None;
+            }
+            return Ok(());
+        };
         // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
         if let Some(bank_vote_sender_state) = bank_vote_sender_state_option {
             if bank_vote_sender_state.bank.slot() != current_working_bank.slot() {
@@ -936,7 +958,7 @@ mod tests {
             .read()
             .unwrap()
             .contains_key(&bank.slot()));
-        let bank1 = Bank::new_from_parent(&bank, &Pubkey::default(), bank.slot() + 1);
+        let bank1 = Bank::new_from_parent(bank.clone(), &Pubkey::default(), bank.slot() + 1);
         vote_tracker.progress_with_new_root_bank(&bank1);
         assert!(!vote_tracker
             .slot_vote_trackers
@@ -947,12 +969,10 @@ mod tests {
         // Check `keys` and `epoch_authorized_voters` are purged when new
         // root bank moves to the next epoch
         let current_epoch = bank.epoch();
-        let new_epoch_bank = Bank::new_from_parent(
-            &bank,
-            &Pubkey::default(),
-            bank.epoch_schedule()
-                .get_first_slot_in_epoch(current_epoch + 1),
-        );
+        let new_epoch_slot = bank
+            .epoch_schedule()
+            .get_first_slot_in_epoch(current_epoch + 1);
+        let new_epoch_bank = Bank::new_from_parent(bank, &Pubkey::default(), new_epoch_slot);
         vote_tracker.progress_with_new_root_bank(&new_epoch_bank);
     }
 
@@ -998,7 +1018,7 @@ mod tests {
         let bank0 = Bank::new_for_tests(&genesis_config);
         // Votes for slots less than the provided root bank's slot should not be processed
         let bank3 = Arc::new(Bank::new_from_parent(
-            &Arc::new(bank0),
+            Arc::new(bank0),
             &Pubkey::default(),
             3,
         ));
@@ -1177,7 +1197,7 @@ mod tests {
         let all_expected_slots: BTreeSet<_> = gossip_vote_slots
             .clone()
             .into_iter()
-            .chain(replay_vote_slots.clone().into_iter())
+            .chain(replay_vote_slots.clone())
             .collect();
         let mut pubkey_to_votes: HashMap<Pubkey, BTreeSet<Slot>> = HashMap::new();
         for (received_pubkey, new_votes) in verified_vote_receiver.try_iter() {
@@ -1447,7 +1467,7 @@ mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks,
@@ -1519,7 +1539,7 @@ mod tests {
             .collect();
 
         let new_root_bank =
-            Bank::new_from_parent(&bank, &Pubkey::default(), first_slot_in_new_epoch - 2);
+            Bank::new_from_parent(bank, &Pubkey::default(), first_slot_in_new_epoch - 2);
         ClusterInfoVoteListener::filter_and_confirm_with_new_votes(
             &vote_tracker,
             vote_txs,
@@ -1563,7 +1583,7 @@ mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
-            &exit,
+            exit,
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             bank_forks,
@@ -1697,7 +1717,7 @@ mod tests {
         // 1) If we hand over a `current_leader_bank`, vote sender state should be updated
         ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
             &mut bank_vote_sender_state_option,
-            current_leader_bank.clone(),
+            Some(current_leader_bank.clone()),
             &verified_packets_sender,
             &verified_vote_packets,
         )
@@ -1716,7 +1736,7 @@ mod tests {
         // 2) Handing over the same leader bank again should not update the state
         ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
             &mut bank_vote_sender_state_option,
-            current_leader_bank.clone(),
+            Some(current_leader_bank.clone()),
             &verified_packets_sender,
             &verified_vote_packets,
         )
@@ -1735,14 +1755,15 @@ mod tests {
             1
         );
 
+        let slot = current_leader_bank.slot() + 1;
         let current_leader_bank = Arc::new(Bank::new_from_parent(
-            &current_leader_bank,
+            current_leader_bank,
             &Pubkey::default(),
-            current_leader_bank.slot() + 1,
+            slot,
         ));
         ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
             &mut bank_vote_sender_state_option,
-            current_leader_bank.clone(),
+            Some(current_leader_bank.clone()),
             &verified_packets_sender,
             &verified_vote_packets,
         )

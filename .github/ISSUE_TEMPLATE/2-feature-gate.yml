@@ -47,6 +47,13 @@ body:
         - Staked Validator Vote
     validations:
       required: true
+  - type: textarea
+    id: deployment
+    attributes:
+      label: Deployment Considerations
+      placeholder: Describe any considerations for public-cluster deployment, including needed tests and metrics to be monitored
+    validations:
+      required: true
   - type: input
     id: beta-version
     attributes:

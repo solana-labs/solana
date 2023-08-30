@@ -98,7 +98,7 @@ impl NetworkTopology {
 
     fn new_random(max_partitions: usize, max_packet_drop: u8, max_packet_delay: u32) -> Self {
         let mut rng = thread_rng();
-        let num_partitions = rng.gen_range(0, max_partitions + 1);
+        let num_partitions = rng.gen_range(0..max_partitions + 1);
 
         if num_partitions == 0 {
             return NetworkTopology::default();
@@ -110,7 +110,7 @@ impl NetworkTopology {
             let partition = if i == num_partitions - 1 {
                 100 - used_partition
             } else {
-                rng.gen_range(0, 100 - used_partition - num_partitions + i)
+                rng.gen_range(0..100 - used_partition - num_partitions + i)
             };
             used_partition += partition;
             partitions.push(partition as u8);
@@ -120,14 +120,14 @@ impl NetworkTopology {
         for i in 0..partitions.len() - 1 {
             for j in i + 1..partitions.len() {
                 let drop_config = if max_packet_drop > 0 {
-                    let packet_drop = rng.gen_range(0, max_packet_drop + 1);
+                    let packet_drop = rng.gen_range(0..max_packet_drop + 1);
                     format!("loss {packet_drop}% 25% ")
                 } else {
                     String::default()
                 };
 
                 let config = if max_packet_delay > 0 {
-                    let packet_delay = rng.gen_range(0, max_packet_delay + 1);
+                    let packet_delay = rng.gen_range(0..max_packet_delay + 1);
                     format!("{drop_config}delay {packet_delay}ms 10ms")
                 } else {
                     drop_config

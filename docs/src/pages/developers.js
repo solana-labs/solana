@@ -91,19 +91,6 @@ function Developers() {
               />
 
               <Card
-                to="developing/on-chain-programs/examples#helloworld"
-                header={{
-                  label: "Hello World Example",
-                  translateId: "developer-hello-world",
-                }}
-                body={{
-                  label:
-                    "Example of how to use code to interact with the Solana blockchain.",
-                  translateId: "learn-hello-world",
-                }}
-              />
-
-              <Card
                 to="developing/on-chain-programs/examples"
                 header={{
                   label: "Example Programs",

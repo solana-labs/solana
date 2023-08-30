@@ -28,10 +28,10 @@ instead.
 ### Step 4. Create a new snapshot for slot `SLOT_X` with a hard fork at slot `SLOT_X`
 
 ```bash
-$ solana-ledger-tool -l ledger create-snapshot SLOT_X ledger --hard-fork SLOT_X
+$ solana-ledger-tool -l <LEDGER_PATH> --snapshot-archive-path <SNAPSHOTS_PATH> --incremental-snapshot-archive-path <INCREMENTAL_SNAPSHOTS_PATH> create-snapshot SLOT_X <SNAPSHOTS_PATH> --hard-fork SLOT_X
 ```
 
-The ledger directory should now contain the new snapshot.
+The snapshots directory should now contain the new snapshot.
 `solana-ledger-tool create-snapshot` will also output the new shred version, and bank hash value,
 call this NEW_SHRED_VERSION and NEW_BANK_HASH respectively.
 

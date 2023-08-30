@@ -7,17 +7,17 @@ use {
     dashmap::DashMap,
     rand::Rng,
     rayon::iter::{IntoParallelRefIterator, ParallelIterator},
-    solana_runtime::{
+    solana_accounts_db::{
         accounts::{AccountAddressFilter, Accounts},
         accounts_db::{
             test_utils::create_test_accounts, AccountShrinkThreshold,
-            VerifyAccountsHashAndLamportsConfig,
+            VerifyAccountsHashAndLamportsConfig, INCLUDE_SLOT_IN_HASH_TESTS,
         },
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
-        bank::*,
         rent_collector::RentCollector,
     },
+    solana_runtime::bank::*,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         genesis_config::{create_genesis_config, ClusterType},
@@ -75,7 +75,11 @@ fn test_accounts_squash(bencher: &mut Bencher) {
     // merkle hash of the account state and distribution of fees and rent
     let mut slot = 1u64;
     bencher.iter(|| {
-        let next_bank = Arc::new(Bank::new_from_parent(&prev_bank, &Pubkey::default(), slot));
+        let next_bank = Arc::new(Bank::new_from_parent(
+            prev_bank.clone(),
+            &Pubkey::default(),
+            slot,
+        ));
         next_bank.deposit(&pubkeys[0], 1).unwrap();
         next_bank.squash();
         slot += 1;
@@ -114,6 +118,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
                 ignore_mismatch: false,
                 store_detailed_debug_info: false,
                 use_bg_thread_pool: false,
+                include_slot_in_hash: INCLUDE_SLOT_IN_HASH_TESTS,
             }
         ))
     });
@@ -243,7 +248,7 @@ fn bench_concurrent_read_write(bencher: &mut Bencher) {
         |accounts, pubkeys| {
             let mut rng = rand::thread_rng();
             loop {
-                let i = rng.gen_range(0, pubkeys.len());
+                let i = rng.gen_range(0..pubkeys.len());
                 test::black_box(
                     accounts
                         .load_without_fixed_root(&Ancestors::default(), &pubkeys[i])

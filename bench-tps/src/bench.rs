@@ -1,10 +1,9 @@
 use {
     crate::{
         bench_tps_client::*,
-        cli::{Config, InstructionPaddingConfig},
+        cli::{ComputeUnitPrice, Config, InstructionPaddingConfig},
         perf_utils::{sample_txs, SampleStats},
         send_batch::*,
-        spl_convert::FromOtherSolana,
     },
     log::*,
     rand::distributions::{Distribution, Uniform},
@@ -41,27 +40,41 @@ use {
 // The point at which transactions become "too old", in seconds.
 const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) as u64;
 
-// Add prioritization fee to transfer transactions, when `--use-randomized-compute-unit-price`
-// is used, compute-unit-price is randomly generated in range of (0..MAX_COMPUTE_UNIT_PRICE).
+// Add prioritization fee to transfer transactions, if `compute_unit_price` is set.
+// If `Random` the compute-unit-price is determined by generating a random number in the range
+// 0..MAX_RANDOM_COMPUTE_UNIT_PRICE then multiplying by COMPUTE_UNIT_PRICE_MULTIPLIER.
+// If `Fixed` the compute-unit-price is the value of the `compute-unit-price` parameter.
 // It also sets transaction's compute-unit to TRANSFER_TRANSACTION_COMPUTE_UNIT. Therefore the
-// max additional cost is `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE / 1_000_000`
-const MAX_COMPUTE_UNIT_PRICE: u64 = 50;
-const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 200;
+// max additional cost is:
+// `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE * COMPUTE_UNIT_PRICE_MULTIPLIER / 1_000_000`
+const MAX_RANDOM_COMPUTE_UNIT_PRICE: u64 = 50;
+const COMPUTE_UNIT_PRICE_MULTIPLIER: u64 = 1_000;
+const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 600; // 1 transfer is plus 3 compute_budget ixs
 /// calculate maximum possible prioritization fee, if `use-randomized-compute-unit-price` is
 /// enabled, round to nearest lamports.
-pub fn max_lamports_for_prioritization(use_randomized_compute_unit_price: bool) -> u64 {
-    if use_randomized_compute_unit_price {
-        const MICRO_LAMPORTS_PER_LAMPORT: u64 = 1_000_000;
-        let micro_lamport_fee: u128 = (MAX_COMPUTE_UNIT_PRICE as u128)
-            .saturating_mul(TRANSFER_TRANSACTION_COMPUTE_UNIT as u128);
-        let fee = micro_lamport_fee
-            .saturating_add(MICRO_LAMPORTS_PER_LAMPORT.saturating_sub(1) as u128)
-            .saturating_div(MICRO_LAMPORTS_PER_LAMPORT as u128);
-        u64::try_from(fee).unwrap_or(u64::MAX)
-    } else {
-        0u64
-    }
+pub fn max_lamports_for_prioritization(compute_unit_price: &Option<ComputeUnitPrice>) -> u64 {
+    let Some(compute_unit_price) = compute_unit_price else {
+        return 0;
+    };
+
+    let compute_unit_price = match compute_unit_price {
+        ComputeUnitPrice::Random => (MAX_RANDOM_COMPUTE_UNIT_PRICE as u128)
+            .saturating_mul(COMPUTE_UNIT_PRICE_MULTIPLIER as u128),
+        ComputeUnitPrice::Fixed(compute_unit_price) => *compute_unit_price as u128,
+    };
+
+    const MICRO_LAMPORTS_PER_LAMPORT: u64 = 1_000_000;
+    let micro_lamport_fee: u128 =
+        compute_unit_price.saturating_mul(TRANSFER_TRANSACTION_COMPUTE_UNIT as u128);
+    let fee = micro_lamport_fee
+        .saturating_add(MICRO_LAMPORTS_PER_LAMPORT.saturating_sub(1) as u128)
+        .saturating_div(MICRO_LAMPORTS_PER_LAMPORT as u128);
+    u64::try_from(fee).unwrap_or(u64::MAX)
 }
+
+// set transfer transaction's loaded account data size to 30K - large enough yet smaller than
+// 32K page size, so it'd cost 0 extra CU.
+const TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE: u32 = 30 * 1024;
 
 pub type TimestampedTransaction = (Transaction, Option<u64>);
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<TimestampedTransaction>>>>;
@@ -113,7 +126,7 @@ struct TransactionChunkGenerator<'a, 'b, T: ?Sized> {
     nonce_chunks: Option<KeypairChunks<'b>>,
     chunk_index: usize,
     reclaim_lamports_back_to_source_account: bool,
-    use_randomized_compute_unit_price: bool,
+    compute_unit_price: Option<ComputeUnitPrice>,
     instruction_padding_config: Option<InstructionPaddingConfig>,
 }
 
@@ -126,7 +139,7 @@ where
         gen_keypairs: &'a [Keypair],
         nonce_keypairs: Option<&'b Vec<Keypair>>,
         chunk_size: usize,
-        use_randomized_compute_unit_price: bool,
+        compute_unit_price: Option<ComputeUnitPrice>,
         instruction_padding_config: Option<InstructionPaddingConfig>,
         num_conflict_groups: Option<usize>,
     ) -> Self {
@@ -144,7 +157,7 @@ where
             nonce_chunks,
             chunk_index: 0,
             reclaim_lamports_back_to_source_account: false,
-            use_randomized_compute_unit_price,
+            compute_unit_price,
             instruction_padding_config,
         }
     }
@@ -181,7 +194,7 @@ where
                 self.reclaim_lamports_back_to_source_account,
                 blockhash.unwrap(),
                 &self.instruction_padding_config,
-                self.use_randomized_compute_unit_price,
+                &self.compute_unit_price,
             )
         };
 
@@ -249,7 +262,7 @@ where
 
 fn create_sampler_thread<T>(
     client: &Arc<T>,
-    exit_signal: &Arc<AtomicBool>,
+    exit_signal: Arc<AtomicBool>,
     sample_period: u64,
     maxes: &Arc<RwLock<Vec<(String, SampleStats)>>>,
 ) -> JoinHandle<()>
@@ -257,13 +270,12 @@ where
     T: 'static + BenchTpsClient + Send + Sync + ?Sized,
 {
     info!("Sampling TPS every {} second...", sample_period);
-    let exit_signal = exit_signal.clone();
     let maxes = maxes.clone();
     let client = client.clone();
     Builder::new()
         .name("solana-client-sample".to_string())
         .spawn(move || {
-            sample_txs(&exit_signal, &maxes, sample_period, &client);
+            sample_txs(exit_signal, &maxes, sample_period, &client);
         })
         .unwrap()
 }
@@ -326,7 +338,7 @@ fn create_sender_threads<T>(
     thread_batch_sleep_ms: usize,
     total_tx_sent_count: &Arc<AtomicUsize>,
     threads: usize,
-    exit_signal: &Arc<AtomicBool>,
+    exit_signal: Arc<AtomicBool>,
     shared_tx_active_thread_count: &Arc<AtomicIsize>,
 ) -> Vec<JoinHandle<()>>
 where
@@ -373,7 +385,7 @@ where
         tx_count,
         sustained,
         target_slots_per_epoch,
-        use_randomized_compute_unit_price,
+        compute_unit_price,
         use_durable_nonce,
         instruction_padding_config,
         num_conflict_groups,
@@ -386,7 +398,7 @@ where
         &gen_keypairs,
         nonce_keypairs.as_ref(),
         tx_count,
-        use_randomized_compute_unit_price,
+        compute_unit_price,
         instruction_padding_config,
         num_conflict_groups,
     );
@@ -408,7 +420,7 @@ where
     // collect the max transaction rate and total tx count seen
     let maxes = Arc::new(RwLock::new(Vec::new()));
     let sample_period = 1; // in seconds
-    let sample_thread = create_sampler_thread(&client, &exit_signal, sample_period, &maxes);
+    let sample_thread = create_sampler_thread(&client, exit_signal.clone(), sample_period, &maxes);
 
     let shared_txs: SharedTransactions = Arc::new(RwLock::new(VecDeque::new()));
 
@@ -440,7 +452,7 @@ where
         thread_batch_sleep_ms,
         &total_tx_sent_count,
         threads,
-        &exit_signal,
+        exit_signal.clone(),
         &shared_tx_active_thread_count,
     );
 
@@ -514,7 +526,7 @@ fn generate_system_txs(
     reclaim: bool,
     blockhash: &Hash,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
-    use_randomized_compute_unit_price: bool,
+    compute_unit_price: &Option<ComputeUnitPrice>,
 ) -> Vec<TimestampedTransaction> {
     let pairs: Vec<_> = if !reclaim {
         source.iter().zip(dest.iter()).collect()
@@ -522,11 +534,22 @@ fn generate_system_txs(
         dest.iter().zip(source.iter()).collect()
     };
 
-    if use_randomized_compute_unit_price {
-        let mut rng = rand::thread_rng();
-        let range = Uniform::from(0..MAX_COMPUTE_UNIT_PRICE);
-        let compute_unit_prices: Vec<_> =
-            (0..pairs.len()).map(|_| range.sample(&mut rng)).collect();
+    if let Some(compute_unit_price) = compute_unit_price {
+        let compute_unit_prices = match compute_unit_price {
+            ComputeUnitPrice::Random => {
+                let mut rng = rand::thread_rng();
+                let range = Uniform::from(0..MAX_RANDOM_COMPUTE_UNIT_PRICE);
+                (0..pairs.len())
+                    .map(|_| {
+                        range
+                            .sample(&mut rng)
+                            .saturating_mul(COMPUTE_UNIT_PRICE_MULTIPLIER)
+                    })
+                    .collect()
+            }
+            ComputeUnitPrice::Fixed(compute_unit_price) => vec![*compute_unit_price; pairs.len()],
+        };
+
         let pairs_with_compute_unit_prices: Vec<_> =
             pairs.iter().zip(compute_unit_prices.iter()).collect();
 
@@ -577,15 +600,13 @@ fn transfer_with_compute_unit_price_and_padding(
     let from_pubkey = from_keypair.pubkey();
     let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
     let instruction = if let Some(instruction_padding_config) = instruction_padding_config {
-        FromOtherSolana::from(
-            wrap_instruction(
-                FromOtherSolana::from(instruction_padding_config.program_id),
-                FromOtherSolana::from(transfer_instruction),
-                vec![],
-                instruction_padding_config.data_size,
-            )
-            .expect("Could not create padded instruction"),
+        wrap_instruction(
+            instruction_padding_config.program_id,
+            transfer_instruction,
+            vec![],
+            instruction_padding_config.data_size,
         )
+        .expect("Could not create padded instruction")
     } else {
         transfer_instruction
     };
@@ -596,6 +617,11 @@ fn transfer_with_compute_unit_price_and_padding(
             ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
         ])
     }
+    instructions.extend_from_slice(&[
+        ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(
+            TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
+        ),
+    ]);
     let message = Message::new(&instructions, Some(&from_pubkey));
     Transaction::new(&[from_keypair], message, recent_blockhash)
 }
@@ -672,20 +698,24 @@ fn nonced_transfer_with_padding(
     let from_pubkey = from_keypair.pubkey();
     let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
     let instruction = if let Some(instruction_padding_config) = instruction_padding_config {
-        FromOtherSolana::from(
-            wrap_instruction(
-                FromOtherSolana::from(instruction_padding_config.program_id),
-                FromOtherSolana::from(transfer_instruction),
-                vec![],
-                instruction_padding_config.data_size,
-            )
-            .expect("Could not create padded instruction"),
+        wrap_instruction(
+            instruction_padding_config.program_id,
+            transfer_instruction,
+            vec![],
+            instruction_padding_config.data_size,
         )
+        .expect("Could not create padded instruction")
     } else {
         transfer_instruction
     };
+    let mut instructions = vec![instruction];
+    instructions.extend_from_slice(&[
+        ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(
+            TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
+        ),
+    ]);
     let message = Message::new_with_nonce(
-        vec![instruction],
+        instructions,
         Some(&from_pubkey),
         nonce_account,
         &nonce_authority.pubkey(),
@@ -791,7 +821,7 @@ fn get_new_latest_blockhash<T: BenchTpsClient + ?Sized>(
 }
 
 fn poll_blockhash<T: BenchTpsClient + ?Sized>(
-    exit_signal: &Arc<AtomicBool>,
+    exit_signal: &AtomicBool,
     blockhash: &Arc<RwLock<Hash>>,
     client: &Arc<T>,
     id: &Pubkey,
@@ -841,7 +871,7 @@ fn poll_blockhash<T: BenchTpsClient + ?Sized>(
 }
 
 fn do_tx_transfers<T: BenchTpsClient + ?Sized>(
-    exit_signal: &Arc<AtomicBool>,
+    exit_signal: &AtomicBool,
     shared_txs: &SharedTransactions,
     shared_tx_thread_count: &Arc<AtomicIsize>,
     total_tx_sent_count: &Arc<AtomicUsize>,
@@ -1082,6 +1112,7 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
             total,
             max_fee,
             lamports_per_account,
+            TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
         );
     }
     Ok(())
@@ -1093,15 +1124,25 @@ mod tests {
         super::*,
         solana_runtime::{bank::Bank, bank_client::BankClient},
         solana_sdk::{
-            commitment_config::CommitmentConfig, fee_calculator::FeeRateGovernor,
-            genesis_config::create_genesis_config, native_token::sol_to_lamports, nonce::State,
+            commitment_config::CommitmentConfig,
+            feature_set::FeatureSet,
+            fee_calculator::FeeRateGovernor,
+            genesis_config::{create_genesis_config, GenesisConfig},
+            native_token::sol_to_lamports,
+            nonce::State,
         },
     };
+
+    fn bank_with_all_features(genesis_config: &GenesisConfig) -> Bank {
+        let mut bank = Bank::new_for_tests(genesis_config);
+        bank.feature_set = Arc::new(FeatureSet::all_enabled());
+        bank
+    }
 
     #[test]
     fn test_bench_tps_bank_client() {
         let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = bank_with_all_features(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
 
         let config = Config {
@@ -1121,7 +1162,7 @@ mod tests {
     #[test]
     fn test_bench_tps_fund_keys() {
         let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = bank_with_all_features(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
         let keypair_count = 20;
         let lamports = 20;
@@ -1145,7 +1186,7 @@ mod tests {
         let (mut genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
         let fee_rate_governor = FeeRateGovernor::new(11, 0);
         genesis_config.fee_rate_governor = fee_rate_governor;
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = bank_with_all_features(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
         let keypair_count = 20;
         let lamports = 20;
@@ -1162,7 +1203,7 @@ mod tests {
     #[test]
     fn test_bench_tps_create_durable_nonce() {
         let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = bank_with_all_features(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
         let keypair_count = 10;
         let lamports = 10_000_000;

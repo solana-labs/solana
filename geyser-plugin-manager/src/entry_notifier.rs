@@ -6,9 +6,9 @@ use {
     solana_geyser_plugin_interface::geyser_plugin_interface::{
         ReplicaEntryInfo, ReplicaEntryInfoVersions,
     },
+    solana_ledger::entry_notifier_interface::EntryNotifier,
     solana_measure::measure::Measure,
     solana_metrics::*,
-    solana_rpc::entry_notifier_interface::EntryNotifier,
     solana_sdk::clock::Slot,
     std::sync::{Arc, RwLock},
 };

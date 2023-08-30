@@ -14,8 +14,7 @@ ahash = { workspace = true }
 bincode = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
 curve25519-dalek = { workspace = true }
-dlopen = { workspace = true }
-dlopen_derive = { workspace = true }
+dlopen2 = { workspace = true }
 fnv = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
@@ -37,7 +36,7 @@ name = "solana_perf"
 
 [dev-dependencies]
 matches = { workspace = true }
-rand_chacha = "0.2.2"
+rand_chacha = { workspace = true }
 solana-logger = { workspace = true }
 test-case = { workspace = true }
 

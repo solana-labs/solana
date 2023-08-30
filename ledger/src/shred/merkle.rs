@@ -186,9 +186,8 @@ impl ShredData {
         // Deserialize headers.
         let mut cursor = Cursor::new(&shard[..]);
         let common_header: ShredCommonHeader = deserialize_from_with_limit(&mut cursor)?;
-        let proof_size = match common_header.shred_variant {
-            ShredVariant::MerkleData(proof_size) => proof_size,
-            _ => return Err(Error::InvalidShredVariant),
+        let ShredVariant::MerkleData(proof_size) = common_header.shred_variant else {
+            return Err(Error::InvalidShredVariant);
         };
         if ShredCode::capacity(proof_size)? != shard_size {
             return Err(Error::InvalidShardSize(shard_size));
@@ -293,9 +292,8 @@ impl ShredCode {
         coding_header: CodingShredHeader,
         mut shard: Vec<u8>,
     ) -> Result<Self, Error> {
-        let proof_size = match common_header.shred_variant {
-            ShredVariant::MerkleCode(proof_size) => proof_size,
-            _ => return Err(Error::InvalidShredVariant),
+        let ShredVariant::MerkleCode(proof_size) = common_header.shred_variant else {
+            return Err(Error::InvalidShredVariant);
         };
         let shard_size = shard.len();
         if Self::capacity(proof_size)? != shard_size {
@@ -630,9 +628,8 @@ pub(super) fn recover(
 ) -> Result<Vec<Shred>, Error> {
     // Grab {common, coding} headers from first coding shred.
     let headers = shreds.iter().find_map(|shred| {
-        let shred = match shred {
-            Shred::ShredCode(shred) => shred,
-            Shred::ShredData(_) => return None,
+        let Shred::ShredCode(shred) = shred else {
+            return None;
         };
         let position = u32::from(shred.coding_header.position);
         let common_header = ShredCommonHeader {
@@ -841,13 +838,11 @@ pub(super) fn make_shreds_from_data(
             .checked_sub(parent_slot)
             .and_then(|offset| u16::try_from(offset).ok())
             .ok_or(Error::InvalidParentSlot { slot, parent_slot })?;
-        let flags = unsafe {
-            ShredFlags::from_bits_unchecked(
-                ShredFlags::SHRED_TICK_REFERENCE_MASK
-                    .bits()
-                    .min(reference_tick),
-            )
-        };
+        let flags = ShredFlags::from_bits_retain(
+            ShredFlags::SHRED_TICK_REFERENCE_MASK
+                .bits()
+                .min(reference_tick),
+        );
         DataShredHeader {
             parent_offset,
             flags,
@@ -1178,7 +1173,7 @@ mod test {
         num_coding_shreds: usize,
         reed_solomon_cache: &ReedSolomonCache,
     ) {
-        let keypair = Keypair::generate(rng);
+        let keypair = Keypair::new();
         let num_shreds = num_data_shreds + num_coding_shreds;
         let proof_size = get_proof_size(num_shreds);
         let capacity = ShredData::capacity(proof_size).unwrap();
@@ -1191,10 +1186,10 @@ mod test {
             fec_set_index: 1835,
         };
         let data_header = {
-            let reference_tick = rng.gen_range(0, 0x40);
+            let reference_tick = rng.gen_range(0..0x40);
             DataShredHeader {
                 parent_offset: rng.gen::<u16>().max(1),
-                flags: unsafe { ShredFlags::from_bits_unchecked(reference_tick) },
+                flags: ShredFlags::from_bits_retain(reference_tick),
                 size: 0,
             }
         };
@@ -1209,7 +1204,7 @@ mod test {
                 index: common_header.index + i as u32,
                 ..common_header
             };
-            let size = ShredData::SIZE_OF_HEADERS + rng.gen_range(0, capacity);
+            let size = ShredData::SIZE_OF_HEADERS + rng.gen_range(0..capacity);
             let data_header = DataShredHeader {
                 size: size as u16,
                 ..data_header
@@ -1350,7 +1345,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let reed_solomon_cache = ReedSolomonCache::default();
         for _ in 0..32 {
-            let data_size = rng.gen_range(0, 31200 * 7);
+            let data_size = rng.gen_range(0..31200 * 7);
             run_make_shreds_from_data(&mut rng, data_size, &reed_solomon_cache);
         }
     }
@@ -1363,11 +1358,11 @@ mod test {
         let thread_pool = ThreadPoolBuilder::new().num_threads(2).build().unwrap();
         let keypair = Keypair::new();
         let slot = 149_745_689;
-        let parent_slot = slot - rng.gen_range(1, 65536);
+        let parent_slot = slot - rng.gen_range(1..65536);
         let shred_version = rng.gen();
-        let reference_tick = rng.gen_range(1, 64);
-        let next_shred_index = rng.gen_range(0, 671);
-        let next_code_index = rng.gen_range(0, 781);
+        let reference_tick = rng.gen_range(1..64);
+        let next_shred_index = rng.gen_range(0..671);
+        let next_code_index = rng.gen_range(0..781);
         let mut data = vec![0u8; data_size];
         rng.fill(&mut data[..]);
         let shreds = make_shreds_from_data(

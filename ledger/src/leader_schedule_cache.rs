@@ -531,7 +531,7 @@ mod tests {
             target_slot += 1;
         }
 
-        let bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), target_slot);
+        let bank = Bank::new_from_parent(Arc::new(bank), &Pubkey::default(), target_slot);
         let mut expected_slot = 0;
         let epoch = bank.get_leader_schedule_epoch(target_slot);
         for i in 0..epoch {
@@ -591,7 +591,7 @@ mod tests {
         assert_eq!(bank.get_epoch_and_slot_index(96).0, 2);
         assert!(cache.slot_leader_at(96, Some(&bank)).is_none());
 
-        let bank2 = Bank::new_from_parent(&bank, &solana_sdk::pubkey::new_rand(), 95);
+        let bank2 = Bank::new_from_parent(bank, &solana_sdk::pubkey::new_rand(), 95);
         assert!(bank2.epoch_vote_accounts(2).is_some());
 
         // Set root for a slot in epoch 1, so that epoch 2 is now confirmed

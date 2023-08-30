@@ -318,7 +318,7 @@ impl<T: AbiExample> AbiExample for Box<[T]> {
 impl<T: AbiExample> AbiExample for std::marker::PhantomData<T> {
     fn example() -> Self {
         info!("AbiExample for (PhantomData<T>): {}", type_name::<Self>());
-        <std::marker::PhantomData<T>>::default()
+        std::marker::PhantomData::<T>
     }
 }
 

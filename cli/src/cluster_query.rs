@@ -2,6 +2,7 @@ use {
     crate::{
         cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
         compute_unit_price::WithComputeUnitPrice,
+        feature::get_feature_activation_epoch,
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
     clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
@@ -43,6 +44,7 @@ use {
         clock::{self, Clock, Slot},
         commitment_config::CommitmentConfig,
         epoch_schedule::Epoch,
+        feature_set,
         hash::Hash,
         message::Message,
         native_token::lamports_to_sol,
@@ -52,7 +54,7 @@ use {
         rpc_port::DEFAULT_RPC_PORT_STR,
         signature::Signature,
         slot_history,
-        stake::{self, state::StakeState},
+        stake::{self, state::StakeStateV2},
         system_instruction,
         sysvar::{
             self,
@@ -68,6 +70,7 @@ use {
     std::{
         collections::{BTreeMap, HashMap, VecDeque},
         fmt,
+        rc::Rc,
         str::FromStr,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -486,7 +489,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
 
 pub fn parse_catchup(
     matches: &ArgMatches<'_>,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let node_pubkey = pubkey_of_signer(matches, "node_pubkey", wallet_manager)?;
     let mut our_localhost_port = value_t!(matches, "our_localhost", u16).ok();
@@ -521,7 +524,7 @@ pub fn parse_catchup(
 pub fn parse_cluster_ping(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let interval = Duration::from_secs(value_t_or_exit!(matches, "interval", u64));
     let count = if matches.is_present("count") {
@@ -628,7 +631,7 @@ pub fn parse_get_transaction_count(_matches: &ArgMatches<'_>) -> Result<CliComma
 
 pub fn parse_show_stakes(
     matches: &ArgMatches<'_>,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
     let vote_account_pubkeys =
@@ -680,7 +683,7 @@ pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
 
 pub fn parse_transaction_history(
     matches: &ArgMatches<'_>,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let address = pubkey_of_signer(matches, "address", wallet_manager)?.unwrap();
 
@@ -1007,8 +1010,8 @@ pub fn process_leader_schedule(
 ) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
     let epoch = epoch.unwrap_or(epoch_info.epoch);
-    if epoch > epoch_info.epoch {
-        return Err(format!("Epoch {epoch} is in the future").into());
+    if epoch > (epoch_info.epoch + 1) {
+        return Err(format!("Epoch {epoch} is more than one epoch in the future").into());
     }
 
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
@@ -1109,7 +1112,7 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> Pro
     match config.output_format {
         OutputFormat::Json | OutputFormat::JsonCompact => {}
         _ => {
-            let epoch_info = cli_epoch_info.epoch_info.clone();
+            let epoch_info = &cli_epoch_info.epoch_info;
             let average_slot_time_ms = rpc_client
                 .get_recent_performance_samples(Some(60))
                 .ok()
@@ -1131,7 +1134,7 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> Pro
                     .get_block_time(first_block_in_epoch)
                     .ok()
                     .map(|time| {
-                        time + (((first_block_in_epoch - epoch_expected_start_slot)
+                        time - (((first_block_in_epoch - epoch_expected_start_slot)
                             * average_slot_time_ms)
                             / 1000) as i64
                     });
@@ -1579,7 +1582,7 @@ pub fn process_ping(
 
 pub fn parse_logs(
     matches: &ArgMatches<'_>,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let address = pubkey_of_signer(matches, "address", wallet_manager)?;
     let include_votes = matches.is_present("include_votes");
@@ -1766,7 +1769,7 @@ pub fn process_show_stakes(
         // Use server-side filtering if only one vote account is provided
         if vote_account_pubkeys.len() == 1 {
             program_accounts_config.filters = Some(vec![
-                // Filter by `StakeState::Stake(_, _)`
+                // Filter by `StakeStateV2::Stake(_, _)`
                 RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &[2, 0, 0, 0])),
                 // Filter by `Delegation::voter_pubkey`, which begins at byte offset 124
                 RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
@@ -1800,12 +1803,14 @@ pub fn process_show_stakes(
     let stake_history = from_account(&stake_history_account).ok_or_else(|| {
         CliError::RpcRequestError("Failed to deserialize stake history".to_string())
     })?;
+    let new_rate_activation_epoch =
+        get_feature_activation_epoch(rpc_client, &feature_set::reduce_stake_warmup_cooldown::id())?;
 
     let mut stake_accounts: Vec<CliKeyedStakeState> = vec![];
     for (stake_pubkey, stake_account) in all_stake_accounts {
         if let Ok(stake_state) = stake_account.state() {
             match stake_state {
-                StakeState::Initialized(_) => {
+                StakeStateV2::Initialized(_) => {
                     if vote_account_pubkeys.is_none() {
                         stake_accounts.push(CliKeyedStakeState {
                             stake_pubkey: stake_pubkey.to_string(),
@@ -1815,11 +1820,12 @@ pub fn process_show_stakes(
                                 use_lamports_unit,
                                 &stake_history,
                                 &clock,
+                                new_rate_activation_epoch,
                             ),
                         });
                     }
                 }
-                StakeState::Stake(_, stake) => {
+                StakeStateV2::Stake(_, stake, _) => {
                     if vote_account_pubkeys.is_none()
                         || vote_account_pubkeys
                             .unwrap()
@@ -1833,6 +1839,7 @@ pub fn process_show_stakes(
                                 use_lamports_unit,
                                 &stake_history,
                                 &clock,
+                                new_rate_activation_epoch,
                             ),
                         });
                     }
@@ -1958,14 +1965,14 @@ pub fn process_show_validators(
 
     let mut stake_by_version: BTreeMap<CliVersion, CliValidatorsStakeByVersion> = BTreeMap::new();
     for validator in current_validators.iter() {
-        let mut entry = stake_by_version
+        let entry = stake_by_version
             .entry(validator.version.clone())
             .or_default();
         entry.current_validators += 1;
         entry.current_active_stake += validator.activated_stake;
     }
     for validator in delinquent_validators.iter() {
-        let mut entry = stake_by_version
+        let entry = stake_by_version
             .entry(validator.version.clone())
             .or_default();
         entry.delinquent_validators += 1;
@@ -1974,7 +1981,7 @@ pub fn process_show_validators(
 
     let validators: Vec<_> = current_validators
         .into_iter()
-        .chain(delinquent_validators.into_iter())
+        .chain(delinquent_validators)
         .collect();
 
     let (average_skip_rate, average_stake_weighted_skip_rate) = {
@@ -2151,7 +2158,7 @@ impl RentLengthValue {
     pub fn length(&self) -> usize {
         match self {
             Self::Nonce => NonceState::size(),
-            Self::Stake => StakeState::size_of(),
+            Self::Stake => StakeStateV2::size_of(),
             Self::System => 0,
             Self::Vote => VoteState::size_of(),
             Self::Bytes(l) => *l,

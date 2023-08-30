@@ -236,13 +236,11 @@ impl ShredData {
         };
         let size = (data.len() + Self::SIZE_OF_HEADERS) as u16;
         let flags = flags
-            | unsafe {
-                ShredFlags::from_bits_unchecked(
-                    ShredFlags::SHRED_TICK_REFERENCE_MASK
-                        .bits()
-                        .min(reference_tick),
-                )
-            };
+            | ShredFlags::from_bits_retain(
+                ShredFlags::SHRED_TICK_REFERENCE_MASK
+                    .bits()
+                    .min(reference_tick),
+            );
         let data_header = DataShredHeader {
             parent_offset,
             flags,
@@ -389,7 +387,8 @@ mod test {
             let mut shred = shred.clone();
             shred.data_header.flags |= ShredFlags::LAST_SHRED_IN_SLOT;
             assert_matches!(shred.sanitize(), Ok(()));
-            shred.data_header.flags &= !ShredFlags::DATA_COMPLETE_SHRED;
+            shred.data_header.flags &=
+                ShredFlags::from_bits_retain(!ShredFlags::DATA_COMPLETE_SHRED.bits());
             assert_matches!(shred.sanitize(), Err(Error::InvalidShredFlags(131u8)));
             shred.data_header.flags |= ShredFlags::SHRED_TICK_REFERENCE_MASK;
             assert_matches!(shred.sanitize(), Err(Error::InvalidShredFlags(191u8)));

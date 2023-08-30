@@ -89,7 +89,7 @@ pub struct Message {
 
 impl Message {
     /// Sanitize message fields and compiled instruction indexes
-    pub fn sanitize(&self, reject_dynamic_program_ids: bool) -> Result<(), SanitizeError> {
+    pub fn sanitize(&self) -> Result<(), SanitizeError> {
         let num_static_account_keys = self.account_keys.len();
         if usize::from(self.header.num_required_signatures)
             .saturating_add(usize::from(self.header.num_readonly_unsigned_accounts))
@@ -143,18 +143,15 @@ impl Message {
             .checked_sub(1)
             .expect("message doesn't contain any account keys");
 
-        // switch to rejecting program ids loaded from lookup tables so that
-        // static analysis on program instructions can be performed without
-        // loading on-chain data from a bank
-        let max_program_id_ix = if reject_dynamic_program_ids {
+        // reject program ids loaded from lookup tables so that
+        // static analysis on program instructions can be performed
+        // without loading on-chain data from a bank
+        let max_program_id_ix =
             // `expect` is safe because of earlier check that
             // `num_static_account_keys` is non-zero
             num_static_account_keys
                 .checked_sub(1)
-                .expect("message doesn't contain any static account keys")
-        } else {
-            max_account_ix
-        };
+                .expect("message doesn't contain any static account keys");
 
         for ci in &self.instructions {
             if usize::from(ci.program_id_index) > max_program_id_ix {
@@ -375,9 +372,7 @@ mod tests {
             account_keys: vec![Pubkey::new_unique()],
             ..Message::default()
         }
-        .sanitize(
-            true, // require_static_program_ids
-        )
+        .sanitize()
         .is_ok());
     }
 
@@ -396,9 +391,7 @@ mod tests {
             }],
             ..Message::default()
         }
-        .sanitize(
-            true, // require_static_program_ids
-        )
+        .sanitize()
         .is_ok());
     }
 
@@ -417,9 +410,7 @@ mod tests {
             }],
             ..Message::default()
         }
-        .sanitize(
-            true, // require_static_program_ids
-        )
+        .sanitize()
         .is_ok());
     }
 
@@ -444,13 +435,7 @@ mod tests {
             ..Message::default()
         };
 
-        assert!(message.sanitize(
-            false, // require_static_program_ids
-        ).is_ok());
-
-        assert!(message.sanitize(
-            true, // require_static_program_ids
-        ).is_err());
+        assert!(message.sanitize().is_err());
     }
 
     #[test]
@@ -473,9 +458,7 @@ mod tests {
             }],
             ..Message::default()
         }
-        .sanitize(
-            true, // require_static_program_ids
-        )
+        .sanitize()
         .is_ok());
     }
 
@@ -486,9 +469,7 @@ mod tests {
             account_keys: vec![Pubkey::new_unique()],
             ..Message::default()
         }
-        .sanitize(
-            true, // require_static_program_ids
-        )
+        .sanitize()
         .is_err());
     }
 
@@ -503,9 +484,7 @@ mod tests {
             account_keys: vec![Pubkey::new_unique()],
             ..Message::default()
         }
-        .sanitize(
-            true, // require_static_program_ids
-        )
+        .sanitize()
         .is_err());
     }
 
@@ -524,9 +503,7 @@ mod tests {
             }],
             ..Message::default()
         }
-        .sanitize(
-            true, // require_static_program_ids
-        )
+        .sanitize()
         .is_err());
     }
 
@@ -540,9 +517,7 @@ mod tests {
             account_keys: (0..=u8::MAX).map(|_| Pubkey::new_unique()).collect(),
             ..Message::default()
         }
-        .sanitize(
-            true, // require_static_program_ids
-        )
+        .sanitize()
         .is_ok());
     }
 
@@ -556,9 +531,7 @@ mod tests {
             account_keys: (0..=256).map(|_| Pubkey::new_unique()).collect(),
             ..Message::default()
         }
-        .sanitize(
-            true, // require_static_program_ids
-        )
+        .sanitize()
         .is_err());
     }
 
@@ -577,9 +550,7 @@ mod tests {
             }],
             ..Message::default()
         }
-        .sanitize(
-            true, // require_static_program_ids
-        )
+        .sanitize()
         .is_ok());
     }
 
@@ -598,9 +569,7 @@ mod tests {
             }],
             ..Message::default()
         }
-        .sanitize(
-            true, // require_static_program_ids
-        )
+        .sanitize()
         .is_err());
     }
 
@@ -625,12 +594,7 @@ mod tests {
             ..Message::default()
         };
 
-        assert!(message
-            .sanitize(true /* require_static_program_ids */)
-            .is_err());
-        assert!(message
-            .sanitize(false /* require_static_program_ids */)
-            .is_err());
+        assert!(message.sanitize().is_err());
     }
 
     #[test]
@@ -653,9 +617,7 @@ mod tests {
             }],
             ..Message::default()
         }
-        .sanitize(
-            true, // require_static_program_ids
-        )
+        .sanitize()
         .is_err());
     }
 

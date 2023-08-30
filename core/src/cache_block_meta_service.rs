@@ -26,9 +26,8 @@ impl CacheBlockMetaService {
     pub fn new(
         cache_block_meta_receiver: CacheBlockMetaReceiver,
         blockstore: Arc<Blockstore>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
-        let exit = exit.clone();
         let thread_hdl = Builder::new()
             .name("solCacheBlkTime".to_string())
             .spawn(move || loop {
@@ -58,7 +57,7 @@ impl CacheBlockMetaService {
         Self { thread_hdl }
     }
 
-    fn cache_block_meta(bank: Arc<Bank>, blockstore: &Arc<Blockstore>) {
+    fn cache_block_meta(bank: Arc<Bank>, blockstore: &Blockstore) {
         if let Err(e) = blockstore.cache_block_time(bank.slot(), bank.clock().unix_timestamp) {
             error!("cache_block_time failed: slot {:?} {:?}", bank.slot(), e);
         }

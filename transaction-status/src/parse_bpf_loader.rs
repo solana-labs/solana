@@ -2,6 +2,7 @@ use {
     crate::parse_instruction::{
         check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
     },
+    base64::{prelude::BASE64_STANDARD, Engine},
     bincode::deserialize,
     serde_json::json,
     solana_sdk::{
@@ -28,7 +29,7 @@ pub fn parse_bpf_loader(
                 instruction_type: "write".to_string(),
                 info: json!({
                     "offset": offset,
-                    "bytes": base64::encode(bytes),
+                    "bytes": BASE64_STANDARD.encode(bytes),
                     "account": account_keys[instruction.accounts[0] as usize].to_string(),
                 }),
             })
@@ -86,7 +87,7 @@ pub fn parse_bpf_upgradeable_loader(
                 instruction_type: "write".to_string(),
                 info: json!({
                     "offset": offset,
-                    "bytes": base64::encode(bytes),
+                    "bytes": BASE64_STANDARD.encode(bytes),
                     "account": account_keys[instruction.accounts[0] as usize].to_string(),
                     "authority": account_keys[instruction.accounts[1] as usize].to_string(),
                 }),
@@ -241,7 +242,7 @@ mod test {
                 instruction_type: "write".to_string(),
                 info: json!({
                     "offset": offset,
-                    "bytes": base64::encode(&bytes),
+                    "bytes": BASE64_STANDARD.encode(&bytes),
                     "account": account_pubkey.to_string(),
                 }),
             }
@@ -377,7 +378,7 @@ mod test {
                 instruction_type: "write".to_string(),
                 info: json!({
                     "offset": offset,
-                    "bytes": base64::encode(&bytes),
+                    "bytes": BASE64_STANDARD.encode(&bytes),
                     "account": buffer_address.to_string(),
                     "authority": authority_address.to_string(),
                 }),

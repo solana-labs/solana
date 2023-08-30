@@ -378,7 +378,7 @@ mod test {
     fn test_bump_allocator() {
         // alloc the entire
         {
-            let heap = vec![0u8; 128];
+            let heap = [0u8; 128];
             let allocator = BumpAllocator {
                 start: heap.as_ptr() as *const _ as usize,
                 len: heap.len(),
@@ -398,7 +398,7 @@ mod test {
         }
         // check alignment
         {
-            let heap = vec![0u8; 128];
+            let heap = [0u8; 128];
             let allocator = BumpAllocator {
                 start: heap.as_ptr() as *const _ as usize,
                 len: heap.len(),
@@ -423,7 +423,7 @@ mod test {
         }
         // alloc entire block (minus the pos ptr)
         {
-            let heap = vec![0u8; 128];
+            let heap = [0u8; 128];
             let allocator = BumpAllocator {
                 start: heap.as_ptr() as *const _ as usize,
                 len: heap.len(),

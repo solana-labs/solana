@@ -97,8 +97,8 @@ pub trait Banks {
         commitment: CommitmentLevel,
     ) -> Option<(Hash, u64)>;
     async fn get_fee_for_message_with_commitment_and_context(
-        commitment: CommitmentLevel,
         message: Message,
+        commitment: CommitmentLevel,
     ) -> Option<u64>;
 }
 

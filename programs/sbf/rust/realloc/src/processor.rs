@@ -13,7 +13,7 @@ use {
         pubkey::Pubkey,
         system_instruction, system_program,
     },
-    std::convert::TryInto,
+    std::{convert::TryInto, mem},
 };
 
 solana_program::entrypoint!(process_instruction);
@@ -60,6 +60,42 @@ fn process_instruction(
             account.realloc(new_len, false)?;
             assert_eq!(new_len, account.data_len());
             account.try_borrow_mut_data()?[pre_len..].fill(fill);
+        }
+        // extend the account and do a 8-bytes write across the original account
+        // length and the realloc region
+        EXTEND_AND_WRITE_U64 => {
+            let pre_len = account.data_len();
+            let new_len = mem::size_of::<u64>();
+            assert!(pre_len < new_len);
+            account.realloc(new_len, false)?;
+            assert_eq!(new_len, account.data_len());
+
+            let (bytes, _) = instruction_data[1..].split_at(new_len);
+            let value = u64::from_le_bytes(bytes.try_into().unwrap());
+            msg!(
+                "write {} to account {:p}",
+                value,
+                account.try_borrow_data().unwrap().as_ptr()
+            );
+            // exercise memory write
+            unsafe {
+                *account
+                    .try_borrow_mut_data()
+                    .unwrap()
+                    .as_mut_ptr()
+                    .cast::<u64>() = value
+            };
+            // exercise memory read
+            assert_eq!(
+                unsafe {
+                    *account
+                        .try_borrow_mut_data()
+                        .unwrap()
+                        .as_ptr()
+                        .cast::<u64>()
+                },
+                value
+            );
         }
         REALLOC_AND_ASSIGN => {
             msg!("realloc and assign");

@@ -237,6 +237,7 @@ pub fn main() -> Result<(), String> {
                         .help("arguments to supply to the program"),
                 ),
         )
+        .subcommand(SubCommand::with_name("list").about("List installed versions of solana cli"))
         .get_matches();
 
     let config_file = matches.value_of("config_file").unwrap();
@@ -272,6 +273,7 @@ pub fn main() -> Result<(), String> {
 
             command::run(config_file, program_name, program_arguments)
         }
+        ("list", Some(_matches)) => command::list(config_file),
         _ => unreachable!(),
     }
 }

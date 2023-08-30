@@ -24,6 +24,7 @@ use {
         },
         rpc_sender::*,
     },
+    base64::{prelude::BASE64_STANDARD, Engine},
     bincode::serialize,
     log::*,
     serde_json::{json, Value},
@@ -5387,7 +5388,7 @@ where
         .map_err(|e| ClientErrorKind::Custom(format!("Serialization failed: {e}")))?;
     let encoded = match encoding {
         UiTransactionEncoding::Base58 => bs58::encode(serialized).into_string(),
-        UiTransactionEncoding::Base64 => base64::encode(serialized),
+        UiTransactionEncoding::Base64 => BASE64_STANDARD.encode(serialized),
         _ => {
             return Err(ClientErrorKind::Custom(format!(
                 "unsupported encoding: {encoding}. Supported encodings: base58, base64"

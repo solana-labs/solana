@@ -43,31 +43,23 @@ impl StatsManager {
         datapoint_info!(
             "accounts_background_service",
             (
-                "duration_since_previous_submit-ms",
-                duration_since_previous_submit.as_millis() as i64,
+                "duration_since_previous_submit_us",
+                duration_since_previous_submit.as_micros(),
                 i64
             ),
-            ("num_iterations", self.stats.num_iterations as i64, i64),
+            ("num_iterations", self.stats.num_iterations, i64),
             (
-                "cumulative_runtime-ms",
-                self.stats.cumulative_runtime.as_millis() as i64,
-                i64
-            ),
-            (
-                "mean_runtime-ms",
-                self.stats.mean_runtime().as_millis() as i64,
+                "cumulative_runtime_us",
+                self.stats.cumulative_runtime.as_micros(),
                 i64
             ),
             (
-                "min_runtime-ms",
-                self.stats.min_runtime.as_millis() as i64,
+                "mean_runtime_us",
+                self.stats.mean_runtime().as_micros(),
                 i64
             ),
-            (
-                "max_runtime-ms",
-                self.stats.max_runtime.as_millis() as i64,
-                i64
-            ),
+            ("min_runtime_us", self.stats.min_runtime.as_micros(), i64),
+            ("max_runtime_us", self.stats.max_runtime.as_micros(), i64),
         );
 
         // reset the stats back to default

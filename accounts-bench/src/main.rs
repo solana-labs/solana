@@ -1,20 +1,21 @@
 #![allow(clippy::integer_arithmetic)]
+
 #[macro_use]
 extern crate log;
 use {
     clap::{crate_description, crate_name, value_t, App, Arg},
     rayon::prelude::*,
-    solana_measure::measure::Measure,
-    solana_runtime::{
+    solana_accounts_db::{
         accounts::Accounts,
         accounts_db::{
             test_utils::{create_test_accounts, update_accounts_bench},
-            AccountShrinkThreshold, CalcAccountsHashDataSource,
+            AccountShrinkThreshold, CalcAccountsHashDataSource, INCLUDE_SLOT_IN_HASH_TESTS,
         },
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
         rent_collector::RentCollector,
     },
+    solana_measure::measure::Measure,
     solana_sdk::{
         genesis_config::ClusterType, pubkey::Pubkey, sysvar::epoch_schedule::EpochSchedule,
     },
@@ -124,7 +125,7 @@ fn main() {
                 .update_accounts_hash_for_tests(0, &ancestors, false, false);
             time.stop();
             let mut time_store = Measure::start("hash using store");
-            let results_store = accounts.accounts_db.update_accounts_hash(
+            let results_store = accounts.accounts_db.update_accounts_hash_with_verify(
                 CalcAccountsHashDataSource::Storages,
                 false,
                 solana_sdk::clock::Slot::default(),
@@ -133,6 +134,7 @@ fn main() {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                INCLUDE_SLOT_IN_HASH_TESTS,
             );
             time_store.stop();
             if results != results_store {

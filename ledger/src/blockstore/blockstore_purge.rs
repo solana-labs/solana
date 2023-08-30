@@ -471,11 +471,11 @@ pub mod tests {
 
         let max_slot = 10;
         for x in 0..max_slot {
-            let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+            let random_bytes: [u8; 64] = std::array::from_fn(|_| rand::random::<u8>());
             blockstore
                 .write_transaction_status(
                     x,
-                    Signature::new(&random_bytes),
+                    Signature::from(random_bytes),
                     vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
                     vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
@@ -486,11 +486,11 @@ pub mod tests {
         blockstore.run_purge(0, 1, PurgeType::PrimaryIndex).unwrap();
 
         for x in max_slot..2 * max_slot {
-            let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+            let random_bytes: [u8; 64] = std::array::from_fn(|_| rand::random::<u8>());
             blockstore
                 .write_transaction_status(
                     x,
-                    Signature::new(&random_bytes),
+                    Signature::from(random_bytes),
                     vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
                     vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
@@ -521,11 +521,11 @@ pub mod tests {
         let transaction_status_index_cf = &blockstore.transaction_status_index_cf;
         let slot = 10;
         for _ in 0..5 {
-            let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+            let random_bytes: [u8; 64] = std::array::from_fn(|_| rand::random::<u8>());
             blockstore
                 .write_transaction_status(
                     slot,
-                    Signature::new(&random_bytes),
+                    Signature::from(random_bytes),
                     vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
                     vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
@@ -682,7 +682,7 @@ pub mod tests {
     }
 
     fn clear_and_repopulate_transaction_statuses_for_test(
-        blockstore: &mut Blockstore,
+        blockstore: &Blockstore,
         index0_max_slot: u64,
         index1_max_slot: u64,
     ) {
@@ -803,14 +803,14 @@ pub mod tests {
     #[allow(clippy::cognitive_complexity)]
     fn test_purge_transaction_status_exact() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
-        let mut blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let index0_max_slot = 9;
         let index1_max_slot = 19;
 
         // Test purge outside bounds
         clear_and_repopulate_transaction_statuses_for_test(
-            &mut blockstore,
+            &blockstore,
             index0_max_slot,
             index1_max_slot,
         );
@@ -857,7 +857,7 @@ pub mod tests {
 
         // Test purge inside index 0
         clear_and_repopulate_transaction_statuses_for_test(
-            &mut blockstore,
+            &blockstore,
             index0_max_slot,
             index1_max_slot,
         );
@@ -906,7 +906,7 @@ pub mod tests {
 
         // Test purge inside index 0 at upper boundary
         clear_and_repopulate_transaction_statuses_for_test(
-            &mut blockstore,
+            &blockstore,
             index0_max_slot,
             index1_max_slot,
         );
@@ -957,7 +957,7 @@ pub mod tests {
 
         // Test purge inside index 1 at lower boundary
         clear_and_repopulate_transaction_statuses_for_test(
-            &mut blockstore,
+            &blockstore,
             index0_max_slot,
             index1_max_slot,
         );
@@ -1005,7 +1005,7 @@ pub mod tests {
 
         // Test purge across index boundaries
         clear_and_repopulate_transaction_statuses_for_test(
-            &mut blockstore,
+            &blockstore,
             index0_max_slot,
             index1_max_slot,
         );
@@ -1055,7 +1055,7 @@ pub mod tests {
 
         // Test purge include complete index 1
         clear_and_repopulate_transaction_statuses_for_test(
-            &mut blockstore,
+            &blockstore,
             index0_max_slot,
             index1_max_slot,
         );
@@ -1102,7 +1102,7 @@ pub mod tests {
 
         // Test purge all
         clear_and_repopulate_transaction_statuses_for_test(
-            &mut blockstore,
+            &blockstore,
             index0_max_slot,
             index1_max_slot,
         );

@@ -312,8 +312,7 @@ pub fn request_airdrop_transaction(
     }
 
     // Read the transaction
-    let mut buffer = Vec::new();
-    buffer.resize(transaction_length, 0);
+    let mut buffer = vec![0; transaction_length];
     stream.read_exact(&mut buffer).map_err(|err| {
         info!(
             "request_airdrop_transaction: buffer read_exact error: {:?}",
@@ -389,11 +388,11 @@ pub async fn run_faucet(
     );
 
     loop {
-        let _faucet = faucet.clone();
+        let faucet = faucet.clone();
         match listener.accept().await {
             Ok((stream, _)) => {
                 tokio::spawn(async move {
-                    if let Err(e) = process(stream, _faucet).await {
+                    if let Err(e) = process(stream, faucet).await {
                         info!("failed to process request; error = {:?}", e);
                     }
                 });

@@ -1,12 +1,18 @@
 #![allow(clippy::integer_arithmetic)]
 use {
+    base64::{prelude::BASE64_STANDARD, Engine},
     crossbeam_channel::Receiver,
     log::*,
+    solana_accounts_db::{
+        accounts_db::{create_accounts_run_and_snapshot_dirs, AccountsDbConfig},
+        accounts_index::AccountsIndexConfig,
+        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+    },
     solana_cli_output::CliAccount,
     solana_client::rpc_request::MAX_MULTIPLE_ACCOUNTS,
     solana_core::{
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
-        tower_storage::TowerStorage,
+        consensus::tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_geyser_plugin_manager::{
@@ -14,6 +20,7 @@ use {
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
+        contact_info::Protocol,
         gossip_service::discover_cluster,
         socketaddr,
     },
@@ -26,10 +33,8 @@ use {
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_rpc_client::{nonblocking, rpc_client::RpcClient},
     solana_runtime::{
-        accounts_db::AccountsDbConfig, accounts_index::AccountsIndexConfig, bank_forks::BankForks,
-        genesis_utils::create_genesis_config_with_leader_ex,
-        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE, runtime_config::RuntimeConfig,
-        snapshot_config::SnapshotConfig, snapshot_utils::create_accounts_run_and_snapshot_dirs,
+        bank_forks::BankForks, genesis_utils::create_genesis_config_with_leader_ex,
+        runtime_config::RuntimeConfig, snapshot_config::SnapshotConfig,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -121,7 +126,6 @@ pub struct TestValidatorGenesis {
     pubsub_config: PubSubConfig,
     rpc_ports: Option<(u16, u16)>, // (JsonRpc, JsonRpcPubSub), None == random ports
     warp_slot: Option<Slot>,
-    no_bpf_jit: bool,
     accounts: HashMap<Pubkey, AccountSharedData>,
     #[allow(deprecated)]
     programs: Vec<ProgramInfo>,
@@ -156,7 +160,6 @@ impl Default for TestValidatorGenesis {
             pubsub_config: PubSubConfig::default(),
             rpc_ports: Option::<(u16, u16)>::default(),
             warp_slot: Option::<Slot>::default(),
-            no_bpf_jit: bool::default(),
             accounts: HashMap::<Pubkey, AccountSharedData>::default(),
             #[allow(deprecated)]
             programs: Vec::<ProgramInfo>::default(),
@@ -253,11 +256,6 @@ impl TestValidatorGenesis {
 
     pub fn warp_slot(&mut self, warp_slot: Slot) -> &mut Self {
         self.warp_slot = Some(warp_slot);
-        self
-    }
-
-    pub fn bpf_jit(&mut self, bpf_jit: bool) -> &mut Self {
-        self.no_bpf_jit = !bpf_jit;
         self
     }
 
@@ -372,9 +370,8 @@ impl TestValidatorGenesis {
         accounts: &[AccountInfo],
     ) -> Result<&mut Self, String> {
         for account in accounts {
-            let account_path = match solana_program_test::find_file(account.filename) {
-                Some(path) => path,
-                None => return Err(format!("Unable to locate {}", account.filename)),
+            let Some(account_path) = solana_program_test::find_file(account.filename) else {
+                return Err(format!("Unable to locate {}", account.filename));
             };
             let mut file = File::open(&account_path).unwrap();
             let mut account_info_raw = String::new();
@@ -477,7 +474,8 @@ impl TestValidatorGenesis {
             address,
             AccountSharedData::from(Account {
                 lamports,
-                data: base64::decode(data_base64)
+                data: BASE64_STANDARD
+                    .decode(data_base64)
                     .unwrap_or_else(|err| panic!("Failed to base64 decode: {err}")),
                 owner,
                 executable: false,
@@ -888,7 +886,7 @@ impl TestValidator {
         let vote_account_address = validator_vote_account.pubkey();
         let rpc_url = format!("http://{}", node.info.rpc().unwrap());
         let rpc_pubsub_url = format!("ws://{}/", node.info.rpc_pubsub().unwrap());
-        let tpu = node.info.tpu().unwrap();
+        let tpu = node.info.tpu(Protocol::UDP).unwrap();
         let gossip = node.info.gossip().unwrap();
 
         {
@@ -910,7 +908,6 @@ impl TestValidator {
         });
 
         let runtime_config = RuntimeConfig {
-            bpf_jit: !config.no_bpf_jit,
             compute_budget: config
                 .compute_unit_limit
                 .map(|compute_unit_limit| ComputeBudget {

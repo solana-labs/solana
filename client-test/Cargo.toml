@@ -13,6 +13,7 @@ edition = { workspace = true }
 [dependencies]
 futures-util = { workspace = true }
 serde_json = { workspace = true }
+solana-client = { workspace = true }
 solana-ledger = { workspace = true }
 solana-measure = { workspace = true }
 solana-merkle-tree = { workspace = true }

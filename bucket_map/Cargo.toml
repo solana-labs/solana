@@ -15,7 +15,7 @@ bv = { workspace = true, features = ["serde"] }
 log = { workspace = true }
 memmap2 = { workspace = true }
 modular-bitfield = { workspace = true }
-num_enum = "0.5.7"
+num_enum = { workspace = true }
 rand = { workspace = true }
 solana-measure = { workspace = true }
 solana-sdk = { workspace = true }

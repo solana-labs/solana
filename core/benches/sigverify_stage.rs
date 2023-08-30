@@ -52,7 +52,7 @@ fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
     for batch in batches.iter_mut() {
         total += batch.len();
         for p in batch.iter_mut() {
-            let ip_index = thread_rng().gen_range(0, ips.len());
+            let ip_index = thread_rng().gen_range(0..ips.len());
             p.meta_mut().addr = ips[ip_index];
         }
     }

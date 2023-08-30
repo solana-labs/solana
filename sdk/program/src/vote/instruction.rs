@@ -2,7 +2,7 @@
 
 use {
     crate::{
-        clock::Slot,
+        clock::{Slot, UnixTimestamp},
         hash::Hash,
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
@@ -11,8 +11,8 @@ use {
             program::id,
             state::{
                 serde_compact_vote_state_update, Vote, VoteAuthorize,
-                VoteAuthorizeCheckedWithSeedArgs, VoteAuthorizeWithSeedArgs, VoteInit, VoteState,
-                VoteStateUpdate,
+                VoteAuthorizeCheckedWithSeedArgs, VoteAuthorizeWithSeedArgs, VoteInit,
+                VoteStateUpdate, VoteStateVersions,
             },
         },
     },
@@ -185,6 +185,21 @@ impl VoteInstruction {
             _ => panic!("Tried to get slot on non simple vote instruction"),
         }
     }
+
+    /// Only to be used on vote instructions (guard with is_simple_vote),  panics otherwise
+    pub fn timestamp(&self) -> Option<UnixTimestamp> {
+        assert!(self.is_simple_vote());
+        match self {
+            Self::Vote(v) | Self::VoteSwitch(v, _) => v.timestamp,
+            Self::UpdateVoteState(vote_state_update)
+            | Self::UpdateVoteStateSwitch(vote_state_update, _)
+            | Self::CompactUpdateVoteState(vote_state_update)
+            | Self::CompactUpdateVoteStateSwitch(vote_state_update, _) => {
+                vote_state_update.timestamp
+            }
+            _ => panic!("Tried to get timestamp on non simple vote instruction"),
+        }
+    }
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -202,19 +217,43 @@ fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction
     )
 }
 
+pub struct CreateVoteAccountConfig<'a> {
+    pub space: u64,
+    pub with_seed: Option<(&'a Pubkey, &'a str)>,
+}
+
+impl<'a> Default for CreateVoteAccountConfig<'a> {
+    fn default() -> Self {
+        Self {
+            space: VoteStateVersions::vote_state_size_of(false) as u64,
+            with_seed: None,
+        }
+    }
+}
+
+#[deprecated(
+    since = "1.16.0",
+    note = "Please use `create_account_with_config()` instead."
+)]
 pub fn create_account(
     from_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
     vote_init: &VoteInit,
     lamports: u64,
 ) -> Vec<Instruction> {
-    let space = VoteState::size_of() as u64;
-    let create_ix =
-        system_instruction::create_account(from_pubkey, vote_pubkey, lamports, space, &id());
-    let init_ix = initialize_account(vote_pubkey, vote_init);
-    vec![create_ix, init_ix]
+    create_account_with_config(
+        from_pubkey,
+        vote_pubkey,
+        vote_init,
+        lamports,
+        CreateVoteAccountConfig::default(),
+    )
 }
 
+#[deprecated(
+    since = "1.16.0",
+    note = "Please use `create_account_with_config()` instead."
+)]
 pub fn create_account_with_seed(
     from_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
@@ -223,16 +262,27 @@ pub fn create_account_with_seed(
     vote_init: &VoteInit,
     lamports: u64,
 ) -> Vec<Instruction> {
-    let space = VoteState::size_of() as u64;
-    let create_ix = system_instruction::create_account_with_seed(
+    create_account_with_config(
         from_pubkey,
         vote_pubkey,
-        base,
-        seed,
+        vote_init,
         lamports,
-        space,
-        &id(),
-    );
+        CreateVoteAccountConfig {
+            with_seed: Some((base, seed)),
+            ..CreateVoteAccountConfig::default()
+        },
+    )
+}
+
+pub fn create_account_with_config(
+    from_pubkey: &Pubkey,
+    vote_pubkey: &Pubkey,
+    vote_init: &VoteInit,
+    lamports: u64,
+    config: CreateVoteAccountConfig,
+) -> Vec<Instruction> {
+    let create_ix =
+        system_instruction::create_account(from_pubkey, vote_pubkey, lamports, config.space, &id());
     let init_ix = initialize_account(vote_pubkey, vote_init);
     vec![create_ix, init_ix]
 }

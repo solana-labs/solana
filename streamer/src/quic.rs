@@ -6,7 +6,7 @@ use {
     crossbeam_channel::Sender,
     pem::Pem,
     quinn::{Endpoint, IdleTimeout, ServerConfig},
-    rustls::{server::ClientCertVerified, Certificate, DistinguishedNames},
+    rustls::{server::ClientCertVerified, Certificate, DistinguishedName},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::PACKET_DATA_SIZE,
@@ -28,7 +28,7 @@ use {
 pub const MAX_STAKED_CONNECTIONS: usize = 2000;
 pub const MAX_UNSTAKED_CONNECTIONS: usize = 500;
 
-struct SkipClientVerification;
+pub struct SkipClientVerification;
 
 impl SkipClientVerification {
     pub fn new() -> Arc<Self> {
@@ -37,8 +37,8 @@ impl SkipClientVerification {
 }
 
 impl rustls::server::ClientCertVerifier for SkipClientVerification {
-    fn client_auth_root_subjects(&self) -> Option<DistinguishedNames> {
-        Some(DistinguishedNames::new())
+    fn client_auth_root_subjects(&self) -> &[DistinguishedName] {
+        &[]
     }
 
     fn verify_client_cert(
@@ -71,6 +71,7 @@ pub(crate) fn configure_server(
     server_tls_config.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
 
     let mut server_config = ServerConfig::with_crypto(Arc::new(server_tls_config));
+    server_config.use_retry(true);
     let config = Arc::get_mut(&mut server_config.transport).unwrap();
 
     // QUIC_MAX_CONCURRENT_STREAMS doubled, which was found to improve reliability
@@ -158,9 +159,9 @@ pub struct StreamStats {
 }
 
 impl StreamStats {
-    pub fn report(&self) {
+    pub fn report(&self, name: &'static str) {
         datapoint_info!(
-            "quic-connections",
+            name,
             (
                 "active_connections",
                 self.total_connections.load(Ordering::Relaxed),
@@ -391,6 +392,7 @@ impl StreamStats {
 
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
+    name: &'static str,
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
@@ -400,14 +402,14 @@ pub fn spawn_server(
     staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
     max_unstaked_connections: usize,
-    stats: Arc<StreamStats>,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
 ) -> Result<(Endpoint, thread::JoinHandle<()>), QuicServerError> {
     let runtime = rt();
-    let (endpoint, task) = {
+    let (endpoint, _stats, task) = {
         let _guard = runtime.enter();
         crate::nonblocking::quic::spawn_server(
+            name,
             sock,
             keypair,
             gossip_host,
@@ -417,7 +419,6 @@ pub fn spawn_server(
             staked_nodes,
             max_staked_connections,
             max_unstaked_connections,
-            stats,
             wait_for_chunk_timeout,
             coalesce,
         )
@@ -456,8 +457,8 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let stats = Arc::new(StreamStats::default());
         let (_, t) = spawn_server(
+            "quic_streamer_test",
             s,
             &keypair,
             ip,
@@ -467,7 +468,6 @@ mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )
@@ -513,8 +513,8 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let stats = Arc::new(StreamStats::default());
         let (_, t) = spawn_server(
+            "quic_streamer_test",
             s,
             &keypair,
             ip,
@@ -524,7 +524,6 @@ mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )
@@ -557,8 +556,8 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let stats = Arc::new(StreamStats::default());
         let (_, t) = spawn_server(
+            "quic_streamer_test",
             s,
             &keypair,
             ip,
@@ -568,7 +567,6 @@ mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
-            stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )

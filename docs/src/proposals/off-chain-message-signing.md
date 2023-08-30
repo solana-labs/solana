@@ -53,7 +53,7 @@ This field **SHOULD NOT** be displayed to users
 #### Header version
 
 The header version is represented as an 8-bit unsigned integer. Only the version
-0 header format is specfied in this document
+0 header format is specified in this document
 
 This field **SHOULD NOT** be displayed to users
 

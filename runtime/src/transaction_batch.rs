@@ -108,7 +108,7 @@ mod tests {
         let (bank, txs) = setup();
 
         // Prepare batch without locks
-        let batch = bank.prepare_sanitized_batch_without_locking(txs[0].clone());
+        let batch = bank.prepare_unlocked_batch_from_single_tx(&txs[0]);
         assert!(batch.lock_results().iter().all(|x| x.is_ok()));
 
         // Grab locks
@@ -116,7 +116,7 @@ mod tests {
         assert!(batch2.lock_results().iter().all(|x| x.is_ok()));
 
         // Prepare another batch without locks
-        let batch3 = bank.prepare_sanitized_batch_without_locking(txs[0].clone());
+        let batch3 = bank.prepare_unlocked_batch_from_single_tx(&txs[0]);
         assert!(batch3.lock_results().iter().all(|x| x.is_ok()));
     }
 

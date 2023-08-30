@@ -15,10 +15,10 @@ extern uint64_t entrypoint(const uint8_t *input) {
     return ERROR_INVALID_ARGUMENT;
   }
   /* test float conversion to int compiles and works */
-  uint32_t *data = (uint32_t *)(params.ka[0].data);
-  uint32_t new_data = *data + 1;
-  *data += 1.5;
-  sol_assert(*data == new_data);
+  uint32_t data = *(uint32_t *)(params.ka[0].data);
+  uint32_t new_data = data + 1;
+  data += 1.5;
+  sol_assert(data == new_data);
 
   /* test signed division works for FP values */
   double value = (double)new_data + 1.0;
@@ -26,7 +26,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
   sol_assert(value < 0.0);
 
   /* test that standard math functions are available */
-  value = *data + 1.0;
+  value = data + 1.0;
   sol_assert(log2(value) == 1.0);
 
   return SUCCESS;

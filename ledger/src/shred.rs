@@ -118,7 +118,7 @@ pub const LEGACY_SHRED_DATA_CAPACITY: usize = legacy::ShredData::CAPACITY;
 // LAST_SHRED_IN_SLOT also implies DATA_COMPLETE_SHRED.
 // So it cannot be LAST_SHRED_IN_SLOT if not also DATA_COMPLETE_SHRED.
 bitflags! {
-    #[derive(Default, Serialize, Deserialize)]
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
     pub struct ShredFlags:u8 {
         const SHRED_TICK_REFERENCE_MASK = 0b0011_1111;
         const DATA_COMPLETE_SHRED       = 0b0100_0000;
@@ -578,7 +578,10 @@ pub mod layout {
     }
 
     pub(crate) fn get_signature(shred: &[u8]) -> Option<Signature> {
-        Some(Signature::new(shred.get(..SIZE_OF_SIGNATURE)?))
+        shred
+            .get(..SIZE_OF_SIGNATURE)
+            .map(Signature::try_from)?
+            .ok()
     }
 
     pub(crate) const fn get_signature_range() -> Range<usize> {
@@ -586,9 +589,8 @@ pub mod layout {
     }
 
     pub(super) fn get_shred_variant(shred: &[u8]) -> Result<ShredVariant, Error> {
-        let shred_variant = match shred.get(OFFSET_OF_SHRED_VARIANT) {
-            None => return Err(Error::InvalidPayloadSize(shred.len())),
-            Some(shred_variant) => *shred_variant,
+        let Some(&shred_variant) = shred.get(OFFSET_OF_SHRED_VARIANT) else {
+            return Err(Error::InvalidPayloadSize(shred.len()));
         };
         ShredVariant::try_from(shred_variant).map_err(|_| Error::InvalidShredVariant)
     }
@@ -673,9 +675,8 @@ pub mod layout {
         if get_shred_type(shred)? != ShredType::Data {
             return Err(Error::InvalidShredType);
         }
-        let flags = match shred.get(85) {
-            None => return Err(Error::InvalidPayloadSize(shred.len())),
-            Some(flags) => flags,
+        let Some(flags) = shred.get(85) else {
+            return Err(Error::InvalidPayloadSize(shred.len()));
         };
         Ok(flags & ShredFlags::SHRED_TICK_REFERENCE_MASK.bits())
     }
@@ -915,12 +916,9 @@ pub fn should_discard_shred(
             }
         }
     }
-    let shred_variant = match layout::get_shred_variant(shred) {
-        Ok(shred_variant) => shred_variant,
-        Err(_) => {
-            stats.bad_shred_type += 1;
-            return true;
-        }
+    let Ok(shred_variant) = layout::get_shred_variant(shred) else {
+        stats.bad_shred_type += 1;
+        return true;
     };
     let slot = match layout::get_slot(shred) {
         Some(slot) => {
@@ -935,12 +933,9 @@ pub fn should_discard_shred(
             return true;
         }
     };
-    let index = match layout::get_index(shred) {
-        Some(index) => index,
-        None => {
-            stats.index_bad_deserialize += 1;
-            return true;
-        }
+    let Some(index) = layout::get_index(shred) else {
+        stats.index_bad_deserialize += 1;
+        return true;
     };
     match ShredType::from(shred_variant) {
         ShredType::Code => {
@@ -958,19 +953,13 @@ pub fn should_discard_shred(
                 stats.index_out_of_bounds += 1;
                 return true;
             }
-            let parent_offset = match layout::get_parent_offset(shred) {
-                Some(parent_offset) => parent_offset,
-                None => {
-                    stats.bad_parent_offset += 1;
-                    return true;
-                }
+            let Some(parent_offset) = layout::get_parent_offset(shred) else {
+                stats.bad_parent_offset += 1;
+                return true;
             };
-            let parent = match slot.checked_sub(Slot::from(parent_offset)) {
-                Some(parent) => parent,
-                None => {
-                    stats.bad_parent_offset += 1;
-                    return true;
-                }
+            let Some(parent) = slot.checked_sub(Slot::from(parent_offset)) else {
+                stats.bad_parent_offset += 1;
+                return true;
             };
             if !blockstore::verify_shred_slots(slot, parent, root) {
                 stats.slot_out_of_range += 1;
@@ -1006,7 +995,9 @@ pub fn max_entries_per_n_shred(
     num_shreds: u64,
     shred_data_size: Option<usize>,
 ) -> u64 {
-    let data_buffer_size = ShredData::capacity(/*merkle_proof_size:*/ None).unwrap();
+    // Default 32:32 erasure batches yields 64 shreds; log2(64) = 6.
+    let merkle_proof_size = Some(6);
+    let data_buffer_size = ShredData::capacity(merkle_proof_size).unwrap();
     let shred_data_size = shred_data_size.unwrap_or(data_buffer_size) as u64;
     let vec_size = bincode::serialized_size(&vec![entry]).unwrap();
     let entry_size = bincode::serialized_size(entry).unwrap();
@@ -1051,7 +1042,7 @@ mod tests {
         matches::assert_matches,
         rand::Rng,
         rand_chacha::{rand_core::SeedableRng, ChaChaRng},
-        solana_sdk::{shred_version, signature::Signer},
+        solana_sdk::{shred_version, signature::Signer, signer::keypair::keypair_from_seed},
     };
 
     const SIZE_OF_SHRED_INDEX: usize = 4;
@@ -1534,7 +1525,10 @@ mod tests {
         };
         let mut data = [0u8; legacy::ShredData::CAPACITY];
         rng.fill(&mut data[..]);
-        let keypair = Keypair::generate(&mut rng);
+
+        let mut seed = [0u8; Keypair::SECRET_KEY_LENGTH];
+        rng.fill(&mut seed[..]);
+        let keypair = keypair_from_seed(&seed).unwrap();
         let mut shred = Shred::new_from_data(
             141939602, // slot
             28685,     // index
@@ -1571,7 +1565,9 @@ mod tests {
             let seed = <[u8; 32]>::try_from(bs58_decode(SEED)).unwrap();
             ChaChaRng::from_seed(seed)
         };
-        let keypair = Keypair::generate(&mut rng);
+        let mut seed = [0u8; Keypair::SECRET_KEY_LENGTH];
+        rng.fill(&mut seed[..]);
+        let keypair = keypair_from_seed(&seed).unwrap();
         let mut shred = Shred::new_from_data(
             142076266, // slot
             21443,     // index
@@ -1607,7 +1603,9 @@ mod tests {
         };
         let mut parity_shard = vec![0u8; legacy::SIZE_OF_ERASURE_ENCODED_SLICE];
         rng.fill(&mut parity_shard[..]);
-        let keypair = Keypair::generate(&mut rng);
+        let mut seed = [0u8; Keypair::SECRET_KEY_LENGTH];
+        rng.fill(&mut seed[..]);
+        let keypair = keypair_from_seed(&seed).unwrap();
         let mut shred = Shred::new_from_parity_shard(
             141945197, // slot
             23418,     // index
@@ -1687,6 +1685,12 @@ mod tests {
 
     #[test]
     fn test_shred_flags_serde() {
+        let flags: ShredFlags = bincode::deserialize(&[0b0001_0101]).unwrap();
+        assert!(!flags.contains(ShredFlags::DATA_COMPLETE_SHRED));
+        assert!(!flags.contains(ShredFlags::LAST_SHRED_IN_SLOT));
+        assert_eq!((flags & ShredFlags::SHRED_TICK_REFERENCE_MASK).bits(), 21u8);
+        assert_eq!(bincode::serialize(&flags).unwrap(), [0b0001_0101]);
+
         let flags: ShredFlags = bincode::deserialize(&[0b0111_0001]).unwrap();
         assert!(flags.contains(ShredFlags::DATA_COMPLETE_SHRED));
         assert!(!flags.contains(ShredFlags::LAST_SHRED_IN_SLOT));

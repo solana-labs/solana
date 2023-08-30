@@ -44,6 +44,11 @@ impl EpochStakes {
         self.total_stake
     }
 
+    /// For tests
+    pub fn set_total_stake(&mut self, total_stake: u64) {
+        self.total_stake = total_stake;
+    }
+
     pub fn node_id_to_vote_accounts(&self) -> &Arc<NodeIdToVoteAccounts> {
         &self.node_id_to_vote_accounts
     }

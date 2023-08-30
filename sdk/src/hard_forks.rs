@@ -33,6 +33,11 @@ impl HardForks {
         self.hard_forks.iter()
     }
 
+    // Returns `true` is there are currently no registered hard forks
+    pub fn is_empty(&self) -> bool {
+        self.hard_forks.is_empty()
+    }
+
     // Returns data to include in the bank hash for the given slot if a hard fork is scheduled
     pub fn get_hash_data(&self, slot: Slot, parent_slot: Slot) -> Option<[u8; 8]> {
         // The expected number of hard forks in a cluster is small.

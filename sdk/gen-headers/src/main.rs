@@ -44,17 +44,14 @@ fn main() {
  */
 fn transform(inc: &PathBuf) {
     let inc_path = PathBuf::from(inc);
-    let filename = match inc_path.file_name() {
-        Some(f) => f,
-        None => return,
+    let Some(filename) = inc_path.file_name() else {
+        return;
     };
-    let parent = match inc_path.parent() {
-        Some(f) => f,
-        None => return,
+    let Some(parent) = inc_path.parent() else {
+        return;
     };
-    let parent = match parent.parent() {
-        Some(f) => f,
-        None => return,
+    let Some(parent) = parent.parent() else {
+        return;
     };
     let mut header_path = PathBuf::from(parent);
     let mut filename = PathBuf::from(filename);

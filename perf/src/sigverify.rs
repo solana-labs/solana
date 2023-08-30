@@ -31,7 +31,7 @@ const TRACER_KEY_BYTES: [u8; 32] = [
 const TRACER_KEY: Pubkey = Pubkey::new_from_array(TRACER_KEY_BYTES);
 const TRACER_KEY_OFFSET_IN_TRANSACTION: usize = 69;
 // Empirically derived to constrain max verify latency to ~8ms at lower packet counts
-pub const VERIFY_MIN_PACKETS_PER_THREAD: usize = 128;
+pub const VERIFY_PACKET_CHUNK_SIZE: usize = 128;
 
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
@@ -131,21 +131,17 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) -> bool {
 
     for _ in 0..packet_offsets.sig_len {
         let pubkey_end = pubkey_start.saturating_add(size_of::<Pubkey>());
-        let sig_end = match sig_start.checked_add(size_of::<Signature>()) {
-            Some(sig_end) => sig_end,
-            None => return false,
+        let Some(sig_end) = sig_start.checked_add(size_of::<Signature>()) else {
+            return false;
         };
-        let signature = match packet.data(sig_start..sig_end) {
-            Some(signature) => Signature::new(signature),
-            None => return false,
+        let Some(Ok(signature)) = packet.data(sig_start..sig_end).map(Signature::try_from) else {
+            return false;
         };
-        let pubkey = match packet.data(pubkey_start..pubkey_end) {
-            Some(pubkey) => pubkey,
-            None => return false,
+        let Some(pubkey) = packet.data(pubkey_start..pubkey_end) else {
+            return false;
         };
-        let message = match packet.data(msg_start..) {
-            Some(message) => message,
-            None => return false,
+        let Some(message) = packet.data(msg_start..) else {
+            return false;
         };
         if !signature.verify(pubkey, message) {
             return false;
@@ -317,9 +313,8 @@ fn do_get_packet_offsets(
 
 pub fn check_for_tracer_packet(packet: &mut Packet) -> bool {
     let first_pubkey_start: usize = TRACER_KEY_OFFSET_IN_TRANSACTION;
-    let first_pubkey_end = match first_pubkey_start.checked_add(size_of::<Pubkey>()) {
-        Some(offset) => offset,
-        None => return false,
+    let Some(first_pubkey_end) = first_pubkey_start.checked_add(size_of::<Pubkey>()) else {
+        return false;
     };
     // Check for tracer pubkey
     match packet.data(first_pubkey_start..first_pubkey_end) {
@@ -522,46 +517,20 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
 
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
     debug!("CPU ECDSA for {}", packet_count);
-    let desired_thread_count = packet_count
-        .saturating_add(VERIFY_MIN_PACKETS_PER_THREAD)
-        .saturating_div(VERIFY_MIN_PACKETS_PER_THREAD);
-    if desired_thread_count <= 1 {
-        // When using single thread, skip rayon overhead.
-        batches.iter_mut().for_each(|batch| {
-            batch.iter_mut().for_each(|packet| {
-                if !packet.meta().discard() && !verify_packet(packet, reject_non_vote) {
-                    packet.meta_mut().set_discard(true);
+    PAR_THREAD_POOL.install(|| {
+        batches
+            .par_iter_mut()
+            .flatten()
+            .collect::<Vec<&mut Packet>>()
+            .par_chunks_mut(VERIFY_PACKET_CHUNK_SIZE)
+            .for_each(|packets| {
+                for packet in packets.iter_mut() {
+                    if !packet.meta().discard() && !verify_packet(packet, reject_non_vote) {
+                        packet.meta_mut().set_discard(true);
+                    }
                 }
-            })
-        });
-    } else if desired_thread_count < get_thread_count() {
-        // Dynamically compute minimum packet length to spread the load while minimizing threads.
-        let packets_per_thread = packet_count.saturating_div(desired_thread_count);
-        PAR_THREAD_POOL.install(|| {
-            batches
-                .into_par_iter()
-                .flatten()
-                .collect::<Vec<&mut Packet>>()
-                .into_par_iter()
-                .with_min_len(packets_per_thread)
-                .for_each(|packet: &mut Packet| {
-                    if !packet.meta().discard() && !verify_packet(packet, reject_non_vote) {
-                        packet.meta_mut().set_discard(true);
-                    }
-                })
-        });
-    } else {
-        // When using all available threads, skip the overhead of flattening, collecting, etc.
-        PAR_THREAD_POOL.install(|| {
-            batches.into_par_iter().for_each(|batch: &mut PacketBatch| {
-                batch.par_iter_mut().for_each(|packet: &mut Packet| {
-                    if !packet.meta().discard() && !verify_packet(packet, reject_non_vote) {
-                        packet.meta_mut().set_discard(true);
-                    }
-                })
             });
-        });
-    }
+    });
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
 
@@ -636,9 +605,8 @@ pub fn ed25519_verify(
     reject_non_vote: bool,
     valid_packet_count: usize,
 ) {
-    let api = match perf_libs::api() {
-        None => return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count),
-        Some(api) => api,
+    let Some(api) = perf_libs::api() else {
+        return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
     };
     let total_packet_count = count_packets_in_batches(batches);
     // micro-benchmarks show GPU time for smallest batch around 15-20ms
@@ -646,13 +614,15 @@ pub fn ed25519_verify(
     // power-of-two number around that accounting for the fact that the CPU
     // may be busy doing other things while being a real validator
     // TODO: dynamically adjust this crossover
-    if valid_packet_count < 64
-        || 100usize
-            .wrapping_mul(valid_packet_count)
-            .wrapping_div(total_packet_count)
-            < 90
-    {
-        return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
+    let maybe_valid_percentage = 100usize
+        .wrapping_mul(valid_packet_count)
+        .checked_div(total_packet_count);
+    let Some(valid_percentage) = maybe_valid_percentage else {
+        return;
+    };
+    if valid_percentage < 90 || valid_packet_count < 64 {
+        ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
+        return;
     }
 
     let (signature_offsets, pubkey_offsets, msg_start_offsets, msg_sizes, sig_lens) =
@@ -742,10 +712,10 @@ mod tests {
     fn test_copy_return_values() {
         let mut rng = rand::thread_rng();
         let sig_lens: Vec<Vec<u32>> = {
-            let size = rng.gen_range(0, 64);
+            let size = rng.gen_range(0..64);
             repeat_with(|| {
-                let size = rng.gen_range(0, 16);
-                repeat_with(|| rng.gen_range(0, 5)).take(size).collect()
+                let size = rng.gen_range(0..16);
+                repeat_with(|| rng.gen_range(0..5)).take(size).collect()
             })
             .take(size)
             .collect()
@@ -1092,7 +1062,7 @@ mod tests {
         // generate packet vector
         let batches: Vec<_> = (0..num_batches)
             .map(|_| {
-                let num_packets_per_batch = thread_rng().gen_range(1, max_packets_per_batch);
+                let num_packets_per_batch = thread_rng().gen_range(1..max_packets_per_batch);
                 let mut packet_batch = PacketBatch::with_capacity(num_packets_per_batch);
                 for _ in 0..num_packets_per_batch {
                     packet_batch.push(packet.clone());
@@ -1190,22 +1160,22 @@ mod tests {
 
     #[test]
     fn test_verify_medium_pass() {
-        test_verify_n(VERIFY_MIN_PACKETS_PER_THREAD, false);
+        test_verify_n(VERIFY_PACKET_CHUNK_SIZE, false);
     }
 
     #[test]
     fn test_verify_large_pass() {
-        test_verify_n(VERIFY_MIN_PACKETS_PER_THREAD * get_thread_count(), false);
+        test_verify_n(VERIFY_PACKET_CHUNK_SIZE * get_thread_count(), false);
     }
 
     #[test]
     fn test_verify_medium_fail() {
-        test_verify_n(VERIFY_MIN_PACKETS_PER_THREAD, true);
+        test_verify_n(VERIFY_PACKET_CHUNK_SIZE, true);
     }
 
     #[test]
     fn test_verify_large_fail() {
-        test_verify_n(VERIFY_MIN_PACKETS_PER_THREAD * get_thread_count(), true);
+        test_verify_n(VERIFY_PACKET_CHUNK_SIZE * get_thread_count(), true);
     }
 
     #[test]
@@ -1253,22 +1223,22 @@ mod tests {
         let recycler = Recycler::default();
         let recycler_out = Recycler::default();
         for _ in 0..50 {
-            let num_batches = thread_rng().gen_range(2, 30);
+            let num_batches = thread_rng().gen_range(2..30);
             let mut batches = generate_packet_batches_random_size(&packet, 128, num_batches);
 
-            let num_modifications = thread_rng().gen_range(0, 5);
+            let num_modifications = thread_rng().gen_range(0..5);
             for _ in 0..num_modifications {
-                let batch = thread_rng().gen_range(0, batches.len());
-                let packet = thread_rng().gen_range(0, batches[batch].len());
-                let offset = thread_rng().gen_range(0, batches[batch][packet].meta().size);
-                let add = thread_rng().gen_range(0, 255);
+                let batch = thread_rng().gen_range(0..batches.len());
+                let packet = thread_rng().gen_range(0..batches[batch].len());
+                let offset = thread_rng().gen_range(0..batches[batch][packet].meta().size);
+                let add = thread_rng().gen_range(0..255);
                 batches[batch][packet].buffer_mut()[offset] = batches[batch][packet]
                     .data(offset)
                     .unwrap()
                     .wrapping_add(add);
             }
 
-            let batch_to_disable = thread_rng().gen_range(0, batches.len());
+            let batch_to_disable = thread_rng().gen_range(0..batches.len());
             for p in batches[batch_to_disable].iter_mut() {
                 p.meta_mut().set_discard(true);
             }
@@ -1434,6 +1404,21 @@ mod tests {
             let mut packet = Packet::from_data(None, tx).unwrap();
             let packet_offsets = do_get_packet_offsets(&packet, 0).unwrap();
             check_for_simple_vote_transaction(&mut packet, &packet_offsets, 0).ok();
+            assert!(!packet.meta().is_simple_vote_tx());
+        }
+
+        // single legacy vote tx with extra (invalid) signature is not
+        {
+            let mut tx = new_test_vote_tx(&mut rng);
+            tx.signatures.push(Signature::default());
+            tx.message.header.num_required_signatures = 3;
+            tx.message.instructions[0].data = vec![1, 2, 3];
+            let mut packet = Packet::from_data(None, tx).unwrap();
+            let packet_offsets = do_get_packet_offsets(&packet, 0).unwrap();
+            assert_eq!(
+                Err(PacketError::InvalidSignatureLen),
+                check_for_simple_vote_transaction(&mut packet, &packet_offsets, 0)
+            );
             assert!(!packet.meta().is_simple_vote_tx());
         }
     }

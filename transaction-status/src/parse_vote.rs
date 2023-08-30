@@ -255,7 +255,7 @@ mod test {
             sysvar,
             vote::{
                 instruction as vote_instruction,
-                state::{Vote, VoteAuthorize, VoteInit, VoteStateUpdate},
+                state::{Vote, VoteAuthorize, VoteInit, VoteStateUpdate, VoteStateVersions},
             },
         },
     };
@@ -276,11 +276,15 @@ mod test {
             commission,
         };
 
-        let instructions = vote_instruction::create_account(
+        let instructions = vote_instruction::create_account_with_config(
             &Pubkey::new_unique(),
             &vote_pubkey,
             &vote_init,
             lamports,
+            vote_instruction::CreateVoteAccountConfig {
+                space: VoteStateVersions::vote_state_size_of(true) as u64,
+                ..vote_instruction::CreateVoteAccountConfig::default()
+            },
         );
         let mut message = Message::new(&instructions, None);
         assert_eq!(

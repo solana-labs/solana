@@ -50,6 +50,7 @@ define_syscall!(fn sol_get_clock_sysvar(addr: *mut u8) -> u64);
 define_syscall!(fn sol_get_epoch_schedule_sysvar(addr: *mut u8) -> u64);
 define_syscall!(fn sol_get_fees_sysvar(addr: *mut u8) -> u64);
 define_syscall!(fn sol_get_rent_sysvar(addr: *mut u8) -> u64);
+define_syscall!(fn sol_get_last_restart_slot(addr: *mut u8) -> u64);
 define_syscall!(fn sol_memcpy_(dst: *mut u8, src: *const u8, n: u64));
 define_syscall!(fn sol_memmove_(dst: *mut u8, src: *const u8, n: u64));
 define_syscall!(fn sol_memcmp_(s1: *const u8, s2: *const u8, n: u64, result: *mut i32));
@@ -67,6 +68,7 @@ define_syscall!(fn sol_curve_multiscalar_mul(curve_id: u64, scalars_addr: *const
 define_syscall!(fn sol_curve_pairing_map(curve_id: u64, point: *const u8, result: *mut u8) -> u64);
 define_syscall!(fn sol_alt_bn128_group_op(group_op: u64, input: *const u8, input_size: u64, result: *mut u8) -> u64);
 define_syscall!(fn sol_big_mod_exp(params: *const u8, result: *mut u8) -> u64);
+define_syscall!(fn sol_get_epoch_rewards_sysvar(addr: *mut u8) -> u64);
 
 #[cfg(target_feature = "static-syscalls")]
 pub const fn sys_hash(name: &str) -> usize {

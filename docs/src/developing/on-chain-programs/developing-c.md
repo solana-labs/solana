@@ -24,10 +24,6 @@ include ~/.local/share/solana/install/active_release/bin/sdk/sbf/c/sbf.mk
 The sbf-sdk may not be in the exact place specified above but if you setup your
 environment per [How to Build](#how-to-build) then it should be.
 
-Take a look at
-[helloworld](https://github.com/solana-labs/example-helloworld/tree/master/src/program-c)
-for an example of a C program.
-
 ## How to Build
 
 First setup the environment:
@@ -47,11 +43,9 @@ Solana uses the [Criterion](https://github.com/Snaipe/Criterion) test framework
 and tests are executed each time the program is built [How to
 Build](#how-to-build).
 
-To add tests, create a new file next to your source file named `test_<program name>.c` and populate it with criterion test cases. For an example see the
-[helloworld C
-tests](https://github.com/solana-labs/example-helloworld/blob/master/src/program-c/src/helloworld/test_helloworld.c)
-or the [Criterion docs](https://criterion.readthedocs.io/en/master) for
-information on how to write a test case.
+To add tests, create a new file next to your source file named `test_<program name>.c`
+and populate it with criterion test cases. See the [Criterion docs](https://criterion.readthedocs.io/en/master)
+for information on how to write a test case.
 
 ## Program Entrypoint
 
@@ -76,14 +70,7 @@ This entrypoint takes a generic byte array which contains the serialized program
 parameters (program id, accounts, instruction data, etc...). To deserialize the
 parameters each loader contains its own [helper function](#Serialization).
 
-Refer to [helloworld's use of the
-entrypoint](https://github.com/solana-labs/example-helloworld/blob/bc0b25c0ccebeff44df9760ddb97011558b7d234/src/program-c/src/helloworld/helloworld.c#L37)
-as an example of how things fit together.
-
 ### Serialization
-
-Refer to [helloworld's use of the deserialization
-function](https://github.com/solana-labs/example-helloworld/blob/bc0b25c0ccebeff44df9760ddb97011558b7d234/src/program-c/src/helloworld/helloworld.c#L43).
 
 Each loader provides a helper function that deserializes the program's input
 parameters into C types:

@@ -13,7 +13,7 @@ use {
 };
 
 bitflags! {
-    #[derive(Deserialize, Serialize)]
+    #[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
     /// Flags to indicate whether a slot is a descendant of a slot on the main fork
     pub struct ConnectedFlags:u8 {
         // A slot S should be considered to be connected if:
@@ -289,7 +289,8 @@ impl SlotMeta {
         self.is_connected()
     }
 
-    /// Dangerous. Currently only needed for a local-cluster test
+    /// Dangerous.
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn unset_parent(&mut self) {
         self.parent_slot = None;
     }
@@ -344,9 +345,8 @@ impl ErasureMeta {
     // Returns true if the erasure fields on the shred
     // are consistent with the erasure-meta.
     pub(crate) fn check_coding_shred(&self, shred: &Shred) -> bool {
-        let mut other = match Self::from_coding_shred(shred) {
-            Some(erasure_meta) => erasure_meta,
-            None => return false,
+        let Some(mut other) = Self::from_coding_shred(shred) else {
+            return false;
         };
         other.__unused_size = self.__unused_size;
         self == &other

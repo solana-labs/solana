@@ -1,10 +1,15 @@
+//! The public-key validity proof instruction.
+//!
+//! A public-key validity proof system is defined with respect to an ElGamal public key. The proof
+//! certifies that a given public key is a valid ElGamal public key (i.e. the prover knows a
+//! corresponding secret key). To generate the proof, a prover must provide the secret key for the
+//! public key.
+
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
-        encryption::elgamal::{ElGamalKeypair, ElGamalPubkey},
-        errors::ProofError,
-        sigma_proofs::pubkey_proof::PubkeySigmaProof,
-        transcript::TranscriptProtocol,
+        encryption::elgamal::ElGamalKeypair, errors::ProofError,
+        sigma_proofs::pubkey_proof::PubkeyValidityProof, transcript::TranscriptProtocol,
     },
     merlin::Transcript,
     std::convert::TryInto,
@@ -17,22 +22,22 @@ use {
     bytemuck::{Pod, Zeroable},
 };
 
-/// This struct includes the cryptographic proof *and* the account data information needed to
-/// verify the proof
+/// The instruction data that is needed for the `ProofInstruction::VerifyPubkeyValidity`
+/// instruction.
 ///
-/// - The pre-instruction should call PubkeyValidityData::verify_proof(&self)
-/// - The actual program should check that the public key in this struct is consistent with what is
-/// stored in the confidential token account
+/// It includes the cryptographic proof as well as the context data information needed to verify
+/// the proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct PubkeyValidityData {
     /// The context data for the public key validity proof
-    pub context: PubkeyValidityProofContext,
+    pub context: PubkeyValidityProofContext, // 32 bytes
 
     /// Proof that the public key is well-formed
-    pub proof: PubkeyValidityProof, // 64 bytes
+    pub proof: pod::PubkeyValidityProof, // 64 bytes
 }
 
+/// The context data needed to verify a pubkey validity proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct PubkeyValidityProofContext {
@@ -43,12 +48,12 @@ pub struct PubkeyValidityProofContext {
 #[cfg(not(target_os = "solana"))]
 impl PubkeyValidityData {
     pub fn new(keypair: &ElGamalKeypair) -> Result<Self, ProofError> {
-        let pod_pubkey = pod::ElGamalPubkey(keypair.public.to_bytes());
+        let pod_pubkey = pod::ElGamalPubkey(keypair.pubkey().to_bytes());
 
         let context = PubkeyValidityProofContext { pubkey: pod_pubkey };
 
-        let mut transcript = PubkeyValidityProof::transcript_new(&pod_pubkey);
-        let proof = PubkeyValidityProof::new(keypair, &mut transcript);
+        let mut transcript = context.new_transcript();
+        let proof = PubkeyValidityProof::new(keypair, &mut transcript).into();
 
         Ok(PubkeyValidityData { context, proof })
     }
@@ -63,44 +68,20 @@ impl ZkProofData<PubkeyValidityProofContext> for PubkeyValidityData {
 
     #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofError> {
-        let mut transcript = PubkeyValidityProof::transcript_new(&self.context.pubkey);
+        let mut transcript = self.context.new_transcript();
         let pubkey = self.context.pubkey.try_into()?;
-        self.proof.verify(&pubkey, &mut transcript)
+        let proof: PubkeyValidityProof = self.proof.try_into()?;
+        proof.verify(&pubkey, &mut transcript).map_err(|e| e.into())
     }
-}
-
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-#[allow(non_snake_case)]
-pub struct PubkeyValidityProof {
-    /// Associated public-key sigma proof
-    pub proof: pod::PubkeySigmaProof,
 }
 
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
-impl PubkeyValidityProof {
-    fn transcript_new(pubkey: &pod::ElGamalPubkey) -> Transcript {
+impl PubkeyValidityProofContext {
+    fn new_transcript(&self) -> Transcript {
         let mut transcript = Transcript::new(b"PubkeyProof");
-        transcript.append_pubkey(b"pubkey", pubkey);
+        transcript.append_pubkey(b"pubkey", &self.pubkey);
         transcript
-    }
-
-    pub fn new(keypair: &ElGamalKeypair, transcript: &mut Transcript) -> Self {
-        let proof = PubkeySigmaProof::new(keypair, transcript);
-        Self {
-            proof: proof.into(),
-        }
-    }
-
-    pub fn verify(
-        &self,
-        pubkey: &ElGamalPubkey,
-        transcript: &mut Transcript,
-    ) -> Result<(), ProofError> {
-        let proof: PubkeySigmaProof = self.proof.try_into()?;
-        proof.verify(pubkey, transcript)?;
-        Ok(())
     }
 }
 
@@ -109,7 +90,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_pubkey_validity_correctness() {
+    fn test_pubkey_validity_instruction_correctness() {
         let keypair = ElGamalKeypair::new_rand();
 
         let pubkey_validity_data = PubkeyValidityData::new(&keypair).unwrap();

@@ -6,24 +6,24 @@ use {
     },
     itertools::izip,
     log::*,
+    solana_accounts_db::accounts_db::create_accounts_run_and_snapshot_dirs,
     solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
     solana_core::{
-        tower_storage::FileTowerStorage,
+        consensus::tower_storage::FileTowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{
         cluster_info::Node,
-        contact_info::{ContactInfo, LegacyContactInfo},
+        contact_info::{ContactInfo, LegacyContactInfo, Protocol},
         gossip_service::discover_cluster,
     },
-    solana_ledger::create_new_tmp_ledger,
+    solana_ledger::{create_new_tmp_ledger, shred::Shred},
     solana_runtime::{
         genesis_utils::{
             create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,
             ValidatorVoteKeypairs,
         },
         snapshot_config::SnapshotConfig,
-        snapshot_utils::create_accounts_run_and_snapshot_dirs,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -31,19 +31,20 @@ use {
         clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
+        feature_set,
         genesis_config::{ClusterType, GenesisConfig},
         message::Message,
         poh_config::PohConfig,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         stake::{
-            config as stake_config, instruction as stake_instruction,
+            instruction as stake_instruction,
             state::{Authorized, Lockup},
         },
         system_transaction,
         transaction::Transaction,
     },
-    solana_stake_program::{config::create_account as create_stake_config_account, stake_state},
+    solana_stake_program::stake_state,
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::tpu_client::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
@@ -56,6 +57,7 @@ use {
         collections::HashMap,
         io::{Error, ErrorKind, Result},
         iter,
+        net::UdpSocket,
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
     },
@@ -266,18 +268,6 @@ impl LocalCluster {
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);
 
-        // Replace staking config
-        genesis_config.add_account(
-            stake_config::id(),
-            create_stake_config_account(
-                1,
-                &stake_config::Config {
-                    warmup_cooldown_rate: std::f64::MAX,
-                    slash_penalty: std::u8::MAX,
-                },
-            ),
-        );
-
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let leader_contact_info = leader_node.info.clone();
         let mut leader_config = safe_clone_config(&config.validator_configs[0]);
@@ -329,8 +319,14 @@ impl LocalCluster {
             validators,
             genesis_config,
             connection_cache: match config.tpu_use_quic {
-                true => Arc::new(ConnectionCache::new(config.tpu_connection_pool_size)),
-                false => Arc::new(ConnectionCache::with_udp(config.tpu_connection_pool_size)),
+                true => Arc::new(ConnectionCache::new_quic(
+                    "connection_cache_local_cluster_quic",
+                    config.tpu_connection_pool_size,
+                )),
+                false => Arc::new(ConnectionCache::with_udp(
+                    "connection_cache_local_cluster_udp",
+                    config.tpu_connection_pool_size,
+                )),
             },
         };
 
@@ -451,7 +447,9 @@ impl LocalCluster {
         socket_addr_space: SocketAddrSpace,
     ) -> Pubkey {
         let (rpc, tpu) = LegacyContactInfo::try_from(&self.entry_point_info)
-            .map(cluster_tests::get_client_facing_addr)
+            .map(|node| {
+                cluster_tests::get_client_facing_addr(self.connection_cache.protocol(), node)
+            })
             .unwrap();
         let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
 
@@ -546,7 +544,9 @@ impl LocalCluster {
 
     pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
         let (rpc, tpu) = LegacyContactInfo::try_from(&self.entry_point_info)
-            .map(cluster_tests::get_client_facing_addr)
+            .map(|node| {
+                cluster_tests::get_client_facing_addr(self.connection_cache.protocol(), node)
+            })
             .unwrap();
         let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
@@ -667,8 +667,18 @@ impl LocalCluster {
             == 0
         {
             // 1) Create vote account
+            // Unlike the bootstrap validator we have to check if the new vote state is being used
+            // as the cluster is already running, and using the wrong account size will cause the
+            // InitializeAccount tx to fail
+            let use_current_vote_state = client
+                .poll_get_balance_with_commitment(
+                    &feature_set::vote_state_add_vote_latency::id(),
+                    CommitmentConfig::processed(),
+                )
+                .unwrap_or(0)
+                > 0;
 
-            let instructions = vote_instruction::create_account(
+            let instructions = vote_instruction::create_account_with_config(
                 &from_account.pubkey(),
                 &vote_account_pubkey,
                 &VoteInit {
@@ -678,6 +688,11 @@ impl LocalCluster {
                     commission: 0,
                 },
                 amount,
+                vote_instruction::CreateVoteAccountConfig {
+                    space: vote_state::VoteStateVersions::vote_state_size_of(use_current_vote_state)
+                        as u64,
+                    ..vote_instruction::CreateVoteAccountConfig::default()
+                },
             );
             let message = Message::new(&instructions, Some(&from_account.pubkey()));
             let mut transaction = Transaction::new(
@@ -797,7 +812,9 @@ impl Cluster for LocalCluster {
     fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
         self.validators.get(pubkey).map(|f| {
             let (rpc, tpu) = LegacyContactInfo::try_from(&f.info.contact_info)
-                .map(cluster_tests::get_client_facing_addr)
+                .map(|node| {
+                    cluster_tests::get_client_facing_addr(self.connection_cache.protocol(), node)
+                })
                 .unwrap();
             ThinClient::new(rpc, tpu, self.connection_cache.clone())
         })
@@ -834,6 +851,10 @@ impl Cluster for LocalCluster {
         };
 
         (node, entry_point_info)
+    }
+
+    fn set_entry_point(&mut self, entry_point_info: ContactInfo) {
+        self.entry_point_info = entry_point_info;
     }
 
     fn restart_node(
@@ -905,6 +926,20 @@ impl Cluster for LocalCluster {
 
     fn get_contact_info(&self, pubkey: &Pubkey) -> Option<&ContactInfo> {
         self.validators.get(pubkey).map(|v| &v.info.contact_info)
+    }
+
+    fn send_shreds_to_validator(&self, dup_shreds: Vec<&Shred>, validator_key: &Pubkey) {
+        let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let validator_tvu = self
+            .get_contact_info(validator_key)
+            .unwrap()
+            .tvu(Protocol::UDP)
+            .unwrap();
+        for shred in dup_shreds {
+            send_socket
+                .send_to(shred.payload().as_ref(), validator_tvu)
+                .unwrap();
+        }
     }
 }
 

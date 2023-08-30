@@ -52,7 +52,6 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 num_cpus = { workspace = true }
-regex = { workspace = true }
 serial_test = { workspace = true }
 
 [build-dependencies]
