@@ -23,14 +23,13 @@ pub enum LoaderV4Instruction {
     /// it also sets the authority needed for subsequent operations.
     /// Decreasing to size zero closes the program account and resets it
     /// into an uninitialized state.
-    /// When increasing the size providing additional lamports is necessary to
-    /// reach rent exemption (via the payer account, which has to be a signer).
-    /// When decreasing the size, superflous lamports are transfered to the recipient account.
+    /// Providing additional lamports upfront might be necessary to reach rent exemption.
+    /// Superflous funds are transfered to the recipient account.
     ///
     /// # Account references
     ///   0. `[(signer), writable]` The program account to change the size of.
     ///   1. `[signer]` The authority of the program.
-    ///   2. `[(signer), writable]` Either the payer or the recipient account.
+    ///   2. `[writable]` Optional, the recipient account.
     Truncate {
         /// The new size after the operation.
         new_size: u32,
