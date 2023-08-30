@@ -168,6 +168,11 @@ async fn main() {
         }
     }
 
+    // we need to convert the binrary to base64 before we save it to a file
+    // or we create the normal genesis.bin but then we take another step
+    // and that's when we convert it to base64 and put into our config map
+    // then when we load it from the rust code running in the pod,
+    // we have to parse the base64, then convert to binary, and then load().
     match genesis.generate() {
         Ok(_) => (),
         Err(err) => {
@@ -175,6 +180,9 @@ async fn main() {
             return;
         }
     }
+
+    // load genesis (test -> this should run in pod)
+    genesis.load();
 
     process::exit(1);
 
