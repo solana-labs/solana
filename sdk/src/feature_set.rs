@@ -692,7 +692,7 @@ pub mod revise_turbine_epoch_stakes {
 }
 
 pub mod enable_poseidon_syscall {
-    solana_sdk::declare_id!("Pos1111111111111111111111111111111111111111");
+    solana_sdk::declare_id!("FL9RsQA6TVUoh5xJQ9d936RHSebA1NLQqe3Zv9sXZRpr");
 }
 
 lazy_static! {
