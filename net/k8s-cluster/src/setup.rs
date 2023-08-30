@@ -260,46 +260,77 @@ impl<'a> Genesis<'a> {
             LedgerColumnOptions::default(),
         )?;
 
+        info!("hash of genesis: {}", genesis_config.hash());
+
         // genesis
         // read in the three bootstrap keys
         Ok(())
     }
 
-    pub fn generate_account(&self, path_to_destination: PathBuf, account: &str) {}
+    pub fn load(&self) {
+        let path = self.config_dir.join("bootstrap-validator");
+        let loaded_config = GenesisConfig::load(&path).expect("load");
+        info!("hash of loaded genesis: {}", loaded_config.hash());
 
-    pub fn generate_old(&self) {
-        let total_validators = self.config.num_validators + 1; // add 1 for bootstrap
-        for i in 0..total_validators {
-            info!("generating keypair index: {}", i);
-            let filename = format!("keypair-validator-{}", i);
-            let outfile = SOLANA_ROOT.join(filename);
-            let (passphrase, passphrase_message) = keygen::mnemonic::no_passphrase_and_message();
-
-            let word_count: usize = 12; //default
-            let mnemonic_type = MnemonicType::for_word_count(word_count).unwrap();
-            let mnemonic = Mnemonic::new(mnemonic_type, Language::English);
-            let seed = Seed::new(&mnemonic, &passphrase);
-            let keypair = keypair_from_seed(seed.as_bytes()).unwrap();
-
-            if let Some(outfile) = outfile.to_str() {
-                output_keypair(&keypair, outfile, "new")
-                    .map_err(|err| format!("Unable to write {outfile}: {err}"));
-            }
-
-            let phrase: &str = mnemonic.phrase();
-            let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
-            println!(
-                "{}\npubkey: {}\n{}\nSave this seed phrase{} to recover your new keypair:\n{}\n{}",
-                &divider,
-                keypair.pubkey(),
-                &divider,
-                passphrase_message,
-                phrase,
-                &divider
-            );
-        }
     }
 }
+
+mod tests {
+    use {
+        super::*,
+        solana_sdk::signature::{Keypair, Signer},
+        std::path::PathBuf,
+    };
+    fn make_tmp_path(name: &str) -> PathBuf {
+        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
+        let keypair = Keypair::new();
+
+        let path = [
+            out_dir,
+            "tmp".to_string(),
+            format!("{}-{}", name, keypair.pubkey()),
+        ]
+        .iter()
+        .collect();
+
+        // whack any possible collision
+        let _ignored = std::fs::remove_dir_all(&path);
+        // whack any possible collision
+        let _ignored = std::fs::remove_file(&path);
+
+        path
+    }
+
+    #[test]
+    fn test_genesis_config() {
+        let faucet_keypair = Keypair::new();
+        let mut config = GenesisConfig::default();
+        config.add_account(
+            faucet_keypair.pubkey(),
+            AccountSharedData::new(10_000, 0, &Pubkey::default()),
+        );
+        config.add_account(
+            solana_sdk::pubkey::new_rand(),
+            AccountSharedData::new(1, 0, &Pubkey::default()),
+        );
+        config.add_native_instruction_processor("hi".to_string(), solana_sdk::pubkey::new_rand());
+
+        assert_eq!(config.accounts.len(), 2);
+        assert!(config
+            .accounts
+            .iter()
+            .any(|(pubkey, account)| *pubkey == faucet_keypair.pubkey()
+                && account.lamports == 10_000));
+
+        let path = &make_tmp_path("genesis_config");
+        config.write(path).expect("write");
+        let loaded_config = GenesisConfig::load(path).expect("load");
+        assert_eq!(config.hash(), loaded_config.hash());
+        let _ignored = std::fs::remove_file(path);
+    }
+
+}
+
 
 /*
 1) Create bootstrap validator keys ->
