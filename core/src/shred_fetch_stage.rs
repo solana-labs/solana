@@ -79,48 +79,46 @@ impl ShredFetchStage {
 
             match recvr.recv_timeout(Duration::from_millis(DEFAULT_MS_PER_SLOT)) {
                 Ok(mut packet_batch) => {
+                    stats.shred_count += packet_batch.len();
 
-            stats.shred_count += packet_batch.len();
+                    if let Some((udp_socket, _)) = repair_context {
+                        debug_assert_eq!(flags, PacketFlags::REPAIR);
+                        debug_assert!(keypair.is_some());
+                        if let Some(ref keypair) = keypair {
+                            ServeRepair::handle_repair_response_pings(
+                                udp_socket,
+                                keypair,
+                                &mut packet_batch,
+                                &mut stats,
+                            );
+                        }
+                    }
 
-            if let Some((udp_socket, _)) = repair_context {
-                debug_assert_eq!(flags, PacketFlags::REPAIR);
-                debug_assert!(keypair.is_some());
-                if let Some(ref keypair) = keypair {
-                    ServeRepair::handle_repair_response_pings(
-                        udp_socket,
-                        keypair,
-                        &mut packet_batch,
-                        &mut stats,
-                    );
-                }
-            }
-
-             // Limit shreds to 2 epochs away.
-            let max_slot = last_slot + 2 * slots_per_epoch;
-            let should_drop_merkle_shreds =
-                |shred_slot| should_drop_merkle_shreds(shred_slot, &root_bank);
-            let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
-            for packet in packet_batch.iter_mut().filter(|p| !p.meta().discard()) {
-                if turbine_disabled
-                    || should_discard_shred(
-                        packet,
-                        last_root,
-                        max_slot,
-                        shred_version,
-                        should_drop_merkle_shreds,
-                        &mut stats,
-                    )
-                {
-                    packet.meta_mut().set_discard(true);
-                } else {
-                    packet.meta_mut().flags.insert(flags);
-                }
-            }
-            stats.maybe_submit(name, STATS_SUBMIT_CADENCE);
-            if sendr.send(packet_batch).is_err() {
-                break;
-            }
-
+                    // Limit shreds to 2 epochs away.
+                    let max_slot = last_slot + 2 * slots_per_epoch;
+                    let should_drop_merkle_shreds =
+                        |shred_slot| should_drop_merkle_shreds(shred_slot, &root_bank);
+                    let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
+                    for packet in packet_batch.iter_mut().filter(|p| !p.meta().discard()) {
+                        if turbine_disabled
+                            || should_discard_shred(
+                                packet,
+                                last_root,
+                                max_slot,
+                                shred_version,
+                                should_drop_merkle_shreds,
+                                &mut stats,
+                            )
+                        {
+                            packet.meta_mut().set_discard(true);
+                        } else {
+                            packet.meta_mut().flags.insert(flags);
+                        }
+                    }
+                    stats.maybe_submit(name, STATS_SUBMIT_CADENCE);
+                    if sendr.send(packet_batch).is_err() {
+                        break;
+                    }
                 }
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => break,
