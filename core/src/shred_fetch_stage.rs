@@ -52,12 +52,14 @@ impl ShredFetchStage {
             .as_ref()
             .map(|(_, cluster_info)| cluster_info.keypair().clone());
 
-        // In the case of bank_forks=None, setup to accept any slot range
-        let mut root_bank = bank_forks.read().unwrap().root_bank();
-        let mut last_root = 0;
-        let mut last_slot = std::u64::MAX;
-        let mut slots_per_epoch = 0;
-
+        // Only need root bank in order to check feature statuses later on;
+        // can demote to only fetching root slot once those features go away.
+        let (mut root_bank, mut last_slot) = {
+            let bank_forks_r = bank_forks.read().unwrap();
+            (bank_forks_r.root_bank(), bank_forks_r.highest_slot())
+        };
+        let mut last_root = root_bank.slot();
+        let mut slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
         let mut stats = ShredFetchStats::default();
 
         for mut packet_batch in recvr {
@@ -65,12 +67,11 @@ impl ShredFetchStage {
                 last_updated = Instant::now();
                 {
                     let bank_forks_r = bank_forks.read().unwrap();
-                    last_root = bank_forks_r.root();
-                    let working_bank = bank_forks_r.working_bank();
-                    last_slot = working_bank.slot();
                     root_bank = bank_forks_r.root_bank();
-                    slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
+                    last_slot = bank_forks_r.highest_slot();
                 }
+                last_root = root_bank.slot();
+                slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
                 keypair = repair_context
                     .as_ref()
                     .map(|(_, cluster_info)| cluster_info.keypair().clone());
