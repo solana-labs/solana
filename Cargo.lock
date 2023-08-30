@@ -176,9 +176,9 @@ dependencies = [
  "include_dir",
  "itertools",
  "proc-macro-error",
- "proc-macro2 1.0.53",
- "quote 1.0.26",
- "syn 1.0.107",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -2650,8 +2650,8 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b139284b5cf57ecfa712bcc66950bb635b31aff41c188e8a4cfc758eca374a3f"
 dependencies = [
- "proc-macro2 1.0.53",
- "quote 1.0.26",
+ "proc-macro2",
+ "quote",
 ]
 
 [[package]]
@@ -3202,9 +3202,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22ce75669015c4f47b289fd4d4f56e894e4c96003ffdf3ac51313126f94c6cbb"
 dependencies = [
  "cfg-if 1.0.0",
- "proc-macro2 1.0.53",
- "quote 1.0.26",
- "syn 1.0.107",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -6955,24 +6955,24 @@ dependencies = [
 
 [[package]]
 name = "solana-scheduler"
-version = "1.16.0"
+version = "1.17.0"
 
 [[package]]
 name = "solana-scheduler-pool"
-version = "1.16.0"
+version = "1.17.0"
 dependencies = [
  "assert_matches",
  "bincode",
  "crossbeam-channel",
  "log",
  "nohash-hasher",
- "rand 0.7.3",
+ "rand 0.8.5",
  "solana-ledger",
- "solana-logger 1.16.0",
+ "solana-logger",
  "solana-program-runtime",
  "solana-runtime",
  "solana-scheduler",
- "solana-sdk 1.16.0",
+ "solana-sdk",
  "tikv-jemallocator",
 ]
 
