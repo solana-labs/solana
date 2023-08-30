@@ -92,6 +92,7 @@ fn main() {
             "noop",
             "panic",
             "param_passing",
+            "poseidon",
             "rand",
             "realloc",
             "realloc_invoke",

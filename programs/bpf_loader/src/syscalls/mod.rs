@@ -37,8 +37,8 @@ use {
             disable_cpi_setting_executable_and_rent_epoch, disable_deploy_of_alloc_free_syscall,
             disable_fees_sysvar, enable_alt_bn128_syscall, enable_big_mod_exp_syscall,
             enable_early_verification_of_account_modifications, enable_partitioned_epoch_reward,
-            error_on_syscall_bpf_function_hash_collisions, last_restart_slot_sysvar,
-            libsecp256k1_0_5_upgrade_enabled, reject_callx_r10,
+            enable_poseidon_syscall, error_on_syscall_bpf_function_hash_collisions,
+            last_restart_slot_sysvar, libsecp256k1_0_5_upgrade_enabled, reject_callx_r10,
             stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
             switch_to_new_elf_parser,
         },
@@ -47,7 +47,7 @@ use {
             AccountMeta, InstructionError, ProcessedSiblingInstruction,
             TRANSACTION_LEVEL_STACK_HEIGHT,
         },
-        keccak, native_loader,
+        keccak, native_loader, poseidon,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
         program_stubs::is_nonoverlapping,
@@ -125,6 +125,8 @@ pub enum SyscallError {
     InvalidAttribute,
     #[error("Invalid pointer")]
     InvalidPointer,
+    #[error("Arithmetic overflow")]
+    ArithmeticOverflow,
 }
 
 type Error = Box<dyn std::error::Error>;
@@ -160,6 +162,7 @@ pub fn create_program_runtime_environment_v1<'a>(
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
     let last_restart_slot_syscall_enabled = feature_set.is_active(&last_restart_slot_sysvar::id());
+    let enable_poseidon_syscall = feature_set.is_active(&enable_poseidon_syscall::id());
     // !!! ATTENTION !!!
     // When adding new features for RBPF here,
     // also add them to `Bank::apply_builtin_program_feature_transitions()`.
@@ -325,6 +328,14 @@ pub fn create_program_runtime_environment_v1<'a>(
         enable_big_mod_exp_syscall,
         b"sol_big_mod_exp",
         SyscallBigModExp::call,
+    )?;
+
+    // Poseidon
+    register_feature_gated_function!(
+        result,
+        enable_poseidon_syscall,
+        b"sol_poseidon",
+        SyscallPoseidon::call,
     )?;
 
     // Log data
@@ -1792,6 +1803,78 @@ declare_syscall!(
         return_value.copy_from_slice(value.as_slice());
 
         Ok(0)
+    }
+);
+
+declare_syscall!(
+    // Poseidon
+    SyscallPoseidon,
+    fn inner_call(
+        invoke_context: &mut InvokeContext,
+        parameters: u64,
+        endianness: u64,
+        vals_addr: u64,
+        vals_len: u64,
+        result_addr: u64,
+        memory_mapping: &mut MemoryMapping,
+    ) -> Result<u64, Error> {
+        let parameters: poseidon::Parameters = parameters.try_into()?;
+        let endianness: poseidon::Endianness = endianness.try_into()?;
+
+        if vals_len > 12 {
+            ic_msg!(
+                invoke_context,
+                "Poseidon hashing {} sequences is not supported",
+                vals_len,
+            );
+            return Err(SyscallError::InvalidLength.into());
+        }
+
+        let budget = invoke_context.get_compute_budget();
+        let Some(cost) = budget.poseidon_cost(vals_len) else {
+            ic_msg!(
+                invoke_context,
+                "Overflow while calculating the compute cost"
+            );
+            return Err(SyscallError::ArithmeticOverflow.into());
+        };
+        consume_compute_meter(invoke_context, cost.to_owned())?;
+
+        let hash_result = translate_slice_mut::<u8>(
+            memory_mapping,
+            result_addr,
+            poseidon::HASH_BYTES as u64,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+        let inputs = translate_slice::<&[u8]>(
+            memory_mapping,
+            vals_addr,
+            vals_len,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+        let inputs = inputs
+            .iter()
+            .map(|input| {
+                translate_slice::<u8>(
+                    memory_mapping,
+                    input.as_ptr() as *const _ as u64,
+                    input.len() as u64,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
+                )
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        let hash = match poseidon::hashv(parameters, endianness, inputs.as_slice()) {
+            Ok(hash) => hash,
+            Err(e) => {
+                return Ok(e.into());
+            }
+        };
+        hash_result.copy_from_slice(&hash.to_bytes());
+
+        Ok(SUCCESS)
     }
 );
 
