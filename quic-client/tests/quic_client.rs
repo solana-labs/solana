@@ -3,16 +3,16 @@ mod tests {
     use {
         crossbeam_channel::{unbounded, Receiver},
         log::*,
-        rayon::{
-            iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
-            ThreadPool,
-        },
+        rayon::iter::{IntoParallelIterator, ParallelIterator},
         solana_connection_cache::connection_cache_stats::ConnectionCacheStats,
         solana_perf::packet::PacketBatch,
         solana_quic_client::nonblocking::quic_client::{
             QuicClientCertificate, QuicLazyInitializedEndpoint,
         },
-        solana_sdk::{net::DEFAULT_TPU_COALESCE, packet::PACKET_DATA_SIZE, signature::Keypair},
+        solana_sdk::{
+            net::DEFAULT_TPU_COALESCE, packet::PACKET_DATA_SIZE,
+            quic::QUIC_MAX_STAKED_CONCURRENT_STREAMS, signature::Keypair,
+        },
         solana_streamer::{
             nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, quic::SpawnServerResult,
             streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate,
@@ -327,8 +327,8 @@ mod tests {
     #[tokio::test]
     async fn test_connection_cache_memory_usage() {
         use {
-            solana_connection_cache::nonblocking::client_connection::ClientConnection,
-            solana_quic_client::nonblocking::quic_client::QuicClientConnection,
+            solana_connection_cache::client_connection::ClientConnection,
+            solana_quic_client::quic_client::QuicClientConnection,
         };
         solana_logger::setup();
 
@@ -355,12 +355,14 @@ mod tests {
             // Send a full size packet with single byte writes.
             let num_expected_packets: usize = 1;
 
-            thread_pool.install(
-                || {
-                    let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
-                    assert!(client.send_data_batch(&packets).await.is_ok());        
-                }
-            );
+            thread_pool.install(|| {
+                (0..QUIC_MAX_STAKED_CONCURRENT_STREAMS)
+                    .into_par_iter()
+                    .for_each(|_i| {
+                        let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
+                        assert!(client.send_data_batch(&packets).is_ok());
+                    });
+            });
 
             clients.push(client);
         }
