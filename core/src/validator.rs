@@ -1043,8 +1043,13 @@ impl Validator {
             bank_forks.clone(),
             config.repair_whitelist.clone(),
         );
+        let (repair_quic_endpoint_sender, repair_quic_endpoint_receiver) = unbounded();
         let serve_repair_service = ServeRepairService::new(
             serve_repair,
+            // Incoming UDP repair requests are adapted into RemoteRequest
+            // and also sent through the same channel.
+            repair_quic_endpoint_sender,
+            repair_quic_endpoint_receiver,
             blockstore.clone(),
             node.sockets.serve_repair,
             socket_addr_space,

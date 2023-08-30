@@ -41,6 +41,7 @@ const ALPN_REPAIR_PROTOCOL_ID: &[u8] = b"solana-repair";
 const CONNECT_SERVER_NAME: &str = "solana-repair";
 
 const CLIENT_CHANNEL_CAPACITY: usize = 1 << 14;
+const CONNECTION_CACHE_CAPACITY: usize = 4096;
 const MAX_CONCURRENT_BIDI_STREAMS: VarInt = VarInt::from_u32(512);
 
 const CONNECTION_CLOSE_ERROR_CODE_SHUTDOWN: VarInt = VarInt::from_u32(1);
@@ -485,6 +486,13 @@ async fn cache_connection(
     // only by SocketAddr when establishing outgoing connections.
     let entries: [Arc<RwLock<Option<Connection>>>; 2] = {
         let mut cache = cache.write().await;
+        if cache.len() >= CONNECTION_CACHE_CAPACITY {
+            connection.close(
+                CONNECTION_CLOSE_ERROR_CODE_DROPPED,
+                CONNECTION_CLOSE_REASON_DROPPED,
+            );
+            return;
+        }
         [Some(remote_pubkey), None].map(|remote_pubkey| {
             let key = (remote_address, remote_pubkey);
             cache.entry(key).or_default().clone()
