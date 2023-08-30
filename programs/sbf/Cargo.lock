@@ -5030,6 +5030,7 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rayon",
  "rustc_version",
+ "rustversion",
  "serde",
  "serde_bytes",
  "serde_derive",
