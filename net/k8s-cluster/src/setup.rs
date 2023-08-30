@@ -11,6 +11,7 @@ use {
     solana_sdk::{
         account::AccountSharedData,
         clock,
+        epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
         native_token::sol_to_lamports,
         poh_config::PohConfig,
@@ -181,9 +182,23 @@ impl<'a> Genesis<'a> {
             }
         }
 
-        let max_genesis_archive_unpacked_size = MAX_GENESIS_ARCHIVE_UNPACKED_SIZE;
+        let max_genesis_archive_unpacked_size = 1073741824; // set in setup.sh
+
+        let slots_per_epoch = match cluster_type {
+            ClusterType::Development => clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
+            ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
+                clock::DEFAULT_SLOTS_PER_EPOCH
+            }
+        };
+
+        let epoch_schedule = EpochSchedule::custom(
+            slots_per_epoch,
+            slots_per_epoch,
+            true, //  TODO: fix for flag
+        );
 
         let mut genesis_config = GenesisConfig {
+            epoch_schedule,
             ..GenesisConfig::default()
         };
 
