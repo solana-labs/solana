@@ -1724,6 +1724,7 @@ pub mod test_utils {
 mod tests {
     use {
         super::*,
+        assert_matches::assert_matches,
         rand::Rng,
         solana_program_runtime::{
             invoke_context::mock_process_instruction, with_mock_invoke_context,
@@ -4117,10 +4118,10 @@ mod tests {
             .programs_modified_by_tx
             .replenish(program_id, Arc::new(program));
 
-        assert!(matches!(
+        assert_matches!(
             deploy_test_program(&mut invoke_context, program_id,),
             Ok(())
-        ));
+        );
 
         let updated_program = invoke_context
             .programs_modified_by_tx
@@ -4158,10 +4159,10 @@ mod tests {
             .replenish(program_id, Arc::new(program));
 
         let program_id2 = Pubkey::new_unique();
-        assert!(matches!(
+        assert_matches!(
             deploy_test_program(&mut invoke_context, program_id2),
             Ok(())
-        ));
+        );
 
         let program2 = invoke_context
             .programs_modified_by_tx

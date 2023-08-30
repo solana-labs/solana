@@ -1887,6 +1887,7 @@ mod tests {
     use {
         super::*,
         crate::mock_create_vm,
+        assert_matches::assert_matches,
         core::slice,
         solana_program_runtime::{invoke_context::InvokeContext, with_mock_invoke_context},
         solana_rbpf::{
@@ -2191,10 +2192,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
 
         invoke_context.mock_set_remaining(string.len() as u64);
         let mut result = ProgramResult::Ok(0);
@@ -2273,10 +2274,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
 
         assert_eq!(
             invoke_context
@@ -2358,10 +2359,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
 
         invoke_context.mock_set_remaining(cost);
         let mut result = ProgramResult::Ok(0);
@@ -2623,10 +2624,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
     }
 
     #[test]
@@ -2702,10 +2703,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
     }
 
     #[test]
@@ -2781,10 +2782,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
     }
 
     #[test]
@@ -2952,10 +2953,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
     }
 
     #[test]
@@ -3125,10 +3126,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
     }
 
     #[test]
@@ -3661,10 +3662,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping
+        );
     }
 
     #[test]
@@ -3814,10 +3815,10 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert!(matches!(
+        assert_matches!(
             result,
-            ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping,
-        ));
+            ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping
+        );
     }
 
     #[test]
@@ -3828,18 +3829,18 @@ mod tests {
         let address = bpf_loader_upgradeable::id();
 
         let exceeded_seed = &[127; MAX_SEED_LEN + 1];
-        assert!(matches!(
+        assert_matches!(
             create_program_address(&mut invoke_context, &[exceeded_seed], &address),
-            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
-        ));
-        assert!(matches!(
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+        );
+        assert_matches!(
             create_program_address(
                 &mut invoke_context,
                 &[b"short_seed", exceeded_seed],
                 &address,
             ),
-            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
-        ));
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+        );
         let max_seed = &[0; MAX_SEED_LEN];
         assert!(create_program_address(&mut invoke_context, &[max_seed], &address).is_ok());
         let exceeded_seeds: &[&[u8]] = &[
@@ -3880,10 +3881,10 @@ mod tests {
             &[16],
             &[17],
         ];
-        assert!(matches!(
+        assert_matches!(
             create_program_address(&mut invoke_context, max_seeds, &address),
-            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
-        ));
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+        );
         assert_eq!(
             create_program_address(&mut invoke_context, &[b"", &[1]], &address).unwrap(),
             "BwqrghZA2htAcqq8dzP1WDAhTXYTYWj7CHxF5j7TDBAe"
@@ -3917,10 +3918,10 @@ mod tests {
             create_program_address(&mut invoke_context, &[b"Talking"], &address).unwrap(),
         );
         invoke_context.mock_set_remaining(0);
-        assert!(matches!(
+        assert_matches!(
             create_program_address(&mut invoke_context, &[b"", &[1]], &address),
-            Result::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            Result::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
     }
 
     #[test]
@@ -3956,17 +3957,17 @@ mod tests {
         invoke_context.mock_set_remaining(cost * (max_tries - bump_seed as u64));
         try_find_program_address(&mut invoke_context, seeds, &address).unwrap();
         invoke_context.mock_set_remaining(cost * (max_tries - bump_seed as u64 - 1));
-        assert!(matches!(
+        assert_matches!(
             try_find_program_address(&mut invoke_context, seeds, &address),
-            Result::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
-        ));
+            Result::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded
+        );
 
         let exceeded_seed = &[127; MAX_SEED_LEN + 1];
         invoke_context.mock_set_remaining(cost * (max_tries - 1));
-        assert!(matches!(
+        assert_matches!(
             try_find_program_address(&mut invoke_context, &[exceeded_seed], &address),
-            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
-        ));
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+        );
         let exceeded_seeds: &[&[u8]] = &[
             &[1],
             &[2],
@@ -3987,12 +3988,12 @@ mod tests {
             &[17],
         ];
         invoke_context.mock_set_remaining(cost * (max_tries - 1));
-        assert!(matches!(
+        assert_matches!(
             try_find_program_address(&mut invoke_context, exceeded_seeds, &address),
-            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
-        ));
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+        );
 
-        assert!(matches!(
+        assert_matches!(
             call_program_address_common(
                 &mut invoke_context,
                 seeds,
@@ -4000,8 +4001,8 @@ mod tests {
                 true,
                 SyscallTryFindProgramAddress::call,
             ),
-            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping,
-        ));
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping
+        );
     }
 
     #[test]
@@ -4101,10 +4102,10 @@ mod tests {
                 &mut result,
             );
 
-            assert!(matches!(
+            assert_matches!(
                 result,
-                ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::InvalidLength,
-            ));
+                ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::InvalidLength
+            );
         }
     }
 

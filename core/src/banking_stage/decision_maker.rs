@@ -163,7 +163,7 @@ mod tests {
         {
             poh_recorder.write().unwrap().set_bank(bank.clone(), false);
             let decision = decision_maker.make_consume_or_forward_decision();
-            assert!(matches!(decision, BufferedPacketsDecision::Consume(_)));
+            assert_matches!(decision, BufferedPacketsDecision::Consume(_));
         }
 
         // Will be leader shortly - Hold
@@ -204,7 +204,7 @@ mod tests {
         {
             poh_recorder.write().unwrap().reset(bank, None);
             let decision = decision_maker.make_consume_or_forward_decision();
-            assert!(matches!(decision, BufferedPacketsDecision::Forward));
+            assert_matches!(decision, BufferedPacketsDecision::Forward);
         }
 
         exit.store(true, Ordering::Relaxed);

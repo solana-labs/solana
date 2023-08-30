@@ -5066,6 +5066,7 @@ name = "solana-account-decoder"
 version = "1.17.0"
 dependencies = [
  "Inflector",
+ "assert_matches",
  "base64 0.21.3",
  "bincode",
  "bs58",
@@ -5377,6 +5378,7 @@ dependencies = [
 name = "solana-bpf-loader-program"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "bincode",
  "byteorder",
  "libsecp256k1",
@@ -5476,6 +5478,7 @@ dependencies = [
 name = "solana-clap-utils"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "chrono",
  "clap 2.33.3",
  "rpassword",
@@ -5492,6 +5495,7 @@ dependencies = [
 name = "solana-clap-v3-utils"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "chrono",
  "clap 3.2.23",
  "rpassword",
@@ -5509,6 +5513,7 @@ dependencies = [
 name = "solana-cli"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "bincode",
  "bs58",
  "clap 2.33.3",
@@ -6520,6 +6525,7 @@ dependencies = [
 name = "solana-program-runtime"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "base64 0.21.3",
  "bincode",
  "eager",
@@ -6635,6 +6641,7 @@ dependencies = [
 name = "solana-remote-wallet"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "console",
  "dialoguer",
  "hidapi",
@@ -7061,6 +7068,7 @@ dependencies = [
 name = "solana-streamer"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "async-channel",
  "bytes",
  "crossbeam-channel",
@@ -7150,6 +7158,7 @@ dependencies = [
 name = "solana-tokens"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "bincode",
  "chrono",
  "clap 2.33.3",
@@ -7391,6 +7400,7 @@ dependencies = [
 name = "solana-vote-program"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "bincode",
  "log",
  "num-derive",

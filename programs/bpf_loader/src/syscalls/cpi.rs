@@ -1638,6 +1638,7 @@ mod tests {
     use {
         super::*,
         crate::mock_create_vm,
+        assert_matches::assert_matches,
         solana_program_runtime::{
             invoke_context::SerializedAccountMetadata, with_mock_invoke_context,
         },
@@ -1991,7 +1992,7 @@ mod tests {
         callee_account
             .set_data_length(original_data_len + MAX_PERMITTED_DATA_INCREASE + 1)
             .unwrap();
-        assert!(matches!(
+        assert_matches!(
             update_caller_account(
                 &invoke_context,
                 &memory_mapping,
@@ -2000,8 +2001,8 @@ mod tests {
                 &mut callee_account,
                 false,
             ),
-            Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::InvalidRealloc,
-        ));
+            Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::InvalidRealloc
+        );
 
         // close the account
         callee_account.set_data_length(0).unwrap();
@@ -2174,7 +2175,7 @@ mod tests {
         callee_account
             .set_data_length(original_data_len + MAX_PERMITTED_DATA_INCREASE + 1)
             .unwrap();
-        assert!(matches!(
+        assert_matches!(
             update_caller_account(
                 &invoke_context,
                 &memory_mapping,
@@ -2184,7 +2185,7 @@ mod tests {
                 false,
             ),
             Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::InvalidRealloc
-        ));
+        );
 
         // close the account
         callee_account.set_data_length(0).unwrap();
@@ -2443,7 +2444,7 @@ mod tests {
         let callee_account = borrow_instruction_account!(invoke_context, 0);
 
         caller_account.serialized_data[0] = b'b';
-        assert!(matches!(
+        assert_matches!(
             update_callee_account(
                 &invoke_context,
                 &memory_mapping,
@@ -2453,7 +2454,7 @@ mod tests {
                 false,
             ),
             Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ExternalAccountDataModified
-        ));
+        );
 
         // without direct mapping
         let mut data = b"foobarbaz".to_vec();
@@ -2461,7 +2462,7 @@ mod tests {
         caller_account.serialized_data = &mut data;
 
         let callee_account = borrow_instruction_account!(invoke_context, 0);
-        assert!(matches!(
+        assert_matches!(
             update_callee_account(
                 &invoke_context,
                 &memory_mapping,
@@ -2471,7 +2472,7 @@ mod tests {
                 false,
             ),
             Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::AccountDataSizeChanged
-        ));
+        );
 
         // with direct mapping
         let mut data = b"baz".to_vec();
@@ -2479,7 +2480,7 @@ mod tests {
         caller_account.serialized_data = &mut data;
 
         let callee_account = borrow_instruction_account!(invoke_context, 0);
-        assert!(matches!(
+        assert_matches!(
             update_callee_account(
                 &invoke_context,
                 &memory_mapping,
@@ -2489,7 +2490,7 @@ mod tests {
                 true,
             ),
             Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::AccountDataSizeChanged
-        ));
+        );
     }
 
     #[test]

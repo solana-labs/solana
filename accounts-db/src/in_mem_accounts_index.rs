@@ -1512,6 +1512,7 @@ mod tests {
     use {
         super::*,
         crate::accounts_index::{AccountsIndexConfig, IndexLimitMb, BINS_FOR_TESTING},
+        assert_matches::assert_matches,
         itertools::Itertools,
     };
 
@@ -2072,12 +2073,12 @@ mod tests {
             // item is NOT in index at all, still return true from remove_if_slot_list_empty_entry
             // make sure not initially in index
             let entry = map.entry(unknown_key);
-            assert!(matches!(entry, Entry::Vacant(_)));
+            assert_matches!(entry, Entry::Vacant(_));
             let entry = map.entry(unknown_key);
             assert!(test.remove_if_slot_list_empty_entry(entry));
             // make sure still not in index
             let entry = map.entry(unknown_key);
-            assert!(matches!(entry, Entry::Vacant(_)));
+            assert_matches!(entry, Entry::Vacant(_));
         }
 
         {
@@ -2085,11 +2086,11 @@ mod tests {
             let val = Arc::new(AccountMapEntryInner::<u64>::default());
             map.insert(key, val);
             let entry = map.entry(key);
-            assert!(matches!(entry, Entry::Occupied(_)));
+            assert_matches!(entry, Entry::Occupied(_));
             // should have removed it since it had an empty slot list
             assert!(test.remove_if_slot_list_empty_entry(entry));
             let entry = map.entry(key);
-            assert!(matches!(entry, Entry::Vacant(_)));
+            assert_matches!(entry, Entry::Vacant(_));
             // return true - item is not in index at all now
             assert!(test.remove_if_slot_list_empty_entry(entry));
         }
@@ -2103,7 +2104,7 @@ mod tests {
             let entry = map.entry(key);
             assert!(!test.remove_if_slot_list_empty_entry(entry));
             let entry = map.entry(key);
-            assert!(matches!(entry, Entry::Occupied(_)));
+            assert_matches!(entry, Entry::Occupied(_));
         }
     }
 

@@ -55,6 +55,7 @@ thiserror = { workspace = true }
 tiny-bip39 = { workspace = true }
 
 [dev-dependencies]
+assert_matches = { workspace = true }
 solana-streamer = { workspace = true }
 solana-test-validator = { workspace = true }
 tempfile = { workspace = true }

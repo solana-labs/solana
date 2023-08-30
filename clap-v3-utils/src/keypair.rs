@@ -371,6 +371,7 @@ impl DefaultSigner {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct SignerSource {
     pub kind: SignerSourceKind,
     pub derivation_path: Option<DerivationPath>,
@@ -1266,6 +1267,7 @@ mod tests {
     use {
         super::*,
         crate::offline::OfflineArgs,
+        assert_matches::assert_matches,
         clap::{Arg, Command},
         solana_remote_wallet::{locator::Manufacturer, remote_wallet::initialize_wallet_manager},
         solana_sdk::{signer::keypair::write_keypair_file, system_instruction},
@@ -1314,31 +1316,31 @@ mod tests {
 
     #[test]
     fn test_parse_signer_source() {
-        assert!(matches!(
+        assert_matches!(
             parse_signer_source(STDOUT_OUTFILE_TOKEN).unwrap(),
             SignerSource {
                 kind: SignerSourceKind::Stdin,
                 derivation_path: None,
                 legacy: false,
             }
-        ));
+        );
         let stdin = "stdin:".to_string();
-        assert!(matches!(
+        assert_matches!(
             parse_signer_source(stdin).unwrap(),
             SignerSource {
                 kind: SignerSourceKind::Stdin,
                 derivation_path: None,
                 legacy: false,
             }
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             parse_signer_source(ASK_KEYWORD).unwrap(),
             SignerSource {
                 kind: SignerSourceKind::Prompt,
                 derivation_path: None,
                 legacy: true,
             }
-        ));
+        );
         let pubkey = Pubkey::new_unique();
         assert!(
             matches!(parse_signer_source(pubkey.to_string()).unwrap(), SignerSource {
@@ -1381,39 +1383,39 @@ mod tests {
             manufacturer: Manufacturer::Ledger,
             pubkey: None,
         };
-        assert!(matches!(parse_signer_source(usb).unwrap(), SignerSource {
+        assert_matches!(parse_signer_source(usb).unwrap(), SignerSource {
                 kind: SignerSourceKind::Usb(u),
                 derivation_path: None,
                 legacy: false,
-            } if u == expected_locator));
+            } if u == expected_locator);
         let usb = "usb://ledger?key=0/0".to_string();
         let expected_locator = RemoteWalletLocator {
             manufacturer: Manufacturer::Ledger,
             pubkey: None,
         };
         let expected_derivation_path = Some(DerivationPath::new_bip44(Some(0), Some(0)));
-        assert!(matches!(parse_signer_source(usb).unwrap(), SignerSource {
+        assert_matches!(parse_signer_source(usb).unwrap(), SignerSource {
                 kind: SignerSourceKind::Usb(u),
                 derivation_path: d,
                 legacy: false,
-            } if u == expected_locator && d == expected_derivation_path));
+            } if u == expected_locator && d == expected_derivation_path);
         // Catchall into SignerSource::Filepath fails
         let junk = "sometextthatisnotapubkeyorfile".to_string();
         assert!(Pubkey::from_str(&junk).is_err());
-        assert!(matches!(
+        assert_matches!(
             parse_signer_source(&junk),
             Err(SignerSourceError::IoError(_))
-        ));
+        );
 
         let prompt = "prompt:".to_string();
-        assert!(matches!(
+        assert_matches!(
             parse_signer_source(prompt).unwrap(),
             SignerSource {
                 kind: SignerSourceKind::Prompt,
                 derivation_path: None,
                 legacy: false,
             }
-        ));
+        );
         assert!(
             matches!(parse_signer_source(format!("file:{absolute_path_str}")).unwrap(), SignerSource {
                 kind: SignerSourceKind::Filepath(p),

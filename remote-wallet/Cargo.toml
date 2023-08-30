@@ -23,6 +23,9 @@ solana-sdk = { workspace = true }
 thiserror = { workspace = true }
 uriparse = { workspace = true }
 
+[dev-dependencies]
+assert_matches = { workspace = true }
+
 [features]
 default = ["linux-static-hidraw", "hidapi"]
 linux-static-libusb = ["hidapi/linux-static-libusb"]

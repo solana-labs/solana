@@ -17,6 +17,7 @@ use {
         },
         status_cache::MAX_CACHE_ENTRIES,
     },
+    assert_matches::assert_matches,
     crossbeam_channel::{bounded, unbounded},
     itertools::Itertools,
     rand::Rng,
@@ -6043,16 +6044,16 @@ fn test_pre_post_transaction_balances() {
 
     // Failed transactions still produce balance sets
     // This is a TransactionError - not possible to charge fees
-    assert!(matches!(
+    assert_matches!(
         transaction_results.execution_results[1],
-        TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound),
-    ));
+        TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound)
+    );
     assert_eq!(transaction_balances_set.pre_balances[1], vec![0, 0, 1]);
     assert_eq!(transaction_balances_set.post_balances[1], vec![0, 0, 1]);
 
     // Failed transactions still produce balance sets
     // This is an InstructionError - fees charged
-    assert!(matches!(
+    assert_matches!(
         transaction_results.execution_results[2],
         TransactionExecutionResult::Executed {
             details: TransactionExecutionDetails {
@@ -6063,8 +6064,8 @@ fn test_pre_post_transaction_balances() {
                 ..
             },
             ..
-        },
-    ));
+        }
+    );
     assert_eq!(
         transaction_balances_set.pre_balances[2],
         vec![909_000, 0, 1]
@@ -7230,7 +7231,7 @@ fn test_bank_load_program() {
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
     let program = bank.load_program(&key1);
-    assert!(matches!(program.program, LoadedProgramType::LegacyV1(_)));
+    assert_matches!(program.program, LoadedProgramType::LegacyV1(_));
     assert_eq!(
         program.account_size,
         program_account.data().len() + programdata_account.data().len()
@@ -12691,10 +12692,10 @@ fn test_rewards_computation_and_partitioned_distribution_one_block() {
         if slot == num_slots_in_epoch {
             // This is the first block of epoch 1. Reward computation should happen in this block.
             // assert reward compute status activated at epoch boundary
-            assert!(matches!(
+            assert_matches!(
                 curr_bank.get_reward_interval(),
                 RewardInterval::InsideInterval
-            ));
+            );
 
             // cap should increase because of new epoch rewards
             assert!(post_cap > pre_cap);
@@ -12704,10 +12705,10 @@ fn test_rewards_computation_and_partitioned_distribution_one_block() {
             // rewards are transferred from epoch_rewards sysvar to stake accounts. The cap should stay the same.
             // 2. when curr_slot == num_slots_in_epoch+2, the 3rd block of epoch 1. reward distribution should have already completed. Therefore,
             // reward_status should stay inactive and cap should stay the same.
-            assert!(matches!(
+            assert_matches!(
                 curr_bank.get_reward_interval(),
                 RewardInterval::OutsideInterval
-            ));
+            );
 
             assert_eq!(post_cap, pre_cap);
         } else {
@@ -12804,20 +12805,20 @@ fn test_rewards_computation_and_partitioned_distribution_two_blocks() {
         if slot == num_slots_in_epoch {
             // This is the first block of epoch 1. Reward computation should happen in this block.
             // assert reward compute status activated at epoch boundary
-            assert!(matches!(
+            assert_matches!(
                 curr_bank.get_reward_interval(),
                 RewardInterval::InsideInterval
-            ));
+            );
 
             // cap should increase because of new epoch rewards
             assert!(post_cap > pre_cap);
         } else if slot == num_slots_in_epoch + 1 {
             // When curr_slot == num_slots_in_epoch + 1, the 2nd block of epoch 1, reward distribution should happen in this block.
             // however, since rewards are transferred from epoch_rewards sysvar to stake accounts. The cap should stay the same.
-            assert!(matches!(
+            assert_matches!(
                 curr_bank.get_reward_interval(),
                 RewardInterval::InsideInterval
-            ));
+            );
 
             assert_eq!(post_cap, pre_cap);
         } else if slot == num_slots_in_epoch + 2 || slot == num_slots_in_epoch + 3 {
@@ -12826,10 +12827,10 @@ fn test_rewards_computation_and_partitioned_distribution_two_blocks() {
             // rewards are transferred from epoch_rewards sysvar to stake accounts. The cap should stay the same.
             // 2. when curr_slot == num_slots_in_epoch+2, the 3rd block of epoch 1. reward distribution should have already completed. Therefore,
             // reward_status should stay inactive and cap should stay the same.
-            assert!(matches!(
+            assert_matches!(
                 curr_bank.get_reward_interval(),
                 RewardInterval::OutsideInterval
-            ));
+            );
 
             assert_eq!(post_cap, pre_cap);
         } else {
