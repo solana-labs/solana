@@ -52,7 +52,6 @@ use {
     solana_runtime::{
         bank::{bank_hash_details, Bank, RewardCalculationEvent, TotalAccountsStats},
         bank_forks::BankForks,
-        prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils,
@@ -61,9 +60,7 @@ use {
             ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
             SUPPORTED_ARCHIVE_COMPRESSION,
         },
-        vote_sender_types::ReplayVoteSender,
     },
-    solana_scheduler_pool::DefaultSchedulerPool,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,

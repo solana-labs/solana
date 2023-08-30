@@ -28,13 +28,16 @@ use {
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
         bank_forks::BankForks,
+        prioritization_fee_cache::PrioritizationFeeCache,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
             self, clean_orphaned_account_snapshot_dirs, create_all_accounts_run_and_snapshot_dirs,
             move_and_async_delete_path_contents,
         },
+        vote_sender_types::ReplayVoteSender,
     },
+    solana_scheduler_pool::DefaultSchedulerPool,
     solana_sdk::{
         genesis_config::GenesisConfig, signature::Signer, signer::keypair::Keypair,
         timing::timestamp,
@@ -256,6 +259,25 @@ pub fn load_and_process_ledger(
         "Using: block-verification-method: {}",
         block_verification_method,
     );
+    match block_verification_method {
+        BlockVerificationMethod::BlockstoreProcessor => {
+            info!("not installing scheduler pool...");
+        }
+        BlockVerificationMethod::UnifiedScheduler => {
+            let no_transaction_status_sender = None;
+            let no_replay_vote_sender = None::<ReplayVoteSender>;
+            let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+            bank_forks
+                .write()
+                .unwrap()
+                .install_scheduler_pool(DefaultSchedulerPool::new_dyn(
+                    process_options.runtime_config.log_messages_bytes_limit,
+                    no_transaction_status_sender,
+                    no_replay_vote_sender,
+                    _ignored_prioritization_fee_cache,
+                ));
+        }
+    }
 
     let node_id = Arc::new(Keypair::new());
     let cluster_info = Arc::new(ClusterInfo::new(

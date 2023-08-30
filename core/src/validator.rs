@@ -1178,7 +1178,6 @@ impl Validator {
         )
         .unwrap();
 
-        let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
