@@ -322,7 +322,7 @@ impl SlotMeta {
 }
 
 impl ErasureMeta {
-    pub fn from_coding_shred(shred: &Shred) -> Option<Self> {
+    pub(crate) fn from_coding_shred(shred: &Shred) -> Option<Self> {
         match shred.shred_type() {
             ShredType::Data => None,
             ShredType::Code => {
@@ -344,12 +344,21 @@ impl ErasureMeta {
 
     // Returns true if the erasure fields on the shred
     // are consistent with the erasure-meta.
-    pub fn check_coding_shred(&self, shred: &Shred) -> bool {
+    pub(crate) fn check_coding_shred(&self, shred: &Shred) -> bool {
         let Some(mut other) = Self::from_coding_shred(shred) else {
             return false;
         };
         other.__unused_size = self.__unused_size;
         self == &other
+    }
+
+    /// Returns true if both shreds are coding shreds and have a
+    /// consistent erasure config
+    pub fn check_erasure_consistency(shred1: &Shred, shred2: &Shred) -> bool {
+        let Some(coding_shred) = Self::from_coding_shred(shred1) else {
+            return false;
+        };
+        coding_shred.check_coding_shred(shred2)
     }
 
     pub(crate) fn config(&self) -> ErasureConfig {

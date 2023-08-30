@@ -29,10 +29,8 @@ pub struct DuplicateShred {
     pub(crate) from: Pubkey,
     pub(crate) wallclock: u64,
     pub(crate) slot: Slot,
-
     #[allow(dead_code)]
-    shred_index: u32,
-
+    _unused: u32,
     shred_type: ShredType,
     // Serialized DuplicateSlotProof split into chunks.
     num_chunks: u8,
@@ -113,35 +111,6 @@ where
         return Err(Error::ShredTypeMismatch);
     }
 
-    if shred1.index() == shred2.index() && shred1.payload() == shred2.payload() {
-        return Err(Error::InvalidDuplicateShreds);
-    }
-
-    if shred1.index() != shred2.index() && shred1.shred_type() == ShredType::Data {
-        match (
-            shred1.index(),
-            shred1.last_in_slot(),
-            shred2.index(),
-            shred2.last_in_slot(),
-        ) {
-            (ix1, true, ix2, false) if ix1 > ix2 => return Err(Error::InvalidLastIndexConflict),
-            (ix1, false, ix2, true) if ix1 < ix2 => return Err(Error::InvalidLastIndexConflict),
-            (_, false, _, false) => return Err(Error::InvalidLastIndexConflict),
-            _ => (),
-        }
-    }
-
-    if shred1.index() != shred2.index() && shred1.shred_type() == ShredType::Code {
-        if shred1.fec_set_index() != shred2.fec_set_index() {
-            return Err(Error::InvalidErasureMetaConflict);
-        }
-        let erasure_meta =
-            ErasureMeta::from_coding_shred(shred1).expect("Shred1 should be a coding shred");
-        if erasure_meta.check_coding_shred(shred2) {
-            return Err(Error::InvalidErasureMetaConflict);
-        }
-    }
-
     if let Some(leader_schedule) = leader_schedule {
         let slot_leader =
             leader_schedule(shred1.slot()).ok_or(Error::UnknownSlotLeader(shred1.slot()))?;
@@ -149,7 +118,35 @@ where
             return Err(Error::InvalidSignature);
         }
     }
-    Ok(())
+
+    if shred1.index() == shred2.index() {
+        if shred1.payload() != shred2.payload() {
+            return Ok(());
+        }
+        return Err(Error::InvalidDuplicateShreds);
+    }
+
+    if shred1.shred_type() == ShredType::Data {
+        if shred1.last_in_slot() && shred2.index() > shred1.index() {
+            return Ok(());
+        }
+        if shred2.last_in_slot() && shred1.index() > shred2.index() {
+            return Ok(());
+        }
+        return Err(Error::InvalidLastIndexConflict);
+    }
+
+    // This mirrors the current logic in blockstore to detect coding shreds with conflicting
+    // erasure sets. However this is not technically exhaustive, as any 2 shreds with
+    // different but overlapping erasure sets can be considered duplicate and need not be
+    // a part of the same fec set. Further work to enhance detection is planned in
+    // https://github.com/solana-labs/solana/issues/33037
+    if shred1.fec_set_index() == shred2.fec_set_index()
+        && !ErasureMeta::check_erasure_consistency(shred1, shred2)
+    {
+        return Ok(());
+    }
+    Err(Error::InvalidErasureMetaConflict)
 }
 
 pub(crate) fn from_shred<F>(
@@ -192,7 +189,7 @@ where
             num_chunks,
             chunk_index: i as u8,
             chunk,
-            shred_index: 0,
+            _unused: 0,
         });
     Ok(chunks)
 }
@@ -308,7 +305,7 @@ pub(crate) mod tests {
             num_chunks: u8::MAX,
             chunk_index: u8::MAX,
             chunk: Vec::default(),
-            shred_index: 0,
+            _unused: 0,
         };
         assert_eq!(
             bincode::serialize(&dup).unwrap().len(),
@@ -445,7 +442,7 @@ pub(crate) mod tests {
                 num_chunks,
                 chunk_index: i as u8,
                 chunk,
-                shred_index: 0,
+                _unused: 0,
             });
         Ok(chunks)
     }

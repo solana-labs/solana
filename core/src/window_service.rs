@@ -150,22 +150,18 @@ fn run_check_duplicate(
                 // Unlike the other cases we have to wait until here to decide to handle the duplicate and store
                 // in blockstore. This is because the duplicate could have been part of the same insert batch,
                 // so we wait until the batch has been written.
-                if !blockstore.has_duplicate_shreds_in_slot(shred_slot) {
-                    if let Some(existing_shred_payload) = blockstore.is_shred_duplicate(&shred) {
-                        blockstore.store_duplicate_slot(
-                            shred_slot,
-                            existing_shred_payload.clone(),
-                            shred.clone().into_payload(),
-                        )?;
-                        (shred, existing_shred_payload)
-                    } else {
-                        // Shred is not duplicate
-                        return Ok(());
-                    }
-                } else {
-                    // Shred has already been handled
-                    return Ok(());
+                if blockstore.has_duplicate_shreds_in_slot(shred_slot) {
+                    return Ok(()); // A duplicate is already recorded
                 }
+                let Some(existing_shred_payload) = blockstore.is_shred_duplicate(&shred) else {
+                    return Ok(()); // Not a duplicate
+                };
+                blockstore.store_duplicate_slot(
+                    shred_slot,
+                    existing_shred_payload.clone(),
+                    shred.clone().into_payload(),
+                )?;
+                (shred, existing_shred_payload)
             }
         };
 

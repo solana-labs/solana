@@ -6619,7 +6619,7 @@ pub mod tests {
         ));
         assert!(blockstore.has_duplicate_shreds_in_slot(0));
         assert_eq!(duplicate_shreds.len(), 1);
-        matches!(
+        assert_matches!(
             duplicate_shreds[0],
             PossibleDuplicateShred::LastIndexConflict(_, _)
         );
@@ -6650,7 +6650,7 @@ pub mod tests {
         ));
 
         assert_eq!(duplicate_shreds.len(), 1);
-        matches!(
+        assert_matches!(
             duplicate_shreds[0],
             PossibleDuplicateShred::LastIndexConflict(_, _)
         );
