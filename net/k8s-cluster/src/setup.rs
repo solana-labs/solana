@@ -1,5 +1,6 @@
 use {
     crate::{boxed_error, initialize_globals, SOLANA_ROOT},
+    base64::{Engine as _, engine::{self, general_purpose}},
     bip39::{Language, Mnemonic, MnemonicType, Seed},
     clap::ArgMatches,
     log::*,
@@ -12,7 +13,7 @@ use {
         account::AccountSharedData,
         clock,
         epoch_schedule::EpochSchedule,
-        genesis_config::{ClusterType, GenesisConfig},
+        genesis_config::{ClusterType, GenesisConfig, DEFAULT_GENESIS_FILE},
         native_token::sol_to_lamports,
         poh_config::PohConfig,
         pubkey::Pubkey,
@@ -26,7 +27,16 @@ use {
     },
     solana_stake_program::stake_state,
     solana_vote_program::vote_state::{self, VoteState},
-    std::{error::Error, path::PathBuf, process, time::Duration},
+    std::{
+        error::Error, 
+        fs::File,
+        io::{
+            Read, Write,
+        },
+        path::PathBuf, 
+        process, 
+        time::Duration,
+    },
 };
 
 pub const DEFAULT_WORD_COUNT: usize = 12;
@@ -68,6 +78,8 @@ pub struct Genesis<'a> {
     pub config_dir: PathBuf,
     pub validator_keypairs: Vec<ValidatorAccountKeypairs>,
     pub faucet_keypair: Option<Keypair>,
+    pub genesis_config: Option<GenesisConfig>,
+    
 }
 
 impl<'a> Genesis<'a> {
@@ -78,6 +90,7 @@ impl<'a> Genesis<'a> {
             config_dir: SOLANA_ROOT.join("config-k8s"),
             validator_keypairs: Vec::default(),
             faucet_keypair: None,
+            genesis_config: None
         }
     }
 
@@ -140,7 +153,7 @@ impl<'a> Genesis<'a> {
         Ok(())
     }
 
-    pub fn generate(&self) -> Result<(), Box<dyn Error>> {
+    pub fn generate(&mut self) -> Result<(), Box<dyn Error>> {
         let ledger_path = self.config_dir.join("bootstrap-validator");
         let rent = Rent::default();
 
@@ -253,6 +266,8 @@ impl<'a> Genesis<'a> {
 
         add_genesis_accounts(&mut genesis_config, issued_lamports - faucet_lamports);
 
+        // should probably create new implementation that writes this directly to a configmap yaml
+        // or at least a base64 file
         create_new_ledger(
             &ledger_path,
             &genesis_config,
@@ -260,18 +275,62 @@ impl<'a> Genesis<'a> {
             LedgerColumnOptions::default(),
         )?;
 
-        info!("hash of genesis: {}", genesis_config.hash());
+        self.genesis_config = Some(genesis_config);
 
         // genesis
         // read in the three bootstrap keys
         Ok(())
     }
 
-    pub fn load(&self) {
-        let path = self.config_dir.join("bootstrap-validator");
-        let loaded_config = GenesisConfig::load(&path).expect("load");
-        info!("hash of loaded genesis: {}", loaded_config.hash());
+    // convert binary file to base64
+    pub fn setup_config_map(
+        &self,
+    ) -> Result<(), Box<dyn Error>> {
+        self.verify_genesis_from_file()?;
+        let path = self.config_dir.join("bootstrap-validator").join(DEFAULT_GENESIS_FILE);
+        let mut input_content = Vec::new();
+        File::open(path)?.read_to_end(&mut input_content)?;
+        let base64_content = general_purpose::STANDARD.encode(input_content);
 
+        let outpath = self.config_dir.join("bootstrap-validator").join("genesis-config-map.yaml");
+
+
+        Ok(())
+
+    }
+
+    pub fn load_genesis_to_base64_from_file(
+        &self,
+    ) -> Result<String, Box<dyn Error>> {
+        let path = self.config_dir.join("bootstrap-validator").join(DEFAULT_GENESIS_FILE);
+        let mut input_content = Vec::new();
+        File::open(path)?.read_to_end(&mut input_content)?;
+        Ok(general_purpose::STANDARD.encode(input_content))
+    }
+
+    pub fn load_genesis_from_config_map(
+        &self,
+    ) {
+        
+    }
+
+
+    // should be run inside pod
+    pub fn verify_genesis_from_file(&self) -> Result<(), Box<dyn Error>> {
+        let path = self.config_dir.join("bootstrap-validator");
+        // let loaded_config = GenesisConfig::load(&path);
+        // let loaded_config = match GenesisConfig::load(&path) {
+        //     Ok(config) => config,
+        //     Err(err) => return Err(boxed_error!(format!("Failed to load genesis config from file! err: {}", err))),
+        // };
+
+        let loaded_config = GenesisConfig::load(&path)?;
+        info!("hash of loaded genesis: {}", loaded_config.hash());
+        match &self.genesis_config {
+            Some(config) => assert_eq!(config.hash(), loaded_config.hash()),
+            None => return Err(boxed_error!("No genesis config set in Genesis struct")),
+        };
+        Ok(())
     }
 }
 

@@ -16,12 +16,17 @@ use {
     },
     log::*,
     serde_json,
+    serde_yaml,
     solana_k8s_cluster::{
         docker::{DockerConfig, DockerImageConfig},
         release::{BuildConfig, Deploy},
         setup::{Genesis, SetupConfig},
+        kubernetes::Kubernetes,
+        initialize_globals,
+        get_solana_root,
     },
-    std::{collections::BTreeMap, process, thread, time::Duration},
+    solana_sdk::genesis_config::GenesisConfig,
+    std::{collections::BTreeMap, process, thread, time::Duration, fs::File, io::Write},
 };
 
 const BOOTSTRAP_VALIDATOR_REPLICAS: i32 = 1;
@@ -135,7 +140,7 @@ async fn main() {
     }
     solana_logger::setup();
     let matches = parse_matches();
-
+    initialize_globals();
     let setup_config = SetupConfig {
         namespace: matches.value_of("cluster_namespace").unwrap_or_default(),
         num_validators: value_t_or_exit!(matches, "number_of_validators", i32),
@@ -150,6 +155,20 @@ async fn main() {
         profile_build: matches.is_present("profile_build"),
         docker_build: matches.is_present("docker_build"),
     };
+
+    let kub_controller = Kubernetes::new().await;
+    match kub_controller.namespace_exists(setup_config.namespace).await {
+        Ok(res) => {
+            if !res {
+                error!("Namespace: '{}' doesn't exist. Exiting...", setup_config.namespace);
+                return;
+            }
+        },
+        Err(err) => {
+            error!("{}", err);
+            return;
+        }
+    }
 
     let mut genesis = Genesis::new(setup_config.clone());
     // genesis.generate();
@@ -182,7 +201,45 @@ async fn main() {
     }
 
     // load genesis (test -> this should run in pod)
-    genesis.load();
+    match genesis.verify_genesis_from_file() {
+        Ok(_) => (),
+        Err(err) => {
+            error!("Failed verify genesis from file! err: {}", err);
+            return;
+        } 
+    }
+
+    let base64_genesis_string = match genesis.load_genesis_to_base64_from_file() {
+        Ok(genesis_string) => genesis_string,
+        Err(err) => {
+            error!("Failed to load genesis from file! {}", err);
+            return;
+        }
+    };
+
+    let loaded_config = GenesisConfig::load_from_base64_string(base64_genesis_string.as_str()).expect("load");
+    info!("loaded_config_hash: {}", loaded_config.hash());
+
+
+    let config_map = match kub_controller.create_config_map(setup_config.namespace, base64_genesis_string).await {
+        Ok(config_map) => {
+            info!("successfully deployed config map");
+            config_map
+        },
+        Err(err) => {
+            error!("Failed to deploy config map: {}", err);
+            return;
+        }
+    };
+
+
+
+
+
+
+
+
+
 
     process::exit(1);
 
