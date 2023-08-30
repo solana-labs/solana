@@ -62,7 +62,7 @@ impl ShredFetchStage {
         let mut slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
         let mut stats = ShredFetchStats::default();
 
-        for mut packet_batch in recvr {
+        loop {
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
                 last_updated = Instant::now();
                 {
@@ -76,6 +76,10 @@ impl ShredFetchStage {
                     .as_ref()
                     .map(|(_, cluster_info)| cluster_info.keypair().clone());
             }
+
+            match recvr.recv_timeout(Duration::from_millis(DEFAULT_MS_PER_SLOT)) {
+                Ok(mut packet_batch) => {
+
             stats.shred_count += packet_batch.len();
 
             if let Some((udp_socket, _)) = repair_context {
@@ -91,7 +95,7 @@ impl ShredFetchStage {
                 }
             }
 
-            // Limit shreds to 2 epochs away.
+             // Limit shreds to 2 epochs away.
             let max_slot = last_slot + 2 * slots_per_epoch;
             let should_drop_merkle_shreds =
                 |shred_slot| should_drop_merkle_shreds(shred_slot, &root_bank);
@@ -115,6 +119,11 @@ impl ShredFetchStage {
             stats.maybe_submit(name, STATS_SUBMIT_CADENCE);
             if sendr.send(packet_batch).is_err() {
                 break;
+            }
+
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => break,
             }
         }
     }
