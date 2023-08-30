@@ -1,3 +1,6 @@
+// REMOVE once https://github.com/rust-lang/rust-clippy/issues/11153 is fixed
+#![allow(clippy::items_after_test_module)]
+
 use {
     crate::snapshot_utils::create_tmp_accounts_dir_for_tests,
     log::*,
