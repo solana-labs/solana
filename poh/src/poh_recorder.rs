@@ -655,10 +655,7 @@ impl PohRecorder {
 
     #[cfg(any(test, feature = "test-in-workspace"))]
     pub fn set_bank_for_test(&mut self, bank: Arc<Bank>) {
-        self.set_bank(
-            BankWithScheduler::new_without_scheduler(bank),
-            false,
-        )
+        self.set_bank(BankWithScheduler::new_without_scheduler(bank), false)
     }
 
     #[cfg(test)]

@@ -1129,14 +1129,15 @@ impl ProgramTestContext {
             bank.freeze();
             bank
         } else {
-            bank_forks.insert(Bank::warp_from_parent(
-                bank,
-                &Pubkey::default(),
-                pre_warp_slot,
-                // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
-                solana_accounts_db::accounts_db::CalcAccountsHashDataSource::IndexForTests,
-            ))
-            .clone()
+            bank_forks
+                .insert(Bank::warp_from_parent(
+                    bank,
+                    &Pubkey::default(),
+                    pre_warp_slot,
+                    // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
+                    solana_accounts_db::accounts_db::CalcAccountsHashDataSource::IndexForTests,
+                ))
+                .clone()
         };
 
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();

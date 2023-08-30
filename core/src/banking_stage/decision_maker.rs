@@ -161,7 +161,10 @@ mod tests {
 
         // Currently Leader - Consume
         {
-            poh_recorder.write().unwrap().set_bank_for_test(bank.clone());
+            poh_recorder
+                .write()
+                .unwrap()
+                .set_bank_for_test(bank.clone());
             let decision = decision_maker.make_consume_or_forward_decision();
             assert!(matches!(decision, BufferedPacketsDecision::Consume(_)));
         }

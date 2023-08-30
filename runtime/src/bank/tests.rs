@@ -12942,7 +12942,10 @@ fn test_program_execution_restricted_for_stake_account_in_reward_period() {
         // Push a dummy blockhash, so that the latest_blockhash() for the transfer transaction in each
         // iteration are different. Otherwise, all those transactions will be the same, and will not be
         // executed by the bank except the first one.
-        bank.register_recent_blockhash(&Hash::new_unique(), &BankWithScheduler::no_scheduler_available());
+        bank.register_recent_blockhash(
+            &Hash::new_unique(),
+            &BankWithScheduler::no_scheduler_available(),
+        );
         previous_bank = Arc::new(bank);
     }
 }
