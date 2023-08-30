@@ -3115,9 +3115,9 @@ mod tests {
             accounts_hardlinks_dir,
         );
 
-        assert!(matches!(
+        assert_matches!(
             ret,
             Err(GetSnapshotAccountsHardLinkDirError::GetAccountPath(_))
-        ));
+        );
     }
 }

@@ -1242,14 +1242,14 @@ mod tests {
             // account locking
             let commit_transactions_result = commit_transactions_result.unwrap();
             assert_eq!(commit_transactions_result.len(), 2);
-            assert!(matches!(
-                commit_transactions_result.get(0).unwrap(),
-                CommitTransactionDetails::Committed { .. }
-            ));
-            assert!(matches!(
-                commit_transactions_result.get(1).unwrap(),
-                CommitTransactionDetails::NotCommitted
-            ));
+            assert_matches!(
+                commit_transactions_result.get(0),
+                Some(CommitTransactionDetails::Committed { .. })
+            );
+            assert_matches!(
+                commit_transactions_result.get(1),
+                Some(CommitTransactionDetails::NotCommitted)
+            );
             assert_eq!(retryable_transaction_indexes, vec![1]);
 
             let expected_block_cost = if !apply_cost_tracker_during_replay_enabled {

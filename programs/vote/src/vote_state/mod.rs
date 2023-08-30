@@ -1097,6 +1097,7 @@ mod tests {
     use {
         super::*,
         crate::vote_state,
+        assert_matches::assert_matches,
         solana_sdk::{
             account::AccountSharedData, account_utils::StateMut, clock::DEFAULT_SLOTS_PER_EPOCH,
             hash::hash, transaction_context::InstructionAccount,
@@ -1216,7 +1217,7 @@ mod tests {
 
         // Ensure that the vote state started out at 1_14_11
         let vote_state_version = borrowed_account.get_state::<VoteStateVersions>().unwrap();
-        assert!(matches!(vote_state_version, VoteStateVersions::V1_14_11(_)));
+        assert_matches!(vote_state_version, VoteStateVersions::V1_14_11(_));
 
         // Convert the vote state to current as would occur during vote instructions
         let converted_vote_state = vote_state_version.convert_to_current();
@@ -1233,7 +1234,7 @@ mod tests {
             Ok(())
         );
         let vote_state_version = borrowed_account.get_state::<VoteStateVersions>().unwrap();
-        assert!(matches!(vote_state_version, VoteStateVersions::V1_14_11(_)));
+        assert_matches!(vote_state_version, VoteStateVersions::V1_14_11(_));
 
         // Convert the vote state to current as would occur during vote instructions
         let converted_vote_state = vote_state_version.convert_to_current();
@@ -1251,7 +1252,7 @@ mod tests {
             Ok(())
         );
         let vote_state_version = borrowed_account.get_state::<VoteStateVersions>().unwrap();
-        assert!(matches!(vote_state_version, VoteStateVersions::V1_14_11(_)));
+        assert_matches!(vote_state_version, VoteStateVersions::V1_14_11(_));
 
         // Convert the vote state to current as would occur during vote instructions
         let converted_vote_state = vote_state_version.convert_to_current();
@@ -1272,7 +1273,7 @@ mod tests {
             Ok(())
         );
         let vote_state_version = borrowed_account.get_state::<VoteStateVersions>().unwrap();
-        assert!(matches!(vote_state_version, VoteStateVersions::Current(_)));
+        assert_matches!(vote_state_version, VoteStateVersions::Current(_));
 
         // Convert the vote state to current as would occur during vote instructions
         let converted_vote_state = vote_state_version.convert_to_current();

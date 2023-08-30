@@ -28,7 +28,7 @@ const MAX_LOADED_ENTRY_COUNT: usize = 256;
 pub const DELAY_VISIBILITY_SLOT_OFFSET: Slot = 1;
 
 /// Relationship between two fork IDs
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum BlockRelation {
     /// The slot is on the same fork and is an ancestor of the other slot
     Ancestor,
@@ -830,6 +830,7 @@ mod tests {
             BlockRelation, ForkGraph, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
             LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
         },
+        assert_matches::assert_matches,
         percentage::Percentage,
         solana_rbpf::vm::{BuiltinProgram, Config},
         solana_sdk::{clock::Slot, pubkey::Pubkey},
@@ -1136,16 +1137,13 @@ mod tests {
         let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
         let tombstone =
             LoadedProgram::new_tombstone(0, LoadedProgramType::FailedVerification(env.clone()));
-        assert!(matches!(
-            tombstone.program,
-            LoadedProgramType::FailedVerification(_)
-        ));
+        assert_matches!(tombstone.program, LoadedProgramType::FailedVerification(_));
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 0);
         assert_eq!(tombstone.effective_slot, 0);
 
         let tombstone = LoadedProgram::new_tombstone(100, LoadedProgramType::Closed);
-        assert!(matches!(tombstone.program, LoadedProgramType::Closed));
+        assert_matches!(tombstone.program, LoadedProgramType::Closed);
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 100);
         assert_eq!(tombstone.effective_slot, 100);
@@ -1498,10 +1496,7 @@ mod tests {
         // The effective slot of program4 deployed in slot 15 is 19. So it should not be usable in slot 16.
         // A delay visibility tombstone should be returned here.
         let tombstone = found.find(&program4).expect("Failed to find the tombstone");
-        assert!(matches!(
-            tombstone.program,
-            LoadedProgramType::DelayVisibility
-        ));
+        assert_matches!(tombstone.program, LoadedProgramType::DelayVisibility);
         assert_eq!(tombstone.deployment_slot, 15);
 
         assert!(missing.contains(&(program3, 1)));
@@ -1564,10 +1559,7 @@ mod tests {
         assert!(match_slot(&found, &program1, 0, 11));
         // program2 was updated at slot 11, but is not effective till slot 12. The result should contain a tombstone.
         let tombstone = found.find(&program2).expect("Failed to find the tombstone");
-        assert!(matches!(
-            tombstone.program,
-            LoadedProgramType::DelayVisibility
-        ));
+        assert_matches!(tombstone.program, LoadedProgramType::DelayVisibility);
         assert_eq!(tombstone.deployment_slot, 11);
         assert!(match_slot(&found, &program4, 5, 11));
 

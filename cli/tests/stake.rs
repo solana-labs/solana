@@ -1,6 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 #![allow(clippy::redundant_closure)]
 use {
+    assert_matches::assert_matches,
     solana_cli::{
         check_balance,
         cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
@@ -2380,5 +2381,5 @@ fn test_stake_minimum_delegation() {
     };
 
     let result = process_command(&config);
-    assert!(matches!(result, Ok(..)));
+    assert_matches!(result, Ok(..));
 }

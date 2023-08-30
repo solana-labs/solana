@@ -27,5 +27,8 @@ spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
 thiserror = { workspace = true }
 zstd = { workspace = true }
 
+[dev-dependencies]
+assert_matches = { workspace = true }
+
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

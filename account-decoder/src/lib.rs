@@ -214,6 +214,7 @@ fn slice_data(data: &[u8], data_slice_config: Option<UiDataSliceConfig>) -> &[u8
 mod test {
     use {
         super::*,
+        assert_matches::assert_matches,
         solana_sdk::account::{Account, AccountSharedData},
     };
 
@@ -257,10 +258,10 @@ mod test {
             None,
             None,
         );
-        assert!(matches!(
+        assert_matches!(
             encoded_account.data,
             UiAccountData::Binary(_, UiAccountEncoding::Base64Zstd)
-        ));
+        );
 
         let decoded_account = encoded_account.decode::<Account>().unwrap();
         assert_eq!(decoded_account.data(), &vec![0; 1024]);
