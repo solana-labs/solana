@@ -1246,11 +1246,7 @@ fn update_callee_account(
                         .get_data_mut()?
                         .get_mut(caller_account.original_data_len..post_len)
                         .ok_or(SyscallError::InvalidLength)?
-                        .copy_from_slice(
-                            serialized_data
-                                .get(0..realloc_bytes_used)
-                                .ok_or(SyscallError::InvalidLength)?,
-                        );
+                        .copy_from_slice(serialized_data);
                 }
             }
             Err(err) if prev_len != post_len => {
