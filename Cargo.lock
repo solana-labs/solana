@@ -6434,6 +6434,7 @@ name = "solana-k8s-cluster"
 version = "1.17.0"
 dependencies = [
  "anyhow",
+ "base64 0.21.3",
  "bincode",
  "bv",
  "bzip2",
@@ -6468,6 +6469,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
+ "serde_yaml 0.9.25",
  "serial_test",
  "solana-accounts-db",
  "solana-bloom",
