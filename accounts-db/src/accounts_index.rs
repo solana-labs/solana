@@ -1637,7 +1637,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                 let is_zero_lamport = account_info.is_zero_lamport();
                 let result = if is_zero_lamport { Some(pubkey) } else { None };
 
-                binned[binned_index].1.push((pubkey, account_info));
+                binned[binned_index].1.push((pubkey, (slot, account_info)));
                 result
             })
             .collect::<Vec<_>>();
@@ -1649,25 +1649,29 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             let r_account_maps = &self.account_maps[pubkey_bin];
             let mut insert_time = Measure::start("insert_into_primary_index");
             if use_disk {
-                r_account_maps.startup_insert_only(slot, items.into_iter());
+                r_account_maps.startup_insert_only(items.into_iter());
             } else {
                 // not using disk buckets, so just write to in-mem
                 // this is no longer the default case
-                items.into_iter().for_each(|(pubkey, account_info)| {
-                    let new_entry = PreAllocatedAccountMapEntry::new(
-                        slot,
-                        account_info,
-                        &self.storage.storage,
-                        use_disk,
-                    );
-                    match r_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_entry) {
-                        InsertNewEntryResults::DidNotExist => {}
-                        InsertNewEntryResults::ExistedNewEntryZeroLamports => {}
-                        InsertNewEntryResults::ExistedNewEntryNonZeroLamports => {
-                            dirty_pubkeys.push(pubkey);
+                items
+                    .into_iter()
+                    .for_each(|(pubkey, (slot, account_info))| {
+                        let new_entry = PreAllocatedAccountMapEntry::new(
+                            slot,
+                            account_info,
+                            &self.storage.storage,
+                            use_disk,
+                        );
+                        match r_account_maps
+                            .insert_new_entry_if_missing_with_lock(pubkey, new_entry)
+                        {
+                            InsertNewEntryResults::DidNotExist => {}
+                            InsertNewEntryResults::ExistedNewEntryZeroLamports => {}
+                            InsertNewEntryResults::ExistedNewEntryNonZeroLamports => {
+                                dirty_pubkeys.push(pubkey);
+                            }
                         }
-                    }
-                });
+                    });
             }
             insert_time.stop();
             insertion_time.fetch_add(insert_time.as_us(), Ordering::Relaxed);

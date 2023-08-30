@@ -142,7 +142,7 @@ struct StartupInfoDuplicates<T: IndexValue> {
 #[derive(Default, Debug)]
 struct StartupInfo<T: IndexValue> {
     /// entries to add next time we are flushing to disk
-    insert: Mutex<Vec<(Slot, Pubkey, T)>>,
+    insert: Mutex<Vec<(Pubkey, (Slot, T))>>,
     /// pubkeys with more than 1 entry
     duplicates: Mutex<StartupInfoDuplicates<T>>,
 }
@@ -672,14 +672,16 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
 
     /// Queue up these insertions for when the flush thread is dealing with this bin.
     /// This is very fast and requires no lookups or disk access.
-    pub fn startup_insert_only(&self, slot: Slot, items: impl Iterator<Item = (Pubkey, T)>) {
+    pub fn startup_insert_only(&self, items: impl Iterator<Item = (Pubkey, (Slot, T))>) {
         assert!(self.storage.get_startup());
         assert!(self.bucket.is_some());
 
         let mut insert = self.startup_info.insert.lock().unwrap();
+        // todo: memcpy the new slice into our vector already
+        // todo: avoid reallocs and just allocate another vec instead of likely resizing this one over and over
         items
             .into_iter()
-            .for_each(|(k, v)| insert.push((slot, k, v)));
+            .for_each(|(k, (slot, v))| insert.push((k, (slot, v))));
     }
 
     pub fn insert_new_entry_if_missing_with_lock(
@@ -1069,7 +1071,9 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         let disk = self.bucket.as_ref().unwrap();
         let mut count = insert.len() as u64;
         for (k, entry, duplicate_entry) in disk.batch_insert_non_duplicates(
-            insert.into_iter().map(|(slot, k, v)| (k, (slot, v.into()))),
+            insert
+                .into_iter()
+                .map(|(k, (slot, v))| (k, (slot, v.into()))),
             count as usize,
         ) {
             duplicates.duplicates.push((entry.0, k, entry.1.into()));
