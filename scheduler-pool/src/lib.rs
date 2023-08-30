@@ -174,7 +174,7 @@ impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTran
     ) {
         // scheduler must properly prevent conflicting tx executions, so locking isn't needed
         // here
-        let batch = bank.prepare_sanitized_batch_without_locking(transaction);
+        let batch = bank.prepare_unlocked_batch_from_single_tx(transaction);
         let batch_with_indexes = TransactionBatchWithIndexes {
             batch,
             transaction_indexes: vec![index],
@@ -475,7 +475,7 @@ mod tests {
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let child_bank = Bank::new_from_parent(&bank, &Pubkey::default(), 1);
+        let child_bank = Bank::new_from_parent(bank.clone(), &Pubkey::default(), 1);
 
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
@@ -712,7 +712,7 @@ mod tests {
             bank.fill_bank_with_ticks_for_tests();
             bank.freeze();
             bank = Arc::new(Bank::new_from_parent(
-                &bank,
+                bank.clone(),
                 &Pubkey::default(),
                 bank.slot().checked_add(1).unwrap(),
             ));

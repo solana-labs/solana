@@ -588,7 +588,7 @@ mod thread_utilization {
                     &mint_keypair,
                     &solana_sdk::pubkey::new_rand(),
                     // simulate somewhat realistic work load; txes finish at different timings
-                    thread_rng().gen_range(1, 10),
+                    thread_rng().gen_range(1..10),
                     genesis_config.hash(),
                 ));
             TransactionWithIndexForBench::new((tx0, index))

@@ -654,9 +654,9 @@ impl PohRecorder {
     }
 
     #[cfg(any(test, feature = "test-in-workspace"))]
-    pub fn set_bank_for_test(&mut self, bank: &Arc<Bank>) {
+    pub fn set_bank_for_test(&mut self, bank: Arc<Bank>) {
         self.set_bank(
-            BankWithScheduler::new_without_scheduler(bank.clone()),
+            BankWithScheduler::new_without_scheduler(bank),
             false,
         )
     }
@@ -1474,8 +1474,8 @@ mod tests {
             );
 
             bank0.fill_bank_with_ticks_for_tests();
-            let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-            poh_recorder.set_bank_for_test(&bank1);
+            let bank1 = Arc::new(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1));
+            poh_recorder.set_bank_for_test(bank1.clone());
 
             // Record up to exactly min tick height
             let min_tick_height = poh_recorder.working_bank.as_ref().unwrap().min_tick_height;
@@ -1569,7 +1569,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            poh_recorder.set_bank_with_transaction_index_for_test(bank.clone());
+            poh_recorder.set_bank_with_transaction_index_for_test(&bank);
             poh_recorder.tick();
             assert_eq!(
                 poh_recorder
