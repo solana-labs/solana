@@ -9,7 +9,10 @@ use {
     lru::LruCache,
     solana_measure::measure,
     solana_sdk::{
-        clock::{BankId, Slot}, pubkey::Pubkey, saturating_add_assign, transaction::SanitizedTransaction,
+        clock::{BankId, Slot},
+        pubkey::Pubkey,
+        saturating_add_assign,
+        transaction::SanitizedTransaction,
     },
     std::{
         collections::HashMap,
@@ -283,11 +286,13 @@ impl PrioritizationFeeCache {
         let (slot_prioritization_fee, cache_lock_time) =
             measure!(Self::get_prioritization_fee(cache, slot), "cache_lock_time");
 
-        let (_, entry_update_time) = measure!({
-            let mut block_prioritization_fee = slot_prioritization_fee
-                .entry(*bank_id)
-                .or_insert(PrioritizationFee::default());
-            block_prioritization_fee.update(transaction_fee, &writable_accounts) },
+        let (_, entry_update_time) = measure!(
+            {
+                let mut block_prioritization_fee = slot_prioritization_fee
+                    .entry(*bank_id)
+                    .or_insert(PrioritizationFee::default());
+                block_prioritization_fee.update(transaction_fee, &writable_accounts)
+            },
             "entry_update_time"
         );
         metrics.accumulate_total_cache_lock_elapsed_us(cache_lock_time.as_us());
@@ -306,15 +311,16 @@ impl PrioritizationFeeCache {
         // prune cache by evicting write account entry from prioritization fee if its fee is less
         // or equal to block's minimum transaction fee, because they are irrelevant in calculating
         // block minimum fee.
-        let (_, slot_finalize_time) = measure!( {
-            // retain prioritization fee for OC-ed bank
-            slot_prioritization_fee.retain(|id, _| id == bank_id);
-            let mut block_prioritization_fee = slot_prioritization_fee
-                .entry(*bank_id)
-                .or_insert(PrioritizationFee::default());
-            let result = block_prioritization_fee.mark_block_completed();
-            block_prioritization_fee.report_metrics(*slot);
-            result
+        let (_, slot_finalize_time) = measure!(
+            {
+                // retain prioritization fee for OC-ed bank
+                slot_prioritization_fee.retain(|id, _| id == bank_id);
+                let mut block_prioritization_fee = slot_prioritization_fee
+                    .entry(*bank_id)
+                    .or_insert(PrioritizationFee::default());
+                let result = block_prioritization_fee.mark_block_completed();
+                block_prioritization_fee.report_metrics(*slot);
+                result
             },
             "slot_finalize_time"
         );
@@ -360,7 +366,11 @@ impl PrioritizationFeeCache {
             .read()
             .unwrap()
             .iter()
-            .filter(|(_slot, slot_prioritization_fee)| slot_prioritization_fee.iter().any(|prioritization_fee| prioritization_fee.is_finalized()))
+            .filter(|(_slot, slot_prioritization_fee)| {
+                slot_prioritization_fee
+                    .iter()
+                    .any(|prioritization_fee| prioritization_fee.is_finalized())
+            })
             .count()
     }
 
@@ -370,21 +380,23 @@ impl PrioritizationFeeCache {
             .unwrap()
             .iter()
             .filter_map(|(slot, slot_prioritization_fee)| {
-                slot_prioritization_fee.iter().find_map(|prioritization_fee_read| {
-                prioritization_fee_read.is_finalized().then(|| {
-                    let mut fee = prioritization_fee_read
-                        .get_min_transaction_fee()
-                        .unwrap_or_default();
-                    for account_key in account_keys {
-                        if let Some(account_fee) =
-                            prioritization_fee_read.get_writable_account_fee(account_key)
-                        {
-                            fee = std::cmp::max(fee, account_fee);
-                        }
-                    }
-                    Some((*slot, fee))
-                })
-                })
+                slot_prioritization_fee
+                    .iter()
+                    .find_map(|prioritization_fee_read| {
+                        prioritization_fee_read.is_finalized().then(|| {
+                            let mut fee = prioritization_fee_read
+                                .get_min_transaction_fee()
+                                .unwrap_or_default();
+                            for account_key in account_keys {
+                                if let Some(account_fee) =
+                                    prioritization_fee_read.get_writable_account_fee(account_key)
+                                {
+                                    fee = std::cmp::max(fee, account_fee);
+                                }
+                            }
+                            Some((*slot, fee))
+                        })
+                    })
             })
             .flatten()
             .collect()
@@ -440,9 +452,8 @@ mod tests {
 
         // wait till update is done
         while block_fee
-            .lock()
-            .unwrap()
-            .get_min_transaction_fee()
+            .get(&bank.bank_id())
+            .map(|block_fee| block_fee.get_min_transaction_fee())
             .is_none()
         {
             std::thread::sleep(std::time::Duration::from_millis(100));
@@ -453,15 +464,19 @@ mod tests {
     fn sync_finalize_priority_fee_for_test(
         prioritization_fee_cache: &PrioritizationFeeCache,
         slot: Slot,
+        bank_id: BankId,
     ) {
-        prioritization_fee_cache.finalize_priority_fee(slot);
+        prioritization_fee_cache.finalize_priority_fee(slot, bank_id);
         let fee = PrioritizationFeeCache::get_prioritization_fee(
             prioritization_fee_cache.cache.clone(),
             &slot,
         );
 
         // wait till finalization is done
-        while !fee.lock().unwrap().is_finalized() {
+        while !fee
+            .get(&bank_id)
+            .map_or_else(|| false, |block_fee| block_fee.is_finalized())
+        {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
     }
@@ -492,7 +507,7 @@ mod tests {
         let slot = bank.slot();
 
         let prioritization_fee_cache = PrioritizationFeeCache::default();
-        sync_update(&prioritization_fee_cache, bank, txs.iter());
+        sync_update(&prioritization_fee_cache, bank.clone(), txs.iter());
 
         // assert block minimum fee and account a, b, c fee accordingly
         {
@@ -500,7 +515,7 @@ mod tests {
                 prioritization_fee_cache.cache.clone(),
                 &slot,
             );
-            let fee = fee.lock().unwrap();
+            let fee = fee.get(&bank.bank_id()).unwrap();
             assert_eq!(2, fee.get_min_transaction_fee().unwrap());
             assert_eq!(2, fee.get_writable_account_fee(&write_account_a).unwrap());
             assert_eq!(5, fee.get_writable_account_fee(&write_account_b).unwrap());
@@ -513,12 +528,12 @@ mod tests {
 
         // assert after prune, account a and c should be removed from cache to save space
         {
-            sync_finalize_priority_fee_for_test(&prioritization_fee_cache, slot);
+            sync_finalize_priority_fee_for_test(&prioritization_fee_cache, slot, bank.bank_id());
             let fee = PrioritizationFeeCache::get_prioritization_fee(
                 prioritization_fee_cache.cache.clone(),
                 &slot,
             );
-            let fee = fee.lock().unwrap();
+            let fee = fee.get(&bank.bank_id()).unwrap();
             assert_eq!(2, fee.get_min_transaction_fee().unwrap());
             assert!(fee.get_writable_account_fee(&write_account_a).is_none());
             assert_eq!(5, fee.get_writable_account_fee(&write_account_b).unwrap());
@@ -534,20 +549,22 @@ mod tests {
             prioritization_fee_cache.cache.clone(),
             &1
         )
-        .lock()
-        .unwrap()
+        .entry(1)
+        .or_insert(PrioritizationFee::default())
         .mark_block_completed()
         .is_ok());
         assert!(PrioritizationFeeCache::get_prioritization_fee(
             prioritization_fee_cache.cache.clone(),
             &2
         )
-        .lock()
-        .unwrap()
+        .entry(2)
+        .or_insert(PrioritizationFee::default())
         .mark_block_completed()
         .is_ok());
         // add slot 3 entry to cache, but not finalize it
-        PrioritizationFeeCache::get_prioritization_fee(prioritization_fee_cache.cache.clone(), &3);
+        PrioritizationFeeCache::get_prioritization_fee(prioritization_fee_cache.cache.clone(), &3)
+            .entry(3)
+            .or_insert(PrioritizationFee::default());
 
         // assert available block count should be 2 finalized blocks
         assert_eq!(2, prioritization_fee_cache.available_block_count());
@@ -605,7 +622,7 @@ mod tests {
                     &Pubkey::new_unique(),
                 ),
             ];
-            sync_update(&prioritization_fee_cache, bank1, txs.iter());
+            sync_update(&prioritization_fee_cache, bank1.clone(), txs.iter());
             // before block is marked as completed
             assert!(prioritization_fee_cache
                 .get_prioritization_fees(&[])
@@ -626,7 +643,7 @@ mod tests {
                 .get_prioritization_fees(&[write_account_a, write_account_b, write_account_c])
                 .is_empty());
             // after block is completed
-            sync_finalize_priority_fee_for_test(&prioritization_fee_cache, 1);
+            sync_finalize_priority_fee_for_test(&prioritization_fee_cache, 1, bank1.bank_id());
             assert_eq!(
                 hashmap_of(vec![(1, 1)]),
                 prioritization_fee_cache.get_prioritization_fees(&[])
@@ -668,7 +685,7 @@ mod tests {
                     &Pubkey::new_unique(),
                 ),
             ];
-            sync_update(&prioritization_fee_cache, bank2, txs.iter());
+            sync_update(&prioritization_fee_cache, bank2.clone(), txs.iter());
             // before block is marked as completed
             assert_eq!(
                 hashmap_of(vec![(1, 1)]),
@@ -700,7 +717,7 @@ mod tests {
                 ])
             );
             // after block is completed
-            sync_finalize_priority_fee_for_test(&prioritization_fee_cache, 2);
+            sync_finalize_priority_fee_for_test(&prioritization_fee_cache, 2, bank2.bank_id());
             assert_eq!(
                 hashmap_of(vec![(2, 3), (1, 1)]),
                 prioritization_fee_cache.get_prioritization_fees(&[]),
@@ -742,7 +759,7 @@ mod tests {
                     &Pubkey::new_unique(),
                 ),
             ];
-            sync_update(&prioritization_fee_cache, bank3, txs.iter());
+            sync_update(&prioritization_fee_cache, bank3.clone(), txs.iter());
             // before block is marked as completed
             assert_eq!(
                 hashmap_of(vec![(2, 3), (1, 1)]),
@@ -774,7 +791,7 @@ mod tests {
                 ]),
             );
             // after block is completed
-            sync_finalize_priority_fee_for_test(&prioritization_fee_cache, 3);
+            sync_finalize_priority_fee_for_test(&prioritization_fee_cache, 3, bank3.bank_id());
             assert_eq!(
                 hashmap_of(vec![(3, 5), (2, 3), (1, 1)]),
                 prioritization_fee_cache.get_prioritization_fees(&[]),
@@ -803,6 +820,111 @@ mod tests {
                     write_account_b,
                     write_account_c,
                 ]),
+            );
+        }
+    }
+
+    #[test]
+    fn test_purge_duplicated_bank() {
+        // duplicated bank can exists for same slot before OC.
+        // prioritization_fee_cache should only have data from OC-ed bank
+        solana_logger::setup();
+        let write_account_a = Pubkey::new_unique();
+        let write_account_b = Pubkey::new_unique();
+        let write_account_c = Pubkey::new_unique();
+
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank0 = Bank::new_for_benches(&genesis_config);
+        let bank_forks = BankForks::new(bank0);
+        let bank = bank_forks.working_bank();
+        let collector = solana_sdk::pubkey::new_rand();
+        let slot: Slot = 999;
+        let bank1 = Arc::new(Bank::new_from_parent(bank.clone(), &collector, slot));
+        let bank2 = Arc::new(Bank::new_from_parent(bank, &collector, slot));
+
+        let prioritization_fee_cache = PrioritizationFeeCache::default();
+
+        // Assert after add transactions for bank1 of slot 1
+        {
+            let txs = vec![
+                build_sanitized_transaction_for_test(2, &write_account_a, &write_account_b),
+                build_sanitized_transaction_for_test(
+                    1,
+                    &Pubkey::new_unique(),
+                    &Pubkey::new_unique(),
+                ),
+            ];
+            sync_update(&prioritization_fee_cache, bank1.clone(), txs.iter());
+
+            let slot_prioritization_fee = PrioritizationFeeCache::get_prioritization_fee(
+                prioritization_fee_cache.cache.clone(),
+                &slot,
+            );
+            assert_eq!(1, slot_prioritization_fee.len());
+            assert!(slot_prioritization_fee.contains_key(&bank1.bank_id()));
+        }
+
+        // Assert after add transactions for bank2 of slot 1
+        {
+            let txs = vec![
+                build_sanitized_transaction_for_test(4, &write_account_b, &write_account_c),
+                build_sanitized_transaction_for_test(
+                    3,
+                    &Pubkey::new_unique(),
+                    &Pubkey::new_unique(),
+                ),
+            ];
+            sync_update(&prioritization_fee_cache, bank2.clone(), txs.iter());
+
+            let slot_prioritization_fee = PrioritizationFeeCache::get_prioritization_fee(
+                prioritization_fee_cache.cache.clone(),
+                &slot,
+            );
+            assert_eq!(2, slot_prioritization_fee.len());
+            assert!(slot_prioritization_fee.contains_key(&bank1.bank_id()));
+            assert!(slot_prioritization_fee.contains_key(&bank2.bank_id()));
+        }
+
+        // Assert after finalize with bank1 of slot 1,
+        {
+            sync_finalize_priority_fee_for_test(&prioritization_fee_cache, slot, bank1.bank_id());
+
+            let slot_prioritization_fee = PrioritizationFeeCache::get_prioritization_fee(
+                prioritization_fee_cache.cache.clone(),
+                &slot,
+            );
+            assert_eq!(1, slot_prioritization_fee.len());
+            assert!(slot_prioritization_fee.contains_key(&bank1.bank_id()));
+
+            // and data available for query are from bank1
+            assert_eq!(
+                hashmap_of(vec![(slot, 1)]),
+                prioritization_fee_cache.get_prioritization_fees(&[])
+            );
+            assert_eq!(
+                hashmap_of(vec![(slot, 2)]),
+                prioritization_fee_cache.get_prioritization_fees(&[write_account_a])
+            );
+            assert_eq!(
+                hashmap_of(vec![(slot, 2)]),
+                prioritization_fee_cache.get_prioritization_fees(&[write_account_b])
+            );
+            assert_eq!(
+                hashmap_of(vec![(slot, 1)]),
+                prioritization_fee_cache.get_prioritization_fees(&[write_account_c])
+            );
+            assert_eq!(
+                hashmap_of(vec![(slot, 2)]),
+                prioritization_fee_cache
+                    .get_prioritization_fees(&[write_account_a, write_account_b])
+            );
+            assert_eq!(
+                hashmap_of(vec![(slot, 2)]),
+                prioritization_fee_cache.get_prioritization_fees(&[
+                    write_account_a,
+                    write_account_b,
+                    write_account_c
+                ])
             );
         }
     }
