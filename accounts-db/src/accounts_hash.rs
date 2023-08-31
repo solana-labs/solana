@@ -173,7 +173,7 @@ impl AccountHashesFile {
             hashes.len()
         );
 
-        self.mmap_file = Some((size, MmapAccountHashesFile { mmap: map }));
+        self.mmap_file = Some((hashes.len(), MmapAccountHashesFile { mmap: map }));
 
         // mut_mmap.deref_mut().write_all(data_to_write).unwrap();
 
