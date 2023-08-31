@@ -1,133 +1,13 @@
 use {
-    super::transaction_priority_id::TransactionPriorityId,
+    super::{
+        transaction_priority_id::TransactionPriorityId,
+        transaction_state::{SanitizedTransactionTTL, TransactionState},
+    },
     crate::banking_stage::scheduler_messages::TransactionId,
     min_max_heap::MinMaxHeap,
     solana_runtime::transaction_priority_details::TransactionPriorityDetails,
-    solana_sdk::{slot_history::Slot, transaction::SanitizedTransaction},
     std::collections::HashMap,
 };
-
-#[allow(clippy::large_enum_variant)]
-pub(crate) enum TransactionState {
-    Unprocessed {
-        transaction_ttl: SanitizedTransactionTTL,
-        transaction_priority_details: TransactionPriorityDetails,
-        forwarded: bool,
-    },
-    Pending {
-        transaction_priority_details: TransactionPriorityDetails,
-        forwarded: bool,
-    },
-}
-
-impl TransactionState {
-    fn new(
-        transaction_ttl: SanitizedTransactionTTL,
-        transaction_priority_details: TransactionPriorityDetails,
-        forwarded: bool,
-    ) -> Self {
-        Self::Unprocessed {
-            transaction_ttl,
-            transaction_priority_details,
-            forwarded,
-        }
-    }
-
-    pub(crate) fn transaction_priority_details(&self) -> &TransactionPriorityDetails {
-        match self {
-            Self::Unprocessed {
-                transaction_priority_details,
-                ..
-            } => transaction_priority_details,
-            Self::Pending {
-                transaction_priority_details,
-                ..
-            } => transaction_priority_details,
-        }
-    }
-
-    pub(crate) fn priority(&self) -> u64 {
-        self.transaction_priority_details().priority
-    }
-
-    pub(crate) fn forwarded(&self) -> bool {
-        match self {
-            Self::Unprocessed { forwarded, .. } => *forwarded,
-            Self::Pending { forwarded, .. } => *forwarded,
-        }
-    }
-
-    pub(crate) fn set_forwarded(&mut self) {
-        match self {
-            Self::Unprocessed { forwarded, .. } => *forwarded = true,
-            Self::Pending { forwarded, .. } => *forwarded = true,
-        }
-    }
-
-    fn transition_to_pending(&mut self) -> SanitizedTransactionTTL {
-        match self.take() {
-            TransactionState::Unprocessed {
-                transaction_ttl,
-                transaction_priority_details,
-                forwarded,
-            } => {
-                *self = TransactionState::Pending {
-                    transaction_priority_details,
-                    forwarded,
-                };
-                transaction_ttl
-            }
-            TransactionState::Pending { .. } => {
-                panic!("transaction already pending");
-            }
-        }
-    }
-
-    fn transition_to_unprocessed(&mut self, transaction_ttl: SanitizedTransactionTTL) {
-        match self.take() {
-            TransactionState::Unprocessed { .. } => panic!("already unprocessed"),
-            TransactionState::Pending {
-                transaction_priority_details,
-                forwarded,
-            } => {
-                *self = Self::Unprocessed {
-                    transaction_ttl,
-                    transaction_priority_details,
-                    forwarded,
-                }
-            }
-        }
-    }
-
-    pub(crate) fn transaction_ttl(&self) -> &SanitizedTransactionTTL {
-        match self {
-            Self::Unprocessed {
-                transaction_ttl, ..
-            } => transaction_ttl,
-            Self::Pending { .. } => panic!("transaction is pending"),
-        }
-    }
-
-    /// Internal helper to transitioning between states.
-    /// Replaces `self` with a dummy state that will immediately be overwritten in transition.
-    fn take(&mut self) -> Self {
-        core::mem::replace(
-            self,
-            Self::Pending {
-                transaction_priority_details: TransactionPriorityDetails {
-                    priority: 0,
-                    compute_unit_limit: 0,
-                },
-                forwarded: false,
-            },
-        )
-    }
-}
-
-pub(crate) struct SanitizedTransactionTTL {
-    pub(crate) transaction: SanitizedTransaction,
-    pub(crate) max_age_slot: Slot,
-}
 
 pub(crate) struct TransactionStateContainer {
     priority_queue: MinMaxHeap<TransactionPriorityId>,
@@ -216,7 +96,7 @@ impl TransactionStateContainer {
         if self.push_id_into_queue(priority_id) {
             self.id_to_transaction_state.insert(
                 transaction_id,
-                TransactionState::new(transaction_ttl, transaction_priority_details, false),
+                TransactionState::new(transaction_ttl, transaction_priority_details),
             );
         }
     }
@@ -263,14 +143,18 @@ mod tests {
     use {
         super::*,
         solana_sdk::{
-            compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message,
-            signature::Keypair, signer::Signer, system_instruction, transaction::Transaction,
+            compute_budget::ComputeBudgetInstruction,
+            hash::Hash,
+            message::Message,
+            signature::Keypair,
+            signer::Signer,
+            slot_history::Slot,
+            system_instruction,
+            transaction::{SanitizedTransaction, Transaction},
         },
     };
 
-    fn test_transaction(
-        priority: u64,
-    ) -> (SanitizedTransactionTTL, TransactionPriorityDetails) {
+    fn test_transaction(priority: u64) -> (SanitizedTransactionTTL, TransactionPriorityDetails) {
         let from_keypair = Keypair::new();
         let ixs = vec![
             system_instruction::transfer(
@@ -287,7 +171,13 @@ mod tests {
             transaction: SanitizedTransaction::from_transaction_for_tests(tx),
             max_age_slot: Slot::MAX,
         };
-        (transaction_ttl, TransactionPriorityDetails { priority, compute_unit_limit: 0 })
+        (
+            transaction_ttl,
+            TransactionPriorityDetails {
+                priority,
+                compute_unit_limit: 0,
+            },
+        )
     }
 
     fn push_to_container(container: &mut TransactionStateContainer, num: usize) {
@@ -400,6 +290,8 @@ mod tests {
         let non_existing_id = TransactionId::new(7);
         assert!(container.get_mut_transaction_state(&existing_id).is_some());
         assert!(container.get_mut_transaction_state(&existing_id).is_some());
-        assert!(container.get_mut_transaction_state(&non_existing_id).is_none());
+        assert!(container
+            .get_mut_transaction_state(&non_existing_id)
+            .is_none());
     }
 }
