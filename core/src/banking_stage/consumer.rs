@@ -1877,7 +1877,7 @@ mod tests {
             poh_recorder
                 .write()
                 .unwrap()
-                .set_bank_for_test(bank.clone());
+                .set_bank_for_test(bank);
             let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
             let banking_stage_stats = BankingStageStats::default();
             consumer.consume_buffered_packets(
@@ -1958,7 +1958,7 @@ mod tests {
             poh_recorder
                 .write()
                 .unwrap()
-                .set_bank_for_test(bank.clone());
+                .set_bank_for_test(bank);
             let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
             consumer.consume_buffered_packets(
                 &bank_start,
