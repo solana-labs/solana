@@ -282,22 +282,22 @@ impl<'a> Genesis<'a> {
         Ok(())
     }
 
-    // convert binary file to base64
-    pub fn setup_config_map(
-        &self,
-    ) -> Result<(), Box<dyn Error>> {
-        self.verify_genesis_from_file()?;
-        let path = self.config_dir.join("bootstrap-validator").join(DEFAULT_GENESIS_FILE);
-        let mut input_content = Vec::new();
-        File::open(path)?.read_to_end(&mut input_content)?;
-        let base64_content = general_purpose::STANDARD.encode(input_content);
+    // // convert binary file to base64
+    // pub fn setup_config_map(
+    //     &self,
+    // ) -> Result<(), Box<dyn Error>> {
+    //     self.verify_genesis_from_file()?;
+    //     let path = self.config_dir.join("bootstrap-validator").join(DEFAULT_GENESIS_FILE);
+    //     let mut input_content = Vec::new();
+    //     File::open(path)?.read_to_end(&mut input_content)?;
+    //     let base64_content = general_purpose::STANDARD.encode(input_content);
 
-        let outpath = self.config_dir.join("bootstrap-validator").join("genesis-config-map.yaml");
+    //     let outpath = self.config_dir.join("bootstrap-validator").join("genesis-config-map.yaml");
 
 
-        Ok(())
+    //     Ok(())
 
-    }
+    // }
 
     pub fn load_genesis_to_base64_from_file(
         &self,

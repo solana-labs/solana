@@ -30,6 +30,8 @@ use {
     std::{collections::BTreeMap, process, thread, time::Duration, fs::File, io::Write},
 };
 
+
+
 const BOOTSTRAP_VALIDATOR_REPLICAS: i32 = 1;
 
 fn parse_matches() -> ArgMatches<'static> {
@@ -201,7 +203,6 @@ async fn main() {
         }
     }
 
-
     let mut genesis = Genesis::new(setup_config.clone());
     // genesis.generate();
     match genesis.generate_faucet() {
@@ -263,9 +264,6 @@ async fn main() {
         }
     };
 
-
-    // process::exit(1);
-
     let bootstrap_container_name = matches
         .value_of("bootstrap_container_name")
         .expect("Bootstrap container name is required");
@@ -280,7 +278,18 @@ async fn main() {
         .expect("Validator image name is required");
 
     kub_controller.create_selector(&ValidatorType::Bootstrap, "app.kubernetes.io/name", "bootstrap-validator");
-    let bootstrap_deployment = kub_controller.create_bootstrap_validator_deployment(bootstrap_container_name, bootstrap_image_name, BOOTSTRAP_VALIDATOR_REPLICAS);
+    let bootstrap_deployment = match kub_controller.create_bootstrap_validator_deployment(
+        bootstrap_container_name, 
+        bootstrap_image_name, 
+        BOOTSTRAP_VALIDATOR_REPLICAS,
+        config_map.metadata.name.clone()
+    ) {
+        Ok(deployment) => deployment,
+        Err(err) => {
+            error!("Error creating bootstrap validator deployment: {}", err);
+            return;
+        }
+    };
     let dep_name = match kub_controller.deploy_deployment(&bootstrap_deployment).await {
         Ok(dep) => {
             info!("bootstrap validator deployment deployed successfully");
@@ -315,11 +324,19 @@ async fn main() {
     info!("deployment: {} Ready!", dep_name);
 
     kub_controller.create_selector(&ValidatorType::Standard, "app.kubernetes.io/name", "validator");
-    let validator_deployment = kub_controller.create_validator_deployment(
+    let validator_deployment = match kub_controller.create_validator_deployment(
         validator_container_name,
         validator_image_name,
         setup_config.num_validators,
-    );
+        config_map.metadata.name
+    ) {
+        Ok(deployment) => deployment,
+        Err(err) => {
+            error!("Error creating validator deployment: {}", err);
+            return;
+        }
+    };
+
     match kub_controller.deploy_deployment(&validator_deployment).await {
         Ok(_) => info!("validator deployment deployed successfully"),
         Err(err) => error!(

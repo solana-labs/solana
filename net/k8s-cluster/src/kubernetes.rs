@@ -1,12 +1,13 @@
 use {
-    crate::ValidatorType,
+    crate::{ValidatorType, boxed_error},
     base64::{Engine as _, engine::{self, general_purpose}},
     k8s_openapi::{
         api::{
             apps::v1::{Deployment, DeploymentSpec},
             core::v1::{
                 Container, EnvVar, EnvVarSource, ObjectFieldSelector, PodSpec, PodTemplateSpec,
-                Service, ServicePort, ServiceSpec, ConfigMap, Namespace,
+                Service, ServicePort, ServiceSpec, ConfigMap, Namespace, Volume, VolumeMount,
+                ConfigMapVolumeSource,
             },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
@@ -112,7 +113,8 @@ impl<'a> Kubernetes<'a> {
         container_name: &str,
         image_name: &str,
         num_bootstrap_validators: i32,
-    ) -> Deployment {
+        config_map_name: Option<String>
+    ) -> Result<Deployment, Box<dyn Error>> {
         let env_var = vec![EnvVar {
             name: "MY_POD_IP".to_string(),
             value_from: Some(EnvVarSource {
@@ -136,6 +138,7 @@ impl<'a> Kubernetes<'a> {
             num_bootstrap_validators,
             env_var,
             &command,
+            config_map_name
         )
     }
 
@@ -148,7 +151,28 @@ impl<'a> Kubernetes<'a> {
         num_validators: i32,
         env_vars: Vec<EnvVar>,
         command: &Vec<String>,
-    ) -> Deployment {
+        config_map_name: Option<String>
+    ) -> Result<Deployment, Box<dyn Error>> {
+        let config_map_name = match config_map_name {
+            Some(name) => name,
+            None => return Err(boxed_error!("config_map_name is None!")),
+        };
+
+        let volume = Volume {
+            name: "genesis-config-volume".into(),
+            config_map: Some(ConfigMapVolumeSource {
+                name: Some(config_map_name.clone()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+    
+        let volume_mount = VolumeMount {
+            name: "genesis-config-volume".to_string(),
+            mount_path: "/home/solana/genesis".to_string(),
+            ..Default::default()
+        };
+
         // Define the pod spec
         let pod_spec = PodTemplateSpec {
             metadata: Some(ObjectMeta {
@@ -162,8 +186,10 @@ impl<'a> Kubernetes<'a> {
                     image_pull_policy: Some("Never".to_string()), // Set the image pull policy to "Never"
                     env: Some(env_vars),
                     command: Some(command.clone()),
+                    volume_mounts: Some(vec![volume_mount]),
                     ..Default::default()
                 }],
+                volumes: Some(vec![volume]),
                 ..Default::default()
             }),
             ..Default::default()
@@ -181,7 +207,7 @@ impl<'a> Kubernetes<'a> {
         };
     
         //Build deployment
-        Deployment {
+        Ok(Deployment {
             metadata: ObjectMeta {
                 name: Some(format!("{}-deployment", app_name)),
                 namespace: Some(self.namespace.to_string()),
@@ -189,7 +215,7 @@ impl<'a> Kubernetes<'a> {
             },
             spec: Some(deployment_spec),
             ..Default::default()
-        }
+        })
     }
 
     pub async fn deploy_deployment(
@@ -282,7 +308,8 @@ impl<'a> Kubernetes<'a> {
         container_name: &str,
         image_name: &str,
         num_validators: i32,
-    ) -> Deployment {
+        config_map_name: Option<String>
+    ) -> Result<Deployment, Box<dyn Error>> {
         let env_vars = vec![
             EnvVar {
                 name: "NAMESPACE".to_string(),
@@ -329,6 +356,7 @@ impl<'a> Kubernetes<'a> {
             num_validators,
             env_vars,
             &command,
+            config_map_name,
         )
     }
 
