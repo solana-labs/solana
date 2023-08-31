@@ -25,7 +25,6 @@ use {
     },
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
-        feature_set,
         hash::Hash,
         instruction::Instruction,
         pubkey::Pubkey,
@@ -508,50 +507,16 @@ impl Tower {
         self.last_vote_tx_blockhash = Some(new_vote_tx_blockhash);
     }
 
-    // Returns true if we have switched the new vote instruction that directly sets vote state
-    pub(crate) fn is_direct_vote_state_update_enabled(bank: &Bank) -> bool {
-        bank.feature_set
-            .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
-    }
-
-    fn apply_vote_and_generate_vote_diff(
-        local_vote_state: &mut VoteState,
-        slot: Slot,
-        hash: Hash,
-        last_voted_slot_in_bank: Option<Slot>,
-    ) -> VoteTransaction {
-        let vote = Vote::new(vec![slot], hash);
-        let _ignored = process_vote_unchecked(local_vote_state, vote);
-        let slots = if let Some(last_voted_slot) = last_voted_slot_in_bank {
-            local_vote_state
-                .votes
-                .iter()
-                .map(|v| v.slot())
-                .skip_while(|s| *s <= last_voted_slot)
-                .collect()
-        } else {
-            local_vote_state.votes.iter().map(|v| v.slot()).collect()
-        };
-        VoteTransaction::from(Vote::new(slots, hash))
-    }
-
     pub fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
         let vote_account = bank.get_vote_account(vote_account_pubkey)?;
         let vote_state = vote_account.vote_state();
         vote_state.as_ref().ok()?.last_voted_slot()
     }
 
-    pub fn record_bank_vote(&mut self, bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
-        let last_voted_slot_in_bank = Self::last_voted_slot_in_bank(bank, vote_account_pubkey);
-
+    pub fn record_bank_vote(&mut self, bank: &Bank) -> Option<Slot> {
         // Returns the new root if one is made after applying a vote for the given bank to
         // `self.vote_state`
-        self.record_bank_vote_and_update_lockouts(
-            bank.slot(),
-            bank.hash(),
-            last_voted_slot_in_bank,
-            Self::is_direct_vote_state_update_enabled(bank),
-        )
+        self.record_bank_vote_and_update_lockouts(bank.slot(), bank.hash())
     }
 
     /// If we've recently updated the vote state by applying a new vote
@@ -575,34 +540,19 @@ impl Tower {
         &mut self,
         vote_slot: Slot,
         vote_hash: Hash,
-        last_voted_slot_in_bank: Option<Slot>,
-        is_direct_vote_state_update_enabled: bool,
     ) -> Option<Slot> {
         trace!("{} record_vote for {}", self.node_pubkey, vote_slot);
         let old_root = self.root();
 
-        if is_direct_vote_state_update_enabled {
-            let vote = Vote::new(vec![vote_slot], vote_hash);
-            let result = process_vote_unchecked(&mut self.vote_state, vote);
-            if result.is_err() {
-                error!(
-                    "Error while recording vote {} {} in local tower {:?}",
-                    vote_slot, vote_hash, result
-                );
-            }
-            self.update_last_vote_from_vote_state(vote_hash);
-        } else {
-            let mut new_vote = Self::apply_vote_and_generate_vote_diff(
-                &mut self.vote_state,
-                vote_slot,
-                vote_hash,
-                last_voted_slot_in_bank,
+        let vote = Vote::new(vec![vote_slot], vote_hash);
+        let result = process_vote_unchecked(&mut self.vote_state, vote);
+        if result.is_err() {
+            error!(
+                "Error while recording vote {} {} in local tower {:?}",
+                vote_slot, vote_hash, result
             );
-
-            new_vote
-                .set_timestamp(self.maybe_timestamp(self.last_voted_slot().unwrap_or_default()));
-            self.last_vote = new_vote;
-        };
+        }
+        self.update_last_vote_from_vote_state(vote_hash);
 
         let new_root = self.root();
 
@@ -620,7 +570,7 @@ impl Tower {
 
     #[cfg(test)]
     pub fn record_vote(&mut self, slot: Slot, hash: Hash) -> Option<Slot> {
-        self.record_bank_vote_and_update_lockouts(slot, hash, self.last_voted_slot(), true)
+        self.record_bank_vote_and_update_lockouts(slot, hash)
     }
 
     /// Used for tests
@@ -1579,7 +1529,7 @@ pub mod test {
             signature::Signer,
             slot_history::SlotHistory,
         },
-        solana_vote_program::vote_state::{self, Vote, VoteStateVersions, MAX_LOCKOUT_HISTORY},
+        solana_vote_program::vote_state::{Vote, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         std::{
             collections::{HashMap, VecDeque},
             fs::{remove_file, OpenOptions},
@@ -2528,61 +2478,6 @@ pub mod test {
         assert_eq!(voted_stakes[&0], 1);
         assert_eq!(voted_stakes[&1], 1);
         assert_eq!(voted_stakes[&2], 1);
-    }
-
-    #[test]
-    fn test_apply_vote_and_generate_vote_diff() {
-        let mut local = VoteState::default();
-        let vote = Tower::apply_vote_and_generate_vote_diff(&mut local, 0, Hash::default(), None);
-        assert_eq!(local.votes.len(), 1);
-        assert_eq!(vote.slots(), vec![0]);
-        assert_eq!(local.tower(), vec![0]);
-    }
-
-    #[test]
-    fn test_apply_vote_and_generate_vote_diff_dup_vote() {
-        let mut local = VoteState::default();
-        // If `latest_voted_slot_in_bank == Some(0)`, then we already have a vote for 0. Adding
-        // another vote for slot 0 should return an empty vote as the diff.
-        let vote =
-            Tower::apply_vote_and_generate_vote_diff(&mut local, 0, Hash::default(), Some(0));
-        assert!(vote.is_empty());
-    }
-
-    #[test]
-    fn test_apply_vote_and_generate_vote_diff_next_vote() {
-        let mut local = VoteState::default();
-        let vote = Vote {
-            slots: vec![0],
-            hash: Hash::default(),
-            timestamp: None,
-        };
-        let _ = vote_state::process_vote_unchecked(&mut local, vote);
-        assert_eq!(local.votes.len(), 1);
-        let vote =
-            Tower::apply_vote_and_generate_vote_diff(&mut local, 1, Hash::default(), Some(0));
-        assert_eq!(vote.slots(), vec![1]);
-        assert_eq!(local.tower(), vec![0, 1]);
-    }
-
-    #[test]
-    fn test_apply_vote_and_generate_vote_diff_next_after_expired_vote() {
-        let mut local = VoteState::default();
-        let vote = Vote {
-            slots: vec![0],
-            hash: Hash::default(),
-            timestamp: None,
-        };
-        let _ = vote_state::process_vote_unchecked(&mut local, vote);
-        assert_eq!(local.votes.len(), 1);
-
-        // First vote expired, so should be evicted from tower. Thus even with
-        // `latest_voted_slot_in_bank == Some(0)`, the first vote slot won't be
-        // observable in any of the results.
-        let vote =
-            Tower::apply_vote_and_generate_vote_diff(&mut local, 3, Hash::default(), Some(0));
-        assert_eq!(vote.slots(), vec![3]);
-        assert_eq!(local.tower(), vec![3]);
     }
 
     #[test]

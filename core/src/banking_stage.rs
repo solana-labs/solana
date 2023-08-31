@@ -28,7 +28,7 @@ use {
         bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::{feature_set::allow_votes_to_directly_update_vote_state, timing::AtomicInterval},
+    solana_sdk::timing::AtomicInterval,
     std::{
         cmp, env,
         sync::{
@@ -359,55 +359,32 @@ impl BankingStage {
             TOTAL_BUFFERED_PACKETS / ((num_threads - NUM_VOTE_PROCESSING_THREADS) as usize);
         // Keeps track of extraneous vote transactions for the vote threads
         let latest_unprocessed_votes = Arc::new(LatestUnprocessedVotes::new());
-        let should_split_voting_threads = bank_forks
-            .read()
-            .map(|bank_forks| {
-                let bank = bank_forks.root_bank();
-                bank.feature_set
-                    .is_active(&allow_votes_to_directly_update_vote_state::id())
-            })
-            .unwrap_or(false);
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|id| {
-                let (packet_receiver, unprocessed_transaction_storage) =
-                    match (id, should_split_voting_threads) {
-                        (0, false) => (
-                            gossip_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_transaction_storage(
-                                UnprocessedPacketBatches::with_capacity(batch_limit),
-                                ThreadType::Voting(VoteSource::Gossip),
-                            ),
+                let (packet_receiver, unprocessed_transaction_storage) = match id {
+                    0 => (
+                        gossip_vote_receiver.clone(),
+                        UnprocessedTransactionStorage::new_vote_storage(
+                            latest_unprocessed_votes.clone(),
+                            VoteSource::Gossip,
                         ),
-                        (0, true) => (
-                            gossip_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_vote_storage(
-                                latest_unprocessed_votes.clone(),
-                                VoteSource::Gossip,
-                            ),
+                    ),
+                    1 => (
+                        tpu_vote_receiver.clone(),
+                        UnprocessedTransactionStorage::new_vote_storage(
+                            latest_unprocessed_votes.clone(),
+                            VoteSource::Tpu,
                         ),
-                        (1, false) => (
-                            tpu_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_transaction_storage(
-                                UnprocessedPacketBatches::with_capacity(batch_limit),
-                                ThreadType::Voting(VoteSource::Tpu),
-                            ),
+                    ),
+                    _ => (
+                        non_vote_receiver.clone(),
+                        UnprocessedTransactionStorage::new_transaction_storage(
+                            UnprocessedPacketBatches::with_capacity(batch_limit),
+                            ThreadType::Transactions,
                         ),
-                        (1, true) => (
-                            tpu_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_vote_storage(
-                                latest_unprocessed_votes.clone(),
-                                VoteSource::Tpu,
-                            ),
-                        ),
-                        _ => (
-                            non_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_transaction_storage(
-                                UnprocessedPacketBatches::with_capacity(batch_limit),
-                                ThreadType::Transactions,
-                            ),
-                        ),
-                    };
+                    ),
+                };
 
                 let mut packet_receiver =
                     PacketReceiver::new(id, packet_receiver, bank_forks.clone());
@@ -609,9 +586,7 @@ mod tests {
             poh_service::PohService,
         },
         solana_runtime::{
-            bank::Bank,
-            bank_forks::BankForks,
-            genesis_utils::{activate_feature, bootstrap_validator_stake_lamports},
+            bank::Bank, bank_forks::BankForks, genesis_utils::bootstrap_validator_stake_lamports,
         },
         solana_sdk::{
             hash::Hash,
@@ -1126,14 +1101,10 @@ mod tests {
     fn test_unprocessed_transaction_storage_full_send() {
         solana_logger::setup();
         let GenesisConfigInfo {
-            mut genesis_config,
+            genesis_config,
             mint_keypair,
             ..
         } = create_slow_genesis_config(10000);
-        activate_feature(
-            &mut genesis_config,
-            allow_votes_to_directly_update_vote_state::id(),
-        );
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = bank_forks.read().unwrap().get(0).unwrap();
