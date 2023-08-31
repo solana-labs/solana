@@ -12561,13 +12561,16 @@ pub mod tests {
 
     #[test]
     fn test_hash_stored_account() {
-        // This test uses some UNSAFE tricks to detect most of account's field
-        // addition and deletion without changing the hash code
+        // This test uses some UNSAFE tricks to detect most of hashing code changes, resulting from
+        // account's field additions and deletions of StoredAccountMeta and AccountSharedData and
+        // hashing-order changes.
 
         const ACCOUNT_DATA_LEN: usize = 3;
-        // the type of InputTuple elements must not contain references;
+        // the type of InputFields elements must not contain references;
         // they should be simple scalars or data blobs
-        type InputTuple = (
+        // repr(C) is needed for abi-stability in the dirtiest variant of std::mem::transmute().
+        #[repr(C)]
+        struct InputFields(
             Slot,
             StoredMeta,
             AccountMeta,
@@ -12575,19 +12578,23 @@ pub mod tests {
             usize, // for StoredAccountMeta::offset
             Hash,
         );
-        const INPUT_LEN: usize = std::mem::size_of::<InputTuple>();
+        const INPUT_LEN: usize = std::mem::size_of::<InputFields>();
         type InputBlob = [u8; INPUT_LEN];
         let mut blob: InputBlob = [0u8; INPUT_LEN];
 
-        // spray memory with decreasing counts so that, data layout can be detected.
+        // spray memory with decreasing integers so that, data layout change and/or hashing
+        // reordering can be detected. note that just zeroed blob can't detect field reordering.
         for (i, byte) in blob.iter_mut().enumerate() {
             *byte = (INPUT_LEN - i) as u8;
         }
 
         //UNSAFE: forcibly cast the special byte pattern to actual account fields.
-        let (slot, meta, account_meta, data, offset, hash): InputTuple =
-            unsafe { std::mem::transmute::<InputBlob, InputTuple>(blob) };
+        let InputFields(slot, meta, account_meta, data, offset, hash) =
+            unsafe { std::mem::transmute::<InputBlob, InputFields>(blob) };
 
+        // When adding a field to the following constructor, make sure this is sourced from
+        // InputFields as well after adding new corresponding one to it. Needless to say, but note
+        // that the hashing code itself must be adjusted
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
@@ -12599,9 +12606,9 @@ pub mod tests {
         let account = stored_account.to_account_shared_data();
 
         let expected_account_hash = if cfg!(debug_assertions) {
-            Hash::from_str("6qtBXmRrLdTdAV5bK6bZZJxQA4fPSUBxzQGq2BQSat25").unwrap()
+            Hash::from_str("8GiQSN2VvWASKPUuZgFkH4v66ihEanrDVXAkMFvLwEa8").unwrap()
         } else {
-            Hash::from_str("5HL9MtsQmxZQ8XSgcAhSkqnrayQFXUY8FT1JsHjDNKbi").unwrap()
+            Hash::from_str("9MYASra3mm8oXzMapYUonB6TcRsKFPtjhNXVgY3MPPUX").unwrap()
         };
 
         assert_eq!(
