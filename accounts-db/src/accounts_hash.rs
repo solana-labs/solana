@@ -132,15 +132,7 @@ impl AccountHashesFile {
         let count_and_writer = self.count_and_writer.as_mut().unwrap();
 
         let hash_bytes = unsafe { std::slice::from_raw_parts(hashes.as_ptr() as *const u8, size) };
-        assert_eq!(
-            size,
-            count_and_writer.1.write(hash_bytes).unwrap_or_else(|err| {
-                panic!(
-                    "Unable to write file within {}: {err}",
-                    self.dir_for_temp_cache_files.display()
-                )
-            })
-        );
+        count_and_writer.1.write_all(hash_bytes).unwrap();
         count_and_writer.0 += n;
     }
 }
