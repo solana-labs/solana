@@ -12549,40 +12549,36 @@ pub mod tests {
 
     #[test]
     fn test_hash_stored_account() {
-        // This test uses some UNSAFE tricks to detect most of hashing code changes, resulting from
-        // account's field additions and deletions of StoredAccountMeta and AccountSharedData and
-        // hashing-order changes.
-
+        // Number are just sequential.
+        let slot: Slot = 0x01_02_03_04_05_06_07_08;
+        let meta = StoredMeta {
+            write_version_obsolete: 0x09_0a_0b_0c_0d_0e_0f_10,
+            data_len: 0x11_12_13_14_15_16_17_18,
+            pubkey: Pubkey::from([
+                0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26,
+                0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x33, 0x34,
+                0x35, 0x36, 0x37, 0x38,
+            ]),
+        };
+        let account_meta = AccountMeta {
+            lamports: 0x39_3a_3b_3c_3d_3e_3f_40,
+            rent_epoch: 0x41_42_43_44_45_46_47_48,
+            owner: Pubkey::from([
+                0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56,
+                0x57, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x60, 0x61, 0x62, 0x63, 0x64,
+                0x65, 0x66, 0x67, 0x68,
+            ]),
+            executable: false,
+        };
         const ACCOUNT_DATA_LEN: usize = 3;
-        // the type of InputFields elements must not contain references;
-        // they should be simple scalars or data blobs
-        // repr(C) is needed for abi-stability in the dirtiest variant of std::mem::transmute().
-        #[repr(C)]
-        struct InputFields(
-            Slot,
-            StoredMeta,
-            AccountMeta,
-            [u8; ACCOUNT_DATA_LEN],
-            usize, // for StoredAccountMeta::offset
-            Hash,
-        );
-        const INPUT_LEN: usize = std::mem::size_of::<InputFields>();
-        type InputBlob = [u8; INPUT_LEN];
-        let mut blob: InputBlob = [0u8; INPUT_LEN];
+        let data: [u8; ACCOUNT_DATA_LEN] = [0x69, 0x6a, 0x6b];
+        let offset: usize = 0x6c_6d_6e_6f_70_71_72_73;
+        let hash = Hash::from([
+            0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f, 0x80, 0x81,
+            0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
+            0x90, 0x91, 0x92, 0x93,
+        ]);
 
-        // spray memory with decreasing integers so that, data layout change and/or hashing
-        // reordering can be detected. note that just zeroed blob can't detect field reordering.
-        for (i, byte) in blob.iter_mut().enumerate() {
-            *byte = (INPUT_LEN - i) as u8;
-        }
-
-        //UNSAFE: forcibly cast the special byte pattern to actual account fields.
-        let InputFields(slot, meta, account_meta, data, offset, hash) =
-            unsafe { std::mem::transmute::<InputBlob, InputFields>(blob) };
-
-        // When adding a field to the following constructor, make sure this is sourced from
-        // InputFields as well after adding new corresponding one to it. Needless to say, but note
-        // that the hashing code itself must be adjusted
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
@@ -12593,11 +12589,8 @@ pub mod tests {
         });
         let account = stored_account.to_account_shared_data();
 
-        let expected_account_hash = if cfg!(debug_assertions) {
-            Hash::from_str("8GiQSN2VvWASKPUuZgFkH4v66ihEanrDVXAkMFvLwEa8").unwrap()
-        } else {
-            Hash::from_str("9MYASra3mm8oXzMapYUonB6TcRsKFPtjhNXVgY3MPPUX").unwrap()
-        };
+        let expected_account_hash =
+            Hash::from_str("6VeAL4x4PVkECKL1hD1avwPE1uMCRoWiZJzVMvVNYhTq").unwrap();
 
         assert_eq!(
             AccountsDb::hash_account(
