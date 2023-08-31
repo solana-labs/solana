@@ -352,7 +352,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: self.no_shrink_in_progress()")]
+    #[should_panic(expected = "self.no_shrink_in_progress()")]
     fn test_get_slot_storage_entry_fail() {
         let storage = AccountStorage::default();
         storage
@@ -362,7 +362,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: self.no_shrink_in_progress()")]
+    #[should_panic(expected = "self.no_shrink_in_progress()")]
     fn test_all_slots_fail() {
         let storage = AccountStorage::default();
         storage
@@ -372,7 +372,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: self.no_shrink_in_progress()")]
+    #[should_panic(expected = "self.no_shrink_in_progress()")]
     fn test_initialize_fail() {
         let mut storage = AccountStorage::default();
         storage
@@ -382,9 +382,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "assertion failed: shrink_can_be_active || self.shrink_in_progress_map.is_empty()"
-    )]
+    #[should_panic(expected = "shrink_can_be_active || self.shrink_in_progress_map.is_empty()")]
     fn test_remove_fail() {
         let storage = AccountStorage::default();
         storage
@@ -394,7 +392,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: self.no_shrink_in_progress()")]
+    #[should_panic(expected = "self.no_shrink_in_progress()")]
     fn test_iter_fail() {
         let storage = AccountStorage::default();
         storage
@@ -404,7 +402,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: self.no_shrink_in_progress()")]
+    #[should_panic(expected = "self.no_shrink_in_progress()")]
     fn test_insert_fail() {
         let storage = AccountStorage::default();
         let sample = storage.get_test_storage();

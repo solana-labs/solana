@@ -182,7 +182,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: hashes_per_tick > 1")]
+    #[should_panic(expected = "hashes_per_tick > 1")]
     fn test_target_poh_time_hashes_per_tick() {
         let zero = Hash::default();
         let poh = Poh::new(zero, Some(0));
