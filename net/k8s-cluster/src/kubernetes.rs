@@ -1,13 +1,16 @@
 use {
-    crate::{ValidatorType, boxed_error},
-    base64::{Engine as _, engine::{self, general_purpose}},
+    crate::{boxed_error, ValidatorType},
+    base64::{
+        engine::{self, general_purpose},
+        Engine as _,
+    },
     k8s_openapi::{
         api::{
             apps::v1::{Deployment, DeploymentSpec},
             core::v1::{
-                Container, EnvVar, EnvVarSource, ObjectFieldSelector, PodSpec, PodTemplateSpec,
-                Service, ServicePort, ServiceSpec, ConfigMap, Namespace, Volume, VolumeMount,
-                ConfigMapVolumeSource,
+                ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource, Namespace,
+                ObjectFieldSelector, PodSpec, PodTemplateSpec, Service, ServicePort, ServiceSpec,
+                Volume, VolumeMount,
             },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
@@ -16,19 +19,10 @@ use {
         api::{Api, ObjectMeta, PostParams},
         Client,
     },
-    solana_sdk::{
-        genesis_config::DEFAULT_GENESIS_FILE,
-    },
-    std::{
-        error::Error,
-        fs::File,
-        io::Read,
-        path::PathBuf, 
-        collections::BTreeMap,
-    },
     log::*,
+    solana_sdk::genesis_config::DEFAULT_GENESIS_FILE,
+    std::{collections::BTreeMap, error::Error, fs::File, io::Read, path::PathBuf},
 };
-
 
 pub struct Kubernetes<'a> {
     client: Client,
@@ -67,20 +61,18 @@ impl<'a> Kubernetes<'a> {
         api.create(&PostParams::default(), &config_map).await
     }
 
-    pub async fn namespace_exists(
-        &self,
-    ) -> Result<bool, kube::Error> {
+    pub async fn namespace_exists(&self) -> Result<bool, kube::Error> {
         let namespaces: Api<Namespace> = Api::all(self.client.clone());
         let namespace_list = namespaces.list(&Default::default()).await?;
-    
+
         for namespace in namespace_list.items {
             match namespace.metadata.name {
                 Some(ns) => {
                     if ns == self.namespace.to_string() {
-                        return Ok(true)
+                        return Ok(true);
                     }
                 }
-                None => ()
+                None => (),
             }
         }
         Ok(false)
@@ -93,7 +85,7 @@ impl<'a> Kubernetes<'a> {
         value: &str,
     ) {
         match *validator_type {
-            ValidatorType::Bootstrap => {                
+            ValidatorType::Bootstrap => {
                 self.bootstrap_validator_selector.insert(
                     key.to_string(),
                     value.to_string(), // validator or bootstrap-validator
@@ -113,7 +105,7 @@ impl<'a> Kubernetes<'a> {
         container_name: &str,
         image_name: &str,
         num_bootstrap_validators: i32,
-        config_map_name: Option<String>
+        config_map_name: Option<String>,
     ) -> Result<Deployment, Box<dyn Error>> {
         let env_var = vec![EnvVar {
             name: "MY_POD_IP".to_string(),
@@ -126,10 +118,10 @@ impl<'a> Kubernetes<'a> {
             }),
             ..Default::default()
         }];
-    
+
         // let command = vec!["/workspace/start-bootstrap-validator.sh".to_string()];
         let command = vec!["sleep".to_string(), "3600".to_string()];
-    
+
         self.create_deployment(
             "bootstrap-validator",
             &self.bootstrap_validator_selector,
@@ -138,7 +130,7 @@ impl<'a> Kubernetes<'a> {
             num_bootstrap_validators,
             env_var,
             &command,
-            config_map_name
+            config_map_name,
         )
     }
 
@@ -151,7 +143,7 @@ impl<'a> Kubernetes<'a> {
         num_validators: i32,
         env_vars: Vec<EnvVar>,
         command: &Vec<String>,
-        config_map_name: Option<String>
+        config_map_name: Option<String>,
     ) -> Result<Deployment, Box<dyn Error>> {
         let config_map_name = match config_map_name {
             Some(name) => name,
@@ -166,7 +158,7 @@ impl<'a> Kubernetes<'a> {
             }),
             ..Default::default()
         };
-    
+
         let volume_mount = VolumeMount {
             name: "genesis-config-volume".to_string(),
             mount_path: "/home/solana/genesis".to_string(),
@@ -194,7 +186,7 @@ impl<'a> Kubernetes<'a> {
             }),
             ..Default::default()
         };
-    
+
         //Define the deployment spec
         let deployment_spec = DeploymentSpec {
             replicas: Some(num_validators),
@@ -205,7 +197,7 @@ impl<'a> Kubernetes<'a> {
             template: pod_spec,
             ..Default::default()
         };
-    
+
         //Build deployment
         Ok(Deployment {
             metadata: ObjectMeta {
@@ -229,14 +221,12 @@ impl<'a> Kubernetes<'a> {
         api.create(&post_params, deployment).await
     }
 
-    pub fn create_bootstrap_validator_service(
-        &self,
-    ) -> Service {
+    pub fn create_bootstrap_validator_service(&self) -> Service {
         self.create_service("bootstrap-validator", &self.bootstrap_validator_selector)
     }
-    
+
     fn create_service(
-       &self, 
+        &self,
         service_name: &str,
         label_selector: &BTreeMap<String, String>,
     ) -> Service {
@@ -273,25 +263,19 @@ impl<'a> Kubernetes<'a> {
         }
     }
 
-    pub async fn deploy_service(
-        &self,
-        service: &Service,
-    ) -> Result<Service, kube::Error> {
+    pub async fn deploy_service(&self, service: &Service) -> Result<Service, kube::Error> {
         let post_params = PostParams::default();
         // Create an API instance for Services in the specified namespace
         let service_api: Api<Service> = Api::namespaced(self.client.clone(), self.namespace);
-    
+
         // Create the Service object in the cluster
         service_api.create(&post_params, &service).await
     }
 
-    pub async fn check_deployment_ready(
-        &self,
-        deployment_name: &str,
-    ) -> Result<bool, kube::Error> {
+    pub async fn check_deployment_ready(&self, deployment_name: &str) -> Result<bool, kube::Error> {
         let deployments: Api<Deployment> = Api::namespaced(self.client.clone(), self.namespace);
         let deployment = deployments.get(deployment_name).await?;
-    
+
         let desired_validators = deployment.spec.as_ref().unwrap().replicas.unwrap_or(1);
         let available_validators = deployment
             .status
@@ -299,7 +283,7 @@ impl<'a> Kubernetes<'a> {
             .unwrap()
             .available_replicas
             .unwrap_or(0);
-    
+
         Ok(available_validators >= desired_validators)
     }
 
@@ -308,7 +292,7 @@ impl<'a> Kubernetes<'a> {
         container_name: &str,
         image_name: &str,
         num_validators: i32,
-        config_map_name: Option<String>
+        config_map_name: Option<String>,
     ) -> Result<Deployment, Box<dyn Error>> {
         let env_vars = vec![
             EnvVar {
@@ -344,10 +328,10 @@ impl<'a> Kubernetes<'a> {
                 ..Default::default()
             },
         ];
-    
+
         // let command = vec!["/workspace/start-validator.sh".to_string()];
         let command = vec!["sleep".to_string(), "3600".to_string()];
-    
+
         self.create_deployment(
             "validator",
             &self.standard_validator_selector,
@@ -375,7 +359,7 @@ impl<'a> Kubernetes<'a> {
             .await?;
         // let deployment_json = serde_json::to_string_pretty(&deployment).unwrap();
         // info!("{}", deployment_json);
-    
+
         // Get the Service
         let service_api: Api<Service> = Api::namespaced(self.client.clone(), self.namespace);
         let service = service_api
@@ -383,7 +367,7 @@ impl<'a> Kubernetes<'a> {
             .await?;
         // let service_json = serde_json::to_string_pretty(&service).unwrap();
         // info!("{}", service_json);
-    
+
         let deployment_labels = deployment
             .spec
             .and_then(|spec| {
@@ -394,7 +378,7 @@ impl<'a> Kubernetes<'a> {
                 })
             })
             .clone();
-    
+
         let service_labels = service
             .spec
             .and_then(|spec| {
@@ -402,22 +386,21 @@ impl<'a> Kubernetes<'a> {
                     .and_then(|val| val.get("app.kubernetes.io/name").cloned())
             })
             .clone();
-    
+
         info!(
             "dep, serve labels: {:?}, {:?}",
             deployment_labels, service_labels
         );
-    
+
         let are_equal = match (deployment_labels, service_labels) {
             (Some(dep_label), Some(serv_label)) => dep_label == serv_label,
             _ => false,
         };
-    
+
         if !are_equal {
             error!("Deployment and Service labels are not the same!");
         }
-    
+
         Ok(())
     }
-    
 }

@@ -29,9 +29,9 @@ pub fn initialize_globals() {
 }
 
 pub mod docker;
-pub mod release;
 pub mod genesis;
 pub mod kubernetes;
+pub mod release;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ValidatorType {

@@ -1,6 +1,9 @@
 use {
     crate::{boxed_error, initialize_globals, SOLANA_ROOT},
-    base64::{Engine as _, engine::{self, general_purpose}},
+    base64::{
+        engine::{self, general_purpose},
+        Engine as _,
+    },
     bip39::{Language, Mnemonic, MnemonicType, Seed},
     clap::ArgMatches,
     log::*,
@@ -28,13 +31,11 @@ use {
     solana_stake_program::stake_state,
     solana_vote_program::vote_state::{self, VoteState},
     std::{
-        error::Error, 
+        error::Error,
         fs::File,
-        io::{
-            Read, Write,
-        },
-        path::PathBuf, 
-        process, 
+        io::{Read, Write},
+        path::PathBuf,
+        process,
         time::Duration,
     },
 };
@@ -79,7 +80,6 @@ pub struct Genesis<'a> {
     pub validator_keypairs: Vec<ValidatorAccountKeypairs>,
     pub faucet_keypair: Option<Keypair>,
     pub genesis_config: Option<GenesisConfig>,
-    
 }
 
 impl<'a> Genesis<'a> {
@@ -90,7 +90,7 @@ impl<'a> Genesis<'a> {
             config_dir: SOLANA_ROOT.join("config-k8s"),
             validator_keypairs: Vec::default(),
             faucet_keypair: None,
-            genesis_config: None
+            genesis_config: None,
         }
     }
 
@@ -145,9 +145,11 @@ impl<'a> Genesis<'a> {
         }
 
         self.validator_keypairs.push(ValidatorAccountKeypairs {
-            vote_account: vote.ok_or_else(|| boxed_error!("vote-account keypair not initialized"))?,
+            vote_account: vote
+                .ok_or_else(|| boxed_error!("vote-account keypair not initialized"))?,
             identity: identity.ok_or_else(|| boxed_error!("identity keypair not initialized"))?,
-            stake_account: stake.ok_or_else(|| boxed_error!("stake-account keypair not initialized"))?,
+            stake_account: stake
+                .ok_or_else(|| boxed_error!("stake-account keypair not initialized"))?,
         });
 
         Ok(())
@@ -294,26 +296,21 @@ impl<'a> Genesis<'a> {
 
     //     let outpath = self.config_dir.join("bootstrap-validator").join("genesis-config-map.yaml");
 
-
     //     Ok(())
 
     // }
 
-    pub fn load_genesis_to_base64_from_file(
-        &self,
-    ) -> Result<String, Box<dyn Error>> {
-        let path = self.config_dir.join("bootstrap-validator").join(DEFAULT_GENESIS_FILE);
+    pub fn load_genesis_to_base64_from_file(&self) -> Result<String, Box<dyn Error>> {
+        let path = self
+            .config_dir
+            .join("bootstrap-validator")
+            .join(DEFAULT_GENESIS_FILE);
         let mut input_content = Vec::new();
         File::open(path)?.read_to_end(&mut input_content)?;
         Ok(general_purpose::STANDARD.encode(input_content))
     }
 
-    pub fn load_genesis_from_config_map(
-        &self,
-    ) {
-        
-    }
-
+    pub fn load_genesis_from_config_map(&self) {}
 
     // should be run inside pod
     pub fn verify_genesis_from_file(&self) -> Result<(), Box<dyn Error>> {
@@ -387,9 +384,7 @@ mod tests {
         assert_eq!(config.hash(), loaded_config.hash());
         let _ignored = std::fs::remove_file(path);
     }
-
 }
-
 
 /*
 1) Create bootstrap validator keys ->
