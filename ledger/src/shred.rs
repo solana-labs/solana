@@ -895,7 +895,6 @@ pub fn should_discard_shred(
     root: Slot,
     max_slot: Slot,
     shred_version: u16,
-    should_drop_merkle_shreds: impl Fn(Slot) -> bool,
     stats: &mut ShredFetchStats,
 ) -> bool {
     debug_assert!(root < max_slot);
@@ -984,15 +983,9 @@ pub fn should_discard_shred(
     match shred_variant {
         ShredVariant::LegacyCode | ShredVariant::LegacyData => (),
         ShredVariant::MerkleCode(_) => {
-            if should_drop_merkle_shreds(slot) {
-                return true;
-            }
             stats.num_shreds_merkle_code = stats.num_shreds_merkle_code.saturating_add(1);
         }
         ShredVariant::MerkleData(_) => {
-            if should_drop_merkle_shreds(slot) {
-                return true;
-            }
             stats.num_shreds_merkle_data = stats.num_shreds_merkle_data.saturating_add(1);
         }
     }
@@ -1192,7 +1185,6 @@ mod tests {
             root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats
         ));
         assert_eq!(stats, ShredFetchStats::default());
@@ -1203,7 +1195,6 @@ mod tests {
             root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats
         ));
         assert_eq!(stats.index_overrun, 1);
@@ -1214,7 +1205,6 @@ mod tests {
             root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats
         ));
         assert_eq!(stats.index_overrun, 2);
@@ -1225,7 +1215,6 @@ mod tests {
             root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats
         ));
         assert_eq!(stats.index_overrun, 3);
@@ -1236,7 +1225,6 @@ mod tests {
             root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats
         ));
         assert_eq!(stats.index_overrun, 4);
@@ -1247,7 +1235,6 @@ mod tests {
             root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats
         ));
         assert_eq!(stats.bad_parent_offset, 1);
@@ -1268,7 +1255,6 @@ mod tests {
             root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats
         ));
 
@@ -1288,7 +1274,6 @@ mod tests {
             root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats
         ));
         assert_eq!(1, stats.index_out_of_bounds);
@@ -1309,7 +1294,6 @@ mod tests {
             root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats
         ));
         packet.buffer_mut()[OFFSET_OF_SHRED_VARIANT] = u8::MAX;
@@ -1319,7 +1303,6 @@ mod tests {
             root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats
         ));
         assert_eq!(1, stats.bad_shred_type);
@@ -1331,7 +1314,6 @@ mod tests {
             root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats
         ));
         assert_eq!(1, stats.bad_shred_type);

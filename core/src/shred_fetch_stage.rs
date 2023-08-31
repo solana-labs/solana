@@ -5,11 +5,20 @@ use {
     crossbeam_channel::{unbounded, Sender},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::shred::{should_discard_shred, ShredFetchStats},
+<<<<<<< HEAD
     solana_perf::packet::{PacketBatch, PacketBatchRecycler, PacketFlags},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         feature_set,
+=======
+    solana_perf::packet::{PacketBatch, PacketBatchRecycler, PacketFlags, PACKETS_PER_BATCH},
+    solana_runtime::bank_forks::BankForks,
+    solana_sdk::{
+        clock::DEFAULT_MS_PER_SLOT,
+        packet::{Meta, PACKET_DATA_SIZE},
+        pubkey::Pubkey,
+>>>>>>> 1431275328 (removes outdated check for merkle shreds (#33088))
     },
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
     std::{
@@ -85,19 +94,10 @@ impl ShredFetchStage {
 
             // Limit shreds to 2 epochs away.
             let max_slot = last_slot + 2 * slots_per_epoch;
-            let should_drop_merkle_shreds =
-                |shred_slot| should_drop_merkle_shreds(shred_slot, &root_bank);
             let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
             for packet in packet_batch.iter_mut().filter(|p| !p.meta().discard()) {
                 if turbine_disabled
-                    || should_discard_shred(
-                        packet,
-                        last_root,
-                        max_slot,
-                        shred_version,
-                        should_drop_merkle_shreds,
-                        &mut stats,
-                    )
+                    || should_discard_shred(packet, last_root, max_slot, shred_version, &mut stats)
                 {
                     packet.meta_mut().set_discard(true);
                 } else {
@@ -232,6 +232,7 @@ impl ShredFetchStage {
     }
 }
 
+<<<<<<< HEAD
 #[must_use]
 fn should_drop_merkle_shreds(shred_slot: Slot, root_bank: &Bank) -> bool {
     check_feature_activation(
@@ -243,6 +244,51 @@ fn should_drop_merkle_shreds(shred_slot: Slot, root_bank: &Bank) -> bool {
         shred_slot,
         root_bank,
     )
+=======
+fn receive_quic_datagrams(
+    quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
+    sender: Sender<PacketBatch>,
+    recycler: PacketBatchRecycler,
+    exit: Arc<AtomicBool>,
+) {
+    const RECV_TIMEOUT: Duration = Duration::from_secs(1);
+    while !exit.load(Ordering::Relaxed) {
+        let entry = match quic_endpoint_receiver.recv_timeout(RECV_TIMEOUT) {
+            Ok(entry) => entry,
+            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Disconnected) => return,
+        };
+        let mut packet_batch =
+            PacketBatch::new_with_recycler(&recycler, PACKETS_PER_BATCH, "receive_quic_datagrams");
+        unsafe {
+            packet_batch.set_len(PACKETS_PER_BATCH);
+        };
+        let deadline = Instant::now() + PACKET_COALESCE_DURATION;
+        let entries = std::iter::once(entry).chain(
+            std::iter::repeat_with(|| quic_endpoint_receiver.recv_deadline(deadline).ok())
+                .while_some(),
+        );
+        let size = entries
+            .filter(|(_, _, bytes)| bytes.len() <= PACKET_DATA_SIZE)
+            .zip(packet_batch.iter_mut())
+            .map(|((_pubkey, addr, bytes), packet)| {
+                *packet.meta_mut() = Meta {
+                    size: bytes.len(),
+                    addr: addr.ip(),
+                    port: addr.port(),
+                    flags: PacketFlags::empty(),
+                };
+                packet.buffer_mut()[..bytes.len()].copy_from_slice(&bytes);
+            })
+            .count();
+        if size > 0 {
+            packet_batch.truncate(size);
+            if sender.send(packet_batch).is_err() {
+                return;
+            }
+        }
+    }
+>>>>>>> 1431275328 (removes outdated check for merkle shreds (#33088))
 }
 
 #[cfg(test)]
@@ -285,7 +331,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
         let coding = solana_ledger::shred::Shredder::generate_coding_shreds(
@@ -299,7 +344,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
     }
@@ -321,7 +365,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.index_overrun, 1);
@@ -343,18 +386,12 @@ mod tests {
             3,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.slot_out_of_range, 1);
 
         assert!(should_discard_shred(
-            &packet,
-            last_root,
-            max_slot,
-            345,       // shred_version
-            |_| false, // should_drop_merkle_shreds
-            &mut stats,
+            &packet, last_root, max_slot, /*shred_version:*/ 345, &mut stats,
         ));
         assert_eq!(stats.shred_version_mismatch, 1);
 
@@ -364,7 +401,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
 
@@ -386,7 +422,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
 
@@ -398,7 +433,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
     }
