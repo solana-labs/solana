@@ -12561,13 +12561,14 @@ pub mod tests {
 
     #[test]
     fn test_hash_stored_account() {
-        // This test uses some UNSAFE tricks to detect most of hashing algo changes, resulting from
+        // This test uses some UNSAFE tricks to detect most of hashing code changes, resulting from
         // account's field additions and deletions of StoredAccountMeta and AccountSharedData and
         // hashing-order changes.
 
         const ACCOUNT_DATA_LEN: usize = 3;
         // the type of InputFields elements must not contain references;
         // they should be simple scalars or data blobs
+        // repr(C) is needed for abi-stability in the dirtiest variant of std::mem::transmute().
         #[repr(C)]
         struct InputFields(
             Slot,
@@ -12582,17 +12583,18 @@ pub mod tests {
         let mut blob: InputBlob = [0u8; INPUT_LEN];
 
         // spray memory with decreasing integers so that, data layout change and/or hashing
-        // reordering can be detected.
+        // reordering can be detected. note that just zeroed blob can't detect field reordering.
         for (i, byte) in blob.iter_mut().enumerate() {
             *byte = (INPUT_LEN - i) as u8;
         }
 
-        //UNSAFE: forcibly slice off actual fields from the special byte pattern.
+        //UNSAFE: forcibly cast the special byte pattern to actual account fields.
         let InputFields(slot, meta, account_meta, data, offset, hash) =
             unsafe { std::mem::transmute::<InputBlob, InputFields>(blob) };
 
-        // When adding a field to AppendVecStoredAccountMeta, make sure this is sourced from
-        // InputFields as well after adding new corresponding one to it.
+        // When adding a field to the following constructor, make sure this is sourced from
+        // InputFields as well after adding new corresponding one to it. Needless to say, but note
+        // that the hashing code itself must be adjusted
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
