@@ -129,12 +129,12 @@ pub(crate) struct SanitizedTransactionTTL {
     pub(crate) max_age_slot: Slot,
 }
 
-pub(crate) struct TransactionPacketContainer {
+pub(crate) struct TransactionStateContainer {
     priority_queue: MinMaxHeap<TransactionPriorityId>,
     id_to_transaction_state: HashMap<TransactionId, TransactionState>,
 }
 
-impl TransactionPacketContainer {
+impl TransactionStateContainer {
     pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self {
             priority_queue: MinMaxHeap::with_capacity(capacity),
@@ -290,7 +290,7 @@ mod tests {
         (transaction_ttl, TransactionPriorityDetails { priority, compute_unit_limit: 0 })
     }
 
-    fn push_to_container(container: &mut TransactionPacketContainer, num: usize) {
+    fn push_to_container(container: &mut TransactionStateContainer, num: usize) {
         for id in 0..num as u64 {
             let priority = id;
             let (transaction_ttl, transaction_priority_details) = test_transaction(priority);
@@ -304,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_is_empty() {
-        let mut container = TransactionPacketContainer::with_capacity(1);
+        let mut container = TransactionStateContainer::with_capacity(1);
         assert!(container.is_empty());
 
         push_to_container(&mut container, 1);
@@ -313,7 +313,7 @@ mod tests {
 
     #[test]
     fn test_priority_queue_capacity() {
-        let mut container = TransactionPacketContainer::with_capacity(1);
+        let mut container = TransactionStateContainer::with_capacity(1);
         push_to_container(&mut container, 5);
 
         assert_eq!(container.priority_queue.len(), 1);
@@ -331,7 +331,7 @@ mod tests {
 
     #[test]
     fn test_take_top_n() {
-        let mut container = TransactionPacketContainer::with_capacity(5);
+        let mut container = TransactionStateContainer::with_capacity(5);
         push_to_container(&mut container, 5);
 
         let taken = container.take_top_n(3).collect::<Vec<_>>();
@@ -348,7 +348,7 @@ mod tests {
 
     #[test]
     fn test_remove_by_id() {
-        let mut container = TransactionPacketContainer::with_capacity(5);
+        let mut container = TransactionStateContainer::with_capacity(5);
         push_to_container(&mut container, 5);
 
         container.remove_by_id(&TransactionId::new(3));
@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn test_push_id_into_queue() {
-        let mut container = TransactionPacketContainer::with_capacity(1);
+        let mut container = TransactionStateContainer::with_capacity(1);
         assert!(container.push_id_into_queue(TransactionPriorityId::new(1, TransactionId::new(0))));
         assert_eq!(container.priority_queue.len(), 1);
         assert_eq!(container.id_to_transaction_state.len(), 0);
@@ -375,7 +375,7 @@ mod tests {
 
     #[test]
     fn test_get_packet_entry_missing() {
-        let mut container = TransactionPacketContainer::with_capacity(5);
+        let mut container = TransactionStateContainer::with_capacity(5);
         push_to_container(&mut container, 5);
         assert!(container
             .get_mut_transaction_state(&TransactionId::new(7))
@@ -384,7 +384,7 @@ mod tests {
 
     #[test]
     fn test_get_packet_entry() {
-        let mut container = TransactionPacketContainer::with_capacity(5);
+        let mut container = TransactionStateContainer::with_capacity(5);
         push_to_container(&mut container, 5);
         assert!(container
             .get_mut_transaction_state(&TransactionId::new(3))
@@ -393,7 +393,7 @@ mod tests {
 
     #[test]
     fn test_get_transaction() {
-        let mut container = TransactionPacketContainer::with_capacity(5);
+        let mut container = TransactionStateContainer::with_capacity(5);
         push_to_container(&mut container, 5);
 
         let existing_id = TransactionId::new(3);
