@@ -85,7 +85,7 @@ pub async fn add_lookup_table_account(
         data.len(),
         &solana_address_lookup_table_program::id(),
     );
-    account.set_data(data);
+    account.set_data_from_slice(&data);
     context.set_account(&account_address, &account);
 
     account

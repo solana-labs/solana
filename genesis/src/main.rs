@@ -87,8 +87,8 @@ pub fn load_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> 
 
         let mut account = AccountSharedData::new(account_details.balance, 0, &owner_program_id);
         if account_details.data != "~" {
-            account.set_data(
-                BASE64_STANDARD
+            account.set_data_from_slice(
+                &BASE64_STANDARD
                     .decode(account_details.data.as_str())
                     .map_err(|err| {
                         io::Error::new(
