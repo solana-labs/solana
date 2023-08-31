@@ -125,7 +125,8 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         }];
     
-        let command = vec!["/workspace/start-bootstrap-validator.sh".to_string()];
+        // let command = vec!["/workspace/start-bootstrap-validator.sh".to_string()];
+        let command = vec!["sleep".to_string(), "3600".to_string()];
     
         self.create_deployment(
             "bootstrap-validator",
@@ -158,6 +159,7 @@ impl<'a> Kubernetes<'a> {
                 containers: vec![Container {
                     name: container_name.to_string(),
                     image: Some(image_name.to_string()),
+                    image_pull_policy: Some("Never".to_string()), // Set the image pull policy to "Never"
                     env: Some(env_vars),
                     command: Some(command.clone()),
                     ..Default::default()
@@ -316,7 +318,8 @@ impl<'a> Kubernetes<'a> {
             },
         ];
     
-        let command = vec!["/workspace/start-validator.sh".to_string()];
+        // let command = vec!["/workspace/start-validator.sh".to_string()];
+        let command = vec!["sleep".to_string(), "3600".to_string()];
     
         self.create_deployment(
             "validator",
