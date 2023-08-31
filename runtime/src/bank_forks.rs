@@ -209,18 +209,16 @@ impl BankForks {
     pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
         let bank = self.banks.remove(&slot)?;
         for parent in bank.proper_ancestors() {
-            let mut entry = match self.descendants.entry(parent) {
-                Entry::Vacant(_) => panic!("this should not happen!"),
-                Entry::Occupied(entry) => entry,
+            let Entry::Occupied(mut entry) = self.descendants.entry(parent) else {
+                panic!("this should not happen!");
             };
             entry.get_mut().remove(&slot);
             if entry.get().is_empty() && !self.banks.contains_key(&parent) {
                 entry.remove_entry();
             }
         }
-        let entry = match self.descendants.entry(slot) {
-            Entry::Vacant(_) => panic!("this should not happen!"),
-            Entry::Occupied(entry) => entry,
+        let Entry::Occupied(entry) = self.descendants.entry(slot) else {
+            panic!("this should not happen!");
         };
         if entry.get().is_empty() {
             entry.remove_entry();
