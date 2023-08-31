@@ -55,11 +55,18 @@ pub struct AccountHashesFile {
     count_and_writer: Option<(usize, BufWriter<File>)>,
     /// The directory where temporary cache files are put
     dir_for_temp_cache_files: PathBuf,
+
+    mmap_file: Option<(usize, MmapAccountHashesFile)>,
 }
 
 impl AccountHashesFile {
     /// map the file into memory and return a reader that can access it by slice
     fn get_reader(&mut self) -> Option<(usize, MmapAccountHashesFile)> {
+        std::mem::take(&mut self.mmap_file)
+    }
+
+    /// map the file into memory and return a reader that can access it by slice
+    fn get_reader2(&mut self) -> Option<(usize, MmapAccountHashesFile)> {
         std::mem::take(&mut self.count_and_writer).map(|(count, writer)| {
             let file = Some(writer.into_inner().unwrap());
             (
@@ -113,6 +120,88 @@ impl AccountHashesFile {
     }
 
     pub fn write_batch(&mut self, hashes: &[Hash]) {
+        use std::io::{Seek, SeekFrom, Write};
+
+        let file = Some(
+            tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
+                panic!(
+                    "Unable to create file within {}: {err}",
+                    self.dir_for_temp_cache_files.display()
+                )
+            }),
+        );
+
+        let size = std::mem::size_of_val(hashes);
+        let mut data = file.unwrap();
+
+        // let mut data = std::fs::OpenOptions::new()
+        //     .read(true)
+        //     .write(true)
+        //     .create(true)
+        //     .open(self.file)
+        //     .map_err(|e| {
+        //         panic!("error");
+        //     })
+        //     .unwrap();
+
+        // Theoretical performance optimization: write a zero to the end of
+        // the file so that we won't have to resize it later, which may be
+        // expensive.
+        data.seek(std::io::SeekFrom::Start((size - 1) as u64))
+            .unwrap();
+        data.write_all(&[0]).unwrap();
+        data.rewind().unwrap();
+        data.flush().unwrap();
+
+        //UNSAFE: Required to create a Mmap
+        let map = unsafe { MmapMut::map_mut(&data) };
+        let mut map = map.unwrap_or_else(|e| {
+            error!(
+                "Failed to map the data file (size: {}): {}.\n
+                    Please increase sysctl vm.max_map_count or equivalent for your platform.",
+                size, e
+            );
+            std::process::exit(1);
+        });
+
+        let hash_bytes = unsafe { std::slice::from_raw_parts(hashes.as_ptr() as *const u8, size) };
+
+        (&mut map[..]).write_all(hash_bytes).unwrap();
+        self.mmap_file = Some((size, MmapAccountHashesFile { mmap: map }));
+
+        // mut_mmap.deref_mut().write_all(data_to_write).unwrap();
+
+        // if self.count_and_writer.is_none() {
+        //     // we have hashes to write but no file yet, so create a file that will auto-delete on drop
+        //     self.count_and_writer = Some((
+        //         0,
+        //         BufWriter::new(
+        //             tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
+        //                 panic!(
+        //                     "Unable to create file within {}: {err}",
+        //                     self.dir_for_temp_cache_files.display()
+        //                 )
+        //             }),
+        //         ),
+        //     ));
+        // }
+        // let n = hashes.len();
+        // let count_and_writer = self.count_and_writer.as_mut().unwrap();
+
+        // let hash_bytes = unsafe { std::slice::from_raw_parts(hashes.as_ptr() as *const u8, size) };
+        // assert_eq!(
+        //     size,
+        //     count_and_writer.1.write(hash_bytes).unwrap_or_else(|err| {
+        //         panic!(
+        //             "Unable to write file within {}: {err}",
+        //             self.dir_for_temp_cache_files.display()
+        //         )
+        //     })
+        // );
+        // count_and_writer.0 += n;
+    }
+
+    pub fn write_batch0(&mut self, hashes: &[Hash]) {
         if self.count_and_writer.is_none() {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
             self.count_and_writer = Some((
@@ -1162,6 +1251,8 @@ impl<'a> AccountsHasher<'a> {
         let mut hash_file = AccountHashesFile {
             count_and_writer: None,
             dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
+
+            mmap_file: None,
         };
 
         if !hashes_to_write.is_empty() {
@@ -1322,6 +1413,7 @@ pub mod tests {
             Self {
                 count_and_writer: None,
                 dir_for_temp_cache_files,
+                mmap_file: None,
             }
         }
     }
