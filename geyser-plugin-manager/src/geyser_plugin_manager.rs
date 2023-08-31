@@ -333,7 +333,7 @@ pub(crate) fn load_plugin_from_config(
 pub(crate) fn load_plugin_from_config(
     _geyser_plugin_config_file: &Path,
 ) -> Result<(Box<dyn GeyserPlugin>, Library, &str), GeyserPluginManagerError> {
-    Ok(tests::dummy_plugin_and_library())
+    Ok(tests::dummy_plugin_and_library(tests::TestPlugin))
 }
 
 #[cfg(test)]
@@ -345,19 +345,10 @@ mod tests {
         std::sync::{Arc, RwLock},
     };
 
-    pub(super) fn dummy_plugin_and_library() -> (Box<dyn GeyserPlugin>, Library, &'static str) {
-        let plugin = Box::new(TestPlugin);
-        let lib = {
-            let handle: *mut std::os::raw::c_void = &mut () as *mut _ as *mut std::os::raw::c_void;
-            // SAFETY: all calls to get Symbols should fail, so this is actually safe
-            let inner_lib = unsafe { libloading::os::unix::Library::from_raw(handle) };
-            Library::from(inner_lib)
-        };
-        (plugin, lib, DUMMY_CONFIG)
-    }
-
-    pub(super) fn dummy_plugin_and_library2() -> (Box<dyn GeyserPlugin>, Library, &'static str) {
-        let plugin = Box::new(TestPlugin2);
+    pub(super) fn dummy_plugin_and_library<P: GeyserPlugin>(
+        plugin: P,
+    ) -> (Box<dyn GeyserPlugin>, Library, &'static str) {
+        let plugin = Box::new(plugin);
         let lib = {
             let handle: *mut std::os::raw::c_void = &mut () as *mut _ as *mut std::os::raw::c_void;
             // SAFETY: all calls to get Symbols should fail, so this is actually safe
@@ -371,7 +362,7 @@ mod tests {
     pub(super) const DUMMY_CONFIG: &str = "dummy_config";
     const ANOTHER_DUMMY_NAME: &str = "another_dummy";
 
-    #[derive(Debug)]
+    #[derive(Clone, Copy, Debug)]
     pub(super) struct TestPlugin;
 
     impl GeyserPlugin for TestPlugin {
@@ -380,7 +371,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Clone, Copy, Debug)]
     pub(super) struct TestPlugin2;
 
     impl GeyserPlugin for TestPlugin2 {
@@ -403,7 +394,7 @@ mod tests {
         );
 
         // Mock having loaded plugin (TestPlugin)
-        let (mut plugin, lib, config) = dummy_plugin_and_library();
+        let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin);
         plugin.on_load(config).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
@@ -432,12 +423,12 @@ mod tests {
 
         // Load two plugins
         // First
-        let (mut plugin, lib, config) = dummy_plugin_and_library();
+        let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin);
         plugin.on_load(config).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
         // Second
-        let (mut plugin, lib, config) = dummy_plugin_and_library2();
+        let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin2);
         plugin.on_load(config).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
