@@ -109,17 +109,43 @@ impl<'a> Genesis<'a> {
         Ok(())
     }
 
-    pub fn generate_accounts(&mut self, validator_type: &str) -> Result<(), Box<dyn Error>> {
-        let mut accounts = vec!["identity", "vote-account", "stake-account"];
+    pub fn generate_accounts(
+        &mut self, 
+        validator_type: &str, 
+        number_of_accounts: i32
+    ) -> Result<(), Box<dyn Error>> {
         let mut filename_prefix = "validator".to_string();
         if validator_type == "bootstrap" {
             filename_prefix = format!("{}-{}", validator_type, filename_prefix);
+        } else if validator_type == "validator" {
+            filename_prefix = "validator".to_string();
+        } else {
+            return Err(boxed_error!(format!("Invalid validator type: {}", validator_type)));
         }
+
+        for i in 0..number_of_accounts {
+            self.generate_account(validator_type, filename_prefix.as_str(), i)?;
+        }
+
+
+        Ok(())
+    }
+
+    fn generate_account(&mut self, validator_type: &str, filename_prefix: &str, i: i32) -> Result<(), Box<dyn Error>> {
+        let account_types = vec!["identity", "vote-account", "stake-account"];
         let mut identity: Option<Keypair> = None;
         let mut vote: Option<Keypair> = None;
         let mut stake: Option<Keypair> = None;
-        for account in accounts {
-            let filename = format!("{}/{}.json", filename_prefix, account);
+        for account in account_types {
+            let filename: String;
+            if validator_type == "bootstrap" {
+                filename = format!("{}/{}.json", filename_prefix, account);
+            } else if validator_type == "validator" {
+                filename = format!("{}-{}-{}.json", filename_prefix, account, i);
+            } else {
+                return Err(boxed_error!(format!("Invalid validator type: {}", validator_type)));
+            }
+
             let outfile = self.config_dir.join(filename);
             info!("outfile: {:?}", outfile);
 
@@ -160,6 +186,7 @@ impl<'a> Genesis<'a> {
         let rent = Rent::default();
 
         // vote account
+        // lamports set a default 500
         let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
             .max(VoteState::get_rent_exempt_reserve(&rent))
             .to_string();
@@ -284,22 +311,6 @@ impl<'a> Genesis<'a> {
         Ok(())
     }
 
-    // // convert binary file to base64
-    // pub fn setup_config_map(
-    //     &self,
-    // ) -> Result<(), Box<dyn Error>> {
-    //     self.verify_genesis_from_file()?;
-    //     let path = self.config_dir.join("bootstrap-validator").join(DEFAULT_GENESIS_FILE);
-    //     let mut input_content = Vec::new();
-    //     File::open(path)?.read_to_end(&mut input_content)?;
-    //     let base64_content = general_purpose::STANDARD.encode(input_content);
-
-    //     let outpath = self.config_dir.join("bootstrap-validator").join("genesis-config-map.yaml");
-
-    //     Ok(())
-
-    // }
-
     pub fn load_genesis_to_base64_from_file(&self) -> Result<String, Box<dyn Error>> {
         let path = self
             .config_dir
@@ -315,12 +326,6 @@ impl<'a> Genesis<'a> {
     // should be run inside pod
     pub fn verify_genesis_from_file(&self) -> Result<(), Box<dyn Error>> {
         let path = self.config_dir.join("bootstrap-validator");
-        // let loaded_config = GenesisConfig::load(&path);
-        // let loaded_config = match GenesisConfig::load(&path) {
-        //     Ok(config) => config,
-        //     Err(err) => return Err(boxed_error!(format!("Failed to load genesis config from file! err: {}", err))),
-        // };
-
         let loaded_config = GenesisConfig::load(&path)?;
         info!("hash of loaded genesis: {}", loaded_config.hash());
         match &self.genesis_config {
