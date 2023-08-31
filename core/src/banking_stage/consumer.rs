@@ -1874,10 +1874,7 @@ mod tests {
             assert_eq!(buffered_packet_batches.len(), num_conflicting_transactions);
             // When the working bank in poh_recorder is Some, all packets should be processed.
             // Multi-Iterator will process them 1-by-1 if all txs are conflicting.
-            poh_recorder
-                .write()
-                .unwrap()
-                .set_bank_for_test(bank);
+            poh_recorder.write().unwrap().set_bank_for_test(bank);
             let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
             let banking_stage_stats = BankingStageStats::default();
             consumer.consume_buffered_packets(
@@ -1955,10 +1952,7 @@ mod tests {
             assert_eq!(buffered_packet_batches.len(), num_conflicting_transactions);
             // When the working bank in poh_recorder is Some, all packets should be processed.
             // Multi-Iterator will process them 1-by-1 if all txs are conflicting.
-            poh_recorder
-                .write()
-                .unwrap()
-                .set_bank_for_test(bank);
+            poh_recorder.write().unwrap().set_bank_for_test(bank);
             let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
             consumer.consume_buffered_packets(
                 &bank_start,
