@@ -29,7 +29,6 @@ pub struct DuplicateShred {
     pub(crate) from: Pubkey,
     pub(crate) wallclock: u64,
     pub(crate) slot: Slot,
-    #[allow(dead_code)]
     _unused: u32,
     shred_type: ShredType,
     // Serialized DuplicateSlotProof split into chunks.
