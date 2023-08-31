@@ -12551,32 +12551,35 @@ pub mod tests {
 
     #[test]
     fn test_hash_stored_account() {
-        // This test uses some UNSAFE tricks to detect most of account's field
-        // addition and deletion without changing the hash code
-
+        // Number here are just random.
+        let slot: Slot = 0xaeed23dad70ba9aeu64;
+        let meta = StoredMeta {
+            write_version_obsolete: 0x26ebe67958b75a71,
+            data_len: 0x1496bf012a670f37,
+            pubkey: Pubkey::from([
+                0x0f, 0xcb, 0x7e, 0x3b, 0xb8, 0x62, 0x14, 0x81, 0xd6, 0x91, 0x11, 0xbd, 0x44, 0xf0,
+                0x6c, 0x79, 0x84, 0xf2, 0x59, 0x26, 0x18, 0x89, 0x83, 0x31, 0xbf, 0x0e, 0xa5, 0xb4,
+                0x13, 0xb3, 0x17, 0x58,
+            ]),
+        };
+        let account_meta = AccountMeta {
+            lamports: 0x03a915016cc680d6,
+            rent_epoch: 0xa1030b12297933af,
+            owner: Pubkey::from([
+                0x3a, 0x88, 0xba, 0xd1, 0xd1, 0x06, 0xf5, 0x01, 0x98, 0x1b, 0x84, 0x3e, 0x6c, 0xf3,
+                0x6d, 0xcb, 0xbf, 0x76, 0x56, 0x9b, 0xa3, 0xc0, 0xcd, 0xfe, 0xd8, 0x74, 0x06, 0xb5,
+                0x0c, 0x89, 0xe1, 0x01,
+            ]),
+            executable: false,
+        };
         const ACCOUNT_DATA_LEN: usize = 3;
-        // the type of InputTuple elements must not contain references;
-        // they should be simple scalars or data blobs
-        type InputTuple = (
-            Slot,
-            StoredMeta,
-            AccountMeta,
-            [u8; ACCOUNT_DATA_LEN],
-            usize, // for StoredAccountMeta::offset
-            Hash,
-        );
-        const INPUT_LEN: usize = std::mem::size_of::<InputTuple>();
-        type InputBlob = [u8; INPUT_LEN];
-        let mut blob: InputBlob = [0u8; INPUT_LEN];
-
-        // spray memory with decreasing counts so that, data layout can be detected.
-        for (i, byte) in blob.iter_mut().enumerate() {
-            *byte = (INPUT_LEN - i) as u8;
-        }
-
-        //UNSAFE: forcibly cast the special byte pattern to actual account fields.
-        let (slot, meta, account_meta, data, offset, hash): InputTuple =
-            unsafe { std::mem::transmute::<InputBlob, InputTuple>(blob) };
+        let data: [u8; ACCOUNT_DATA_LEN] = [0xe2, 0x5e, 0xe5];
+        let offset: usize = 0xe963f8abc3d39a51;
+        let hash = Hash::from([
+            0x1c, 0xd8, 0x45, 0x1e, 0x46, 0x1e, 0xcd, 0x1e, 0xff, 0xf5, 0xfd, 0x9e, 0x4c, 0xfb,
+            0x1b, 0x49, 0x60, 0xbf, 0xc2, 0xa3, 0x17, 0x2e, 0xd3, 0x55, 0xd6, 0x20, 0x5c, 0xa0,
+            0x62, 0x53, 0xf4, 0x42,
+        ]);
 
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
@@ -12588,11 +12591,8 @@ pub mod tests {
         });
         let account = stored_account.to_account_shared_data();
 
-        let expected_account_hash = if cfg!(debug_assertions) {
-            Hash::from_str("6qtBXmRrLdTdAV5bK6bZZJxQA4fPSUBxzQGq2BQSat25").unwrap()
-        } else {
-            Hash::from_str("5HL9MtsQmxZQ8XSgcAhSkqnrayQFXUY8FT1JsHjDNKbi").unwrap()
-        };
+        let expected_account_hash =
+            Hash::from_str("B6PLnsBw9CqqqWvjdEHbT2tnVRfvLJQRwdr7AzhPqEp6").unwrap();
 
         assert_eq!(
             AccountsDb::hash_account(
