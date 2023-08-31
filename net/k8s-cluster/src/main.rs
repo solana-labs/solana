@@ -1,5 +1,5 @@
 use {
-    clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
+    clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches, value_t},
     k8s_openapi::{
         api::{
             apps::v1::{Deployment, DeploymentSpec},
@@ -46,7 +46,11 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("num-validators")
                 .takes_value(true)
                 .default_value("1")
-                .help("Number of validator replicas to deploy"),
+                .help("Number of validator replicas to deploy")
+                .validator(|s| match s.parse::<i32>() {
+                    Ok(n) if n > 0 => Ok(()),
+                    _ => Err(String::from("number_of_validators should be greater than 0")),
+                }),
         )
         .arg(
             Arg::with_name("bootstrap_container_name")
@@ -211,7 +215,15 @@ async fn main() {
             return;
         }
     }
-    match genesis.generate_accounts("bootstrap") {
+    match genesis.generate_accounts("bootstrap", 1) {
+        Ok(_) => (),
+        Err(err) => {
+            error!("generate accounts error! {}", err);
+            return;
+        }
+    }
+
+    match genesis.generate_accounts("validator", setup_config.num_validators) {
         Ok(_) => (),
         Err(err) => {
             error!("generate accounts error! {}", err);
