@@ -20,7 +20,7 @@ use {
         borrow::Borrow,
         convert::TryInto,
         fs::File,
-        io::{BufWriter, Write},
+        io::{BufWriter, Seek, Write},
         path::PathBuf,
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -120,8 +120,6 @@ impl AccountHashesFile {
     }
 
     pub fn write_batch(&mut self, hashes: &[Hash]) {
-        use std::io::{Seek, SeekFrom, Write};
-
         let file = Some(
             tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
                 panic!(
@@ -168,7 +166,12 @@ impl AccountHashesFile {
 
         map[..size].copy_from_slice(hash_bytes);
 
-        error!("mmap_size={}, data_size={}", map.len(), size);
+        error!(
+            "mmap_size={}, data_size={}, hash_num={}",
+            map.len(),
+            size,
+            hashes.len()
+        );
 
         self.mmap_file = Some((size, MmapAccountHashesFile { mmap: map }));
 
