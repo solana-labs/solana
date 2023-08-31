@@ -204,7 +204,7 @@ mod tests {
             transaction_state,
             TransactionState::Unprocessed { .. }
         ));
-        let transaction_ttl = transaction_state.transition_to_pending();
+        let _ = transaction_state.transition_to_pending();
         assert!(matches!(
             transaction_state,
             TransactionState::Pending { .. }
@@ -271,8 +271,7 @@ mod tests {
         ));
         assert_eq!(transaction_ttl.max_age_slot, Slot::MAX);
 
-        // ensure transaction_ttl is not lost through state transitions
-        let transaction_ttl = transaction_state.transition_to_pending();
+        let _ = transaction_state.transition_to_pending();
         assert!(matches!(
             transaction_state,
             TransactionState::Pending { .. }
