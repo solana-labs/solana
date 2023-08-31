@@ -65,13 +65,13 @@ of confirmation.
 
 #### Transaction Merkle
 
-An Entry-Merkle is a Merkle Root including all transactions in a given entry,
-sorted by signature. Each transaction in an entry is already merkled here:
+An Entry-Merkle is a Merkle Root including all transactions in a given entry.
+All signatures of transactions in entries are already merkled here:
 https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/ledger/src/entry.rs#L205.
 This means we can show a transaction `T` was included in an entry `E`.
 
-A Block-Merkle is the Merkle Root of all the Entry-Merkles sequenced in the
-block.
+A proposed Block-Merkle is the Merkle Root of all the Entry-Merkles sequenced in the
+block. The Block-Merkle is currently not computed or implemented.
 
 ![Block Merkle Diagram](/img/spv-block-merkle.svg)
 
@@ -138,7 +138,7 @@ https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3
 Each vote is a signed transaction that includes the bank hash of the block the
 validator voted for, i.e. the `B` from the `Transaction Merkle` section above.
 Once a certain threshold `T` of the network has voted on a block, the block is
-considered optimistially confirmed. The votes made by this group of `T`
+considered optimistically confirmed. The votes made by this group of `T`
 validators is needed to show the block with bank hash `B` was optimistically
 confirmed.
 
@@ -150,11 +150,11 @@ vote, and vote account pubkey responsible for the vote.
 
 Together, the transaction merkle and optimistic confirmation proofs can be
 provided over RPC to subscribers by extending the existing signature
-subscrption logic. Clients who subscribe to the "Confirmed" confirmation
+subscription logic. Clients who subscribe to the "Confirmed" confirmation
 level are already notified when optimistic confirmation is detected, a flag
 can be provided to signal the two proofs above should also be returned.
 
-It is important to note that optimistcally confirming `B` also implies that all
+It is important to note that optimistically confirming `B` also implies that all
 ancestor blocks of `B` are also optimistically confirmed, and also that not
 all blocks will be optimistically confirmed.
 
@@ -164,7 +164,7 @@ B -> B'
 
 ```
 
-So in the example above if a block `B'` is optimisically confirmed, then so is
+So in the example above if a block `B'` is optimistically confirmed, then so is
 `B`. Thus if a transaction was in block `B`, the transaction merkle in the
 proof will be for block `B`, but the votes presented in the proof will be for
 block `B'`. This is why the headers in the `Block headers` section above are
@@ -174,7 +174,7 @@ important, the client will need to verify that `B` is indeed an ancestor of
 #### Proof of Stake Distribution
 
 Once presented with the transaction merkle and optimistic confirmation proofs
-above, a client can verify a transaction `T` was optimistially confirmed in a
+above, a client can verify a transaction `T` was optimistically confirmed in a
 block with bank hash `B`. The last missing piece is how to verify that the
 votes in the optimistic proofs above actually constitute the valid `T`
 percentage of the stake necessay to uphold the safety guarantees of
@@ -243,6 +243,34 @@ Merkle Root and will appear in votes included in an Entry. The light client can
 simulate [fork selection](../implemented-proposals/tower-bft.md) for the
 consecutive votes and verify that the receipt is confirmed at the desired
 lockout threshold.
+
+The light client would have to download the vote set up to the super-majority of
+stake, which is currently around ~150 votes. Each vote being 300-500 bytes could
+give a size of 60k bytes for the votes, the client would have to verify all the
+vote signatures and that they are part of the current staked set. The merkle tree
+path to the transaction and status code would have to be downloaded. The number of
+entries per block is roughly 250, and the number of transactions per block is roughly
+2500. log2(2500) = 12 hashes or 384 bytes.
+
+With the Block-Merkle, 250 hashes for all the entries would have to be downloaded, and
+then all the hash inputs to that entry or around 10 hashes. Around a total of 260 hashes
+or roughly 8k.
+
+The inputs to the Bank-Hash are around 104 bytes each. To generate a chain back to the
+parent, N banks times 104 bytes will have to be downloaded and hashed. N could be as
+low as 32 which is about 3.3k total.
+
+To compute the current validator set and stakes, an account inclusion proof for the
+special sysvar account which will write the validator set and stakes to is used. This
+would have the merkle path to the account state itself and the inputs to the bank hash
+as well as another set of votes to prove the Bank-Hash.
+
+Attack vectors:
+Generating a made-up validator set and set of states: valid signatures for the votes from
+the validator set will be hard to generate assuming the client has the correct validator set.
+
+Presenting a transaction on a non-rooted fork to the user as confirmed by the network:
+Votes will not show that the validators are locked out on that fork.
 
 ### Synthetic State
 
