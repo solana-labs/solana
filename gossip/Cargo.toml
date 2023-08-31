@@ -54,6 +54,7 @@ thiserror = { workspace = true }
 [dev-dependencies]
 num_cpus = { workspace = true }
 serial_test = { workspace = true }
+test-case = { workspace = true }
 
 [build-dependencies]
 rustc_version = { workspace = true }

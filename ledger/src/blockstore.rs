@@ -135,9 +135,26 @@ impl std::fmt::Display for InsertDataShredError {
     }
 }
 
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub enum PossibleDuplicateShred {
+    Exists(Shred), // Blockstore has another shred in its spot
+    LastIndexConflict(/* original */ Shred, /* conflict */ Vec<u8>), // The index of this shred conflicts with `slot_meta.last_index`
+    ErasureConflict(/* original */ Shred, /* conflict */ Vec<u8>), // The coding shred has a conflict in the erasure_meta
+}
+
+impl PossibleDuplicateShred {
+    pub fn slot(&self) -> Slot {
+        match self {
+            Self::Exists(shred) => shred.slot(),
+            Self::LastIndexConflict(shred, _) => shred.slot(),
+            Self::ErasureConflict(shred, _) => shred.slot(),
+        }
+    }
+}
+
 pub struct InsertResults {
     completed_data_set_infos: Vec<CompletedDataSetInfo>,
-    duplicate_shreds: Vec<Shred>,
+    duplicate_shreds: Vec<PossibleDuplicateShred>,
 }
 
 /// A "complete data set" is a range of [`Shred`]s that combined in sequence carry a single
@@ -1047,7 +1064,7 @@ impl Blockstore {
         metrics: &mut BlockstoreInsertionMetrics,
     ) -> Result<Vec<CompletedDataSetInfo>>
     where
-        F: Fn(Shred),
+        F: Fn(PossibleDuplicateShred),
     {
         let InsertResults {
             completed_data_set_infos,
@@ -1165,7 +1182,7 @@ impl Blockstore {
         write_batch: &mut WriteBatch,
         just_received_shreds: &mut HashMap<ShredId, Shred>,
         index_meta_time_us: &mut u64,
-        duplicate_shreds: &mut Vec<Shred>,
+        duplicate_shreds: &mut Vec<PossibleDuplicateShred>,
         is_trusted: bool,
         shred_source: ShredSource,
         metrics: &mut BlockstoreInsertionMetrics,
@@ -1184,7 +1201,7 @@ impl Blockstore {
         if !is_trusted {
             if index_meta.coding().contains(shred_index) {
                 metrics.num_coding_shreds_exists += 1;
-                duplicate_shreds.push(shred);
+                duplicate_shreds.push(PossibleDuplicateShred::Exists(shred));
                 return false;
             }
 
@@ -1201,8 +1218,6 @@ impl Blockstore {
                 .unwrap_or_else(|| ErasureMeta::from_coding_shred(&shred).unwrap())
         });
 
-        // TODO: handle_duplicate is not invoked and so duplicate shreds are
-        // not gossiped to the rest of cluster.
         if !erasure_meta.check_coding_shred(&shred) {
             metrics.num_coding_shreds_invalid_erasure_config += 1;
             let conflicting_shred = self.find_conflicting_coding_shred(
@@ -1212,15 +1227,22 @@ impl Blockstore {
                 just_received_shreds,
             );
             if let Some(conflicting_shred) = conflicting_shred {
-                if self
-                    .store_duplicate_if_not_existing(
-                        slot,
+                if !self.has_duplicate_shreds_in_slot(slot) {
+                    if self
+                        .store_duplicate_slot(
+                            slot,
+                            conflicting_shred.clone(),
+                            shred.payload().clone(),
+                        )
+                        .is_err()
+                    {
+                        warn!("bad duplicate store..");
+                    }
+
+                    duplicate_shreds.push(PossibleDuplicateShred::ErasureConflict(
+                        shred.clone(),
                         conflicting_shred,
-                        shred.payload().clone(),
-                    )
-                    .is_err()
-                {
-                    warn!("bad duplicate store..");
+                    ));
                 }
             } else {
                 datapoint_info!("bad-conflict-shred", ("slot", slot, i64));
@@ -1338,7 +1360,7 @@ impl Blockstore {
         just_inserted_shreds: &mut HashMap<ShredId, Shred>,
         index_meta_time_us: &mut u64,
         is_trusted: bool,
-        duplicate_shreds: &mut Vec<Shred>,
+        duplicate_shreds: &mut Vec<PossibleDuplicateShred>,
         leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
     ) -> std::result::Result<Vec<CompletedDataSetInfo>, InsertDataShredError> {
@@ -1360,7 +1382,7 @@ impl Blockstore {
 
         if !is_trusted {
             if Self::is_data_shred_present(&shred, slot_meta, index_meta.data()) {
-                duplicate_shreds.push(shred);
+                duplicate_shreds.push(PossibleDuplicateShred::Exists(shred));
                 return Err(InsertDataShredError::Exists);
             }
 
@@ -1385,6 +1407,7 @@ impl Blockstore {
                 &self.last_root,
                 leader_schedule,
                 shred_source,
+                duplicate_shreds,
             ) {
                 return Err(InsertDataShredError::InvalidShred);
             }
@@ -1466,6 +1489,7 @@ impl Blockstore {
         last_root: &RwLock<u64>,
         leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
+        duplicate_shreds: &mut Vec<PossibleDuplicateShred>,
     ) -> bool {
         let shred_index = u64::from(shred.index());
         let slot = shred.slot();
@@ -1483,21 +1507,25 @@ impl Blockstore {
             let leader_pubkey = leader_schedule
                 .and_then(|leader_schedule| leader_schedule.slot_leader_at(slot, None));
 
-            let ending_shred: Cow<Vec<u8>> = self.get_data_shred_from_just_inserted_or_db(
-                just_inserted_shreds,
-                slot,
-                last_index.unwrap(),
-            );
+            if !self.has_duplicate_shreds_in_slot(slot) {
+                let ending_shred: Vec<u8> = self
+                    .get_data_shred_from_just_inserted_or_db(
+                        just_inserted_shreds,
+                        slot,
+                        last_index.unwrap(),
+                    )
+                    .into_owned();
 
-            if self
-                .store_duplicate_if_not_existing(
-                    slot,
-                    ending_shred.into_owned(),
-                    shred.payload().clone(),
-                )
-                .is_err()
-            {
-                warn!("store duplicate error");
+                if self
+                    .store_duplicate_slot(slot, ending_shred.clone(), shred.payload().clone())
+                    .is_err()
+                {
+                    warn!("store duplicate error");
+                }
+                duplicate_shreds.push(PossibleDuplicateShred::LastIndexConflict(
+                    shred.clone(),
+                    ending_shred,
+                ));
             }
 
             datapoint_error!(
@@ -1518,21 +1546,25 @@ impl Blockstore {
             let leader_pubkey = leader_schedule
                 .and_then(|leader_schedule| leader_schedule.slot_leader_at(slot, None));
 
-            let ending_shred: Cow<Vec<u8>> = self.get_data_shred_from_just_inserted_or_db(
-                just_inserted_shreds,
-                slot,
-                slot_meta.received - 1,
-            );
+            if !self.has_duplicate_shreds_in_slot(slot) {
+                let ending_shred: Vec<u8> = self
+                    .get_data_shred_from_just_inserted_or_db(
+                        just_inserted_shreds,
+                        slot,
+                        slot_meta.received - 1,
+                    )
+                    .into_owned();
 
-            if self
-                .store_duplicate_if_not_existing(
-                    slot,
-                    ending_shred.into_owned(),
-                    shred.payload().clone(),
-                )
-                .is_err()
-            {
-                warn!("store duplicate error");
+                if self
+                    .store_duplicate_slot(slot, ending_shred.clone(), shred.payload().clone())
+                    .is_err()
+                {
+                    warn!("store duplicate error");
+                }
+                duplicate_shreds.push(PossibleDuplicateShred::LastIndexConflict(
+                    shred.clone(),
+                    ending_shred,
+                ));
             }
 
             datapoint_error!(
@@ -3222,19 +3254,6 @@ impl Blockstore {
 
     pub fn remove_slot_duplicate_proof(&self, slot: Slot) -> Result<()> {
         self.duplicate_slots_cf.delete(slot)
-    }
-
-    pub fn store_duplicate_if_not_existing(
-        &self,
-        slot: Slot,
-        shred1: Vec<u8>,
-        shred2: Vec<u8>,
-    ) -> Result<()> {
-        if !self.has_duplicate_shreds_in_slot(slot) {
-            self.store_duplicate_slot(slot, shred1, shred2)
-        } else {
-            Ok(())
-        }
     }
 
     pub fn get_first_duplicate_proof(&self) -> Option<(Slot, DuplicateSlotProof)> {
@@ -6571,6 +6590,7 @@ pub mod tests {
             &last_root,
             None,
             ShredSource::Repaired,
+            &mut Vec::new(),
         ));
         // Trying to insert another "is_last" shred with index < the received index should fail
         // skip over shred 7
@@ -6587,6 +6607,7 @@ pub mod tests {
                 panic!("Shred in unexpected format")
             }
         };
+        let mut duplicate_shreds = vec![];
         assert!(!blockstore.should_insert_data_shred(
             &shred7,
             &slot_meta,
@@ -6594,8 +6615,15 @@ pub mod tests {
             &last_root,
             None,
             ShredSource::Repaired,
+            &mut duplicate_shreds,
         ));
         assert!(blockstore.has_duplicate_shreds_in_slot(0));
+        assert_eq!(duplicate_shreds.len(), 1);
+        assert_matches!(
+            duplicate_shreds[0],
+            PossibleDuplicateShred::LastIndexConflict(_, _)
+        );
+        assert_eq!(duplicate_shreds[0].slot(), 0);
 
         // Insert all pending shreds
         let mut shred8 = shreds[8].clone();
@@ -6604,18 +6632,30 @@ pub mod tests {
 
         // Trying to insert a shred with index > the "is_last" shred should fail
         if shred8.is_data() {
-            shred8.set_slot(slot_meta.last_index.unwrap() + 1);
+            shred8.set_index((slot_meta.last_index.unwrap() + 1) as u32);
         } else {
             panic!("Shred in unexpected format")
         }
+        duplicate_shreds.clear();
+        blockstore.duplicate_slots_cf.delete(0).unwrap();
+        assert!(!blockstore.has_duplicate_shreds_in_slot(0));
         assert!(!blockstore.should_insert_data_shred(
-            &shred7,
+            &shred8,
             &slot_meta,
             &HashMap::new(),
             &last_root,
             None,
             ShredSource::Repaired,
+            &mut duplicate_shreds,
         ));
+
+        assert_eq!(duplicate_shreds.len(), 1);
+        assert_matches!(
+            duplicate_shreds[0],
+            PossibleDuplicateShred::LastIndexConflict(_, _)
+        );
+        assert_eq!(duplicate_shreds[0].slot(), 0);
+        assert!(blockstore.has_duplicate_shreds_in_slot(0));
     }
 
     #[test]
@@ -6701,7 +6741,10 @@ pub mod tests {
             ShredSource::Turbine,
             &mut BlockstoreInsertionMetrics::default(),
         ));
-        assert_eq!(duplicate_shreds, vec![coding_shred]);
+        assert_eq!(
+            duplicate_shreds,
+            vec![PossibleDuplicateShred::Exists(coding_shred)]
+        );
     }
 
     #[test]

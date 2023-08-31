@@ -6066,6 +6066,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "static_assertions",
+ "test-case",
  "thiserror",
 ]
 
