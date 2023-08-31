@@ -19,7 +19,7 @@ use {
         system_program,
         timing::years_as_slots,
     },
-    base64::{Engine as _, engine::general_purpose},
+    base64::{engine::general_purpose, Engine as _},
     bincode::{deserialize, serialize},
     chrono::{TimeZone, Utc},
     memmap2::Mmap,
@@ -207,20 +207,22 @@ impl GenesisConfig {
     }
 
     pub fn load_from_base64_string(base64_data: &str) -> Result<Self, std::io::Error> {
-        let decoded_data = general_purpose::STANDARD.decode(base64_data).map_err(|err| {
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to decode base64 data: {:?}", err),
-            )
-        })?;
-    
+        let decoded_data = general_purpose::STANDARD
+            .decode(base64_data)
+            .map_err(|err| {
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to decode base64 data: {:?}", err),
+                )
+            })?;
+
         let genesis_config = deserialize(&decoded_data).map_err(|err| {
             std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("Unable to deserialize data: {:?}", err),
             )
         })?;
-        
+
         Ok(genesis_config)
     }
 

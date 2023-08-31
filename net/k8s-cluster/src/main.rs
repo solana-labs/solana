@@ -15,22 +15,18 @@ use {
         Client,
     },
     log::*,
-    serde_json,
-    serde_yaml,
+    serde_json, serde_yaml,
     solana_k8s_cluster::{
         docker::{DockerConfig, DockerImageConfig},
-        release::{BuildConfig, Deploy},
         genesis::{Genesis, SetupConfig},
+        get_solana_root, initialize_globals,
         kubernetes::Kubernetes,
-        initialize_globals,
-        get_solana_root,
+        release::{BuildConfig, Deploy},
         ValidatorType,
     },
     solana_sdk::genesis_config::GenesisConfig,
-    std::{collections::BTreeMap, process, thread, time::Duration, fs::File, io::Write},
+    std::{collections::BTreeMap, fs::File, io::Write, process, thread, time::Duration},
 };
-
-
 
 const BOOTSTRAP_VALIDATOR_REPLICAS: i32 = 1;
 
@@ -164,10 +160,13 @@ async fn main() {
     match kub_controller.namespace_exists().await {
         Ok(res) => {
             if !res {
-                error!("Namespace: '{}' doesn't exist. Exiting...", setup_config.namespace);
+                error!(
+                    "Namespace: '{}' doesn't exist. Exiting...",
+                    setup_config.namespace
+                );
                 return;
             }
-        },
+        }
         Err(err) => {
             error!("{}", err);
             return;
@@ -239,7 +238,7 @@ async fn main() {
         Err(err) => {
             error!("Failed verify genesis from file! err: {}", err);
             return;
-        } 
+        }
     }
 
     let base64_genesis_string = match genesis.load_genesis_to_base64_from_file() {
@@ -250,14 +249,18 @@ async fn main() {
         }
     };
 
-    let loaded_config = GenesisConfig::load_from_base64_string(base64_genesis_string.as_str()).expect("load");
+    let loaded_config =
+        GenesisConfig::load_from_base64_string(base64_genesis_string.as_str()).expect("load");
     info!("loaded_config_hash: {}", loaded_config.hash());
 
-    let config_map = match kub_controller.create_config_map(base64_genesis_string).await {
+    let config_map = match kub_controller
+        .create_config_map(base64_genesis_string)
+        .await
+    {
         Ok(config_map) => {
             info!("successfully deployed config map");
             config_map
-        },
+        }
         Err(err) => {
             error!("Failed to deploy config map: {}", err);
             return;
@@ -277,12 +280,16 @@ async fn main() {
         .value_of("validator_image_name")
         .expect("Validator image name is required");
 
-    kub_controller.create_selector(&ValidatorType::Bootstrap, "app.kubernetes.io/name", "bootstrap-validator");
+    kub_controller.create_selector(
+        &ValidatorType::Bootstrap,
+        "app.kubernetes.io/name",
+        "bootstrap-validator",
+    );
     let bootstrap_deployment = match kub_controller.create_bootstrap_validator_deployment(
-        bootstrap_container_name, 
-        bootstrap_image_name, 
+        bootstrap_container_name,
+        bootstrap_image_name,
         BOOTSTRAP_VALIDATOR_REPLICAS,
-        config_map.metadata.name.clone()
+        config_map.metadata.name.clone(),
     ) {
         Ok(deployment) => deployment,
         Err(err) => {
@@ -290,7 +297,10 @@ async fn main() {
             return;
         }
     };
-    let dep_name = match kub_controller.deploy_deployment(&bootstrap_deployment).await {
+    let dep_name = match kub_controller
+        .deploy_deployment(&bootstrap_deployment)
+        .await
+    {
         Ok(dep) => {
             info!("bootstrap validator deployment deployed successfully");
             dep.metadata.name.unwrap()
@@ -314,7 +324,8 @@ async fn main() {
     }
 
     //TODO: handle this return val properly, don't just unwrap
-    while !kub_controller.check_deployment_ready(dep_name.as_str())
+    while !kub_controller
+        .check_deployment_ready(dep_name.as_str())
         .await
         .unwrap()
     {
@@ -323,12 +334,16 @@ async fn main() {
     }
     info!("deployment: {} Ready!", dep_name);
 
-    kub_controller.create_selector(&ValidatorType::Standard, "app.kubernetes.io/name", "validator");
+    kub_controller.create_selector(
+        &ValidatorType::Standard,
+        "app.kubernetes.io/name",
+        "validator",
+    );
     let validator_deployment = match kub_controller.create_validator_deployment(
         validator_container_name,
         validator_image_name,
         setup_config.num_validators,
-        config_map.metadata.name
+        config_map.metadata.name,
     ) {
         Ok(deployment) => deployment,
         Err(err) => {
@@ -337,7 +352,10 @@ async fn main() {
         }
     };
 
-    match kub_controller.deploy_deployment(&validator_deployment).await {
+    match kub_controller
+        .deploy_deployment(&validator_deployment)
+        .await
+    {
         Ok(_) => info!("validator deployment deployed successfully"),
         Err(err) => error!(
             "Error! Failed to deploy validator deployment. err: {:?}",
@@ -351,7 +369,10 @@ async fn main() {
         Err(err) => error!("Error! Failed to deploy validator service. err: {:?}", err),
     }
 
-    let _ = kub_controller.check_service_matching_deployment("bootstrap-validator").await;
-    let _ = kub_controller.check_service_matching_deployment("validator").await;
-
+    let _ = kub_controller
+        .check_service_matching_deployment("bootstrap-validator")
+        .await;
+    let _ = kub_controller
+        .check_service_matching_deployment("validator")
+        .await;
 }
