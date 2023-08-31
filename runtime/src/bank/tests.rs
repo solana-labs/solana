@@ -2769,7 +2769,7 @@ fn test_bank_tx_fee() {
     );
 
     // Verify that an InstructionError collects fees, too
-    let bank = Arc::new(Bank::new_from_parent(bank.clone(), &leader, 1));
+    let bank = Arc::new(Bank::new_from_parent(bank, &leader, 1));
     let mut tx = system_transaction::transfer(&mint_keypair, &key, 1, bank.last_blockhash());
     // Create a bogus instruction to system_program to cause an instruction error
     tx.message.instructions[0].data[0] = 40;
@@ -2882,7 +2882,7 @@ fn test_bank_tx_compute_unit_fee() {
     );
 
     // Verify that an InstructionError collects fees, too
-    let bank = Arc::new(Bank::new_from_parent(bank.clone(), &leader, 1));
+    let bank = Arc::new(Bank::new_from_parent(bank, &leader, 1));
     let mut tx = system_transaction::transfer(&mint_keypair, &key, 1, bank.last_blockhash());
     // Create a bogus instruction to system_program to cause an instruction error
     tx.message.instructions[0].data[0] = 40;
@@ -2938,7 +2938,7 @@ fn test_bank_blockhash_fee_structure() {
     let cheap_lamports_per_signature = bank.get_lamports_per_signature();
     assert_eq!(cheap_lamports_per_signature, 0);
 
-    let bank = Arc::new(Bank::new_from_parent(bank.clone(), &leader, 1));
+    let bank = Arc::new(Bank::new_from_parent(bank, &leader, 1));
     goto_end_of_slot_without_scheduler(&bank);
     let expensive_blockhash = bank.last_blockhash();
     let expensive_lamports_per_signature = bank.get_lamports_per_signature();
@@ -6682,7 +6682,7 @@ fn test_clean_nonrooted() {
 
     // Store some lamports for pubkey1 in bank 2, root bank 2
     // bank2's parent is bank0
-    let bank2 = Arc::new(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 2));
+    let bank2 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 2));
     bank2.deposit(&pubkey1, some_lamports).unwrap();
     bank2.store_account(&pubkey0, &account_zero);
     goto_end_of_slot_without_scheduler(&bank2);
@@ -6697,7 +6697,7 @@ fn test_clean_nonrooted() {
     // candidate set
     bank2.clean_accounts_for_tests();
 
-    let bank3 = Arc::new(Bank::new_from_parent(bank2.clone(), &Pubkey::default(), 3));
+    let bank3 = Arc::new(Bank::new_from_parent(bank2, &Pubkey::default(), 3));
     bank3.deposit(&pubkey1, some_lamports + 1).unwrap();
     goto_end_of_slot_without_scheduler(&bank3);
     bank3.freeze();
@@ -6751,7 +6751,7 @@ fn test_shrink_candidate_slots_cached() {
 
     // Store some lamports in bank 1
     let some_lamports = 123;
-    let bank1 = Arc::new(new_from_parent(bank0.clone()));
+    let bank1 = Arc::new(new_from_parent(bank0));
     bank1.deposit(&pubkey1, some_lamports).unwrap();
     bank1.deposit(&pubkey2, some_lamports).unwrap();
     goto_end_of_slot_without_scheduler(&bank1);
@@ -6762,7 +6762,7 @@ fn test_shrink_candidate_slots_cached() {
     bank1.force_flush_accounts_cache();
 
     // Store some lamports for pubkey1 in bank 2, root bank 2
-    let bank2 = Arc::new(new_from_parent(bank1.clone()));
+    let bank2 = Arc::new(new_from_parent(bank1));
     bank2.deposit(&pubkey1, some_lamports).unwrap();
     bank2.store_account(&pubkey0, &account0);
     goto_end_of_slot_without_scheduler(&bank2);
@@ -12133,7 +12133,7 @@ fn test_runtime_feature_enable_with_program_cache() {
 
     // Advance the bank so the next transaction can be submitted.
     goto_end_of_slot_without_scheduler(&root_bank);
-    let mut bank = new_from_parent(root_bank.clone());
+    let mut bank = new_from_parent(root_bank);
 
     // Compose second instruction using the same program with a different block hash
     let instruction2 = Instruction::new_with_bytes(program_keypair.pubkey(), &[], Vec::new());

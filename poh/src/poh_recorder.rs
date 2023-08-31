@@ -1103,10 +1103,7 @@ pub fn create_test_recorder(
     );
     let ticks_per_slot = bank.ticks_per_slot();
 
-    poh_recorder.set_bank(
-        BankWithScheduler::new_without_scheduler(bank.clone()),
-        false,
-    );
+    poh_recorder.set_bank(BankWithScheduler::new_without_scheduler(bank), false);
     let poh_recorder = Arc::new(RwLock::new(poh_recorder));
     let poh_service = PohService::new(
         poh_recorder.clone(),
@@ -1471,7 +1468,7 @@ mod tests {
             );
 
             bank0.fill_bank_with_ticks_for_tests();
-            let bank1 = Arc::new(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1));
+            let bank1 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
             poh_recorder.set_bank_for_test(bank1.clone());
 
             // Record up to exactly min tick height
