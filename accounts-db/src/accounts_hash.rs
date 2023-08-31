@@ -166,7 +166,10 @@ impl AccountHashesFile {
 
         let hash_bytes = unsafe { std::slice::from_raw_parts(hashes.as_ptr() as *const u8, size) };
 
-        (&mut map[..]).write_all(hash_bytes).unwrap();
+        map[..size].copy_from_slice(hash_bytes);
+
+        error!("mmap_size={}, data_size={}", map.len(), size);
+
         self.mmap_file = Some((size, MmapAccountHashesFile { mmap: map }));
 
         // mut_mmap.deref_mut().write_all(data_to_write).unwrap();
