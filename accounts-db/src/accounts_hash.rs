@@ -97,18 +97,16 @@ impl AccountHashesFile {
             ));
         }
         let count_and_writer = self.count_and_writer.as_mut().unwrap();
-        assert_eq!(
-            std::mem::size_of::<Hash>(),
-            count_and_writer
-                .1
-                .write(hash.as_ref())
-                .unwrap_or_else(|err| {
-                    panic!(
-                        "Unable to write file within {}: {err}",
-                        self.dir_for_temp_cache_files.display()
-                    )
-                })
-        );
+        count_and_writer
+            .1
+            .write_all(hash.as_ref())
+            .unwrap_or_else(|err| {
+                panic!(
+                    "Unable to write file within {}: {err}",
+                    self.dir_for_temp_cache_files.display()
+                )
+            });
+
         count_and_writer.0 += 1;
     }
 }
