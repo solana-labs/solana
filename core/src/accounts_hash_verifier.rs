@@ -130,7 +130,6 @@ impl AccountsHashVerifier {
                         .unwrap_or(0)
                 );
                 info!("AccountsHashVerifier has stopped");
-                std::process::exit(0);
             })
             .unwrap();
         Self {
