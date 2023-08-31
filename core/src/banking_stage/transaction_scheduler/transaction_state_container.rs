@@ -157,7 +157,9 @@ impl TransactionStateContainer {
 
     /// Remove transaction by id.
     pub(crate) fn remove_by_id(&mut self, id: &TransactionId) {
-        self.id_to_transaction_state.remove(id).expect("transaction must exist");
+        self.id_to_transaction_state
+            .remove(id)
+            .expect("transaction must exist");
     }
 }
 
