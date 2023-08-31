@@ -1,3 +1,36 @@
+# Run this thing
+```
+kubectl create ns greg
+```
+```
+cargo run --bin solana-k8s -- 
+    -n <namespace e.g. greg-test> 
+    --num-validators 3 
+    --bootstrap-container boostrap-validator 
+    --bootstrap-image bootstrap-k8s-cluster-image:latest 
+    --validator-container validator 
+    --validator-image validator-k8s-cluster-image:latest 
+    --prebuild-genesis 
+    --deploy-method local 
+    --do-build 
+    --docker-build 
+    --image-tag k8s-cluster-image:latest
+```
+
+Notes:
+- Builds container and the kubernetes deployments will read from images locally
+- Def some hardcoded stuff in here still 
+- each Docker image that is built will have a postfix of `image-tag` variable. or `k8s-cluster-image:latest` here
+- each image on build will be prepended with either `bootstrap-` or `validator-` depending on the image we're building
+- the `bootstrap-image` and `validator-image` must match `bootstrap-` or `validator-` and then `--image-tag`
+    - this should be fixed in the future. Shouldn't have to declare `bootstrap-image` or `validator-image` names tbh
+
+
+TODO:
+- we currently write binary to file for genesis, then read it back to verify it. and then read it again to convert into a base64 string and then converted into binrary and then converted into a GenesisConfig lol. So need to fix
+- need to add configurable accounts/stakes/etc into genesisconfig. it's currently only the bootstrap validator that is stored in genesis
+- Figure out env variables for private keys. idk how this is going to work
+
 # Kubernetes Deployment 
 1) Create your namespace!
 ```
