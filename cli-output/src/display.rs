@@ -1,7 +1,7 @@
 use {
     crate::cli_output::CliSignatureVerificationStatus,
     base64::{prelude::BASE64_STANDARD, Engine},
-    chrono::{DateTime, Local, NaiveDateTime, SecondsFormat, TimeZone, Utc},
+    chrono::{Local, NaiveDateTime, SecondsFormat, TimeZone, Utc},
     console::style,
     indicatif::{ProgressBar, ProgressStyle},
     solana_cli_config::SettingType,
@@ -716,7 +716,9 @@ pub fn new_spinner_progress_bar() -> ProgressBar {
 
 pub fn unix_timestamp_to_string(unix_timestamp: UnixTimestamp) -> String {
     match NaiveDateTime::from_timestamp_opt(unix_timestamp, 0) {
-        Some(ndt) => DateTime::<Utc>::from_utc(ndt, Utc).to_rfc3339_opts(SecondsFormat::Secs, true),
+        Some(ndt) => Utc
+            .from_utc_datetime(&ndt)
+            .to_rfc3339_opts(SecondsFormat::Secs, true),
         None => format!("UnixTimestamp {unix_timestamp}"),
     }
 }
