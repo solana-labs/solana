@@ -8,15 +8,13 @@ use {
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::shred::{should_discard_shred, ShredFetchStats},
     solana_perf::packet::{PacketBatch, PacketBatchRecycler, PacketFlags, PACKETS_PER_BATCH},
-    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::{
-        clock::{Slot, DEFAULT_MS_PER_SLOT},
-        feature_set,
+        clock::DEFAULT_MS_PER_SLOT,
         packet::{Meta, PACKET_DATA_SIZE},
         pubkey::Pubkey,
     },
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
-    solana_turbine::cluster_nodes::check_feature_activation,
     std::{
         net::{SocketAddr, UdpSocket},
         sync::{
@@ -93,19 +91,10 @@ impl ShredFetchStage {
 
             // Limit shreds to 2 epochs away.
             let max_slot = last_slot + 2 * slots_per_epoch;
-            let should_drop_merkle_shreds =
-                |shred_slot| should_drop_merkle_shreds(shred_slot, &root_bank);
             let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
             for packet in packet_batch.iter_mut().filter(|p| !p.meta().discard()) {
                 if turbine_disabled
-                    || should_discard_shred(
-                        packet,
-                        last_root,
-                        max_slot,
-                        shred_version,
-                        should_drop_merkle_shreds,
-                        &mut stats,
-                    )
+                    || should_discard_shred(packet, last_root, max_slot, shred_version, &mut stats)
                 {
                     packet.meta_mut().set_discard(true);
                 } else {
@@ -295,19 +284,6 @@ fn receive_quic_datagrams(
     }
 }
 
-#[must_use]
-fn should_drop_merkle_shreds(shred_slot: Slot, root_bank: &Bank) -> bool {
-    check_feature_activation(
-        &feature_set::keep_merkle_shreds::id(),
-        shred_slot,
-        root_bank,
-    ) && !check_feature_activation(
-        &feature_set::drop_merkle_shreds::id(),
-        shred_slot,
-        root_bank,
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use {
@@ -348,7 +324,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
         let coding = solana_ledger::shred::Shredder::generate_coding_shreds(
@@ -362,7 +337,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
     }
@@ -384,7 +358,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.index_overrun, 1);
@@ -406,18 +379,12 @@ mod tests {
             3,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.slot_out_of_range, 1);
 
         assert!(should_discard_shred(
-            &packet,
-            last_root,
-            max_slot,
-            345,       // shred_version
-            |_| false, // should_drop_merkle_shreds
-            &mut stats,
+            &packet, last_root, max_slot, /*shred_version:*/ 345, &mut stats,
         ));
         assert_eq!(stats.shred_version_mismatch, 1);
 
@@ -427,7 +394,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
 
@@ -449,7 +415,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
 
@@ -461,7 +426,6 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
     }
