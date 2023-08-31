@@ -475,7 +475,7 @@ mod tests {
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let child_bank = Bank::new_from_parent(bank.clone(), &Pubkey::default(), 1);
+        let child_bank = Bank::new_from_parent(bank, &Pubkey::default(), 1);
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
