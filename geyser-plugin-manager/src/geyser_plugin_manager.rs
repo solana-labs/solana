@@ -348,14 +348,11 @@ mod tests {
     pub(super) fn dummy_plugin_and_library<P: GeyserPlugin>(
         plugin: P,
     ) -> (Box<dyn GeyserPlugin>, Library, &'static str) {
-        let plugin = Box::new(plugin);
-        let lib = {
-            let handle: *mut std::os::raw::c_void = &mut () as *mut _ as *mut std::os::raw::c_void;
-            // SAFETY: all calls to get Symbols should fail, so this is actually safe
-            let inner_lib = unsafe { libloading::os::unix::Library::from_raw(handle) };
-            Library::from(inner_lib)
-        };
-        (plugin, lib, DUMMY_CONFIG)
+        (
+            Box::new(plugin),
+            Library::from(libloading::os::unix::Library::this()),
+            DUMMY_CONFIG,
+        )
     }
 
     const DUMMY_NAME: &str = "dummy";
