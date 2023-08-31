@@ -1,3 +1,7 @@
+[profile.release-with-debug]
+inherits = "release"
+debug = true
+
 [workspace]
 members = [
     "account-decoder",
