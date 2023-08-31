@@ -87,7 +87,7 @@ impl AccountHashesFile {
             self.count_and_writer = Some((
                 0,
                 BufWriter::with_capacity(
-                    256 * 1024,
+                    32 * 1024,
                     tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
                         panic!(
                             "Unable to create file within {}: {err}",
