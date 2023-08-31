@@ -5,9 +5,7 @@ use {
         Engine as _,
     },
     bip39::{Language, Mnemonic, MnemonicType, Seed},
-    clap::ArgMatches,
     log::*,
-    solana_accounts_db::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     solana_clap_v3_utils::{input_parsers::STDOUT_OUTFILE_TOKEN, keygen, keypair},
     solana_entry::poh::{compute_hashes_per_tick, Poh},
     solana_genesis::genesis_accounts::add_genesis_accounts,
@@ -19,10 +17,9 @@ use {
         genesis_config::{ClusterType, GenesisConfig, DEFAULT_GENESIS_FILE},
         native_token::sol_to_lamports,
         poh_config::PohConfig,
-        pubkey::Pubkey,
         rent::Rent,
         signature::{
-            keypair_from_seed, read_keypair_file, write_keypair, write_keypair_file, Keypair,
+            keypair_from_seed, write_keypair, write_keypair_file, Keypair,
             Signer,
         },
         stake::state::StakeStateV2,
@@ -33,9 +30,8 @@ use {
     std::{
         error::Error,
         fs::File,
-        io::{Read, Write},
+        io::Read,
         path::PathBuf,
-        process,
         time::Duration,
     },
 };

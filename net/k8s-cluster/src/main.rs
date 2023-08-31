@@ -1,31 +1,16 @@
 use {
     clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches, value_t},
-    k8s_openapi::{
-        api::{
-            apps::v1::{Deployment, DeploymentSpec},
-            core::v1::{
-                Container, EnvVar, EnvVarSource, ObjectFieldSelector, PodSpec, PodTemplateSpec,
-                Service, ServicePort, ServiceSpec,
-            },
-        },
-        apimachinery::pkg::apis::meta::v1::LabelSelector,
-    },
-    kube::{
-        api::{Api, ObjectMeta, PostParams},
-        Client,
-    },
     log::*,
-    serde_json, serde_yaml,
     solana_k8s_cluster::{
         docker::{DockerConfig, DockerImageConfig},
         genesis::{Genesis, SetupConfig},
-        get_solana_root, initialize_globals,
+        initialize_globals,
         kubernetes::Kubernetes,
         release::{BuildConfig, Deploy},
         ValidatorType,
     },
     solana_sdk::genesis_config::GenesisConfig,
-    std::{collections::BTreeMap, fs::File, io::Write, process, thread, time::Duration},
+    std::{thread, time::Duration},
 };
 
 const BOOTSTRAP_VALIDATOR_REPLICAS: i32 = 1;
@@ -297,29 +282,29 @@ async fn main() {
         "app.kubernetes.io/name",
         "bootstrap-validator",
     );
-    let bootstrap_deployment = match kub_controller.create_bootstrap_validator_deployment(
+    let bootstrap_replica_set = match kub_controller.create_bootstrap_validator_replicas_set(
         bootstrap_container_name,
         bootstrap_image_name,
         BOOTSTRAP_VALIDATOR_REPLICAS,
         config_map.metadata.name.clone(),
     ) {
-        Ok(deployment) => deployment,
+        Ok(replica_set) => replica_set,
         Err(err) => {
-            error!("Error creating bootstrap validator deployment: {}", err);
+            error!("Error creating bootstrap validator replicas_set: {}", err);
             return;
         }
     };
-    let dep_name = match kub_controller
-        .deploy_deployment(&bootstrap_deployment)
+    let rs_name = match kub_controller
+        .deploy_replicas_set(&bootstrap_replica_set)
         .await
     {
-        Ok(dep) => {
-            info!("bootstrap validator deployment deployed successfully");
-            dep.metadata.name.unwrap()
+        Ok(rs) => {
+            info!("bootstrap validator replicas_set deployed successfully");
+            rs.metadata.name.unwrap()
         }
         Err(err) => {
             error!(
-                "Error! Failed to deploy bootstrap validator deployment. err: {:?}",
+                "Error! Failed to deploy bootstrap validator replicas_set. err: {:?}",
                 err
             );
             err.to_string() //TODO: fix this, should handle this error better. shoudn't just return a string. should exit or something better
@@ -337,40 +322,40 @@ async fn main() {
 
     //TODO: handle this return val properly, don't just unwrap
     while !kub_controller
-        .check_deployment_ready(dep_name.as_str())
+        .check_replica_set_ready(rs_name.as_str())
         .await
         .unwrap()
     {
-        info!("deployment: {} not ready...", dep_name);
+        info!("replica set: {} not ready...", rs_name);
         thread::sleep(Duration::from_secs(1));
     }
-    info!("deployment: {} Ready!", dep_name);
+    info!("replica set: {} Ready!", rs_name);
 
     kub_controller.create_selector(
         &ValidatorType::Standard,
         "app.kubernetes.io/name",
         "validator",
     );
-    let validator_deployment = match kub_controller.create_validator_deployment(
+    let validator_replica_set = match kub_controller.create_validator_replicas_set(
         validator_container_name,
         validator_image_name,
         setup_config.num_validators,
         config_map.metadata.name,
     ) {
-        Ok(deployment) => deployment,
+        Ok(replica_set) => replica_set,
         Err(err) => {
-            error!("Error creating validator deployment: {}", err);
+            error!("Error creating validator replicas_set: {}", err);
             return;
         }
     };
 
     match kub_controller
-        .deploy_deployment(&validator_deployment)
+        .deploy_replicas_set(&validator_replica_set)
         .await
     {
-        Ok(_) => info!("validator deployment deployed successfully"),
+        Ok(_) => info!("validator replicas_set deployed successfully"),
         Err(err) => error!(
-            "Error! Failed to deploy validator deployment. err: {:?}",
+            "Error! Failed to deploy validator replicas_set. err: {:?}",
             err
         ),
     }
@@ -382,9 +367,9 @@ async fn main() {
     }
 
     let _ = kub_controller
-        .check_service_matching_deployment("bootstrap-validator")
+        .check_service_matching_replica_set("bootstrap-validator")
         .await;
     let _ = kub_controller
-        .check_service_matching_deployment("validator")
+        .check_service_matching_replica_set("validator")
         .await;
 }
