@@ -140,6 +140,7 @@ wait_step() {
 }
 
 all_test_steps() {
+  command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 80
   command_step checks1 ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20 check
   command_step checks2 ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-dev-context-only-utils.sh check-bins" 15 check
   command_step checks3 ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-dev-context-only-utils.sh check-all-targets" 15 check
