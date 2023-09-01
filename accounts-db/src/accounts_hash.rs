@@ -52,7 +52,9 @@ impl MmapAccountHashesFile {
 /// 1 file containing account hashes sorted by pubkey
 pub struct AccountHashesFile {
     /// # hashes and an open file that will be deleted on drop. None if there are zero hashes to represent, and thus, no file.
-    count_and_writer: Option<(usize, BufWriter<File>)>,
+    //count_and_writer: Option<(usize, BufWriter<File>)>,
+    count_and_writer: Option<(usize, File)>,
+
     /// The directory where temporary cache files are put
     dir_for_temp_cache_files: PathBuf,
 }
@@ -61,11 +63,10 @@ impl AccountHashesFile {
     /// map the file into memory and return a reader that can access it by slice
     fn get_reader(&mut self) -> Option<(usize, MmapAccountHashesFile)> {
         std::mem::take(&mut self.count_and_writer).map(|(count, writer)| {
-            let file = Some(writer.into_inner().unwrap());
             (
                 count,
                 MmapAccountHashesFile {
-                    mmap: unsafe { MmapMut::map_mut(file.as_ref().unwrap()).unwrap() },
+                    mmap: unsafe { MmapMut::map_mut(&writer).unwrap() },
                 },
             )
         })
@@ -86,29 +87,24 @@ impl AccountHashesFile {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
             self.count_and_writer = Some((
                 0,
-                BufWriter::new(
-                    tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
-                        panic!(
-                            "Unable to create file within {}: {err}",
-                            self.dir_for_temp_cache_files.display()
-                        )
-                    }),
-                ),
+                tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
+                    panic!(
+                        "Unable to create file within {}: {err}",
+                        self.dir_for_temp_cache_files.display()
+                    )
+                }),
             ));
         }
         let count_and_writer = self.count_and_writer.as_mut().unwrap();
-        assert_eq!(
-            std::mem::size_of::<Hash>(),
-            count_and_writer
-                .1
-                .write(hash.as_ref())
-                .unwrap_or_else(|err| {
-                    panic!(
-                        "Unable to write file within {}: {err}",
-                        self.dir_for_temp_cache_files.display()
-                    )
-                })
-        );
+        count_and_writer
+            .1
+            .write_all(hash.as_ref())
+            .unwrap_or_else(|err| {
+                panic!(
+                    "Unable to write file within {}: {err}",
+                    self.dir_for_temp_cache_files.display()
+                )
+            });
         count_and_writer.0 += 1;
     }
 
@@ -117,14 +113,12 @@ impl AccountHashesFile {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
             self.count_and_writer = Some((
                 0,
-                BufWriter::new(
-                    tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
-                        panic!(
-                            "Unable to create file within {}: {err}",
-                            self.dir_for_temp_cache_files.display()
-                        )
-                    }),
-                ),
+                tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
+                    panic!(
+                        "Unable to create file within {}: {err}",
+                        self.dir_for_temp_cache_files.display()
+                    )
+                }),
             ));
         }
         let n = hashes.len();
