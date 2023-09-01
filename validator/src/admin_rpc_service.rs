@@ -819,12 +819,7 @@ mod tests {
     use {
         super::*,
         serde_json::Value,
-<<<<<<< HEAD
         solana_core::tower_storage::NullTowerStorage,
-=======
-        solana_accounts_db::{accounts_index::AccountSecondaryIndexes, inline_spl_token},
-        solana_core::consensus::tower_storage::NullTowerStorage,
->>>>>>> fb1ba216f5 (Revert "Add an RPC API that can query the list of Top N secondary index keys and their sizes (#28887)" (#33121))
         solana_gossip::cluster_info::ClusterInfo,
         solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
         solana_rpc::rpc::create_validator_exit,
@@ -833,7 +828,6 @@ mod tests {
             bank::{Bank, BankTestConfig},
             bank_forks::BankForks,
             inline_spl_token,
-            secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
         },
         solana_sdk::{
             account::{Account, AccountSharedData},
