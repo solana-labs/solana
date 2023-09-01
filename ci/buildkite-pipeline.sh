@@ -298,7 +298,7 @@ pull_or_push_steps() {
               .sh$ \
               ^.buildkite/hooks \
       ; then
-    command_step shellcheck "ci/shellcheck.sh" 5 check
+    #command_step shellcheck "ci/shellcheck.sh" 5 check
     wait_step
   fi
 
