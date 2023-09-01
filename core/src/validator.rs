@@ -1090,7 +1090,8 @@ impl Validator {
                 )
                 .map_err(|err| format!("wait_for_supermajority failed: {err:?}"))?,
         };
-        if waited_for_supermajority && config.wen_restart.is_some() {
+        if waited_for_supermajority && config.wait_for_supermajority.is_none() && wen_restart_slot.is_some() {
+            wen_restart_slot = None;
             finish_wen_restart(&config.wen_restart)?;
         }
 
