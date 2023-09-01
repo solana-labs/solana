@@ -493,7 +493,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
                     if space > 0 {
                         let lamports = account_info.lamports.unwrap_or(account.lamports());
                         let mut account = AccountSharedData::new(lamports, space, &owner);
-                        account.set_data(data);
+                        account.set_data_from_slice(&data);
                         account
                     } else {
                         account
@@ -508,7 +508,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
                     });
                     let lamports = account_info.lamports.unwrap_or(0);
                     let mut account = AccountSharedData::new(lamports, space, &owner);
-                    account.set_data(data);
+                    account.set_data_from_slice(&data);
                     account
                 };
                 transaction_accounts.push((pubkey, account));

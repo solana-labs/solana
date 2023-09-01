@@ -85,6 +85,7 @@ serial_test = { workspace = true }
 solana-core = { path = ".", features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }
 solana-program-runtime = { workspace = true }
+solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 solana-stake-program = { workspace = true }
 static_assertions = { workspace = true }
 systemstat = { workspace = true }

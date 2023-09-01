@@ -1181,7 +1181,7 @@ mod tests {
         let lamports = rent.minimum_balance(version1_14_11_serialized_len);
         let mut vote_account =
             AccountSharedData::new(lamports, version1_14_11_serialized_len, &id());
-        vote_account.set_data(version1_14_11_serialized);
+        vote_account.set_data_from_slice(&version1_14_11_serialized);
 
         // Create a fake TransactionContext with a fake InstructionContext with a single account which is the
         // vote account that was just created
