@@ -9,10 +9,20 @@ use {
     std::sync::atomic::{AtomicUsize, Ordering},
 };
 
-#[derive(Default)]
 pub struct InvalidFeePayerFilter {
+    capacity: usize,
     recent_invalid_fee_payers: DashSet<Pubkey>,
     stats: InvalidFeePayerFilterStats,
+}
+
+impl Default for InvalidFeePayerFilter {
+    fn default() -> Self {
+        Self {
+            capacity: 16 * 1024,
+            recent_invalid_fee_payers: DashSet::new(),
+            stats: InvalidFeePayerFilterStats::default(),
+        }
+    }
 }
 
 impl InvalidFeePayerFilter {
@@ -27,6 +37,12 @@ impl InvalidFeePayerFilter {
     pub fn add(&self, pubkey: Pubkey) {
         self.stats.num_added.fetch_add(1, Ordering::Relaxed);
         self.recent_invalid_fee_payers.insert(pubkey);
+
+        if self.recent_invalid_fee_payers.len() > self.capacity {
+            if let Some(key) = self.recent_invalid_fee_payers.iter().next().map(|k| *k.key()) {
+                self.recent_invalid_fee_payers.remove(&key);
+            }
+        }
     }
 
     /// Check if a pubkey is in the filter.
