@@ -33,14 +33,15 @@ else
   set -x
   echo "$e==>$x Buildkite CI detected."
   urlencode() {
-    echo $(echo "$1" | curl -Gso /dev/null -w "%{url_effective}" --data-urlencode @- "")
-    echo $(echo "$1" | curl -Gso /dev/null -w "%{url_effective}" --data-urlencode @- "" | cut -c 3-)
-    echo $(echo "$1" | curl -Gso /dev/null -w "%{url_effective}" --data-urlencode @- "" | cut -c 3- | sed -e 's/%0A//')
+      echo "$1" | curl -Gso /dev/null -w "%{url_effective}" --data-urlencode @- "" | cut -c 3- | sed -e 's/%0A//'
   }
   service="buildkite"
   branch="$BUILDKITE_BRANCH"
   build="$BUILDKITE_BUILD_NUMBER"
   job="$BUILDKITE_JOB_ID"
+  echo "$BUILDKITE_BUILD_URL" | curl -Gso /dev/null -w "%{url_effective}" --data-urlencode @- ""
+  echo "$BUILDKITE_BUILD_URL" | curl -Gso /dev/null -w "%{url_effective}" --data-urlencode @- "" | cut -c 3-
+  echo "$BUILDKITE_BUILD_URL" | curl -Gso /dev/null -w "%{url_effective}" --data-urlencode @- "" | cut -c 3- | sed -e 's/%0A//'
   build_url=$(urlencode "$BUILDKITE_BUILD_URL")
   slug="$BUILDKITE_PROJECT_SLUG"
   commit="$BUILDKITE_COMMIT"
