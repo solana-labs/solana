@@ -560,8 +560,22 @@ impl Validator {
             ));
         }
 
-        if let Some(expected_shred_version) = config.expected_shred_version {
-            if let Some(wait_for_supermajority_slot) = config.wait_for_supermajority {
+        let mut wen_restart_slot = None;
+        let mut wait_for_supermajority_slot = config.wait_for_supermajority;
+        let mut wait_for_supermajority_hash = config.expected_bank_hash;
+        let mut expected_shred_version = config.expected_shred_version;
+        if wait_for_supermajority_slot.is_none() && config.wen_restart.is_some() {
+            let wen_restart_progress = get_wen_restart_phase_one_result(&config.wen_restart)?;
+            if let Some((slot, hash, shred_version)) = wen_restart_progress {
+                wen_restart_slot = Some(slot);
+                wait_for_supermajority_slot = wen_restart_slot;
+                wait_for_supermajority_hash = Some(hash);
+                expected_shred_version = Some(shred_version);
+            }
+        }
+
+        if let Some(expected_shred_version) = expected_shred_version {
+            if let Some(wait_for_supermajority_slot) = wait_for_supermajority_slot {
                 *start_progress.write().unwrap() = ValidatorStartProgress::CleaningBlockStore;
                 backup_and_clear_blockstore(
                     ledger_path,
@@ -700,7 +714,7 @@ impl Validator {
 
         Self::print_node_info(&node);
 
-        if let Some(expected_shred_version) = config.expected_shred_version {
+        if let Some(expected_shred_version) = expected_shred_version {
             if expected_shred_version != node.info.shred_version() {
                 return Err(format!(
                     "shred version mismatch: expected {} found: {}",
@@ -820,10 +834,11 @@ impl Validator {
             &bank_forks,
             &leader_schedule_cache,
             &accounts_background_request_sender,
+            &wait_for_supermajority_slot,
         )?;
 
         if config.process_ledger_before_services {
-            process_blockstore.process()?;
+            process_blockstore.process(&wait_for_supermajority_slot)?;
         }
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
 
@@ -1065,17 +1080,6 @@ impl Validator {
             repair_whitelist: config.repair_whitelist.clone(),
         });
 
-        let mut wen_restart_slot = None;
-        let mut wait_for_supermajority_slot = config.wait_for_supermajority;
-        let mut wait_for_supermajority_hash = config.expected_bank_hash;
-        if wait_for_supermajority_slot.is_none() && config.wen_restart.is_some() {
-            let wen_restart_progress = get_wen_restart_phase_one_result(&config.wen_restart)?;
-            if let Some((slot, hash)) = wen_restart_progress {
-                wen_restart_slot = Some(slot);
-                wait_for_supermajority_slot = wen_restart_slot;
-                wait_for_supermajority_hash = Some(hash);
-            }
-        }
         let waited_for_supermajority = match wait_for_supermajority_slot {
             None => false,
             Some(expected_slot) =>
@@ -1102,7 +1106,7 @@ impl Validator {
             && !config.no_wait_for_vote_to_start_leader
             && config.wen_restart.is_none();
 
-        let tower = process_blockstore.process_to_create_tower()?;
+        let tower = process_blockstore.process_to_create_tower(&wait_for_supermajority_slot)?;
         let last_vote = tower.last_vote();
         // TVU shred version should be the old one before wen_restart, otherwise repair results
         // from before the restart will be rejected.
@@ -1273,6 +1277,7 @@ impl Validator {
                 &config.wen_restart,
                 &config.snapshot_config.incremental_snapshot_archives_dir,
                 &accounts_background_request_sender,
+                &genesis_config.hash(),
                 last_vote,
                 blockstore.clone(),
                 cluster_info.clone(),
@@ -1560,11 +1565,11 @@ fn check_poh_speed(
     Ok(())
 }
 
-fn maybe_cluster_restart_with_hard_fork(config: &ValidatorConfig, root_slot: Slot) -> Option<Slot> {
+fn maybe_cluster_restart_with_hard_fork(wait_for_supermajority_slot: &Option<Slot>, root_slot: Slot) -> Option<Slot> {
     // detect cluster restart (hard fork) indirectly via wait_for_supermajority...
-    if let Some(wait_slot_for_supermajority) = config.wait_for_supermajority {
-        if wait_slot_for_supermajority == root_slot {
-            return Some(wait_slot_for_supermajority);
+    if let Some(wait_slot_for_supermajority) = wait_for_supermajority_slot {
+        if wait_slot_for_supermajority == &root_slot {
+            return Some(wait_slot_for_supermajority.clone());
         }
     }
 
@@ -1577,6 +1582,7 @@ fn post_process_restored_tower(
     vote_account: &Pubkey,
     config: &ValidatorConfig,
     bank_forks: &BankForks,
+    wait_for_supermajority_slot: &Option<Slot>,
 ) -> Result<Tower, String> {
     let mut should_require_tower = config.require_tower;
 
@@ -1587,7 +1593,7 @@ fn post_process_restored_tower(
         let tower = tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history);
 
         if let Some(hard_fork_restart_slot) =
-            maybe_cluster_restart_with_hard_fork(config, root_bank.slot())
+            maybe_cluster_restart_with_hard_fork(wait_for_supermajority_slot, root_bank.slot())
         {
             // intentionally fail to restore tower; we're supposedly in a new hard fork; past
             // out-of-chain vote state doesn't make sense at all
@@ -1878,7 +1884,10 @@ impl<'a> ProcessBlockStore<'a> {
         }
     }
 
-    pub(crate) fn process(&mut self) -> Result<(), String> {
+    pub(crate) fn process(
+        &mut self,
+        wait_for_supermajority_slot: &Option<Slot>,
+    ) -> Result<(), String> {
         if self.tower.is_none() {
             let previous_start_process = *self.start_progress.read().unwrap();
             *self.start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
@@ -1939,11 +1948,12 @@ impl<'a> ProcessBlockStore<'a> {
                     self.vote_account,
                     self.config,
                     &self.bank_forks.read().unwrap(),
+                    wait_for_supermajority_slot,
                 )?
             });
 
             if let Some(hard_fork_restart_slot) = maybe_cluster_restart_with_hard_fork(
-                self.config,
+                wait_for_supermajority_slot,
                 self.bank_forks.read().unwrap().root(),
             ) {
                 // reconciliation attempt 2 of 2 with hard fork
@@ -1961,8 +1971,8 @@ impl<'a> ProcessBlockStore<'a> {
         Ok(())
     }
 
-    pub(crate) fn process_to_create_tower(mut self) -> Result<Tower, String> {
-        self.process()?;
+    pub(crate) fn process_to_create_tower(mut self, wait_for_supermajority_slot: &Option<Slot>) -> Result<Tower, String> {
+        self.process(wait_for_supermajority_slot)?;
         Ok(self.tower.unwrap())
     }
 }
@@ -1974,6 +1984,7 @@ fn maybe_warp_slot(
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
     accounts_background_request_sender: &AbsRequestSender,
+    wait_for_supermajority_slot: &Option<Slot>,
 ) -> Result<(), String> {
     if let Some(warp_slot) = config.warp_slot {
         let mut bank_forks = bank_forks.write().unwrap();
@@ -2036,7 +2047,7 @@ fn maybe_warp_slot(
         drop(bank_forks);
         // Process blockstore after warping bank forks to make sure tower and
         // bank forks are in sync.
-        process_blockstore.process()?;
+        process_blockstore.process(wait_for_supermajority_slot)?;
     }
     Ok(())
 }
@@ -2216,7 +2227,7 @@ fn wait_for_supermajority(
 ) -> Result<bool, ValidatorError> {
     if let Some(process_blockstore) = process_blockstore {
         process_blockstore
-            .process()
+            .process(&Some(*wait_for_supermajority_slot))
             .map_err(ValidatorError::Error)?;
     }
 

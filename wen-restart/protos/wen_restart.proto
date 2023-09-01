@@ -15,6 +15,7 @@ message WenRestartProgress {
     message SnapshotBank {
         uint64 slot = 1;
         string bankhash = 2;
+        uint32 shred_version = 3;
     }
 
     State state = 1;

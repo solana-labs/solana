@@ -16,7 +16,7 @@ use {
         bank_forks::BankForks,
         snapshot_utils::get_incremental_snapshot_archives,
     },
-    solana_sdk::{clock::Slot, hash::Hash},
+    solana_sdk::{clock::Slot, hash::Hash, shred_version::compute_shred_version},
     solana_vote_program::vote_state::VoteTransaction,
     std::{
         collections::{HashMap, HashSet},
@@ -87,6 +87,7 @@ pub fn wen_restart(
     wen_restart_path: &Option<PathBuf>,
     incremental_snapshot_archives_dir: &PathBuf,
     accounts_background_request_sender: &AbsRequestSender,
+    genesis_config_hash: &Hash,
     last_vote: VoteTransaction,
     blockstore: Arc<Blockstore>,
     cluster_info: Arc<ClusterInfo>,
@@ -225,6 +226,7 @@ pub fn wen_restart(
     }
     info!("wen_restart add hard forks, set_root and generate snapshot {}", my_selected_slot);
     let new_root_bank_hash;
+    let new_shred_version;
     {
         let mut my_bank_forks = bank_forks.write().unwrap();
         let root_bank = my_bank_forks.root_bank();
@@ -238,6 +240,10 @@ pub fn wen_restart(
             accounts_background_request_sender,
             None,
             true,
+        );
+        new_shred_version = compute_shred_version(
+            genesis_config_hash,
+            Some(&new_root_bank.hard_forks()),
         );
     }
     info!("wen_restart waiting for new snapshot to be generated on {}", my_selected_slot);
@@ -256,6 +262,7 @@ pub fn wen_restart(
         snapshot_bank: Some(wen_restart_proto::wen_restart_progress::SnapshotBank{
             slot: my_selected_slot,
             bankhash: new_root_bank_hash.to_string(),
+            shred_version: new_shred_version as u32,
         }),
     })?;
     Ok(my_selected_slot)
@@ -268,13 +275,13 @@ fn read_wen_restart_records(records_path: &Option<PathBuf>) -> Result<wen_restar
     Ok(progress)
 }
 
-pub fn get_wen_restart_phase_one_result(records_path: &Option<PathBuf>) -> Result<Option<(Slot, Hash)>, String> {
+pub fn get_wen_restart_phase_one_result(records_path: &Option<PathBuf>) -> Result<Option<(Slot, Hash, u16)>, String> {
     match read_wen_restart_records(records_path) {
         Ok(progress) => {
             match progress.snapshot_bank {
                 Some(bank) => {
                     let bankhash = Hash::from_str(&bank.bankhash).map_err(|e| format!("{e:?}"))?;
-                    Ok(Some((bank.slot, bankhash)))
+                    Ok(Some((bank.slot, bankhash, bank.shred_version.try_into().unwrap())))
                 },
                 None => Ok(None),
             }
