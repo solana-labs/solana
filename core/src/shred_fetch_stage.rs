@@ -64,15 +64,13 @@ impl ShredFetchStage {
         for mut packet_batch in recvr {
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
                 last_updated = Instant::now();
-                {
-                    let root_bank = {
-                        let bank_forks_r = bank_forks.read().unwrap();
-                        last_slot = bank_forks_r.highest_slot();
-                        bank_forks_r.root_bank()
-                    };
-                    last_root = root_bank.slot();
-                    slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
-                }
+                let root_bank = {
+                    let bank_forks_r = bank_forks.read().unwrap();
+                    last_slot = bank_forks_r.highest_slot();
+                    bank_forks_r.root_bank()
+                };
+                last_root = root_bank.slot();
+                slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
                 keypair = repair_context
                     .as_ref()
                     .map(|(_, cluster_info)| cluster_info.keypair().clone());
