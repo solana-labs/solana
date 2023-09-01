@@ -66,7 +66,7 @@ mod tests {
 
     #[test]
     #[should_panic(
-        expected = "assertion failed: self.distributed_rewards.saturating_add(amount) <= self.total_rewards"
+        expected = "self.distributed_rewards.saturating_add(amount) <= self.total_rewards"
     )]
     fn test_epoch_rewards_distribute_panic() {
         let mut epoch_rewards = EpochRewards::new(100, 0, 64);

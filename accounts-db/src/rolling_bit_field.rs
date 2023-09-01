@@ -477,13 +477,13 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: max_width.is_power_of_two()")]
+    #[should_panic(expected = "max_width.is_power_of_two()")]
     fn test_bitfield_power_2() {
         let _ = RollingBitField::new(3);
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: max_width > 0")]
+    #[should_panic(expected = "max_width > 0")]
     fn test_bitfield_0() {
         let _ = RollingBitField::new(0);
     }

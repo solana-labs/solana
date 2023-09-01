@@ -3585,7 +3585,7 @@ fn test_bank_hash_internal_state_verify() {
 }
 
 #[test]
-#[should_panic(expected = "assertion failed: self.is_frozen()")]
+#[should_panic(expected = "self.is_frozen()")]
 fn test_verify_hash_unfrozen() {
     let bank = create_simple_test_bank(2_000);
     assert!(bank.verify_hash());
@@ -12459,7 +12459,7 @@ fn test_distribute_partitioned_epoch_rewards() {
 }
 
 #[test]
-#[should_panic(expected = "assertion failed: self.epoch_schedule.get_slots_in_epoch")]
+#[should_panic(expected = "self.epoch_schedule.get_slots_in_epoch")]
 fn test_distribute_partitioned_epoch_rewards_too_many_partitions() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
     let mut bank = Bank::new_for_tests(&genesis_config);

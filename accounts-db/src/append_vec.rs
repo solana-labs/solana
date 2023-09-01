@@ -730,7 +730,7 @@ pub mod tests {
     static_assertions::assert_eq_align!(u64, StoredMeta, AccountMeta);
 
     #[test]
-    #[should_panic(expected = "assertion failed: accounts.has_hash_and_write_version()")]
+    #[should_panic(expected = "accounts.has_hash_and_write_version()")]
     fn test_storable_accounts_with_hashes_and_write_versions_new() {
         let account = AccountSharedData::default();
         // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
@@ -765,19 +765,25 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed:")]
+    // rust 1.73+ (our as-of-writing nightly version) changed panic message. we're stuck with this
+    // short common substring until the monorepo is fully 1.73+ including stable.
+    #[should_panic(expected = "left == right")]
     fn test_storable_accounts_with_hashes_and_write_versions_new2() {
         test_mismatch(false, false);
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed:")]
+    // rust 1.73+ (our as-of-writing nightly version) changed panic message. we're stuck with this
+    // short common substring until the monorepo is fully 1.73+ including stable.
+    #[should_panic(expected = "left == right")]
     fn test_storable_accounts_with_hashes_and_write_versions_new3() {
         test_mismatch(false, true);
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed:")]
+    // rust 1.73+ (our as-of-writing nightly version) changed panic message. we're stuck with this
+    // short common substring until the monorepo is fully 1.73+ including stable.
+    #[should_panic(expected = "left == right")]
     fn test_storable_accounts_with_hashes_and_write_versions_new4() {
         test_mismatch(true, false);
     }

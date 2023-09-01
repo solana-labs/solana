@@ -993,7 +993,7 @@ pub mod tests {
 
     #[test]
     #[should_panic(
-        expected = "assertion failed: accounts_to_combine.target_slots_sorted.len() >= packed_contents.len()"
+        expected = "accounts_to_combine.target_slots_sorted.len() >= packed_contents.len()"
     )]
     fn test_write_packed_storages_too_few_slots() {
         let (db, storages, slots, _infos) = get_sample_storages(1, None);

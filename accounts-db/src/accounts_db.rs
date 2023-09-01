@@ -17764,7 +17764,7 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: self.storage.remove")]
+    #[should_panic(expected = "self.storage.remove")]
     fn test_handle_dropped_roots_for_ancient_assert() {
         solana_logger::setup();
         let common_store_path = Path::new("");
