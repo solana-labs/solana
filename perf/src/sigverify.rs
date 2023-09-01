@@ -676,7 +676,7 @@ pub fn ed25519_verify(
 }
 
 #[cfg(test)]
-#[allow(clippy::integer_arithmetic)]
+#[allow(clippy::arithmetic_side_effects)]
 mod tests {
     use {
         super::*,

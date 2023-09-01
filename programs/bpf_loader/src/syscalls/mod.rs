@@ -367,11 +367,13 @@ fn translate_type_inner<'a, T>(
     check_aligned: bool,
 ) -> Result<&'a mut T, Error> {
     let host_addr = translate(memory_mapping, access_type, vm_addr, size_of::<T>() as u64)?;
-
-    if check_aligned && !address_is_aligned::<T>(host_addr) {
-        return Err(SyscallError::UnalignedPointer.into());
+    if !check_aligned {
+        Ok(unsafe { std::mem::transmute::<u64, &mut T>(host_addr) })
+    } else if !address_is_aligned::<T>(host_addr) {
+        Err(SyscallError::UnalignedPointer.into())
+    } else {
+        Ok(unsafe { &mut *(host_addr as *mut T) })
     }
-    Ok(unsafe { &mut *(host_addr as *mut T) })
 }
 fn translate_type_mut<'a, T>(
     memory_mapping: &MemoryMapping,
@@ -1879,7 +1881,7 @@ declare_syscall!(
 );
 
 #[cfg(test)]
-#[allow(clippy::integer_arithmetic)]
+#[allow(clippy::arithmetic_side_effects)]
 #[allow(clippy::indexing_slicing)]
 mod tests {
     #[allow(deprecated)]

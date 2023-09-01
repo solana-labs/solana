@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     assert_matches::assert_matches,
     crossbeam_channel::{unbounded, Receiver},

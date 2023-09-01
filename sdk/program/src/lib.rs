@@ -743,7 +743,7 @@ macro_rules! unchecked_div_by_const {
         // ugly error messages!
         // https://users.rust-lang.org/t/unexpected-behavior-of-compile-time-integer-div-by-zero-check-in-declarative-macro/56718
         let _ = [(); ($den as usize) - 1];
-        #[allow(clippy::integer_arithmetic)]
+        #[allow(clippy::arithmetic_side_effects)]
         let quotient = $num / $den;
         quotient
     }};

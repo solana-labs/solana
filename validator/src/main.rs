@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 use {

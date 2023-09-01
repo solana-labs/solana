@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::redundant_closure)]
 use {
     assert_matches::assert_matches,

@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 pub mod leader_bank_notifier;
 pub mod poh_recorder;
 pub mod poh_service;
