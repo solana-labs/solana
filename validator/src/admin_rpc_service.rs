@@ -821,7 +821,6 @@ mod tests {
         serde_json::Value,
         solana_accounts_db::{
             accounts_index::AccountSecondaryIndexes, inline_spl_token,
-            secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
         },
         solana_core::consensus::tower_storage::NullTowerStorage,
         solana_gossip::cluster_info::ClusterInfo,
