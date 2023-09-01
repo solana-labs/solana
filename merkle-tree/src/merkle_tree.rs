@@ -139,7 +139,7 @@ impl MerkleTree {
         self.nodes.iter().last()
     }
 
-    fn append_nodes(nodes: &mut[Hash], mut leaf_count: usize, leaves: Vec<Hash>) -> usize {
+    fn append_nodes(nodes: &mut [Hash], mut leaf_count: usize, leaves: Vec<Hash>) -> usize {
         for mut leaf in leaves {
             let mut layer: usize = 0;
             leaf_count += 1;
@@ -152,9 +152,8 @@ impl MerkleTree {
                 layer += 1;
                 cursor >>= 1;
             }
-        
+
             nodes[layer] = leaf;
-            
         }
         leaf_count
     }
@@ -162,13 +161,12 @@ impl MerkleTree {
     fn private_depth(leaf_count: usize) -> usize {
         if leaf_count <= 1 {
             leaf_count
-        }
-        else {
+        } else {
             (63 - (leaf_count - 1).leading_zeros()) as usize + 2
         }
     }
 
-    fn commit_finish(nodes: &mut[Hash], leaf_count: usize) -> Hash {
+    fn commit_finish(nodes: &mut [Hash], leaf_count: usize) -> Hash {
         let leaf_count = leaf_count;
         let root_idx: usize = Self::private_depth(leaf_count) - 1;
 
@@ -182,34 +180,40 @@ impl MerkleTree {
                     let arg1 = &tmp;
                     let arg2 = &tmp;
                     hash_intermediate!(arg1, arg2)
-                }
-                else {
+                } else {
                     let arg1 = &tmp;
                     let arg2 = &nodes[layer];
                     hash_intermediate!(arg1, arg2)
                 };
-                layer+=1; 
-                layer_count = (layer_count+1) >> 1;
+                layer += 1;
+                layer_count = (layer_count + 1) >> 1;
             }
             nodes[root_idx] = tmp;
         }
         nodes[root_idx]
     }
 
-    pub fn merkle_root<T: AsRef<[u8]>>(items: &[T]) -> Hash {
+    #[allow(clippy::uninit_vec)]
+    pub fn merkle_root<T: AsRef<[u8]>>(items: &[T]) -> Option<Hash> {
+        if items.is_empty() {
+            return None;
+        }
         let mut nodes: Vec<Hash> = Vec::with_capacity(63);
-        unsafe{
+        unsafe {
             nodes.set_len(63);
         }
 
-        let hashes = items.iter().map(|item| {
-            let item = item.as_ref();
-            hash_leaf!(item)
-        }).collect::<Vec<_>>();
-        let mut leaf_count =0;
+        let hashes = items
+            .iter()
+            .map(|item| {
+                let item = item.as_ref();
+                hash_leaf!(item)
+            })
+            .collect::<Vec<_>>();
+        let mut leaf_count = 0;
         leaf_count = Self::append_nodes(&mut nodes, leaf_count, hashes);
 
-        Self::commit_finish(&mut nodes, leaf_count)
+        Some(Self::commit_finish(&mut nodes, leaf_count))
     }
 
     pub fn find_path(&self, index: usize) -> Option<Proof> {
