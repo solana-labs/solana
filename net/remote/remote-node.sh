@@ -429,7 +429,7 @@ EOF
       args+=(--tpu-enable-udp)
     fi
 
-    if $wenRestartFile; then
+    if [[ "$wenRestartFile" != "" ]]; then
       args+=(--wen-restart $wenRestartFile)
     fi
 
