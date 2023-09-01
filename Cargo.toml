@@ -1,6 +1,7 @@
 [profile.release-with-debug]
 inherits = "release"
 debug = true
+split-debuginfo = "packed"
 
 [workspace]
 members = [
