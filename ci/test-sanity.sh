@@ -6,6 +6,22 @@ cd "$(dirname "$0")/.."
 source ci/_
 
 (
+set -x
+echo "$e==>$x Buildkite CI detected."
+service="buildkite"
+branch="$BUILDKITE_BRANCH"
+build="$BUILDKITE_BUILD_NUMBER"
+job="$BUILDKITE_JOB_ID"
+build_url=$(urlencode "$BUILDKITE_BUILD_URL")
+slug="$BUILDKITE_PROJECT_SLUG"
+commit="$BUILDKITE_COMMIT"
+if [[ "$BUILDKITE_PULL_REQUEST" != "false" ]]; then
+  pr="$BUILDKITE_PULL_REQUEST"
+fi
+tag="$BUILDKITE_TAG"
+)
+
+(
   echo --- git diff --check
 
   if [[ -n "$CI_BASE_BRANCH" ]]; then
