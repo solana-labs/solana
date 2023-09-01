@@ -29,8 +29,12 @@ impl InvalidFeePayerFilter {
     /// Reset the filter if enough time has passed since last reset.
     pub fn reset_on_interval(&self) {
         if self.stats.try_report() {
-            self.recent_invalid_fee_payers.clear();
+            self.reset();
         }
+    }
+
+    fn reset(&self) {
+        self.recent_invalid_fee_payers.clear();
     }
 
     /// Add a pubkey to the filter.
@@ -103,7 +107,7 @@ mod tests {
         assert!(invalid_fee_payer_filter.should_reject(&pubkey1));
         assert!(!invalid_fee_payer_filter.should_reject(&pubkey2));
 
-        invalid_fee_payer_filter.reset_on_interval();
+        invalid_fee_payer_filter.reset();
         assert!(!invalid_fee_payer_filter.should_reject(&pubkey1));
         assert!(!invalid_fee_payer_filter.should_reject(&pubkey2));
     }
