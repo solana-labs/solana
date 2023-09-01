@@ -231,7 +231,7 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
             let key_size_cache = pubkeys_map.len();
             pubkeys_map.insert_if_not_exists(inner_key, &self.stats.num_inner_keys);
             if key_size_cache != pubkeys_map.len() {
-                self.key_size_index.update(&pubkeys_map.len(), key);
+                // skipping self.key_size_index.update(&pubkeys_map.len(), key);
             }
         }
 
@@ -280,7 +280,7 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
             // If we deleted a pubkey from the reverse_index, then the corresponding entry
             // better exist in this index as well or the two indexes are out of sync!
             assert!(inner_key_map.value().remove_inner_key(removed_inner_key));
-            self.key_size_index.update(&inner_key_map.len(), outer_key);
+            // skipping self.key_size_index.update(&inner_key_map.len(), outer_key);
             inner_key_map.is_empty()
         };
 
