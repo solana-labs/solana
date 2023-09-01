@@ -39,7 +39,12 @@ impl InvalidFeePayerFilter {
         self.recent_invalid_fee_payers.insert(pubkey);
 
         if self.recent_invalid_fee_payers.len() > self.capacity {
-            if let Some(key) = self.recent_invalid_fee_payers.iter().next().map(|k| *k.key()) {
+            if let Some(key) = self
+                .recent_invalid_fee_payers
+                .iter()
+                .next()
+                .map(|k| *k.key())
+            {
                 self.recent_invalid_fee_payers.remove(&key);
             }
         }
