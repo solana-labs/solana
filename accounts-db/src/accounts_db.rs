@@ -718,6 +718,7 @@ struct MultiThreadProgress<'a> {
     report_delay_secs: u64,
     first_caller: bool,
     ultimate_count: u64,
+    start_time: Instant,
 }
 
 impl<'a> MultiThreadProgress<'a> {
@@ -729,6 +730,7 @@ impl<'a> MultiThreadProgress<'a> {
             report_delay_secs,
             first_caller: false,
             ultimate_count,
+            start_time: Instant::now(),
         }
     }
     fn report(&mut self, my_current_count: u64) {
@@ -745,11 +747,13 @@ impl<'a> MultiThreadProgress<'a> {
             self.first_caller =
                 self.first_caller || 0 == previous_total_processed_slots_across_all_threads;
             if self.first_caller {
+                let total = previous_total_processed_slots_across_all_threads
+                    + my_total_newly_processed_slots_since_last_report;
                 info!(
-                    "generating index: {}/{} slots...",
-                    previous_total_processed_slots_across_all_threads
-                        + my_total_newly_processed_slots_since_last_report,
-                    self.ultimate_count
+                    "generating index: {}/{} slots... ({}/s)",
+                    total,
+                    self.ultimate_count,
+                    total / self.start_time.elapsed().as_secs().max(1),
                 );
             }
             self.last_update = now;
