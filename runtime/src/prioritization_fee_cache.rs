@@ -34,6 +34,9 @@ struct PrioritizationFeeCacheMetrics {
     // Count of transactions that successfully updated each slot's prioritization fee cache.
     successful_transaction_update_count: AtomicU64,
 
+    // Count of duplicated banks being purged
+    purged_duplicated_bank_count: AtomicU64,
+
     // Accumulated time spent on tracking prioritization fee for each slot.
     total_update_elapsed_us: AtomicU64,
 
@@ -50,6 +53,11 @@ struct PrioritizationFeeCacheMetrics {
 impl PrioritizationFeeCacheMetrics {
     fn accumulate_successful_transaction_update_count(&self, val: u64) {
         self.successful_transaction_update_count
+            .fetch_add(val, Ordering::Relaxed);
+    }
+
+    fn accumulate_total_purged_duplicated_bank_count(&self, val: u64) {
+        self.purged_duplicated_bank_count
             .fetch_add(val, Ordering::Relaxed);
     }
 
@@ -81,6 +89,11 @@ impl PrioritizationFeeCacheMetrics {
                 "successful_transaction_update_count",
                 self.successful_transaction_update_count
                     .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "purged_duplicated_bank_count",
+                self.purged_duplicated_bank_count.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
             (
@@ -313,8 +326,16 @@ impl PrioritizationFeeCache {
         // block minimum fee.
         let (_, slot_finalize_time) = measure!(
             {
-                // retain prioritization fee for OC-ed bank
+                let pre_purge_bank_count = slot_prioritization_fee.len() as u64;
                 slot_prioritization_fee.retain(|id, _| id == bank_id);
+                let post_purge_bank_count = slot_prioritization_fee.len() as u64;
+                metrics.accumulate_total_purged_duplicated_bank_count(
+                    pre_purge_bank_count.saturating_sub(post_purge_bank_count),
+                );
+                if post_purge_bank_count == 0 {
+                    warn!("Prioritization fee cache unexpected finalized on non-existing bank. slot {slot} bank id {bank_id}");
+                }
+
                 let mut block_prioritization_fee = slot_prioritization_fee
                     .entry(*bank_id)
                     .or_insert(PrioritizationFee::default());
@@ -550,7 +571,7 @@ mod tests {
             &1
         )
         .entry(1)
-        .or_insert(PrioritizationFee::default())
+        .or_default()
         .mark_block_completed()
         .is_ok());
         assert!(PrioritizationFeeCache::get_prioritization_fee(
@@ -558,13 +579,13 @@ mod tests {
             &2
         )
         .entry(2)
-        .or_insert(PrioritizationFee::default())
+        .or_default()
         .mark_block_completed()
         .is_ok());
         // add slot 3 entry to cache, but not finalize it
         PrioritizationFeeCache::get_prioritization_fee(prioritization_fee_cache.cache.clone(), &3)
             .entry(3)
-            .or_insert(PrioritizationFee::default());
+            .or_default();
 
         // assert available block count should be 2 finalized blocks
         assert_eq!(2, prioritization_fee_cache.available_block_count());
