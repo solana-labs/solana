@@ -33,7 +33,9 @@ else
   set -x
   echo "$e==>$x Buildkite CI detected."
   urlencode() {
-      echo "$1" | curl -Gso /dev/null -w "%{url_effective}" --data-urlencode @- "" | cut -c 3- | sed -e 's/%0A//'
+    echo $(echo "$1" | curl -Gso /dev/null -w "%{url_effective}" --data-urlencode @- "")
+    echo $(echo "$1" | curl -Gso /dev/null -w "%{url_effective}" --data-urlencode @- "" | cut -c 3-)
+    echo $(echo "$1" | curl -Gso /dev/null -w "%{url_effective}" --data-urlencode @- "" | cut -c 3- | sed -e 's/%0A//')
   }
   service="buildkite"
   branch="$BUILDKITE_BRANCH"
@@ -50,7 +52,7 @@ else
   # We normalize CI to `1`; but codecov expects it to be `true` to detect Buildkite...
   # Unfortunately, codecov.io fails sometimes:
   #   curl: (7) Failed to connect to codecov.io port 443: Connection timed out
-  CI=true bash <(echo "set -x && echo $BUILDKITE_BRANCH")
+  CI=true bash <(echo 'set -x && echo $BUILDKITE_BRANCH')
   CI=true bash <(while ! curl -sS --retry 5 --retry-delay 2 --retry-connrefused --fail https://codecov.io/bash; do sleep 10; done) -Z -X gcov -f target/cov/lcov.info -B "$BUILDKITE_BRANCH"
 
   annotate --style success --context codecov.io \
