@@ -1504,27 +1504,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         }
     }
 
-    pub fn get_largest_keys(
-        &self,
-        index: &AccountIndex,
-        max_entries: usize,
-    ) -> Vec<(usize, Pubkey)> {
-        match index {
-            AccountIndex::ProgramId => self
-                .program_id_index
-                .key_size_index
-                .get_largest_keys(max_entries),
-            AccountIndex::SplTokenOwner => self
-                .spl_token_owner_index
-                .key_size_index
-                .get_largest_keys(max_entries),
-            AccountIndex::SplTokenMint => self
-                .spl_token_mint_index
-                .key_size_index
-                .get_largest_keys(max_entries),
-        }
-    }
-
     /// log any secondary index counts, if non-zero
     pub(crate) fn log_secondary_indexes(&self) {
         if !self.program_id_index.index.is_empty() {
