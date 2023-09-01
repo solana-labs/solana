@@ -97,7 +97,7 @@ fn parse_matches() -> ArgMatches<'static> {
         .arg(
             Arg::with_name("docker_build")
                 .long("docker-build")
-                .help("Build Docker images"),
+                .help("Build Docker images. If not set, will assume local docker image should be used"),
         )
         .arg(
             Arg::with_name("base_image")
@@ -287,6 +287,7 @@ async fn main() {
         bootstrap_image_name,
         BOOTSTRAP_VALIDATOR_REPLICAS,
         config_map.metadata.name.clone(),
+
     ) {
         Ok(replica_set) => replica_set,
         Err(err) => {
