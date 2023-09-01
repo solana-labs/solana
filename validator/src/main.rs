@@ -972,6 +972,18 @@ pub fn main() {
         .pop()
         .unwrap();
 
+    let accounts_hash_cache_path = matches
+        .value_of("accounts_hash_cache_path")
+        .map(Into::into)
+        .unwrap_or_else(|| ledger_path.join(AccountsDb::DEFAULT_ACCOUNTS_HASH_CACHE_DIR));
+    let accounts_hash_cache_path = create_and_canonicalize_directories(&[accounts_hash_cache_path])
+        .unwrap_or_else(|err| {
+            eprintln!("Unable to access accounts hash cache path: {err}");
+            exit(1);
+        })
+        .pop()
+        .unwrap();
+
     let debug_keys: Option<Arc<HashSet<_>>> = if matches.is_present("debug_key") {
         Some(Arc::new(
             values_t_or_exit!(matches, "debug_key", Pubkey)
@@ -1169,9 +1181,7 @@ pub fn main() {
 
     let accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
-        accounts_hash_cache_path: Some(
-            ledger_path.join(AccountsDb::DEFAULT_ACCOUNTS_HASH_CACHE_DIR),
-        ),
+        accounts_hash_cache_path: Some(accounts_hash_cache_path),
         filler_accounts_config,
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
