@@ -134,7 +134,8 @@ impl GroupedCiphertext2HandlesValidityProof {
         // include Y_0, Y_1, Y_2 to transcript and extract challenges
         transcript.validate_and_append_point(b"Y_0", &self.Y_0)?;
         transcript.validate_and_append_point(b"Y_1", &self.Y_1)?;
-        transcript.validate_and_append_point(b"Y_2", &self.Y_2)?;
+        // Y_2 can be an all zero point if the auditor public key is all zero
+        transcript.append_point(b"Y_2", &self.Y_2);
 
         let c = transcript.challenge_scalar(b"c");
         let w = transcript.challenge_scalar(b"w");
