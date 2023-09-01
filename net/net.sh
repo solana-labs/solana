@@ -352,7 +352,7 @@ startBootstrapLeader() {
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
          \"$enableUdp\" \
-         \"false\" \
+         \"$wenRestartFile\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -439,7 +439,6 @@ restartNode() {
   declare ipAddress=$1
   declare nodeType=$2
   declare nodeIndex="$3"
-  declare wenRestart=$4
 
   initLogDir
   declare logFile="$netLogDir/validator-$ipAddress.log"
@@ -515,7 +514,7 @@ restartNode() {
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
          \"$enableUdp\" \
-         \"$wenRestart\" \
+         \"$wenRestartFile\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -1274,7 +1273,7 @@ restartnode)
   skipSetup=true
   prepareDeploy
   getNodeType
-  restartNode "$nodeAddress" "$nodeType" "$nodeIndex" "$wenRestartFile"
+  restartNode "$nodeAddress" "$nodeType" "$nodeIndex"
   ;;
 logs)
   initLogDir
