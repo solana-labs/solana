@@ -112,8 +112,8 @@ impl<'a> DockerConfig<'a> {
         let dockerfile = dockerfile_path.join("Dockerfile");
         let context_path = SOLANA_ROOT.display().to_string();
         let command = format!(
-            "docker build -t {} -f {:?} {}",
-            tag, dockerfile, context_path
+            "docker build -t {}/{} -f {:?} {}",
+            "gregcusack", tag, dockerfile, context_path
         );
         match Command::new("sh")
             .arg("-c")

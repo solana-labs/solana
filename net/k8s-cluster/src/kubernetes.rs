@@ -101,6 +101,7 @@ impl<'a> Kubernetes<'a> {
         image_name: &str,
         num_bootstrap_validators: i32,
         config_map_name: Option<String>,
+        // command_args: &Vec<String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
         let env_var = vec![EnvVar {
             name: "MY_POD_IP".to_string(),
