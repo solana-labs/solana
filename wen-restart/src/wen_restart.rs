@@ -244,7 +244,7 @@ pub fn wen_restart(
     loop {
         if get_incremental_snapshot_archives(incremental_snapshot_archives_dir)
             .iter()
-            .any(|archive_info| archive_info.base_slot() == my_selected_slot)
+            .any(|archive_info| archive_info.slot() == my_selected_slot)
         {
             info!("wen_restart snapshot generated {}", my_selected_slot);
             break;

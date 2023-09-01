@@ -138,6 +138,10 @@ impl IncrementalSnapshotArchiveInfo {
     pub fn base_slot(&self) -> Slot {
         self.base_slot
     }
+
+    pub fn slot(&self) -> Slot {
+        self.inner.slot
+    }
 }
 
 impl SnapshotArchiveInfoGetter for IncrementalSnapshotArchiveInfo {
