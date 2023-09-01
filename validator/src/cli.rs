@@ -1377,13 +1377,17 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("wen_restart")
                 .long("wen-restart")
-                .takes_value(false)
+                .value_name("DIR")
+                .takes_value(true)
                 .help(
                     "When specified, make validator enter Wen Restart, where it doesn't
                     vote, create new blocks, or transmit new blocks. The only thing it
                     does is Gossip last vote information with other validators in Wen
                     Restart and figure out whether consensus can be reached to proceed
                     into a cluster restart.
+                    The progress will be saved in the file location provided. When all is
+                    done, exit the validator and use the progress and snapshot generated
+                    previously to enter wait_for_supermajority mode automatically.
                 ")
         )
         .args(&get_deprecated_arguments())

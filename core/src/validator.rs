@@ -101,7 +101,7 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
-            self, clean_orphaned_account_snapshot_dirs, get_incremental_snapshot_archives,
+            self, clean_orphaned_account_snapshot_dirs,
             move_and_async_delete_path_contents,
         },
     },
@@ -120,7 +120,9 @@ use {
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     solana_turbine::{self, broadcast_stage::BroadcastStageType},
     solana_vote_program::vote_state,
-    solana_wen_restart::wen_restart::wen_restart,
+    solana_wen_restart::wen_restart::{
+        finish_wen_restart, get_wen_restart_phase_one_result, wen_restart,
+    },
     std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
@@ -260,7 +262,7 @@ pub struct ValidatorConfig {
     pub block_production_method: BlockProductionMethod,
     pub generator_config: Option<GeneratorConfig>,
     pub use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup,
-    pub wen_restart: bool,
+    pub wen_restart: Option<PathBuf>,
 }
 
 impl Default for ValidatorConfig {
@@ -328,7 +330,7 @@ impl Default for ValidatorConfig {
             block_production_method: BlockProductionMethod::default(),
             generator_config: None,
             use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup::default(),
-            wen_restart: false,
+            wen_restart: None,
         }
     }
 }
@@ -1063,29 +1065,49 @@ impl Validator {
             repair_whitelist: config.repair_whitelist.clone(),
         });
 
-        let waited_for_supermajority = wait_for_supermajority(
-            config,
-            Some(&mut process_blockstore),
-            &bank_forks,
-            &cluster_info,
-            rpc_override_health_check,
-            &start_progress,
-        )
-        .map_err(|err| format!("wait_for_supermajority failed: {err:?}"))?;
+        let mut wen_restart_slot = None;
+        let mut wait_for_supermajority_slot = config.wait_for_supermajority;
+        let mut wait_for_supermajority_hash = config.expected_bank_hash;
+        if wait_for_supermajority_slot.is_none() && config.wen_restart.is_some() {
+            let wen_restart_progress = get_wen_restart_phase_one_result(&config.wen_restart)?;
+            if let Some((slot, hash)) = wen_restart_progress {
+                wen_restart_slot = Some(slot);
+                wait_for_supermajority_slot = wen_restart_slot;
+                wait_for_supermajority_hash = Some(hash);
+            }
+        }
+        let waited_for_supermajority = match wait_for_supermajority_slot {
+            None => false,
+            Some(expected_slot) =>
+                wait_for_supermajority(
+                    &expected_slot,
+                    &wait_for_supermajority_hash,
+                    Some(&mut process_blockstore),
+                    &bank_forks,
+                    &cluster_info,
+                    rpc_override_health_check,
+                    &start_progress,
+                )
+                .map_err(|err| format!("wait_for_supermajority failed: {err:?}"))?,
+        };
+        if waited_for_supermajority && config.wen_restart.is_some() {
+            finish_wen_restart(&config.wen_restart)?;
+        }
 
         let ledger_metric_report_service =
             LedgerMetricReportService::new(blockstore.clone(), exit.clone());
 
         let wait_for_vote_to_start_leader = !waited_for_supermajority
             && !config.no_wait_for_vote_to_start_leader
-            && !config.wen_restart;
+            && config.wen_restart.is_none();
 
         let tower = process_blockstore.process_to_create_tower()?;
         let last_vote = tower.last_vote();
         // TVU shred version should be the old one before wen_restart, otherwise repair results
         // from before the restart will be rejected.
         let tvu_shred_version = Arc::new(RwLock::new(node.info.shred_version()));
-        if config.wen_restart {
+        let in_wen_restart_phase_one = config.wen_restart.is_some() && wen_restart_slot.is_none();
+        if in_wen_restart_phase_one {
             node.info
                 .set_shred_version((node.info.shred_version() + 1) % 0xffff);
             assert!(
@@ -1181,12 +1203,12 @@ impl Validator {
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let slots_to_repair_for_wen_restart: Option<Arc<RwLock<Option<Vec<Slot>>>>> =
-            if config.wen_restart {
+            if in_wen_restart_phase_one {
                 Some(Arc::new(RwLock::new(Some(Vec::new()))))
             } else {
                 None
             };
-        let in_wen_restart = Arc::new(AtomicBool::new(config.wen_restart));
+        let in_wen_restart_phase_one_condition = Arc::new(AtomicBool::new(in_wen_restart_phase_one));
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -1239,14 +1261,17 @@ impl Validator {
             turbine_quic_endpoint_sender.clone(),
             turbine_quic_endpoint_receiver,
             slots_to_repair_for_wen_restart.clone(),
-            in_wen_restart.clone(),
+            in_wen_restart_phase_one_condition.clone(),
         )?;
 
-                // repair and restart don't need to produce new blocks but it does need
+        // repair and restart don't need to produce new blocks but it does need
         // repair and replay, just not voting. So we need TVU, but not TPU.
-        if config.wen_restart {
-            info!("Waiting for wen_restart to finish");
+        if in_wen_restart_phase_one {
+            info!("Waiting for wen_restart phase one to finish");
             match wen_restart(
+                &config.wen_restart,
+                &config.snapshot_config.incremental_snapshot_archives_dir,
+                &accounts_background_request_sender,
                 last_vote,
                 blockstore.clone(),
                 cluster_info.clone(),
@@ -1254,51 +1279,7 @@ impl Validator {
                 slots_to_repair_for_wen_restart.clone().unwrap(),
             ) {
                 Ok(new_root_slot) => {
-                    info!(
-                        "wen_restart add hard forks, set_root and generate snapshot {}",
-                        new_root_slot
-                    );
-                    {
-                        let mut my_bank_forks = bank_forks.write().unwrap();
-                        let root_bank = my_bank_forks.root_bank();
-                        root_bank.register_hard_fork(new_root_slot);
-                        let new_root_bank = my_bank_forks.get(new_root_slot).unwrap();
-                        new_root_bank.rehash();
-                        info!("wen_restart: new hash for slot {} after adding hard fork {}", new_root_slot, new_root_bank.hash());
-                        my_bank_forks.set_root(
-                            new_root_slot,
-                            &accounts_background_request_sender,
-                            None,
-                            true,
-                        );
-                    }
-                    info!("wen_restart waiting for new snapshot to be generated on {}", new_root_slot);
-                    loop {
-                        if get_incremental_snapshot_archives(&config.snapshot_config.incremental_snapshot_archives_dir)
-                            .iter()
-                            .any(|archive_info| archive_info.slot() == new_root_slot)
-                        {
-                            info!("wen_restart snapshot generated {}", new_root_slot);
-                            break;
-                        }
-                        sleep(Duration::from_millis(1000));
-                    }
-                    let new_shred_version = compute_shred_version(
-                        &genesis_config.hash(),
-                        Some(&bank_forks.read().unwrap().root_bank().hard_forks()),
-                    );
-                    *tvu_shred_version.write().unwrap() = new_shred_version;
-                    cluster_info
-                        .my_contact_info()
-                        .set_shred_version(new_shred_version);
-                    info!(
-                        "wen_restart finished, shred_version now {}",
-                        new_shred_version
-                    );
-                    // All shreds should be accepted, no more special repairs.
-                    *slots_to_repair_for_wen_restart.unwrap().write().unwrap() = None;
-                    in_wen_restart.swap(false, Ordering::Relaxed);
-                    ()
+                    return Err(format!("wen_restart phase one completed, will restart to wait for supermajority: chosen slot {}", new_root_slot));
                 }
                 Err(e) => return Err(format!("wait_for_wen_restart failed: {e:?}")),
             };
@@ -2224,84 +2205,80 @@ enum ValidatorError {
 // Error indicates that a bad hash was encountered or another condition
 // that is unrecoverable and the validator should exit.
 fn wait_for_supermajority(
-    config: &ValidatorConfig,
+    wait_for_supermajority_slot: &Slot,
+    expected_bank_hash: &Option<Hash>,
     process_blockstore: Option<&mut ProcessBlockStore>,
     bank_forks: &RwLock<BankForks>,
     cluster_info: &ClusterInfo,
     rpc_override_health_check: Arc<AtomicBool>,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
 ) -> Result<bool, ValidatorError> {
-    match config.wait_for_supermajority {
-        None => Ok(false),
-        Some(wait_for_supermajority_slot) => {
-            if let Some(process_blockstore) = process_blockstore {
-                process_blockstore
-                    .process()
-                    .map_err(ValidatorError::Error)?;
-            }
+    if let Some(process_blockstore) = process_blockstore {
+        process_blockstore
+            .process()
+            .map_err(ValidatorError::Error)?;
+    }
 
-            let bank = bank_forks.read().unwrap().working_bank();
-            match wait_for_supermajority_slot.cmp(&bank.slot()) {
-                std::cmp::Ordering::Less => return Ok(false),
-                std::cmp::Ordering::Greater => {
-                    error!(
-                        "Ledger does not have enough data to wait for supermajority, \
-                             please enable snapshot fetch. Has {} needs {}",
-                        bank.slot(),
-                        wait_for_supermajority_slot
-                    );
-                    return Err(ValidatorError::NotEnoughLedgerData);
-                }
-                _ => {}
-            }
+    let bank = bank_forks.read().unwrap().working_bank();
+    match wait_for_supermajority_slot.cmp(&bank.slot()) {
+        std::cmp::Ordering::Less => return Ok(false),
+        std::cmp::Ordering::Greater => {
+            error!(
+                "Ledger does not have enough data to wait for supermajority, \
+                        please enable snapshot fetch. Has {} needs {}",
+                bank.slot(),
+                wait_for_supermajority_slot
+            );
+            return Err(ValidatorError::NotEnoughLedgerData);
+        }
+        _ => {}
+    }
 
-            if let Some(expected_bank_hash) = config.expected_bank_hash {
-                if bank.hash() != expected_bank_hash {
-                    error!(
-                        "Bank hash({}) does not match expected value: {}",
-                        bank.hash(),
-                        expected_bank_hash
-                    );
-                    return Err(ValidatorError::BadExpectedBankHash);
-                }
-            }
-
-            for i in 1.. {
-                let logging = i % 10 == 1;
-                if logging {
-                    info!(
-                        "Waiting for {}% of activated stake at slot {} to be in gossip...",
-                        WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT,
-                        bank.slot()
-                    );
-                }
-
-                let gossip_stake_percent =
-                    get_stake_percent_in_gossip(&bank, cluster_info, logging);
-
-                *start_progress.write().unwrap() =
-                    ValidatorStartProgress::WaitingForSupermajority {
-                        slot: wait_for_supermajority_slot,
-                        gossip_stake_percent,
-                    };
-
-                if gossip_stake_percent >= WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT {
-                    info!(
-                        "Supermajority reached, {}% active stake detected, starting up now.",
-                        gossip_stake_percent,
-                    );
-                    break;
-                }
-                // The normal RPC health checks don't apply as the node is waiting, so feign health to
-                // prevent load balancers from removing the node from their list of candidates during a
-                // manual restart.
-                rpc_override_health_check.store(true, Ordering::Relaxed);
-                sleep(Duration::new(1, 0));
-            }
-            rpc_override_health_check.store(false, Ordering::Relaxed);
-            Ok(true)
+    if let Some(expected_bank_hash) = expected_bank_hash {
+        if bank.hash() != *expected_bank_hash {
+            error!(
+                "Bank hash({}) does not match expected value: {}",
+                bank.hash(),
+                expected_bank_hash
+            );
+            return Err(ValidatorError::BadExpectedBankHash);
         }
     }
+
+    for i in 1.. {
+        let logging = i % 10 == 1;
+        if logging {
+            info!(
+                "Waiting for {}% of activated stake at slot {} to be in gossip...",
+                WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT,
+                bank.slot()
+            );
+        }
+
+        let gossip_stake_percent =
+            get_stake_percent_in_gossip(&bank, cluster_info, logging);
+
+        *start_progress.write().unwrap() =
+            ValidatorStartProgress::WaitingForSupermajority {
+                slot: *wait_for_supermajority_slot,
+                gossip_stake_percent,
+            };
+
+        if gossip_stake_percent >= WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT {
+            info!(
+                "Supermajority reached, {}% active stake detected, starting up now.",
+                gossip_stake_percent,
+            );
+            break;
+        }
+        // The normal RPC health checks don't apply as the node is waiting, so feign health to
+        // prevent load balancers from removing the node from their list of candidates during a
+        // manual restart.
+        rpc_override_health_check.store(true, Ordering::Relaxed);
+        sleep(Duration::new(1, 0));
+    }
+    rpc_override_health_check.store(false, Ordering::Relaxed);
+    Ok(true)
 }
 
 // Get the activated stake percentage (based on the provided bank) that is visible in gossip

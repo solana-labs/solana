@@ -30,7 +30,7 @@ extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
 disableQuic="${23}"
 enableUdp="${24}"
-wenRestart="${25}"
+wenRestartFile="${25}"
 
 set +x
 
@@ -429,8 +429,8 @@ EOF
       args+=(--tpu-enable-udp)
     fi
 
-    if $wenRestart; then
-      args+=(--wen-restart)
+    if $wenRestartFile; then
+      args+=(--wen-restart $wenRestartFile)
     fi
 
 cat >> ~/solana/on-reboot <<EOF

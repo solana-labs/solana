@@ -909,7 +909,7 @@ maybeDisableAirdrops=""
 maybeWaitForSupermajority=""
 maybeAccountsDbSkipShrink=""
 maybeSkipRequireTower=""
-maybeWenRestart=""
+wenRestartFile=""
 debugBuild=false
 profileBuild=false
 doBuild=true
@@ -1072,8 +1072,8 @@ while [[ -n $1 ]]; do
       esac
       shift 2
     elif [[ $1 = --wen-restart ]]; then
-      maybeWenRestart="$1"
-      shift 1
+      wenRestartFile=$2
+      shift 2
     else
       usage "Unknown long option: $1"
     fi
@@ -1272,13 +1272,9 @@ restartnode)
   nodeType=
   nodeIndex=
   skipSetup=true
-  wenRestart=true
-  if [[ -z $wen-restart ]]; then
-    wenRestart=false
-  fi
   prepareDeploy
   getNodeType
-  restartNode "$nodeAddress" "$nodeType" "$nodeIndex" "$wenRestart"
+  restartNode "$nodeAddress" "$nodeType" "$nodeIndex" "$wenRestartFile"
   ;;
 logs)
   initLogDir

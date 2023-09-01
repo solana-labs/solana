@@ -183,8 +183,8 @@ while [[ -n $1 ]]; do
       maybeRequireTower=false
       shift
     elif [[ $1 == --wen-restart ]]; then
-      args+=("$1")
-      shift
+      args+=("$1" "$2")
+      shift 2
     elif [[ $1 = -h ]]; then
       usage "$@"
     else
