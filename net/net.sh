@@ -427,7 +427,7 @@ startNode() {
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
          \"$enableUdp\" \
-         \"false\" \
+         \"$wenRestartFile\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
