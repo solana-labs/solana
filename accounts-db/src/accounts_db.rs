@@ -12577,8 +12577,14 @@ pub mod tests {
         }
 
         //UNSAFE: forcibly cast the special byte pattern to actual account fields.
-        let InputFields(slot, meta, account_meta, data, offset, hash) =
+        let InputFields(slot, meta, mut account_meta, data, offset, hash) =
             unsafe { std::mem::transmute::<InputBlob, InputFields>(blob) };
+
+        /*
+         * Reduce the undefined behaviour impact by overwriting a random value we assigned above
+         * into a `bool`.
+         */
+        account_meta.executable = true;
 
         // When adding a field to the following constructor, make sure this is sourced from
         // InputFields as well after adding new corresponding one to it. Needless to say, but note
@@ -12593,11 +12599,8 @@ pub mod tests {
         });
         let account = stored_account.to_account_shared_data();
 
-        let expected_account_hash = if cfg!(debug_assertions) {
-            Hash::from_str("8GiQSN2VvWASKPUuZgFkH4v66ihEanrDVXAkMFvLwEa8").unwrap()
-        } else {
-            Hash::from_str("9MYASra3mm8oXzMapYUonB6TcRsKFPtjhNXVgY3MPPUX").unwrap()
-        };
+        let expected_account_hash =
+            Hash::from_str("9MYASra3mm8oXzMapYUonB6TcRsKFPtjhNXVgY3MPPUX").unwrap();
 
         assert_eq!(
             AccountsDb::hash_account(
