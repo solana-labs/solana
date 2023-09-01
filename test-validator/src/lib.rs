@@ -838,6 +838,14 @@ impl TestValidator {
             ledger_path.join("validator-keypair.json").to_str().unwrap(),
         )?;
 
+        write_keypair_file(
+            &validator_stake_account,
+            ledger_path
+                .join("stake-account-keypair.json")
+                .to_str()
+                .unwrap(),
+        )?;
+
         // `ledger_exists` should fail until the vote account keypair is written
         assert!(!TestValidatorGenesis::ledger_exists(&ledger_path));
 
