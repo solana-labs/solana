@@ -9540,6 +9540,8 @@ pub mod tests {
     use {
         super::*,
         crate::{
+            account_info::StoredSize,
+            account_storage::meta::{AccountMeta, StoredMeta},
             accounts_hash::MERKLE_FANOUT,
             accounts_index::{
                 tests::*, AccountSecondaryIndexesIncludeExclude, ReadAccountMapEntry, RefCount,
