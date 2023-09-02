@@ -41,8 +41,8 @@ num_cpus = { workspace = true }
 num_enum = { workspace = true }
 once_cell = { workspace = true }
 ouroboros = { workspace = true }
-qualifier_attr = { workspace = true }
 percentage = { workspace = true }
+qualifier_attr = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
 regex = { workspace = true }
