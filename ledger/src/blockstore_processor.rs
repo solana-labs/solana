@@ -4563,7 +4563,7 @@ pub mod tests {
                 .returning(|_| ());
             Arc::new(mocked_pool)
         });
-        let bank = BankWithScheduler::new_for_test(bank, Some(Box::new(mocked_scheduler)));
+        let bank = BankWithScheduler::new(bank, Some(Box::new(mocked_scheduler)));
 
         let batch = bank.prepare_sanitized_batch(&txs);
         let batch_with_indexes = TransactionBatchWithIndexes {

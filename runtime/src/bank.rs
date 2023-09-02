@@ -4215,12 +4215,12 @@ impl Bank {
         self.tick_height.fetch_add(1, Relaxed);
     }
 
-    #[cfg(any(test, feature = "test-in-workspace"))]
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn register_tick_for_test(&self, hash: &Hash) {
         self.register_tick(hash, &BankWithScheduler::no_scheduler_available())
     }
 
-    #[cfg(any(test, feature = "test-in-workspace"))]
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn register_default_tick_for_test(&self) {
         self.register_tick(
             &Hash::default(),

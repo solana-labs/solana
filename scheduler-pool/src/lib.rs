@@ -525,7 +525,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 0);
         let scheduler = pool.take_from_pool(context);
         scheduler.schedule_execution(&(tx0, 0));
-        let bank = BankWithScheduler::new_for_test(bank, Some(scheduler));
+        let bank = BankWithScheduler::new(bank, Some(scheduler));
         assert_matches!(bank.wait_for_completed_scheduler(), Some((Ok(()), _)));
         assert_eq!(bank.transaction_count(), 1);
     }
@@ -571,7 +571,7 @@ mod tests {
         // transaction_count should remain same as scheduler should be bailing out.
         assert_eq!(bank.transaction_count(), 0);
 
-        let bank = BankWithScheduler::new_for_test(bank, Some(scheduler));
+        let bank = BankWithScheduler::new(bank, Some(scheduler));
         assert_matches!(
             bank.wait_for_completed_scheduler(),
             Some((
@@ -727,7 +727,7 @@ mod tests {
         >::new_dyn(None, None, None, ignored_prioritization_fee_cache);
         let scheduler = pool.take_from_pool(context);
 
-        let bank = BankWithScheduler::new_for_test(bank, Some(scheduler));
+        let bank = BankWithScheduler::new(bank, Some(scheduler));
         assert_eq!(bank.transaction_count(), 0);
 
         // schedule but not immediately execute transaction

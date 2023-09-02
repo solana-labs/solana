@@ -23,8 +23,6 @@
 //!
 //! See [InstalledScheduler] for visualized interaction.
 
-#[cfg(any(test, feature = "test-in-workspace"))]
-use mockall::automock;
 use {
     crate::{bank::Bank, bank_forks::BankForks},
     log::*,
@@ -42,8 +40,10 @@ use {
         sync::{Arc, RwLock},
     },
 };
+#[cfg(feature = "dev-context-only-utils")]
+use {mockall::automock, qualifier_attr::qualifiers};
 
-#[cfg_attr(any(test, feature = "test-in-workspace"), automock)]
+#[cfg_attr(feature = "dev-context-only-utils", automock)]
 pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>>;
     fn return_to_pool(&self, scheduler: Box<dyn InstalledScheduler<SEA>>);
@@ -101,7 +101,7 @@ pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Sync + Debug
 ///      solana-ledger -- deps --> solana-runtime;
 ///      solana-runtime -- deps --> solana-scheduler;
 ///  ```
-#[cfg_attr(any(test, feature = "test-in-workspace"), automock)]
+#[cfg_attr(feature = "dev-context-only-utils", automock)]
 // suppress false clippy complaints arising from mockall-derive:
 //   warning: `#[must_use]` has no effect when applied to a struct field
 //   warning: the following explicit lifetimes could be elided: 'a
@@ -241,7 +241,8 @@ pub struct BankWithSchedulerInner {
 pub type InstalledSchedulerRwLock = RwLock<Option<DefaultInstalledSchedulerBox>>;
 
 impl BankWithScheduler {
-    fn _new(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    fn new(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
         if let Some(bank_in_context) = scheduler.as_ref().and_then(|scheduler| scheduler.context())
         {
             assert_eq!(bank.slot(), bank_in_context.slot());
@@ -255,17 +256,8 @@ impl BankWithScheduler {
         }
     }
 
-    pub(crate) fn new(bank: Arc<Bank>, scheduler: DefaultInstalledSchedulerBox) -> Self {
-        Self::_new(bank, Some(scheduler))
-    }
-
-    #[cfg(any(test, feature = "test-in-workspace"))]
-    pub fn new_for_test(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
-        Self::_new(bank, scheduler)
-    }
-
     pub fn new_without_scheduler(bank: Arc<Bank>) -> Self {
-        Self::_new(bank, None)
+        Self::new(bank, None)
     }
 
     pub fn clone_with_scheduler(&self) -> BankWithScheduler {
@@ -326,7 +318,7 @@ impl BankWithScheduler {
         NO_INSTALLED_SCHEDULER_RW_LOCK
     }
 
-    #[cfg(any(test, feature = "test-in-workspace"))]
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn drop_scheduler(&self) {
         self.inner.drop_scheduler();
     }
@@ -522,7 +514,7 @@ mod tests {
         solana_logger::setup();
 
         let bank = Arc::new(Bank::default_for_tests());
-        let bank = BankWithScheduler::new_for_test(
+        let bank = BankWithScheduler::new(
             bank,
             Some(setup_mocked_scheduler(
                 [WaitReason::TerminatedToFreeze].into_iter(),
@@ -536,7 +528,7 @@ mod tests {
         solana_logger::setup();
 
         let bank = Arc::new(Bank::default_for_tests());
-        let bank = BankWithScheduler::new_for_test(
+        let bank = BankWithScheduler::new(
             bank,
             Some(setup_mocked_scheduler(
                 [WaitReason::DroppedFromBankForks].into_iter(),
@@ -550,7 +542,7 @@ mod tests {
         solana_logger::setup();
 
         let bank = Arc::new(crate::bank::tests::create_simple_test_bank(42));
-        let bank = BankWithScheduler::new_for_test(
+        let bank = BankWithScheduler::new(
             bank,
             Some(setup_mocked_scheduler(
                 [
@@ -591,7 +583,7 @@ mod tests {
             ),
         );
 
-        let bank = BankWithScheduler::new_for_test(bank, Some(mocked_scheduler));
+        let bank = BankWithScheduler::new(bank, Some(mocked_scheduler));
         bank.schedule_transaction_executions(&[tx0], [0].iter());
     }
 }

@@ -25,4 +25,4 @@ jemallocator = { workspace = true }
 log = { workspace = true }
 nohash-hasher = { workspace = true }
 solana-logger = { workspace = true }
-solana-runtime = { workspace = true, features = ["test-in-workspace"] }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }

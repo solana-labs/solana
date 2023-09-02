@@ -217,7 +217,7 @@ impl BankForks {
         let bank = if let Some(scheduler_pool) = &self.scheduler_pool {
             let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
             let scheduler = scheduler_pool.take_from_pool(context);
-            BankWithScheduler::new(bank, scheduler)
+            BankWithScheduler::new(bank, Some(scheduler))
         } else {
             BankWithScheduler::new_without_scheduler(bank)
         };
