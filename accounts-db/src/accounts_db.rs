@@ -470,6 +470,7 @@ pub(crate) struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     base_working_path: None,
+    accounts_hash_cache_path: None,
     filler_accounts_config: FillerAccountsConfig::const_default(),
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
@@ -481,6 +482,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
     base_working_path: None,
+    accounts_hash_cache_path: None,
     filler_accounts_config: FillerAccountsConfig::const_default(),
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
@@ -541,6 +543,7 @@ pub struct AccountsDbConfig {
     pub index: Option<AccountsIndexConfig>,
     /// Base directory for various necessary files
     pub base_working_path: Option<PathBuf>,
+    pub accounts_hash_cache_path: Option<PathBuf>,
     pub filler_accounts_config: FillerAccountsConfig,
     pub write_cache_limit_bytes: Option<u64>,
     /// if None, ancient append vecs are set to ANCIENT_APPEND_VEC_DEFAULT_OFFSET
@@ -621,6 +624,8 @@ struct GenerateIndexTimings {
     pub accounts_data_len_dedup_time_us: u64,
     pub total_duplicate_slot_keys: u64,
     pub populate_duplicate_keys_us: u64,
+    pub total_slots: u64,
+    pub slots_to_clean: u64,
 }
 
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -688,6 +693,8 @@ impl GenerateIndexTimings {
                 self.populate_duplicate_keys_us as i64,
                 i64
             ),
+            ("total_slots", self.total_slots, i64),
+            ("slots_to_clean", self.slots_to_clean, i64),
         );
     }
 }
@@ -714,6 +721,7 @@ struct MultiThreadProgress<'a> {
     report_delay_secs: u64,
     first_caller: bool,
     ultimate_count: u64,
+    start_time: Instant,
 }
 
 impl<'a> MultiThreadProgress<'a> {
@@ -725,6 +733,7 @@ impl<'a> MultiThreadProgress<'a> {
             report_delay_secs,
             first_caller: false,
             ultimate_count,
+            start_time: Instant::now(),
         }
     }
     fn report(&mut self, my_current_count: u64) {
@@ -741,11 +750,13 @@ impl<'a> MultiThreadProgress<'a> {
             self.first_caller =
                 self.first_caller || 0 == previous_total_processed_slots_across_all_threads;
             if self.first_caller {
+                let total = previous_total_processed_slots_across_all_threads
+                    + my_total_newly_processed_slots_since_last_report;
                 info!(
-                    "generating index: {}/{} slots...",
-                    previous_total_processed_slots_across_all_threads
-                        + my_total_newly_processed_slots_since_last_report,
-                    self.ultimate_count
+                    "generating index: {}/{} slots... ({}/s)",
+                    total,
+                    self.ultimate_count,
+                    total / self.start_time.elapsed().as_secs().max(1),
                 );
             }
             self.last_update = now;
@@ -1472,15 +1483,13 @@ pub struct AccountsDb {
 
     /// Base directory for various necessary files
     base_working_path: PathBuf,
-    /// Directories for account hash calculations, within base_working_path
+    // used by tests - held until we are dropped
+    #[allow(dead_code)]
+    base_working_temp_dir: Option<TempDir>,
+
     full_accounts_hash_cache_path: PathBuf,
     incremental_accounts_hash_cache_path: PathBuf,
     transient_accounts_hash_cache_path: PathBuf,
-
-    // used by tests
-    // holds this until we are dropped
-    #[allow(dead_code)]
-    temp_accounts_hash_cache_path: Option<TempDir>,
 
     pub shrink_paths: RwLock<Option<Vec<PathBuf>>>,
 
@@ -2417,15 +2426,16 @@ pub struct PubkeyHashAccount {
 }
 
 impl AccountsDb {
-    pub const ACCOUNTS_HASH_CACHE_DIR: &'static str = "accounts_hash_cache";
+    pub const DEFAULT_ACCOUNTS_HASH_CACHE_DIR: &'static str = "accounts_hash_cache";
 
     pub fn default_for_tests() -> Self {
-        Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None)
+        Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None, None)
     }
 
     fn default_with_accounts_index(
         accounts_index: AccountInfoAccountsIndex,
         base_working_path: Option<PathBuf>,
+        accounts_hash_cache_path: Option<PathBuf>,
     ) -> Self {
         let num_threads = get_thread_count();
         // 400M bytes
@@ -2433,29 +2443,17 @@ impl AccountsDb {
         // read only cache does not update lru on read of an entry unless it has been at least this many ms since the last lru update
         const READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE: u32 = 100;
 
-        let (base_working_path, accounts_hash_cache_path, temp_accounts_hash_cache_path) =
-            match base_working_path {
-                Some(base_working_path) => {
-                    let accounts_hash_cache_path =
-                        base_working_path.join(Self::ACCOUNTS_HASH_CACHE_DIR);
-                    (base_working_path, accounts_hash_cache_path, None)
-                }
-                None => {
-                    let temp_accounts_hash_cache_path = Some(TempDir::new().unwrap());
-                    let base_working_path = temp_accounts_hash_cache_path
-                        .as_ref()
-                        .unwrap()
-                        .path()
-                        .to_path_buf();
-                    let accounts_hash_cache_path =
-                        base_working_path.join(Self::ACCOUNTS_HASH_CACHE_DIR);
-                    (
-                        base_working_path,
-                        accounts_hash_cache_path,
-                        temp_accounts_hash_cache_path,
-                    )
-                }
+        let (base_working_path, base_working_temp_dir) =
+            if let Some(base_working_path) = base_working_path {
+                (base_working_path, None)
+            } else {
+                let base_working_temp_dir = TempDir::new().unwrap();
+                let base_working_path = base_working_temp_dir.path().to_path_buf();
+                (base_working_path, Some(base_working_temp_dir))
             };
+
+        let accounts_hash_cache_path = accounts_hash_cache_path
+            .unwrap_or_else(|| base_working_path.join(Self::DEFAULT_ACCOUNTS_HASH_CACHE_DIR));
 
         let mut bank_hash_stats = HashMap::new();
         bank_hash_stats.insert(0, BankHashStats::default());
@@ -2488,10 +2486,10 @@ impl AccountsDb {
             write_version: AtomicU64::new(0),
             paths: vec![],
             base_working_path,
+            base_working_temp_dir,
             full_accounts_hash_cache_path: accounts_hash_cache_path.join("full"),
             incremental_accounts_hash_cache_path: accounts_hash_cache_path.join("incremental"),
             transient_accounts_hash_cache_path: accounts_hash_cache_path.join("transient"),
-            temp_accounts_hash_cache_path,
             shrink_paths: RwLock::new(None),
             temp_paths: None,
             file_size: DEFAULT_FILE_SIZE,
@@ -2572,7 +2570,9 @@ impl AccountsDb {
         let base_working_path = accounts_db_config
             .as_ref()
             .and_then(|x| x.base_working_path.clone());
-
+        let accounts_hash_cache_path = accounts_db_config
+            .as_ref()
+            .and_then(|config| config.accounts_hash_cache_path.clone());
         let filler_accounts_config = accounts_db_config
             .as_ref()
             .map(|config| config.filler_accounts_config)
@@ -2627,7 +2627,11 @@ impl AccountsDb {
                 .and_then(|x| x.write_cache_limit_bytes),
             partitioned_epoch_rewards_config,
             exhaustively_verify_refcounts,
-            ..Self::default_with_accounts_index(accounts_index, base_working_path)
+            ..Self::default_with_accounts_index(
+                accounts_index,
+                base_working_path,
+                accounts_hash_cache_path,
+            )
         };
         if paths_is_empty {
             // Create a temporary set of accounts directories, used primarily
@@ -2685,14 +2689,6 @@ impl AccountsDb {
 
     pub fn new_single_for_tests_with_caching() -> Self {
         AccountsDb::new_for_tests_with_caching(Vec::new(), &ClusterType::Development)
-    }
-
-    pub fn new_single_for_tests_with_secondary_indexes(
-        secondary_indexes: AccountSecondaryIndexes,
-    ) -> Self {
-        let mut accounts_db = AccountsDb::new_single_for_tests();
-        accounts_db.account_indexes = secondary_indexes;
-        accounts_db
     }
 
     fn next_id(&self) -> AppendVecId {
@@ -9312,6 +9308,7 @@ impl AccountsDb {
                 storage_size_accounts_map_us: storage_info_timings.storage_size_accounts_map_us,
                 storage_size_accounts_map_flatten_us: storage_info_timings
                     .storage_size_accounts_map_flatten_us,
+                total_slots: slots.len() as u64,
                 ..GenerateIndexTimings::default()
             };
 
@@ -9350,8 +9347,10 @@ impl AccountsDb {
             accounts_data_len_dedup_timer.stop();
             timings.accounts_data_len_dedup_time_us = accounts_data_len_dedup_timer.as_us();
 
+            let uncleaned_roots = uncleaned_roots.into_inner().unwrap();
+            timings.slots_to_clean = uncleaned_roots.len() as u64;
+
             if pass == 0 {
-                let uncleaned_roots = uncleaned_roots.into_inner().unwrap();
                 // Need to add these last, otherwise older updates will be cleaned
                 for root in &slots {
                     self.accounts_index.add_root(*root);
@@ -9921,27 +9920,23 @@ pub mod tests {
         crate::{
             account_info::StoredSize,
             account_storage::meta::{AccountMeta, StoredMeta},
-            accounts::Accounts,
             accounts_hash::MERKLE_FANOUT,
             accounts_index::{
-                tests::*, AccountIndex, AccountSecondaryIndexes,
-                AccountSecondaryIndexesIncludeExclude, ReadAccountMapEntry, RefCount,
+                tests::*, AccountSecondaryIndexesIncludeExclude, ReadAccountMapEntry, RefCount,
             },
             append_vec::{test_utils::TempFile, AppendVecStoredAccountMeta},
             cache_hash_data::CacheHashDataFile,
             inline_spl_token,
-            secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
         },
         assert_matches::assert_matches,
         itertools::Itertools,
-        rand::{distributions::Uniform, prelude::SliceRandom, thread_rng, Rng},
+        rand::{prelude::SliceRandom, thread_rng, Rng},
         solana_sdk::{
             account::{
                 accounts_equal, Account, AccountSharedData, ReadableAccount, WritableAccount,
             },
             hash::HASH_BYTES,
             pubkey::PUBKEY_BYTES,
-            system_program,
         },
         std::{
             iter::FromIterator,
@@ -12554,13 +12549,16 @@ pub mod tests {
 
     #[test]
     fn test_hash_stored_account() {
-        // This test uses some UNSAFE tricks to detect most of account's field
-        // addition and deletion without changing the hash code
+        // This test uses some UNSAFE tricks to detect most of hashing code changes, resulting from
+        // account's field additions and deletions of StoredAccountMeta and AccountSharedData and
+        // hashing-order changes.
 
         const ACCOUNT_DATA_LEN: usize = 3;
-        // the type of InputTuple elements must not contain references;
+        // the type of InputFields elements must not contain references;
         // they should be simple scalars or data blobs
-        type InputTuple = (
+        // repr(C) is needed for abi-stability in the dirtiest variant of std::mem::transmute().
+        #[repr(C)]
+        struct InputFields(
             Slot,
             StoredMeta,
             AccountMeta,
@@ -12568,19 +12566,23 @@ pub mod tests {
             usize, // for StoredAccountMeta::offset
             Hash,
         );
-        const INPUT_LEN: usize = std::mem::size_of::<InputTuple>();
+        const INPUT_LEN: usize = std::mem::size_of::<InputFields>();
         type InputBlob = [u8; INPUT_LEN];
         let mut blob: InputBlob = [0u8; INPUT_LEN];
 
-        // spray memory with decreasing counts so that, data layout can be detected.
+        // spray memory with decreasing integers so that, data layout change and/or hashing
+        // reordering can be detected. note that just zeroed blob can't detect field reordering.
         for (i, byte) in blob.iter_mut().enumerate() {
             *byte = (INPUT_LEN - i) as u8;
         }
 
         //UNSAFE: forcibly cast the special byte pattern to actual account fields.
-        let (slot, meta, account_meta, data, offset, hash): InputTuple =
-            unsafe { std::mem::transmute::<InputBlob, InputTuple>(blob) };
+        let InputFields(slot, meta, account_meta, data, offset, hash) =
+            unsafe { std::mem::transmute::<InputBlob, InputFields>(blob) };
 
+        // When adding a field to the following constructor, make sure this is sourced from
+        // InputFields as well after adding new corresponding one to it. Needless to say, but note
+        // that the hashing code itself must be adjusted
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
@@ -12592,9 +12594,9 @@ pub mod tests {
         let account = stored_account.to_account_shared_data();
 
         let expected_account_hash = if cfg!(debug_assertions) {
-            Hash::from_str("6qtBXmRrLdTdAV5bK6bZZJxQA4fPSUBxzQGq2BQSat25").unwrap()
+            Hash::from_str("8GiQSN2VvWASKPUuZgFkH4v66ihEanrDVXAkMFvLwEa8").unwrap()
         } else {
-            Hash::from_str("5HL9MtsQmxZQ8XSgcAhSkqnrayQFXUY8FT1JsHjDNKbi").unwrap()
+            Hash::from_str("9MYASra3mm8oXzMapYUonB6TcRsKFPtjhNXVgY3MPPUX").unwrap()
         };
 
         assert_eq!(
@@ -17750,7 +17752,7 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: self.storage.remove")]
+    #[should_panic(expected = "self.storage.remove")]
     fn test_handle_dropped_roots_for_ancient_assert() {
         solana_logger::setup();
         let common_store_path = Path::new("");
@@ -18096,216 +18098,5 @@ pub mod tests {
     fn compute_merkle_root(hashes: impl IntoIterator<Item = Hash>) -> Hash {
         let hashes = hashes.into_iter().collect();
         AccountsHasher::compute_merkle_root_recurse(hashes, MERKLE_FANOUT)
-    }
-
-    #[test]
-    fn test_get_largest_keys() {
-        solana_logger::setup();
-        // Constants
-        const NUM_DUMMY_ACCOUNTS: usize = 50;
-        const MAX_CHILD_ACCOUNTS: usize = 100;
-        let mut slot = 0;
-
-        // Set secondary indexes
-        let account_indexes = AccountSecondaryIndexes {
-            keys: None,
-            indexes: HashSet::from([AccountIndex::ProgramId]),
-        };
-
-        // AccountDB Setup
-        let accounts_db = AccountsDb::new_single_for_tests_with_secondary_indexes(account_indexes);
-
-        // Assert that list is empty. No accounts added yet.
-        let mut test_largest_keys = accounts_db.accounts_index.get_largest_keys(
-            &AccountIndex::ProgramId,
-            MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
-        );
-        assert_eq!(0, test_largest_keys.len());
-
-        // Add some basic system owned accounts
-        let mut dummy_account_pubkeys = Vec::with_capacity(NUM_DUMMY_ACCOUNTS);
-        let mut num_generator = thread_rng();
-        let key_size_range = Uniform::new_inclusive(0, MAX_CHILD_ACCOUNTS);
-        for i in 1..=NUM_DUMMY_ACCOUNTS {
-            let pubkey = Pubkey::new_unique();
-            dummy_account_pubkeys.push(pubkey);
-            let account = AccountSharedData::from(Account {
-                lamports: 11111111,
-                owner: system_program::id(),
-                ..Account::default()
-            });
-            // Store account in the AccountsDB
-            accounts_db.store_for_tests(slot, &[(&dummy_account_pubkeys[i - 1], &account)]);
-            slot += 1;
-            // Check that the system pubkey increments each time
-            test_largest_keys = accounts_db.accounts_index.get_largest_keys(
-                &AccountIndex::ProgramId,
-                MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
-            );
-            assert_eq!(test_largest_keys.len(), 1);
-            let number_system_owned_accounts = test_largest_keys[0].0;
-            assert_eq!(i, number_system_owned_accounts);
-        }
-
-        // Now add a random number of accounts each owned by one of the newly
-        // created dummy pubkeys
-        for dummy_account in &dummy_account_pubkeys {
-            // Add child accounts to each dummy account
-            let num_children = (&mut num_generator).sample_iter(key_size_range).next();
-            for j in 0..num_children.unwrap_or(0) {
-                let child_pubkey = Pubkey::new_unique();
-                let child_account = AccountSharedData::from(Account {
-                    lamports: ((j as u64) + 1) * 1000,
-                    owner: *dummy_account,
-                    ..Account::default()
-                });
-                accounts_db.store_for_tests(slot, &[(&child_pubkey, &child_account)]);
-                slot += 1;
-            }
-            // Check for entries with the same key size for sub sorting by pubkey
-            let existing_key_size_position = test_largest_keys
-                .iter()
-                .position(|(x, _)| *x == num_children.unwrap_or(0));
-            // Find where it should go and insert it
-            let key_position = match test_largest_keys
-                .binary_search_by_key(&num_children.unwrap_or(0), |(size, _)| *size)
-            {
-                Ok(found_position) => found_position,
-                Err(woudbe_position) => woudbe_position,
-            };
-            test_largest_keys.insert(key_position, (num_children.unwrap_or(0), *dummy_account));
-            // If there were indeed more elements with the same key size sort them by Pubkey
-            if existing_key_size_position.is_some() {
-                // Obtain a slice of mutable references to all elements with the same key_size
-                let mut sub_slice = test_largest_keys
-                    .split_mut(|(k, _)| *k != num_children.unwrap_or(0))
-                    .flatten()
-                    .collect_vec();
-                // Sort them...
-                let mut sorting_buffer = sub_slice.iter().map(|x| *(*x)).collect_vec();
-                sorting_buffer.sort_unstable_by_key(|(_, v)| *v);
-                // Copy back into the list
-                for i in 0..sub_slice.len() {
-                    *(sub_slice[i]) = (sorting_buffer[i].0, sorting_buffer[i].1);
-                }
-            }
-            // Prune list
-            while test_largest_keys.len() > MAX_NUM_LARGEST_INDEX_KEYS_RETURNED {
-                test_largest_keys.remove(0);
-            }
-        }
-
-        // Verify secondary index list matches expected list built above.
-        let largest_keys = accounts_db.accounts_index.get_largest_keys(
-            &AccountIndex::ProgramId,
-            MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
-        );
-        // Reverse the tracking vector and check for equality
-        // Note: Backend stores the `key_size_index` in ascending key size, but
-        // `get_largest_keys` returns the data in descending order, ie. the largest at the top.
-        test_largest_keys = test_largest_keys.into_iter().rev().collect_vec();
-        assert_eq!(test_largest_keys, largest_keys);
-
-        // Test queries for a partial list and past max return size
-        let mut largest_program_id_keys = Vec::<(usize, Pubkey)>::new();
-        for i in 0..=MAX_NUM_LARGEST_INDEX_KEYS_RETURNED + 1 {
-            largest_program_id_keys = accounts_db
-                .accounts_index
-                .get_largest_keys(&AccountIndex::ProgramId, i);
-            if i <= MAX_NUM_LARGEST_INDEX_KEYS_RETURNED {
-                assert_eq!(largest_program_id_keys.len(), i);
-            } else {
-                assert_eq!(
-                    largest_program_id_keys.len(),
-                    MAX_NUM_LARGEST_INDEX_KEYS_RETURNED
-                );
-            }
-        }
-
-        // Root the bank preparing for removal
-        (0..slot).for_each(|slot| {
-            accounts_db.calculate_accounts_delta_hash(slot);
-            accounts_db.add_root_and_flush_write_cache(slot);
-        });
-
-        // Test Removal of Keys
-        // First just remove a single key
-        let mut smallest_key: Pubkey;
-        let mut smallest_key_size: usize;
-        let mut smallest_key_inner_keys: Vec<Pubkey>;
-        let mut try_again = 0;
-        let zero_lamport_account =
-            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
-        loop {
-            smallest_key = largest_program_id_keys[largest_program_id_keys.len() - 1 - try_again].1;
-            smallest_key_size =
-                largest_program_id_keys[largest_program_id_keys.len() - 1 - try_again].0;
-            let mut collector = Vec::new();
-            accounts_db
-                .scan_accounts(
-                    &Ancestors::default(),
-                    0,
-                    |some_account_tuple| {
-                        if let Some(mapped_account_tuple) = some_account_tuple
-                            .filter(|(_, account, _)| {
-                                Accounts::is_loadable(account.lamports())
-                                    && account.owner() == &smallest_key
-                            })
-                            .map(|(pubkey, account, _slot)| (*pubkey, account))
-                        {
-                            collector.push(mapped_account_tuple)
-                        }
-                    },
-                    &ScanConfig::new(true),
-                )
-                .ok();
-            smallest_key_inner_keys = collector.into_iter().map(|(k, _)| k).collect_vec();
-            let single_inner_key = smallest_key_inner_keys.pop().unwrap();
-            // Overwrite the account as a 0 lamport account and clean.
-            accounts_db.store_for_tests(slot, &[(&single_inner_key, &zero_lamport_account)]);
-            accounts_db.calculate_accounts_delta_hash(slot);
-            accounts_db.add_root_and_flush_write_cache(slot);
-            slot += 1;
-            accounts_db.clean_accounts_for_tests();
-            // Read back
-            largest_program_id_keys = accounts_db.accounts_index.get_largest_keys(
-                &AccountIndex::ProgramId,
-                MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
-            );
-            // Ensure the below check is comparing the same pubkey in case there were ties in the list for keysize.
-            if largest_program_id_keys[largest_program_id_keys.len() - 1 - try_again].1
-                == smallest_key
-            {
-                break;
-            }
-            // If there were a duplicate keysize, just move up in the largest key list.
-            // worst case use the second largest key and keep removing till the tie is broken.
-            else if try_again < largest_program_id_keys.len() - 2 {
-                try_again += 1;
-            }
-        }
-        // Make sure outer key size decreased
-        assert_eq!(
-            smallest_key_size - 1,
-            largest_program_id_keys[largest_program_id_keys.len() - 1 - try_again].0
-        );
-
-        // Test removal of multiple keys
-        for key in smallest_key_inner_keys {
-            accounts_db.store_for_tests(slot, &[(&key, &zero_lamport_account)]);
-        }
-        accounts_db.calculate_accounts_delta_hash(slot);
-        accounts_db.add_root_and_flush_write_cache(slot);
-        accounts_db.clean_accounts_for_tests();
-        // Read back
-        largest_program_id_keys = accounts_db.accounts_index.get_largest_keys(
-            &AccountIndex::ProgramId,
-            MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
-        );
-        // Since all inner keys were removed, make sure outer key is gone too.
-        let outer_key_removed = !largest_program_id_keys
-            .iter()
-            .any(|(_, v)| *v == smallest_key);
-        assert!(outer_key_removed);
     }
 }

@@ -915,9 +915,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chrono"
-version = "0.4.26"
+version = "0.4.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec837a71355b28f6556dbd569b37b3f363091c0bd4b2e735674521b4c5fd9bc5"
+checksum = "95ed24df0632f708f5f6d8082675bef2596f7084dee3dd55f632290bf35bfe0f"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
@@ -926,7 +926,7 @@ dependencies = [
  "serde",
  "time 0.1.43",
  "wasm-bindgen",
- "winapi 0.3.9",
+ "windows-targets 0.48.0",
 ]
 
 [[package]]
@@ -2661,6 +2661,17 @@ dependencies = [
  "cc",
  "pkg-config",
  "vcpkg",
+]
+
+[[package]]
+name = "light-poseidon"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "949bdd22e4ed93481d45e9a6badb34b99132bcad0c8a8d4f05c42f7dcc7b90bc"
+dependencies = [
+ "ark-bn254",
+ "ark-ff",
+ "thiserror",
 ]
 
 [[package]]
@@ -5143,6 +5154,7 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rayon",
  "rustc_version",
+ "rustversion",
  "serde",
  "serde_bytes",
  "serde_derive",
@@ -5372,6 +5384,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "libsecp256k1 0.6.0",
+ "light-poseidon",
  "log",
  "memoffset 0.9.0",
  "num-bigint 0.4.4",
@@ -5976,6 +5989,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-sbf-rust-poseidon"
+version = "1.17.0"
+dependencies = [
+ "array-bytes",
+ "solana-program",
+]
+
+[[package]]
 name = "solana-sbf-rust-rand"
 version = "1.17.0"
 dependencies = [
@@ -6148,6 +6169,7 @@ dependencies = [
  "num_enum 0.6.1",
  "pbkdf2 0.11.0",
  "qstring",
+ "qualifier_attr",
  "rand 0.7.3",
  "rand 0.8.5",
  "rustc_version",

@@ -1,5 +1,5 @@
 //! The solana-program-test provides a BanksClient-based test framework SBF programs
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 // Export tokio for test clients
 pub use tokio;

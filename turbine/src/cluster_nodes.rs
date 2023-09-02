@@ -513,7 +513,7 @@ fn enable_turbine_fanout_experiments(shred_slot: Slot, root_bank: &Bank) -> bool
 
 // Returns true if the feature is effective for the shred slot.
 #[must_use]
-pub fn check_feature_activation(feature: &Pubkey, shred_slot: Slot, root_bank: &Bank) -> bool {
+fn check_feature_activation(feature: &Pubkey, shred_slot: Slot, root_bank: &Bank) -> bool {
     match root_bank.feature_set.activated_slot(feature) {
         None => false,
         Some(feature_slot) => {

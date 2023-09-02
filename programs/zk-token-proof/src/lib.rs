@@ -115,11 +115,6 @@ fn process_close_proof_context(invoke_context: &mut InvokeContext) -> Result<(),
 }
 
 declare_process_instruction!(process_instruction, 0, |invoke_context| {
-    if invoke_context.get_stack_height() != TRANSACTION_LEVEL_STACK_HEIGHT {
-        // Not supported as an inner instruction
-        return Err(InstructionError::UnsupportedProgramId);
-    }
-
     // Consume compute units if feature `native_programs_consume_cu` is activated
     let native_programs_consume_cu = invoke_context
         .feature_set
@@ -130,8 +125,20 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
     let instruction = ProofInstruction::instruction_type(instruction_data)
         .ok_or(InstructionError::InvalidInstructionData)?;
 
+    if invoke_context.get_stack_height() != TRANSACTION_LEVEL_STACK_HEIGHT
+        && instruction != ProofInstruction::CloseContextState
+    {
+        // Proof verification instructions are not supported as an inner instruction
+        return Err(InstructionError::UnsupportedProgramId);
+    }
+
     match instruction {
         ProofInstruction::CloseContextState => {
+            if native_programs_consume_cu {
+                invoke_context
+                    .consume_checked(3_300)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            }
             ic_msg!(invoke_context, "CloseContextState");
             process_close_proof_context(invoke_context)
         }

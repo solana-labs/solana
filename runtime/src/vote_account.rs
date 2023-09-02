@@ -198,15 +198,15 @@ impl VoteAccounts {
             return;
         };
         if let Some(node_pubkey) = vote_account.node_pubkey() {
-            match Arc::make_mut(staked_nodes).entry(node_pubkey) {
-                Entry::Vacant(_) => panic!("this should not happen!"),
-                Entry::Occupied(mut entry) => match entry.get().cmp(&stake) {
-                    Ordering::Less => panic!("subtraction value exceeds node's stake"),
-                    Ordering::Equal => {
-                        entry.remove_entry();
-                    }
-                    Ordering::Greater => *entry.get_mut() -= stake,
-                },
+            let Entry::Occupied(mut entry) = Arc::make_mut(staked_nodes).entry(node_pubkey) else {
+                panic!("this should not happen!");
+            };
+            match entry.get().cmp(&stake) {
+                Ordering::Less => panic!("subtraction value exceeds node's stake"),
+                Ordering::Equal => {
+                    entry.remove_entry();
+                }
+                Ordering::Greater => *entry.get_mut() -= stake,
             }
         }
     }

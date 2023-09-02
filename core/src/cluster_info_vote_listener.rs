@@ -36,7 +36,6 @@ use {
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
-        feature_set::allow_votes_to_directly_update_vote_state,
         hash::Hash,
         pubkey::Pubkey,
         signature::Signature,
@@ -265,7 +264,6 @@ impl ClusterInfoVoteListener {
                 })
                 .unwrap()
         };
-        let bank_forks_clone = bank_forks.clone();
         let bank_send_thread = {
             let exit = exit.clone();
             Builder::new()
@@ -276,7 +274,6 @@ impl ClusterInfoVoteListener {
                         verified_vote_label_packets_receiver,
                         poh_recorder,
                         &verified_packets_sender,
-                        bank_forks_clone,
                     );
                 })
                 .unwrap()
@@ -382,17 +379,10 @@ impl ClusterInfoVoteListener {
         verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
         poh_recorder: Arc<RwLock<PohRecorder>>,
         verified_packets_sender: &BankingPacketSender,
-        bank_forks: Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
         let mut bank_vote_sender_state_option: Option<BankVoteSenderState> = None;
-        let mut is_tower_full_vote_enabled = bank_forks
-            .read()
-            .unwrap()
-            .root_bank()
-            .feature_set
-            .is_active(&allow_votes_to_directly_update_vote_state::id());
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -407,7 +397,6 @@ impl ClusterInfoVoteListener {
             if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
                 would_be_leader,
-                is_tower_full_vote_enabled,
             ) {
                 match e {
                     Error::RecvTimeout(RecvTimeoutError::Disconnected)
@@ -428,15 +417,6 @@ impl ClusterInfoVoteListener {
                     verified_packets_sender,
                     &verified_vote_packets,
                 )?;
-                // Check if we've crossed the feature boundary
-                if !is_tower_full_vote_enabled {
-                    is_tower_full_vote_enabled = bank_forks
-                        .read()
-                        .unwrap()
-                        .root_bank()
-                        .feature_set
-                        .is_active(&allow_votes_to_directly_update_vote_state::id());
-                }
             }
         }
     }

@@ -509,38 +509,36 @@ mod test {
         assert!(storage.is_free(ix));
     }
 
-    struct BucketBadHeader {}
-
-    impl BucketOccupied for BucketBadHeader {
-        fn occupy(&mut self, _element: &mut [u8], _ix: usize) {
-            unimplemented!();
-        }
-        fn free(&mut self, _element: &mut [u8], _ix: usize) {
-            unimplemented!();
-        }
-        fn is_free(&self, _element: &[u8], _ix: usize) -> bool {
-            unimplemented!();
-        }
-        fn offset_to_first_data() -> usize {
-            // not multiple of u64
-            std::mem::size_of::<u64>() - 1
-        }
-        /// initialize this struct
-        fn new(_num_elements: Capacity) -> Self {
-            Self {}
-        }
-    }
-
-    impl BucketCapacity for BucketBadHeader {
-        fn capacity(&self) -> u64 {
-            unimplemented!();
-        }
-    }
-
     #[test]
-    #[should_panic(expected = "assertion failed: `(left == right)`")]
-    fn test_header_size() {
-        _ = BucketStorage::<BucketBadHeader>::new_with_capacity(
+    #[should_panic]
+    fn test_header_bad_size() {
+        struct BucketBadHeader;
+        impl BucketCapacity for BucketBadHeader {
+            fn capacity(&self) -> u64 {
+                unimplemented!();
+            }
+        }
+        impl BucketOccupied for BucketBadHeader {
+            fn occupy(&mut self, _element: &mut [u8], _ix: usize) {
+                unimplemented!();
+            }
+            fn free(&mut self, _element: &mut [u8], _ix: usize) {
+                unimplemented!();
+            }
+            fn is_free(&self, _element: &[u8], _ix: usize) -> bool {
+                unimplemented!();
+            }
+            fn offset_to_first_data() -> usize {
+                // not multiple of u64
+                std::mem::size_of::<u64>() - 1
+            }
+            fn new(_num_elements: Capacity) -> Self {
+                Self
+            }
+        }
+
+        // ensure we panic if the header size (i.e. offset to first data) is not aligned to eight bytes
+        BucketStorage::<BucketBadHeader>::new_with_capacity(
             Arc::default(),
             0,
             0,

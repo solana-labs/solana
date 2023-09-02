@@ -18,6 +18,7 @@ pub fn get_accounts_db_config(
     ledger_path: &Path,
     arg_matches: &ArgMatches<'_>,
 ) -> AccountsDbConfig {
+    let ledger_tool_ledger_path = ledger_path.join(LEDGER_TOOL_DIRECTORY);
     let accounts_index_bins = value_t!(arg_matches, "accounts_index_bins", usize).ok();
     let accounts_index_index_limit_mb =
         if let Ok(limit) = value_t!(arg_matches, "accounts_index_memory_limit_mb", usize) {
@@ -42,9 +43,7 @@ pub fn get_accounts_db_config(
             .map(PathBuf::from)
             .collect()
     } else {
-        vec![ledger_path
-            .join(LEDGER_TOOL_DIRECTORY)
-            .join("accounts_index")]
+        vec![ledger_tool_ledger_path.join("accounts_index")]
     };
     let accounts_index_config = AccountsIndexConfig {
         bins: accounts_index_bins,
@@ -60,7 +59,7 @@ pub fn get_accounts_db_config(
 
     AccountsDbConfig {
         index: Some(accounts_index_config),
-        base_working_path: Some(ledger_path.to_path_buf()),
+        base_working_path: Some(ledger_tool_ledger_path),
         filler_accounts_config,
         ancient_append_vec_offset: value_t!(arg_matches, "accounts_db_ancient_append_vecs", i64)
             .ok(),

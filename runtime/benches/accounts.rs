@@ -1,5 +1,5 @@
 #![feature(test)]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 extern crate test;
 

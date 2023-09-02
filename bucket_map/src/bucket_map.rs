@@ -507,13 +507,9 @@ mod tests {
                                 );
                                 duplicates += 1;
                             }
-                            let count = batch_additions.len();
                             assert_eq!(
                                 map.get_bucket_from_index(0)
-                                    .batch_insert_non_duplicates(
-                                        batch_additions.into_iter(),
-                                        count,
-                                    )
+                                    .batch_insert_non_duplicates(&batch_additions,)
                                     .len(),
                                 duplicates
                             );

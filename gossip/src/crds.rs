@@ -549,9 +549,8 @@ impl Crds {
         self.entries.remove(&value.ordinal);
         // Remove the index from records associated with the value's pubkey.
         let pubkey = value.value.pubkey();
-        let mut records_entry = match self.records.entry(pubkey) {
-            hash_map::Entry::Vacant(_) => panic!("this should not happen!"),
-            hash_map::Entry::Occupied(entry) => entry,
+        let hash_map::Entry::Occupied(mut records_entry) = self.records.entry(pubkey) else {
+            panic!("this should not happen!");
         };
         records_entry.get_mut().swap_remove(&index);
         if records_entry.get().is_empty() {
@@ -905,10 +904,7 @@ mod tests {
             let other = NodeInstance::new(&mut rng, pubkey, now + k);
             let other = other.with_wallclock(now - 1);
             let other = make_crds_value(other);
-            match crds.insert(other, now, GossipRoute::LocalMessage) {
-                Ok(()) => (),
-                _ => panic!(),
-            }
+            assert_matches!(crds.insert(other, now, GossipRoute::LocalMessage), Ok(()));
         }
     }
 
@@ -1148,10 +1144,7 @@ mod tests {
         );
         for value in crds.get_epoch_slots(&mut Cursor(since)) {
             assert!(value.ordinal >= since);
-            match value.value.data {
-                CrdsData::EpochSlots(_, _) => (),
-                _ => panic!("not an epoch-slot!"),
-            }
+            assert_matches!(value.value.data, CrdsData::EpochSlots(_, _));
         }
         let num_votes = crds
             .table
@@ -1174,10 +1167,7 @@ mod tests {
         );
         for value in crds.get_votes(&mut Cursor(since)) {
             assert!(value.ordinal >= since);
-            match value.value.data {
-                CrdsData::Vote(_, _) => (),
-                _ => panic!("not a vote!"),
-            }
+            assert_matches!(value.value.data, CrdsData::Vote(_, _));
         }
         let num_entries = crds
             .table
@@ -1224,16 +1214,10 @@ mod tests {
             crds.get_epoch_slots(&mut Cursor::default()).count()
         );
         for vote in crds.get_votes(&mut Cursor::default()) {
-            match vote.value.data {
-                CrdsData::Vote(_, _) => (),
-                _ => panic!("not a vote!"),
-            }
+            assert_matches!(vote.value.data, CrdsData::Vote(_, _));
         }
         for epoch_slots in crds.get_epoch_slots(&mut Cursor::default()) {
-            match epoch_slots.value.data {
-                CrdsData::EpochSlots(_, _) => (),
-                _ => panic!("not an epoch-slot!"),
-            }
+            assert_matches!(epoch_slots.value.data, CrdsData::EpochSlots(_, _));
         }
         (num_nodes, num_votes, num_epoch_slots)
     }

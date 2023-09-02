@@ -271,7 +271,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "6T2sn92PMrTijsgncH3bBZL4K5GUowb442cCw4y4DuwV")]
+#[frozen_abi(digest = "EnbW8mYTsPMndq9NkHLTkHJgduXvWSfSD6bBdmqQ8TiF")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -1107,19 +1107,18 @@ impl ClusterInfo {
                 self.time_gossip_read_lock("gossip_read_push_vote", &self.stats.push_vote_read);
             (0..MAX_LOCKOUT_HISTORY as u8).find(|ix| {
                 let vote = CrdsValueLabel::Vote(*ix, self_pubkey);
-                if let Some(vote) = gossip_crds.get::<&CrdsData>(&vote) {
-                    match &vote {
-                        CrdsData::Vote(_, prev_vote) => match prev_vote.slot() {
-                            Some(prev_vote_slot) => prev_vote_slot == vote_slot,
-                            None => {
-                                error!("crds vote with no slots!");
-                                false
-                            }
-                        },
-                        _ => panic!("this should not happen!"),
+                let Some(vote) = gossip_crds.get::<&CrdsData>(&vote) else {
+                    return false;
+                };
+                let CrdsData::Vote(_, prev_vote) = &vote else {
+                    panic!("this should not happen!");
+                };
+                match prev_vote.slot() {
+                    Some(prev_vote_slot) => prev_vote_slot == vote_slot,
+                    None => {
+                        error!("crds vote with no slots!");
+                        false
                     }
-                } else {
-                    false
                 }
             })
         };
@@ -1153,11 +1152,10 @@ impl ClusterInfo {
             .time_gossip_read_lock("get_votes", &self.stats.get_votes)
             .get_votes(cursor)
             .map(|vote| {
-                let transaction = match &vote.value.data {
-                    CrdsData::Vote(_, vote) => vote.transaction().clone(),
-                    _ => panic!("this should not happen!"),
+                let CrdsData::Vote(_, vote) = &vote.value.data else {
+                    panic!("this should not happen!");
                 };
-                transaction
+                vote.transaction().clone()
             })
             .collect();
         self.stats.get_votes_count.add_relaxed(txs.len() as u64);
@@ -1173,11 +1171,11 @@ impl ClusterInfo {
             .time_gossip_read_lock("get_votes", &self.stats.get_votes)
             .get_votes(cursor)
             .map(|vote| {
-                let transaction = match &vote.value.data {
-                    CrdsData::Vote(_, vote) => vote.transaction().clone(),
-                    _ => panic!("this should not happen!"),
+                let label = vote.value.label();
+                let CrdsData::Vote(_, vote) = &vote.value.data else {
+                    panic!("this should not happen!");
                 };
-                (vote.value.label(), transaction)
+                (label, vote.transaction().clone())
             })
             .unzip();
         self.stats.get_votes_count.add_relaxed(txs.len() as u64);
@@ -1972,6 +1970,10 @@ impl ClusterInfo {
     // Returns a predicate checking if the pull request is from a valid
     // address, and if the address have responded to a ping request. Also
     // appends ping packets for the addresses which need to be (re)verified.
+    //
+    // allow lint false positive trait bound requirement (`CryptoRng` only
+    // implemented on `&'a mut T`
+    #[rustversion::attr(since(1.73), allow(clippy::needless_pass_by_ref_mut))]
     fn check_pull_request<'a, R>(
         &'a self,
         now: Instant,
@@ -3894,12 +3896,10 @@ mod tests {
             let gossip_crds = cluster_info.gossip.crds.read().unwrap();
             let mut vote_slots = HashSet::new();
             for label in labels {
-                match &gossip_crds.get::<&CrdsData>(&label).unwrap() {
-                    CrdsData::Vote(_, vote) => {
-                        assert!(vote_slots.insert(vote.slot().unwrap()));
-                    }
-                    _ => panic!("this should not happen!"),
-                }
+                let CrdsData::Vote(_, vote) = &gossip_crds.get::<&CrdsData>(&label).unwrap() else {
+                    panic!("this should not happen!");
+                };
+                assert!(vote_slots.insert(vote.slot().unwrap()));
             }
             vote_slots.into_iter().collect()
         };

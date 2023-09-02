@@ -549,7 +549,7 @@ pub fn process_new_vote_state(
     new_root: Option<Slot>,
     timestamp: Option<i64>,
     epoch: Epoch,
-    feature_set: Option<&FeatureSet>,
+    _feature_set: Option<&FeatureSet>,
 ) -> Result<(), VoteError> {
     assert!(!new_state.is_empty());
     if new_state.len() > MAX_LOCKOUT_HISTORY {
@@ -683,18 +683,9 @@ pub fn process_new_vote_state(
     // our state.
     if vote_state.root_slot != new_root {
         // Award vote credits based on the number of slots that were voted on and have reached finality
-        if feature_set
-            .map(|feature_set| {
-                feature_set.is_active(&feature_set::vote_state_update_credit_per_dequeue::id())
-            })
-            .unwrap_or(false)
-        {
-            // For each finalized slot, there was one voted-on slot in the new vote state that was responsible for
-            // finalizing it. Each of those votes is awarded 1 credit.
-            vote_state.increment_credits(epoch, finalized_slot_count);
-        } else {
-            vote_state.increment_credits(epoch, 1);
-        }
+        // For each finalized slot, there was one voted-on slot in the new vote state that was responsible for
+        // finalizing it. Each of those votes is awarded 1 credit.
+        vote_state.increment_credits(epoch, finalized_slot_count);
     }
     if let Some(timestamp) = timestamp {
         let last_slot = new_state.back().unwrap().slot();
@@ -1097,6 +1088,7 @@ mod tests {
     use {
         super::*,
         crate::vote_state,
+        assert_matches::assert_matches,
         solana_sdk::{
             account::AccountSharedData, account_utils::StateMut, clock::DEFAULT_SLOTS_PER_EPOCH,
             hash::hash, transaction_context::InstructionAccount,
@@ -1189,7 +1181,7 @@ mod tests {
         let lamports = rent.minimum_balance(version1_14_11_serialized_len);
         let mut vote_account =
             AccountSharedData::new(lamports, version1_14_11_serialized_len, &id());
-        vote_account.set_data(version1_14_11_serialized);
+        vote_account.set_data_from_slice(&version1_14_11_serialized);
 
         // Create a fake TransactionContext with a fake InstructionContext with a single account which is the
         // vote account that was just created
@@ -1216,7 +1208,7 @@ mod tests {
 
         // Ensure that the vote state started out at 1_14_11
         let vote_state_version = borrowed_account.get_state::<VoteStateVersions>().unwrap();
-        assert!(matches!(vote_state_version, VoteStateVersions::V1_14_11(_)));
+        assert_matches!(vote_state_version, VoteStateVersions::V1_14_11(_));
 
         // Convert the vote state to current as would occur during vote instructions
         let converted_vote_state = vote_state_version.convert_to_current();
@@ -1233,7 +1225,7 @@ mod tests {
             Ok(())
         );
         let vote_state_version = borrowed_account.get_state::<VoteStateVersions>().unwrap();
-        assert!(matches!(vote_state_version, VoteStateVersions::V1_14_11(_)));
+        assert_matches!(vote_state_version, VoteStateVersions::V1_14_11(_));
 
         // Convert the vote state to current as would occur during vote instructions
         let converted_vote_state = vote_state_version.convert_to_current();
@@ -1251,7 +1243,7 @@ mod tests {
             Ok(())
         );
         let vote_state_version = borrowed_account.get_state::<VoteStateVersions>().unwrap();
-        assert!(matches!(vote_state_version, VoteStateVersions::V1_14_11(_)));
+        assert_matches!(vote_state_version, VoteStateVersions::V1_14_11(_));
 
         // Convert the vote state to current as would occur during vote instructions
         let converted_vote_state = vote_state_version.convert_to_current();
@@ -1272,7 +1264,7 @@ mod tests {
             Ok(())
         );
         let vote_state_version = borrowed_account.get_state::<VoteStateVersions>().unwrap();
-        assert!(matches!(vote_state_version, VoteStateVersions::Current(_)));
+        assert_matches!(vote_state_version, VoteStateVersions::Current(_));
 
         // Convert the vote state to current as would occur during vote instructions
         let converted_vote_state = vote_state_version.convert_to_current();
@@ -1670,8 +1662,7 @@ mod tests {
             vec![227, 228, 229, 230, 231, 232, 233, 234, 235, 236],
         ];
 
-        let mut feature_set = FeatureSet::default();
-        feature_set.activate(&feature_set::vote_state_update_credit_per_dequeue::id(), 1);
+        let feature_set = FeatureSet::default();
 
         for vote_group in test_vote_groups {
             // Duplicate vote_state so that the new vote can be applied

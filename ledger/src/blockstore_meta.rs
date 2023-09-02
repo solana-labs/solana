@@ -352,6 +352,15 @@ impl ErasureMeta {
         self == &other
     }
 
+    /// Returns true if both shreds are coding shreds and have a
+    /// consistent erasure config
+    pub fn check_erasure_consistency(shred1: &Shred, shred2: &Shred) -> bool {
+        let Some(coding_shred) = Self::from_coding_shred(shred1) else {
+            return false;
+        };
+        coding_shred.check_coding_shred(shred2)
+    }
+
     pub(crate) fn config(&self) -> ErasureConfig {
         self.config
     }

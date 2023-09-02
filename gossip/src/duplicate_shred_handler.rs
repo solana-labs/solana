@@ -243,9 +243,6 @@ mod tests {
             Some(Error::SlotMismatch) => {
                 new_rand_shred(&mut rng, next_shred_index, &shredder1, &my_keypair)
             }
-            Some(Error::ShredIndexMismatch) => {
-                new_rand_shred(&mut rng, next_shred_index + 1, &shredder, &my_keypair)
-            }
             Some(Error::InvalidDuplicateShreds) => shred1.clone(),
             _ => new_rand_shred(&mut rng, next_shred_index, &shredder, &my_keypair),
         };
@@ -313,7 +310,6 @@ mod tests {
         for error in [
             Error::InvalidSignature,
             Error::SlotMismatch,
-            Error::ShredIndexMismatch,
             Error::InvalidDuplicateShreds,
         ] {
             match create_duplicate_proof(

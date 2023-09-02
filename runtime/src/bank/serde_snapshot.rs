@@ -19,6 +19,7 @@ mod tests {
             },
             status_cache::StatusCache,
         },
+        assert_matches::assert_matches,
         solana_accounts_db::{
             account_storage::{AccountStorageMap, AccountStorageReference},
             accounts_db::{
@@ -419,7 +420,7 @@ mod tests {
                 .get_epoch_reward_status_to_serialize()
                 .unwrap_or(&EpochRewardStatus::Inactive);
             if let Some(rewards) = epoch_reward_status_active {
-                assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
+                assert_matches!(epoch_reward_status, EpochRewardStatus::Active(_));
                 if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
                     start_block_height,
                     ref stake_rewards_by_partition,
@@ -431,7 +432,7 @@ mod tests {
                     unreachable!("Epoch reward status should NOT be inactive.");
                 }
             } else {
-                assert!(matches!(epoch_reward_status, EpochRewardStatus::Inactive));
+                assert_matches!(epoch_reward_status, EpochRewardStatus::Inactive);
             }
         }
     }
@@ -511,7 +512,7 @@ mod tests {
                 .get_epoch_reward_status_to_serialize()
                 .unwrap_or(&EpochRewardStatus::Inactive);
             if let Some(rewards) = epoch_reward_status_active {
-                assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
+                assert_matches!(epoch_reward_status, EpochRewardStatus::Active(_));
                 if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
                     start_block_height,
                     ref stake_rewards_by_partition,
@@ -523,7 +524,7 @@ mod tests {
                     unreachable!("Epoch reward status should NOT be inactive.");
                 }
             } else {
-                assert!(matches!(epoch_reward_status, EpochRewardStatus::Inactive));
+                assert_matches!(epoch_reward_status, EpochRewardStatus::Inactive);
             }
         }
     }
@@ -602,7 +603,7 @@ mod tests {
         let epoch_reward_status = bank
             .get_epoch_reward_status_to_serialize()
             .unwrap_or(&EpochRewardStatus::Inactive);
-        assert!(matches!(epoch_reward_status, EpochRewardStatus::Inactive));
+        assert_matches!(epoch_reward_status, EpochRewardStatus::Inactive);
     }
 
     #[cfg(RUSTC_WITH_SPECIALIZATION)]

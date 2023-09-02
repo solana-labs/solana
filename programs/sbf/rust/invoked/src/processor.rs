@@ -1,7 +1,7 @@
 //! Example Rust-based SBF program that issues a cross-program-invocation
 
 #![cfg(feature = "program")]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {
     crate::instructions::*,

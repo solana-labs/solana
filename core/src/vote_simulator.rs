@@ -143,8 +143,6 @@ impl VoteSimulator {
         tower: &mut Tower,
     ) -> Vec<HeaviestForkFailures> {
         // Try to simulate the vote
-        let my_keypairs = self.validator_keypairs.get(my_pubkey).unwrap();
-        let my_vote_pubkey = my_keypairs.vote_keypair.pubkey();
         let ancestors = self.bank_forks.read().unwrap().ancestors();
         let mut frozen_banks: Vec<_> = self
             .bank_forks
@@ -197,7 +195,7 @@ impl VoteSimulator {
             return heaviest_fork_failures;
         }
 
-        let new_root = tower.record_bank_vote(&vote_bank, &my_vote_pubkey);
+        let new_root = tower.record_bank_vote(&vote_bank);
         if let Some(new_root) = new_root {
             self.set_root(new_root);
         }

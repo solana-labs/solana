@@ -38,7 +38,7 @@ pub fn get_append_vec_path(path: &str) -> TempFile {
 pub fn create_test_account(sample: usize) -> (StoredMeta, AccountSharedData) {
     let data_len = sample % 256;
     let mut account = AccountSharedData::new(sample as u64, 0, &Pubkey::default());
-    account.set_data((0..data_len).map(|_| data_len as u8).collect());
+    account.set_data_from_slice(&vec![data_len as u8; data_len]);
     let stored_meta = StoredMeta {
         write_version_obsolete: 0,
         pubkey: Pubkey::default(),

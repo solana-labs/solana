@@ -122,6 +122,14 @@ pub struct ComputeBudget {
     /// Maximum accounts data size, in bytes, that a transaction is allowed to load; The
     /// value is capped by MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES to prevent overuse of memory.
     pub loaded_accounts_data_size_limit: usize,
+    /// Coefficient `a` of the quadratic function which determines the number
+    /// of compute units consumed to call poseidon syscall for a given number
+    /// of inputs.
+    pub poseidon_cost_coefficient_a: u64,
+    /// Coefficient `c` of the quadratic function which determines the number
+    /// of compute units consumed to call poseidon syscall for a given number
+    /// of inputs.
+    pub poseidon_cost_coefficient_c: u64,
 }
 
 impl Default for ComputeBudget {
@@ -171,6 +179,8 @@ impl ComputeBudget {
             alt_bn128_pairing_one_pair_cost_other: 12_121,
             big_modular_exponentiation_cost: 33,
             loaded_accounts_data_size_limit: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
+            poseidon_cost_coefficient_a: 61,
+            poseidon_cost_coefficient_c: 542,
         }
     }
 
@@ -307,6 +317,35 @@ impl ComputeBudget {
             compute_unit_limit: compute_budget.compute_unit_limit,
             prioritization_fee: prioritization_fee_details.get_fee(),
         }
+    }
+
+    /// Returns cost of the Poseidon hash function for the given number of
+    /// inputs is determined by the following quadratic function:
+    ///
+    /// 61*n^2 + 542
+    ///
+    /// Which aproximates the results of benchmarks of light-posiedon
+    /// library[0]. These results assume 1 CU per 33 ns. Examples:
+    ///
+    /// * 1 input
+    ///   * light-poseidon benchmark: `18,303 / 33 ≈ 555`
+    ///   * function: `61*1^2 + 542 = 603`
+    /// * 2 inputs
+    ///   * light-poseidon benchmark: `25,866 / 33 ≈ 784`
+    ///   * function: `61*2^2 + 542 = 786`
+    /// * 3 inputs
+    ///   * light-poseidon benchmark: `37,549 / 33 ≈ 1,138`
+    ///   * function; `61*3^2 + 542 = 1091`
+    ///
+    /// [0] https://github.com/Lightprotocol/light-poseidon#performance
+    pub fn poseidon_cost(&self, nr_inputs: u64) -> Option<u64> {
+        let squared_inputs = nr_inputs.checked_pow(2)?;
+        let mul_result = self
+            .poseidon_cost_coefficient_a
+            .checked_mul(squared_inputs)?;
+        let final_result = mul_result.checked_add(self.poseidon_cost_coefficient_c)?;
+
+        Some(final_result)
     }
 }
 

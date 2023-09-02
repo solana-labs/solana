@@ -1096,6 +1096,7 @@ pub mod test {
             quic::{MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
             tls_certificates::new_self_signed_tls_certificate,
         },
+        assert_matches::assert_matches,
         async_channel::unbounded as async_unbounded,
         crossbeam_channel::{unbounded, Receiver},
         quinn::{ClientConfig, IdleTimeout, TransportConfig},
@@ -1260,8 +1261,7 @@ pub mod test {
             // It has been noticed if there is already connection open against the server, this open_uni can fail
             // with ApplicationClosed(ApplicationClose) error due to CONNECTION_CLOSE_CODE_TOO_MANY before writing to
             // the stream -- expect it.
-            let s2 = s2.err().unwrap();
-            assert!(matches!(s2, quinn::ConnectionError::ApplicationClosed(_)));
+            assert_matches!(s2, Err(quinn::ConnectionError::ApplicationClosed(_)));
         }
     }
 
