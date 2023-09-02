@@ -242,7 +242,7 @@ pub type InstalledSchedulerRwLock = RwLock<Option<DefaultInstalledSchedulerBox>>
 
 impl BankWithScheduler {
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-    fn new(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
+    pub(crate) fn new(bank: Arc<Bank>, scheduler: Option<DefaultInstalledSchedulerBox>) -> Self {
         if let Some(bank_in_context) = scheduler.as_ref().and_then(|scheduler| scheduler.context())
         {
             assert_eq!(bank.slot(), bank_in_context.slot());
