@@ -301,6 +301,11 @@ EOF
     # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
     args+=($extraNodeArgs)
 
+    if [[ "$wenRestartFile" != "" ]]; then
+      args+=(--wen-restart $wenRestartFile)
+    fi
+
+
 cat >> ~/solana/on-reboot <<EOF
     nohup ./multinode-demo/bootstrap-validator.sh ${args[@]} > validator.log.\$now 2>&1 &
     pid=\$!
