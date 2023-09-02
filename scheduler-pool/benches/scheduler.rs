@@ -518,8 +518,11 @@ mod thread_utilization {
             _index: usize,
             _pool: &SchedulerPool<T, Self, SEA>,
         ) {
-            let Ok(Transfer{lamports: sleep_ms}) =
-                bincode::deserialize(&transaction.message().instructions()[0].data) else { panic!() };
+            let Ok(Transfer { lamports: sleep_ms }) =
+                bincode::deserialize(&transaction.message().instructions()[0].data)
+            else {
+                panic!()
+            };
 
             sleep(Duration::from_millis(sleep_ms));
         }
@@ -645,8 +648,11 @@ mod thread_utilization {
             _index: usize,
             _pool: &SchedulerPool<T, Self, SEA>,
         ) {
-            let Ok(Transfer{lamports: sleep_ms}) =
-                bincode::deserialize(&transaction.message().instructions()[0].data) else { panic!() };
+            let Ok(Transfer { lamports: sleep_ms }) =
+                bincode::deserialize(&transaction.message().instructions()[0].data)
+            else {
+                panic!()
+            };
 
             sleep(Duration::from_millis(sleep_ms));
 
