@@ -5497,7 +5497,7 @@ fn test_invalid_forks_persisted_on_restart() {
     solana_logger::setup_with("info,solana_metrics=off,solana_ledger=off");
 
     let dup_slot = 10;
-    let validator_keypairs = vec![
+    let validator_keypairs = [
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
         "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
     ]
@@ -5556,7 +5556,7 @@ fn test_invalid_forks_persisted_on_restart() {
             timer.elapsed() < Duration::from_secs(30),
             "Did not make more than 10 blocks in 30 seconds"
         );
-        std::thread::yield_now();
+        sleep(Duration::from_millis(100));
     }
 
     // Send duplicate
@@ -5624,11 +5624,11 @@ fn test_invalid_forks_persisted_on_restart() {
                 let shreds = blockstore
                     .get_data_shreds_for_slot(child, 0)
                     .expect("Child is full");
-                let mut our_block = true;
+                let mut is_our_block = true;
                 for shred in shreds {
-                    our_block &= shred.verify(&target_pubkey);
+                    is_our_block &= shred.verify(&target_pubkey);
                 }
-                if our_block {
+                if is_our_block {
                     done = true;
                 }
                 checked_children.insert(child);
@@ -5639,6 +5639,6 @@ fn test_invalid_forks_persisted_on_restart() {
             timer.elapsed() < Duration::from_secs(30),
             "Did not create a new fork off parent {parent} in 30 seconds after restart"
         );
-        std::thread::yield_now();
+        sleep(Duration::from_millis(100));
     }
 }
