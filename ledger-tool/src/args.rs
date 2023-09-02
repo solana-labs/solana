@@ -1,10 +1,15 @@
 use {
     clap::{value_t, values_t_or_exit, ArgMatches},
+<<<<<<< HEAD
     solana_runtime::{
+=======
+    solana_accounts_db::{
+>>>>>>> adee97fe38 (Ledger-tool CLI can specify accounts hash cache path (#33118))
         accounts_db::{AccountsDb, AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb},
         partitioned_rewards::TestPartitionedEpochRewards,
     },
+    solana_runtime::snapshot_utils,
     solana_sdk::clock::Slot,
     std::path::{Path, PathBuf},
 };
@@ -55,12 +60,32 @@ pub fn get_accounts_db_config(
         size: value_t!(arg_matches, "accounts_filler_size", usize).unwrap_or(0),
     };
 
+    let accounts_hash_cache_path = arg_matches
+        .value_of("accounts_hash_cache_path")
+        .map(Into::into)
+        .unwrap_or_else(|| {
+            ledger_tool_ledger_path.join(AccountsDb::DEFAULT_ACCOUNTS_HASH_CACHE_DIR)
+        });
+    let accounts_hash_cache_path =
+        snapshot_utils::create_and_canonicalize_directories(&[accounts_hash_cache_path])
+            .unwrap_or_else(|err| {
+                eprintln!("Unable to access accounts hash cache path: {err}");
+                std::process::exit(1);
+            })
+            .pop()
+            .unwrap();
+
     AccountsDbConfig {
         index: Some(accounts_index_config),
+<<<<<<< HEAD
         base_working_path: Some(ledger_path.to_path_buf()),
         accounts_hash_cache_path: Some(
             ledger_path.join(AccountsDb::DEFAULT_ACCOUNTS_HASH_CACHE_DIR),
         ),
+=======
+        base_working_path: Some(ledger_tool_ledger_path),
+        accounts_hash_cache_path: Some(accounts_hash_cache_path),
+>>>>>>> adee97fe38 (Ledger-tool CLI can specify accounts hash cache path (#33118))
         filler_accounts_config,
         ancient_append_vec_offset: value_t!(arg_matches, "accounts_db_ancient_append_vecs", i64)
             .ok(),
