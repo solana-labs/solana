@@ -105,7 +105,10 @@ pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Sync + Debug
 // suppress false clippy complaints arising from mockall-derive:
 //   warning: `#[must_use]` has no effect when applied to a struct field
 //   warning: the following explicit lifetimes could be elided: 'a
-#[allow(unused_attributes, clippy::needless_lifetimes)]
+#[cfg_attr(
+    feature = "dev-context-only-utils",
+    allow(unused_attributes, clippy::needless_lifetimes)
+)]
 pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + 'static {
     fn id(&self) -> SchedulerId;
     fn pool(&self) -> InstalledSchedulerPoolArc<SEA>;
