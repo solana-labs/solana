@@ -65,20 +65,18 @@ pub fn get_accounts_db_config(
             ledger_tool_ledger_path.join(AccountsDb::DEFAULT_ACCOUNTS_HASH_CACHE_DIR)
         });
     let accounts_hash_cache_path =
-        match snapshot_utils::create_and_canonicalize_directories(&[accounts_hash_cache_path]) {
-            Ok(mut paths) => Some(paths.pop().unwrap()),
-            Err(err) => {
-                log::error!(
-                    "Unable to access accounts hash cache path, falling back to default: {err}"
-                );
-                None
-            }
-        };
+        snapshot_utils::create_and_canonicalize_directories(&[accounts_hash_cache_path])
+            .unwrap_or_else(|err| {
+                eprintln!("Unable to access accounts hash cache path: {err}");
+                std::process::exit(1);
+            })
+            .pop()
+            .unwrap();
 
     AccountsDbConfig {
         index: Some(accounts_index_config),
         base_working_path: Some(ledger_tool_ledger_path),
-        accounts_hash_cache_path,
+        accounts_hash_cache_path: Some(accounts_hash_cache_path),
         filler_accounts_config,
         ancient_append_vec_offset: value_t!(arg_matches, "accounts_db_ancient_append_vecs", i64)
             .ok(),
