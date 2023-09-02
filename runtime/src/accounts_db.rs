@@ -1396,6 +1396,7 @@ pub struct AccountsDb {
     /// Set of storage paths to pick from
     pub(crate) paths: Vec<PathBuf>,
 
+    /// Directories for account hash calculations, within base_working_path
     full_accounts_hash_cache_path: PathBuf,
     incremental_accounts_hash_cache_path: PathBuf,
     transient_accounts_hash_cache_path: PathBuf,
@@ -2351,7 +2352,7 @@ impl<'a> AppendVecScan for ScanState<'a> {
 }
 
 impl AccountsDb {
-    pub const ACCOUNTS_HASH_CACHE_DIR: &str = "accounts_hash_cache";
+    pub const DEFAULT_ACCOUNTS_HASH_CACHE_DIR: &str = "accounts_hash_cache";
 
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None)
@@ -2364,15 +2365,14 @@ impl AccountsDb {
         let num_threads = get_thread_count();
         const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 400_000_000; // 400M bytes
 
-        let mut temp_accounts_hash_cache_path = None;
-        let accounts_hash_cache_path = accounts_hash_cache_path.unwrap_or_else(|| {
-            temp_accounts_hash_cache_path = Some(TempDir::new().unwrap());
-            temp_accounts_hash_cache_path
-                .as_ref()
-                .unwrap()
-                .path()
-                .to_path_buf()
-        });
+        let (accounts_hash_cache_path, temp_accounts_hash_cache_path) =
+            if let Some(accounts_hash_cache_path) = accounts_hash_cache_path {
+                (accounts_hash_cache_path, None)
+            } else {
+                let temp_dir = TempDir::new().expect("new tempdir");
+                let cache_path = temp_dir.path().join(Self::DEFAULT_ACCOUNTS_HASH_CACHE_DIR);
+                (cache_path, Some(temp_dir))
+            };
 
         let mut bank_hash_stats = HashMap::new();
         bank_hash_stats.insert(0, BankHashStats::default());
@@ -2485,8 +2485,7 @@ impl AccountsDb {
         );
         let accounts_hash_cache_path = accounts_db_config
             .as_ref()
-            .and_then(|x| x.accounts_hash_cache_path.clone());
-
+            .and_then(|config| config.accounts_hash_cache_path.clone());
         let filler_accounts_config = accounts_db_config
             .as_ref()
             .map(|config| config.filler_accounts_config)
