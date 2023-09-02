@@ -217,7 +217,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledSche
             context: Some(initial_context),
             result_with_timings: Mutex::default(),
             handler,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 }
@@ -683,7 +683,7 @@ mod tests {
                     context: Some(initial_context),
                     result_with_timings: Mutex::default(),
                     handler,
-                    _phantom: PhantomData::default(),
+                    _phantom: PhantomData,
                 },
                 Mutex::new(vec![]),
             ))

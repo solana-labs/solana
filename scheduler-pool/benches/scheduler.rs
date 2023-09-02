@@ -1,5 +1,5 @@
 #![feature(test)]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 #[global_allocator]
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
@@ -319,7 +319,7 @@ mod nonblocking {
                 result_receiver,
                 lane_count,
                 context: initial_context,
-                _phantom: PhantomData::default(),
+                _phantom: PhantomData,
             }
         }
     }
