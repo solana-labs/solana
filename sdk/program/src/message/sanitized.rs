@@ -94,6 +94,9 @@ impl From<SanitizeError> for SanitizeMessageError {
             SanitizeError::IndexOutOfBounds => Self::IndexOutOfBounds,
             SanitizeError::ValueOutOfBounds => Self::ValueOutOfBounds,
             SanitizeError::InvalidValue => Self::InvalidValue,
+            SanitizeError::InstructionError(_, _) | SanitizeError::DuplicateInstruction(_) => {
+                todo!()
+            }
         }
     }
 }

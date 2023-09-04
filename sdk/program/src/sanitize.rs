@@ -1,6 +1,6 @@
 //! A trait for sanitizing values and members of over the wire messages.
 
-use thiserror::Error;
+use {crate::instruction::InstructionError, thiserror::Error};
 
 #[derive(PartialEq, Debug, Error, Eq, Clone)]
 pub enum SanitizeError {
@@ -10,6 +10,15 @@ pub enum SanitizeError {
     ValueOutOfBounds,
     #[error("invalid value")]
     InvalidValue,
+
+    /// An error occurred while processing an instruction. The first element of the tuple
+    /// indicates the instruction index in which the error occurred.
+    #[error("Error processing Instruction {0}: {1}")]
+    InstructionError(u8, InstructionError),
+
+    /// Transaction contains a duplicate instruction that is not allowed
+    #[error("Transaction contains a duplicate instruction ({0}) that is not allowed")]
+    DuplicateInstruction(u8),
 }
 
 /// A trait for sanitizing values and members of over-the-wire messages.

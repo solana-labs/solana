@@ -61,6 +61,7 @@ pub mod account_utils;
 pub mod client;
 pub mod commitment_config;
 pub mod compute_budget;
+pub mod compute_budget_processor;
 pub mod derivation_path;
 pub mod deserialize_utils;
 pub mod ed25519_instruction;

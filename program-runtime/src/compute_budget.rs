@@ -1,16 +1,14 @@
 use {
     crate::prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
     solana_sdk::{
-        borsh0_10::try_from_slice_unchecked,
-        compute_budget::{self, ComputeBudgetInstruction},
-        entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
+        compute_budget_processor::*,
         feature_set::{
             add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
             remove_deprecated_request_unit_ix, FeatureSet,
         },
         fee::FeeBudgetLimits,
         genesis_config::ClusterType,
-        instruction::{CompiledInstruction, InstructionError},
+        instruction::CompiledInstruction,
         pubkey::Pubkey,
         transaction::TransactionError,
     },
@@ -22,7 +20,6 @@ pub const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES: usize = 64 * 1024 * 1024;
 
 pub const DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT: u32 = 200_000;
 pub const MAX_COMPUTE_UNIT_LIMIT: u32 = 1_400_000;
-const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
@@ -119,6 +116,11 @@ pub struct ComputeBudget {
     pub alt_bn128_pairing_one_pair_cost_other: u64,
     /// Big integer modular exponentiation cost
     pub big_modular_exponentiation_cost: u64,
+    // TODO - remove `loaded_accounts_data_size_limit` from compute_budget
+    //        if its instructinos processing is moved to SDK. Cause compute_budget
+    //        itself doesn't care loaded_accounts at all, it is here just because
+    //        compute_budget instruction. Should aim to separate IXs from CB struct
+    //
     /// Maximum accounts data size, in bytes, that a transaction is allowed to load; The
     /// value is capped by MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES to prevent overuse of memory.
     pub loaded_accounts_data_size_limit: usize,
@@ -184,6 +186,12 @@ impl ComputeBudget {
         }
     }
 
+    // TODO - this function can be obsolete, ComputeBudget can be constructored from
+    // sanitized_transaction.get_meta()
+    // eg: 
+    // 1. instruction validation would be part of transaction sanitization, Error during sanitizing
+    // 2. IXs are processed separately to get values
+    // 3. use values to funish CB object when needed
     pub fn process_instructions<'a>(
         &mut self,
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
@@ -191,102 +199,25 @@ impl ComputeBudget {
         enable_request_heap_frame_ix: bool,
         support_set_loaded_accounts_data_size_limit_ix: bool,
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
-        let mut num_non_compute_budget_instructions: u32 = 0;
-        let mut updated_compute_unit_limit = None;
-        let mut requested_heap_size = None;
-        let mut prioritization_fee = None;
-        let mut updated_loaded_accounts_data_size_limit = None;
+        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
+            instructions,
+            support_request_units_deprecated,
+            enable_request_heap_frame_ix,
+            support_set_loaded_accounts_data_size_limit_ix,
+        )?;
 
-        for (i, (program_id, instruction)) in instructions.enumerate() {
-            if compute_budget::check_id(program_id) {
-                let invalid_instruction_data_error = TransactionError::InstructionError(
-                    i as u8,
-                    InstructionError::InvalidInstructionData,
-                );
-                let duplicate_instruction_error = TransactionError::DuplicateInstruction(i as u8);
-
-                match try_from_slice_unchecked(&instruction.data) {
-                    Ok(ComputeBudgetInstruction::RequestUnitsDeprecated {
-                        units: compute_unit_limit,
-                        additional_fee,
-                    }) if support_request_units_deprecated => {
-                        if updated_compute_unit_limit.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        if prioritization_fee.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        updated_compute_unit_limit = Some(compute_unit_limit);
-                        prioritization_fee =
-                            Some(PrioritizationFeeType::Deprecated(additional_fee as u64));
-                    }
-                    Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
-                        if requested_heap_size.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        requested_heap_size = Some((bytes, i as u8));
-                    }
-                    Ok(ComputeBudgetInstruction::SetComputeUnitLimit(compute_unit_limit)) => {
-                        if updated_compute_unit_limit.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        updated_compute_unit_limit = Some(compute_unit_limit);
-                    }
-                    Ok(ComputeBudgetInstruction::SetComputeUnitPrice(micro_lamports)) => {
-                        if prioritization_fee.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        prioritization_fee =
-                            Some(PrioritizationFeeType::ComputeUnitPrice(micro_lamports));
-                    }
-                    Ok(ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit(bytes))
-                        if support_set_loaded_accounts_data_size_limit_ix =>
-                    {
-                        if updated_loaded_accounts_data_size_limit.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        updated_loaded_accounts_data_size_limit = Some(bytes as usize);
-                    }
-                    _ => return Err(invalid_instruction_data_error),
-                }
-            } else {
-                // only include non-request instructions in default max calc
-                num_non_compute_budget_instructions =
-                    num_non_compute_budget_instructions.saturating_add(1);
-            }
-        }
-
-        if let Some((bytes, i)) = requested_heap_size {
-            if !enable_request_heap_frame_ix
-                || bytes > MAX_HEAP_FRAME_BYTES
-                || bytes < MIN_HEAP_FRAME_BYTES as u32
-                || bytes % 1024 != 0
-            {
-                return Err(TransactionError::InstructionError(
-                    i,
-                    InstructionError::InvalidInstructionData,
-                ));
-            }
-            self.heap_size = Some(bytes as usize);
-        }
-
-        let compute_unit_limit = updated_compute_unit_limit
-            .unwrap_or_else(|| {
-                num_non_compute_budget_instructions
-                    .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT)
-            })
-            .min(MAX_COMPUTE_UNIT_LIMIT);
-        self.compute_unit_limit = u64::from(compute_unit_limit);
-
-        self.loaded_accounts_data_size_limit = updated_loaded_accounts_data_size_limit
-            .unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
-            .min(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES);
-
-        Ok(prioritization_fee
-            .map(|fee_type| PrioritizationFeeDetails::new(fee_type, self.compute_unit_limit))
-            .unwrap_or_default())
+        // TODO - heap_size doesn't have to be Option<>, it has its default value anyway.
+        self.heap_size = Some(transaction_meta.updated_heap_bytes);
+        self.compute_unit_limit = transaction_meta.compute_unit_limit;
+        self.loaded_accounts_data_size_limit = transaction_meta.accounts_loaded_bytes;
+        Ok(PrioritizationFeeDetails::new(
+            PrioritizationFeeType::ComputeUnitPrice(transaction_meta.compute_unit_price),
+            self.compute_unit_limit,
+        ))
     }
 
+    // TODO - this function can be obsoleted, replacing with sanitized_transaction.get_meta()
+    //
     pub fn fee_budget_limits<'a>(
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         feature_set: &FeatureSet,
@@ -349,13 +280,17 @@ impl ComputeBudget {
     }
 }
 
+// TODO move these tests to sdk/src/compute_budget_processor.rs
+//
 #[cfg(test)]
 mod tests {
     use {
         super::*,
         solana_sdk::{
+            compute_budget::{self, ComputeBudgetInstruction},
+            entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
             hash::Hash,
-            instruction::Instruction,
+            instruction::{Instruction, InstructionError},
             message::Message,
             pubkey::Pubkey,
             signature::Keypair,
@@ -364,6 +299,8 @@ mod tests {
             transaction::{SanitizedTransaction, Transaction},
         },
     };
+
+    const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
 
     macro_rules! test {
         ( $instructions: expr, $expected_result: expr, $expected_budget: expr, $enable_request_heap_frame_ix: expr, $support_set_loaded_accounts_data_size_limit_ix: expr ) => {

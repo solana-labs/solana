@@ -168,8 +168,12 @@ pub enum TransactionError {
 }
 
 impl From<SanitizeError> for TransactionError {
-    fn from(_: SanitizeError) -> Self {
-        Self::SanitizeFailure
+    fn from(err: SanitizeError) -> Self {
+        match err {
+            SanitizeError::InstructionError(index, err) => Self::InstructionError(index, err),
+            SanitizeError::DuplicateInstruction(index) => Self::DuplicateInstruction(index),
+            _ => Self::SanitizeFailure,
+        }
     }
 }
 
