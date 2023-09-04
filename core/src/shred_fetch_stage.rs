@@ -44,7 +44,7 @@ impl ShredFetchStage {
 
         // In the case of bank_forks=None, setup to accept any slot range
         let mut root_bank = bank_forks.read().unwrap().root_bank();
-        let mut last_root = 0;
+        let mut last_root = root_bank.slot();
         let mut last_slot = std::u64::MAX;
         let mut slots_per_epoch = 0;
 
