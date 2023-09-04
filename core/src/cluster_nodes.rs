@@ -576,15 +576,7 @@ fn enable_turbine_fanout_experiments(shred_slot: Slot, root_bank: &Bank) -> bool
 
 // Returns true if the feature is effective for the shred slot.
 #[must_use]
-<<<<<<< HEAD:core/src/cluster_nodes.rs
-pub(crate) fn check_feature_activation(
-    feature: &Pubkey,
-    shred_slot: Slot,
-    root_bank: &Bank,
-) -> bool {
-=======
 fn check_feature_activation(feature: &Pubkey, shred_slot: Slot, root_bank: &Bank) -> bool {
->>>>>>> 1431275328 (removes outdated check for merkle shreds (#33088)):turbine/src/cluster_nodes.rs
     match root_bank.feature_set.activated_slot(feature) {
         None => false,
         Some(feature_slot) => {
