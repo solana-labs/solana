@@ -10,4 +10,8 @@ RUN set -x \
  && cargo --version \
  && cargo install grcov \
  && rustc +nightly-$date --version \
- && cargo +nightly-$date --version
+ && cargo +nightly-$date --version \
+ # codecov
+ && curl -Os https://uploader.codecov.io/latest/linux/codecov \
+ && chmod +x codecov \
+ && mv codecov /usr/bin
