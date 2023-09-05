@@ -506,16 +506,24 @@ impl PrunedBanksRequestHandler {
         let banks_to_purge = self.pruned_banks_receiver.try_iter().collect::<Vec<_>>();
         let num_banks_to_purge = banks_to_purge.len();
 
-        let grouped_banks_to_purge = banks_to_purge
+        /*
+         * let grouped_banks_to_purge = banks_to_purge
+         *     .into_iter()
+         *     .into_group_map_by(|(slot, _id)| *slot);
+         * let grouped_banks_to_purge: Vec<_> = grouped_banks_to_purge.values().collect();
+         */
+        let grouped_banks_to_purge: Vec<_> = banks_to_purge
             .into_iter()
-            .into_group_map_by(|(slot, _id)| *slot);
-        let grouped_banks_to_purge: Vec<_> = grouped_banks_to_purge.values().collect();
+            .into_group_map_by(|(slot, _id)| *slot)
+            .values()
+            .cloned()
+            .collect();
 
         let accounts_db = bank.rc.accounts.accounts_db.as_ref();
         accounts_db.thread_pool_clean.install(|| {
             grouped_banks_to_purge.into_par_iter().for_each(|group| {
                 for (slot, bank_id) in group {
-                    accounts_db.purge_slot(*slot, *bank_id, is_serialized_with_abs);
+                    accounts_db.purge_slot(slot, bank_id, is_serialized_with_abs);
                 }
             })
         });
