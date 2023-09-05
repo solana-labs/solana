@@ -14,6 +14,7 @@ default = ["program"]
 program = []
 
 [dependencies]
+rustversion = { workspace = true }
 solana-program = { workspace = true }
 solana-sbf-rust-invoked = { workspace = true }
 solana-sbf-rust-realloc = { workspace = true }
