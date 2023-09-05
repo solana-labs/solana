@@ -5755,6 +5755,7 @@ version = "1.17.0"
 dependencies = [
  "solana-program",
  "solana-sbf-rust-invoked",
+ "solana-sbf-rust-realloc",
 ]
 
 [[package]]

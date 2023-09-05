@@ -31,6 +31,12 @@ static const uint8_t TEST_RETURN_DATA_TOO_LARGE = 18;
 static const uint8_t TEST_DUPLICATE_PRIVILEGE_ESCALATION_SIGNER = 19;
 static const uint8_t TEST_DUPLICATE_PRIVILEGE_ESCALATION_WRITABLE = 20;
 static const uint8_t TEST_MAX_ACCOUNT_INFOS_EXCEEDED = 21;
+// TEST_CPI_INVALID_* must match the definitions in
+// https://github.com/solana-labs/solana/blob/master/programs/sbf/rust/invoke/src/instructions.rs
+static const uint8_t TEST_CPI_INVALID_KEY_POINTER = 34;
+static const uint8_t TEST_CPI_INVALID_OWNER_POINTER = 35;
+static const uint8_t TEST_CPI_INVALID_LAMPORTS_POINTER = 36;
+static const uint8_t TEST_CPI_INVALID_DATA_POINTER = 37;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -661,6 +667,73 @@ extern uint64_t entrypoint(const uint8_t *input) {
     // Writable privilege escalation will always fail the whole transaction
     instruction.accounts[1].is_writable = true;
     sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+    break;
+  }
+  case TEST_CPI_INVALID_KEY_POINTER:
+  {
+    sol_log("Test TEST_CPI_INVALID_KEY_POINTER");
+    SolAccountMeta arguments[] = {
+        {accounts[ARGUMENT_INDEX].key, false, false},
+        {accounts[INVOKED_ARGUMENT_INDEX].key, false, false},
+    };
+    uint8_t data[] = {};
+    SolPubkey key = *accounts[ARGUMENT_INDEX].key;
+    accounts[ARGUMENT_INDEX].key = &key;
+
+    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
+    sol_invoke(&instruction, accounts, 4);
+    break;
+  }
+  case TEST_CPI_INVALID_LAMPORTS_POINTER:
+  {
+    sol_log("Test TEST_CPI_INVALID_LAMPORTS_POINTER");
+    SolAccountMeta arguments[] = {
+        {accounts[ARGUMENT_INDEX].key, false, false},
+        {accounts[INVOKED_ARGUMENT_INDEX].key, false, false},
+    };
+    uint8_t data[] = {};
+    uint64_t lamports = *accounts[ARGUMENT_INDEX].lamports;
+    accounts[ARGUMENT_INDEX].lamports = &lamports;
+
+    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
+    sol_invoke(&instruction, accounts, 4);
+    break;
+  }
+  case TEST_CPI_INVALID_OWNER_POINTER:
+  {
+    sol_log("Test TEST_CPI_INVALID_OWNER_POINTER");
+    SolAccountMeta arguments[] = {
+        {accounts[ARGUMENT_INDEX].key, false, false},
+        {accounts[INVOKED_ARGUMENT_INDEX].key, false, false},
+    };
+    uint8_t data[] = {};
+    SolPubkey owner = *accounts[ARGUMENT_INDEX].owner;
+    accounts[ARGUMENT_INDEX].owner = &owner;
+
+    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
+    sol_invoke(&instruction, accounts, 4);
+    break;
+  }
+  case TEST_CPI_INVALID_DATA_POINTER:
+  {
+    sol_log("Test TEST_CPI_INVALID_DATA_POINTER");
+    SolAccountMeta arguments[] = {
+        {accounts[ARGUMENT_INDEX].key, false, false},
+        {accounts[INVOKED_ARGUMENT_INDEX].key, false, false},
+    };
+    uint8_t data[] = {};
+    accounts[ARGUMENT_INDEX].data = data;
+
+    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
+    sol_invoke(&instruction, accounts, 4);
     break;
   }
 

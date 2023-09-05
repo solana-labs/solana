@@ -2,11 +2,13 @@
 
 #![cfg(feature = "program")]
 #![allow(unreachable_code)]
+#![allow(clippy::integer_arithmetic)]
 
 use {
     crate::instructions::*,
     solana_program::{
         account_info::AccountInfo,
+        bpf_loader_deprecated,
         entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
         instruction::Instruction,
         msg,
@@ -16,9 +18,11 @@ use {
         syscalls::{
             MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
         },
-        system_instruction,
+        system_instruction, system_program,
     },
     solana_sbf_rust_invoked::instructions::*,
+    solana_sbf_rust_realloc::instructions::*,
+    std::{cell::RefCell, mem, rc::Rc, slice},
 };
 
 fn do_nested_invokes(num_nested_invokes: u64, accounts: &[AccountInfo]) -> ProgramResult {
@@ -688,8 +692,614 @@ fn process_instruction(
             invoked_instruction.accounts[1].is_writable = true;
             invoke(&invoked_instruction, accounts)?;
         }
-        _ => panic!(),
+        TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLEE => {
+            msg!("TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLEE");
+            invoke(
+                &create_instruction(
+                    *program_id,
+                    &[
+                        (program_id, false, false),
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                    ],
+                    vec![
+                        TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLEE_NESTED,
+                        42,
+                        42,
+                        42,
+                    ],
+                ),
+                accounts,
+            )
+            .unwrap();
+            let account = &accounts[ARGUMENT_INDEX];
+            // this should cause the tx to fail since the callee changed ownership
+            unsafe {
+                *account
+                    .data
+                    .borrow_mut()
+                    .get_unchecked_mut(instruction_data[1] as usize) = 42
+            };
+        }
+        TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLEE_NESTED => {
+            msg!("TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLEE_NESTED");
+            let account = &accounts[ARGUMENT_INDEX];
+            account.data.borrow_mut().fill(0);
+            account.assign(&system_program::id());
+        }
+        TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLER => {
+            msg!("TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLER");
+            let account = &accounts[ARGUMENT_INDEX];
+            let invoked_program_id = accounts[INVOKED_PROGRAM_INDEX].key;
+            account.data.borrow_mut().fill(0);
+            account.assign(invoked_program_id);
+            invoke(
+                &create_instruction(
+                    *invoked_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (invoked_program_id, false, false),
+                    ],
+                    vec![RETURN_OK],
+                ),
+                accounts,
+            )
+            .unwrap();
+            // this should cause the tx to failsince invoked_program_id now owns
+            // the account
+            unsafe {
+                *account
+                    .data
+                    .borrow_mut()
+                    .get_unchecked_mut(instruction_data[1] as usize) = 42
+            };
+        }
+        TEST_FORBID_LEN_UPDATE_AFTER_OWNERSHIP_CHANGE_MOVING_DATA_POINTER => {
+            msg!("TEST_FORBID_LEN_UPDATE_AFTER_OWNERSHIP_CHANGE_MOVING_DATA_POINTER");
+            const INVOKE_PROGRAM_INDEX: usize = 3;
+            const REALLOC_PROGRAM_INDEX: usize = 4;
+            let account = &accounts[ARGUMENT_INDEX];
+            let realloc_program_id = accounts[REALLOC_PROGRAM_INDEX].key;
+            let invoke_program_id = accounts[INVOKE_PROGRAM_INDEX].key;
+            account.realloc(0, false).unwrap();
+            account.assign(realloc_program_id);
+
+            // Place a RcBox<RefCell<&mut [u8]>> in the account data. This
+            // allows us to test having CallerAccount::ref_to_len_in_vm in an
+            // account region.
+            let rc_box_addr =
+                account.data.borrow_mut().as_mut_ptr() as *mut RcBox<RefCell<&mut [u8]>>;
+            let rc_box_size = mem::size_of::<RcBox<RefCell<&mut [u8]>>>();
+            unsafe {
+                std::ptr::write(
+                    rc_box_addr,
+                    RcBox {
+                        strong: 1,
+                        weak: 0,
+                        // We're testing what happens if we make CPI update the
+                        // slice length after we put the slice in the account
+                        // address range. To do so, we need to move the data
+                        // pointer past the RcBox or CPI will clobber the length
+                        // change when it copies the callee's account data back
+                        // into the caller's account data
+                        // https://github.com/solana-labs/solana/blob/fa28958bd69054d1c2348e0a731011e93d44d7af/programs/bpf_loader/src/syscalls/cpi.rs#L1487
+                        value: RefCell::new(slice::from_raw_parts_mut(
+                            account.data.borrow_mut().as_mut_ptr().add(rc_box_size),
+                            0,
+                        )),
+                    },
+                );
+            }
+
+            // CPI now will update the serialized length in the wrong place,
+            // since we moved the account data slice. To hit the corner case we
+            // want to hit, we'll need to update the serialized length manually
+            // or during deserialize_parameters() we'll get
+            // AccountDataSizeChanged
+            let serialized_len_ptr =
+                unsafe { account.data.borrow_mut().as_mut_ptr().offset(-8) as *mut u64 };
+            unsafe {
+                std::ptr::write(
+                    &account.data as *const _ as usize as *mut Rc<RefCell<&mut [u8]>>,
+                    Rc::from_raw(((rc_box_addr as usize) + mem::size_of::<usize>() * 2) as *mut _),
+                );
+            }
+
+            let mut instruction_data = vec![REALLOC, 0];
+            instruction_data.extend_from_slice(&rc_box_size.to_le_bytes());
+
+            // check that the account is empty before we CPI
+            assert_eq!(account.data_len(), 0);
+
+            invoke(
+                &create_instruction(
+                    *realloc_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (realloc_program_id, false, false),
+                        (invoke_program_id, false, false),
+                    ],
+                    instruction_data.to_vec(),
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            // verify that CPI did update `ref_to_len_in_vm`
+            assert_eq!(account.data_len(), rc_box_size);
+
+            // update the serialized length so we don't error out early with AccountDataSizeChanged
+            unsafe { *serialized_len_ptr = rc_box_size as u64 };
+
+            // hack to avoid dropping the RcBox, which is supposed to be on the
+            // heap but we put it into account data. If we don't do this,
+            // dropping the Rc will cause
+            // global_deallocator.dealloc(rc_box_addr) which is invalid and
+            // happens to write a poison value into the account.
+            unsafe {
+                std::ptr::write(
+                    &account.data as *const _ as usize as *mut Rc<RefCell<&mut [u8]>>,
+                    Rc::new(RefCell::new(&mut [])),
+                );
+            }
+        }
+        TEST_FORBID_LEN_UPDATE_AFTER_OWNERSHIP_CHANGE => {
+            msg!("TEST_FORBID_LEN_UPDATE_AFTER_OWNERSHIP_CHANGE");
+            const INVOKE_PROGRAM_INDEX: usize = 3;
+            const REALLOC_PROGRAM_INDEX: usize = 4;
+            let account = &accounts[ARGUMENT_INDEX];
+            let target_account_index = instruction_data[1] as usize;
+            let target_account = &accounts[target_account_index];
+            let realloc_program_id = accounts[REALLOC_PROGRAM_INDEX].key;
+            let invoke_program_id = accounts[INVOKE_PROGRAM_INDEX].key;
+            account.realloc(0, false).unwrap();
+            account.assign(realloc_program_id);
+            target_account.realloc(0, false).unwrap();
+            target_account.assign(realloc_program_id);
+
+            let rc_box_addr =
+                target_account.data.borrow_mut().as_mut_ptr() as *mut RcBox<RefCell<&mut [u8]>>;
+            let rc_box_size = mem::size_of::<RcBox<RefCell<&mut [u8]>>>();
+            unsafe {
+                std::ptr::write(
+                    rc_box_addr,
+                    RcBox {
+                        strong: 1,
+                        weak: 0,
+                        // The difference with
+                        // TEST_FORBID_LEN_UPDATE_AFTER_OWNERSHIP_CHANGE_MOVING_DATA_POINTER
+                        // is that we don't move the data pointer past the
+                        // RcBox. This is needed to avoid the "Invalid account
+                        // info pointer" check when direct mapping is enabled.
+                        // This also means we don't need to update the
+                        // serialized len like we do in the other test.
+                        value: RefCell::new(slice::from_raw_parts_mut(
+                            account.data.borrow_mut().as_mut_ptr(),
+                            0,
+                        )),
+                    },
+                );
+            }
+
+            let serialized_len_ptr =
+                unsafe { account.data.borrow_mut().as_mut_ptr().offset(-8) as *mut u64 };
+            // Place a RcBox<RefCell<&mut [u8]>> in the account data. This
+            // allows us to test having CallerAccount::ref_to_len_in_vm in an
+            // account region.
+            unsafe {
+                std::ptr::write(
+                    &account.data as *const _ as usize as *mut Rc<RefCell<&mut [u8]>>,
+                    Rc::from_raw(((rc_box_addr as usize) + mem::size_of::<usize>() * 2) as *mut _),
+                );
+            }
+
+            let mut instruction_data = vec![REALLOC, 0];
+            instruction_data.extend_from_slice(&rc_box_size.to_le_bytes());
+
+            // check that the account is empty before we CPI
+            assert_eq!(account.data_len(), 0);
+
+            invoke(
+                &create_instruction(
+                    *realloc_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (target_account.key, true, false),
+                        (realloc_program_id, false, false),
+                        (invoke_program_id, false, false),
+                    ],
+                    instruction_data.to_vec(),
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            unsafe { *serialized_len_ptr = rc_box_size as u64 };
+            // hack to avoid dropping the RcBox, which is supposed to be on the
+            // heap but we put it into account data. If we don't do this,
+            // dropping the Rc will cause
+            // global_deallocator.dealloc(rc_box_addr) which is invalid and
+            // happens to write a poison value into the account.
+            unsafe {
+                std::ptr::write(
+                    &account.data as *const _ as usize as *mut Rc<RefCell<&mut [u8]>>,
+                    Rc::new(RefCell::new(&mut [])),
+                );
+            }
+        }
+        TEST_ALLOW_WRITE_AFTER_OWNERSHIP_CHANGE_TO_CALLER => {
+            msg!("TEST_ALLOW_WRITE_AFTER_OWNERSHIP_CHANGE_TO_CALLER");
+            const INVOKE_PROGRAM_INDEX: usize = 3;
+            let account = &accounts[ARGUMENT_INDEX];
+            let invoked_program_id = accounts[INVOKED_PROGRAM_INDEX].key;
+            let invoke_program_id = accounts[INVOKE_PROGRAM_INDEX].key;
+            invoke(
+                &create_instruction(
+                    *invoked_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (invoked_program_id, false, false),
+                        (invoke_program_id, false, false),
+                    ],
+                    vec![ASSIGN_ACCOUNT_TO_CALLER],
+                ),
+                accounts,
+            )
+            .unwrap();
+            // this should succeed since the callee gave us ownership of the
+            // account
+            unsafe {
+                *account
+                    .data
+                    .borrow_mut()
+                    .get_unchecked_mut(instruction_data[1] as usize) = 42
+            };
+        }
+        TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS => {
+            msg!("TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS");
+            const CALLEE_PROGRAM_INDEX: usize = 3;
+            let account = &accounts[ARGUMENT_INDEX];
+            let callee_program_id = accounts[CALLEE_PROGRAM_INDEX].key;
+
+            let expected = {
+                let data = &instruction_data[1..];
+                let prev_len = account.data_len();
+                account.realloc(prev_len + data.len(), false)?;
+                account.data.borrow_mut()[prev_len..].copy_from_slice(data);
+                account.data.borrow().to_vec()
+            };
+
+            let mut instruction_data = vec![TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_NESTED];
+            instruction_data.extend_from_slice(&expected);
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    instruction_data,
+                ),
+                accounts,
+            )
+            .unwrap();
+        }
+        TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_NESTED => {
+            msg!("TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_NESTED");
+            const ARGUMENT_INDEX: usize = 0;
+            let account = &accounts[ARGUMENT_INDEX];
+            assert_eq!(*account.data.borrow(), &instruction_data[1..]);
+        }
+        TEST_CPI_ACCOUNT_UPDATE_CALLEE_GROWS => {
+            msg!("TEST_CPI_ACCOUNT_UPDATE_CALLEE_GROWS");
+            const REALLOC_PROGRAM_INDEX: usize = 2;
+            const INVOKE_PROGRAM_INDEX: usize = 3;
+            let account = &accounts[ARGUMENT_INDEX];
+            let realloc_program_id = accounts[REALLOC_PROGRAM_INDEX].key;
+            let realloc_program_owner = accounts[REALLOC_PROGRAM_INDEX].owner;
+            let invoke_program_id = accounts[INVOKE_PROGRAM_INDEX].key;
+            let mut instruction_data = instruction_data.to_vec();
+            let mut expected = account.data.borrow().to_vec();
+            expected.extend_from_slice(&instruction_data[1..]);
+            instruction_data[0] = REALLOC_EXTEND_FROM_SLICE;
+            invoke(
+                &create_instruction(
+                    *realloc_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (realloc_program_id, false, false),
+                        (invoke_program_id, false, false),
+                    ],
+                    instruction_data.to_vec(),
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            if !bpf_loader_deprecated::check_id(realloc_program_owner) {
+                assert_eq!(&*account.data.borrow(), &expected);
+            }
+        }
+        TEST_CPI_ACCOUNT_UPDATE_CALLEE_SHRINKS_SMALLER_THAN_ORIGINAL_LEN => {
+            msg!("TEST_CPI_ACCOUNT_UPDATE_CALLEE_SHRINKS_SMALLER_THAN_ORIGINAL_LEN");
+            const REALLOC_PROGRAM_INDEX: usize = 2;
+            const INVOKE_PROGRAM_INDEX: usize = 3;
+            let account = &accounts[ARGUMENT_INDEX];
+            let realloc_program_id = accounts[REALLOC_PROGRAM_INDEX].key;
+            let realloc_program_owner = accounts[REALLOC_PROGRAM_INDEX].owner;
+            let invoke_program_id = accounts[INVOKE_PROGRAM_INDEX].key;
+            let new_len = usize::from_le_bytes(instruction_data[1..9].try_into().unwrap());
+            let prev_len = account.data_len();
+            let expected = account.data.borrow()[..new_len].to_vec();
+            let mut instruction_data = vec![REALLOC, 0];
+            instruction_data.extend_from_slice(&new_len.to_le_bytes());
+            invoke(
+                &create_instruction(
+                    *realloc_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (realloc_program_id, false, false),
+                        (invoke_program_id, false, false),
+                    ],
+                    instruction_data,
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            // deserialize_parameters_unaligned predates realloc support, and
+            // hardcodes the account data length to the original length.
+            if !bpf_loader_deprecated::check_id(realloc_program_owner) {
+                assert_eq!(&*account.data.borrow(), &expected);
+                assert_eq!(
+                    unsafe {
+                        slice::from_raw_parts(
+                            account.data.borrow().as_ptr().add(new_len),
+                            prev_len - new_len,
+                        )
+                    },
+                    &vec![0; prev_len - new_len]
+                );
+            }
+        }
+        TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_CALLEE_SHRINKS => {
+            msg!("TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_CALLEE_SHRINKS");
+            const INVOKE_PROGRAM_INDEX: usize = 3;
+            const SENTINEL: u8 = 42;
+            let account = &accounts[ARGUMENT_INDEX];
+            let invoke_program_id = accounts[INVOKE_PROGRAM_INDEX].key;
+
+            let prev_data = {
+                let data = &instruction_data[9..];
+                let prev_len = account.data_len();
+                account.realloc(prev_len + data.len(), false)?;
+                account.data.borrow_mut()[prev_len..].copy_from_slice(data);
+                unsafe {
+                    // write a sentinel value just outside the account data to
+                    // check that when CPI zeroes the realloc region it doesn't
+                    // zero too much
+                    *account
+                        .data
+                        .borrow_mut()
+                        .as_mut_ptr()
+                        .add(prev_len + data.len()) = SENTINEL;
+                };
+                account.data.borrow().to_vec()
+            };
+
+            let mut expected = account.data.borrow().to_vec();
+            let new_len = usize::from_le_bytes(instruction_data[1..9].try_into().unwrap());
+            expected.extend_from_slice(&instruction_data[9..]);
+            let mut instruction_data =
+                vec![TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_CALLEE_SHRINKS_NESTED];
+            instruction_data.extend_from_slice(&new_len.to_le_bytes());
+            invoke(
+                &create_instruction(
+                    *invoke_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (invoke_program_id, false, false),
+                    ],
+                    instruction_data,
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            assert_eq!(*account.data.borrow(), &prev_data[..new_len]);
+            assert_eq!(
+                unsafe {
+                    slice::from_raw_parts(
+                        account.data.borrow().as_ptr().add(new_len),
+                        prev_data.len() - new_len,
+                    )
+                },
+                &vec![0; prev_data.len() - new_len]
+            );
+            assert_eq!(
+                unsafe { *account.data.borrow().as_ptr().add(prev_data.len()) },
+                SENTINEL
+            );
+        }
+        TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_CALLEE_SHRINKS_NESTED => {
+            msg!("TEST_CPI_ACCOUNT_UPDATE_CALLER_GROWS_CALLEE_SHRINKS_NESTED");
+            const ARGUMENT_INDEX: usize = 0;
+            let account = &accounts[ARGUMENT_INDEX];
+            let new_len = usize::from_le_bytes(instruction_data[1..9].try_into().unwrap());
+            account.realloc(new_len, false).unwrap();
+        }
+        TEST_CPI_INVALID_KEY_POINTER => {
+            msg!("TEST_CPI_INVALID_KEY_POINTER");
+            const CALLEE_PROGRAM_INDEX: usize = 2;
+            let account = &accounts[ARGUMENT_INDEX];
+            let key = *account.key;
+            let key = &key as *const _ as usize;
+            unsafe {
+                *mem::transmute::<_, *mut *const Pubkey>(&account.key) = key as *const Pubkey;
+            }
+            let callee_program_id = accounts[CALLEE_PROGRAM_INDEX].key;
+
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![],
+                ),
+                accounts,
+            )
+            .unwrap();
+        }
+        TEST_CPI_INVALID_LAMPORTS_POINTER => {
+            msg!("TEST_CPI_INVALID_LAMPORTS_POINTER");
+            const CALLEE_PROGRAM_INDEX: usize = 2;
+            let account = &accounts[ARGUMENT_INDEX];
+            let mut lamports = account.lamports();
+            account
+                .lamports
+                .replace(unsafe { mem::transmute(&mut lamports) });
+            let callee_program_id = accounts[CALLEE_PROGRAM_INDEX].key;
+
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![],
+                ),
+                accounts,
+            )
+            .unwrap();
+        }
+        TEST_CPI_INVALID_OWNER_POINTER => {
+            msg!("TEST_CPI_INVALID_OWNER_POINTER");
+            const CALLEE_PROGRAM_INDEX: usize = 2;
+            let account = &accounts[ARGUMENT_INDEX];
+            let owner = account.owner as *const _ as usize + 1;
+            unsafe {
+                *mem::transmute::<_, *mut *const Pubkey>(&account.owner) = owner as *const Pubkey;
+            }
+            let callee_program_id = accounts[CALLEE_PROGRAM_INDEX].key;
+
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![],
+                ),
+                accounts,
+            )
+            .unwrap();
+        }
+        TEST_CPI_INVALID_DATA_POINTER => {
+            msg!("TEST_CPI_INVALID_DATA_POINTER");
+            const CALLEE_PROGRAM_INDEX: usize = 2;
+            let account = &accounts[ARGUMENT_INDEX];
+            let data = unsafe {
+                slice::from_raw_parts_mut(account.data.borrow_mut()[1..].as_mut_ptr(), 0)
+            };
+            account.data.replace(data);
+            let callee_program_id = accounts[CALLEE_PROGRAM_INDEX].key;
+
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![],
+                ),
+                accounts,
+            )
+            .unwrap();
+        }
+        TEST_CPI_CHANGE_ACCOUNT_DATA_MEMORY_ALLOCATION => {
+            msg!("TEST_CPI_CHANGE_ACCOUNT_DATA_MEMORY_ALLOCATION");
+            const CALLEE_PROGRAM_INDEX: usize = 2;
+            let account = &accounts[ARGUMENT_INDEX];
+            let callee_program_id = accounts[CALLEE_PROGRAM_INDEX].key;
+            let original_data_len = account.data_len();
+
+            // Initial data is all [0xFF; 20]
+            assert_eq!(&*account.data.borrow(), &[0xFF; 20]);
+
+            // Realloc to [0xFE; 10]
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (account.key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![0xFE; 10],
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            // Check that [10..20] is zeroed
+            let new_len = account.data_len();
+            assert_eq!(&*account.data.borrow(), &[0xFE; 10]);
+            assert_eq!(
+                unsafe {
+                    slice::from_raw_parts(
+                        account.data.borrow().as_ptr().add(new_len),
+                        original_data_len - new_len,
+                    )
+                },
+                &vec![0; original_data_len - new_len]
+            );
+
+            // Realloc to [0xFD; 5]
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![0xFD; 5],
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            // Check that [5..20] is zeroed
+            let new_len = account.data_len();
+            assert_eq!(&*account.data.borrow(), &[0xFD; 5]);
+            assert_eq!(
+                unsafe {
+                    slice::from_raw_parts(
+                        account.data.borrow().as_ptr().add(new_len),
+                        original_data_len - new_len,
+                    )
+                },
+                &vec![0; original_data_len - new_len]
+            );
+        }
+        TEST_WRITE_ACCOUNT => {
+            msg!("TEST_WRITE_ACCOUNT");
+            let target_account_index = instruction_data[1] as usize;
+            let target_account = &accounts[target_account_index];
+            let byte_index = usize::from_le_bytes(instruction_data[2..10].try_into().unwrap());
+            target_account.data.borrow_mut()[byte_index] = instruction_data[10];
+        }
+        _ => panic!("unexpected program data"),
     }
 
     Ok(())
+}
+
+#[repr(C)]
+struct RcBox<T> {
+    strong: usize,
+    weak: usize,
+    value: T,
 }
