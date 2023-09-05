@@ -129,7 +129,7 @@ enum CacheServiceUpdate {
         transaction_fee: u64,
         writable_accounts: Arc<Vec<Pubkey>>,
     },
-    BankFrozen {
+    BankFinalized {
         slot: Slot,
         bank_id: BankId,
     },
@@ -277,7 +277,7 @@ impl PrioritizationFeeCache {
     /// by pruning irrelevant accounts to save space, and marking its availability for queries.
     pub fn finalize_priority_fee(&self, slot: Slot, bank_id: BankId) {
         self.sender
-            .send(CacheServiceUpdate::BankFrozen { slot, bank_id })
+            .send(CacheServiceUpdate::BankFinalized { slot, bank_id })
             .unwrap_or_else(|err| {
                 warn!(
                     "prioritization fee cache signalling bank frozen failed: {:?}",
@@ -369,7 +369,7 @@ impl PrioritizationFeeCache {
                     writable_accounts,
                     metrics.clone(),
                 ),
-                CacheServiceUpdate::BankFrozen { slot, bank_id } => {
+                CacheServiceUpdate::BankFinalized { slot, bank_id } => {
                     Self::finalize_slot(cache.clone(), &slot, &bank_id, metrics.clone());
 
                     metrics.report(slot);
