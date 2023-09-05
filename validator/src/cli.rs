@@ -1379,6 +1379,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("wen-restart")
                 .value_name("DIR")
                 .takes_value(true)
+                .conflicts_with_all(&["expected_shred_version", "expected_bank_hash", "wait_for_supermajority"])
                 .help(
                     "When specified, make validator enter Wen Restart, where it doesn't
                     vote, create new blocks, or transmit new blocks. The only thing it
