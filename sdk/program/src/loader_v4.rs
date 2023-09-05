@@ -186,10 +186,7 @@ pub fn transfer_authority(
 
 #[cfg(test)]
 mod tests {
-    use {
-        crate::system_program,
-        {super::*, memoffset::offset_of},
-    };
+    use {super::*, crate::system_program, memoffset::offset_of};
 
     #[test]
     fn test_layout() {
