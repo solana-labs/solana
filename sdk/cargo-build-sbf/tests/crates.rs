@@ -70,6 +70,7 @@ fn test_dump() {
         .expect("Unable to install rustfilt required for --dump option")
         .success());
     let output = run_cargo_build("noop", &["--dump"], "test_dump");
+    assert!(output.status.success());
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let dump = cwd
         .join("tests")
