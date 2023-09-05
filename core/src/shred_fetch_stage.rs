@@ -42,14 +42,6 @@ impl ShredFetchStage {
             .as_ref()
             .map(|(_, cluster_info)| cluster_info.keypair().clone());
 
-<<<<<<< HEAD
-        // In the case of bank_forks=None, setup to accept any slot range
-        let mut root_bank = bank_forks.read().unwrap().root_bank();
-        let mut last_root = root_bank.slot();
-        let mut last_slot = std::u64::MAX;
-        let mut slots_per_epoch = 0;
-
-=======
         let (mut last_root, mut last_slot, mut slots_per_epoch) = {
             let bank_forks_r = bank_forks.read().unwrap();
             let root_bank = bank_forks_r.root_bank();
@@ -59,7 +51,6 @@ impl ShredFetchStage {
                 bank_forks_r.highest_slot(),
             )
         };
->>>>>>> ad33c68ce9 (Update ShredFetchStage::modify_packets to drop root bank quicker (#33105))
         let mut stats = ShredFetchStats::default();
 
         for mut packet_batch in recvr {
@@ -67,20 +58,11 @@ impl ShredFetchStage {
                 last_updated = Instant::now();
                 let root_bank = {
                     let bank_forks_r = bank_forks.read().unwrap();
-<<<<<<< HEAD
-                    last_root = bank_forks_r.root();
-                    let working_bank = bank_forks_r.working_bank();
-                    last_slot = working_bank.slot();
-                    root_bank = bank_forks_r.root_bank();
-                    slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
-                }
-=======
                     last_slot = bank_forks_r.highest_slot();
                     bank_forks_r.root_bank()
                 };
                 last_root = root_bank.slot();
                 slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
->>>>>>> ad33c68ce9 (Update ShredFetchStage::modify_packets to drop root bank quicker (#33105))
                 keypair = repair_context
                     .as_ref()
                     .map(|(_, cluster_info)| cluster_info.keypair().clone());
