@@ -498,12 +498,10 @@ fn process_instruction_inner(
     let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
     let executor = invoke_context
         .find_program_in_cache(program_account.get_key())
-        .ok_or(InstructionError::InvalidAccountData)?;
-
-    if executor.is_tombstone() {
-        return Err(Box::new(InstructionError::InvalidAccountData));
-    }
-
+        .ok_or_else(|| {
+            ic_logger_msg!(log_collector, "Program is not cached");
+            InstructionError::InvalidAccountData
+        })?;
     drop(program_account);
     get_or_create_executor_time.stop();
     saturating_add_assign!(
@@ -516,6 +514,7 @@ fn process_instruction_inner(
         LoadedProgramType::FailedVerification(_)
         | LoadedProgramType::Closed
         | LoadedProgramType::DelayVisibility => {
+            ic_logger_msg!(log_collector, "Program is not deployed");
             Err(Box::new(InstructionError::InvalidAccountData) as Box<dyn std::error::Error>)
         }
         LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
