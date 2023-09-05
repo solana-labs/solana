@@ -502,21 +502,45 @@ pub struct PrunedBanksRequestHandler {
 
 impl PrunedBanksRequestHandler {
     pub fn handle_request(&self, bank: &Bank, is_serialized_with_abs: bool) -> usize {
-        let slots = self.pruned_banks_receiver.try_iter().collect::<Vec<_>>();
-        let count = slots.len();
-        bank.rc.accounts.accounts_db.thread_pool_clean.install(|| {
-            slots
-                .into_par_iter()
-                .for_each(|(pruned_slot, pruned_bank_id)| {
-                    bank.rc.accounts.accounts_db.purge_slot(
-                        pruned_slot,
-                        pruned_bank_id,
-                        is_serialized_with_abs,
-                    );
-                });
+        use itertools::Itertools;
+        let banks_to_purge = self.pruned_banks_receiver.try_iter().collect::<Vec<_>>();
+        let num_banks_to_purge = banks_to_purge.len();
+
+        let grouped_banks_to_purge = banks_to_purge
+            .into_iter()
+            .into_group_map_by(|(slot, _id)| *slot);
+        let grouped_banks_to_purge: Vec<_> = grouped_banks_to_purge.values().collect();
+
+        let accounts_db = bank.rc.accounts.accounts_db.as_ref();
+        accounts_db.thread_pool_clean.install(|| {
+            grouped_banks_to_purge.into_par_iter().for_each(|group| {
+                for (slot, bank_id) in group {
+                    accounts_db.purge_slot(*slot, *bank_id, is_serialized_with_abs);
+                }
+            })
         });
 
-        count
+        // OLD BELOW
+
+        /*
+         *         let mut banks_to_purge = self.pruned_banks_receiver.try_iter().collect::<Vec<_>>();
+         *         banks_to_purge.sort_by_key(|(slot, _id)| *slot);
+         *         let num_banks_to_purge = banks_to_purge.len();
+         *
+         *         bank.rc.accounts.accounts_db.thread_pool_clean.install(|| {
+         *             banks_to_purge
+         *                 .into_par_iter()
+         *                 .for_each(|(pruned_slot, pruned_bank_id)| {
+         *                     bank.rc.accounts.accounts_db.purge_slot(
+         *                         pruned_slot,
+         *                         pruned_bank_id,
+         *                         is_serialized_with_abs,
+         *                     );
+         *                 });
+         *         });
+         */
+
+        num_banks_to_purge
     }
 
     fn remove_dead_slots(
