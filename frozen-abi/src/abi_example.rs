@@ -556,8 +556,9 @@ impl<O: AbiEnumVisitor, E: AbiEnumVisitor> AbiEnumVisitor for Result<O, E> {
     }
 }
 
-impl<T: AbiExample> AbiExample for once_cell::sync::OnceCell<T> {
+#[cfg(not(any(target_os = "solana", target_cpu = "sbfv2", target_arch = "bpfel")))]
+impl<T: AbiExample> AbiExample for std::sync::OnceLock<T> {
     fn example() -> Self {
-        Self::with_value(T::example())
+        Self::from(T::example())
     }
 }
