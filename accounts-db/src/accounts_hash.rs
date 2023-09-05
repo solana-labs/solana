@@ -837,13 +837,20 @@ impl<'a> AccountsHasher<'a> {
                         /*lamports sum*/ 0,
                     )
                 },
-                |mut a, mut b| {
-                    a.2 =
-                        a.2.checked_add(b.2)
-                            .expect("summing capitalization cannot overflow");
-                    a.1 += b.1;
-                    a.0.append(&mut b.0);
-                    a
+                |a, b| {
+                    let (mut acc, mut x) = if a.0.len() > b.0.len() {
+                        (a, b)
+                    } else {
+                        (b, a)
+                    };
+
+                    acc.2 = acc
+                        .2
+                        .checked_add(x.2)
+                        .expect("summing capitalization cannot overflow");
+                    acc.1 += x.1;
+                    acc.0.append(&mut x.0);
+                    acc
                 },
             );
         zeros.stop();
