@@ -152,6 +152,9 @@ mod tests {
         let blockstore = Arc::new(Blockstore::open(ledger_path.as_path()).unwrap());
         let (exit, poh_recorder, poh_service, _entry_receiver) =
             create_test_recorder(bank.clone(), blockstore, None, None);
+        // Drop the poh service immediately to avoid potential ticking
+        exit.store(true, Ordering::Relaxed);
+        poh_service.join().unwrap();
 
         let my_pubkey = Pubkey::new_unique();
         let decision_maker = DecisionMaker::new(my_pubkey, poh_recorder.clone());
@@ -206,9 +209,6 @@ mod tests {
             let decision = decision_maker.make_consume_or_forward_decision();
             assert_matches!(decision, BufferedPacketsDecision::Forward);
         }
-
-        exit.store(true, Ordering::Relaxed);
-        poh_service.join().unwrap();
     }
 
     #[test]
