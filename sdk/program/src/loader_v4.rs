@@ -71,8 +71,22 @@ pub fn create_buffer(
     payer_address: &Pubkey,
     buffer_address: &Pubkey,
     lamports: u64,
-) -> Instruction {
-    system_instruction::create_account(payer_address, buffer_address, lamports, 0, &id())
+    authority: &Pubkey,
+    new_size: u32,
+    recipient_address: &Pubkey,
+) -> Vec<Instruction> {
+    vec![
+        system_instruction::create_account(payer_address, buffer_address, lamports, 0, &id()),
+        Instruction::new_with_bincode(
+            id(),
+            &LoaderV4Instruction::Truncate { new_size },
+            vec![
+                AccountMeta::new(*buffer_address, true),
+                AccountMeta::new_readonly(*authority, true),
+                AccountMeta::new(*recipient_address, false),
+            ],
+        ),
+    ]
 }
 
 /// Returns the instructions required to set the length of the program account.
@@ -86,7 +100,7 @@ pub fn truncate(
         id(),
         &LoaderV4Instruction::Truncate { new_size },
         vec![
-            AccountMeta::new(*program_address, true),
+            AccountMeta::new(*program_address, false),
             AccountMeta::new_readonly(*authority, true),
             AccountMeta::new(*recipient_address, false),
         ],
@@ -123,7 +137,7 @@ pub fn deploy(program_address: &Pubkey, authority: &Pubkey) -> Instruction {
     )
 }
 
-/// Returns the instructions required to deploy a program.
+/// Returns the instructions required to deploy a program using a buffer.
 pub fn deploy_from_source(
     program_address: &Pubkey,
     authority: &Pubkey,
@@ -172,7 +186,10 @@ pub fn transfer_authority(
 
 #[cfg(test)]
 mod tests {
-    use {super::*, memoffset::offset_of};
+    use {
+        crate::system_program,
+        {super::*, memoffset::offset_of},
+    };
 
     #[test]
     fn test_layout() {
@@ -180,6 +197,39 @@ mod tests {
         assert_eq!(offset_of!(LoaderV4State, authority_address), 0x08);
         assert_eq!(offset_of!(LoaderV4State, status), 0x28);
         assert_eq!(LoaderV4State::program_data_offset(), 0x30);
+    }
+
+    #[test]
+    fn test_create_buffer_instruction() {
+        let payer = Pubkey::new_unique();
+        let program = Pubkey::new_unique();
+        let authority = Pubkey::new_unique();
+        let recipient = Pubkey::new_unique();
+        let instructions = create_buffer(&payer, &program, 123, &authority, 10, &recipient);
+        assert_eq!(instructions.len(), 2);
+        let instruction0 = &instructions[0];
+        assert_eq!(instruction0.program_id, system_program::id());
+        assert_eq!(instruction0.accounts.len(), 2);
+        assert_eq!(instruction0.accounts[0].pubkey, payer);
+        assert!(instruction0.accounts[0].is_writable);
+        assert!(instruction0.accounts[0].is_signer);
+        assert_eq!(instruction0.accounts[1].pubkey, program);
+        assert!(instruction0.accounts[1].is_writable);
+        assert!(instruction0.accounts[1].is_signer);
+
+        let instruction1 = &instructions[1];
+        assert!(is_truncate_instruction(&instruction1.data));
+        assert_eq!(instruction1.program_id, id());
+        assert_eq!(instruction1.accounts.len(), 3);
+        assert_eq!(instruction1.accounts[0].pubkey, program);
+        assert!(instruction1.accounts[0].is_writable);
+        assert!(instruction1.accounts[0].is_signer);
+        assert_eq!(instruction1.accounts[1].pubkey, authority);
+        assert!(!instruction1.accounts[1].is_writable);
+        assert!(instruction1.accounts[1].is_signer);
+        assert_eq!(instruction1.accounts[2].pubkey, recipient);
+        assert!(instruction1.accounts[2].is_writable);
+        assert!(!instruction1.accounts[2].is_signer);
     }
 
     #[test]
@@ -209,7 +259,7 @@ mod tests {
         assert_eq!(instruction.accounts.len(), 3);
         assert_eq!(instruction.accounts[0].pubkey, program);
         assert!(instruction.accounts[0].is_writable);
-        assert!(instruction.accounts[0].is_signer);
+        assert!(!instruction.accounts[0].is_signer);
         assert_eq!(instruction.accounts[1].pubkey, authority);
         assert!(!instruction.accounts[1].is_writable);
         assert!(instruction.accounts[1].is_signer);
