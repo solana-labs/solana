@@ -797,11 +797,17 @@ fn cmp_requests_by_priority(
     .then(slot_a.cmp(&slot_b))
 }
 
+/// An iterator over a slice producing non-overlapping runs
+/// of elements using a predicate to separate them.
+///
+/// This can be used to extract sorted subslices.
+///
 /// (`Vec::group_by()`](https://doc.rust-lang.org/std/vec/struct.Vec.html#method.group_by)
 /// is currently a nightly-only experimental API.  Once the API is stablized, use it instead.
 ///
 /// tracking issue: https://github.com/rust-lang/rust/issues/80552
-/// implementation: https://github.com/Kerollmops/rust/blob/8b53be660444d736bb6a6e1c6ba42c8180c968e7/library/core/src/slice/iter.rs#L2972-L3023
+/// rust-lang PR: https://github.com/rust-lang/rust/pull/79895/
+/// implementation permalink: https://github.com/Kerollmops/rust/blob/8b53be660444d736bb6a6e1c6ba42c8180c968e7/library/core/src/slice/iter.rs#L2972-L3023
 struct GroupBy<'a, T: 'a, P> {
     slice: &'a [T],
     predicate: P,
@@ -1086,5 +1092,20 @@ mod test {
         assert!(snapshot_request_handler
             .get_next_snapshot_request(Some(480))
             .is_none());
+    }
+
+    // This test is for our copied impl of GroupBy, above.
+    // When it is removed, this test can be removed.
+    #[test]
+    fn test_group_by() {
+        let slice = &[1, 1, 1, 3, 3, 2, 2, 2, 1, 0];
+
+        let mut iter = GroupBy::new(slice, |a, b| a == b);
+        assert_eq!(iter.next(), Some(&[1, 1, 1][..]));
+        assert_eq!(iter.next(), Some(&[3, 3][..]));
+        assert_eq!(iter.next(), Some(&[2, 2, 2][..]));
+        assert_eq!(iter.next(), Some(&[1][..]));
+        assert_eq!(iter.next(), Some(&[0][..]));
+        assert_eq!(iter.next(), None);
     }
 }
