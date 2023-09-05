@@ -64,21 +64,12 @@ fn test_build() {
 #[serial]
 fn test_dump() {
     // This test requires rustfilt.
-<<<<<<< HEAD
     assert!(Command::new("cargo")
-        .args(["install", "-f", "rustfilt"])
+        .args(["install", "rustfilt"])
         .status()
         .expect("Unable to install rustfilt required for --dump option")
         .success());
     let output = run_cargo_build("noop", &["--dump"], "test_dump");
-    assert!(output.status.success());
-=======
-    assert_cmd::Command::new("cargo")
-        .args(["install", "rustfilt"])
-        .assert()
-        .success();
-    run_cargo_build("noop", &["--dump"], false);
->>>>>>> 3a91d3cc6a (ci: remove -f from cargo install rustfilt (#33143))
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let dump = cwd
         .join("tests")
