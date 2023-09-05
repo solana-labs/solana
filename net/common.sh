@@ -22,6 +22,7 @@ configFile="$netConfigDir/config"
 geoipConfigFile="$netConfigDir/geoip.yml"
 
 entrypointIp=
+entrypointIp2=
 publicNetwork=
 netBasename=
 sshPrivateKey=
@@ -67,8 +68,10 @@ loadConfigFile() {
 
   if $publicNetwork; then
     entrypointIp=${validatorIpList[0]}
+    entrypointIp2=${validatorIpList[1]}
   else
     entrypointIp=${validatorIpListPrivate[0]}
+    entrypointIp2=${validatorIpListPrivate[1]}
   fi
 
   buildSshOptions

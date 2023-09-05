@@ -31,6 +31,7 @@ tmpfsAccounts="${22:false}"
 disableQuic="${23}"
 enableUdp="${24}"
 wenRestartFile="${25}"
+entrypointIp2="${26}"
 
 set +x
 
@@ -305,6 +306,9 @@ EOF
       args+=(--wen-restart $wenRestartFile)
     fi
 
+    if [[ -n "$entrypointIp2" ]]; then
+      args+=(--entrypoint "$entrypointIp2:8001")
+    fi
 
 cat >> ~/solana/on-reboot <<EOF
     nohup ./multinode-demo/bootstrap-validator.sh ${args[@]} > validator.log.\$now 2>&1 &

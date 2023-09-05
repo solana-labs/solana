@@ -92,7 +92,9 @@ while [[ -n $1 ]]; do
       ledger_dir=$2
       shift 2
     elif [[ $1 = --entrypoint ]]; then
-      gossip_entrypoint=$2
+      if [[ -z $gossip_entrypoint ]]; then
+        gossip_entrypoint=$2
+      fi
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --no-snapshot-fetch ]]; then

@@ -353,6 +353,7 @@ startBootstrapLeader() {
          \"$disableQuic\" \
          \"$enableUdp\" \
          \"$wenRestartFile\" \
+         \"$extraEntrypointIp\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -428,6 +429,7 @@ startNode() {
          \"$disableQuic\" \
          \"$enableUdp\" \
          \"$wenRestartFile\" \
+         \"$extraEntrypointIp\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -515,6 +517,7 @@ restartNode() {
          \"$disableQuic\" \
          \"$enableUdp\" \
          \"$wenRestartFile\" \
+         \"$extraEntrypointIp\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -909,6 +912,7 @@ maybeWaitForSupermajority=""
 maybeAccountsDbSkipShrink=""
 maybeSkipRequireTower=""
 wenRestartFile=""
+extraEntrypointIp=""
 debugBuild=false
 profileBuild=false
 doBuild=true
@@ -1072,6 +1076,7 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --wen-restart ]]; then
       wenRestartFile=$2
+      extraEntrypointIp=$entrypointIp2
       shift 2
     else
       usage "Unknown long option: $1"
