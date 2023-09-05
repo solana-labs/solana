@@ -5753,6 +5753,7 @@ dependencies = [
 name = "solana-sbf-rust-invoke"
 version = "1.17.0"
 dependencies = [
+ "rustversion",
  "solana-program",
  "solana-sbf-rust-invoked",
  "solana-sbf-rust-realloc",

@@ -22,6 +22,7 @@ net2 = "0.2.37"
 num-derive = "0.3"
 num-traits = "0.2"
 rand = "0.8"
+rustversion = "1.0.14"
 serde = "1.0.112"
 serde_json = "1.0.56"
 solana_rbpf = "=0.6.0"
@@ -101,6 +102,7 @@ solana_rbpf = { workspace = true }
 
 [dev-dependencies]
 solana-ledger = { workspace = true }
+solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 
 [[bench]]
 name = "bpf_loader"
