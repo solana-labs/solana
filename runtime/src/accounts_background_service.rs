@@ -502,51 +502,26 @@ pub struct PrunedBanksRequestHandler {
 
 impl PrunedBanksRequestHandler {
     pub fn handle_request(&self, bank: &Bank, is_serialized_with_abs: bool) -> usize {
-        use itertools::Itertools;
-        let banks_to_purge = self.pruned_banks_receiver.try_iter().collect::<Vec<_>>();
+        let mut banks_to_purge: Vec<_> = self.pruned_banks_receiver.try_iter().collect();
+        // We need a stable sort to ensure we purge banks—with the same slot—in the same order
+        // they were sent into the channel.
+        banks_to_purge.sort_by_key(|(slot, _id)| *slot);
         let num_banks_to_purge = banks_to_purge.len();
 
-        /*
-         * let grouped_banks_to_purge = banks_to_purge
-         *     .into_iter()
-         *     .into_group_map_by(|(slot, _id)| *slot);
-         * let grouped_banks_to_purge: Vec<_> = grouped_banks_to_purge.values().collect();
-         */
-        let grouped_banks_to_purge: Vec<_> = banks_to_purge
-            .into_iter()
-            .into_group_map_by(|(slot, _id)| *slot)
-            .values()
-            .cloned()
-            .collect();
+        // Group the banks into slices with the same slot
+        let grouped_banks_to_purge: Vec<_> =
+            GroupBy::new(banks_to_purge.as_slice(), |a, b| a.0 == b.0).collect();
 
+        // Purge all the slots in parallel
+        // Banks for the same slot are purged sequentially
         let accounts_db = bank.rc.accounts.accounts_db.as_ref();
         accounts_db.thread_pool_clean.install(|| {
             grouped_banks_to_purge.into_par_iter().for_each(|group| {
-                for (slot, bank_id) in group {
-                    accounts_db.purge_slot(slot, bank_id, is_serialized_with_abs);
-                }
-            })
+                group.iter().for_each(|(slot, bank_id)| {
+                    accounts_db.purge_slot(*slot, *bank_id, is_serialized_with_abs);
+                })
+            });
         });
-
-        // OLD BELOW
-
-        /*
-         *         let mut banks_to_purge = self.pruned_banks_receiver.try_iter().collect::<Vec<_>>();
-         *         banks_to_purge.sort_by_key(|(slot, _id)| *slot);
-         *         let num_banks_to_purge = banks_to_purge.len();
-         *
-         *         bank.rc.accounts.accounts_db.thread_pool_clean.install(|| {
-         *             banks_to_purge
-         *                 .into_par_iter()
-         *                 .for_each(|(pruned_slot, pruned_bank_id)| {
-         *                     bank.rc.accounts.accounts_db.purge_slot(
-         *                         pruned_slot,
-         *                         pruned_bank_id,
-         *                         is_serialized_with_abs,
-         *                     );
-         *                 });
-         *         });
-         */
 
         num_banks_to_purge
     }
@@ -820,6 +795,50 @@ fn cmp_requests_by_priority(
         accounts_package_kind_b,
     )
     .then(slot_a.cmp(&slot_b))
+}
+
+/// (`Vec::group_by()`](https://doc.rust-lang.org/std/vec/struct.Vec.html#method.group_by)
+/// is currently a nightly-only experimental API.  Once the API is stablized, use it instead.
+///
+/// tracking issue: https://github.com/rust-lang/rust/issues/80552
+/// implementation: https://github.com/Kerollmops/rust/blob/8b53be660444d736bb6a6e1c6ba42c8180c968e7/library/core/src/slice/iter.rs#L2972-L3023
+struct GroupBy<'a, T: 'a, P> {
+    slice: &'a [T],
+    predicate: P,
+}
+impl<'a, T: 'a, P> GroupBy<'a, T, P>
+where
+    P: FnMut(&T, &T) -> bool,
+{
+    fn new(slice: &'a [T], predicate: P) -> Self {
+        GroupBy { slice, predicate }
+    }
+}
+impl<'a, T: 'a, P> Iterator for GroupBy<'a, T, P>
+where
+    P: FnMut(&T, &T) -> bool,
+{
+    type Item = &'a [T];
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.slice.is_empty() {
+            None
+        } else {
+            let mut len = 1;
+            let mut iter = self.slice.windows(2);
+            while let Some([l, r]) = iter.next() {
+                if (self.predicate)(l, r) {
+                    len += 1
+                } else {
+                    break;
+                }
+            }
+            let (head, tail) = self.slice.split_at(len);
+            self.slice = tail;
+            Some(head)
+        }
+    }
 }
 
 #[cfg(test)]
