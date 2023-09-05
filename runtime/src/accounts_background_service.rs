@@ -1094,6 +1094,70 @@ mod test {
             .is_none());
     }
 
+    /// Ensure that we can prune banks with the same slot (if they were on different forks)
+    #[test]
+    fn test_pruned_banks_request_handler_handle_request() {
+        let (pruned_banks_sender, pruned_banks_receiver) = crossbeam_channel::unbounded();
+        let pruned_banks_request_handler = PrunedBanksRequestHandler {
+            pruned_banks_receiver,
+        };
+        let genesis_config_info = create_genesis_config(10);
+        let bank = Bank::new_for_tests(&genesis_config_info.genesis_config);
+        bank.set_startup_verification_complete();
+        bank.rc.accounts.accounts_db.enable_bank_drop_callback();
+        bank.set_callback(Some(Box::new(SendDroppedBankCallback::new(
+            pruned_banks_sender,
+        ))));
+
+        let fork0_bank0 = Arc::new(bank);
+        let fork0_bank1 = Arc::new(Bank::new_from_parent(
+            fork0_bank0.clone(),
+            &Pubkey::new_unique(),
+            fork0_bank0.slot() + 1,
+        ));
+        let fork1_bank1 = Arc::new(Bank::new_from_parent(
+            fork0_bank0.clone(),
+            &Pubkey::new_unique(),
+            fork0_bank0.slot() + 1,
+        ));
+        let fork2_bank1 = Arc::new(Bank::new_from_parent(
+            fork0_bank0.clone(),
+            &Pubkey::new_unique(),
+            fork0_bank0.slot() + 1,
+        ));
+        let fork0_bank2 = Arc::new(Bank::new_from_parent(
+            fork0_bank1.clone(),
+            &Pubkey::new_unique(),
+            fork0_bank1.slot() + 1,
+        ));
+        let fork1_bank2 = Arc::new(Bank::new_from_parent(
+            fork1_bank1.clone(),
+            &Pubkey::new_unique(),
+            fork1_bank1.slot() + 1,
+        ));
+        let fork0_bank3 = Arc::new(Bank::new_from_parent(
+            fork0_bank2.clone(),
+            &Pubkey::new_unique(),
+            fork0_bank2.slot() + 1,
+        ));
+        let fork3_bank3 = Arc::new(Bank::new_from_parent(
+            fork0_bank2.clone(),
+            &Pubkey::new_unique(),
+            fork0_bank2.slot() + 1,
+        ));
+        fork0_bank3.squash();
+
+        drop(fork3_bank3);
+        drop(fork1_bank2);
+        drop(fork0_bank2);
+        drop(fork1_bank1);
+        drop(fork2_bank1);
+        drop(fork0_bank1);
+        drop(fork0_bank0);
+        let num_banks_purged = pruned_banks_request_handler.handle_request(&fork0_bank3, true);
+        assert_eq!(num_banks_purged, 7);
+    }
+
     // This test is for our copied impl of GroupBy, above.
     // When it is removed, this test can be removed.
     #[test]
