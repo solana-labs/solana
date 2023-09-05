@@ -7416,12 +7416,8 @@ impl Bank {
             )
             .unwrap();
             let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-            if *loaded_programs_cache.program_runtime_environment_v1
-                != program_runtime_environment_v1
-            {
-                loaded_programs_cache.program_runtime_environment_v1 =
-                    Arc::new(program_runtime_environment_v1);
-            }
+            loaded_programs_cache.program_runtime_environment_v1 =
+                Arc::new(program_runtime_environment_v1);
             loaded_programs_cache.prune_feature_set_transition();
         }
         for builtin in BUILTINS.iter() {
