@@ -2,7 +2,7 @@
 
 #![cfg(feature = "program")]
 #![allow(unreachable_code)]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {
     crate::instructions::*,
