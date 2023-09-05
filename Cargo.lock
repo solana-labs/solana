@@ -6857,6 +6857,7 @@ dependencies = [
  "once_cell",
  "ouroboros",
  "percentage",
+ "qualifier_attr",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rayon",
