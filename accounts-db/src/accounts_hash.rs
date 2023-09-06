@@ -165,7 +165,12 @@ impl AccountHashesFile {
         let (_, t1) = measure_us!({
             let hash_bytes =
                 unsafe { std::slice::from_raw_parts(hashes.as_ptr() as *const u8, size) };
-            map[..size].copy_from_slice(hash_bytes);
+            //map[..size].copy_from_slice(hash_bytes);
+            for i in 0..size {
+                unsafe {
+                    *map.get_unchecked_mut(i) = *hash_bytes.get_unchecked(i);
+                }
+            }
         });
 
         let d1 = map[size - 2];
