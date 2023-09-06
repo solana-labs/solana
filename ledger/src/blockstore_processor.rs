@@ -1859,7 +1859,7 @@ pub mod tests {
                 create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
             },
         },
-        matches::assert_matches,
+        assert_matches::assert_matches,
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
         solana_program_runtime::declare_process_instruction,

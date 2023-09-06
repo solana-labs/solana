@@ -32,13 +32,13 @@ use {
         crds_value::{CrdsData, CrdsValue, CrdsValueLabel},
         legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
+    assert_matches::debug_assert_matches,
     bincode::serialize,
     indexmap::{
         map::{rayon::ParValues, Entry, IndexMap},
         set::IndexSet,
     },
     lru::LruCache,
-    matches::debug_assert_matches,
     rayon::{prelude::*, ThreadPool},
     solana_sdk::{
         clock::Slot,

@@ -465,7 +465,7 @@ mod tests {
             shred::{ProcessShredsStats, Shred, ShredFlags, LEGACY_SHRED_DATA_CAPACITY},
             shredder::{ReedSolomonCache, Shredder},
         },
-        matches::assert_matches,
+        assert_matches::assert_matches,
         rand::{seq::SliceRandom, Rng},
         rayon::ThreadPoolBuilder,
         solana_entry::entry::Entry,

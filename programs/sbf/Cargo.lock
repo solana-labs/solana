@@ -5012,6 +5012,7 @@ dependencies = [
 name = "solana-gossip"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "bincode",
  "bv",
  "clap 2.33.3",
@@ -5021,7 +5022,6 @@ dependencies = [
  "itertools",
  "log",
  "lru",
- "matches",
  "num-traits",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -5151,7 +5151,6 @@ name = "solana-merkle-tree"
 version = "1.17.0"
 dependencies = [
  "fast-math",
- "matches",
  "solana-program",
 ]
 

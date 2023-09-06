@@ -76,8 +76,8 @@ tokio = { workspace = true, features = ["full"] }
 trees = { workspace = true }
 
 [dev-dependencies]
+assert_matches = { workspace = true }
 fs_extra = { workspace = true }
-matches = { workspace = true }
 raptorq = { workspace = true }
 serde_json = { workspace = true }
 serial_test = { workspace = true }

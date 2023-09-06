@@ -1052,8 +1052,8 @@ mod test {
     use {
         super::*,
         crate::shred::{ShredFlags, ShredId, SignedData},
+        assert_matches::assert_matches,
         itertools::Itertools,
-        matches::assert_matches,
         rand::{seq::SliceRandom, CryptoRng, Rng},
         rayon::ThreadPoolBuilder,
         solana_sdk::signature::{Keypair, Signer},
