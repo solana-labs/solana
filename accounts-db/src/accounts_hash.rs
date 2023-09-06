@@ -1749,7 +1749,7 @@ pub mod tests {
         let hash = Hash::new_unique();
         let mut account_maps = Vec::new();
         let val = CalculateHashIntermediate::new(hash, 1, key);
-        account_maps.push(val.clone());
+        account_maps.push(val);
 
         let vecs = vec![account_maps.to_vec()];
         let slice = convert_to_slice(&vecs);
