@@ -3,7 +3,6 @@
 #![cfg_attr(RUSTC_NEEDS_PROC_MACRO_HYGIENE, feature(proc_macro_hygiene))]
 
 pub mod error;
-pub mod instruction;
 #[cfg(not(target_os = "solana"))]
 pub mod processor;
 pub mod state;

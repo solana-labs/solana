@@ -1,22 +1,28 @@
 use {
     crate::cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
-    solana_address_lookup_table_program::{
-        instruction::{
-            close_lookup_table, create_lookup_table, create_lookup_table_signed,
-            deactivate_lookup_table, extend_lookup_table, freeze_lookup_table,
-        },
-        state::AddressLookupTable,
-    },
+    solana_address_lookup_table_program::state::AddressLookupTable,
     solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
     solana_cli_output::{CliAddressLookupTable, CliAddressLookupTableCreated, CliSignature},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::config::RpcSendTransactionConfig,
     solana_sdk::{
-        account::from_account, address_lookup_table, clock::Clock,
-        commitment_config::CommitmentConfig, message::Message, pubkey::Pubkey, signer::Signer,
-        sysvar, transaction::Transaction,
+        account::from_account,
+        address_lookup_table::{
+            self,
+            instruction::{
+                close_lookup_table, create_lookup_table, create_lookup_table_signed,
+                deactivate_lookup_table, extend_lookup_table, freeze_lookup_table,
+            },
+        },
+        clock::Clock,
+        commitment_config::CommitmentConfig,
+        message::Message,
+        pubkey::Pubkey,
+        signer::Signer,
+        sysvar,
+        transaction::Transaction,
     },
     std::{rc::Rc, sync::Arc},
 };
