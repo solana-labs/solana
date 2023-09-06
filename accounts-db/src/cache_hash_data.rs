@@ -3,8 +3,10 @@
 use crate::pubkey_bins::PubkeyBinCalculator24;
 use {
     crate::{accounts_hash::CalculateHashIntermediate, cache_hash_data_stats::CacheHashDataStats},
+    bytemuck::{Pod, Zeroable},
     memmap2::MmapMut,
     solana_measure::measure::Measure,
+    std::io::BufWriter,
     std::{
         collections::HashSet,
         fs::{self, remove_file, File, OpenOptions},
@@ -18,6 +20,7 @@ pub type EntryType = CalculateHashIntermediate;
 pub type SavedType = Vec<Vec<EntryType>>;
 pub type SavedTypeSlice = [Vec<EntryType>];
 
+#[derive(Pod, Zeroable, Copy, Clone)]
 #[repr(C)]
 pub struct Header {
     count: usize,
@@ -301,18 +304,12 @@ impl CacheHashData {
         let file = OpenOptions::new()
             .create_new(true)
             .write(true)
-            .append(true)
-            .open(cache_path)
-            .unwrap();
-        let mut fw = std::io::BufWriter::new(file);
+            .open(cache_path)?;
+        let mut fw = BufWriter::new(file);
 
         let header = Header { count: entries };
-        let header_slice = unsafe {
-            std::slice::from_raw_parts(
-                (&header as *const Header) as *const u8,
-                std::mem::size_of::<Header>(),
-            )
-        };
+        let header_slice = bytemuck::bytes_of(&header);
+
         fw.write_all(header_slice)?;
         m1.stop();
         self.stats
@@ -328,13 +325,13 @@ impl CacheHashData {
 
         let mut m2 = Measure::start("write_to_mmap");
         let mut i = 0;
-        data.iter().for_each(|x| {
+        for x in data {
             let size = x.len() * std::mem::size_of::<EntryType>();
             let slice = unsafe { std::slice::from_raw_parts(x.as_ptr() as *const u8, size) };
-            fw.write_all(slice).unwrap();
-            i += x.len() as u64;
-        });
-        assert_eq!(i as usize, entries);
+            fw.write_all(slice)?;
+            i += x.len();
+        }
+        assert_eq!(i, entries);
         m2.stop();
         self.stats
             .write_to_mmap_us
