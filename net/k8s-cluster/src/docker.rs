@@ -198,6 +198,77 @@ WORKDIR /home/solana
     }
 
     pub async fn push_image(&self, validator_type: &str) -> Result<(), Box<dyn Error>> {
+
+        //login to docker repo
+        self.login()?;
+
+        let image = format!(
+            "{}/{}-{}:{}",
+            self.image_config.registry, validator_type, self.image_config.image_name, self.image_config.tag
+        );
+
+        let command = format!(
+            "docker push '{}'",
+            image
+        );
+        match Command::new("sh")
+            .arg("-c")
+            .arg(&command)
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("Failed to execute command")
+            .wait_with_output()
+        {
+            Ok(_) => Ok(()),
+            Err(err) => Err(Box::new(err)),
+        }
+
+        // let username = match &self.registry_username {
+        //     Some(username) => username,
+        //     None => {
+        //         return Err(boxed_error!(
+        //             "No username set for registry! Is REGISTRY_USERNAME set?"
+        //         ))
+        //     }
+        // };
+        // let password = match &self.registry_password {
+        //     Some(password) => password,
+        //     None => {
+        //         return Err(boxed_error!(
+        //             "No password set for registry! Is REGISTRY_PASSWORD set?"
+        //         ))
+        //     }
+        // };
+
+        // // self.docker
+        // let image = format!(
+        //     "{}/{}-{}:{}",
+        //     self.image_config.registry, validator_type, self.image_config.image_name, self.image_config.tag
+        // );
+        // let auth = opts::RegistryAuth::Password {
+        //     username: password.to_string(),
+        //     password: username.to_string(),
+        //     email: None,
+        //     server_address: None,
+        // };
+
+        // let options = opts::ImagePushOpts::builder()
+        //     .tag(self.image_config.tag)
+        //     .auth(auth)
+        //     .build();
+        // let progress_bar = new_spinner_progress_bar();
+        // progress_bar.set_message(format!("{DOCKER_WHALE}Pushing image {} to registry", image));
+
+        // match self.docker.images().push(image, &options).await {
+        //     Ok(res) => Ok(res),
+        //     Err(err) => Err(boxed_error!(format!("{}", err))),
+        // }
+    }
+
+    fn login(
+        &self,
+    ) -> Result<(), Box<dyn Error>> {
         let username = match &self.registry_username {
             Some(username) => username,
             None => {
@@ -215,28 +286,21 @@ WORKDIR /home/solana
             }
         };
 
-        // self.docker
-        let image = format!(
-            "{}/{}-{}:{}",
-            self.image_config.registry, validator_type, self.image_config.image_name, self.image_config.tag
+        let command = format!(
+            "echo '{}' | docker login -u '{}' --password-stdin",
+            password, username
         );
-        let auth = opts::RegistryAuth::Password {
-            username: password.to_string(),
-            password: username.to_string(),
-            email: None,
-            server_address: None,
-        };
-
-        let options = opts::ImagePushOpts::builder()
-            .tag(self.image_config.tag)
-            .auth(auth)
-            .build();
-        let progress_bar = new_spinner_progress_bar();
-        progress_bar.set_message(format!("{DOCKER_WHALE}Pushing image {} to registry", image));
-
-        match self.docker.images().push(image, &options).await {
-            Ok(res) => Ok(res),
-            Err(err) => Err(boxed_error!(format!("{}", err))),
+        match Command::new("sh")
+            .arg("-c")
+            .arg(&command)
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("Failed to execute command")
+            .wait_with_output()
+        {
+            Ok(_) => Ok(()),
+            Err(err) => Err(Box::new(err)),
         }
     }
 }
