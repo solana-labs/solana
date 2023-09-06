@@ -162,24 +162,31 @@ impl AccountHashesFile {
             std::process::exit(1);
         });
 
-        // let hash_bytes = unsafe { std::slice::from_raw_parts(hashes.as_ptr() as *const u8, size) };
-        // map[..size].copy_from_slice(hash_bytes);
+        let (_, t1) = measure_us!({
+            let hash_bytes =
+                unsafe { std::slice::from_raw_parts(hashes.as_ptr() as *const u8, size) };
+            map[..size].copy_from_slice(hash_bytes);
+        });
 
-        let mut i = 0;
-        for h in hashes {
-            let start = i * std::mem::size_of::<Hash>();
-            let end = start + std::mem::size_of::<Hash>();
+        let (_, t2) = measure_us!({
+            let mut i = 0;
+            for h in hashes {
+                let start = i * std::mem::size_of::<Hash>();
+                let end = start + std::mem::size_of::<Hash>();
 
-            let slice = &map[start..end];
+                let slice = &map[start..end];
 
-            let p = unsafe {
-                let item = slice.as_ptr() as *mut Hash;
-                &mut *item
-            };
+                let p = unsafe {
+                    let item = slice.as_ptr() as *mut Hash;
+                    &mut *item
+                };
 
-            *p = h.clone();
-            i += 1;
-        }
+                *p = h.clone();
+                i += 1;
+            }
+        });
+
+        info!("haha batch: {} {}", t1, t2);
 
         error!(
             "mmap_size={}, data_size={}, hash_num={}",
