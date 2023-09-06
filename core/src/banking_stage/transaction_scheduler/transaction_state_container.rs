@@ -15,7 +15,7 @@ use {
 /// Transaction Lifetime:
 /// 1. Received from `SigVerify` by `BankingStage`
 /// 2. Inserted into `TransactionStateContainer` by `BankingStage`
-/// 3. Popped in priority-order by scheduler, and trnsitioned to `Pending` state
+/// 3. Popped in priority-order by scheduler, and transitioned to `Pending` state
 /// 4. Processed by `ConsumeWorker`
 ///   a. If consumed, remove `Pending` state from the `TransactionStateContainer`
 ///   b. If retryable, transition back to `Unprocessed` state.
