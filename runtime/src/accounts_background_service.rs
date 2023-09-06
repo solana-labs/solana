@@ -3,6 +3,8 @@
 //! This can be expensive since we have to walk the append vecs being cleaned up.
 
 mod stats;
+#[cfg(feature = "dev-context-only-utils")]
+use qualifier_attr::qualifiers;
 use {
     crate::{
         bank::{Bank, BankSlotDelta, DropCallback},
@@ -501,7 +503,8 @@ pub struct PrunedBanksRequestHandler {
 }
 
 impl PrunedBanksRequestHandler {
-    pub fn handle_request(&self, bank: &Bank) -> usize {
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    fn handle_request(&self, bank: &Bank) -> usize {
         let mut banks_to_purge: Vec<_> = self.pruned_banks_receiver.try_iter().collect();
         // We need a stable sort to ensure we purge banks—with the same slot—in the same order
         // they were sent into the channel.

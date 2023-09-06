@@ -5548,6 +5548,7 @@ dependencies = [
  "num_enum 0.6.1",
  "ouroboros",
  "percentage",
+ "qualifier_attr",
  "rand 0.8.5",
  "rayon",
  "regex",
