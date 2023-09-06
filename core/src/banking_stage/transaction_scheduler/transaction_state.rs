@@ -75,6 +75,22 @@ impl TransactionState {
         self.transaction_priority_details().priority
     }
 
+    /// Returns whether or not the transaction has already been forwarded.
+    pub(crate) fn forwarded(&self) -> bool {
+        match self {
+            Self::Unprocessed { forwarded, .. } => *forwarded,
+            Self::Pending { forwarded, .. } => *forwarded,
+        }
+    }
+
+    /// Sets the transaction as forwarded.
+    pub(crate) fn set_forwarded(&self) {
+        match self {
+            Self::Unprocessed { forwarded, .. } => *forwarded = true,
+            Self::Pending { forwarded, .. } => *forwarded = true,
+        }
+    }
+
     /// Intended to be called when a transaction is scheduled. This method will
     /// transition the transaction from `Unprocessed` to `Pending` and return the
     /// `SanitizedTransactionTTL` for processing.
