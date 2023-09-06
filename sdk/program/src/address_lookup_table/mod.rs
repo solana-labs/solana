@@ -2,6 +2,7 @@
 //!
 //! [np]: https://docs.solana.com/developing/runtime-facilities/programs#address-lookup-table-program
 
+pub mod error;
 pub mod instruction;
 
 pub mod program {

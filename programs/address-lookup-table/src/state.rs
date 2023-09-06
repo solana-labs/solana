@@ -1,8 +1,8 @@
 use {
-    crate::error::AddressLookupError,
     serde::{Deserialize, Serialize},
     solana_frozen_abi_macro::{AbiEnumVisitor, AbiExample},
     solana_program::{
+        address_lookup_table::error::AddressLookupError,
         clock::Slot,
         instruction::InstructionError,
         pubkey::Pubkey,
