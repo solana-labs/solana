@@ -512,6 +512,18 @@ impl PrunedBanksRequestHandler {
         let grouped_banks_to_purge: Vec<_> =
             GroupBy::new(banks_to_purge.as_slice(), |a, b| a.0 == b.0).collect();
 
+        // Log whenever we need to handle banks with the same slot.  Purposely do this *before* we
+        // call `purge_slot()` to ensure we get the datapoint (in case there's an assert/panic).
+        let num_banks_with_same_slot =
+            num_banks_to_purge.saturating_sub(grouped_banks_to_purge.len());
+        if num_banks_with_same_slot > 0 {
+            datapoint_info!(
+                "pruned_banks_request_handler",
+                ("num_pruned_banks", num_banks_to_purge, i64),
+                ("num_banks_with_same_slot", num_banks_with_same_slot, i64),
+            );
+        }
+
         // Purge all the slots in parallel
         // Banks for the same slot are purged sequentially
         let accounts_db = bank.rc.accounts.accounts_db.as_ref();
