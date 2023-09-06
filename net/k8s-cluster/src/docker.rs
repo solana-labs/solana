@@ -1,20 +1,15 @@
 use {
     crate::{
-        boxed_error, initialize_globals, load_env_variable_by_name, new_spinner_progress_bar,
-        DOCKER_WHALE, SOLANA_ROOT,
+        boxed_error, initialize_globals, load_env_variable_by_name, SOLANA_ROOT,
     },
-    docker_api::{self, opts, Docker},
     log::*,
     std::{
-        env,
         error::Error,
         fs,
         path::PathBuf,
         process::{Command, Output, Stdio},
     },
 };
-
-const URI_ENV_VAR: &str = "unix:///var/run/docker.sock";
 
 #[derive(Clone, Debug)]
 pub struct DockerImageConfig<'a> {
@@ -27,38 +22,6 @@ pub struct DockerImageConfig<'a> {
 pub struct DockerConfig<'a> {
     image_config: DockerImageConfig<'a>,
     deploy_method: &'a str,
-    docker: Docker,
-    registry_username: Option<String>,
-    registry_password: Option<String>,
-}
-
-fn init_runtime() -> Docker {
-    let _ = env_logger::try_init();
-    if let Ok(uri) = env::var(URI_ENV_VAR) {
-        Docker::new(uri).unwrap()
-    } else {
-        #[cfg(unix)]
-        {
-            let uid = nix::unistd::Uid::effective();
-            let docker_dir = PathBuf::from(format!("/run/user/{uid}/docker"));
-            let docker_root_dir = PathBuf::from("/var/run");
-            if docker_dir.exists() {
-                Docker::unix(docker_dir.join("docker.sock"))
-            } else if docker_root_dir.exists() {
-                Docker::unix(docker_root_dir.join("docker.sock"))
-            } else {
-                panic!(
-                    "Docker socket not found. Tried {URI_ENV_VAR} env variable, {} and {}",
-                    docker_dir.display(),
-                    docker_root_dir.display()
-                );
-            }
-        }
-        #[cfg(not(unix))]
-        {
-            panic!("Docker socket not found. Try setting the {URI_ENV_VAR} env variable",);
-        }
-    }
 }
 
 impl<'a> DockerConfig<'a> {
@@ -67,23 +30,7 @@ impl<'a> DockerConfig<'a> {
         DockerConfig {
             image_config,
             deploy_method,
-            docker: init_runtime(),
-            registry_username: match load_env_variable_by_name("REGISTRY_USERNAME") {
-                Ok(username) => Some(username),
-                Err(_) => None,
-            },
-            registry_password: match load_env_variable_by_name("REGISTRY_PASSWORD") {
-                Ok(password) => Some(password),
-                Err(_) => None,
-            },
         }
-    }
-
-    pub fn registry_credentials_set(&self) -> bool {
-        if self.registry_username.is_none() || self.registry_username.is_none() {
-            return false;
-        }
-        true
     }
 
     pub async fn build_image(&self, validator_type: &str) -> Result<(), Box<dyn Error>> {
@@ -198,10 +145,6 @@ WORKDIR /home/solana
     }
 
     pub async fn push_image(&self, validator_type: &str) -> Result<(), Box<dyn Error>> {
-
-        //login to docker repo
-        self.login()?;
-
         let image = format!(
             "{}/{}-{}:{}",
             self.image_config.registry, validator_type, self.image_config.image_name, self.image_config.tag
@@ -211,7 +154,7 @@ WORKDIR /home/solana
             "docker push '{}'",
             image
         );
-        match Command::new("sh")
+        let output = Command::new("sh")
             .arg("-c")
             .arg(&command)
             .stdout(Stdio::inherit())
@@ -219,90 +162,14 @@ WORKDIR /home/solana
             .spawn()
             .expect("Failed to execute command")
             .wait_with_output()
-        {
-            Ok(_) => Ok(()),
-            Err(err) => Err(Box::new(err)),
+            .expect("Failed to push image");
+
+        if !output.status.success() {
+            return Err(boxed_error!(output.status.to_string()));
         }
-
-        // let username = match &self.registry_username {
-        //     Some(username) => username,
-        //     None => {
-        //         return Err(boxed_error!(
-        //             "No username set for registry! Is REGISTRY_USERNAME set?"
-        //         ))
-        //     }
-        // };
-        // let password = match &self.registry_password {
-        //     Some(password) => password,
-        //     None => {
-        //         return Err(boxed_error!(
-        //             "No password set for registry! Is REGISTRY_PASSWORD set?"
-        //         ))
-        //     }
-        // };
-
-        // // self.docker
-        // let image = format!(
-        //     "{}/{}-{}:{}",
-        //     self.image_config.registry, validator_type, self.image_config.image_name, self.image_config.tag
-        // );
-        // let auth = opts::RegistryAuth::Password {
-        //     username: password.to_string(),
-        //     password: username.to_string(),
-        //     email: None,
-        //     server_address: None,
-        // };
-
-        // let options = opts::ImagePushOpts::builder()
-        //     .tag(self.image_config.tag)
-        //     .auth(auth)
-        //     .build();
-        // let progress_bar = new_spinner_progress_bar();
-        // progress_bar.set_message(format!("{DOCKER_WHALE}Pushing image {} to registry", image));
-
-        // match self.docker.images().push(image, &options).await {
-        //     Ok(res) => Ok(res),
-        //     Err(err) => Err(boxed_error!(format!("{}", err))),
-        // }
+        Ok(())
     }
 
-    fn login(
-        &self,
-    ) -> Result<(), Box<dyn Error>> {
-        let username = match &self.registry_username {
-            Some(username) => username,
-            None => {
-                return Err(boxed_error!(
-                    "No username set for registry! Is REGISTRY_USERNAME set?"
-                ))
-            }
-        };
-        let password = match &self.registry_password {
-            Some(password) => password,
-            None => {
-                return Err(boxed_error!(
-                    "No password set for registry! Is REGISTRY_PASSWORD set?"
-                ))
-            }
-        };
-
-        let command = format!(
-            "echo '{}' | docker login -u '{}' --password-stdin",
-            password, username
-        );
-        match Command::new("sh")
-            .arg("-c")
-            .arg(&command)
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .expect("Failed to execute command")
-            .wait_with_output()
-        {
-            Ok(_) => Ok(()),
-            Err(err) => Err(Box::new(err)),
-        }
-    }
 }
 
 // RUN apt install -y iputils-ping curl vim bzip2 psmisc \
