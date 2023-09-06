@@ -4631,7 +4631,7 @@ pub mod tests {
         jsonrpc_core_client::transports::local,
         serde::de::DeserializeOwned,
         solana_accounts_db::{inline_spl_token, inline_spl_token_2022},
-        solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
+        solana_address_lookup_table_program::state::AddressLookupTable,
         solana_entry::entry::next_versioned_entry,
         solana_gossip::socketaddr,
         solana_ledger::{
@@ -4653,7 +4653,7 @@ pub mod tests {
         },
         solana_sdk::{
             account::{Account, WritableAccount},
-            address_lookup_table,
+            address_lookup_table::{self, state::LookupTableMeta},
             clock::MAX_RECENT_BLOCKHASHES,
             compute_budget::ComputeBudgetInstruction,
             fee_calculator::{FeeRateGovernor, DEFAULT_BURN_PERCENT},

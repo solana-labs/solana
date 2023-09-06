@@ -1476,12 +1476,12 @@ mod tests {
             transaction_results::{DurableNonceFee, TransactionExecutionDetails},
         },
         assert_matches::assert_matches,
-        solana_address_lookup_table_program::state::LookupTableMeta,
         solana_program_runtime::prioritization_fee::{
             PrioritizationFeeDetails, PrioritizationFeeType,
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
+            address_lookup_table::state::LookupTableMeta,
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::EpochSchedule,
             genesis_config::ClusterType,

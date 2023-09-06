@@ -4,6 +4,7 @@
 
 pub mod error;
 pub mod instruction;
+pub mod state;
 
 pub mod program {
     crate::declare_id!("AddressLookupTab1e1111111111111111111111111");
