@@ -162,9 +162,24 @@ impl AccountHashesFile {
             std::process::exit(1);
         });
 
-        let hash_bytes = unsafe { std::slice::from_raw_parts(hashes.as_ptr() as *const u8, size) };
+        // let hash_bytes = unsafe { std::slice::from_raw_parts(hashes.as_ptr() as *const u8, size) };
+        // map[..size].copy_from_slice(hash_bytes);
 
-        map[..size].copy_from_slice(hash_bytes);
+        let mut i = 0;
+        for h in hashes {
+            let start = i * std::mem::size_of::<Hash>();
+            let end = start + std::mem::size_of::<Hash>();
+
+            let slice = &map[start..end];
+
+            let p = unsafe {
+                let item = slice.as_ptr() as *mut Hash;
+                &mut *item
+            };
+
+            *p = h.clone();
+            i += 1;
+        }
 
         error!(
             "mmap_size={}, data_size={}, hash_num={}",
