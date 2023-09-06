@@ -20,10 +20,10 @@ const MAX_HEAP_FRAME_BYTES: usize = 256 * 1024;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransactionMeta {
     pub updated_heap_bytes: usize,
-    pub compute_unit_limit: u64,
+    pub compute_unit_limit: u32,
     pub compute_unit_price: u64,
     pub accounts_loaded_bytes: usize,
-    // NOTE - 
+    // NOTE -
     // is_simple_vote can be consolidated into Meta here.
     //
     // other potential compute_budget ix or TLV ix related data here:
@@ -35,9 +35,18 @@ pub struct TransactionMeta {
     //    pub cost_basis: something of cost_model,
 }
 
-impl TransactionMeta {
-    // TODO - impl default with default const?
+impl Default for TransactionMeta {
+    fn default() -> Self {
+        TransactionMeta {
+            updated_heap_bytes: MIN_HEAP_FRAME_BYTES,
+            compute_unit_limit: MAX_COMPUTE_UNIT_LIMIT,
+            compute_unit_price: 0,
+            accounts_loaded_bytes: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
+        }
+    }
+}
 
+impl TransactionMeta {
     // Processing compute_budget could be part of tx sanitizing, failed to process
     // these instructions will drop the transaction eventually without execution,
     // may as well fail it early.
@@ -124,17 +133,15 @@ impl TransactionMeta {
 
         // sanitize limits
         let updated_heap_bytes = updated_heap_size
-            .unwrap_or(solana_sdk::entrypoint::HEAP_LENGTH) // loader's default heap_size
+            .unwrap_or(MIN_HEAP_FRAME_BYTES) // loader's default heap_size
             .min(MAX_HEAP_FRAME_BYTES);
 
-        let compute_unit_limit = u64::from(
-            updated_compute_unit_limit
-                .unwrap_or_else(|| {
-                    num_non_compute_budget_instructions
-                        .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT)
-                })
-                .min(MAX_COMPUTE_UNIT_LIMIT),
-        );
+        let compute_unit_limit = updated_compute_unit_limit
+            .unwrap_or_else(|| {
+                num_non_compute_budget_instructions
+                    .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT)
+            })
+            .min(MAX_COMPUTE_UNIT_LIMIT);
 
         let compute_unit_price = updated_compute_unit_price.unwrap_or(0).min(u64::MAX);
 

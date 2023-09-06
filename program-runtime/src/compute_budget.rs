@@ -188,7 +188,7 @@ impl ComputeBudget {
 
     // TODO - this function can be obsolete, ComputeBudget can be constructored from
     // sanitized_transaction.get_meta()
-    // eg: 
+    // eg:
     // 1. instruction validation would be part of transaction sanitization, Error during sanitizing
     // 2. IXs are processed separately to get values
     // 3. use values to funish CB object when needed
@@ -208,7 +208,7 @@ impl ComputeBudget {
 
         // TODO - heap_size doesn't have to be Option<>, it has its default value anyway.
         self.heap_size = Some(transaction_meta.updated_heap_bytes);
-        self.compute_unit_limit = transaction_meta.compute_unit_limit;
+        self.compute_unit_limit = u64::from(transaction_meta.compute_unit_limit);
         self.loaded_accounts_data_size_limit = transaction_meta.accounts_loaded_bytes;
         Ok(PrioritizationFeeDetails::new(
             PrioritizationFeeType::ComputeUnitPrice(transaction_meta.compute_unit_price),
@@ -223,8 +223,6 @@ impl ComputeBudget {
         feature_set: &FeatureSet,
         maybe_cluster_type: Option<ClusterType>,
     ) -> FeeBudgetLimits {
-        let mut compute_budget = Self::default();
-
         // A cluster specific feature gate, when not activated it keeps v1.13 behavior in mainnet-beta;
         // once activated for v1.14+, it allows compute_budget::request_heap_frame and
         // compute_budget::set_compute_unit_price co-exist in same transaction.
@@ -233,20 +231,20 @@ impl ComputeBudget {
             || maybe_cluster_type
                 .and_then(|cluster_type| (cluster_type != ClusterType::MainnetBeta).then_some(0))
                 .is_some();
-        let prioritization_fee_details = compute_budget
-            .process_instructions(
-                instructions,
-                !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-                enable_request_heap_frame_ix,
-                feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-            )
-            .unwrap_or_default();
+
+        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
+            instructions,
+            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+            enable_request_heap_frame_ix,
+            feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+        )
+        .unwrap_or_default();
 
         FeeBudgetLimits {
-            loaded_accounts_data_size_limit: compute_budget.loaded_accounts_data_size_limit,
-            heap_cost: compute_budget.heap_cost,
-            compute_unit_limit: compute_budget.compute_unit_limit,
-            prioritization_fee: prioritization_fee_details.get_fee(),
+            loaded_accounts_data_size_limit: transaction_meta.accounts_loaded_bytes,
+            heap_cost: ComputeBudget::default().heap_cost,
+            compute_unit_limit: u64::from(transaction_meta.compute_unit_limit),
+            prioritization_fee: transaction_meta.compute_unit_price,
         }
     }
 
