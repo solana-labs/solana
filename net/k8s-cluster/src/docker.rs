@@ -1,5 +1,8 @@
 use {
-    crate::{boxed_error, initialize_globals, SOLANA_ROOT},
+    crate::{
+        boxed_error, initialize_globals, load_env_variable_by_name, new_spinner_progress_bar,
+        DOCKER_WHALE, SOLANA_ROOT,
+    },
     docker_api::{self, opts, Docker},
     log::*,
     std::{
@@ -16,12 +19,46 @@ const URI_ENV_VAR: &str = "unix:///var/run/docker.sock";
 #[derive(Clone, Debug)]
 pub struct DockerImageConfig<'a> {
     pub base_image: &'a str,
+    pub image_name: &'a str,
     pub tag: &'a str,
+    pub registry: &'a str,
 }
 
 pub struct DockerConfig<'a> {
     image_config: DockerImageConfig<'a>,
     deploy_method: &'a str,
+    docker: Docker,
+    registry_username: Option<String>,
+    registry_password: Option<String>,
+}
+
+fn init_runtime() -> Docker {
+    let _ = env_logger::try_init();
+    if let Ok(uri) = env::var(URI_ENV_VAR) {
+        Docker::new(uri).unwrap()
+    } else {
+        #[cfg(unix)]
+        {
+            let uid = nix::unistd::Uid::effective();
+            let docker_dir = PathBuf::from(format!("/run/user/{uid}/docker"));
+            let docker_root_dir = PathBuf::from("/var/run");
+            if docker_dir.exists() {
+                Docker::unix(docker_dir.join("docker.sock"))
+            } else if docker_root_dir.exists() {
+                Docker::unix(docker_root_dir.join("docker.sock"))
+            } else {
+                panic!(
+                    "Docker socket not found. Tried {URI_ENV_VAR} env variable, {} and {}",
+                    docker_dir.display(),
+                    docker_root_dir.display()
+                );
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            panic!("Docker socket not found. Try setting the {URI_ENV_VAR} env variable",);
+        }
+    }
 }
 
 impl<'a> DockerConfig<'a> {
@@ -30,41 +67,27 @@ impl<'a> DockerConfig<'a> {
         DockerConfig {
             image_config,
             deploy_method,
+            docker: init_runtime(),
+            registry_username: match load_env_variable_by_name("REGISTRY_USERNAME") {
+                Ok(username) => Some(username),
+                Err(_) => None,
+            },
+            registry_password: match load_env_variable_by_name("REGISTRY_PASSWORD") {
+                Ok(password) => Some(password),
+                Err(_) => None,
+            },
         }
     }
 
-    pub fn init_runtime(&self) -> Docker {
-        let _ = env_logger::try_init();
-        if let Ok(uri) = env::var(URI_ENV_VAR) {
-            Docker::new(uri).unwrap()
-        } else {
-            #[cfg(unix)]
-            {
-                let uid = nix::unistd::Uid::effective();
-                let docker_dir = PathBuf::from(format!("/run/user/{uid}/docker"));
-                let docker_root_dir = PathBuf::from("/var/run");
-                if docker_dir.exists() {
-                    Docker::unix(docker_dir.join("docker.sock"))
-                } else if docker_root_dir.exists() {
-                    Docker::unix(docker_root_dir.join("docker.sock"))
-                } else {
-                    panic!(
-                        "Docker socket not found. Tried {URI_ENV_VAR} env variable, {} and {}",
-                        docker_dir.display(),
-                        docker_root_dir.display()
-                    );
-                }
-            }
-            #[cfg(not(unix))]
-            {
-                panic!("Docker socket not found. Try setting the {URI_ENV_VAR} env variable",);
-            }
+    pub fn registry_credentials_set(&self) -> bool {
+        if self.registry_username.is_none() || self.registry_username.is_none() {
+            return false;
         }
+        true
     }
 
     pub async fn build_image(&self, validator_type: &str) -> Result<(), Box<dyn Error>> {
-        let docker = self.init_runtime();
-        match self.create_base_image(&docker, validator_type).await {
+        match self.create_base_image(validator_type).await {
             Ok(res) => {
                 if res.status.success() {
                     info!("Successfully created base Image");
@@ -78,24 +101,8 @@ impl<'a> DockerConfig<'a> {
         };
     }
 
-    pub async fn create_base_image(
-        &self,
-        docker: &Docker,
-        validator_type: &str,
-    ) -> Result<Output, Box<dyn Error>> {
-        let tag = format!("{}-{}", validator_type, self.image_config.tag);
-
-        let images = docker.images();
-        let _ = images
-            .get(tag.as_str())
-            .remove(
-                &opts::ImageRemoveOpts::builder()
-                    .force(true)
-                    .noprune(true)
-                    .build(),
-            )
-            .await;
-
+    pub async fn create_base_image(&self, validator_type: &str) -> Result<Output, Box<dyn Error>> {
+        let image_name = format!("{}-{}", validator_type, self.image_config.image_name);
         let docker_path = SOLANA_ROOT.join(format!("{}/{}", "docker-build", validator_type));
 
         let dockerfile_path = match self.create_dockerfile(validator_type, docker_path, None) {
@@ -112,8 +119,8 @@ impl<'a> DockerConfig<'a> {
         let dockerfile = dockerfile_path.join("Dockerfile");
         let context_path = SOLANA_ROOT.display().to_string();
         let command = format!(
-            "docker build -t {}/{} -f {:?} {}",
-            "gregcusack", tag, dockerfile, context_path
+            "docker build -t {}/{}:{} -f {:?} {}",
+            self.image_config.registry, image_name, self.image_config.tag, dockerfile, context_path
         );
         match Command::new("sh")
             .arg("-c")
@@ -188,6 +195,49 @@ WORKDIR /home/solana
         )
         .expect("saved Dockerfile");
         Ok(docker_path)
+    }
+
+    pub async fn push_image(&self, validator_type: &str) -> Result<(), Box<dyn Error>> {
+        let username = match &self.registry_username {
+            Some(username) => username,
+            None => {
+                return Err(boxed_error!(
+                    "No username set for registry! Is REGISTRY_USERNAME set?"
+                ))
+            }
+        };
+        let password = match &self.registry_password {
+            Some(password) => password,
+            None => {
+                return Err(boxed_error!(
+                    "No password set for registry! Is REGISTRY_PASSWORD set?"
+                ))
+            }
+        };
+
+        // self.docker
+        let image = format!(
+            "{}/{}-{}",
+            self.image_config.registry, validator_type, self.image_config.image_name
+        );
+        let auth = opts::RegistryAuth::Password {
+            username: password.to_string(),
+            password: username.to_string(),
+            email: None,
+            server_address: None,
+        };
+
+        let options = opts::ImagePushOpts::builder()
+            .tag(self.image_config.tag)
+            .auth(auth)
+            .build();
+        let progress_bar = new_spinner_progress_bar();
+        progress_bar.set_message(format!("{DOCKER_WHALE}Pushing image {} to registry", image));
+
+        match self.docker.images().push(image, &options).await {
+            Ok(res) => Ok(res),
+            Err(err) => Err(boxed_error!(format!("{}", err))),
+        }
     }
 }
 

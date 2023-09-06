@@ -1,5 +1,8 @@
 # Run this thing
 ```
+export REGISTRY_USERNAME=<docker-registry-username> REGISTRY_PASSWORD=<docker-registry-password>
+```
+```
 kubectl create ns greg
 ```
 ```
