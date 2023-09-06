@@ -4457,7 +4457,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "solana-address-lookup-table-program",
  "solana-config-program",
  "solana-sdk",
  "spl-token",
@@ -4506,7 +4505,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "siphasher",
- "solana-address-lookup-table-program",
  "solana-bpf-loader-program",
  "solana-bucket-map",
  "solana-compute-budget-program",
@@ -4809,7 +4807,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-accounts-db",
- "solana-address-lookup-table-program",
  "solana-bloom",
  "solana-client",
  "solana-cost-model",
@@ -5682,7 +5679,6 @@ name = "solana-sbf-rust-dep-crate"
 version = "1.17.0"
 dependencies = [
  "byteorder 1.4.3",
- "solana-address-lookup-table-program",
  "solana-program",
 ]
 
@@ -6253,7 +6249,6 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account-decoder",
- "solana-address-lookup-table-program",
  "solana-sdk",
  "spl-associated-token-account",
  "spl-memo",
