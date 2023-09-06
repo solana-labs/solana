@@ -196,29 +196,32 @@ impl CacheHashDataFile {
     }
 }
 
-pub type PreExistingCacheFiles = HashSet<PathBuf>;
 pub struct CacheHashData {
     cache_dir: PathBuf,
-    pre_existing_cache_files: Arc<Mutex<PreExistingCacheFiles>>,
+    pre_existing_cache_files: Arc<Mutex<HashSet<PathBuf>>>,
+    should_delete_old_cache_files_on_drop: bool,
     pub stats: Arc<CacheHashDataStats>,
 }
 
 impl Drop for CacheHashData {
     fn drop(&mut self) {
-        self.delete_old_cache_files();
+        if self.should_delete_old_cache_files_on_drop {
+            self.delete_old_cache_files();
+        }
         self.stats.report();
     }
 }
 
 impl CacheHashData {
-    pub fn new(cache_dir: PathBuf) -> CacheHashData {
+    pub fn new(cache_dir: PathBuf, should_delete_old_cache_files_on_drop: bool) -> CacheHashData {
         std::fs::create_dir_all(&cache_dir).unwrap_or_else(|err| {
             panic!("error creating cache dir {}: {err}", cache_dir.display())
         });
 
         let result = CacheHashData {
             cache_dir,
-            pre_existing_cache_files: Arc::new(Mutex::new(PreExistingCacheFiles::default())),
+            pre_existing_cache_files: Arc::new(Mutex::new(HashSet::default())),
+            should_delete_old_cache_files_on_drop,
             stats: Arc::default(),
         };
 
@@ -281,7 +284,7 @@ impl CacheHashData {
         })
     }
 
-    pub(crate) fn pre_existing_cache_file_will_be_used(&self, file_name: impl AsRef<Path>) {
+    fn pre_existing_cache_file_will_be_used(&self, file_name: impl AsRef<Path>) {
         self.pre_existing_cache_files
             .lock()
             .unwrap()
@@ -424,7 +427,7 @@ mod tests {
                                 data_this_pass.push(this_bin_data);
                             }
                         }
-                        let cache = CacheHashData::new(cache_dir.clone());
+                        let cache = CacheHashData::new(cache_dir.clone(), true);
                         let file_name = PathBuf::from("test");
                         cache.save(&file_name, &data_this_pass).unwrap();
                         cache.get_cache_files();
