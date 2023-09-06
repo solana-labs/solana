@@ -1,9 +1,9 @@
 use {
-    crate::{boxed_error, initialize_globals, SOLANA_ROOT},
-    docker_api::{self, opts, Docker},
+    crate::{
+        boxed_error, initialize_globals, load_env_variable_by_name, SOLANA_ROOT,
+    },
     log::*,
     std::{
-        env,
         error::Error,
         fs,
         path::PathBuf,
@@ -11,12 +11,12 @@ use {
     },
 };
 
-const URI_ENV_VAR: &str = "unix:///var/run/docker.sock";
-
 #[derive(Clone, Debug)]
 pub struct DockerImageConfig<'a> {
     pub base_image: &'a str,
+    pub image_name: &'a str,
     pub tag: &'a str,
+    pub registry: &'a str,
 }
 
 pub struct DockerConfig<'a> {
@@ -33,38 +33,8 @@ impl<'a> DockerConfig<'a> {
         }
     }
 
-    pub fn init_runtime(&self) -> Docker {
-        let _ = env_logger::try_init();
-        if let Ok(uri) = env::var(URI_ENV_VAR) {
-            Docker::new(uri).unwrap()
-        } else {
-            #[cfg(unix)]
-            {
-                let uid = nix::unistd::Uid::effective();
-                let docker_dir = PathBuf::from(format!("/run/user/{uid}/docker"));
-                let docker_root_dir = PathBuf::from("/var/run");
-                if docker_dir.exists() {
-                    Docker::unix(docker_dir.join("docker.sock"))
-                } else if docker_root_dir.exists() {
-                    Docker::unix(docker_root_dir.join("docker.sock"))
-                } else {
-                    panic!(
-                        "Docker socket not found. Tried {URI_ENV_VAR} env variable, {} and {}",
-                        docker_dir.display(),
-                        docker_root_dir.display()
-                    );
-                }
-            }
-            #[cfg(not(unix))]
-            {
-                panic!("Docker socket not found. Try setting the {URI_ENV_VAR} env variable",);
-            }
-        }
-    }
-
     pub async fn build_image(&self, validator_type: &str) -> Result<(), Box<dyn Error>> {
-        let docker = self.init_runtime();
-        match self.create_base_image(&docker, validator_type).await {
+        match self.create_base_image(validator_type).await {
             Ok(res) => {
                 if res.status.success() {
                     info!("Successfully created base Image");
@@ -78,24 +48,8 @@ impl<'a> DockerConfig<'a> {
         };
     }
 
-    pub async fn create_base_image(
-        &self,
-        docker: &Docker,
-        validator_type: &str,
-    ) -> Result<Output, Box<dyn Error>> {
-        let tag = format!("{}-{}", validator_type, self.image_config.tag);
-
-        let images = docker.images();
-        let _ = images
-            .get(tag.as_str())
-            .remove(
-                &opts::ImageRemoveOpts::builder()
-                    .force(true)
-                    .noprune(true)
-                    .build(),
-            )
-            .await;
-
+    pub async fn create_base_image(&self, validator_type: &str) -> Result<Output, Box<dyn Error>> {
+        let image_name = format!("{}-{}", validator_type, self.image_config.image_name);
         let docker_path = SOLANA_ROOT.join(format!("{}/{}", "docker-build", validator_type));
 
         let dockerfile_path = match self.create_dockerfile(validator_type, docker_path, None) {
@@ -112,8 +66,8 @@ impl<'a> DockerConfig<'a> {
         let dockerfile = dockerfile_path.join("Dockerfile");
         let context_path = SOLANA_ROOT.display().to_string();
         let command = format!(
-            "docker build -t {} -f {:?} {}",
-            tag, dockerfile, context_path
+            "docker build -t {}/{}:{} -f {:?} {}",
+            self.image_config.registry, image_name, self.image_config.tag, dockerfile, context_path
         );
         match Command::new("sh")
             .arg("-c")
@@ -189,6 +143,33 @@ WORKDIR /home/solana
         .expect("saved Dockerfile");
         Ok(docker_path)
     }
+
+    pub async fn push_image(&self, validator_type: &str) -> Result<(), Box<dyn Error>> {
+        let image = format!(
+            "{}/{}-{}:{}",
+            self.image_config.registry, validator_type, self.image_config.image_name, self.image_config.tag
+        );
+
+        let command = format!(
+            "docker push '{}'",
+            image
+        );
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(&command)
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("Failed to execute command")
+            .wait_with_output()
+            .expect("Failed to push image");
+
+        if !output.status.success() {
+            return Err(boxed_error!(output.status.to_string()));
+        }
+        Ok(())
+    }
+
 }
 
 // RUN apt install -y iputils-ping curl vim bzip2 psmisc \

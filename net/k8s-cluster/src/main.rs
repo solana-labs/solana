@@ -1,31 +1,16 @@
 use {
-    clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches, value_t},
-    k8s_openapi::{
-        api::{
-            apps::v1::{Deployment, DeploymentSpec},
-            core::v1::{
-                Container, EnvVar, EnvVarSource, ObjectFieldSelector, PodSpec, PodTemplateSpec,
-                Service, ServicePort, ServiceSpec,
-            },
-        },
-        apimachinery::pkg::apis::meta::v1::LabelSelector,
-    },
-    kube::{
-        api::{Api, ObjectMeta, PostParams},
-        Client,
-    },
+    clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches},
     log::*,
-    serde_json, serde_yaml,
     solana_k8s_cluster::{
         docker::{DockerConfig, DockerImageConfig},
         genesis::{Genesis, SetupConfig},
-        get_solana_root, initialize_globals,
+        initialize_globals,
         kubernetes::Kubernetes,
         release::{BuildConfig, Deploy},
         ValidatorType,
     },
     solana_sdk::genesis_config::GenesisConfig,
-    std::{collections::BTreeMap, fs::File, io::Write, process, thread, time::Duration},
+    std::{thread, time::Duration},
 };
 
 const BOOTSTRAP_VALIDATOR_REPLICAS: i32 = 1;
@@ -57,6 +42,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("bootstrap-container")
                 .takes_value(true)
                 .required(true)
+                .default_value("bootstrap-container")
                 .help("Bootstrap Validator Container name"),
         )
         .arg(
@@ -71,6 +57,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("validator-container")
                 .takes_value(true)
                 .required(true)
+                .default_value("validator-container")
                 .help("Validator Container name"),
         )
         .arg(
@@ -112,21 +99,38 @@ fn parse_matches() -> ArgMatches<'static> {
         .arg(
             Arg::with_name("docker_build")
                 .long("docker-build")
-                .help("Build Docker images"),
+                .help("Build Docker images. If not set, will assume local docker image should be used"),
+        )
+        .arg(
+            Arg::with_name("registry_name")
+                .long("registry")
+                .takes_value(true)
+                .requires("docker_build")
+                .help("Registry to push docker image to"),
+        )
+        .arg(
+            Arg::with_name("image_name")
+                .long("image-name")
+                .takes_value(true)
+                .requires("docker_build")
+                .help("Docker image name. Will be prepended with validator_type (bootstrap or validator)"),
         )
         .arg(
             Arg::with_name("base_image")
                 .long("base-image")
                 .takes_value(true)
                 .default_value("ubuntu:20.04")
+                .requires("docker_build")
                 .help("Docker base image"),
         )
         .arg(
             Arg::with_name("image_tag")
-                .long("image-tag")
+                .long("tag")
                 .takes_value(true)
-                .default_value("k8s-cluster-image")
-                .help("Docker image tag. tag will be prepended with `bootstrap-` and `validator-` to distinguish between both images"),
+                // .default_value("k8s-cluster-image")
+                .default_value("latest")
+                .requires("docker_build")
+                .help("Docker image tag."),
         )
         .arg(
             Arg::with_name("prebuild_genesis")
@@ -180,7 +184,9 @@ async fn main() {
     // Download validator version and Build docker image
     let docker_image_config = DockerImageConfig {
         base_image: matches.value_of("base_image").unwrap_or_default(),
+        image_name: matches.value_of("image_name").unwrap(),
         tag: matches.value_of("image_tag").unwrap_or_default(),
+        registry: matches.value_of("registry_name").unwrap(),
     };
 
     let deploy = Deploy::new(build_config.clone());
@@ -197,15 +203,34 @@ async fn main() {
         let image_types = vec!["bootstrap", "validator"];
         for image_type in image_types {
             match docker.build_image(image_type).await {
-                Ok(_) => info!("Validator Docker image built successfully"),
+                Ok(_) => info!("Docker image built successfully"),
                 Err(err) => {
                     error!("Exiting........ {}", err);
                     return;
                 }
             }
         }
+
+        // Need to push image to registry so Monogon nodes can pull image from registry to local
+        match docker.push_image("bootstrap").await {
+            Ok(_) => info!("Bootstrap Image pushed successfully to registry"),
+            Err(err) => {
+                error!("{}", err);
+                return;
+            }
+        }
+
+        // Need to push image to registry so Monogon nodes can pull image from registry to local
+        match docker.push_image("validator").await {
+            Ok(_) => info!("Validator Image pushed successfully to registry"),
+            Err(err) => {
+                error!("{}", err);
+                return;
+            }
+        }
     }
 
+    info!("Creating Genesis");
     let mut genesis = Genesis::new(setup_config.clone());
     // genesis.generate();
     match genesis.generate_faucet() {
@@ -281,48 +306,66 @@ async fn main() {
 
     let bootstrap_container_name = matches
         .value_of("bootstrap_container_name")
-        .expect("Bootstrap container name is required");
+        .unwrap_or_default();
     let bootstrap_image_name = matches
         .value_of("bootstrap_image_name")
         .expect("Bootstrap image name is required");
     let validator_container_name = matches
         .value_of("validator_container_name")
-        .expect("Validator container name is required");
+        .unwrap_or_default();
     let validator_image_name = matches
         .value_of("validator_image_name")
         .expect("Validator image name is required");
+
+    let secret = match kub_controller.create_secret().await {
+        Ok(secret) => secret,
+        Err(err) => {
+            error!("Failed to create secret! {}", err);
+            return;
+        }
+    };
+    match kub_controller.deploy_secret(&secret).await {
+        Ok(_) => (),
+        Err(err) => {
+            error!("{}", err);
+            return;
+        }
+    }
 
     kub_controller.create_selector(
         &ValidatorType::Bootstrap,
         "app.kubernetes.io/name",
         "bootstrap-validator",
     );
-    let bootstrap_deployment = match kub_controller.create_bootstrap_validator_deployment(
-        bootstrap_container_name,
-        bootstrap_image_name,
-        BOOTSTRAP_VALIDATOR_REPLICAS,
-        config_map.metadata.name.clone(),
-    ) {
-        Ok(deployment) => deployment,
+    let bootstrap_replica_set = match kub_controller
+        .create_bootstrap_validator_replicas_set(
+            bootstrap_container_name,
+            bootstrap_image_name,
+            BOOTSTRAP_VALIDATOR_REPLICAS,
+            config_map.metadata.name.clone(),
+        )
+        .await
+    {
+        Ok(replica_set) => replica_set,
         Err(err) => {
-            error!("Error creating bootstrap validator deployment: {}", err);
+            error!("Error creating bootstrap validator replicas_set: {}", err);
             return;
         }
     };
-    let dep_name = match kub_controller
-        .deploy_deployment(&bootstrap_deployment)
+    let rs_name = match kub_controller
+        .deploy_replicas_set(&bootstrap_replica_set)
         .await
     {
-        Ok(dep) => {
-            info!("bootstrap validator deployment deployed successfully");
-            dep.metadata.name.unwrap()
+        Ok(rs) => {
+            info!("bootstrap validator replicas_set deployed successfully");
+            rs.metadata.name.unwrap()
         }
         Err(err) => {
             error!(
-                "Error! Failed to deploy bootstrap validator deployment. err: {:?}",
+                "Error! Failed to deploy bootstrap validator replicas_set. err: {:?}",
                 err
             );
-            err.to_string() //TODO: fix this, should handle this error better. shoudn't just return a string. should exit or something better
+            return;
         }
     };
 
@@ -337,43 +380,52 @@ async fn main() {
 
     //TODO: handle this return val properly, don't just unwrap
     while !kub_controller
-        .check_deployment_ready(dep_name.as_str())
+        .check_replica_set_ready(rs_name.as_str())
         .await
         .unwrap()
     {
-        info!("deployment: {} not ready...", dep_name);
+        info!("replica set: {} not ready...", rs_name);
         thread::sleep(Duration::from_secs(1));
     }
-    info!("deployment: {} Ready!", dep_name);
+    info!("replica set: {} Ready!", rs_name);
 
     kub_controller.create_selector(
         &ValidatorType::Standard,
         "app.kubernetes.io/name",
         "validator",
     );
-    let validator_deployment = match kub_controller.create_validator_deployment(
-        validator_container_name,
-        validator_image_name,
-        setup_config.num_validators,
-        config_map.metadata.name,
-    ) {
-        Ok(deployment) => deployment,
+    let validator_replica_set = match kub_controller
+        .create_validator_replicas_set(
+            validator_container_name,
+            validator_image_name,
+            setup_config.num_validators,
+            config_map.metadata.name,
+        )
+        .await
+    {
+        Ok(replica_set) => replica_set,
         Err(err) => {
-            error!("Error creating validator deployment: {}", err);
+            error!("Error creating validator replicas_set: {}", err);
             return;
         }
     };
 
-    match kub_controller
-        .deploy_deployment(&validator_deployment)
+    let validator_rs_name = match kub_controller
+        .deploy_replicas_set(&validator_replica_set)
         .await
     {
-        Ok(_) => info!("validator deployment deployed successfully"),
-        Err(err) => error!(
-            "Error! Failed to deploy validator deployment. err: {:?}",
-            err
-        ),
-    }
+        Ok(rs) => {
+            info!("validator replicas_sets deployed successfully");
+            rs.metadata.name.unwrap()
+        }
+        Err(err) => {
+            error!(
+                "Error! Failed to deploy validator replicas_sets. err: {:?}",
+                err
+            );
+            return;
+        }
+    };
 
     let validator_service = kub_controller.create_validator_service();
     match kub_controller.deploy_service(&validator_service).await {
@@ -381,10 +433,22 @@ async fn main() {
         Err(err) => error!("Error! Failed to deploy validator service. err: {:?}", err),
     }
 
+    //TODO: handle this return val properly, don't just unwrap
+    //TODO: not sure this checks for all replica sets
+    while !kub_controller
+        .check_replica_set_ready(validator_rs_name.as_str())
+        .await
+        .unwrap()
+    {
+        info!("replica set: {} not ready...", validator_rs_name);
+        thread::sleep(Duration::from_secs(1));
+    }
+    info!("replica set: {} Ready!", rs_name);
+
     let _ = kub_controller
-        .check_service_matching_deployment("bootstrap-validator")
+        .check_service_matching_replica_set("bootstrap-validator")
         .await;
     let _ = kub_controller
-        .check_service_matching_deployment("validator")
+        .check_service_matching_replica_set("validator")
         .await;
 }

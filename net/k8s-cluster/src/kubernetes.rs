@@ -1,27 +1,23 @@
 use {
-    crate::{boxed_error, ValidatorType},
-    base64::{
-        engine::{self, general_purpose},
-        Engine as _,
-    },
+    crate::{boxed_error, load_env_variable_by_name, ValidatorType},
     k8s_openapi::{
         api::{
-            apps::v1::{Deployment, DeploymentSpec},
+            apps::v1::{ReplicaSet, ReplicaSetSpec},
             core::v1::{
-                ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource, Namespace,
-                ObjectFieldSelector, PodSpec, PodTemplateSpec, Service, ServicePort, ServiceSpec,
-                Volume, VolumeMount,
+                ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource,
+                LocalObjectReference, Namespace, ObjectFieldSelector, PodSpec, PodTemplateSpec,
+                Secret, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
             },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
+        ByteString,
     },
     kube::{
         api::{Api, ObjectMeta, PostParams},
         Client,
     },
     log::*,
-    solana_sdk::genesis_config::DEFAULT_GENESIS_FILE,
-    std::{collections::BTreeMap, error::Error, fs::File, io::Read, path::PathBuf},
+    std::{collections::BTreeMap, error::Error},
 };
 
 pub struct Kubernetes<'a> {
@@ -100,13 +96,14 @@ impl<'a> Kubernetes<'a> {
         }
     }
 
-    pub fn create_bootstrap_validator_deployment(
+    pub async fn create_bootstrap_validator_replicas_set(
         &self,
         container_name: &str,
         image_name: &str,
         num_bootstrap_validators: i32,
         config_map_name: Option<String>,
-    ) -> Result<Deployment, Box<dyn Error>> {
+        // command_args: &Vec<String>,
+    ) -> Result<ReplicaSet, Box<dyn Error>> {
         let env_var = vec![EnvVar {
             name: "MY_POD_IP".to_string(),
             value_from: Some(EnvVarSource {
@@ -122,7 +119,7 @@ impl<'a> Kubernetes<'a> {
         // let command = vec!["/workspace/start-bootstrap-validator.sh".to_string()];
         let command = vec!["sleep".to_string(), "3600".to_string()];
 
-        self.create_deployment(
+        self.create_replicas_set(
             "bootstrap-validator",
             &self.bootstrap_validator_selector,
             container_name,
@@ -132,9 +129,10 @@ impl<'a> Kubernetes<'a> {
             &command,
             config_map_name,
         )
+        .await
     }
 
-    pub fn create_deployment(
+    async fn create_replicas_set(
         &self,
         app_name: &str,
         label_selector: &BTreeMap<String, String>,
@@ -144,7 +142,7 @@ impl<'a> Kubernetes<'a> {
         env_vars: Vec<EnvVar>,
         command: &Vec<String>,
         config_map_name: Option<String>,
-    ) -> Result<Deployment, Box<dyn Error>> {
+    ) -> Result<ReplicaSet, Box<dyn Error>> {
         let config_map_name = match config_map_name {
             Some(name) => name,
             None => return Err(boxed_error!("config_map_name is None!")),
@@ -175,50 +173,91 @@ impl<'a> Kubernetes<'a> {
                 containers: vec![Container {
                     name: container_name.to_string(),
                     image: Some(image_name.to_string()),
-                    image_pull_policy: Some("Never".to_string()), // Set the image pull policy to "Never"
+                    image_pull_policy: Some("Always".to_string()), // Set the image pull policy to "Never"
                     env: Some(env_vars),
                     command: Some(command.clone()),
                     volume_mounts: Some(vec![volume_mount]),
+
                     ..Default::default()
                 }],
                 volumes: Some(vec![volume]),
+                image_pull_secrets: Some(vec![LocalObjectReference {
+                    name: Some("dockerhub-login".to_string()),
+                    ..Default::default()
+                }]),
                 ..Default::default()
             }),
             ..Default::default()
         };
 
-        //Define the deployment spec
-        let deployment_spec = DeploymentSpec {
+        let replicas_set_spec = ReplicaSetSpec {
             replicas: Some(num_validators),
             selector: LabelSelector {
                 match_labels: Some(label_selector.clone()),
                 ..Default::default()
             },
-            template: pod_spec,
+            template: Some(pod_spec),
             ..Default::default()
         };
 
-        //Build deployment
-        Ok(Deployment {
+        Ok(ReplicaSet {
             metadata: ObjectMeta {
-                name: Some(format!("{}-deployment", app_name)),
+                name: Some(format!("{}-replicaset", app_name)),
                 namespace: Some(self.namespace.to_string()),
                 ..Default::default()
             },
-            spec: Some(deployment_spec),
+            spec: Some(replicas_set_spec),
             ..Default::default()
         })
     }
 
-    pub async fn deploy_deployment(
+    //TODO: this duplicates code seen in docker.rs -> loading registry info.
+    // could be ok if we don't build docker and want to just pull from registry!
+    pub async fn create_secret(&self) -> Result<Secret, Box<dyn Error>> {
+        let username = match load_env_variable_by_name("REGISTRY_USERNAME") {
+            Ok(username) => username,
+            Err(_) => return Err(boxed_error!("REGISTRY_USERNAME not set")),
+        };
+        let password = match load_env_variable_by_name("REGISTRY_PASSWORD") {
+            Ok(password) => password,
+            Err(_) => return Err(boxed_error!("REGISTRY_PASSWORD not set")),
+        };
+        let secret_name = "dockerhub-login";
+        let mut data = BTreeMap::new();
+        data.insert(
+            "username".to_string(),
+            ByteString(username.as_bytes().to_vec()),
+        );
+        data.insert(
+            "password".to_string(),
+            ByteString(password.as_bytes().to_vec()),
+        );
+
+        let secret = Secret {
+            metadata: ObjectMeta {
+                name: Some(secret_name.to_string()),
+                ..Default::default()
+            },
+            data: Some(data),
+            ..Default::default()
+        };
+        Ok(secret)
+    }
+
+    pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
+        let secrets_api: Api<Secret> = Api::namespaced(self.client.clone(), self.namespace);
+        secrets_api.create(&PostParams::default(), &secret).await
+    }
+
+    pub async fn deploy_replicas_set(
         &self,
-        deployment: &Deployment,
-    ) -> Result<Deployment, kube::Error> {
-        let api: Api<Deployment> = Api::namespaced(self.client.clone(), self.namespace);
+        replica_set: &ReplicaSet,
+    ) -> Result<ReplicaSet, kube::Error> {
+        let api: Api<ReplicaSet> = Api::namespaced(self.client.clone(), self.namespace);
         let post_params = PostParams::default();
-        info!("creating deployment!");
-        // Apply the Deployment
-        api.create(&post_params, deployment).await
+        info!("creating replica set!");
+        // Apply the ReplicaSet
+        api.create(&post_params, replica_set).await
     }
 
     pub fn create_bootstrap_validator_service(&self) -> Service {
@@ -272,12 +311,15 @@ impl<'a> Kubernetes<'a> {
         service_api.create(&post_params, &service).await
     }
 
-    pub async fn check_deployment_ready(&self, deployment_name: &str) -> Result<bool, kube::Error> {
-        let deployments: Api<Deployment> = Api::namespaced(self.client.clone(), self.namespace);
-        let deployment = deployments.get(deployment_name).await?;
+    pub async fn check_replica_set_ready(
+        &self,
+        replica_set_name: &str,
+    ) -> Result<bool, kube::Error> {
+        let replica_sets: Api<ReplicaSet> = Api::namespaced(self.client.clone(), self.namespace);
+        let replica_set = replica_sets.get(replica_set_name).await?;
 
-        let desired_validators = deployment.spec.as_ref().unwrap().replicas.unwrap_or(1);
-        let available_validators = deployment
+        let desired_validators = replica_set.spec.as_ref().unwrap().replicas.unwrap_or(1);
+        let available_validators = replica_set
             .status
             .as_ref()
             .unwrap()
@@ -287,13 +329,13 @@ impl<'a> Kubernetes<'a> {
         Ok(available_validators >= desired_validators)
     }
 
-    pub fn create_validator_deployment(
+    pub async fn create_validator_replicas_set(
         &self,
         container_name: &str,
         image_name: &str,
         num_validators: i32,
         config_map_name: Option<String>,
-    ) -> Result<Deployment, Box<dyn Error>> {
+    ) -> Result<ReplicaSet, Box<dyn Error>> {
         let env_vars = vec![
             EnvVar {
                 name: "NAMESPACE".to_string(),
@@ -332,7 +374,7 @@ impl<'a> Kubernetes<'a> {
         // let command = vec!["/workspace/start-validator.sh".to_string()];
         let command = vec!["sleep".to_string(), "3600".to_string()];
 
-        self.create_deployment(
+        self.create_replicas_set(
             "validator",
             &self.standard_validator_selector,
             container_name,
@@ -342,33 +384,30 @@ impl<'a> Kubernetes<'a> {
             &command,
             config_map_name,
         )
+        .await
     }
 
     pub fn create_validator_service(&self) -> Service {
         self.create_service("validator", &self.standard_validator_selector)
     }
 
-    pub async fn check_service_matching_deployment(
+    pub async fn check_service_matching_replica_set(
         &self,
         app_name: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Get the Deployment
-        let deployment_api: Api<Deployment> = Api::namespaced(self.client.clone(), self.namespace);
-        let deployment = deployment_api
-            .get(format!("{}-deployment", app_name).as_str())
+        // Get the replica_set
+        let replica_set_api: Api<ReplicaSet> = Api::namespaced(self.client.clone(), self.namespace);
+        let replica_set = replica_set_api
+            .get(format!("{}-replicaset", app_name).as_str())
             .await?;
-        // let deployment_json = serde_json::to_string_pretty(&deployment).unwrap();
-        // info!("{}", deployment_json);
 
         // Get the Service
         let service_api: Api<Service> = Api::namespaced(self.client.clone(), self.namespace);
         let service = service_api
             .get(format!("{}-service", app_name).as_str())
             .await?;
-        // let service_json = serde_json::to_string_pretty(&service).unwrap();
-        // info!("{}", service_json);
 
-        let deployment_labels = deployment
+        let replica_set_labels = replica_set
             .spec
             .and_then(|spec| {
                 Some(spec.selector).and_then(|selector| {
@@ -388,17 +427,17 @@ impl<'a> Kubernetes<'a> {
             .clone();
 
         info!(
-            "dep, serve labels: {:?}, {:?}",
-            deployment_labels, service_labels
+            "ReplicaSet, Service labels: {:?}, {:?}",
+            replica_set_labels, service_labels
         );
 
-        let are_equal = match (deployment_labels, service_labels) {
-            (Some(dep_label), Some(serv_label)) => dep_label == serv_label,
+        let are_equal = match (replica_set_labels, service_labels) {
+            (Some(rs_label), Some(serv_label)) => rs_label == serv_label,
             _ => false,
         };
 
         if !are_equal {
-            error!("Deployment and Service labels are not the same!");
+            error!("ReplicaSet and Service labels are not the same!");
         }
 
         Ok(())
