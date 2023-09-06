@@ -768,7 +768,7 @@ impl ThreadLocalUnprocessedPackets {
 
     /// Checks sanitized transactions against bank, returns valid transaction indexes
     fn filter_invalid_transactions(
-        transactions: &[SanitizedTransction],
+        transactions: &[SanitizedTransaction],
         invalid_fee_payer_filter: &InvalidFeePayerFilter,
         bank: &Bank,
         total_dropped_packets: &mut usize,
