@@ -78,6 +78,7 @@ pub fn get_best_repair_shreds(
     slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
     repairs: &mut Vec<ShredRepairType>,
     max_new_shreds: usize,
+    repair_coding: bool,
 ) {
     let initial_len = repairs.len();
     let max_repairs = initial_len + max_new_shreds;
@@ -103,6 +104,7 @@ pub fn get_best_repair_shreds(
                         slot,
                         slot_meta,
                         max_repairs - repairs.len(),
+                        repair_coding,
                     );
                     repairs.extend(new_repairs);
                     visited_set.insert(slot);
@@ -122,6 +124,7 @@ pub fn get_best_repair_shreds(
                                 repairs,
                                 max_repairs,
                                 *new_child_slot,
+                                repair_coding,
                             );
                         }
                         visited_set.insert(*new_child_slot);
@@ -229,6 +232,7 @@ pub mod test {
             &mut slot_meta_cache,
             &mut repairs,
             6,
+            false,
         );
         assert_eq!(
             repairs,
@@ -258,6 +262,7 @@ pub mod test {
             &mut slot_meta_cache,
             &mut repairs,
             6,
+            false,
         );
         assert_eq!(
             repairs,
@@ -298,6 +303,7 @@ pub mod test {
             &mut slot_meta_cache,
             &mut repairs,
             4,
+            false,
         );
         assert_eq!(
             repairs,
@@ -319,6 +325,7 @@ pub mod test {
             &mut slot_meta_cache,
             &mut repairs,
             4,
+            false,
         );
         assert_eq!(
             repairs,
@@ -345,6 +352,7 @@ pub mod test {
             &mut slot_meta_cache,
             &mut repairs,
             std::usize::MAX,
+            false,
         );
         let last_shred = blockstore.meta(0).unwrap().unwrap().received;
         assert_eq!(

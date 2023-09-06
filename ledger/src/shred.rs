@@ -595,8 +595,15 @@ pub mod layout {
         ShredVariant::try_from(shred_variant).map_err(|_| Error::InvalidShredVariant)
     }
 
+    pub fn is_merkle_variant(shred: &[u8]) -> Result<bool, Error> {
+        get_shred_variant(shred).map(|variant| match variant {
+            ShredVariant::LegacyCode | ShredVariant::LegacyData => false,
+            ShredVariant::MerkleCode(_) | ShredVariant::MerkleData(_) => true,
+        })
+    }
+
     #[inline]
-    pub(super) fn get_shred_type(shred: &[u8]) -> Result<ShredType, Error> {
+    pub(crate) fn get_shred_type(shred: &[u8]) -> Result<ShredType, Error> {
         let shred_variant = get_shred_variant(shred)?;
         Ok(ShredType::from(shred_variant))
     }

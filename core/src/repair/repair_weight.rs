@@ -214,6 +214,7 @@ impl RepairWeight {
         max_closest_completion_repairs: usize,
         repair_timing: &mut RepairTiming,
         stats: &mut BestRepairsStats,
+        repair_coding: bool,
     ) -> Vec<ShredRepairType> {
         let mut repairs = vec![];
         let mut processed_slots = HashSet::from([self.root]);
@@ -242,6 +243,7 @@ impl RepairWeight {
             &mut slot_meta_cache,
             &mut best_shreds_repairs,
             max_new_shreds,
+            repair_coding,
         );
         let num_best_shreds_repairs = best_shreds_repairs.len();
         let repair_slots_set: HashSet<Slot> =
@@ -276,6 +278,7 @@ impl RepairWeight {
             &mut slot_meta_cache,
             &mut processed_slots,
             max_closest_completion_repairs,
+            repair_coding,
         );
         let num_closest_completion_repairs = closest_completion_repairs.len();
         let num_closest_completion_slots = processed_slots.len() - pre_num_slots;
@@ -506,6 +509,7 @@ impl RepairWeight {
         slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
         repairs: &mut Vec<ShredRepairType>,
         max_new_shreds: usize,
+        repair_coding: bool,
     ) {
         let root_tree = self.trees.get(&self.root).expect("Root tree must exist");
         repair_weighted_traversal::get_best_repair_shreds(
@@ -514,6 +518,7 @@ impl RepairWeight {
             slot_meta_cache,
             repairs,
             max_new_shreds,
+            repair_coding,
         );
     }
 
@@ -622,6 +627,7 @@ impl RepairWeight {
         slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
         processed_slots: &mut HashSet<Slot>,
         max_new_repairs: usize,
+        repair_coding: bool,
     ) -> (Vec<ShredRepairType>, /* processed slots */ usize) {
         let mut repairs = Vec::default();
         let mut total_processed_slots = 0;
@@ -636,6 +642,7 @@ impl RepairWeight {
                 slot_meta_cache,
                 processed_slots,
                 max_new_repairs - repairs.len(),
+                repair_coding,
             );
             repairs.extend(new_repairs);
             total_processed_slots += new_processed_slots;

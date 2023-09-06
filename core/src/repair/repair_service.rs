@@ -30,6 +30,7 @@ use {
     solana_sdk::{
         clock::{Slot, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
         epoch_schedule::EpochSchedule,
+        genesis_config::ClusterType,
         hash::Hash,
         pubkey::Pubkey,
         signer::keypair::Keypair,
@@ -111,6 +112,7 @@ pub struct RepairStats {
     pub shred: RepairStatsGroup,
     pub highest_shred: RepairStatsGroup,
     pub orphan: RepairStatsGroup,
+    pub coding_index: RepairStatsGroup,
     pub get_best_orphans_us: u64,
     pub get_best_shreds_us: u64,
 }
@@ -386,6 +388,14 @@ impl RepairService {
                 );
                 add_votes_elapsed.stop();
 
+                /*
+                let repair_coding = match root_bank.cluster_type() {
+                    ClusterType::MainnetBeta | ClusterType::Devnet => false,
+                    ClusterType::Testnet | ClusterType::Development => true,
+                };
+                */
+                let repair_coding = true;
+
                 let repairs = repair_weight.get_best_weighted_repairs(
                     blockstore,
                     root_bank.epoch_stakes_map(),
@@ -396,6 +406,7 @@ impl RepairService {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut repair_timing,
                     &mut best_repairs_stats,
+                    repair_coding,
                 );
 
                 let mut popular_pruned_forks = repair_weight.get_popular_pruned_forks(
@@ -483,13 +494,15 @@ impl RepairService {
             if last_stats.elapsed().as_secs() > 2 {
                 let repair_total = repair_stats.shred.count
                     + repair_stats.highest_shred.count
-                    + repair_stats.orphan.count;
+                    + repair_stats.orphan.count
+                    + repair_stats.coding_index.count;
                 let slot_to_count: Vec<_> = repair_stats
                     .shred
                     .slot_pubkeys
                     .iter()
                     .chain(repair_stats.highest_shred.slot_pubkeys.iter())
                     .chain(repair_stats.orphan.slot_pubkeys.iter())
+                    .chain(repair_stats.coding_index.slot_pubkeys.iter())
                     .map(|(slot, slot_repairs)| {
                         (slot, slot_repairs.pubkey_repairs.values().sum::<u64>())
                     })
@@ -503,6 +516,7 @@ impl RepairService {
                         ("shred-count", repair_stats.shred.count, i64),
                         ("highest-shred-count", repair_stats.highest_shred.count, i64),
                         ("orphan-count", repair_stats.orphan.count, i64),
+                        ("coding-index-count", repair_stats.coding_index.count, i64),
                         ("shred-slot-max", nonzero_num(repair_stats.shred.max), Option<i64>),
                         ("shred-slot-min", nonzero_num(repair_stats.shred.min), Option<i64>),
                         ("repair-highest-slot", repair_stats.highest_shred.max, i64), // deprecated
@@ -511,6 +525,8 @@ impl RepairService {
                         ("repair-orphan", repair_stats.orphan.max, i64), // deprecated
                         ("orphan-slot-max", nonzero_num(repair_stats.orphan.max), Option<i64>),
                         ("orphan-slot-min", nonzero_num(repair_stats.orphan.min), Option<i64>),
+                        ("coding-index-slot-max", nonzero_num(repair_stats.coding_index.max), Option<i64>),
+                        ("coding-index-slot-min", nonzero_num(repair_stats.coding_index.min), Option<i64>),
                     );
                 }
                 datapoint_info!(
@@ -612,6 +628,7 @@ impl RepairService {
         slot: Slot,
         slot_meta: &SlotMeta,
         max_repairs: usize,
+        repair_coding: bool,
     ) -> Vec<ShredRepairType> {
         if max_repairs == 0 || slot_meta.is_full() {
             vec![]
@@ -636,18 +653,83 @@ impl RepairService {
             }
             vec![ShredRepairType::HighestShred(slot, slot_meta.received)]
         } else {
-            blockstore
-                .find_missing_data_indexes(
-                    slot,
-                    slot_meta.first_shred_timestamp,
-                    DEFER_REPAIR_THRESHOLD_TICKS,
-                    slot_meta.consumed,
-                    slot_meta.received,
-                    max_repairs,
-                )
-                .into_iter()
-                .map(|i| ShredRepairType::Shred(slot, i))
-                .collect()
+            let mut repairs = Vec::default();
+            /*
+            if repair_coding && slot_meta.received > 0 {
+                let shred = blockstore
+                    .get_data_shred(slot, slot_meta.received.saturating_sub(1))
+                    .unwrap()
+                    .unwrap();
+                let is_merkle = shred::layout::is_merkle_variant(&shred).unwrap();
+                error!(">>> IS_MERKLE {is_merkle}");
+                if is_merkle {
+                    let coding_repairs = blockstore
+                        .find_missing_code_indexes(
+                            slot,
+                            slot_meta.first_shred_timestamp,
+                            DEFER_REPAIR_THRESHOLD_TICKS,
+                            0,  // TODO
+                            32, // TODO
+                            max_repairs,
+                        )
+                        .into_iter()
+                        .map(|i| ShredRepairType::CodingIndex(slot, i));
+                    error!(">>> created coding repair requests: {coding_repairs:?}");
+                    repairs.extend(coding_repairs);
+                    if repairs.len() > 0 {
+                        return repairs;
+                    }
+                }
+            }
+            */
+            {
+                let coding_repairs = blockstore
+                    .find_missing_code_indexes(
+                        slot,
+                        slot_meta.first_shred_timestamp,
+                        DEFER_REPAIR_THRESHOLD_TICKS,
+                        0,  // TODO
+                        1000, // TODO
+                        max_repairs,
+                    )
+                    .into_iter()
+                    .map(|i| ShredRepairType::CodingIndex(slot, i));
+                error!(">>> created coding repair requests: {coding_repairs:?}");
+                repairs.extend(coding_repairs);
+                if repairs.len() > 0 {
+                    datapoint_info!(
+                        "proto",
+                        ("coding_repairs", repairs.len(), i64),
+                    );
+                    return repairs;
+                }
+                error!(">>> falling back to data shreds");
+            }
+            datapoint_info!(
+                "proto",
+                ("data_repair_fallback", 1, i64),
+            );
+            let max_repairs = 1; // TODO remove
+            if repairs.len() < max_repairs {
+                let data_repairs = blockstore
+                    .find_missing_data_indexes(
+                        slot,
+                        slot_meta.first_shred_timestamp,
+                        DEFER_REPAIR_THRESHOLD_TICKS,
+                        slot_meta.consumed,
+                        slot_meta.received,
+                        max_repairs - repairs.len(),
+                    )
+                    .into_iter()
+                    .map(|i| ShredRepairType::Shred(slot, i));
+                error!(">>> adding data shred requests {data_repairs:?}");
+                datapoint_info!(
+                    "proto",
+                    ("data_repairs", data_repairs.len(), i64),
+                );
+                repairs.extend(data_repairs);
+            }
+            repairs
         }
     }
 
@@ -657,6 +739,7 @@ impl RepairService {
         repairs: &mut Vec<ShredRepairType>,
         max_repairs: usize,
         slot: Slot,
+        repair_coding: bool,
     ) {
         let mut pending_slots = vec![slot];
         while repairs.len() < max_repairs && !pending_slots.is_empty() {
@@ -667,6 +750,7 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     max_repairs - repairs.len(),
+                    repair_coding,
                 );
                 repairs.extend(new_repairs);
                 let next_slots = slot_meta.next_slots;
@@ -704,6 +788,7 @@ impl RepairService {
                 slot,
                 &meta,
                 max_repairs - repairs.len(),
+                false,
             );
             repairs.extend(new_repairs);
         }
@@ -726,6 +811,7 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     MAX_REPAIR_PER_DUPLICATE,
+                    false,
                 ))
             }
         } else {
@@ -905,6 +991,7 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
+                    false,
                 ),
                 vec![
                     ShredRepairType::Orphan(2),
@@ -941,6 +1028,7 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
+                    false,
                 ),
                 vec![ShredRepairType::HighestShred(0, 0)]
             );
@@ -1001,6 +1089,7 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
+                    false,
                 ),
                 expected
             );
@@ -1016,6 +1105,7 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
+                    false,
                 )[..],
                 expected[0..expected.len() - 2]
             );
@@ -1062,6 +1152,7 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
+                    false,
                 ),
                 expected
             );

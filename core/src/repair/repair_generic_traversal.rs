@@ -115,6 +115,7 @@ pub fn get_closest_completion(
     slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
     processed_slots: &mut HashSet<Slot>,
     limit: usize,
+    repair_coding: bool,
 ) -> (Vec<ShredRepairType>, /* processed slots */ usize) {
     let mut slot_dists: Vec<(Slot, u64)> = Vec::default();
     let iter = GenericTraversal::new(tree);
@@ -191,6 +192,7 @@ pub fn get_closest_completion(
                 path_slot,
                 slot_meta,
                 limit - repairs.len(),
+                repair_coding,
             );
             repairs.extend(new_repairs);
             total_processed_slots += 1;
@@ -244,6 +246,7 @@ pub mod test {
             &mut slot_meta_cache,
             &mut processed_slots,
             10,
+            false,
         );
         assert_eq!(repairs, []);
 
@@ -269,6 +272,7 @@ pub mod test {
             &mut slot_meta_cache,
             &mut processed_slots,
             1,
+            false,
         );
         assert_eq!(repairs, [ShredRepairType::Shred(1, 3)]);
     }

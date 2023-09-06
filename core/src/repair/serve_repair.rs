@@ -99,6 +99,8 @@ pub enum ShredRepairType {
     HighestShred(Slot, u64),
     /// Requesting the missing shred at a particular index
     Shred(Slot, u64),
+    /// Requesting the missing coding shred at a particular index
+    CodingIndex(Slot, u64),
 }
 
 impl ShredRepairType {
@@ -106,7 +108,8 @@ impl ShredRepairType {
         match self {
             ShredRepairType::Orphan(slot)
             | ShredRepairType::HighestShred(slot, _)
-            | ShredRepairType::Shred(slot, _) => *slot,
+            | ShredRepairType::Shred(slot, _)
+            | ShredRepairType::CodingIndex(slot, _) => *slot,
         }
     }
 }
@@ -115,8 +118,10 @@ impl RequestResponse for ShredRepairType {
     type Response = Shred;
     fn num_expected_responses(&self) -> u32 {
         match self {
-            ShredRepairType::Orphan(_) => MAX_ORPHAN_REPAIR_RESPONSES as u32,
-            ShredRepairType::Shred(_, _) | ShredRepairType::HighestShred(_, _) => 1,
+            ShredRepairType::Orphan(_) => (MAX_ORPHAN_REPAIR_RESPONSES) as u32,
+            ShredRepairType::HighestShred(_, _)
+            | ShredRepairType::Shred(_, _)
+            | ShredRepairType::CodingIndex(_, _) => 1,
         }
     }
     fn verify_response(&self, response_shred: &Shred) -> bool {
@@ -125,7 +130,7 @@ impl RequestResponse for ShredRepairType {
             ShredRepairType::HighestShred(slot, index) => {
                 response_shred.slot() == *slot && response_shred.index() as u64 >= *index
             }
-            ShredRepairType::Shred(slot, index) => {
+            ShredRepairType::Shred(slot, index) | ShredRepairType::CodingIndex(slot, index) => {
                 response_shred.slot() == *slot && response_shred.index() as u64 == *index
             }
         }
@@ -178,6 +183,8 @@ struct ServeRepairStats {
     pong: usize,
     ancestor_hashes: usize,
     window_index_misses: usize,
+    coding_index: usize,
+    coding_index_misses: usize,
     ping_cache_check_failed: usize,
     pings_sent: usize,
     decode_time_us: u64,
@@ -245,6 +252,11 @@ pub enum RepairProtocol {
         header: RepairRequestHeader,
         slot: Slot,
     },
+    CodingIndex {
+        header: RepairRequestHeader,
+        slot: Slot,
+        index: u64,
+    },
 }
 
 const REPAIR_REQUEST_PONG_SERIALIZED_BYTES: usize = PUBKEY_BYTES + HASH_BYTES + SIGNATURE_BYTES;
@@ -281,6 +293,7 @@ impl RepairProtocol {
             Self::HighestWindowIndex { header, .. } => &header.sender,
             Self::Orphan { header, .. } => &header.sender,
             Self::AncestorHashes { header, .. } => &header.sender,
+            Self::CodingIndex { header, .. } => &header.sender,
         }
     }
 
@@ -297,7 +310,8 @@ impl RepairProtocol {
             | Self::WindowIndex { .. }
             | Self::HighestWindowIndex { .. }
             | Self::Orphan { .. }
-            | Self::AncestorHashes { .. } => true,
+            | Self::AncestorHashes { .. }
+            | Self::CodingIndex { .. } => true,
         }
     }
 
@@ -305,7 +319,8 @@ impl RepairProtocol {
         match self {
             RepairProtocol::WindowIndex { .. }
             | RepairProtocol::HighestWindowIndex { .. }
-            | RepairProtocol::AncestorHashes { .. } => 1,
+            | RepairProtocol::AncestorHashes { .. }
+            | RepairProtocol::CodingIndex { .. } => 1,
             RepairProtocol::Orphan { .. } => MAX_ORPHAN_REPAIR_RESPONSES,
             RepairProtocol::Pong(_) => 0, // no response
             RepairProtocol::LegacyWindowIndex(_, _, _)
@@ -481,6 +496,20 @@ impl ServeRepair {
                     stats.pong += 1;
                     ping_cache.add(pong, *from_addr, Instant::now());
                     (None, "Pong")
+                }
+                RepairProtocol::CodingIndex {
+                    header: RepairRequestHeader { nonce, .. },
+                    slot,
+                    index,
+                } => {
+                    stats.coding_index += 1;
+                    let batch = Self::run_coding_index_request(
+                        recycler, from_addr, blockstore, *slot, *index, *nonce,
+                    );
+                    if batch.is_none() {
+                        stats.coding_index_misses += 1;
+                    }
+                    (batch, "CodingIndex")
                 }
                 RepairProtocol::LegacyWindowIndex(_, _, _)
                 | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
@@ -785,6 +814,8 @@ impl ServeRepair {
             ("err_sig_verify", stats.err_sig_verify, i64),
             ("err_unsigned", stats.err_unsigned, i64),
             ("err_id_mismatch", stats.err_id_mismatch, i64),
+            ("coding_index", stats.coding_index, i64),
+            ("coding_index_misses", stats.coding_index_misses, i64),
         );
 
         *stats = ServeRepairStats::default();
@@ -863,7 +894,8 @@ impl ServeRepair {
             RepairProtocol::WindowIndex { header, .. }
             | RepairProtocol::HighestWindowIndex { header, .. }
             | RepairProtocol::Orphan { header, .. }
-            | RepairProtocol::AncestorHashes { header, .. } => {
+            | RepairProtocol::AncestorHashes { header, .. }
+            | RepairProtocol::CodingIndex { header, .. } => {
                 if &header.recipient != my_id {
                     return Err(Error::from(RepairVerifyError::IdMismatch));
                 }
@@ -909,7 +941,8 @@ impl ServeRepair {
             match request {
                 RepairProtocol::WindowIndex { .. }
                 | RepairProtocol::HighestWindowIndex { .. }
-                | RepairProtocol::Orphan { .. } => {
+                | RepairProtocol::Orphan { .. }
+                | RepairProtocol::CodingIndex { .. } => {
                     let ping = RepairResponse::Ping(ping);
                     Packet::from_data(Some(from_addr), ping).ok()
                 }
@@ -1181,6 +1214,16 @@ impl ServeRepair {
                     slot: *slot,
                 }
             }
+            ShredRepairType::CodingIndex(slot, index) => {
+                repair_stats
+                    .coding_index
+                    .update(repair_peer_id, *slot, *index);
+                RepairProtocol::CodingIndex {
+                    header,
+                    slot: *slot,
+                    index: *index,
+                }
+            }
         };
         Self::repair_proto_to_bytes(&request_proto, identity_keypair)
     }
@@ -1283,6 +1326,25 @@ impl ServeRepair {
         Some(PacketBatch::new_unpinned_with_recycler_data(
             recycler,
             "run_window_request",
+            vec![packet],
+        ))
+    }
+
+    fn run_coding_index_request(
+        recycler: &PacketBatchRecycler,
+        from_addr: &SocketAddr,
+        blockstore: &Blockstore,
+        slot: Slot,
+        index: u64,
+        nonce: Nonce,
+    ) -> Option<PacketBatch> {
+        // Try to find the requested index in one of the slots
+        let packet = repair_response::repair_coding_response_packet(
+            blockstore, slot, index, from_addr, nonce,
+        )?;
+        Some(PacketBatch::new_unpinned_with_recycler_data(
+            recycler,
+            "run_coding_index_request",
             vec![packet],
         ))
     }
@@ -2422,7 +2484,8 @@ mod tests {
         match repair {
             ShredRepairType::Orphan(_)
             | ShredRepairType::HighestShred(_, _)
-            | ShredRepairType::Shred(_, _) => (),
+            | ShredRepairType::Shred(_, _)
+            | ShredRepairType::CodingIndex(_, _) => (),
         };
 
         let slot = 9;

@@ -894,6 +894,10 @@ impl Blockstore {
                     };
                 }
                 ShredType::Code => {
+                    if is_repaired {
+                        metrics.num_coding_shreds_repaired_insert += 1;
+                    }
+                    error!("CODE with shred_source={shred_source:?}");
                     self.check_insert_coding_shred(
                         shred,
                         &mut erasure_metas,
@@ -1250,8 +1254,13 @@ impl Blockstore {
             return false;
         }
 
-        self.slots_stats
-            .record_shred(shred.slot(), shred.fec_set_index(), shred_source, None);
+        self.slots_stats.record_shred(
+            shred.slot(),
+            shred.fec_set_index(),
+            shred_source,
+            None,
+            false,
+        );
 
         // insert coding shred into rocks
         let result = self
@@ -1656,6 +1665,7 @@ impl Blockstore {
             shred.fec_set_index(),
             shred_source,
             Some(slot_meta),
+            true,
         );
 
         // slot is full, send slot full timing to poh_timing_report service.
@@ -1909,10 +1919,21 @@ impl Blockstore {
             let upper_index = cmp::min(current_index, end_index);
             // the tick that will be used to figure out the timeout for this hole
             let data = db_iterator.value().expect("couldn't read value");
-            let reference_tick = u64::from(shred::layout::get_reference_tick(data).unwrap());
-            if ticks_since_first_insert < reference_tick + defer_threshold_ticks {
-                // The higher index holes have not timed out yet
-                break;
+
+            let shred_type = match shred::layout::get_shred_type(data) {
+                Ok(shred_type) => shred_type,
+                Err(e) => {
+                    error!("find_missing_indexes get_shred_type error: {e:?}");
+                    break;
+                }
+            };
+
+            if shred_type == ShredType::Data {
+                let reference_tick = u64::from(shred::layout::get_reference_tick(data).unwrap());
+                if ticks_since_first_insert < reference_tick + defer_threshold_ticks {
+                    // The higher index holes have not timed out yet
+                    break;
+                }
             }
 
             let num_to_take = max_missing - missing_indexes.len();
@@ -1949,6 +1970,36 @@ impl Blockstore {
             .raw_iterator_cf(self.db.cf_handle::<cf::ShredData>())
         {
             Self::find_missing_indexes::<cf::ShredData>(
+                &mut db_iterator,
+                slot,
+                first_timestamp,
+                defer_threshold_ticks,
+                start_index,
+                end_index,
+                max_missing,
+            )
+        } else {
+            vec![]
+        }
+    }
+
+    /// Find missing coding shreds for the given `slot`.
+    ///
+    /// For more details on the arguments, see [`find_missing_indexes`].
+    pub fn find_missing_code_indexes(
+        &self,
+        slot: Slot,
+        first_timestamp: u64,
+        defer_threshold_ticks: u64,
+        start_index: u64,
+        end_index: u64,
+        max_missing: usize,
+    ) -> Vec<u64> {
+        if let Ok(mut db_iterator) = self
+            .db
+            .raw_iterator_cf(self.db.cf_handle::<cf::ShredCode>())
+        {
+            Self::find_missing_indexes::<cf::ShredCode>(
                 &mut db_iterator,
                 slot,
                 first_timestamp,

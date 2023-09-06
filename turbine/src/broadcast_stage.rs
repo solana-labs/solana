@@ -1,5 +1,7 @@
 //! A stage to broadcast data from a leader node to validators
 #![allow(clippy::rc_buffer)]
+
+use rand::Rng;
 use {
     self::{
         broadcast_duplicates_run::{BroadcastDuplicatesConfig, BroadcastDuplicatesRun},
@@ -446,6 +448,9 @@ pub fn broadcast_shreds(
                 cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);
             update_peer_stats(&cluster_nodes, last_datapoint_submit);
             shreds.filter_map(move |shred| {
+                if rand::thread_rng().gen_range(0..100) < 70 {
+                    return None;
+                }
                 let key = shred.id();
                 let protocol = cluster_nodes::get_broadcast_protocol(&key);
                 cluster_nodes

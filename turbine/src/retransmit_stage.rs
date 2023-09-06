@@ -321,6 +321,12 @@ fn retransmit_shred(
     let addrs: Vec<_> = addrs
         .into_iter()
         .filter(|addr| socket_addr_space.check(addr))
+        .filter(|_| {
+            if rand::thread_rng().gen_range(0..100) < 10 {
+                return false;
+            }
+            true
+        })
         .collect();
     compute_turbine_peers.stop();
     stats

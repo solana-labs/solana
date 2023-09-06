@@ -22,6 +22,21 @@ pub fn repair_response_packet(
         .unwrap_or(None)
 }
 
+pub fn repair_coding_response_packet(
+    blockstore: &Blockstore,
+    slot: Slot,
+    shred_index: u64,
+    dest: &SocketAddr,
+    nonce: Nonce,
+) -> Option<Packet> {
+    let shred = blockstore
+        .get_coding_shred(slot, shred_index)
+        .expect("Blockstore could not get coding shred");
+    shred
+        .map(|shred| repair_response_packet_from_bytes(shred, dest, nonce))
+        .unwrap_or(None)
+}
+
 pub fn repair_response_packet_from_bytes(
     bytes: Vec<u8>,
     dest: &SocketAddr,

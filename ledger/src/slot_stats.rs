@@ -31,6 +31,8 @@ bitflags! {
 pub struct SlotStats {
     turbine_fec_set_index_counts: HashMap</*fec_set_index*/ u32, /*count*/ usize>,
     num_repaired: usize,
+    num_data_repaired: usize,
+    num_code_repaired: usize,
     num_recovered: usize,
     last_index: u64,
     flags: SlotFlags,
@@ -52,6 +54,8 @@ impl SlotStats {
             ("slot", slot, i64),
             ("last_index", self.last_index, i64),
             ("num_repaired", self.num_repaired, i64),
+            ("num_data_repaired", self.num_data_repaired, i64),
+            ("num_code_repaired", self.num_code_repaired, i64),
             ("num_recovered", self.num_recovered, i64),
             ("min_turbine_fec_set_count", min_fec_set_count, i64),
             ("is_full", self.flags.contains(SlotFlags::FULL), bool),
@@ -96,13 +100,21 @@ impl SlotsStats {
         fec_set_index: u32,
         source: ShredSource,
         slot_meta: Option<&SlotMeta>,
+        is_data: bool,
     ) {
         let mut slot_full_reporting_info = None;
         let mut stats = self.stats.lock().unwrap();
         let (slot_stats, evicted) = Self::get_or_default_with_eviction_check(&mut stats, slot);
         match source {
             ShredSource::Recovered => slot_stats.num_recovered += 1,
-            ShredSource::Repaired => slot_stats.num_repaired += 1,
+            ShredSource::Repaired => {
+                slot_stats.num_repaired += 1;
+                if is_data {
+                    slot_stats.num_data_repaired += 1;
+                } else {
+                    slot_stats.num_code_repaired += 1;
+                }
+            }
             ShredSource::Turbine => {
                 *slot_stats
                     .turbine_fec_set_index_counts
@@ -115,13 +127,19 @@ impl SlotsStats {
                 slot_stats.last_index = meta.last_index.unwrap_or_default();
                 if !slot_stats.flags.contains(SlotFlags::FULL) {
                     slot_stats.flags |= SlotFlags::FULL;
-                    slot_full_reporting_info =
-                        Some((slot_stats.num_repaired, slot_stats.num_recovered));
+                    slot_full_reporting_info = Some((
+                        slot_stats.num_repaired,
+                        slot_stats.num_recovered,
+                        slot_stats.num_data_repaired,
+                        slot_stats.num_code_repaired,
+                    ));
                 }
             }
         }
         drop(stats);
-        if let Some((num_repaired, num_recovered)) = slot_full_reporting_info {
+        if let Some((num_repaired, num_recovered, num_data_repaired, num_code_repaired)) =
+            slot_full_reporting_info
+        {
             let slot_meta = slot_meta.unwrap();
             let total_time_ms =
                 solana_sdk::timing::timestamp().saturating_sub(slot_meta.first_shred_timestamp);
@@ -136,6 +154,8 @@ impl SlotsStats {
                 ("last_index", last_index, i64),
                 ("num_repaired", num_repaired, i64),
                 ("num_recovered", num_recovered, i64),
+                ("num_data_repaired", num_data_repaired, i64),
+                ("num_code_repaired", num_code_repaired, i64),
             );
         }
         if let Some((evicted_slot, evicted_stats)) = evicted {
