@@ -10,7 +10,7 @@ use {
         ValidatorType,
     },
     solana_sdk::genesis_config::GenesisConfig,
-    std::{thread, time::Duration},
+    std::{thread, time::Duration, process::exit},
 };
 
 const BOOTSTRAP_VALIDATOR_REPLICAS: i32 = 1;
@@ -99,19 +99,21 @@ fn parse_matches() -> ArgMatches<'static> {
         .arg(
             Arg::with_name("docker_build")
                 .long("docker-build")
+                .requires("registry_name")
                 .help("Build Docker images. If not set, will assume local docker image should be used"),
         )
         .arg(
             Arg::with_name("registry_name")
                 .long("registry")
                 .takes_value(true)
-                .requires("docker_build")
+                .required_if("docker_build", "true")
                 .help("Registry to push docker image to"),
         )
         .arg(
             Arg::with_name("image_name")
                 .long("image-name")
                 .takes_value(true)
+                .default_value_if("docker_build", None, "k8s-cluster-image")
                 .requires("docker_build")
                 .help("Docker image name. Will be prepended with validator_type (bootstrap or validator)"),
         )
@@ -119,7 +121,7 @@ fn parse_matches() -> ArgMatches<'static> {
             Arg::with_name("base_image")
                 .long("base-image")
                 .takes_value(true)
-                .default_value("ubuntu:20.04")
+                .default_value_if("docker_build", None, "ubuntu:20.04")
                 .requires("docker_build")
                 .help("Docker base image"),
         )
@@ -127,9 +129,7 @@ fn parse_matches() -> ArgMatches<'static> {
             Arg::with_name("image_tag")
                 .long("tag")
                 .takes_value(true)
-                // .default_value("k8s-cluster-image")
-                .default_value("latest")
-                .requires("docker_build")
+                .default_value_if("docker_build", None, "latest")
                 .help("Docker image tag."),
         )
         .arg(
@@ -181,12 +181,18 @@ async fn main() {
         }
     }
 
+
+
     // Download validator version and Build docker image
-    let docker_image_config = DockerImageConfig {
-        base_image: matches.value_of("base_image").unwrap_or_default(),
-        image_name: matches.value_of("image_name").unwrap(),
-        tag: matches.value_of("image_tag").unwrap_or_default(),
-        registry: matches.value_of("registry_name").unwrap(),
+    let docker_image_config = if build_config.docker_build {
+        Some(DockerImageConfig {
+            base_image: matches.value_of("base_image").unwrap_or_default(),
+            image_name: matches.value_of("image_name").unwrap(),
+            tag: matches.value_of("image_tag").unwrap_or_default(),
+            registry: matches.value_of("registry_name").unwrap()
+        })
+    } else {
+        None
     };
 
     let deploy = Deploy::new(build_config.clone());
@@ -198,36 +204,39 @@ async fn main() {
         }
     }
 
-    if build_config.docker_build {
-        let docker = DockerConfig::new(docker_image_config, build_config.deploy_method);
-        let image_types = vec!["bootstrap", "validator"];
-        for image_type in image_types {
-            match docker.build_image(image_type).await {
-                Ok(_) => info!("Docker image built successfully"),
+    match docker_image_config {
+        Some(config) => {
+            let docker = DockerConfig::new(config, build_config.deploy_method);
+            let image_types = vec!["bootstrap", "validator"];
+            for image_type in image_types {
+                match docker.build_image(image_type).await {
+                    Ok(_) => info!("Docker image built successfully"),
+                    Err(err) => {
+                        error!("Exiting........ {}", err);
+                        return;
+                    }
+                }
+            }
+
+            // Need to push image to registry so Monogon nodes can pull image from registry to local
+            match docker.push_image("bootstrap").await {
+                Ok(_) => info!("Bootstrap Image pushed successfully to registry"),
                 Err(err) => {
-                    error!("Exiting........ {}", err);
+                    error!("{}", err);
+                    return;
+                }
+            }
+
+            // Need to push image to registry so Monogon nodes can pull image from registry to local
+            match docker.push_image("validator").await {
+                Ok(_) => info!("Validator Image pushed successfully to registry"),
+                Err(err) => {
+                    error!("{}", err);
                     return;
                 }
             }
         }
-
-        // Need to push image to registry so Monogon nodes can pull image from registry to local
-        match docker.push_image("bootstrap").await {
-            Ok(_) => info!("Bootstrap Image pushed successfully to registry"),
-            Err(err) => {
-                error!("{}", err);
-                return;
-            }
-        }
-
-        // Need to push image to registry so Monogon nodes can pull image from registry to local
-        match docker.push_image("validator").await {
-            Ok(_) => info!("Validator Image pushed successfully to registry"),
-            Err(err) => {
-                error!("{}", err);
-                return;
-            }
-        }
+        _ => ()   
     }
 
     info!("Creating Genesis");

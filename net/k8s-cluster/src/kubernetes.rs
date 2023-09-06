@@ -118,6 +118,7 @@ impl<'a> Kubernetes<'a> {
 
         // let command = vec!["/workspace/start-bootstrap-validator.sh".to_string()];
         let command = vec!["sleep".to_string(), "3600".to_string()];
+        // let command = vec!["nohup"]
 
         self.create_replicas_set(
             "bootstrap-validator",
