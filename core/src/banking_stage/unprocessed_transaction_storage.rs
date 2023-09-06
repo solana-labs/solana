@@ -768,7 +768,7 @@ impl ThreadLocalUnprocessedPackets {
 
     /// Checks sanitized transactions against bank, returns valid transaction indexes
     fn filter_invalid_transactions(
-        transactions: &[SanitizedTransaction],
+        transactions: &[SanitizedTransction],
         invalid_fee_payer_filter: &InvalidFeePayerFilter,
         bank: &Bank,
         total_dropped_packets: &mut usize,
@@ -777,7 +777,10 @@ impl ThreadLocalUnprocessedPackets {
             .iter()
             .map(|tx| {
                 if invalid_fee_payer_filter.should_reject(&tx.message().account_keys()[0]) {
-                    Err(TransactionError::InsufficientFundsForFee)
+                    // Actual error variant is not used - Result is only used to skip additional
+                    // checks in `check_transactions_with_forwarding_delay`, since this will not
+                    // be forwarded.
+                    Err(TransactionError::InvalidAccountForFee)
                 } else {
                     Ok(())
                 }
