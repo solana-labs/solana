@@ -24,7 +24,6 @@ use {
     dashmap::DashMap,
     itertools::Itertools,
     log::*,
-    solana_address_lookup_table_program::state::AddressLookupTable,
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget},
         loaded_programs::LoadedProgramsForTxBatch,
@@ -32,7 +31,7 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
-        address_lookup_table::{self, error::AddressLookupError},
+        address_lookup_table::{self, error::AddressLookupError, state::AddressLookupTable},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{

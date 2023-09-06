@@ -1,7 +1,6 @@
 use {
     crate::parse_account_data::{ParsableAccount, ParseAccountError},
-    solana_address_lookup_table_program::state::AddressLookupTable,
-    solana_sdk::instruction::InstructionError,
+    solana_sdk::{address_lookup_table::state::AddressLookupTable, instruction::InstructionError},
 };
 
 pub fn parse_address_lookup_table(

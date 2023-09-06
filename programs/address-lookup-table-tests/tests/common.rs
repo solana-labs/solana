@@ -1,12 +1,13 @@
 #![allow(dead_code)]
 use {
-    solana_address_lookup_table_program::{
-        processor::process_instruction, state::AddressLookupTable,
-    },
+    solana_address_lookup_table_program::processor::process_instruction,
     solana_program_test::*,
     solana_sdk::{
         account::AccountSharedData,
-        address_lookup_table::{program::id, state::LookupTableMeta},
+        address_lookup_table::{
+            program::id,
+            state::{AddressLookupTable, LookupTableMeta},
+        },
         clock::Slot,
         hash::Hash,
         instruction::{Instruction, InstructionError},

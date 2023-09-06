@@ -105,12 +105,14 @@ impl ReadWriteAccountSet {
 mod tests {
     use {
         super::ReadWriteAccountSet,
-        solana_address_lookup_table_program::state::AddressLookupTable,
         solana_ledger::genesis_utils::GenesisConfigInfo,
         solana_runtime::{bank::Bank, genesis_utils::create_genesis_config},
         solana_sdk::{
             account::AccountSharedData,
-            address_lookup_table::{self, state::LookupTableMeta},
+            address_lookup_table::{
+                self,
+                state::{AddressLookupTable, LookupTableMeta},
+            },
             hash::Hash,
             message::{
                 v0::{self, MessageAddressTableLookup},

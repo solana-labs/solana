@@ -1,15 +1,13 @@
 use {
     assert_matches::assert_matches,
     common::{assert_ix_error, overwrite_slot_hashes_with_slots, setup_test_context},
-    solana_address_lookup_table_program::{
-        processor::process_instruction, state::AddressLookupTable,
-    },
+    solana_address_lookup_table_program::processor::process_instruction,
     solana_program_test::*,
     solana_sdk::{
         address_lookup_table::{
             instruction::{create_lookup_table, create_lookup_table_signed},
             program::id,
-            state::LOOKUP_TABLE_META_SIZE,
+            state::{AddressLookupTable, LOOKUP_TABLE_META_SIZE},
         },
         clock::Slot,
         feature_set,
