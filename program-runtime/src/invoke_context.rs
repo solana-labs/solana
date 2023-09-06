@@ -748,7 +748,8 @@ impl<'a> InvokeContext<'a> {
             .ok_or(InstructionError::UnsupportedProgramId)?;
         let process_instruction = match &entry.program {
             LoadedProgramType::Builtin(program) => program
-                .lookup_function(ENTRYPOINT_KEY)
+                .get_function_registry()
+                .lookup_by_key(ENTRYPOINT_KEY)
                 .map(|(_name, process_instruction)| process_instruction),
             _ => None,
         }

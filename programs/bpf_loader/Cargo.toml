@@ -14,7 +14,6 @@ bincode = { workspace = true }
 byteorder = { workspace = true }
 libsecp256k1 = { workspace = true }
 log = { workspace = true }
-rand = { workspace = true }
 scopeguard = { workspace = true }
 solana-measure = { workspace = true }
 solana-program-runtime = { workspace = true }
@@ -26,6 +25,7 @@ thiserror = { workspace = true }
 [dev-dependencies]
 assert_matches = { workspace = true }
 memoffset = { workspace = true }
+rand = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 
 [lib]

@@ -22,7 +22,6 @@ use {
         elf::Executable,
         error::EbpfError,
         memory_region::{AccessType, MemoryCowCallback, MemoryMapping, MemoryRegion},
-        verifier::RequisiteVerifier,
         vm::{BuiltinProgram, ContextObject, EbpfVm, ProgramResult},
     },
     solana_sdk::{
@@ -191,7 +190,7 @@ pub fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: 
 
 /// Only used in macro, do not use directly!
 pub fn create_vm<'a, 'b>(
-    program: &'a Executable<RequisiteVerifier, InvokeContext<'b>>,
+    program: &'a Executable<InvokeContext<'b>>,
     regions: Vec<MemoryRegion>,
     accounts_metadata: Vec<SerializedAccountMetadata>,
     invoke_context: &'a mut InvokeContext<'b>,
@@ -285,24 +284,21 @@ macro_rules! create_vm {
 #[macro_export]
 macro_rules! mock_create_vm {
     ($vm:ident, $additional_regions:expr, $accounts_metadata:expr, $invoke_context:expr $(,)?) => {
-        let loader = std::sync::Arc::new(BuiltinProgram::new_loader(
-            solana_rbpf::vm::Config::default(),
-        ));
-        let function_registry = solana_rbpf::vm::FunctionRegistry::default();
-        let executable = solana_rbpf::elf::Executable::<
-            solana_rbpf::verifier::TautologyVerifier,
-            InvokeContext,
-        >::from_text_bytes(
+        let loader = std::sync::Arc::new(BuiltinProgram::new_mock());
+        let function_registry = solana_rbpf::elf::FunctionRegistry::default();
+        let executable = solana_rbpf::elf::Executable::<InvokeContext>::from_text_bytes(
             &[0x95, 0, 0, 0, 0, 0, 0, 0],
             loader,
             SBPFVersion::V2,
             function_registry,
         )
         .unwrap();
-        let verified_executable = solana_rbpf::elf::Executable::verified(executable).unwrap();
+        executable
+            .verify::<solana_rbpf::verifier::RequisiteVerifier>()
+            .unwrap();
         $crate::create_vm!(
             $vm,
-            &verified_executable,
+            &executable,
             $additional_regions,
             $accounts_metadata,
             $invoke_context,
@@ -311,7 +307,7 @@ macro_rules! mock_create_vm {
 }
 
 fn create_memory_mapping<'a, 'b, C: ContextObject>(
-    executable: &'a Executable<RequisiteVerifier, C>,
+    executable: &'a Executable<C>,
     stack: &'b mut AlignedMemory<{ HOST_ALIGN }>,
     heap: &'b mut AlignedMemory<{ HOST_ALIGN }>,
     additional_regions: Vec<MemoryRegion>,
@@ -1483,14 +1479,12 @@ fn process_loader_instruction(invoke_context: &mut InvokeContext) -> Result<(), 
 }
 
 fn execute<'a, 'b: 'a>(
-    executable: &'a Executable<RequisiteVerifier, InvokeContext<'static>>,
+    executable: &'a Executable<InvokeContext<'static>>,
     invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // We dropped the lifetime tracking in the Executor by setting it to 'static,
     // thus we need to reintroduce the correct lifetime of InvokeContext here again.
-    let executable = unsafe {
-        mem::transmute::<_, &'a Executable<RequisiteVerifier, InvokeContext<'b>>>(executable)
-    };
+    let executable = unsafe { mem::transmute::<_, &'a Executable<InvokeContext<'b>>>(executable) };
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -1728,11 +1722,7 @@ mod tests {
         solana_program_runtime::{
             invoke_context::mock_process_instruction, with_mock_invoke_context,
         },
-        solana_rbpf::{
-            elf::SBPFVersion,
-            verifier::Verifier,
-            vm::{Config, ContextObject, FunctionRegistry},
-        },
+        solana_rbpf::vm::ContextObject,
         solana_sdk::{
             account::{
                 create_account_shared_data_for_test as create_account_for_test, AccountSharedData,
@@ -1794,21 +1784,6 @@ mod tests {
         program_account.set_data(elf);
         program_account.set_executable(true);
         program_account
-    }
-
-    #[test]
-    #[should_panic(expected = "LDDWCannotBeLast")]
-    fn test_bpf_loader_check_load_dw() {
-        let prog = &[
-            0x18, 0x00, 0x00, 0x00, 0x88, 0x77, 0x66, 0x55, // first half of lddw
-        ];
-        RequisiteVerifier::verify(
-            prog,
-            &Config::default(),
-            &SBPFVersion::V2,
-            &FunctionRegistry::default(),
-        )
-        .unwrap();
     }
 
     #[test]
@@ -4103,7 +4078,7 @@ mod tests {
         let transaction_accounts = vec![];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let program_id = Pubkey::new_unique();
-        let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
+        let env = Arc::new(BuiltinProgram::new_mock());
         let program = LoadedProgram {
             program: LoadedProgramType::Unloaded(env),
             account_size: 0,
@@ -4143,7 +4118,7 @@ mod tests {
         let transaction_accounts = vec![];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let program_id = Pubkey::new_unique();
-        let env = Arc::new(BuiltinProgram::new_loader(Config::default()));
+        let env = Arc::new(BuiltinProgram::new_mock());
         let program = LoadedProgram {
             program: LoadedProgramType::Unloaded(env),
             account_size: 0,

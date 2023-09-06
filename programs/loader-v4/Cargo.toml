@@ -10,7 +10,6 @@ edition = { workspace = true }
 
 [dependencies]
 log = { workspace = true }
-rand = { workspace = true }
 solana-measure = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-sdk = { workspace = true }
