@@ -3,14 +3,19 @@ mod tests {
     use {
         crossbeam_channel::{unbounded, Receiver},
         log::*,
+        quinn::Endpoint,
         rayon::iter::{IntoParallelIterator, ParallelIterator},
-        solana_connection_cache::connection_cache_stats::ConnectionCacheStats,
+        solana_connection_cache::{
+            client_connection::ClientConnection, connection_cache::ConnectionCache,
+            connection_cache_stats::ConnectionCacheStats,
+        },
         solana_perf::packet::PacketBatch,
-        solana_quic_client::nonblocking::quic_client::{
-            QuicClientCertificate, QuicLazyInitializedEndpoint,
+        solana_quic_client::{
+            nonblocking::quic_client::{QuicClientCertificate, QuicLazyInitializedEndpoint},
+            QuicConfig, QuicConnectionManager, QuicPool,
         },
         solana_sdk::{
-            net::DEFAULT_TPU_COALESCE, packet::PACKET_DATA_SIZE,
+            net::DEFAULT_TPU_COALESCE, packet::PACKET_DATA_SIZE, pubkey::Pubkey,
             quic::QUIC_MAX_STAKED_CONCURRENT_STREAMS, signature::Keypair,
         },
         solana_streamer::{
@@ -351,6 +356,80 @@ mod tests {
                 tpu_addr,
                 connection_cache_stats.clone(),
             );
+
+            // Send a full size packet with single byte writes.
+            let num_expected_packets: usize = 1;
+
+            thread_pool.install(|| {
+                (0..QUIC_MAX_STAKED_CONCURRENT_STREAMS)
+                    .into_par_iter()
+                    .for_each(|_i| {
+                        let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
+                        let rslt = client.send_data_batch(&packets);
+                        if let Err(rslt) = rslt {
+                            info!("Connection {i} error {_i} {rslt:?}");
+                        }
+                    });
+            });
+
+            clients.push(client);
+        }
+    }
+
+    /// Create a quic connection_cache
+    fn new_quic(
+        name: &'static str,
+        connection_pool_size: usize,
+    ) -> ConnectionCache<QuicPool, QuicConnectionManager, QuicConfig> {
+        new_with_client_options(name, connection_pool_size, None, None, None)
+    }
+
+    /// Create a quic conneciton_cache with more client options
+    fn new_with_client_options(
+        name: &'static str,
+        connection_pool_size: usize,
+        client_endpoint: Option<Endpoint>,
+        cert_info: Option<(&Keypair, IpAddr)>,
+        stake_info: Option<(&Arc<RwLock<StakedNodes>>, &Pubkey)>,
+    ) -> ConnectionCache<QuicPool, QuicConnectionManager, QuicConfig> {
+        // The minimum pool size is 1.
+        let connection_pool_size = 1.max(connection_pool_size);
+        let mut config = QuicConfig::new().unwrap();
+        if let Some(client_endpoint) = client_endpoint {
+            config.update_client_endpoint(client_endpoint);
+        }
+        if let Some(cert_info) = cert_info {
+            config
+                .update_client_certificate(cert_info.0, cert_info.1)
+                .unwrap();
+        }
+        if let Some(stake_info) = stake_info {
+            config.set_staked_nodes(stake_info.0, stake_info.1);
+        }
+        let connection_manager = QuicConnectionManager::new_with_connection_config(config);
+        ConnectionCache::new(name, connection_manager, connection_pool_size).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_connection_cache_memory_usage_2() {
+        solana_logger::setup();
+
+        let addr = IpAddr::V4(Ipv4Addr::new(35, 233, 177, 221));
+        let port = 8009;
+        let tpu_addr = SocketAddr::new(addr, port);
+        let mut clients = Vec::default();
+
+        let connection_cache = new_quic("test_connection_cache", 8000);
+
+        let thread_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(512)
+            .thread_name(|i| format!("concame{i:02}"))
+            .build()
+            .unwrap();
+
+        for i in 0..8000 {
+            println!("Connection {i}");
+            let client = connection_cache.get_connection(&tpu_addr);
 
             // Send a full size packet with single byte writes.
             let num_expected_packets: usize = 1;
