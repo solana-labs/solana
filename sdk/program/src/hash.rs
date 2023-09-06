@@ -6,6 +6,7 @@
 use {
     crate::{sanitize::Sanitize, wasm_bindgen},
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
+    bytemuck::{Pod, Zeroable},
     sha2::{Digest, Sha256},
     std::{convert::TryFrom, fmt, mem, str::FromStr},
     thiserror::Error,
@@ -41,6 +42,8 @@ const MAX_BASE58_LEN: usize = 44;
     Ord,
     PartialOrd,
     Hash,
+    Pod,
+    Zeroable,
     AbiExample,
 )]
 #[repr(transparent)]

@@ -326,8 +326,7 @@ impl CacheHashData {
         let mut m2 = Measure::start("write_to_mmap");
         let mut i = 0;
         for x in data {
-            let size = x.len() * std::mem::size_of::<EntryType>();
-            let slice = unsafe { std::slice::from_raw_parts(x.as_ptr() as *const u8, size) };
+            let slice = bytemuck::cast_slice(x.as_slice());
             fw.write_all(slice)?;
             i += x.len();
         }
