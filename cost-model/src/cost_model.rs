@@ -14,6 +14,7 @@ use {
     solana_sdk::{
         borsh0_10::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
+        compute_budget_processor::*,
         feature_set::{
             add_set_tx_loaded_accounts_data_size_instruction,
             include_loaded_accounts_data_size_in_fee_calculation,
@@ -57,12 +58,14 @@ impl CostModel {
     // to set limit, `compute_budget.loaded_accounts_data_size_limit` is set to default
     // limit of 64MB; which will convert to (64M/32K)*8CU = 16_000 CUs
     //
+    /*
     pub fn calculate_loaded_accounts_data_size_cost(compute_budget: &ComputeBudget) -> u64 {
         FeeStructure::calculate_memory_usage_cost(
             compute_budget.loaded_accounts_data_size_limit,
             compute_budget.heap_cost,
         )
     }
+    // */
 
     fn get_signature_cost(transaction: &SanitizedTransaction) -> u64 {
         transaction.signatures().len() as u64 * SIGNATURE_COST
@@ -117,8 +120,6 @@ impl CostModel {
         }
 
         // calculate bpf cost based on compute budget instructions
-        let mut compute_budget = ComputeBudget::default();
-
         // Starting from v1.15, cost model uses compute_budget.set_compute_unit_limit to
         // measure bpf_costs (code below), vs earlier versions that use estimated
         // bpf instruction costs. The calculated transaction costs are used by leaders
@@ -126,7 +127,7 @@ impl CostModel {
         // will not impact consensus. So for v1.15+, should call compute budget with
         // the feature gate `enable_request_heap_frame_ix` enabled.
         let enable_request_heap_frame_ix = true;
-        let result = compute_budget.process_instructions(
+        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
             transaction.message().program_instructions_iter(),
             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
             enable_request_heap_frame_ix,
@@ -135,22 +136,24 @@ impl CostModel {
 
         // if failed to process compute_budget instructions, the transaction will not be executed
         // by `bank`, therefore it should be considered as no execution cost by cost model.
-        match result {
-            Ok(_) => {
+        match transaction_meta {
+            Ok(transaction_meta) => {
                 // if tx contained user-space instructions and a more accurate estimate available correct it,
                 // where "user-space instructions" must be specifically checked by
                 // 'compute_unit_limit_is_set' flag, because compute_budget does not distinguish
                 // builtin and bpf instructions when calculating default compute-unit-limit. (see
                 // compute_budget.rs test `test_process_mixed_instructions_without_compute_budget`)
                 if bpf_costs > 0 && compute_unit_limit_is_set {
-                    bpf_costs = compute_budget.compute_unit_limit
+                    bpf_costs = u64::from(transaction_meta.compute_unit_limit);
                 }
 
                 if feature_set
                     .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id())
                 {
-                    loaded_accounts_data_size_cost =
-                        Self::calculate_loaded_accounts_data_size_cost(&compute_budget);
+                    loaded_accounts_data_size_cost = FeeStructure::calculate_memory_usage_cost(
+                        transaction_meta.accounts_loaded_bytes,
+                        ComputeBudget::default().heap_cost,
+                    );
                 }
             }
             Err(_) => {

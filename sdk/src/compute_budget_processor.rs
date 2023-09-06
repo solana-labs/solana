@@ -22,6 +22,8 @@ pub struct TransactionMeta {
     pub updated_heap_bytes: usize,
     pub compute_unit_limit: u32,
     pub compute_unit_price: u64,
+    /// Maximum accounts data size, in bytes, that a transaction is allowed to load; The
+    /// value is capped by MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES to prevent overuse of memory.
     pub accounts_loaded_bytes: usize,
     // NOTE -
     // is_simple_vote can be consolidated into Meta here.

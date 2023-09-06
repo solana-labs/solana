@@ -116,14 +116,6 @@ pub struct ComputeBudget {
     pub alt_bn128_pairing_one_pair_cost_other: u64,
     /// Big integer modular exponentiation cost
     pub big_modular_exponentiation_cost: u64,
-    // TODO - remove `loaded_accounts_data_size_limit` from compute_budget
-    //        if its instructinos processing is moved to SDK. Cause compute_budget
-    //        itself doesn't care loaded_accounts at all, it is here just because
-    //        compute_budget instruction. Should aim to separate IXs from CB struct
-    //
-    /// Maximum accounts data size, in bytes, that a transaction is allowed to load; The
-    /// value is capped by MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES to prevent overuse of memory.
-    pub loaded_accounts_data_size_limit: usize,
     /// Coefficient `a` of the quadratic function which determines the number
     /// of compute units consumed to call poseidon syscall for a given number
     /// of inputs.
@@ -180,7 +172,6 @@ impl ComputeBudget {
             alt_bn128_pairing_one_pair_cost_first: 36_364,
             alt_bn128_pairing_one_pair_cost_other: 12_121,
             big_modular_exponentiation_cost: 33,
-            loaded_accounts_data_size_limit: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
             poseidon_cost_coefficient_a: 61,
             poseidon_cost_coefficient_c: 542,
         }
@@ -209,7 +200,6 @@ impl ComputeBudget {
         // TODO - heap_size doesn't have to be Option<>, it has its default value anyway.
         self.heap_size = Some(transaction_meta.updated_heap_bytes);
         self.compute_unit_limit = u64::from(transaction_meta.compute_unit_limit);
-        self.loaded_accounts_data_size_limit = transaction_meta.accounts_loaded_bytes;
         Ok(PrioritizationFeeDetails::new(
             PrioritizationFeeType::ComputeUnitPrice(transaction_meta.compute_unit_price),
             self.compute_unit_limit,

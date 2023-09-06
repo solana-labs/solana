@@ -26,14 +26,14 @@ use {
     log::*,
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_program_runtime::{
-        compute_budget::{self, ComputeBudget},
-        loaded_programs::LoadedProgramsForTxBatch,
+        compute_budget::ComputeBudget, loaded_programs::LoadedProgramsForTxBatch,
     },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
+        compute_budget_processor::*,
         feature_set::{
             self, add_set_tx_loaded_accounts_data_size_instruction,
             include_loaded_accounts_data_size_in_fee_calculation,
@@ -247,16 +247,15 @@ impl Accounts {
         feature_set: &FeatureSet,
     ) -> Result<Option<NonZeroUsize>> {
         if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
-            let mut compute_budget =
-                ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
-            let _process_transaction_result = compute_budget.process_instructions(
+            let transaction_meta = TransactionMeta::process_compute_budget_instruction(
                 tx.message().program_instructions_iter(),
                 !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
                 true, // don't reject txs that use request heap size ix
                 feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-            );
+            )
+            .unwrap_or_default();
             // sanitize against setting size limit to zero
-            NonZeroUsize::new(compute_budget.loaded_accounts_data_size_limit).map_or(
+            NonZeroUsize::new(transaction_meta.accounts_loaded_bytes).map_or(
                 Err(TransactionError::InvalidLoadedAccountsDataSizeLimit),
                 |v| Ok(Some(v)),
             )
