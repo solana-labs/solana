@@ -198,6 +198,7 @@ impl Message {
     /// use solana_address_lookup_table_program::state::AddressLookupTable;
     /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
+    ///      address_lookup_table,
     ///      address_lookup_table_account::AddressLookupTableAccount,
     ///      instruction::{AccountMeta, Instruction},
     ///      message::{VersionedMessage, v0},
@@ -217,7 +218,7 @@ impl Message {
     ///     #   data: AddressLookupTable {
     ///     #     addresses: Cow::Owned(instruction.accounts.iter().map(|meta| meta.pubkey).collect()),
     ///     #   }.serialize_for_tests().unwrap(),
-    ///     #   owner: solana_address_lookup_table_program::ID,
+    ///     #   owner: address_lookup_table::program::id(),
     ///     #   executable: false,
     ///     #   rent_epoch: 1,
     ///     # });

@@ -754,6 +754,7 @@ mod tests {
         solana_runtime::prioritization_fee_cache::PrioritizationFeeCache,
         solana_sdk::{
             account::AccountSharedData,
+            address_lookup_table,
             instruction::InstructionError,
             message::{v0, v0::MessageAddressTableLookup, MessageHeader, VersionedMessage},
             poh_config::PohConfig,
@@ -844,7 +845,7 @@ mod tests {
     ) -> AccountSharedData {
         let data = address_lookup_table.serialize_for_tests().unwrap();
         let mut account =
-            AccountSharedData::new(1, data.len(), &solana_address_lookup_table_program::id());
+            AccountSharedData::new(1, data.len(), &address_lookup_table::program::id());
         account.set_data(data);
         bank.store_account(&account_address, &account);
 

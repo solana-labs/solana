@@ -91,7 +91,7 @@ pub static BUILTINS: &[BuiltinPrototype] = &[
     },
     BuiltinPrototype {
         feature_id: None,
-        program_id: solana_address_lookup_table_program::id(),
+        program_id: solana_sdk::address_lookup_table::program::id(),
         name: "address_lookup_table_program",
         entrypoint: solana_address_lookup_table_program::processor::process_instruction,
     },

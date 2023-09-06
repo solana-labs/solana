@@ -110,6 +110,7 @@ mod tests {
         solana_runtime::{bank::Bank, genesis_utils::create_genesis_config},
         solana_sdk::{
             account::AccountSharedData,
+            address_lookup_table,
             hash::Hash,
             message::{
                 v0::{self, MessageAddressTableLookup},
@@ -178,7 +179,7 @@ mod tests {
         let address_table_key = Pubkey::new_unique();
         let data = address_lookup_table.serialize_for_tests().unwrap();
         let mut account =
-            AccountSharedData::new(1, data.len(), &solana_address_lookup_table_program::id());
+            AccountSharedData::new(1, data.len(), &address_lookup_table::program::id());
         account.set_data(data);
         bank.store_account(&address_table_key, &account);
 

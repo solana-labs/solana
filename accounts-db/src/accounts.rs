@@ -32,6 +32,7 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
+        address_lookup_table,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
@@ -781,7 +782,7 @@ impl Accounts {
             .map(|(account, _rent)| account)
             .ok_or(AddressLookupError::LookupTableAccountNotFound)?;
 
-        if table_account.owner() == &solana_address_lookup_table_program::id() {
+        if table_account.owner() == &address_lookup_table::program::id() {
             let current_slot = ancestors.max_slot();
             let lookup_table = AddressLookupTable::deserialize(table_account.data())
                 .map_err(|_ix_err| AddressLookupError::InvalidAccountData)?;
@@ -2356,7 +2357,7 @@ mod tests {
 
         let invalid_table_key = Pubkey::new_unique();
         let invalid_table_account =
-            AccountSharedData::new(1, 0, &solana_address_lookup_table_program::id());
+            AccountSharedData::new(1, 0, &address_lookup_table::program::id());
         accounts.store_slow_uncached(0, &invalid_table_key, &invalid_table_account);
 
         let address_table_lookup = MessageAddressTableLookup {
@@ -2395,7 +2396,7 @@ mod tests {
             AccountSharedData::create(
                 1,
                 table_state.serialize_for_tests().unwrap(),
-                solana_address_lookup_table_program::id(),
+                address_lookup_table::program::id(),
                 false,
                 0,
             )
