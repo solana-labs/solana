@@ -501,7 +501,7 @@ pub struct PrunedBanksRequestHandler {
 }
 
 impl PrunedBanksRequestHandler {
-    pub fn handle_request(&self, bank: &Bank, is_serialized_with_abs: bool) -> usize {
+    pub fn handle_request(&self, bank: &Bank) -> usize {
         let mut banks_to_purge: Vec<_> = self.pruned_banks_receiver.try_iter().collect();
         // We need a stable sort to ensure we purge banks—with the same slot—in the same order
         // they were sent into the channel.
@@ -530,7 +530,7 @@ impl PrunedBanksRequestHandler {
         accounts_db.thread_pool_clean.install(|| {
             grouped_banks_to_purge.into_par_iter().for_each(|group| {
                 group.iter().for_each(|(slot, bank_id)| {
-                    accounts_db.purge_slot(*slot, *bank_id, is_serialized_with_abs);
+                    accounts_db.purge_slot(*slot, *bank_id, true);
                 })
             });
         });
@@ -545,7 +545,7 @@ impl PrunedBanksRequestHandler {
         total_remove_slots_time: &mut u64,
     ) {
         let mut remove_slots_time = Measure::start("remove_slots_time");
-        *removed_slots_count += self.handle_request(bank, true);
+        *removed_slots_count += self.handle_request(bank);
         remove_slots_time.stop();
         *total_remove_slots_time += remove_slots_time.as_us();
 
@@ -1166,7 +1166,7 @@ mod test {
         drop(fork2_bank1);
         drop(fork0_bank1);
         drop(fork0_bank0);
-        let num_banks_purged = pruned_banks_request_handler.handle_request(&fork0_bank3, true);
+        let num_banks_purged = pruned_banks_request_handler.handle_request(&fork0_bank3);
         assert_eq!(num_banks_purged, 7);
     }
 

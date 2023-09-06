@@ -8562,7 +8562,7 @@ fn test_store_scan_consistency_unrooted() {
                 current_major_fork_bank.clean_accounts_for_tests();
                 // Move purge here so that Bank::drop()->purge_slots() doesn't race
                 // with clean. Simulates the call from AccountsBackgroundService
-                pruned_banks_request_handler.handle_request(&current_major_fork_bank, true);
+                pruned_banks_request_handler.handle_request(&current_major_fork_bank);
             }
         },
         Some(Box::new(SendDroppedBankCallback::new(pruned_banks_sender))),
