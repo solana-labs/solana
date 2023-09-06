@@ -13628,6 +13628,30 @@ fn test_calculate_stake_vote_rewards() {
 }
 
 #[test]
+fn test_register_hard_fork() {
+    fn get_hard_forks(bank: &Bank) -> Vec<Slot> {
+        bank.hard_forks().iter().map(|(slot, _)| *slot).collect()
+    }
+
+    let (genesis_config, _mint_keypair) = create_genesis_config(10);
+    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+
+    let bank7 = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 7);
+    bank7.register_hard_fork(6);
+    bank7.register_hard_fork(7);
+    bank7.register_hard_fork(8);
+    // Bank7 will reject slot 6 since it is older, but allow the other two hard forks
+    assert_eq!(get_hard_forks(&bank7), vec![7, 8]);
+
+    let bank9 = Bank::new_from_parent(bank0, &Pubkey::default(), 9);
+    bank9.freeze();
+    bank9.register_hard_fork(9);
+    bank9.register_hard_fork(10);
+    // Bank9 will reject slot 9 since it has already been frozen
+    assert_eq!(get_hard_forks(&bank9), vec![7, 8, 10]);
+}
+
+#[test]
 fn test_last_restart_slot() {
     fn last_restart_slot_dirty(bank: &Bank) -> bool {
         let (dirty_accounts, _, _) = bank
