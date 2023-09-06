@@ -1,7 +1,9 @@
 # Run this thing
+Login to Docker for pushing/pulling repos. we assume auth for registryies are already setup.
 ```
-export REGISTRY_USERNAME=<docker-registry-username> REGISTRY_PASSWORD=<docker-registry-password>
+docker login
 ```
+
 ```
 kubectl create ns greg
 ```

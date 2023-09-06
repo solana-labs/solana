@@ -200,13 +200,6 @@ async fn main() {
 
     if build_config.docker_build {
         let docker = DockerConfig::new(docker_image_config, build_config.deploy_method);
-        // just exit if we don't have credentials set
-        if !docker.registry_credentials_set() {
-            error!(
-                "Registry Credentials not set. Are REGISTRY_USERNAME and REGISTRY_PASSWORD set?"
-            );
-            return;
-        }
         let image_types = vec!["bootstrap", "validator"];
         for image_type in image_types {
             match docker.build_image(image_type).await {

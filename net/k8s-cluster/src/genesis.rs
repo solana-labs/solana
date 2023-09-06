@@ -18,13 +18,22 @@ use {
         native_token::sol_to_lamports,
         poh_config::PohConfig,
         rent::Rent,
-        signature::{keypair_from_seed, write_keypair, write_keypair_file, Keypair, Signer},
+        signature::{
+            keypair_from_seed, write_keypair, write_keypair_file, Keypair,
+            Signer,
+        },
         stake::state::StakeStateV2,
         system_program, timing,
     },
     solana_stake_program::stake_state,
     solana_vote_program::vote_state::{self, VoteState},
-    std::{error::Error, fs::File, io::Read, path::PathBuf, time::Duration},
+    std::{
+        error::Error,
+        fs::File,
+        io::Read,
+        path::PathBuf,
+        time::Duration,
+    },
 };
 
 pub const DEFAULT_WORD_COUNT: usize = 12;
@@ -97,9 +106,9 @@ impl<'a> Genesis<'a> {
     }
 
     pub fn generate_accounts(
-        &mut self,
-        validator_type: &str,
-        number_of_accounts: i32,
+        &mut self, 
+        validator_type: &str, 
+        number_of_accounts: i32
     ) -> Result<(), Box<dyn Error>> {
         let mut filename_prefix = "validator".to_string();
         if validator_type == "bootstrap" {
@@ -107,25 +116,18 @@ impl<'a> Genesis<'a> {
         } else if validator_type == "validator" {
             filename_prefix = "validator".to_string();
         } else {
-            return Err(boxed_error!(format!(
-                "Invalid validator type: {}",
-                validator_type
-            )));
+            return Err(boxed_error!(format!("Invalid validator type: {}", validator_type)));
         }
 
         for i in 0..number_of_accounts {
             self.generate_account(validator_type, filename_prefix.as_str(), i)?;
         }
 
+
         Ok(())
     }
 
-    fn generate_account(
-        &mut self,
-        validator_type: &str,
-        filename_prefix: &str,
-        i: i32,
-    ) -> Result<(), Box<dyn Error>> {
+    fn generate_account(&mut self, validator_type: &str, filename_prefix: &str, i: i32) -> Result<(), Box<dyn Error>> {
         let account_types = vec!["identity", "vote-account", "stake-account"];
         let mut identity: Option<Keypair> = None;
         let mut vote: Option<Keypair> = None;
@@ -137,10 +139,7 @@ impl<'a> Genesis<'a> {
             } else if validator_type == "validator" {
                 filename = format!("{}-{}-{}.json", filename_prefix, account, i);
             } else {
-                return Err(boxed_error!(format!(
-                    "Invalid validator type: {}",
-                    validator_type
-                )));
+                return Err(boxed_error!(format!("Invalid validator type: {}", validator_type)));
             }
 
             let outfile = self.config_dir.join(filename);
@@ -336,7 +335,10 @@ impl<'a> Genesis<'a> {
 mod tests {
     use {
         super::*,
-        solana_sdk::signature::{Keypair, Signer},
+        solana_sdk::{
+            signature::{Keypair, Signer},
+            pubkey::Pubkey,
+        },
         std::path::PathBuf,
     };
     fn make_tmp_path(name: &str) -> PathBuf {
