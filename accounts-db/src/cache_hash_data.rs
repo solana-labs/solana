@@ -8,7 +8,7 @@ use {
     std::{
         collections::HashSet,
         fs::{self, remove_file, File, OpenOptions},
-        io::{Seek, SeekFrom, Write},
+        io::Write,
         path::{Path, PathBuf},
         sync::{atomic::Ordering, Arc, Mutex},
     },
@@ -144,21 +144,6 @@ impl CacheHashDataFile {
         start
     }
 
-    /// get the bytes representing cache file [ix]
-    fn get_slice_internal(&self, ix: u64) -> &[u8] {
-        let start = self.get_element_offset_byte(ix);
-        let end = start + std::mem::size_of::<EntryType>();
-        assert!(
-            end <= self.capacity as usize,
-            "end: {}, capacity: {}, ix: {}, cell size: {}",
-            end,
-            self.capacity,
-            ix,
-            self.cell_size
-        );
-        &self.mmap[start..end]
-    }
-
     fn get_header_mut(&mut self) -> &mut Header {
         let start = 0_usize;
         let end = start + std::mem::size_of::<Header>();
@@ -167,23 +152,6 @@ impl CacheHashDataFile {
             let item = item_slice.as_ptr() as *mut Header;
             &mut *item
         }
-    }
-
-    fn new_map(file: impl AsRef<Path>, capacity: u64) -> Result<MmapMut, std::io::Error> {
-        let mut data = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open(file)?;
-
-        // Theoretical performance optimization: write a zero to the end of
-        // the file so that we won't have to resize it later, which may be
-        // expensive.
-        data.seek(SeekFrom::Start(capacity - 1)).unwrap();
-        data.write_all(&[0]).unwrap();
-        data.rewind().unwrap();
-        data.flush().unwrap();
-        Ok(unsafe { MmapMut::map_mut(&data).unwrap() })
     }
 }
 
