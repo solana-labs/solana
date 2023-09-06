@@ -126,15 +126,6 @@ impl CacheHashDataFile {
         m2.stop();
     }
 
-    /// get '&mut EntryType' from cache file [ix]
-    fn get_mut(&mut self, ix: u64) -> &mut EntryType {
-        let item_slice = self.get_slice_internal(ix);
-        unsafe {
-            let item = item_slice.as_ptr() as *mut EntryType;
-            &mut *item
-        }
-    }
-
     /// get '&[EntryType]' from cache file [ix..]
     fn get_slice(&self, ix: u64) -> &[EntryType] {
         let start = self.get_element_offset_byte(ix);
@@ -339,19 +330,26 @@ impl CacheHashData {
         let entries = entries.iter().sum::<usize>();
         let capacity = cell_size * (entries as u64) + std::mem::size_of::<Header>() as u64;
 
-        let mmap = CacheHashDataFile::new_map(&cache_path, capacity)?;
+        let file = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .append(true)
+            .open(cache_path)
+            .unwrap();
+        let mut fw = std::io::BufWriter::new(file);
+
+        let header = Header { count: entries };
+        let header_slice = unsafe {
+            std::slice::from_raw_parts(
+                (&header as *const Header) as *const u8,
+                std::mem::size_of::<Header>(),
+            )
+        };
+        fw.write_all(header_slice)?;
         m1.stop();
         self.stats
             .create_save_us
             .fetch_add(m1.as_us(), Ordering::Relaxed);
-        let mut cache_file = CacheHashDataFile {
-            mmap,
-            cell_size,
-            capacity,
-        };
-
-        let header = cache_file.get_header_mut();
-        header.count = entries;
 
         self.stats
             .cache_file_size
@@ -363,13 +361,12 @@ impl CacheHashData {
         let mut m2 = Measure::start("write_to_mmap");
         let mut i = 0;
         data.iter().for_each(|x| {
-            x.iter().for_each(|item| {
-                let d = cache_file.get_mut(i as u64);
-                i += 1;
-                *d = item.clone();
-            })
+            let size = x.len() * std::mem::size_of::<EntryType>();
+            let slice = unsafe { std::slice::from_raw_parts(x.as_ptr() as *const u8, size) };
+            fw.write_all(slice).unwrap();
+            i += x.len() as u64;
         });
-        assert_eq!(i, entries);
+        assert_eq!(i as usize, entries);
         m2.stop();
         self.stats
             .write_to_mmap_us
