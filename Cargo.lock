@@ -3202,6 +3202,7 @@ dependencies = [
  "bitflags 2.3.3",
  "cfg-if 1.0.0",
  "libc",
+ "memoffset 0.9.0",
 ]
 
 [[package]]
