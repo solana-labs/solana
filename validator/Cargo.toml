@@ -62,6 +62,7 @@ solana-test-validator = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
+solana-wen-restart = { workspace = true }
 symlink = { workspace = true }
 thiserror = { workspace = true }
 

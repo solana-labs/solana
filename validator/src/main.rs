@@ -74,6 +74,7 @@ use {
         ledger_lockfile, lock_ledger, new_spinner_progress_bar, println_name_value,
         redirect_stderr_to_file,
     },
+    solana_wen_restart::wen_restart::get_wen_restart_phase_one_result,
     std::{
         collections::{HashSet, VecDeque},
         env,
@@ -1088,9 +1089,30 @@ pub fn main() {
     // abort if it fails to obtain a shred-version, so that nodes always join
     // gossip with a valid shred-version. The code to adopt entrypoint shred
     // version can then be deleted from gossip and get_rpc_node above.
-    let expected_shred_version = value_t!(matches, "expected_shred_version", u16)
+    let mut expected_shred_version = value_t!(matches, "expected_shred_version", u16)
         .ok()
         .or_else(|| get_cluster_shred_version(&entrypoint_addrs));
+    let mut expected_bank_hash = matches
+        .value_of("expected_bank_hash")
+        .map(|s| Hash::from_str(s).unwrap());
+    let mut wait_for_supermajority = value_t!(matches, "wait_for_supermajority", Slot).ok();
+    let wen_restart = value_t!(matches, "wen_restart", PathBuf).ok();
+    if wait_for_supermajority.is_none() && wen_restart.is_some() {
+        match get_wen_restart_phase_one_result(&wen_restart) {
+            Ok(wen_restart_progress) => {
+                if let Some((slot, hash, shred_version)) = wen_restart_progress {
+                    wait_for_supermajority = Some(slot);
+                    expected_bank_hash = Some(hash);
+                    expected_shred_version = Some(shred_version);
+                }        
+            },
+            Err(e) => {
+                warn!("{}", e);
+                exit(1);
+            },
+        }
+    }
+
 
     let tower_storage: Arc<dyn tower_storage::TowerStorage> =
         match value_t_or_exit!(matches, "tower_storage", String).as_str() {
@@ -1268,9 +1290,7 @@ pub fn main() {
         expected_genesis_hash: matches
             .value_of("expected_genesis_hash")
             .map(|s| Hash::from_str(s).unwrap()),
-        expected_bank_hash: matches
-            .value_of("expected_bank_hash")
-            .map(|s| Hash::from_str(s).unwrap()),
+        expected_bank_hash,
         expected_shred_version,
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {
@@ -1339,7 +1359,7 @@ pub fn main() {
             },
         },
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
-        wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
+        wait_for_supermajority,
         known_validators,
         repair_validators,
         repair_whitelist,
@@ -1398,7 +1418,7 @@ pub fn main() {
             use_snapshot_archives_at_startup::cli::NAME,
             UseSnapshotArchivesAtStartup
         ),
-        wen_restart: value_t!(matches, "wen_restart", PathBuf).ok(),
+        wen_restart,
         ..ValidatorConfig::default()
     };
 

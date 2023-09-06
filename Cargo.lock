@@ -7390,6 +7390,7 @@ dependencies = [
  "solana-tpu-client",
  "solana-version",
  "solana-vote-program",
+ "solana-wen-restart",
  "spl-token-2022",
  "symlink",
  "thiserror",

@@ -121,7 +121,7 @@ use {
     solana_turbine::{self, broadcast_stage::BroadcastStageType},
     solana_vote_program::vote_state,
     solana_wen_restart::wen_restart::{
-        finish_wen_restart, get_wen_restart_phase_one_result, wen_restart,
+        finish_wen_restart, wen_restart,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -560,22 +560,8 @@ impl Validator {
             ));
         }
 
-        let mut wen_restart_slot = None;
-        let mut wait_for_supermajority_slot = config.wait_for_supermajority;
-        let mut wait_for_supermajority_hash = config.expected_bank_hash;
-        let mut expected_shred_version = config.expected_shred_version;
-        if wait_for_supermajority_slot.is_none() && config.wen_restart.is_some() {
-            let wen_restart_progress = get_wen_restart_phase_one_result(&config.wen_restart)?;
-            if let Some((slot, hash, shred_version)) = wen_restart_progress {
-                wen_restart_slot = Some(slot);
-                wait_for_supermajority_slot = wen_restart_slot;
-                wait_for_supermajority_hash = Some(hash);
-                expected_shred_version = Some(shred_version);
-            }
-        }
-
-        if let Some(expected_shred_version) = expected_shred_version {
-            if let Some(wait_for_supermajority_slot) = wait_for_supermajority_slot {
+        if let Some(expected_shred_version) = config.expected_shred_version {
+            if let Some(wait_for_supermajority_slot) = config.wait_for_supermajority {
                 *start_progress.write().unwrap() = ValidatorStartProgress::CleaningBlockStore;
                 backup_and_clear_blockstore(
                     ledger_path,
@@ -714,7 +700,7 @@ impl Validator {
 
         Self::print_node_info(&node);
 
-        if let Some(expected_shred_version) = expected_shred_version {
+        if let Some(expected_shred_version) = config.expected_shred_version {
             if expected_shred_version != node.info.shred_version() {
                 return Err(format!(
                     "shred version mismatch: expected {} found: {}",
@@ -834,11 +820,11 @@ impl Validator {
             &bank_forks,
             &leader_schedule_cache,
             &accounts_background_request_sender,
-            &wait_for_supermajority_slot,
+            &config.wait_for_supermajority,
         )?;
 
         if config.process_ledger_before_services {
-            process_blockstore.process(&wait_for_supermajority_slot)?;
+            process_blockstore.process(&config.wait_for_supermajority)?;
         }
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
 
@@ -1080,12 +1066,12 @@ impl Validator {
             repair_whitelist: config.repair_whitelist.clone(),
         });
 
-        let waited_for_supermajority = match wait_for_supermajority_slot {
+        let waited_for_supermajority = match config.wait_for_supermajority {
             None => false,
             Some(expected_slot) =>
                 wait_for_supermajority(
                     &expected_slot,
-                    &wait_for_supermajority_hash,
+                    &config.expected_bank_hash,
                     Some(&mut process_blockstore),
                     &bank_forks,
                     &cluster_info,
@@ -1094,7 +1080,7 @@ impl Validator {
                 )
                 .map_err(|err| format!("wait_for_supermajority failed: {err:?}"))?,
         };
-        if waited_for_supermajority && config.wait_for_supermajority.is_none() && wen_restart_slot.is_some() {
+        if waited_for_supermajority && config.wen_restart.is_some() {
             finish_wen_restart(&config.wen_restart)?;
         }
 
@@ -1105,12 +1091,12 @@ impl Validator {
             && !config.no_wait_for_vote_to_start_leader
             && config.wen_restart.is_none();
 
-        let tower = process_blockstore.process_to_create_tower(&wait_for_supermajority_slot)?;
+        let tower = process_blockstore.process_to_create_tower(&config.wait_for_supermajority)?;
         let last_vote = tower.last_vote();
         // TVU shred version should be the old one before wen_restart, otherwise repair results
         // from before the restart will be rejected.
         let tvu_shred_version = Arc::new(RwLock::new(node.info.shred_version()));
-        let in_wen_restart_phase_one = config.wen_restart.is_some() && wen_restart_slot.is_none();
+        let in_wen_restart_phase_one = config.wen_restart.is_some() && !waited_for_supermajority;
         if in_wen_restart_phase_one {
             node.info
                 .set_shred_version((node.info.shred_version() + 1) % 0xffff);
