@@ -254,23 +254,6 @@ impl CacheHashData {
         }
     }
 
-    #[cfg(test)]
-    /// load from 'file_name' into 'accumulator'
-    pub(crate) fn load(
-        &self,
-        file_name: impl AsRef<Path>,
-        accumulator: &mut SavedType,
-        start_bin_index: usize,
-        bin_calculator: &PubkeyBinCalculator24,
-    ) -> Result<(), std::io::Error> {
-        let mut m = Measure::start("overall");
-        let cache_file = self.load_map(file_name)?;
-        cache_file.load_all(accumulator, start_bin_index, bin_calculator);
-        m.stop();
-        self.stats.load_us.fetch_add(m.as_us(), Ordering::Relaxed);
-        Ok(())
-    }
-
     /// open a cache hash file, but don't map it.
     /// This allows callers to know a file exists, but preserves the # mmapped files.
     pub(crate) fn get_file_reference_to_map_later(
@@ -296,13 +279,6 @@ impl CacheHashData {
             path,
             stats: Arc::clone(&self.stats),
         })
-    }
-
-    #[cfg(test)]
-    /// map 'file_name' into memory
-    fn load_map(&self, file_name: impl AsRef<Path>) -> Result<CacheHashDataFile, std::io::Error> {
-        let reference = self.get_file_reference_to_map_later(file_name)?;
-        reference.map()
     }
 
     pub(crate) fn pre_existing_cache_file_will_be_used(&self, file_name: impl AsRef<Path>) {
@@ -382,8 +358,35 @@ impl CacheHashData {
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use {super::*, rand::Rng};
+
+    impl CacheHashData {
+        /// load from 'file_name' into 'accumulator'
+        fn load(
+            &self,
+            file_name: impl AsRef<Path>,
+            accumulator: &mut SavedType,
+            start_bin_index: usize,
+            bin_calculator: &PubkeyBinCalculator24,
+        ) -> Result<(), std::io::Error> {
+            let mut m = Measure::start("overall");
+            let cache_file = self.load_map(file_name)?;
+            cache_file.load_all(accumulator, start_bin_index, bin_calculator);
+            m.stop();
+            self.stats.load_us.fetch_add(m.as_us(), Ordering::Relaxed);
+            Ok(())
+        }
+
+        /// map 'file_name' into memory
+        fn load_map(
+            &self,
+            file_name: impl AsRef<Path>,
+        ) -> Result<CacheHashDataFile, std::io::Error> {
+            let reference = self.get_file_reference_to_map_later(file_name)?;
+            reference.map()
+        }
+    }
 
     #[test]
     fn test_read_write() {
