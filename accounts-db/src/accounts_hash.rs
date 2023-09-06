@@ -168,8 +168,10 @@ impl AccountHashesFile {
             map[..size].copy_from_slice(hash_bytes);
         });
 
+        let d1 = map[size - 2];
+
+        let mut i = 0;
         let (_, t2) = measure_us!({
-            let mut i = 0;
             for h in hashes {
                 let start = i * std::mem::size_of::<Hash>();
                 let end = start + std::mem::size_of::<Hash>();
@@ -186,7 +188,9 @@ impl AccountHashesFile {
             }
         });
 
-        info!("haha batch: {} {}", t1, t2);
+        let d2 = map[size - 2];
+
+        info!("haha batch: {:?}", (t1, t2, size, i * 32, d1, d2));
 
         error!(
             "mmap_size={}, data_size={}, hash_num={}",
