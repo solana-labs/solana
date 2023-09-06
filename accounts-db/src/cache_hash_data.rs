@@ -6,11 +6,10 @@ use {
     bytemuck::{Pod, Zeroable},
     memmap2::MmapMut,
     solana_measure::measure::Measure,
-    std::io::BufWriter,
     std::{
         collections::HashSet,
         fs::{self, remove_file, File, OpenOptions},
-        io::Write,
+        io::{BufWriter, Write},
         path::{Path, PathBuf},
         sync::{atomic::Ordering, Arc, Mutex},
     },
