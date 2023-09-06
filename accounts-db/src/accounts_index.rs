@@ -13,7 +13,6 @@ use {
         secondary_index::*,
     },
     log::*,
-    once_cell::sync::OnceCell,
     ouroboros::self_referencing,
     rand::{thread_rng, Rng},
     rayon::{
@@ -37,7 +36,7 @@ use {
         path::PathBuf,
         sync::{
             atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering},
-            Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
+            Arc, Mutex, OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
     },
     thiserror::Error,
@@ -703,7 +702,7 @@ pub struct AccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     pub max_distance_to_min_scan_slot: AtomicU64,
 
     /// populated at generate_index time - accounts that could possibly be rent paying
-    pub rent_paying_accounts_by_partition: OnceCell<RentPayingAccountsByPartition>,
+    pub rent_paying_accounts_by_partition: OnceLock<RentPayingAccountsByPartition>,
 }
 
 impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
@@ -737,7 +736,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             roots_removed: AtomicUsize::default(),
             active_scans: AtomicUsize::default(),
             max_distance_to_min_scan_slot: AtomicU64::default(),
-            rent_paying_accounts_by_partition: OnceCell::default(),
+            rent_paying_accounts_by_partition: OnceLock::default(),
         }
     }
 
