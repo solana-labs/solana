@@ -217,8 +217,8 @@ WORKDIR /home/solana
 
         // self.docker
         let image = format!(
-            "{}/{}-{}",
-            self.image_config.registry, validator_type, self.image_config.image_name
+            "{}/{}-{}:{}",
+            self.image_config.registry, validator_type, self.image_config.image_name, self.image_config.tag
         );
         let auth = opts::RegistryAuth::Password {
             username: password.to_string(),
