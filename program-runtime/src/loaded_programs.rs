@@ -26,7 +26,8 @@ use {
     },
 };
 
-const MAX_LOADED_ENTRY_COUNT: usize = 256;
+pub type ProgramRuntimeEnvironment = Arc<BuiltinProgram<InvokeContext<'static>>>;
+pub const MAX_LOADED_ENTRY_COUNT: usize = 256;
 pub const DELAY_VISIBILITY_SLOT_OFFSET: Slot = 1;
 
 /// Relationship between two fork IDs
@@ -62,17 +63,17 @@ pub trait WorkingSlot {
 #[derive(Default)]
 pub enum LoadedProgramType {
     /// Tombstone for undeployed, closed or unloadable programs
-    FailedVerification(Arc<BuiltinProgram<InvokeContext<'static>>>),
+    FailedVerification(ProgramRuntimeEnvironment),
     #[default]
     Closed,
     DelayVisibility,
     /// Successfully verified but not currently compiled, used to track usage statistics when a compiled program is evicted from memory.
-    Unloaded(Arc<BuiltinProgram<InvokeContext<'static>>>),
+    Unloaded(ProgramRuntimeEnvironment),
     LegacyV0(Executable<InvokeContext<'static>>),
     LegacyV1(Executable<InvokeContext<'static>>),
     Typed(Executable<InvokeContext<'static>>),
     #[cfg(test)]
-    TestLoaded(Arc<BuiltinProgram<InvokeContext<'static>>>),
+    TestLoaded(ProgramRuntimeEnvironment),
     Builtin(BuiltinProgram<InvokeContext<'static>>),
 }
 
@@ -221,7 +222,7 @@ impl LoadedProgram {
     /// Creates a new user program
     pub fn new(
         loader_key: &Pubkey,
-        program_runtime_environment: Arc<BuiltinProgram<InvokeContext<'static>>>,
+        program_runtime_environment: ProgramRuntimeEnvironment,
         deployment_slot: Slot,
         effective_slot: Slot,
         maybe_expiration_slot: Option<Slot>,
@@ -407,10 +408,10 @@ impl LoadedProgram {
 
 #[derive(Clone, Debug)]
 pub struct ProgramRuntimeEnvironments {
-    /// Globally shared RBPF config and syscall registry
-    pub program_runtime_v1: Arc<BuiltinProgram<InvokeContext<'static>>>,
+    /// Globally shared RBPF config and syscall registry for runtime V1
+    pub program_runtime_v1: ProgramRuntimeEnvironment,
     /// Globally shared RBPF config and syscall registry for runtime V2
-    pub program_runtime_v2: Arc<BuiltinProgram<InvokeContext<'static>>>,
+    pub program_runtime_v2: ProgramRuntimeEnvironment,
 }
 
 impl Default for ProgramRuntimeEnvironments {
