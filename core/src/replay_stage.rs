@@ -549,6 +549,7 @@ impl ReplayStage {
                     &bank_forks,
                     &my_pubkey,
                     &vote_account,
+                    &blockstore,
                 );
             let mut current_leader = None;
             let mut last_reset = Hash::default();
@@ -1230,16 +1231,29 @@ impl ReplayStage {
         bank_forks: &RwLock<BankForks>,
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
+        blockstore: &Blockstore,
     ) -> (ProgressMap, HeaviestSubtreeForkChoice) {
-        let (root_bank, frozen_banks) = {
+        let (root_bank, frozen_banks, duplicate_slot_hashes) = {
             let bank_forks = bank_forks.read().unwrap();
+            let duplicate_slots = blockstore
+                .duplicate_slots_iterator(bank_forks.root_bank().slot())
+                .unwrap();
+            let duplicate_slot_hashes = duplicate_slots
+                .filter_map(|slot| bank_forks.bank_hash(slot).map(|hash| (slot, hash)));
             (
                 bank_forks.root_bank(),
                 bank_forks.frozen_banks().values().cloned().collect(),
+                duplicate_slot_hashes.collect::<Vec<(Slot, Hash)>>(),
             )
         };
 
-        Self::initialize_progress_and_fork_choice(&root_bank, frozen_banks, my_pubkey, vote_account)
+        Self::initialize_progress_and_fork_choice(
+            &root_bank,
+            frozen_banks,
+            my_pubkey,
+            vote_account,
+            duplicate_slot_hashes,
+        )
     }
 
     pub fn initialize_progress_and_fork_choice(
@@ -1247,6 +1261,7 @@ impl ReplayStage {
         mut frozen_banks: Vec<Arc<Bank>>,
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
+        duplicate_slot_hashes: Vec<(Slot, Hash)>,
     ) -> (ProgressMap, HeaviestSubtreeForkChoice) {
         let mut progress = ProgressMap::default();
 
@@ -1261,10 +1276,14 @@ impl ReplayStage {
             );
         }
         let root = root_bank.slot();
-        let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_frozen_banks(
+        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_frozen_banks(
             (root, root_bank.hash()),
             &frozen_banks,
         );
+
+        for slot_hash in duplicate_slot_hashes {
+            heaviest_subtree_fork_choice.mark_fork_invalid_candidate(&slot_hash);
+        }
 
         (progress, heaviest_subtree_fork_choice)
     }
@@ -2086,6 +2105,30 @@ impl ReplayStage {
             purge_repair_slot_counter,
             SlotStateUpdate::Dead(dead_state),
         );
+
+        // If we previously marked this slot as duplicate in blockstore, let the state machine know
+        if !duplicate_slots_tracker.contains(&slot) && blockstore.get_duplicate_slot(slot).is_some()
+        {
+            let duplicate_state = DuplicateState::new_from_state(
+                slot,
+                gossip_duplicate_confirmed_slots,
+                heaviest_subtree_fork_choice,
+                || true,
+                || None,
+            );
+            check_slot_agrees_with_cluster(
+                slot,
+                root,
+                blockstore,
+                duplicate_slots_tracker,
+                epoch_slots_frozen_slots,
+                heaviest_subtree_fork_choice,
+                duplicate_slots_to_repair,
+                ancestor_hashes_replay_update_sender,
+                purge_repair_slot_counter,
+                SlotStateUpdate::Duplicate(duplicate_state),
+            );
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2827,6 +2870,30 @@ impl ReplayStage {
                     purge_repair_slot_counter,
                     SlotStateUpdate::BankFrozen(bank_frozen_state),
                 );
+                // If we previously marked this slot as duplicate in blockstore, let the state machine know
+                if !duplicate_slots_tracker.contains(&bank.slot())
+                    && blockstore.get_duplicate_slot(bank.slot()).is_some()
+                {
+                    let duplicate_state = DuplicateState::new_from_state(
+                        bank.slot(),
+                        gossip_duplicate_confirmed_slots,
+                        heaviest_subtree_fork_choice,
+                        || false,
+                        || Some(bank.hash()),
+                    );
+                    check_slot_agrees_with_cluster(
+                        bank.slot(),
+                        bank_forks.read().unwrap().root(),
+                        blockstore,
+                        duplicate_slots_tracker,
+                        epoch_slots_frozen_slots,
+                        heaviest_subtree_fork_choice,
+                        duplicate_slots_to_repair,
+                        ancestor_hashes_replay_update_sender,
+                        purge_repair_slot_counter,
+                        SlotStateUpdate::Duplicate(duplicate_state),
+                    );
+                }
                 if let Some(sender) = bank_notification_sender {
                     sender
                         .sender
