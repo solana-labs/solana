@@ -197,7 +197,7 @@ impl OptimisticallyConfirmedBankTracker {
                 );
 
                 // finalize block's minimum prioritization fee cache for this bank
-                prioritization_fee_cache.finalize_priority_fee(bank.slot());
+                prioritization_fee_cache.finalize_priority_fee(bank.slot(), bank.bank_id());
             }
         } else if bank.slot() > bank_forks.read().unwrap().root() {
             pending_optimistically_confirmed_banks.insert(bank.slot());
@@ -282,7 +282,6 @@ impl OptimisticallyConfirmedBankTracker {
                 if let Some(bank) = bank {
                     let mut w_optimistically_confirmed_bank =
                         optimistically_confirmed_bank.write().unwrap();
-                    let bank_id = bank.bank_id();
 
                     if bank.slot() > w_optimistically_confirmed_bank.bank.slot() && bank.is_frozen()
                     {
@@ -304,9 +303,6 @@ impl OptimisticallyConfirmedBankTracker {
                         *highest_confirmed_slot = slot;
                     }
                     drop(w_optimistically_confirmed_bank);
-
-                    // finalize block's minimum prioritization fee cache for this bank
-                    prioritization_fee_cache.finalize_priority_fee(slot, bank_id);
                 } else if slot > bank_forks.read().unwrap().root() {
                     pending_optimistically_confirmed_banks.insert(slot);
                 } else {
@@ -321,7 +317,6 @@ impl OptimisticallyConfirmedBankTracker {
             }
             BankNotification::Frozen(bank) => {
                 let frozen_slot = bank.slot();
-                let frozen_bank_id = bank.bank_id();
                 if let Some(parent) = bank.parent() {
                     let num_successful_transactions = bank
                         .transaction_count()
@@ -366,9 +361,6 @@ impl OptimisticallyConfirmedBankTracker {
                         w_optimistically_confirmed_bank.bank = bank;
                     }
                     drop(w_optimistically_confirmed_bank);
-
-                    // finalize block's minimum prioritization fee cache for this bank
-                    prioritization_fee_cache.finalize_priority_fee(frozen_slot, frozen_bank_id);
                 }
             }
             BankNotification::NewRootBank(bank) => {
