@@ -315,10 +315,10 @@ pub fn create_program_runtime_environment_v1<'a>(
     )?;
 
     // Sha256
-    result.register_function(*b"sol_sha256", SyscallHash::call::<Sha256Hasher>)?;
+    result.register_function_hashed(*b"sol_sha256", SyscallHash::call::<Sha256Hasher>)?;
 
     // Keccak256
-    result.register_function(*b"sol_keccak256", SyscallHash::call::<Keccak256Hasher>)?;
+    result.register_function_hashed(*b"sol_keccak256", SyscallHash::call::<Keccak256Hasher>)?;
 
     // Secp256k1 Recover
     result.register_function_hashed(*b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
