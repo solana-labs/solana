@@ -226,12 +226,12 @@ impl CacheHashData {
         result
     }
     fn delete_old_cache_files(&self) {
-        let pre_existing_cache_files = self.pre_existing_cache_files.lock().unwrap();
-        if !pre_existing_cache_files.is_empty() {
+        let old_cache_files = std::mem::take(&mut *self.pre_existing_cache_files.lock().unwrap());
+        if !old_cache_files.is_empty() {
             self.stats
                 .unused_cache_files
-                .fetch_add(pre_existing_cache_files.len(), Ordering::Relaxed);
-            for file_name in pre_existing_cache_files.iter() {
+                .fetch_add(old_cache_files.len(), Ordering::Relaxed);
+            for file_name in old_cache_files.iter() {
                 let result = self.cache_dir.join(file_name);
                 let _ = fs::remove_file(result);
             }
