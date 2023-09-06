@@ -194,8 +194,8 @@ impl Message {
     /// # use solana_sdk::account::Account;
     /// use anyhow::Result;
     /// use solana_rpc_client::rpc_client::RpcClient;
+    /// use solana_program::address_lookup_table::{self, state::{AddressLookupTable, LookupTableMeta}};
     /// use solana_sdk::{
-    ///      address_lookup_table::{self, state::AddressLookupTable},
     ///      address_lookup_table_account::AddressLookupTableAccount,
     ///      instruction::{AccountMeta, Instruction},
     ///      message::{VersionedMessage, v0},
@@ -213,6 +213,7 @@ impl Message {
     ///     # client.set_get_account_response(address_lookup_table_key, Account {
     ///     #   lamports: 1,
     ///     #   data: AddressLookupTable {
+    ///     #     meta: LookupTableMeta::default(),
     ///     #     addresses: Cow::Owned(instruction.accounts.iter().map(|meta| meta.pubkey).collect()),
     ///     #   }.serialize_for_tests().unwrap(),
     ///     #   owner: address_lookup_table::program::id(),
