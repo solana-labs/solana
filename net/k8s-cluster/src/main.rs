@@ -7,6 +7,7 @@ use {
         initialize_globals,
         kubernetes::Kubernetes,
         release::{BuildConfig, Deploy},
+        ValidatorType,
     },
     solana_sdk::genesis_config::GenesisConfig,
     std::{thread, time::Duration},
@@ -337,6 +338,21 @@ async fn main() {
     //         return;
     //     }
     // }
+
+    let secret = match kub_controller.create_secret(&ValidatorType::Bootstrap, "bootstrap-accounts-secret") {
+        Ok(secret) => secret,
+        Err(err) => {
+            error!("Failed to create bootstrap secret! {}", err);
+            return;
+        }
+    };
+    match kub_controller.deploy_secret(&secret).await {
+        Ok(_) => (),
+        Err(err) => {
+            error!("{}", err);
+            return;
+        }
+    }
 
     let label_selector = kub_controller.create_selector(
         "app.kubernetes.io/name",
