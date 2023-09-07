@@ -9,7 +9,6 @@ use {
     solana_measure::measure::Measure,
     solana_rbpf::{
         elf::{Executable, FunctionRegistry},
-        error::EbpfError,
         verifier::RequisiteVerifier,
         vm::{BuiltinProgram, Config},
     },
@@ -232,6 +231,9 @@ impl LoadedProgram {
         reloading: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut load_elf_time = Measure::start("load_elf_time");
+        // The following unused_mut exception is needed for architectures that do not
+        // support JIT compilation.
+        #[allow(unused_mut)]
         let mut executable = Executable::load(elf_bytes, program_runtime_environment.clone())?;
         load_elf_time.stop();
         metrics.load_elf_us = load_elf_time.as_us();
@@ -2207,7 +2209,11 @@ mod tests {
         assert!(!cache.replenish(program2, new_test_loaded_program(10, 11)).0);
 
         let working_slot = TestWorkingSlot::new(20, &[0, 10, 20]);
-        let (found, _missing) = cache.extract(
+        let ExtractedPrograms {
+            loaded: found,
+            missing: _,
+            unloaded: _,
+        } = cache.extract(
             &working_slot,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2220,7 +2226,11 @@ mod tests {
         assert!(match_slot(&found, &program2, 10, 20));
 
         let working_slot = TestWorkingSlot::new(6, &[0, 5, 6]);
-        let (found, missing) = cache.extract(
+        let ExtractedPrograms {
+            loaded: found,
+            missing,
+            unloaded: _,
+        } = cache.extract(
             &working_slot,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2237,7 +2247,11 @@ mod tests {
         cache.prune_by_deployment_slot(5);
 
         let working_slot = TestWorkingSlot::new(20, &[0, 10, 20]);
-        let (found, _missing) = cache.extract(
+        let ExtractedPrograms {
+            loaded: found,
+            missing: _,
+            unloaded: _,
+        } = cache.extract(
             &working_slot,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2250,7 +2264,11 @@ mod tests {
         assert!(match_slot(&found, &program2, 10, 20));
 
         let working_slot = TestWorkingSlot::new(6, &[0, 5, 6]);
-        let (found, missing) = cache.extract(
+        let ExtractedPrograms {
+            loaded: found,
+            missing,
+            unloaded: _,
+        } = cache.extract(
             &working_slot,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
@@ -2267,7 +2285,11 @@ mod tests {
         cache.prune_by_deployment_slot(10);
 
         let working_slot = TestWorkingSlot::new(20, &[0, 10, 20]);
-        let (found, _missing) = cache.extract(
+        let ExtractedPrograms {
+            loaded: found,
+            missing: _,
+            unloaded: _,
+        } = cache.extract(
             &working_slot,
             vec![
                 (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
