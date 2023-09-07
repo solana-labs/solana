@@ -105,7 +105,7 @@ use {
     solana_perf::perf_libs,
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
-        compute_budget::{self, ComputeBudget},
+        compute_budget::ComputeBudget,
         invoke_context::ProcessInstructionWithContext,
         loaded_programs::{
             LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
@@ -130,6 +130,7 @@ use {
             MAX_TRANSACTION_FORWARDING_DELAY, MAX_TRANSACTION_FORWARDING_DELAY_GPU,
             SECONDS_PER_DAY,
         },
+        compute_budget_processor::*,
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
         feature,
@@ -5128,12 +5129,9 @@ impl Bank {
                     {
                         compute_budget
                     } else {
-                        let mut compute_budget =
-                            ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
-
                         let mut compute_budget_process_transaction_time =
                             Measure::start("compute_budget_process_transaction_time");
-                        let process_transaction_result = compute_budget.process_instructions(
+                        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
                             tx.message().program_instructions_iter(),
                             !self
                                 .feature_set
@@ -5149,10 +5147,10 @@ impl Bank {
                                 .compute_budget_process_transaction_us,
                             compute_budget_process_transaction_time.as_us()
                         );
-                        if let Err(err) = process_transaction_result {
-                            return TransactionExecutionResult::NotExecuted(err);
+                        if let Err(err) = transaction_meta {
+                            return TransactionExecutionResult::NotExecuted(err.into());
                         }
-                        compute_budget
+                        ComputeBudget::new_from_transaction_meta(&transaction_meta.unwrap())
                     };
 
                     let result = self.execute_loaded_transaction(

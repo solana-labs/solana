@@ -1,17 +1,13 @@
-use {
-    crate::prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
-    solana_sdk::{
-        compute_budget_processor::*,
-        feature_set::{
-            add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
-            remove_deprecated_request_unit_ix, FeatureSet,
-        },
-        fee::FeeBudgetLimits,
-        genesis_config::ClusterType,
-        instruction::CompiledInstruction,
-        pubkey::Pubkey,
-        transaction::TransactionError,
+use solana_sdk::{
+    compute_budget_processor::*,
+    feature_set::{
+        add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
+        remove_deprecated_request_unit_ix, FeatureSet,
     },
+    fee::FeeBudgetLimits,
+    genesis_config::ClusterType,
+    instruction::CompiledInstruction,
+    pubkey::Pubkey,
 };
 
 /// The total accounts data a transaction can load is limited to 64MiB to not break
@@ -99,6 +95,8 @@ pub struct ComputeBudget {
     /// Number of compute units consumed for a multiscalar multiplication (msm) of ristretto points.
     /// The total cost is calculated as `msm_base_cost + (length - 1) * msm_incremental_cost`.
     pub curve25519_ristretto_msm_incremental_cost: u64,
+    // TODO heap_size doesn't need to be option, cause when it is None, runtime uses HEAP_LENGTH
+    // anyway.
     /// Optional program heap region size, if `None` then loader default
     pub heap_size: Option<usize>,
     /// Number of compute units per additional 32k heap above the default (~.5
@@ -126,6 +124,7 @@ pub struct ComputeBudget {
     pub poseidon_cost_coefficient_c: u64,
 }
 
+// TODO - this can be removed once new_from_transactino_meta() is in
 impl Default for ComputeBudget {
     fn default() -> Self {
         Self::new(MAX_COMPUTE_UNIT_LIMIT as u64)
@@ -177,37 +176,12 @@ impl ComputeBudget {
         }
     }
 
-    // TODO - this function can be obsolete, ComputeBudget can be constructored from
-    // sanitized_transaction.get_meta()
-    // eg:
-    // 1. instruction validation would be part of transaction sanitization, Error during sanitizing
-    // 2. IXs are processed separately to get values
-    // 3. use values to funish CB object when needed
-    pub fn process_instructions<'a>(
-        &mut self,
-        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-        support_request_units_deprecated: bool,
-        enable_request_heap_frame_ix: bool,
-        support_set_loaded_accounts_data_size_limit_ix: bool,
-    ) -> Result<PrioritizationFeeDetails, TransactionError> {
-        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
-            instructions,
-            support_request_units_deprecated,
-            enable_request_heap_frame_ix,
-            support_set_loaded_accounts_data_size_limit_ix,
-        )?;
-
-        // TODO - heap_size doesn't have to be Option<>, it has its default value anyway.
-        self.heap_size = Some(transaction_meta.updated_heap_bytes);
-        self.compute_unit_limit = u64::from(transaction_meta.compute_unit_limit);
-        Ok(PrioritizationFeeDetails::new(
-            PrioritizationFeeType::ComputeUnitPrice(transaction_meta.compute_unit_price),
-            self.compute_unit_limit,
-        ))
+    pub fn new_from_transaction_meta(transaction_meta: &TransactionMeta) -> Self {
+        let mut compute_budget = ComputeBudget::new(u64::from(transaction_meta.compute_unit_limit));
+        compute_budget.heap_size = Some(transaction_meta.updated_heap_bytes);
+        compute_budget
     }
 
-    // TODO - this function can be obsoleted, replacing with sanitized_transaction.get_meta()
-    //
     pub fn fee_budget_limits<'a>(
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         feature_set: &FeatureSet,

@@ -1,10 +1,8 @@
-use {
-    solana_program_runtime::compute_budget::ComputeBudget,
-    solana_sdk::{
-        instruction::CompiledInstruction,
-        pubkey::Pubkey,
-        transaction::{SanitizedTransaction, SanitizedVersionedTransaction},
-    },
+use solana_sdk::{
+    compute_budget_processor::*,
+    instruction::CompiledInstruction,
+    pubkey::Pubkey,
+    transaction::{SanitizedTransaction, SanitizedVersionedTransaction},
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -23,19 +21,17 @@ pub trait GetTransactionPriorityDetails {
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         _round_compute_unit_price_enabled: bool,
     ) -> Option<TransactionPriorityDetails> {
-        let mut compute_budget = ComputeBudget::default();
-        let prioritization_fee_details = compute_budget
-            .process_instructions(
-                instructions,
-                true, // supports prioritization by request_units_deprecated instruction
-                true, // enable request heap frame instruction
-                true, // enable support set accounts data size instruction
-                      // TODO: round_compute_unit_price_enabled: bool
-            )
-            .ok()?;
+        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
+            instructions,
+            true, // supports prioritization by request_units_deprecated instruction
+            true, // enable request heap frame instruction
+            true, // enable support set accounts data size instruction
+                  // TODO: round_compute_unit_price_enabled: bool
+        )
+        .ok()?;
         Some(TransactionPriorityDetails {
-            priority: prioritization_fee_details.get_priority(),
-            compute_unit_limit: compute_budget.compute_unit_limit,
+            priority: transaction_meta.compute_unit_price,
+            compute_unit_limit: u64::from(transaction_meta.compute_unit_limit),
         })
     }
 }
