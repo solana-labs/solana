@@ -7730,9 +7730,13 @@ impl AccountsDb {
         let slot = storages.max_slot_inclusive();
         let use_bg_thread_pool = config.use_bg_thread_pool;
         let accounts_hash_cache_path = self.accounts_hash_cache_path.clone();
+        let transient_accounts_hash_cache_dir = TempDir::new_in(&accounts_hash_cache_path)
+            .expect("create transient accounts hash cache dir");
+        let transient_accounts_hash_cache_path =
+            transient_accounts_hash_cache_dir.path().to_path_buf();
         let scan_and_hash = || {
             let (cache_hash_data, cache_hash_data_us) = measure_us!(Self::get_cache_hash_data(
-                accounts_hash_cache_path.clone(),
+                accounts_hash_cache_path,
                 config,
                 kind,
                 slot
@@ -7751,7 +7755,7 @@ impl AccountsDb {
                     None
                 },
                 zero_lamport_accounts: kind.zero_lamport_accounts(),
-                dir_for_temp_cache_files: accounts_hash_cache_path,
+                dir_for_temp_cache_files: transient_accounts_hash_cache_path,
                 active_stats: &self.active_stats,
             };
 
