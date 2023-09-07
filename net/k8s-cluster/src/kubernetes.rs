@@ -1,15 +1,22 @@
+use k8s_openapi::api::core::v1::SecretVolumeSource;
+
 use {
-    crate::boxed_error,
+    crate::{boxed_error, SOLANA_ROOT},
+    base64::{
+        engine::general_purpose,
+        Engine as _,
+    },
     k8s_openapi::{
         api::{
             apps::v1::{ReplicaSet, ReplicaSetSpec},
             core::v1::{
                 ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource,
-                LocalObjectReference, Namespace, ObjectFieldSelector, PodSpec, PodTemplateSpec,
-                Service, ServicePort, ServiceSpec, Volume, VolumeMount,
+                Namespace, ObjectFieldSelector, PodSpec, PodTemplateSpec,
+                Secret, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
             },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
+        ByteString,
     },
     kube::{
         api::{Api, ObjectMeta, PostParams},
@@ -26,6 +33,7 @@ pub struct Kubernetes<'a> {
 
 impl<'a> Kubernetes<'a> {
     pub async fn new(namespace: &'a str) -> Kubernetes<'a> {
+
         Kubernetes {
             client: Client::try_default().await.unwrap(),
             namespace: namespace,
@@ -85,6 +93,7 @@ impl<'a> Kubernetes<'a> {
         image_name: &str,
         num_bootstrap_validators: i32,
         config_map_name: Option<String>,
+        secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
         let env_var = vec![EnvVar {
@@ -99,6 +108,22 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         }];
 
+        let accounts_volume = Volume {
+            name: "bootstrap-accounts-volume".into(),
+            secret: Some(SecretVolumeSource {
+                secret_name: secret_name,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let accounts_volume_mount = VolumeMount {
+            name: "bootstrap-accounts-volume".to_string(),
+            mount_path: "/home/solana/bootstrap-accounts".to_string(),
+            ..Default::default()
+        };
+
+
         // let command = vec!["/workspace/start-bootstrap-validator.sh".to_string()];
         let command = vec!["sleep".to_string(), "3600".to_string()];
         // let command = vec!["nohup"]
@@ -112,6 +137,8 @@ impl<'a> Kubernetes<'a> {
             env_var,
             &command,
             config_map_name,
+            accounts_volume,
+            accounts_volume_mount,
         )
         .await
     }
@@ -126,13 +153,15 @@ impl<'a> Kubernetes<'a> {
         env_vars: Vec<EnvVar>,
         command: &Vec<String>,
         config_map_name: Option<String>,
+        accounts_volume: Volume,
+        accounts_volume_mount: VolumeMount,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
         let config_map_name = match config_map_name {
             Some(name) => name,
             None => return Err(boxed_error!("config_map_name is None!")),
         };
 
-        let volume = Volume {
+        let genesis_volume = Volume {
             name: "genesis-config-volume".into(),
             config_map: Some(ConfigMapVolumeSource {
                 name: Some(config_map_name.clone()),
@@ -141,11 +170,26 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         };
 
-        let volume_mount = VolumeMount {
+        let genesis_volume_mount = VolumeMount {
             name: "genesis-config-volume".to_string(),
             mount_path: "/home/solana/genesis".to_string(),
             ..Default::default()
         };
+
+        // let accounts_volume = Volume {
+        //     name: "bootstrap-accounts-volume".into(),
+        //     secret: Some(SecretVolumeSource {
+        //         secret_name: Some("bootstrap-accounts-secret".to_string()),
+        //         ..Default::default()
+        //     }),
+        //     ..Default::default()
+        // };
+
+        // let accounts_volume_mount = VolumeMount {
+        //     name: "bootstrap-accounts-volume".to_string(),
+        //     mount_path: "/home/solana/bootstrap-accounts".to_string(),
+        //     ..Default::default()
+        // };
 
         // Define the pod spec
         let pod_spec = PodTemplateSpec {
@@ -160,15 +204,15 @@ impl<'a> Kubernetes<'a> {
                     image_pull_policy: Some("IfNotPresent".to_string()), // Set the image pull policy to "Never"
                     env: Some(env_vars),
                     command: Some(command.clone()),
-                    volume_mounts: Some(vec![volume_mount]),
+                    volume_mounts: Some(vec![genesis_volume_mount, accounts_volume_mount]),
 
                     ..Default::default()
                 }],
-                volumes: Some(vec![volume]),
-                image_pull_secrets: Some(vec![LocalObjectReference {
-                    name: Some("dockerhub-login".to_string()),
-                    ..Default::default()
-                }]),
+                volumes: Some(vec![genesis_volume, accounts_volume]),
+                // image_pull_secrets: Some(vec![LocalObjectReference {
+                //     name: Some("dockerhub-login".to_string()),
+                //     ..Default::default()
+                // }]),
                 ..Default::default()
             }),
             ..Default::default()
@@ -195,50 +239,73 @@ impl<'a> Kubernetes<'a> {
         })
     }
 
-    // //TODO: this duplicates code seen in docker.rs -> loading registry info.
-    // // could be ok if we don't build docker and want to just pull from registry!
-    // pub async fn create_secret_old(&self) -> Result<Secret, Box<dyn Error>> {
-    //     let username = match load_env_variable_by_name("REGISTRY_USERNAME") {
-    //         Ok(username) => username,
-    //         Err(_) => return Err(boxed_error!("REGISTRY_USERNAME not set")),
-    //     };
-    //     let password = match load_env_variable_by_name("REGISTRY_PASSWORD") {
-    //         Ok(password) => password,
-    //         Err(_) => return Err(boxed_error!("REGISTRY_PASSWORD not set")),
-    //     };
-    //     let secret_name = "dockerhub-login";
-    //     let mut data = BTreeMap::new();
-    //     data.insert(
-    //         "username".to_string(),
-    //         ByteString(username.as_bytes().to_vec()),
-    //     );
-    //     data.insert(
-    //         "password".to_string(),
-    //         ByteString(password.as_bytes().to_vec()),
-    //     );
+    pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
+        let secrets_api: Api<Secret> = Api::namespaced(self.client.clone(), self.namespace);
+        secrets_api.create(&PostParams::default(), &secret).await
+    }
 
-    //     let secret = Secret {
-    //         metadata: ObjectMeta {
-    //             name: Some(secret_name.to_string()),
-    //             ..Default::default()
-    //         },
-    //         data: Some(data),
-    //         ..Default::default()
-    //     };
-    //     Ok(secret)
-    // }
+    pub fn create_bootstrap_secret(
+        &self,
+        secret_name: &str,
+    ) -> Result<Secret, Box<dyn Error>> {
+        let key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator");
 
-    // pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
-    //     let secrets_api: Api<Secret> = Api::namespaced(self.client.clone(), self.namespace);
-    //     secrets_api.create(&PostParams::default(), &secret).await
-    // }
+        let identity_keypair = std::fs::read(key_path.join("identity.json"))
+            .expect(format!("Failed to read identity.json file! at: {:?}", key_path).as_str());
+        let vote_keypair = std::fs::read(key_path.join("vote-account.json"))
+            .expect(format!("Failed to read vote-account.json file! at: {:?}", key_path).as_str());
+        let stake_keypair = std::fs::read(key_path.join("stake-account.json"))
+            .expect(format!("Failed to read stake-account.json file! at: {:?}", key_path).as_str());
 
-    // pub fn create_secret(
-    //     &self,
-    //     secret_name: &str,
-    // ) {
+        let mut data = BTreeMap::new();
+        data.insert("identity.json".to_string(), ByteString(general_purpose::STANDARD.encode(identity_keypair).as_bytes().to_vec()));
+        data.insert("vote.json".to_string(), ByteString(general_purpose::STANDARD.encode(vote_keypair).as_bytes().to_vec()));
+        data.insert("stake.json".to_string(), ByteString(general_purpose::STANDARD.encode(stake_keypair).as_bytes().to_vec()));
 
-    // }
+        let secret = Secret {
+            metadata: ObjectMeta {
+                name: Some(secret_name.to_string()),
+                ..Default::default()
+            },
+            data: Some(data),
+            ..Default::default()
+        };
+
+        Ok(secret)
+    }
+
+    pub fn create_validator_secret(
+        &self,
+        validator_index: i32,
+    ) -> Result<Secret, Box<dyn Error>> {
+        let secret_name = format!("validator-accounts-secret-{}", validator_index);
+        let key_path = SOLANA_ROOT.join("config-k8s");
+
+        let mut data: BTreeMap<String, ByteString> = BTreeMap::new();
+        let accounts = vec!["identity", "vote", "stake"];
+        for account in accounts {
+            let file_name: String;
+            if account == "identity" {
+                file_name = format!("validator-{}-{}.json", account, validator_index);
+            } else {
+                file_name = format!("validator-{}-account-{}.json", account, validator_index);
+            }
+            let keypair = std::fs::read(key_path.join(file_name.clone()))
+                .expect(format!("Failed to read {} file! at: {:?}", file_name, key_path).as_str());
+            data.insert(format!("{}.json", account), ByteString(general_purpose::STANDARD.encode(keypair).as_bytes().to_vec()));
+        }
+        let secret = Secret {
+            metadata: ObjectMeta {
+                name: Some(secret_name.to_string()),
+                ..Default::default()
+            },
+            data: Some(data),
+            ..Default::default()
+        };
+
+        Ok(secret)
+
+    }
 
     pub async fn deploy_replicas_set(
         &self,
@@ -323,6 +390,7 @@ impl<'a> Kubernetes<'a> {
         image_name: &str,
         num_validators: i32,
         config_map_name: Option<String>,
+        secret_name: Option<String>,
         label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
         let env_vars = vec![
@@ -360,6 +428,23 @@ impl<'a> Kubernetes<'a> {
             },
         ];
 
+        let accounts_volume = Volume {
+            name: format!("validator-accounts-volume-{}", validator_index),
+            secret: Some(SecretVolumeSource {
+                secret_name: secret_name,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let accounts_volume_mount = VolumeMount {
+            name: format!("validator-accounts-volume-{}", validator_index),
+            mount_path: "/home/solana/validator-accounts".to_string(),
+            ..Default::default()
+        };
+
+
+
         // let command = vec!["/workspace/start-validator.sh".to_string()];
         let command = vec!["sleep".to_string(), "3600".to_string()];
 
@@ -372,6 +457,8 @@ impl<'a> Kubernetes<'a> {
             env_vars,
             &command,
             config_map_name,
+            accounts_volume,
+            accounts_volume_mount,
         )
         .await
     }

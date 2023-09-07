@@ -338,6 +338,21 @@ async fn main() {
     //     }
     // }
 
+    let bootstrap_secret = match kub_controller.create_bootstrap_secret("bootstrap-accounts-secret") {
+        Ok(secret) => secret,
+        Err(err) => {
+            error!("Failed to create bootstrap secret! {}", err);
+            return;
+        }
+    };
+    match kub_controller.deploy_secret(&bootstrap_secret).await {
+        Ok(_) => (),
+        Err(err) => {
+            error!("{}", err);
+            return;
+        }
+    }
+
     let label_selector = kub_controller.create_selector(
         "app.kubernetes.io/name",
         "bootstrap-validator",
@@ -348,6 +363,7 @@ async fn main() {
             bootstrap_image_name,
             BOOTSTRAP_VALIDATOR_REPLICAS,
             config_map.metadata.name.clone(),
+            bootstrap_secret.metadata.name.clone(),
             &label_selector
         )
         .await
@@ -401,6 +417,21 @@ async fn main() {
 
 
     for validator_index in 0..setup_config.num_validators {
+        let validator_secret = match kub_controller.create_validator_secret(validator_index) {
+            Ok(secret) => secret,
+            Err(err) => {
+                error!("Failed to create validator secret! {}", err);
+                return;
+            }
+        };
+        match kub_controller.deploy_secret(&validator_secret).await {
+            Ok(_) => (),
+            Err(err) => {
+                error!("{}", err);
+                return;
+            }
+        }
+
         let label_selector = kub_controller.create_selector(
             "app.kubernetes.io/name",
             format!("validator-{}", validator_index).as_str(),
@@ -413,6 +444,7 @@ async fn main() {
                 validator_image_name,
                 1,
                 config_map.metadata.name.clone(),
+                validator_secret.metadata.name.clone(),
                 &label_selector,
             )
             .await
