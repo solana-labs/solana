@@ -4072,7 +4072,7 @@ mod tests {
         };
         let dest_address = Pubkey::new_unique();
         let dest_account = AccountSharedData::new_data_with_space(
-            0,
+            rent_exempt_reserve,
             &StakeStateV2::Uninitialized,
             StakeStateV2::size_of(),
             &id(),
@@ -4090,72 +4090,57 @@ mod tests {
                 is_writable: true,
             },
         ];
-        for (source_reserve, dest_reserve, expected_result) in [
-            (rent_exempt_reserve, rent_exempt_reserve, Ok(())),
+        for (source_delegation, split_amount, expected_result) in [
+            (minimum_delegation * 2, minimum_delegation, Ok(())),
             (
-                rent_exempt_reserve,
-                rent_exempt_reserve - 1,
+                minimum_delegation * 2,
+                minimum_delegation - 1,
                 Err(InstructionError::InsufficientFunds),
             ),
             (
-                rent_exempt_reserve - 1,
-                rent_exempt_reserve,
+                (minimum_delegation * 2) - 1,
+                minimum_delegation,
                 Err(InstructionError::InsufficientFunds),
             ),
             (
-                rent_exempt_reserve - 1,
-                rent_exempt_reserve - 1,
+                (minimum_delegation - 1) * 2,
+                minimum_delegation - 1,
                 Err(InstructionError::InsufficientFunds),
             ),
         ] {
-            // The source account's starting balance is equal to *both* the source and dest
-            // accounts' *final* balance
-            let mut source_starting_balance = source_reserve + dest_reserve;
-            for (delegation, source_stake_state) in &[
-                (0, StakeStateV2::Initialized(source_meta)),
-                (
-                    minimum_delegation,
-                    just_stake(
-                        source_meta,
-                        minimum_delegation * 2 + source_starting_balance - rent_exempt_reserve,
+            let source_account = AccountSharedData::new_data_with_space(
+                source_delegation + rent_exempt_reserve,
+                &just_stake(source_meta, source_delegation),
+                StakeStateV2::size_of(),
+                &id(),
+            )
+            .unwrap();
+            process_instruction(
+                Arc::clone(&feature_set),
+                &serialize(&StakeInstruction::Split(split_amount)).unwrap(),
+                vec![
+                    (source_address, source_account),
+                    (dest_address, dest_account.clone()),
+                    (rent::id(), create_account_shared_data_for_test(&rent)),
+                    (
+                        stake_history::id(),
+                        create_account_shared_data_for_test(&stake_history),
                     ),
-                ),
-            ] {
-                source_starting_balance += delegation * 2;
-                let source_account = AccountSharedData::new_data_with_space(
-                    source_starting_balance,
-                    source_stake_state,
-                    StakeStateV2::size_of(),
-                    &id(),
-                )
-                .unwrap();
-                process_instruction(
-                    Arc::clone(&feature_set),
-                    &serialize(&StakeInstruction::Split(dest_reserve + delegation)).unwrap(),
-                    vec![
-                        (source_address, source_account),
-                        (dest_address, dest_account.clone()),
-                        (rent::id(), create_account_shared_data_for_test(&rent)),
-                        (
-                            stake_history::id(),
-                            create_account_shared_data_for_test(&stake_history),
-                        ),
-                        (
-                            clock::id(),
-                            create_account_shared_data_for_test(&Clock {
-                                epoch: current_epoch,
-                                ..Clock::default()
-                            }),
-                        ),
-                        (
-                            epoch_schedule::id(),
-                            create_account_shared_data_for_test(&EpochSchedule::default()),
-                        ),
-                    ],
-                    instruction_accounts.clone(),
-                    expected_result.clone(),
-                );
-            }
+                    (
+                        clock::id(),
+                        create_account_shared_data_for_test(&Clock {
+                            epoch: current_epoch,
+                            ..Clock::default()
+                        }),
+                    ),
+                    (
+                        epoch_schedule::id(),
+                        create_account_shared_data_for_test(&EpochSchedule::default()),
+                    ),
+                ],
+                instruction_accounts.clone(),
+                expected_result.clone(),
+            );
         }
     }
 
