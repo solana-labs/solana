@@ -139,7 +139,9 @@ pub trait HasherImpl {
     fn create_hasher() -> Self;
     fn hash(&mut self, val: &[u8]);
     fn result(self) -> [u8; HASH_BYTES];
-    fn get_compute_budget() -> ComputeBudget;
+    fn get_base_cost(compute_budget: &ComputeBudget) -> u64;
+    fn get_byte_cost(compute_budget: &ComputeBudget) -> u64;
+    fn get_max_slices(compute_budget: &ComputeBudget) -> u64;
 }
 
 pub struct Sha256Hasher(Hasher);
@@ -158,17 +160,18 @@ impl HasherImpl for Sha256Hasher {
         self.0.hash(val);
     }
 
-    fn result(self) -> [u8; HASH_BYTES] {
+    fn result(self) -> [u8; Self::HASH_BYTES] {
         self.0.result().to_bytes()
     }
 
-    fn get_compute_budget() -> ComputeBudget {
-        let mut compute_budget: ComputeBudget = ComputeBudget::default();
-        compute_budget.hash_base_cost = 85;
-        compute_budget.hash_byte_cost = 1;
-        compute_budget.hash_max_slices = 20_000;
-        
-        compute_budget
+    fn get_base_cost(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_base_cost
+    }
+    fn get_byte_cost(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_byte_cost
+    }
+    fn get_max_slices(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_max_slices
     }
 
 }
@@ -185,17 +188,18 @@ impl HasherImpl for Blake3Hasher {
         self.0.hash(val);
     }
 
-    fn result(self) -> [u8; HASH_BYTES] {
+    fn result(self) -> [u8; Self::HASH_BYTES]{
         self.0.result().to_bytes()
     }
 
-    fn get_compute_budget() -> ComputeBudget {
-        let mut compute_budget: ComputeBudget = ComputeBudget::default();
-        compute_budget.hash_base_cost = 85;
-        compute_budget.hash_byte_cost = 1;
-        compute_budget.hash_max_slices = 20_000;
-        
-        compute_budget
+    fn get_base_cost(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_base_cost
+    }
+    fn get_byte_cost(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_byte_cost
+    }
+    fn get_max_slices(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_max_slices
     }
 
 }
@@ -212,17 +216,18 @@ impl HasherImpl for Keccak256Hasher {
         self.0.hash(val);
     }
 
-    fn result(self) -> [u8; HASH_BYTES] {
+    fn result(self) -> [u8; Self::HASH_BYTES] {
         self.0.result().to_bytes()
     }
 
-    fn get_compute_budget() -> ComputeBudget {
-        let mut compute_budget: ComputeBudget = ComputeBudget::default();
-        compute_budget.hash_base_cost = 85;
-        compute_budget.hash_byte_cost = 1;
-        compute_budget.hash_max_slices = 20_000;
-        
-        compute_budget
+    fn get_base_cost(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_base_cost
+    }
+    fn get_byte_cost(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_byte_cost
+    }
+    fn get_max_slices(compute_budget: &ComputeBudget) -> u64 {
+        compute_budget.sha256_max_slices
     }
     
 }
@@ -1958,19 +1963,22 @@ declare_syscallhash!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, Error> {
-        let compute_budget = H::get_compute_budget();
-        if compute_budget.hash_max_slices < vals_len {
+        let compute_budget = invoke_context.get_compute_budget();
+        let hash_base_cost = H::get_base_cost(compute_budget);
+        let hash_byte_cost = H::get_byte_cost(compute_budget);
+        let hash_max_slices = H::get_max_slices(compute_budget);
+        if hash_max_slices < vals_len {
             ic_msg!(
                 invoke_context,
                 "{} Hashing {} sequences in one syscall is over the limit {}",
                 H::NAME,
                 vals_len,
-                compute_budget.hash_max_slices,
+                hash_max_slices,
             );
             return Err(SyscallError::TooManySlices.into());
         }
 
-        consume_compute_meter(invoke_context, compute_budget.hash_base_cost)?;
+        consume_compute_meter(invoke_context, hash_base_cost)?;
 
         let hash_result = translate_slice_mut::<u8>(
             memory_mapping,
@@ -1997,7 +2005,7 @@ declare_syscallhash!(
                     invoke_context.get_check_size(),
                 )?;
                 let cost = compute_budget.mem_op_base_cost.max(
-                    compute_budget.hash_byte_cost.saturating_mul(
+                    hash_byte_cost.saturating_mul(
                         (val.len() as u64)
                             .checked_div(2)
                             .expect("div by non-zero literal"),

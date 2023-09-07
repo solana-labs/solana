@@ -51,16 +51,10 @@ pub struct ComputeBudget {
     pub max_invoke_stack_height: usize,
     /// Maximum cross-program invocation and instructions per transaction
     pub max_instruction_trace_length: usize,
-    /// Base number of compute units consumed to call generalized hash
-    pub hash_base_cost: u64,
     /// Base number of compute units consumed to call SHA256
     pub sha256_base_cost: u64,
-    /// Incremental number of units consumed by generalized hash (based on bytes)
-    pub hash_byte_cost: u64,
     /// Incremental number of units consumed by SHA256 (based on bytes)
     pub sha256_byte_cost: u64,
-    /// Maximum number of slices hashed per syscall for generalized hash
-    pub hash_max_slices: u64,
     /// Maximum number of slices hashed per syscall for sha256
     pub sha256_max_slices: u64,
     /// Maximum SBF to BPF call depth
@@ -162,11 +156,8 @@ impl ComputeBudget {
             invoke_units: 1000,
             max_invoke_stack_height: 5,
             max_instruction_trace_length: 64,
-            hash_base_cost: 85,
             sha256_base_cost: 85,
-            hash_byte_cost: 1,
             sha256_byte_cost: 1,
-            hash_max_slices: 20_000,
             sha256_max_slices: 20_000,
             max_call_depth: 64,
             stack_frame_size: 4_096,
