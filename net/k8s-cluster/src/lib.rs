@@ -71,7 +71,7 @@ pub fn load_env_variable_by_name(name: &str) -> Result<String, env::VarError> {
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
 static PACKAGE: Emoji = Emoji("📦 ", "");
-static DOCKER_WHALE: Emoji = Emoji("🐳 ", "");
+// static DOCKER_WHALE: Emoji = Emoji("🐳 ", "");
 
 /// Creates a new process bar for processing that will take an unknown amount of time
 pub fn new_spinner_progress_bar() -> ProgressBar {

@@ -1,16 +1,15 @@
 use {
-    crate::{boxed_error, load_env_variable_by_name, ValidatorType},
+    crate::boxed_error,
     k8s_openapi::{
         api::{
             apps::v1::{ReplicaSet, ReplicaSetSpec},
             core::v1::{
                 ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource,
                 LocalObjectReference, Namespace, ObjectFieldSelector, PodSpec, PodTemplateSpec,
-                Secret, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
+                Service, ServicePort, ServiceSpec, Volume, VolumeMount,
             },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
-        ByteString,
     },
     kube::{
         api::{Api, ObjectMeta, PostParams},
@@ -23,8 +22,6 @@ use {
 pub struct Kubernetes<'a> {
     client: Client,
     namespace: &'a str,
-    bootstrap_validator_selector: BTreeMap<String, String>,
-    standard_validator_selector: BTreeMap<String, String>,
 }
 
 impl<'a> Kubernetes<'a> {
@@ -32,8 +29,6 @@ impl<'a> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
             namespace: namespace,
-            bootstrap_validator_selector: BTreeMap::default(),
-            standard_validator_selector: BTreeMap::default(),
         }
     }
 
@@ -76,24 +71,12 @@ impl<'a> Kubernetes<'a> {
 
     pub fn create_selector(
         &mut self,
-        validator_type: &ValidatorType, // validator or bootstrap-validator
         key: &str,
         value: &str,
-    ) {
-        match *validator_type {
-            ValidatorType::Bootstrap => {
-                self.bootstrap_validator_selector.insert(
-                    key.to_string(),
-                    value.to_string(), // validator or bootstrap-validator
-                );
-            }
-            ValidatorType::Standard => {
-                self.standard_validator_selector.insert(
-                    key.to_string(),
-                    value.to_string(), // validator or bootstrap-validator
-                );
-            }
-        }
+    ) -> BTreeMap<String, String> {
+        let mut btree = BTreeMap::new();
+        btree.insert(key.to_string(), value.to_string());
+        btree
     }
 
     pub async fn create_bootstrap_validator_replicas_set(
@@ -102,7 +85,7 @@ impl<'a> Kubernetes<'a> {
         image_name: &str,
         num_bootstrap_validators: i32,
         config_map_name: Option<String>,
-        // command_args: &Vec<String>,
+        label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
         let env_var = vec![EnvVar {
             name: "MY_POD_IP".to_string(),
@@ -118,10 +101,11 @@ impl<'a> Kubernetes<'a> {
 
         // let command = vec!["/workspace/start-bootstrap-validator.sh".to_string()];
         let command = vec!["sleep".to_string(), "3600".to_string()];
+        // let command = vec!["nohup"]
 
         self.create_replicas_set(
             "bootstrap-validator",
-            &self.bootstrap_validator_selector,
+            label_selector,
             container_name,
             image_name,
             num_bootstrap_validators,
@@ -173,7 +157,7 @@ impl<'a> Kubernetes<'a> {
                 containers: vec![Container {
                     name: container_name.to_string(),
                     image: Some(image_name.to_string()),
-                    image_pull_policy: Some("Always".to_string()), // Set the image pull policy to "Never"
+                    image_pull_policy: Some("IfNotPresent".to_string()), // Set the image pull policy to "Never"
                     env: Some(env_vars),
                     command: Some(command.clone()),
                     volume_mounts: Some(vec![volume_mount]),
@@ -211,43 +195,50 @@ impl<'a> Kubernetes<'a> {
         })
     }
 
-    //TODO: this duplicates code seen in docker.rs -> loading registry info.
-    // could be ok if we don't build docker and want to just pull from registry!
-    pub async fn create_secret(&self) -> Result<Secret, Box<dyn Error>> {
-        let username = match load_env_variable_by_name("REGISTRY_USERNAME") {
-            Ok(username) => username,
-            Err(_) => return Err(boxed_error!("REGISTRY_USERNAME not set")),
-        };
-        let password = match load_env_variable_by_name("REGISTRY_PASSWORD") {
-            Ok(password) => password,
-            Err(_) => return Err(boxed_error!("REGISTRY_PASSWORD not set")),
-        };
-        let secret_name = "dockerhub-login";
-        let mut data = BTreeMap::new();
-        data.insert(
-            "username".to_string(),
-            ByteString(username.as_bytes().to_vec()),
-        );
-        data.insert(
-            "password".to_string(),
-            ByteString(password.as_bytes().to_vec()),
-        );
+    // //TODO: this duplicates code seen in docker.rs -> loading registry info.
+    // // could be ok if we don't build docker and want to just pull from registry!
+    // pub async fn create_secret_old(&self) -> Result<Secret, Box<dyn Error>> {
+    //     let username = match load_env_variable_by_name("REGISTRY_USERNAME") {
+    //         Ok(username) => username,
+    //         Err(_) => return Err(boxed_error!("REGISTRY_USERNAME not set")),
+    //     };
+    //     let password = match load_env_variable_by_name("REGISTRY_PASSWORD") {
+    //         Ok(password) => password,
+    //         Err(_) => return Err(boxed_error!("REGISTRY_PASSWORD not set")),
+    //     };
+    //     let secret_name = "dockerhub-login";
+    //     let mut data = BTreeMap::new();
+    //     data.insert(
+    //         "username".to_string(),
+    //         ByteString(username.as_bytes().to_vec()),
+    //     );
+    //     data.insert(
+    //         "password".to_string(),
+    //         ByteString(password.as_bytes().to_vec()),
+    //     );
 
-        let secret = Secret {
-            metadata: ObjectMeta {
-                name: Some(secret_name.to_string()),
-                ..Default::default()
-            },
-            data: Some(data),
-            ..Default::default()
-        };
-        Ok(secret)
-    }
+    //     let secret = Secret {
+    //         metadata: ObjectMeta {
+    //             name: Some(secret_name.to_string()),
+    //             ..Default::default()
+    //         },
+    //         data: Some(data),
+    //         ..Default::default()
+    //     };
+    //     Ok(secret)
+    // }
 
-    pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
-        let secrets_api: Api<Secret> = Api::namespaced(self.client.clone(), self.namespace);
-        secrets_api.create(&PostParams::default(), &secret).await
-    }
+    // pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
+    //     let secrets_api: Api<Secret> = Api::namespaced(self.client.clone(), self.namespace);
+    //     secrets_api.create(&PostParams::default(), &secret).await
+    // }
+
+    // pub fn create_secret(
+    //     &self,
+    //     secret_name: &str,
+    // ) {
+
+    // }
 
     pub async fn deploy_replicas_set(
         &self,
@@ -258,10 +249,6 @@ impl<'a> Kubernetes<'a> {
         info!("creating replica set!");
         // Apply the ReplicaSet
         api.create(&post_params, replica_set).await
-    }
-
-    pub fn create_bootstrap_validator_service(&self) -> Service {
-        self.create_service("bootstrap-validator", &self.bootstrap_validator_selector)
     }
 
     fn create_service(
@@ -332,9 +319,11 @@ impl<'a> Kubernetes<'a> {
     pub async fn create_validator_replicas_set(
         &self,
         container_name: &str,
+        validator_index: i32,
         image_name: &str,
         num_validators: i32,
         config_map_name: Option<String>,
+        label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
         let env_vars = vec![
             EnvVar {
@@ -375,8 +364,8 @@ impl<'a> Kubernetes<'a> {
         let command = vec!["sleep".to_string(), "3600".to_string()];
 
         self.create_replicas_set(
-            "validator",
-            &self.standard_validator_selector,
+            format!("validator-{}", validator_index).as_str(),
+            label_selector,
             container_name,
             image_name,
             num_validators,
@@ -387,8 +376,12 @@ impl<'a> Kubernetes<'a> {
         .await
     }
 
-    pub fn create_validator_service(&self) -> Service {
-        self.create_service("validator", &self.standard_validator_selector)
+    pub fn create_validator_service(
+        &self, 
+        service_name: &str, 
+        label_selector: &BTreeMap<String, String>,
+    ) -> Service {
+        self.create_service(service_name, label_selector)
     }
 
     pub async fn check_service_matching_replica_set(
