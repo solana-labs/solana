@@ -4311,8 +4311,8 @@ impl AccountsDb {
 
         // Working from the beginning of store_usage which are the most sparse and see when we can stop
         // shrinking while still achieving the overall goals.
-        let mut shrink_slots: ShrinkCandidates = HashMap::new();
-        let mut shrink_slots_next_batch: ShrinkCandidates = HashMap::new();
+        let mut shrink_slots = ShrinkCandidates::new();
+        let mut shrink_slots_next_batch = ShrinkCandidates::new();
         for usage in &store_usage {
             let store = &usage.store;
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
@@ -8161,7 +8161,7 @@ impl AccountsDb {
         assert!(self.storage.no_shrink_in_progress());
 
         let mut dead_slots = HashSet::new();
-        let mut new_shrink_candidates: ShrinkCandidates = HashMap::new();
+        let mut new_shrink_candidates = ShrinkCandidates::new();
         let mut measure = Measure::start("remove");
         for (slot, account_info) in reclaims {
             // No cached accounts should make it here
@@ -13250,7 +13250,7 @@ pub mod tests {
     fn test_select_candidates_by_total_usage_no_candidates() {
         // no input candidates -- none should be selected
         solana_logger::setup();
-        let candidates: ShrinkCandidates = HashMap::new();
+        let candidates = ShrinkCandidates::new();
 
         let (selected_candidates, next_candidates) = AccountsDb::select_candidates_by_total_usage(
             &candidates,
@@ -13266,7 +13266,7 @@ pub mod tests {
     fn test_select_candidates_by_total_usage_3_way_split_condition() {
         // three candidates, one selected for shrink, one is put back to the candidate list and one is ignored
         solana_logger::setup();
-        let mut candidates: ShrinkCandidates = HashMap::new();
+        let mut candidates = ShrinkCandidates::new();
 
         let common_store_path = Path::new("");
         let slot_id_1 = 12;
@@ -13340,7 +13340,7 @@ pub mod tests {
     fn test_select_candidates_by_total_usage_2_way_split_condition() {
         // three candidates, 2 are selected for shrink, one is ignored
         solana_logger::setup();
-        let mut candidates: ShrinkCandidates = HashMap::new();
+        let mut candidates = ShrinkCandidates::new();
 
         let common_store_path = Path::new("");
         let slot_id_1 = 12;
@@ -13410,7 +13410,7 @@ pub mod tests {
     fn test_select_candidates_by_total_usage_all_clean() {
         // 2 candidates, they must be selected to achieve the target alive ratio
         solana_logger::setup();
-        let mut candidates: ShrinkCandidates = HashMap::new();
+        let mut candidates = ShrinkCandidates::new();
 
         let slot1 = 12;
         let common_store_path = Path::new("");
