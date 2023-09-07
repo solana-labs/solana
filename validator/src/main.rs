@@ -957,6 +957,7 @@ pub fn main() {
         .map(|s| Hash::from_str(s).unwrap());
     let mut wait_for_supermajority = value_t!(matches, "wait_for_supermajority", Slot).ok();
     let wen_restart = value_t!(matches, "wen_restart", PathBuf).ok();
+    let mut in_wen_restart_phase_two = false;
     if wait_for_supermajority.is_none() && wen_restart.is_some() {
         match get_wen_restart_phase_one_result(&wen_restart) {
             Ok(wen_restart_progress) => {
@@ -964,6 +965,7 @@ pub fn main() {
                     wait_for_supermajority = Some(slot);
                     expected_bank_hash = Some(hash);
                     expected_shred_version = Some(shred_version);
+                    in_wen_restart_phase_two = true;
                 }        
             },
             Err(e) => {
@@ -974,8 +976,8 @@ pub fn main() {
     }
 
     let rpc_bootstrap_config = bootstrap::RpcBootstrapConfig {
-        no_genesis_fetch: matches.is_present("no_genesis_fetch") || wait_for_supermajority.is_some(),
-        no_snapshot_fetch: matches.is_present("no_snapshot_fetch") || wait_for_supermajority.is_some(),
+        no_genesis_fetch: matches.is_present("no_genesis_fetch") || in_wen_restart_phase_two,
+        no_snapshot_fetch: matches.is_present("no_snapshot_fetch") || in_wen_restart_phase_two,
         check_vote_account: matches
             .value_of("check_vote_account")
             .map(|url| url.to_string()),
@@ -985,7 +987,7 @@ pub fn main() {
             "max_genesis_archive_unpacked_size",
             u64
         ),
-        incremental_snapshot_fetch: !matches.is_present("no_incremental_snapshots") || wait_for_supermajority.is_some(),
+        incremental_snapshot_fetch: !matches.is_present("no_incremental_snapshots") || in_wen_restart_phase_two,
     };
 
     let private_rpc = matches.is_present("private_rpc");
