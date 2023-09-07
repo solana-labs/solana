@@ -1031,8 +1031,8 @@ pub fn verify_test_data_shred(
 mod tests {
     use {
         super::*,
+        assert_matches::assert_matches,
         bincode::serialized_size,
-        matches::assert_matches,
         rand::Rng,
         rand_chacha::{rand_core::SeedableRng, ChaChaRng},
         solana_sdk::{shred_version, signature::Signer, signer::keypair::keypair_from_seed},

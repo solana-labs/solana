@@ -5722,6 +5722,7 @@ dependencies = [
 name = "solana-core"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "base64 0.21.3",
  "bincode",
  "bs58",
@@ -5737,7 +5738,6 @@ dependencies = [
  "lazy_static",
  "log",
  "lru",
- "matches",
  "min-max-heap",
  "num_enum 0.6.1",
  "quinn",
@@ -5879,12 +5879,12 @@ dependencies = [
 name = "solana-entry"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "bincode",
  "crossbeam-channel",
  "dlopen2",
  "lazy_static",
  "log",
- "matches",
  "rand 0.8.5",
  "rayon",
  "serde",
@@ -6033,6 +6033,7 @@ dependencies = [
 name = "solana-gossip"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "bincode",
  "bv",
  "clap 2.33.3",
@@ -6042,7 +6043,6 @@ dependencies = [
  "itertools",
  "log",
  "lru",
- "matches",
  "num-traits",
  "num_cpus",
  "rand 0.8.5",
@@ -6151,7 +6151,6 @@ dependencies = [
  "libc",
  "log",
  "lru",
- "matches",
  "num_cpus",
  "num_enum 0.6.1",
  "prost",
@@ -6349,7 +6348,6 @@ version = "1.17.0"
 dependencies = [
  "fast-math",
  "hex",
- "matches",
  "solana-program",
 ]
 
@@ -6415,6 +6413,7 @@ name = "solana-perf"
 version = "1.17.0"
 dependencies = [
  "ahash 0.8.3",
+ "assert_matches",
  "bincode",
  "bv",
  "caps",
@@ -6424,7 +6423,6 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "matches",
  "nix 0.26.4",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -6442,11 +6440,11 @@ dependencies = [
 name = "solana-poh"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "bincode",
  "core_affinity",
  "crossbeam-channel",
  "log",
- "matches",
  "rand 0.8.5",
  "solana-entry",
  "solana-ledger",
@@ -7276,6 +7274,7 @@ dependencies = [
 name = "solana-turbine"
 version = "1.17.0"
 dependencies = [
+ "assert_matches",
  "bincode",
  "bytes",
  "crossbeam-channel",
@@ -7283,7 +7282,6 @@ dependencies = [
  "itertools",
  "log",
  "lru",
- "matches",
  "quinn",
  "rand 0.8.5",
  "rand_chacha 0.3.1",

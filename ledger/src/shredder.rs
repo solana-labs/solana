@@ -472,8 +472,8 @@ mod tests {
                 ShredType, MAX_CODE_SHREDS_PER_SLOT,
             },
         },
+        assert_matches::assert_matches,
         bincode::serialized_size,
-        matches::assert_matches,
         rand::{seq::SliceRandom, Rng},
         solana_sdk::{
             hash::{hash, Hash},
