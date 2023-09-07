@@ -51,8 +51,15 @@ impl MmapAccountHashesFile {
 
 /// 1 file containing account hashes sorted by pubkey
 pub struct AccountHashesFile {
-    /// # hashes and an open file that will be deleted on drop. None if there are zero hashes to represent, and thus, no file.
-    count_and_writer: Option<(usize, BufWriter<File>)>,
+    /// # of hashes in the file.
+    count: usize,
+
+    /// Optional handler of the file. None if there are zero hashes and hence no file.
+    file: Option<File>,
+
+    /// Optional writer to the hash file.
+    writer: Option<BufWriter<File>>,
+
     /// The directory where temporary cache files are put
     dir_for_temp_cache_files: PathBuf,
 }
@@ -60,54 +67,54 @@ pub struct AccountHashesFile {
 impl AccountHashesFile {
     /// map the file into memory and return a reader that can access it by slice
     fn get_reader(&mut self) -> Option<(usize, MmapAccountHashesFile)> {
-        std::mem::take(&mut self.count_and_writer).map(|(count, writer)| {
-            let file = Some(writer.into_inner().unwrap());
-            (
-                count,
+        let file = std::mem::take(&mut self.file);
+
+        if let Some(file) = file {
+            Some((
+                self.count,
                 MmapAccountHashesFile {
-                    mmap: unsafe { MmapMut::map_mut(file.as_ref().unwrap()).unwrap() },
+                    mmap: unsafe { MmapMut::map_mut(&file).unwrap() },
                 },
-            )
-        })
+            ))
+        } else {
+            None
+        }
     }
 
     /// # hashes stored in this file
     pub fn count(&self) -> usize {
-        self.count_and_writer
-            .as_ref()
-            .map(|(count, _)| *count)
-            .unwrap_or_default()
+        self.count
     }
 
     /// write 'hash' to the file
     /// If the file isn't open, create it first.
     pub fn write(&mut self, hash: &Hash) {
-        if self.count_and_writer.is_none() {
+        if self.writer.is_none() {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
-            self.count_and_writer = Some((
-                0,
-                BufWriter::new(
-                    tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
-                        panic!(
-                            "Unable to create file within {}: {err}",
-                            self.dir_for_temp_cache_files.display()
-                        )
-                    }),
-                ),
-            ));
-        }
-        let count_and_writer = self.count_and_writer.as_mut().unwrap();
-        count_and_writer
-            .1
-            .write_all(hash.as_ref())
-            .unwrap_or_else(|err| {
+            let file = tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
                 panic!(
-                    "Unable to write file within {}: {err}",
+                    "Unable to create file within {}: {err}",
                     self.dir_for_temp_cache_files.display()
                 )
             });
 
-        count_and_writer.0 += 1;
+            self.writer = Some(BufWriter::new(file));
+        }
+        let writer = self.writer.as_mut().unwrap();
+        writer.write_all(hash.as_ref()).unwrap_or_else(|err| {
+            panic!(
+                "Unable to write file within {}: {err}",
+                self.dir_for_temp_cache_files.display()
+            )
+        });
+        self.count += 1;
+    }
+
+    /// release hash file writer to file handler
+    pub fn release_writer(&mut self) {
+        if let Some(writer) = std::mem::take(&mut self.writer) {
+            self.file = Some(writer.into_inner().unwrap());
+        }
     }
 }
 
@@ -986,9 +993,12 @@ impl<'a> AccountsHasher<'a> {
         // this will change as items in sorted_data_by_pubkey[] are exhausted
         let mut first_item_to_pubkey_division = Vec::with_capacity(len);
         let mut hashes = AccountHashesFile {
-            count_and_writer: None,
+            count: 0,
+            file: None,
+            writer: None,
             dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
         };
+
         // initialize 'first_items', which holds the current lowest item in each slot group
         sorted_data_by_pubkey
             .iter()
@@ -1086,6 +1096,7 @@ impl<'a> AccountsHasher<'a> {
             }
         }
 
+        hashes.release_writer();
         (hashes, overall_sum)
     }
 
@@ -1238,7 +1249,9 @@ pub mod tests {
     impl AccountHashesFile {
         fn new(dir_for_temp_cache_files: PathBuf) -> Self {
             Self {
-                count_and_writer: None,
+                count: 0,
+                file: None,
+                writer: None,
                 dir_for_temp_cache_files,
             }
         }
@@ -1307,6 +1320,7 @@ pub mod tests {
 
         // 1 hash
         file.write(&hashes[0]);
+        file.release_writer();
         let reader = file.get_reader().unwrap();
         assert_eq!(&[hashes[0]][..], reader.1.read(0));
         assert!(reader.1.read(1).is_empty());
@@ -1314,7 +1328,10 @@ pub mod tests {
         // multiple hashes
         let mut file = AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf());
         assert!(file.get_reader().is_none());
-        hashes.iter().for_each(|hash| file.write(hash));
+        hashes.iter().for_each(|hash| {
+            file.write(hash);
+        });
+        file.release_writer();
         let reader = file.get_reader().unwrap();
         (0..2).for_each(|i| assert_eq!(&hashes[i..], reader.1.read(i)));
         assert!(reader.1.read(2).is_empty());
@@ -1334,6 +1351,7 @@ pub mod tests {
             // 1 hash
             let mut file1 = AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf());
             file1.write(&hashes[0]);
+            file1.release_writer();
             combined.push(hashes[0]);
 
             // multiple hashes
@@ -1342,6 +1360,7 @@ pub mod tests {
                 file2.write(hash);
                 combined.push(*hash);
             });
+            file2.release_writer();
 
             let hashes = if permutation == 0 {
                 vec![file0, file1, file2]
