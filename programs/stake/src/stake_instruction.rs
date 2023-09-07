@@ -4412,17 +4412,26 @@ mod tests {
                 minimum_delegation.saturating_sub(1), // when minimum is 0, this blows up!
                 Err(InstructionError::InsufficientFunds),
             ),
-            // destination is not rent exempt, so split enough for rent and minimum delegation
-            (rent_exempt_reserve - 1, minimum_delegation + 1, Ok(())),
+            // destination is not rent exempt, so any split amount fails, including enough for rent
+            // and minimum delegation
+            (
+                rent_exempt_reserve - 1,
+                minimum_delegation + 1,
+                Err(InstructionError::InsufficientFunds),
+            ),
             // destination is not rent exempt, but split amount only for minimum delegation
             (
                 rent_exempt_reserve - 1,
                 minimum_delegation,
                 Err(InstructionError::InsufficientFunds),
             ),
-            // destination has smallest non-zero balance, so can split the minimum balance
-            // requirements minus what destination already has
-            (1, rent_exempt_reserve + minimum_delegation - 1, Ok(())),
+            // destination is not rent exempt, so any split amount fails, including case where
+            // destination has smallest non-zero balance
+            (
+                1,
+                rent_exempt_reserve + minimum_delegation - 1,
+                Err(InstructionError::InsufficientFunds),
+            ),
             // destination has smallest non-zero balance, but cannot split less than the minimum
             // balance requirements minus what destination already has
             (
@@ -4430,9 +4439,13 @@ mod tests {
                 rent_exempt_reserve + minimum_delegation - 2,
                 Err(InstructionError::InsufficientFunds),
             ),
-            // destination has zero lamports, so split must be at least rent exempt reserve plus
-            // minimum delegation
-            (0, rent_exempt_reserve + minimum_delegation, Ok(())),
+            // destination has zero lamports, so any split amount fails, including at least rent
+            // exempt reserve plus minimum delegation
+            (
+                0,
+                rent_exempt_reserve + minimum_delegation,
+                Err(InstructionError::InsufficientFunds),
+            ),
             // destination has zero lamports, but split amount is less than rent exempt reserve
             // plus minimum delegation
             (
