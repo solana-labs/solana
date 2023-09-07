@@ -1,13 +1,13 @@
 use {
     crate::{boxed_error, initialize_globals, SOLANA_ROOT},
     base64::{
-        engine::{self, general_purpose},
+        engine::general_purpose,
         Engine as _,
     },
     bip39::{Language, Mnemonic, MnemonicType, Seed},
     log::*,
-    solana_clap_v3_utils::{input_parsers::STDOUT_OUTFILE_TOKEN, keygen, keypair},
-    solana_entry::poh::{compute_hashes_per_tick, Poh},
+    solana_clap_v3_utils::{input_parsers::STDOUT_OUTFILE_TOKEN, keygen},
+    solana_entry::poh::compute_hashes_per_tick,
     solana_genesis::genesis_accounts::add_genesis_accounts,
     solana_ledger::{blockstore::create_new_ledger, blockstore_options::LedgerColumnOptions},
     solana_sdk::{
@@ -332,6 +332,7 @@ impl<'a> Genesis<'a> {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use {
         super::*,

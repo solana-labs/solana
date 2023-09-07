@@ -1,6 +1,6 @@
 use {
     crate::{
-        boxed_error, initialize_globals, load_env_variable_by_name, SOLANA_ROOT,
+        boxed_error, initialize_globals, SOLANA_ROOT,
     },
     log::*,
     std::{
