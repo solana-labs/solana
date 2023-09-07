@@ -7,7 +7,6 @@ use {
         initialize_globals,
         kubernetes::Kubernetes,
         release::{BuildConfig, Deploy},
-        ValidatorType,
     },
     solana_sdk::genesis_config::GenesisConfig,
     std::{thread, time::Duration},
