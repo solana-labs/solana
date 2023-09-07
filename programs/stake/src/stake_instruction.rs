@@ -5358,17 +5358,7 @@ mod tests {
             },
         ];
 
-        // Test various account prefunding, including empty, less than rent_exempt_reserve, exactly
-        // rent_exempt_reserve, and more than rent_exempt_reserve. The empty case is not covered in
-        // test_split, since that test uses a Meta with rent_exempt_reserve = 0
-        let split_lamport_balances = vec![
-            0,
-            split_rent_exempt_reserve - 1,
-            split_rent_exempt_reserve,
-            split_rent_exempt_reserve + minimum_delegation - 1,
-            split_rent_exempt_reserve + minimum_delegation,
-        ];
-        for initial_balance in split_lamport_balances {
+        let transaction_accounts = |initial_balance: u64| -> Vec<(Pubkey, AccountSharedData)> {
             let split_to_account = AccountSharedData::new_data_with_space(
                 initial_balance,
                 &StakeStateV2::Uninitialized,
@@ -5376,7 +5366,7 @@ mod tests {
                 &id(),
             )
             .unwrap();
-            let transaction_accounts = vec![
+            vec![
                 (stake_address, stake_account.clone()),
                 (split_to_address, split_to_account),
                 (rent::id(), create_account_shared_data_for_test(&rent)),
@@ -5395,7 +5385,31 @@ mod tests {
                     epoch_schedule::id(),
                     create_account_shared_data_for_test(&EpochSchedule::default()),
                 ),
-            ];
+            ]
+        };
+
+        // Test insufficient account prefunding, including empty and less than rent_exempt_reserve
+        let split_lamport_balances = vec![0, split_rent_exempt_reserve - 1];
+        for initial_balance in split_lamport_balances {
+            process_instruction(
+                Arc::clone(&feature_set),
+                &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
+                transaction_accounts(initial_balance),
+                instruction_accounts.clone(),
+                Err(InstructionError::InsufficientFunds),
+            );
+        }
+
+        // Test various account prefunding, including exactly rent_exempt_reserve, and more than
+        // rent_exempt_reserve. The empty case is not covered in test_split, since that test uses a
+        // Meta with rent_exempt_reserve = 0
+        let split_lamport_balances = vec![
+            split_rent_exempt_reserve,
+            split_rent_exempt_reserve + minimum_delegation - 1,
+            split_rent_exempt_reserve + minimum_delegation,
+        ];
+        for initial_balance in split_lamport_balances {
+            let transaction_accounts = transaction_accounts(initial_balance);
 
             // split more than available fails
             process_instruction(
