@@ -18,8 +18,16 @@ pub struct InvalidFeePayerFilter {
 
 impl Default for InvalidFeePayerFilter {
     fn default() -> Self {
+        // Upper-bound on the number of invalid fee payers to track, to avoid
+        // unbounded memory growth.
+        // Number chosen so it is large enough to track a large number of
+        // invalid fee payers, but small enough to not use too much memory.
+        // Typically, unique invalid fee paying is rare so this is probably
+        // overkill.
+        const INVALID_FEE_PAYER_CAPACITY: usize = 16 * 1024;
+
         Self {
-            capacity: 16 * 1024,
+            capacity: INVALID_FEE_PAYER_CAPACITY,
             recent_invalid_fee_payers: DashSet::new(),
             stats: InvalidFeePayerFilterStats::default(),
             interval: AtomicInterval::default(),
