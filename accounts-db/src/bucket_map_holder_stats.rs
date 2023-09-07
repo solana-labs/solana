@@ -63,6 +63,7 @@ pub struct BucketMapHolderStats {
     bins: u64,
     pub estimate_mem: AtomicU64,
     pub flush_should_evict_us: AtomicU64,
+    pub copy_us: AtomicU64,
 }
 
 impl BucketMapHolderStats {
@@ -516,6 +517,7 @@ impl BucketMapHolderStats {
                         .swap(0, Ordering::Relaxed),
                     i64
                 ),
+                ("copy_us", self.copy_us.swap(0, Ordering::Relaxed), i64),
             );
         } else {
             datapoint_info!(
