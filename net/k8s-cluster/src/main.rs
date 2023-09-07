@@ -1,5 +1,5 @@
 use {
-    clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches},
+    clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     log::*,
     solana_k8s_cluster::{
         docker::{DockerConfig, DockerImageConfig},
@@ -7,7 +7,6 @@ use {
         initialize_globals,
         kubernetes::Kubernetes,
         release::{BuildConfig, Deploy},
-        ValidatorType,
     },
     solana_sdk::genesis_config::GenesisConfig,
     std::{thread, time::Duration},

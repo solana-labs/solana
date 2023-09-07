@@ -1,16 +1,15 @@
 use {
-    crate::{boxed_error, load_env_variable_by_name, ValidatorType},
+    crate::boxed_error,
     k8s_openapi::{
         api::{
             apps::v1::{ReplicaSet, ReplicaSetSpec},
             core::v1::{
                 ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource,
                 LocalObjectReference, Namespace, ObjectFieldSelector, PodSpec, PodTemplateSpec,
-                Secret, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
+                Service, ServicePort, ServiceSpec, Volume, VolumeMount,
             },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
-        ByteString,
     },
     kube::{
         api::{Api, ObjectMeta, PostParams},
