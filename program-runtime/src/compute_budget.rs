@@ -95,10 +95,8 @@ pub struct ComputeBudget {
     /// Number of compute units consumed for a multiscalar multiplication (msm) of ristretto points.
     /// The total cost is calculated as `msm_base_cost + (length - 1) * msm_incremental_cost`.
     pub curve25519_ristretto_msm_incremental_cost: u64,
-    // TODO heap_size doesn't need to be option, cause when it is None, runtime uses HEAP_LENGTH
-    // anyway.
-    /// Optional program heap region size, if `None` then loader default
-    pub heap_size: Option<usize>,
+    /// program heap region size
+    pub heap_size: usize,
     /// Number of compute units per additional 32k heap above the default (~.5
     /// us per 32k at 15 units/us rounded up)
     pub heap_cost: u64,
@@ -163,7 +161,8 @@ impl ComputeBudget {
             curve25519_ristretto_multiply_cost: 2_208,
             curve25519_ristretto_msm_base_cost: 2303,
             curve25519_ristretto_msm_incremental_cost: 788,
-            heap_size: None,
+            heap_size: solana_sdk::entrypoint::HEAP_LENGTH,
+            // TODO - heap_cost can be defined in a static for FeeStructure to access it directly
             heap_cost: 8,
             mem_op_base_cost: 10,
             alt_bn128_addition_cost: 334,
@@ -178,7 +177,7 @@ impl ComputeBudget {
 
     pub fn new_from_transaction_meta(transaction_meta: &TransactionMeta) -> Self {
         let mut compute_budget = ComputeBudget::new(u64::from(transaction_meta.compute_unit_limit));
-        compute_budget.heap_size = Some(transaction_meta.updated_heap_bytes);
+        compute_budget.heap_size = transaction_meta.updated_heap_bytes;
         compute_budget
     }
 
