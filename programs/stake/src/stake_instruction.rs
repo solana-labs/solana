@@ -4993,7 +4993,7 @@ mod tests {
         .unwrap();
         let split_to_address = solana_sdk::pubkey::new_rand();
         let split_to_account = AccountSharedData::new_data_with_space(
-            0,
+            rent_exempt_reserve,
             &StakeStateV2::Uninitialized,
             StakeStateV2::size_of(),
             &id(),
