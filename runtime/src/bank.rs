@@ -5951,6 +5951,7 @@ impl Bank {
         mut accounts: Vec<(Pubkey, AccountSharedData, Slot)>,
         rent_paying_pubkeys: Option<&HashSet<Pubkey>>,
         partition_index: PartitionIndex,
+        can_skip_rewrites: bool,
     ) -> CollectRentFromAccountsInfo {
         let mut rent_debits = RentDebits::default();
         let mut total_rent_collected_info = CollectedInfo::default();
@@ -5958,7 +5959,6 @@ impl Bank {
             Vec::<(&Pubkey, &AccountSharedData)>::with_capacity(accounts.len());
         let mut time_collecting_rent_us = 0;
         let mut time_storing_accounts_us = 0;
-        let can_skip_rewrites = self.bank_hash_skips_rent_rewrites();
         let set_exempt_rent_epoch_max: bool = self
             .feature_set
             .is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
@@ -6083,89 +6083,123 @@ impl Bank {
         subrange_full: RangeInclusive<Pubkey>,
         metrics: &RentMetrics,
     ) {
-        let mut hold_range = Measure::start("hold_range");
+        let can_skip_rewrites = self.bank_hash_skips_rent_rewrites();
         let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
-        thread_pool.install(|| {
-            self.rc
-                .accounts
-                .hold_range_in_memory(&subrange_full, true, thread_pool);
-            hold_range.stop();
-            metrics.hold_range_us.fetch_add(hold_range.as_us(), Relaxed);
-
+        let mut results = thread_pool.install(|| {
             let rent_paying_pubkeys_ = self.get_rent_paying_pubkeys(&partition);
             let rent_paying_pubkeys = rent_paying_pubkeys_.as_ref();
 
-            // divide the range into num_threads smaller ranges and process in parallel
-            // Note that 'pubkey_range_from_partition' cannot easily be re-used here to break the range smaller.
-            // It has special handling of 0..0 and partition_count changes affect all ranges unevenly.
-            let num_threads = solana_accounts_db::accounts_db::quarter_thread_count() as u64;
-            let sz = std::mem::size_of::<u64>();
-            let start_prefix = accounts_partition::prefix_from_pubkey(subrange_full.start());
-            let end_prefix_inclusive = accounts_partition::prefix_from_pubkey(subrange_full.end());
-            let range = end_prefix_inclusive - start_prefix;
-            let increment = range / num_threads;
-            let mut results = (0..num_threads)
-                .into_par_iter()
-                .map(|chunk| {
-                    let offset = |chunk| start_prefix + chunk * increment;
-                    let start = offset(chunk);
-                    let last = chunk == num_threads - 1;
-                    let merge_prefix = |prefix: u64, mut bound: Pubkey| {
-                        bound.as_mut()[0..sz].copy_from_slice(&prefix.to_be_bytes());
-                        bound
-                    };
-                    let start = merge_prefix(start, *subrange_full.start());
-                    let (accounts, measure_load_accounts) = measure!(if last {
-                        let end = *subrange_full.end();
-                        let subrange = start..=end; // IN-clusive
-                        self.rc
-                            .accounts
-                            .load_to_collect_rent_eagerly(&self.ancestors, subrange)
-                    } else {
-                        let end = merge_prefix(offset(chunk + 1), *subrange_full.start());
-                        let subrange = start..end; // EX-clusive, the next 'start' will be this same value
-                        self.rc
-                            .accounts
-                            .load_to_collect_rent_eagerly(&self.ancestors, subrange)
+            if can_skip_rewrites {
+                let rent_paying_pubkeys = rent_paying_pubkeys.as_ref().unwrap();
+                let mut accounts = Vec::with_capacity(rent_paying_pubkeys.len());
+                let (_, measure_load_accounts_us) = measure_us!({
+                    rent_paying_pubkeys.iter().for_each(|pubkey| {
+                        if let Some(account_slot) =
+                            self.load_slow_with_fixed_root(&self.ancestors, pubkey)
+                        {
+                            accounts.push((*pubkey, account_slot.0, account_slot.1));
+                        }
                     });
-                    CollectRentInPartitionInfo::new(
-                        self.collect_rent_from_accounts(accounts, rent_paying_pubkeys, partition.1),
-                        Duration::from_nanos(measure_load_accounts.as_ns()),
-                    )
-                })
-                .reduce(
-                    CollectRentInPartitionInfo::default,
-                    CollectRentInPartitionInfo::reduce,
-                );
+                });
 
-            // We cannot assert here that we collected from all expected keys.
-            // Some accounts may have been topped off or may have had all funds removed and gone to 0 lamports.
+                CollectRentInPartitionInfo::new(
+                    self.collect_rent_from_accounts(
+                        accounts,
+                        Some(*rent_paying_pubkeys),
+                        partition.1,
+                        can_skip_rewrites,
+                    ),
+                    Duration::from_nanos(measure_load_accounts_us * 1000),
+                )
+            } else {
+                let mut hold_range = Measure::start("hold_range");
+                self.rc
+                    .accounts
+                    .hold_range_in_memory(&subrange_full, true, thread_pool);
+                hold_range.stop();
+                metrics.hold_range_us.fetch_add(hold_range.as_us(), Relaxed);
 
-            self.rc
-                .accounts
-                .hold_range_in_memory(&subrange_full, false, thread_pool);
+                // divide the range into num_threads smaller ranges and process in parallel
+                // Note that 'pubkey_range_from_partition' cannot easily be re-used here to break the range smaller.
+                // It has special handling of 0..0 and partition_count changes affect all ranges unevenly.
+                let num_threads = solana_accounts_db::accounts_db::quarter_thread_count() as u64;
+                let sz = std::mem::size_of::<u64>();
+                let start_prefix = accounts_partition::prefix_from_pubkey(subrange_full.start());
+                let end_prefix_inclusive =
+                    accounts_partition::prefix_from_pubkey(subrange_full.end());
+                let range = end_prefix_inclusive - start_prefix;
+                let increment = range / num_threads;
 
-            self.collected_rent
-                .fetch_add(results.rent_collected, Relaxed);
-            self.update_accounts_data_size_delta_off_chain(
-                -(results.accounts_data_size_reclaimed as i64),
-            );
-            self.rewards
-                .write()
-                .unwrap()
-                .append(&mut results.rent_rewards);
+                let results = (0..num_threads)
+                    .into_par_iter()
+                    .map(|chunk| {
+                        let offset = |chunk| start_prefix + chunk * increment;
+                        let start = offset(chunk);
+                        let last = chunk == num_threads - 1;
+                        let merge_prefix = |prefix: u64, mut bound: Pubkey| {
+                            bound.as_mut()[0..sz].copy_from_slice(&prefix.to_be_bytes());
+                            bound
+                        };
+                        let start = merge_prefix(start, *subrange_full.start());
+                        let (accounts, measure_load_accounts) = measure!(if last {
+                            let end = *subrange_full.end();
+                            let subrange = start..=end; // IN-clusive
+                            self.rc
+                                .accounts
+                                .load_to_collect_rent_eagerly(&self.ancestors, subrange)
+                        } else {
+                            let end = merge_prefix(offset(chunk + 1), *subrange_full.start());
+                            let subrange = start..end; // EX-clusive, the next 'start' will be this same value
+                            self.rc
+                                .accounts
+                                .load_to_collect_rent_eagerly(&self.ancestors, subrange)
+                        });
+                        CollectRentInPartitionInfo::new(
+                            self.collect_rent_from_accounts(
+                                accounts,
+                                rent_paying_pubkeys,
+                                partition.1,
+                                can_skip_rewrites,
+                            ),
+                            Duration::from_nanos(measure_load_accounts.as_ns()),
+                        )
+                    })
+                    .reduce(
+                        CollectRentInPartitionInfo::default,
+                        CollectRentInPartitionInfo::reduce,
+                    );
 
-            metrics
-                .load_us
-                .fetch_add(results.time_loading_accounts_us, Relaxed);
-            metrics
-                .collect_us
-                .fetch_add(results.time_collecting_rent_us, Relaxed);
-            metrics
-                .store_us
-                .fetch_add(results.time_storing_accounts_us, Relaxed);
-            metrics.count.fetch_add(results.num_accounts, Relaxed);
+                // We cannot assert here that we collected from all expected keys.
+                // Some accounts may have been topped off or may have had all funds removed and gone to 0 lamports.
+
+                self.rc
+                    .accounts
+                    .hold_range_in_memory(&subrange_full, false, thread_pool);
+
+                results
+            }
         });
+
+        self.collected_rent
+            .fetch_add(results.rent_collected, Relaxed);
+        self.update_accounts_data_size_delta_off_chain(
+            -(results.accounts_data_size_reclaimed as i64),
+        );
+        self.rewards
+            .write()
+            .unwrap()
+            .append(&mut results.rent_rewards);
+
+        metrics
+            .load_us
+            .fetch_add(results.time_loading_accounts_us, Relaxed);
+        metrics
+            .collect_us
+            .fetch_add(results.time_collecting_rent_us, Relaxed);
+        metrics
+            .store_us
+            .fetch_add(results.time_storing_accounts_us, Relaxed);
+        metrics.count.fetch_add(results.num_accounts, Relaxed);
     }
 
     /// return true iff storing this account is just a rewrite and can be skipped

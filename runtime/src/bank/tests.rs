@@ -1942,6 +1942,7 @@ fn test_collect_rent_from_accounts() {
             vec![(zero_lamport_pubkey, account, later_slot - 1)],
             None,
             PartitionIndex::default(),
+            false, // should we cycle this here?
         );
 
         let deltas = later_bank
