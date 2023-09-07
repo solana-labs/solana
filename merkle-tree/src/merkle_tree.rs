@@ -1,4 +1,4 @@
-use solana_program::hash::{hashv, Hash};
+use {std::fmt::Debug, solana_program::hash::{hashv, Hash}};
 
 // We need to discern between leaf and intermediate nodes to prevent trivial second
 // pre-image attacks.
@@ -194,7 +194,7 @@ impl MerkleTree {
     }
 
     #[allow(clippy::uninit_vec)]
-    pub fn merkle_root<T: AsRef<[u8]>>(items: &[T]) -> Option<Hash> {
+    pub fn merkle_root<T: AsRef<[u8]> + Debug>(items: &[T]) -> Option<Hash> {
         if items.is_empty() {
             return None;
         }
@@ -213,7 +213,15 @@ impl MerkleTree {
         let mut leaf_count = 0;
         leaf_count = Self::append_nodes(&mut nodes, leaf_count, hashes);
 
-        Some(Self::commit_finish(&mut nodes, leaf_count))
+        let res = Self::commit_finish(&mut nodes, leaf_count);
+
+        let temp: Hash = "11111111111111111111111111111111".parse().unwrap();
+
+        if res == Hash::default() || res == temp {
+            panic!("Bad hash, data: {:?}", items);
+        }
+
+        Some(res)
     }
 
     pub fn find_path(&self, index: usize) -> Option<Proof> {
