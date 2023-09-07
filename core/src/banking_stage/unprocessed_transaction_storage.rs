@@ -143,11 +143,11 @@ pub struct ConsumeScannerPayload<'a> {
 }
 
 fn consume_scan_should_process_packet(
-    invalid_fee_payer_filter: &InvalidFeePayerFilter,
     bank: &Bank,
     banking_stage_stats: &BankingStageStats,
     packet: &ImmutableDeserializedPacket,
     payload: &mut ConsumeScannerPayload,
+    invalid_fee_payer_filter: &InvalidFeePayerFilter,
 ) -> ProcessingDecision {
     // If end of the slot, return should process (quick loop after reached end of slot)
     if payload.reached_end_of_slot {
@@ -475,11 +475,11 @@ impl VoteStorage {
         let should_process_packet =
             |packet: &Arc<ImmutableDeserializedPacket>, payload: &mut ConsumeScannerPayload| {
                 consume_scan_should_process_packet(
-                    invalid_fee_payer_filter,
                     &bank,
                     banking_stage_stats,
                     packet,
                     payload,
+                    invalid_fee_payer_filter,
                 )
             };
 
@@ -910,11 +910,11 @@ impl ThreadLocalUnprocessedPackets {
         let should_process_packet =
             |packet: &Arc<ImmutableDeserializedPacket>, payload: &mut ConsumeScannerPayload| {
                 consume_scan_should_process_packet(
-                    invalid_fee_payer_filter,
                     bank,
                     banking_stage_stats,
                     packet,
                     payload,
+                    invalid_fee_payer_filter,
                 )
             };
         let mut scanner = create_consume_multi_iterator(
