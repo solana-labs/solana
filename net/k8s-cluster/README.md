@@ -1,42 +1,86 @@
-# Run this thing
-Login to Docker for pushing/pulling repos. we assume auth for registryies are already setup.
+# How to run
+From your local build host, login to Docker for pushing/pulling repos. we assume auth for registryies are already setup.
 ```
 docker login
 ```
 
 ```
-kubectl create ns greg
+kubectl create ns <namespace>
 ```
+
+1) Build local solana version (aka based on the current commit)
 ```
 cargo run --bin solana-k8s -- 
     -n <namespace e.g. greg-test> 
     --num-validators 3 
-    --bootstrap-container boostrap-validator 
-    --bootstrap-image bootstrap-k8s-cluster-image:latest 
-    --validator-container validator 
-    --validator-image validator-k8s-cluster-image:latest 
+    --bootstrap-image <registry>/bootstrap-<image-name>:<tag>
+    --validator-image <registry>/validator-<image-name>:<tag>
     --prebuild-genesis 
     --deploy-method local 
     --do-build 
     --docker-build 
-    --image-tag k8s-cluster-image:latest
+    --registry <your-docker-registry-name>
+    --image-name <name-of-your-image-to-build>
+    --base-image <base-image-of-docker-image: default ubuntu:20.04>
+    --tag <imagetag. default: latest>
 ```
 
-Notes:
-- Builds container and the kubernetes deployments will read from images locally
-- Def some hardcoded stuff in here still 
-- each Docker image that is built will have a postfix of `image-tag` variable. or `k8s-cluster-image:latest` here
-- each image on build will be prepended with either `bootstrap-` or `validator-` depending on the image we're building
-- the `bootstrap-image` and `validator-image` must match `bootstrap-` or `validator-` and then `--image-tag`
-    - this should be fixed in the future. Shouldn't have to declare `bootstrap-image` or `validator-image` names tbh
 
+2) Pull specific release (e.g. v1.16.5)
+```
+cargo run --bin solana-k8s -- 
+    -n <namespace e.g. greg-test> 
+    --num-validators 3 
+    --bootstrap-image <registry>/bootstrap-<image-name>:<tag>
+    --validator-image <registry>/validator-<image-name>:<tag>
+    --prebuild-genesis 
+    --deploy-method tar
+    --release-channel <release-channel. e.g. v1.16.5 (must prepend with 'v')>
+    --do-build 
+    --docker-build 
+    --registry <docker-registry>
+    --image-name <name-of-your-image-to-build>
+    --base-image <base-image-of-docker-image: default ubuntu:20.04>
+    --tag <imagetag. default: latest>
+```
+
+Example
+```
+cargo run --bin solana-k8s -- 
+    -n greg-test
+    --num-validators 3 
+    --bootstrap-image gregcusack/bootstrap-k8s-cluster-image:v2
+    --validator-image gregcusack/validator-k8s-cluster-image:v2
+    --prebuild-genesis 
+    --deploy-method local 
+    --do-build 
+    --docker-build 
+    --registry gregcusack
+    --image-name k8s-cluster-image
+    --base-image ubuntu:20.04
+    --tag v2
+
+```
+
+Important Notes: this isn't designed the best way currently. 
+- bootstrap and validator docker images are build exactly the same although the pods they run in are not build the same
+- `--bootstrap-image` and `--validator-image` must match the format outlined above. The pods in the replicasets pull the exact `--bootstrap-image` and `--validator-image` images from dockerhub.
+    - The docker container that is build is named based off of `--registry`, `--image-name`, `--base-image`, and `--tag`
+    - Whenever image name you give will be prepended with either `bootstrap-` or `validator-`. not the best design currently but that's currently how it's build. 
+    So make sure when you set `--boostrap-image` you make sure to prepend the `image-name` with `boostrap-` and same thing for `--validator-image` w/ `validator-`
+
+
+Other Notes:
+- Def some hardcoded stuff in here still 
+- genesis creation is hardcoded for the most part in terms of stakes, lamports, etc. But does include all validator accounts that are created on deployment.
 
 TODO:
 - we currently write binary to file for genesis, then read it back to verify it. and then read it again to convert into a base64 string and then converted into binrary and then converted into a GenesisConfig lol. So need to fix
-- need to add configurable accounts/stakes/etc into genesisconfig. it's currently only the bootstrap validator that is stored in genesis
 - Figure out env variables for private keys. idk how this is going to work
 
-# Kubernetes Deployment 
+
+# Legacy info
+### Kubernetes Deployment 
 1) Create your namespace!
 ```
 kubectl create ns <your-namespace>
@@ -70,12 +114,12 @@ solana -ul gossip
 
 
 
-## TODO
-- [ ] Make number of validators to deploy configurable
+### TODO
+- [x] Make number of validators to deploy configurable
 - [ ] Configure to be able to set any type of flags needed (see net.sh scripts for gce)
 - [x] Configurable namespace -> define your own namespace and deploy into it
 
-### docker containers for solana validators
+#### docker containers for solana validators
 Builds off of: https://github.com/yihau/solana-local-cluster
 
 
