@@ -1347,10 +1347,7 @@ pub mod tests {
                         let storage = db.storage.get_slot_storage_entry(slot);
                         assert!(storage.is_some());
                         if in_shrink_candidate_slots {
-                            db.shrink_candidate_slots
-                                .lock()
-                                .unwrap()
-                                .insert(slot, storage.unwrap());
+                            db.shrink_candidate_slots.lock().unwrap().insert(slot);
                         }
                     });
 
@@ -1379,11 +1376,7 @@ pub mod tests {
                     );
 
                     slots.clone().for_each(|slot| {
-                        assert!(!db
-                            .shrink_candidate_slots
-                            .lock()
-                            .unwrap()
-                            .contains_key(&slot));
+                        assert!(!db.shrink_candidate_slots.lock().unwrap().contains(&slot));
                     });
 
                     let roots_after = db
