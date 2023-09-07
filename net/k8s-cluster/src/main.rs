@@ -10,7 +10,7 @@ use {
         ValidatorType,
     },
     solana_sdk::genesis_config::GenesisConfig,
-    std::{thread, time::Duration, process::exit},
+    std::{thread, time::Duration},
 };
 
 const BOOTSTRAP_VALIDATOR_REPLICAS: i32 = 1;
@@ -181,8 +181,6 @@ async fn main() {
         }
     }
 
-
-
     // Download validator version and Build docker image
     let docker_image_config = if build_config.docker_build {
         Some(DockerImageConfig {
@@ -341,8 +339,7 @@ async fn main() {
         }
     }
 
-    kub_controller.create_selector(
-        &ValidatorType::Bootstrap,
+    let label_selector = kub_controller.create_selector(
         "app.kubernetes.io/name",
         "bootstrap-validator",
     );
@@ -352,6 +349,7 @@ async fn main() {
             bootstrap_image_name,
             BOOTSTRAP_VALIDATOR_REPLICAS,
             config_map.metadata.name.clone(),
+            &label_selector
         )
         .await
     {
@@ -378,7 +376,10 @@ async fn main() {
         }
     };
 
-    let bootstrap_service = kub_controller.create_bootstrap_validator_service();
+    let bootstrap_service = kub_controller.create_validator_service(
+        "bootstrap-validator",
+        &label_selector
+    );
     match kub_controller.deploy_service(&bootstrap_service).await {
         Ok(_) => info!("bootstrap validator service deployed successfully"),
         Err(err) => error!(
@@ -398,66 +399,78 @@ async fn main() {
     }
     info!("replica set: {} Ready!", rs_name);
 
-    kub_controller.create_selector(
-        &ValidatorType::Standard,
-        "app.kubernetes.io/name",
-        "validator",
-    );
-    let validator_replica_set = match kub_controller
-        .create_validator_replicas_set(
-            validator_container_name,
-            validator_image_name,
-            setup_config.num_validators,
-            config_map.metadata.name,
-        )
-        .await
-    {
-        Ok(replica_set) => replica_set,
-        Err(err) => {
-            error!("Error creating validator replicas_set: {}", err);
-            return;
-        }
-    };
 
-    let validator_rs_name = match kub_controller
-        .deploy_replicas_set(&validator_replica_set)
-        .await
-    {
-        Ok(rs) => {
-            info!("validator replicas_sets deployed successfully");
-            rs.metadata.name.unwrap()
-        }
-        Err(err) => {
-            error!(
-                "Error! Failed to deploy validator replicas_sets. err: {:?}",
-                err
-            );
-            return;
-        }
-    };
 
-    let validator_service = kub_controller.create_validator_service();
-    match kub_controller.deploy_service(&validator_service).await {
-        Ok(_) => info!("validator service deployed successfully"),
-        Err(err) => error!("Error! Failed to deploy validator service. err: {:?}", err),
+    for validator_index in 0..setup_config.num_validators {
+        let label_selector = kub_controller.create_selector(
+            "app.kubernetes.io/name",
+            format!("validator-{}", validator_index).as_str(),
+        );
+
+        let validator_replica_set = match kub_controller
+            .create_validator_replicas_set(
+                validator_container_name,
+                validator_index,
+                validator_image_name,
+                1,
+                config_map.metadata.name.clone(),
+                &label_selector,
+            )
+            .await
+        {
+            Ok(replica_set) => replica_set,
+            Err(err) => {
+                error!("Error creating validator replicas_set: {}", err);
+                return;
+            }
+        };
+
+        let _ = match kub_controller
+            .deploy_replicas_set(&validator_replica_set)
+            .await
+        {
+            Ok(rs) => {
+                info!("validator replicas_sets deployed successfully");
+                rs.metadata.name.unwrap()
+            }
+            Err(err) => {
+                error!(
+                    "Error! Failed to deploy validator replicas_sets. err: {:?}",
+                    err
+                );
+                return;
+            }
+        };
+
+        let validator_service = kub_controller.create_validator_service(
+            format!("validator-{}", validator_index).as_str(),
+            &label_selector
+        );
+        match kub_controller.deploy_service(&validator_service).await {
+            Ok(_) => info!("validator service deployed successfully"),
+            Err(err) => error!("Error! Failed to deploy validator service. err: {:?}", err),
+        }
+
     }
 
-    //TODO: handle this return val properly, don't just unwrap
-    //TODO: not sure this checks for all replica sets
-    while !kub_controller
-        .check_replica_set_ready(validator_rs_name.as_str())
-        .await
-        .unwrap()
-    {
-        info!("replica set: {} not ready...", validator_rs_name);
-        thread::sleep(Duration::from_secs(1));
-    }
-    info!("replica set: {} Ready!", rs_name);
 
-    let _ = kub_controller
-        .check_service_matching_replica_set("bootstrap-validator")
-        .await;
-    let _ = kub_controller
-        .check_service_matching_replica_set("validator")
-        .await;
+
+    // //TODO: handle this return val properly, don't just unwrap
+    // //TODO: not sure this checks for all replica sets
+    // while !kub_controller
+    //     .check_replica_set_ready(validator_rs_name.as_str())
+    //     .await
+    //     .unwrap()
+    // {
+    //     info!("replica set: {} not ready...", validator_rs_name);
+    //     thread::sleep(Duration::from_secs(1));
+    // }
+    // info!("replica set: {} Ready!", rs_name);
+
+    // let _ = kub_controller
+    //     .check_service_matching_replica_set("bootstrap-validator")
+    //     .await;
+    // let _ = kub_controller
+    //     .check_service_matching_replica_set("validator")
+    //     .await;
 }

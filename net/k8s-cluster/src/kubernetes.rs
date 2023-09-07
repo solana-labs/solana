@@ -23,8 +23,6 @@ use {
 pub struct Kubernetes<'a> {
     client: Client,
     namespace: &'a str,
-    bootstrap_validator_selector: BTreeMap<String, String>,
-    standard_validator_selector: BTreeMap<String, String>,
 }
 
 impl<'a> Kubernetes<'a> {
@@ -32,8 +30,6 @@ impl<'a> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
             namespace: namespace,
-            bootstrap_validator_selector: BTreeMap::default(),
-            standard_validator_selector: BTreeMap::default(),
         }
     }
 
@@ -76,24 +72,12 @@ impl<'a> Kubernetes<'a> {
 
     pub fn create_selector(
         &mut self,
-        validator_type: &ValidatorType, // validator or bootstrap-validator
         key: &str,
         value: &str,
-    ) {
-        match *validator_type {
-            ValidatorType::Bootstrap => {
-                self.bootstrap_validator_selector.insert(
-                    key.to_string(),
-                    value.to_string(), // validator or bootstrap-validator
-                );
-            }
-            ValidatorType::Standard => {
-                self.standard_validator_selector.insert(
-                    key.to_string(),
-                    value.to_string(), // validator or bootstrap-validator
-                );
-            }
-        }
+    ) -> BTreeMap<String, String> {
+        let mut btree = BTreeMap::new();
+        btree.insert(key.to_string(), value.to_string());
+        btree
     }
 
     pub async fn create_bootstrap_validator_replicas_set(
@@ -102,7 +86,7 @@ impl<'a> Kubernetes<'a> {
         image_name: &str,
         num_bootstrap_validators: i32,
         config_map_name: Option<String>,
-        // command_args: &Vec<String>,
+        label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
         let env_var = vec![EnvVar {
             name: "MY_POD_IP".to_string(),
@@ -122,7 +106,7 @@ impl<'a> Kubernetes<'a> {
 
         self.create_replicas_set(
             "bootstrap-validator",
-            &self.bootstrap_validator_selector,
+            label_selector,
             container_name,
             image_name,
             num_bootstrap_validators,
@@ -174,7 +158,7 @@ impl<'a> Kubernetes<'a> {
                 containers: vec![Container {
                     name: container_name.to_string(),
                     image: Some(image_name.to_string()),
-                    image_pull_policy: Some("Always".to_string()), // Set the image pull policy to "Never"
+                    image_pull_policy: Some("IfNotPresent".to_string()), // Set the image pull policy to "Never"
                     env: Some(env_vars),
                     command: Some(command.clone()),
                     volume_mounts: Some(vec![volume_mount]),
@@ -261,10 +245,6 @@ impl<'a> Kubernetes<'a> {
         api.create(&post_params, replica_set).await
     }
 
-    pub fn create_bootstrap_validator_service(&self) -> Service {
-        self.create_service("bootstrap-validator", &self.bootstrap_validator_selector)
-    }
-
     fn create_service(
         &self,
         service_name: &str,
@@ -333,9 +313,11 @@ impl<'a> Kubernetes<'a> {
     pub async fn create_validator_replicas_set(
         &self,
         container_name: &str,
+        validator_index: i32,
         image_name: &str,
         num_validators: i32,
         config_map_name: Option<String>,
+        label_selector: &BTreeMap<String, String>,
     ) -> Result<ReplicaSet, Box<dyn Error>> {
         let env_vars = vec![
             EnvVar {
@@ -376,8 +358,8 @@ impl<'a> Kubernetes<'a> {
         let command = vec!["sleep".to_string(), "3600".to_string()];
 
         self.create_replicas_set(
-            "validator",
-            &self.standard_validator_selector,
+            format!("validator-{}", validator_index).as_str(),
+            label_selector,
             container_name,
             image_name,
             num_validators,
@@ -388,8 +370,12 @@ impl<'a> Kubernetes<'a> {
         .await
     }
 
-    pub fn create_validator_service(&self) -> Service {
-        self.create_service("validator", &self.standard_validator_selector)
+    pub fn create_validator_service(
+        &self, 
+        service_name: &str, 
+        label_selector: &BTreeMap<String, String>,
+    ) -> Service {
+        self.create_service(service_name, label_selector)
     }
 
     pub async fn check_service_matching_replica_set(
