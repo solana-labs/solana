@@ -1,7 +1,7 @@
 use k8s_openapi::api::core::v1::SecretVolumeSource;
 
 use {
-    crate::{boxed_error, ValidatorType, SOLANA_ROOT},
+    crate::{boxed_error, SOLANA_ROOT},
     base64::{
         engine::general_purpose,
         Engine as _,
@@ -11,7 +11,7 @@ use {
             apps::v1::{ReplicaSet, ReplicaSetSpec},
             core::v1::{
                 ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource,
-                LocalObjectReference, Namespace, ObjectFieldSelector, PodSpec, PodTemplateSpec,
+                Namespace, ObjectFieldSelector, PodSpec, PodTemplateSpec,
                 Secret, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
             },
         },
@@ -23,7 +23,7 @@ use {
         Client,
     },
     log::*,
-    std::{collections::BTreeMap, error::Error, path::PathBuf},
+    std::{collections::BTreeMap, error::Error},
 };
 
 pub struct Kubernetes<'a> {
