@@ -1,22 +1,29 @@
+use k8s_openapi::api::core::v1::SecretVolumeSource;
+
 use {
-    crate::boxed_error,
+    crate::{boxed_error, ValidatorType, SOLANA_ROOT},
+    base64::{
+        engine::general_purpose,
+        Engine as _,
+    },
     k8s_openapi::{
         api::{
             apps::v1::{ReplicaSet, ReplicaSetSpec},
             core::v1::{
                 ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource,
                 LocalObjectReference, Namespace, ObjectFieldSelector, PodSpec, PodTemplateSpec,
-                Service, ServicePort, ServiceSpec, Volume, VolumeMount,
+                Secret, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
             },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
+        ByteString,
     },
     kube::{
         api::{Api, ObjectMeta, PostParams},
         Client,
     },
     log::*,
-    std::{collections::BTreeMap, error::Error},
+    std::{collections::BTreeMap, error::Error, path::PathBuf},
 };
 
 pub struct Kubernetes<'a> {
@@ -26,6 +33,7 @@ pub struct Kubernetes<'a> {
 
 impl<'a> Kubernetes<'a> {
     pub async fn new(namespace: &'a str) -> Kubernetes<'a> {
+
         Kubernetes {
             client: Client::try_default().await.unwrap(),
             namespace: namespace,
@@ -132,7 +140,7 @@ impl<'a> Kubernetes<'a> {
             None => return Err(boxed_error!("config_map_name is None!")),
         };
 
-        let volume = Volume {
+        let genesis_volume = Volume {
             name: "genesis-config-volume".into(),
             config_map: Some(ConfigMapVolumeSource {
                 name: Some(config_map_name.clone()),
@@ -141,9 +149,24 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         };
 
-        let volume_mount = VolumeMount {
+        let genesis_volume_mount = VolumeMount {
             name: "genesis-config-volume".to_string(),
             mount_path: "/home/solana/genesis".to_string(),
+            ..Default::default()
+        };
+
+        let accounts_volume = Volume {
+            name: "bootstrap-accounts-volume".into(),
+            secret: Some(SecretVolumeSource {
+                secret_name: Some("bootstrap-accounts-secret".to_string()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let accounts_volume_mount = VolumeMount {
+            name: "bootstrap-accounts-volume".to_string(),
+            mount_path: "/home/solana/bootstrap-accounts".to_string(),
             ..Default::default()
         };
 
@@ -160,15 +183,15 @@ impl<'a> Kubernetes<'a> {
                     image_pull_policy: Some("IfNotPresent".to_string()), // Set the image pull policy to "Never"
                     env: Some(env_vars),
                     command: Some(command.clone()),
-                    volume_mounts: Some(vec![volume_mount]),
+                    volume_mounts: Some(vec![genesis_volume_mount, accounts_volume_mount]),
 
                     ..Default::default()
                 }],
-                volumes: Some(vec![volume]),
-                image_pull_secrets: Some(vec![LocalObjectReference {
-                    name: Some("dockerhub-login".to_string()),
-                    ..Default::default()
-                }]),
+                volumes: Some(vec![genesis_volume, accounts_volume]),
+                // image_pull_secrets: Some(vec![LocalObjectReference {
+                //     name: Some("dockerhub-login".to_string()),
+                //     ..Default::default()
+                // }]),
                 ..Default::default()
             }),
             ..Default::default()
@@ -228,17 +251,46 @@ impl<'a> Kubernetes<'a> {
     //     Ok(secret)
     // }
 
-    // pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
-    //     let secrets_api: Api<Secret> = Api::namespaced(self.client.clone(), self.namespace);
-    //     secrets_api.create(&PostParams::default(), &secret).await
-    // }
+    pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
+        let secrets_api: Api<Secret> = Api::namespaced(self.client.clone(), self.namespace);
+        secrets_api.create(&PostParams::default(), &secret).await
+    }
 
-    // pub fn create_secret(
-    //     &self,
-    //     secret_name: &str,
-    // ) {
+    pub fn create_secret(
+        &self,
+        validator_type: &ValidatorType,
+        secret_name: &str,
+    ) -> Result<Secret, Box<dyn Error>> {
+        let mut key_path = SOLANA_ROOT.join("config-k8s");
+        if validator_type == &ValidatorType::Bootstrap {
+            key_path = key_path.join("bootstrap-validator");
+        }
 
-    // }
+        let identity_keypair = std::fs::read(key_path.join("identity.json"))
+            .expect(format!("Failed to read identity.json file! at: {:?}", key_path).as_str());
+        let vote_keypair = std::fs::read(key_path.join("vote-account.json"))
+            .expect(format!("Failed to read vote-account.json file! at: {:?}", key_path).as_str());
+        let stake_keypair = std::fs::read(key_path.join("stake-account.json"))
+            .expect(format!("Failed to read stake-account.json file! at: {:?}", key_path).as_str());
+
+        let mut data = BTreeMap::new();
+        data.insert("identity.json".to_string(), ByteString(general_purpose::STANDARD.encode(identity_keypair).as_bytes().to_vec()));
+        data.insert("vote.json".to_string(), ByteString(general_purpose::STANDARD.encode(vote_keypair).as_bytes().to_vec()));
+        data.insert("stake.json".to_string(), ByteString(general_purpose::STANDARD.encode(stake_keypair).as_bytes().to_vec()));
+
+        let secret = Secret {
+            metadata: ObjectMeta {
+                name: Some(secret_name.to_string()),
+                ..Default::default()
+            },
+            data: Some(data),
+            ..Default::default()
+        };
+
+        Ok(secret)
+    }
+
+
 
     pub async fn deploy_replicas_set(
         &self,
