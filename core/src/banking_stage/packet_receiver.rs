@@ -122,7 +122,7 @@ impl PacketReceiver {
         let mut dropped_packets_count = 0;
         let mut newly_buffered_packets_count = 0;
         let (deserialized_packets, num_filter_dropped_packets) =
-            Self::filter_packets(&self.invalid_fee_payer_filter, deserialized_packets);
+            Self::filter_invalid_fee_payers(&self.invalid_fee_payer_filter, deserialized_packets);
         dropped_packets_count += num_filter_dropped_packets;
 
         Self::push_unprocessed(
@@ -149,7 +149,7 @@ impl PacketReceiver {
             .swap(unprocessed_transaction_storage.len(), Ordering::Relaxed);
     }
 
-    fn filter_packets(
+    fn filter_invalid_fee_payers(
         invalid_fee_payer_filter: &InvalidFeePayerFilter,
         deserialized_packets: Vec<ImmutableDeserializedPacket>,
     ) -> (Vec<ImmutableDeserializedPacket>, usize) {
