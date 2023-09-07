@@ -432,6 +432,12 @@ mod tests {
         // Now try a (dummy) reload, replacing TestPlugin with TestPlugin2
         let reload_result = plugin_manager_lock.reload_plugin(DUMMY_NAME, TESTPLUGIN2_CONFIG);
         assert!(reload_result.is_ok());
+
+        // The plugin is now replaced with ANOTHER_DUMMY_NAME
+        let plugins = plugin_manager_lock.list_plugins().unwrap();
+        assert!(plugins.iter().any(|name| name.eq(ANOTHER_DUMMY_NAME)));
+        // DUMMY_NAME should no longer be present.
+        assert!(!plugins.iter().any(|name| name.eq(DUMMY_NAME)));
     }
 
     #[test]
