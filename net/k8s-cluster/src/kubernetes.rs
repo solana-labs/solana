@@ -196,43 +196,50 @@ impl<'a> Kubernetes<'a> {
         })
     }
 
-    //TODO: this duplicates code seen in docker.rs -> loading registry info.
-    // could be ok if we don't build docker and want to just pull from registry!
-    pub async fn create_secret(&self) -> Result<Secret, Box<dyn Error>> {
-        let username = match load_env_variable_by_name("REGISTRY_USERNAME") {
-            Ok(username) => username,
-            Err(_) => return Err(boxed_error!("REGISTRY_USERNAME not set")),
-        };
-        let password = match load_env_variable_by_name("REGISTRY_PASSWORD") {
-            Ok(password) => password,
-            Err(_) => return Err(boxed_error!("REGISTRY_PASSWORD not set")),
-        };
-        let secret_name = "dockerhub-login";
-        let mut data = BTreeMap::new();
-        data.insert(
-            "username".to_string(),
-            ByteString(username.as_bytes().to_vec()),
-        );
-        data.insert(
-            "password".to_string(),
-            ByteString(password.as_bytes().to_vec()),
-        );
+    // //TODO: this duplicates code seen in docker.rs -> loading registry info.
+    // // could be ok if we don't build docker and want to just pull from registry!
+    // pub async fn create_secret_old(&self) -> Result<Secret, Box<dyn Error>> {
+    //     let username = match load_env_variable_by_name("REGISTRY_USERNAME") {
+    //         Ok(username) => username,
+    //         Err(_) => return Err(boxed_error!("REGISTRY_USERNAME not set")),
+    //     };
+    //     let password = match load_env_variable_by_name("REGISTRY_PASSWORD") {
+    //         Ok(password) => password,
+    //         Err(_) => return Err(boxed_error!("REGISTRY_PASSWORD not set")),
+    //     };
+    //     let secret_name = "dockerhub-login";
+    //     let mut data = BTreeMap::new();
+    //     data.insert(
+    //         "username".to_string(),
+    //         ByteString(username.as_bytes().to_vec()),
+    //     );
+    //     data.insert(
+    //         "password".to_string(),
+    //         ByteString(password.as_bytes().to_vec()),
+    //     );
 
-        let secret = Secret {
-            metadata: ObjectMeta {
-                name: Some(secret_name.to_string()),
-                ..Default::default()
-            },
-            data: Some(data),
-            ..Default::default()
-        };
-        Ok(secret)
-    }
+    //     let secret = Secret {
+    //         metadata: ObjectMeta {
+    //             name: Some(secret_name.to_string()),
+    //             ..Default::default()
+    //         },
+    //         data: Some(data),
+    //         ..Default::default()
+    //     };
+    //     Ok(secret)
+    // }
 
-    pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
-        let secrets_api: Api<Secret> = Api::namespaced(self.client.clone(), self.namespace);
-        secrets_api.create(&PostParams::default(), &secret).await
-    }
+    // pub async fn deploy_secret(&self, secret: &Secret) -> Result<Secret, kube::Error> {
+    //     let secrets_api: Api<Secret> = Api::namespaced(self.client.clone(), self.namespace);
+    //     secrets_api.create(&PostParams::default(), &secret).await
+    // }
+
+    // pub fn create_secret(
+    //     &self,
+    //     secret_name: &str,
+    // ) {
+
+    // }
 
     pub async fn deploy_replicas_set(
         &self,

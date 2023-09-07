@@ -324,20 +324,20 @@ async fn main() {
         .value_of("validator_image_name")
         .expect("Validator image name is required");
 
-    let secret = match kub_controller.create_secret().await {
-        Ok(secret) => secret,
-        Err(err) => {
-            error!("Failed to create secret! {}", err);
-            return;
-        }
-    };
-    match kub_controller.deploy_secret(&secret).await {
-        Ok(_) => (),
-        Err(err) => {
-            error!("{}", err);
-            return;
-        }
-    }
+    // let secret = match kub_controller.create_secret_old().await {
+    //     Ok(secret) => secret,
+    //     Err(err) => {
+    //         error!("Failed to create secret! {}", err);
+    //         return;
+    //     }
+    // };
+    // match kub_controller.deploy_secret(&secret).await {
+    //     Ok(_) => (),
+    //     Err(err) => {
+    //         error!("{}", err);
+    //         return;
+    //     }
+    // }
 
     let label_selector = kub_controller.create_selector(
         "app.kubernetes.io/name",
