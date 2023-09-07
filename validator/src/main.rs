@@ -946,9 +946,36 @@ pub fn main() {
 
     let init_complete_file = matches.value_of("init_complete_file");
 
+    // TODO: Once entrypoints are updated to return shred-version, this should
+    // abort if it fails to obtain a shred-version, so that nodes always join
+    // gossip with a valid shred-version. The code to adopt entrypoint shred
+    // version can then be deleted from gossip and get_rpc_node above.
+    let mut expected_shred_version = value_t!(matches, "expected_shred_version", u16)
+        .ok();
+    let mut expected_bank_hash = matches
+        .value_of("expected_bank_hash")
+        .map(|s| Hash::from_str(s).unwrap());
+    let mut wait_for_supermajority = value_t!(matches, "wait_for_supermajority", Slot).ok();
+    let wen_restart = value_t!(matches, "wen_restart", PathBuf).ok();
+    if wait_for_supermajority.is_none() && wen_restart.is_some() {
+        match get_wen_restart_phase_one_result(&wen_restart) {
+            Ok(wen_restart_progress) => {
+                if let Some((slot, hash, shred_version)) = wen_restart_progress {
+                    wait_for_supermajority = Some(slot);
+                    expected_bank_hash = Some(hash);
+                    expected_shred_version = Some(shred_version);
+                }        
+            },
+            Err(e) => {
+                warn!("{}", e);
+                exit(1);
+            },
+        }
+    }
+
     let rpc_bootstrap_config = bootstrap::RpcBootstrapConfig {
-        no_genesis_fetch: matches.is_present("no_genesis_fetch"),
-        no_snapshot_fetch: matches.is_present("no_snapshot_fetch"),
+        no_genesis_fetch: matches.is_present("no_genesis_fetch") || wait_for_supermajority.is_some(),
+        no_snapshot_fetch: matches.is_present("no_snapshot_fetch") || wait_for_supermajority.is_some(),
         check_vote_account: matches
             .value_of("check_vote_account")
             .map(|url| url.to_string()),
@@ -958,7 +985,7 @@ pub fn main() {
             "max_genesis_archive_unpacked_size",
             u64
         ),
-        incremental_snapshot_fetch: !matches.is_present("no_incremental_snapshots"),
+        incremental_snapshot_fetch: !matches.is_present("no_incremental_snapshots") || wait_for_supermajority.is_some(),
     };
 
     let private_rpc = matches.is_present("private_rpc");
@@ -1085,34 +1112,8 @@ pub fn main() {
             exit(1);
         }
     }
-    // TODO: Once entrypoints are updated to return shred-version, this should
-    // abort if it fails to obtain a shred-version, so that nodes always join
-    // gossip with a valid shred-version. The code to adopt entrypoint shred
-    // version can then be deleted from gossip and get_rpc_node above.
-    let mut expected_shred_version = value_t!(matches, "expected_shred_version", u16)
-        .ok()
-        .or_else(|| get_cluster_shred_version(&entrypoint_addrs));
-    let mut expected_bank_hash = matches
-        .value_of("expected_bank_hash")
-        .map(|s| Hash::from_str(s).unwrap());
-    let mut wait_for_supermajority = value_t!(matches, "wait_for_supermajority", Slot).ok();
-    let wen_restart = value_t!(matches, "wen_restart", PathBuf).ok();
-    if wait_for_supermajority.is_none() && wen_restart.is_some() {
-        match get_wen_restart_phase_one_result(&wen_restart) {
-            Ok(wen_restart_progress) => {
-                if let Some((slot, hash, shred_version)) = wen_restart_progress {
-                    wait_for_supermajority = Some(slot);
-                    expected_bank_hash = Some(hash);
-                    expected_shred_version = Some(shred_version);
-                }        
-            },
-            Err(e) => {
-                warn!("{}", e);
-                exit(1);
-            },
-        }
-    }
 
+    expected_shred_version = expected_shred_version.or_else(|| get_cluster_shred_version(&entrypoint_addrs));
 
     let tower_storage: Arc<dyn tower_storage::TowerStorage> =
         match value_t_or_exit!(matches, "tower_storage", String).as_str() {
