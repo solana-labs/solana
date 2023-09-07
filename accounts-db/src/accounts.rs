@@ -33,7 +33,6 @@ use {
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
-        compute_budget_processor::*,
         feature_set::{
             self, add_set_tx_loaded_accounts_data_size_instruction,
             include_loaded_accounts_data_size_in_fee_calculation,
@@ -57,6 +56,7 @@ use {
         sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
+        transaction_meta_util::GetTransactionMeta,
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
     std::{
@@ -247,12 +247,14 @@ impl Accounts {
         feature_set: &FeatureSet,
     ) -> Result<Option<NonZeroUsize>> {
         if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
-            let transaction_meta = TransactionMeta::process_compute_budget_instruction(
-                tx.message().program_instructions_iter(),
-                !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-                true, // don't reject txs that use request heap size ix
-                feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-            )
+//            let transaction_meta = TransactionMeta::process_compute_budget_instruction(
+//                tx.message().program_instructions_iter(),
+//                !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+//                true, // don't reject txs that use request heap size ix
+//                feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+//            )
+            // TODO - wire in ClusterType, or have feature activated in mainnet first
+            let transaction_meta = tx.get_transaction_meta(feature_set, None)
             .unwrap_or_default();
             // sanitize against setting size limit to zero
             NonZeroUsize::new(transaction_meta.accounts_loaded_bytes).map_or(
@@ -722,7 +724,7 @@ impl Accounts {
                         fee_structure.calculate_fee(
                             tx.message(),
                             lamports_per_signature,
-                            &ComputeBudget::fee_budget_limits(tx.message().program_instructions_iter(), feature_set, Some(self.accounts_db.expected_cluster_type())),
+                            &ComputeBudget::fee_budget_limits(&tx.get_transaction_meta(feature_set, Some(self.accounts_db.expected_cluster_type())).unwrap_or_default()),
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                             feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                         )

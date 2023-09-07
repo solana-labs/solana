@@ -1,8 +1,9 @@
 use solana_sdk::{
-    compute_budget_processor::*,
+    feature_set::FeatureSet,
     instruction::CompiledInstruction,
     pubkey::Pubkey,
     transaction::{SanitizedTransaction, SanitizedVersionedTransaction},
+    transaction_meta_util::GetTransactionMeta,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -17,23 +18,23 @@ pub trait GetTransactionPriorityDetails {
         round_compute_unit_price_enabled: bool,
     ) -> Option<TransactionPriorityDetails>;
 
-    fn process_compute_budget_instruction<'a>(
-        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-        _round_compute_unit_price_enabled: bool,
-    ) -> Option<TransactionPriorityDetails> {
-        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
-            instructions,
-            true, // supports prioritization by request_units_deprecated instruction
-            true, // enable request heap frame instruction
-            true, // enable support set accounts data size instruction
-                  // TODO: round_compute_unit_price_enabled: bool
-        )
-        .ok()?;
-        Some(TransactionPriorityDetails {
-            priority: transaction_meta.compute_unit_price,
-            compute_unit_limit: u64::from(transaction_meta.compute_unit_limit),
-        })
-    }
+//    fn process_compute_budget_instruction<'a>(
+//        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
+//        _round_compute_unit_price_enabled: bool,
+//    ) -> Option<TransactionPriorityDetails> {
+//         let transaction_meta = TransactionMeta::process_compute_budget_instruction(
+//             instructions,
+//             true, // supports prioritization by request_units_deprecated instruction
+//             true, // enable request heap frame instruction
+//             true, // enable support set accounts data size instruction
+//                   // TODO: round_compute_unit_price_enabled: bool
+//         )
+//        .ok()?;
+//        Some(TransactionPriorityDetails {
+//            priority: transaction_meta.compute_unit_price,
+//            compute_unit_limit: u64::from(transaction_meta.compute_unit_limit),
+//        })
+//    }
 }
 
 impl GetTransactionPriorityDetails for SanitizedVersionedTransaction {
@@ -41,10 +42,18 @@ impl GetTransactionPriorityDetails for SanitizedVersionedTransaction {
         &self,
         round_compute_unit_price_enabled: bool,
     ) -> Option<TransactionPriorityDetails> {
-        Self::process_compute_budget_instruction(
-            self.get_message().program_instructions_iter(),
-            round_compute_unit_price_enabled,
-        )
+//        Self::process_compute_budget_instruction(
+//            self.get_message().program_instructions_iter(),
+//            round_compute_unit_price_enabled,
+//        )
+        // TODO - this Trait needs to be remove/replaced, or have to wire in feature _set and
+        // cluster type
+        let transaction_meta = self.get_transaction_meta(&FeatureSet::default(), None).ok()?;
+        Some(TransactionPriorityDetails {
+            priority: transaction_meta.compute_unit_price,
+            compute_unit_limit: u64::from(transaction_meta.compute_unit_limit),
+        })
+
     }
 }
 
@@ -53,10 +62,17 @@ impl GetTransactionPriorityDetails for SanitizedTransaction {
         &self,
         round_compute_unit_price_enabled: bool,
     ) -> Option<TransactionPriorityDetails> {
-        Self::process_compute_budget_instruction(
-            self.message().program_instructions_iter(),
-            round_compute_unit_price_enabled,
-        )
+//        Self::process_compute_budget_instruction(
+//            self.message().program_instructions_iter(),
+//            round_compute_unit_price_enabled,
+//        )
+        // TODO - this Trait needs to be remove/replaced, or have to wire in feature _set and
+        // cluster type
+        let transaction_meta = self.get_transaction_meta(&FeatureSet::default(), None).ok()?;
+        Some(TransactionPriorityDetails {
+            priority: transaction_meta.compute_unit_price,
+            compute_unit_limit: u64::from(transaction_meta.compute_unit_limit),
+        })
     }
 }
 

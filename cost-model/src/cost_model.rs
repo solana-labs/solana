@@ -14,7 +14,6 @@ use {
     solana_sdk::{
         borsh0_10::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
-        compute_budget_processor::*,
         feature_set::{
             add_set_tx_loaded_accounts_data_size_instruction,
             include_loaded_accounts_data_size_in_fee_calculation,
@@ -27,6 +26,7 @@ use {
         system_instruction::SystemInstruction,
         system_program,
         transaction::SanitizedTransaction,
+        transaction_meta_util::GetTransactionMeta,
     },
 };
 
@@ -126,13 +126,16 @@ impl CostModel {
         // during block packing, different costs for same transaction due to different versions
         // will not impact consensus. So for v1.15+, should call compute budget with
         // the feature gate `enable_request_heap_frame_ix` enabled.
-        let enable_request_heap_frame_ix = true;
-        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
-            transaction.message().program_instructions_iter(),
-            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-            enable_request_heap_frame_ix,
-            feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-        );
+//        let enable_request_heap_frame_ix = true;
+//        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
+//            transaction.message().program_instructions_iter(),
+//            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+//            enable_request_heap_frame_ix,
+//            feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+//        );
+
+        // TODO - wire ClusterType in, or get feature activated in mainnet first
+        let transaction_meta = transaction.get_transaction_meta(feature_set, None);
 
         // if failed to process compute_budget instructions, the transaction will not be executed
         // by `bank`, therefore it should be considered as no execution cost by cost model.

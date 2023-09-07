@@ -130,7 +130,6 @@ use {
             MAX_TRANSACTION_FORWARDING_DELAY, MAX_TRANSACTION_FORWARDING_DELAY_GPU,
             SECONDS_PER_DAY,
         },
-        compute_budget_processor::*,
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
         feature,
@@ -175,6 +174,7 @@ use {
         transaction_context::{
             ExecutionRecord, TransactionAccount, TransactionContext, TransactionReturnData,
         },
+        transaction_meta_util::GetTransactionMeta,
     },
     solana_stake_program::stake_state::{
         self, InflationPointCalculationEvent, PointValue, StakeStateV2,
@@ -4087,10 +4087,10 @@ impl Bank {
             message,
             lamports_per_signature,
             &ComputeBudget::fee_budget_limits(
-                message.program_instructions_iter(),
-                &self.feature_set,
-                Some(self.cluster_type()),
-            ),
+                &message.get_transaction_meta(
+                    &self.feature_set, 
+                    Some(self.cluster_type()))
+                .unwrap_or_default()),
             self.feature_set
                 .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
             self.feature_set
@@ -5131,15 +5131,16 @@ impl Bank {
                     } else {
                         let mut compute_budget_process_transaction_time =
                             Measure::start("compute_budget_process_transaction_time");
-                        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
-                            tx.message().program_instructions_iter(),
-                            !self
-                                .feature_set
-                                .is_active(&remove_deprecated_request_unit_ix::id()),
-                            true, // don't reject txs that use request heap size ix
-                            self.feature_set
-                                .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-                        );
+//                        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
+//                            tx.message().program_instructions_iter(),
+//                            !self
+//                                .feature_set
+//                                .is_active(&remove_deprecated_request_unit_ix::id()),
+//                            true, // don't reject txs that use request heap size ix
+//                            self.feature_set
+//                                .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+//                        );
+                        let transaction_meta = tx.get_transaction_meta(&self.feature_set, self.cluster_type);
                         compute_budget_process_transaction_time.stop();
                         saturating_add_assign!(
                             timings

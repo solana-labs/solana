@@ -4,51 +4,18 @@ use crate::{
     borsh0_10::try_from_slice_unchecked,
     compute_budget::{self, ComputeBudgetInstruction},
     entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
+    feature_set::{
+        add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
+        remove_deprecated_request_unit_ix, FeatureSet,
+    },
+    genesis_config::ClusterType,
     instruction::{CompiledInstruction, InstructionError},
     pubkey::Pubkey,
     sanitize::SanitizeError,
+    transaction_meta::{DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT, MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
+    MAX_HEAP_FRAME_BYTES, TransactionMeta},
 };
 
-// TODO - remove the dup in program-runtime::compute_budget.rs
-const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES: usize = 64 * 1024 * 1024;
-const DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT: u32 = 200_000;
-const MAX_COMPUTE_UNIT_LIMIT: u32 = 1_400_000;
-const MAX_HEAP_FRAME_BYTES: usize = 256 * 1024;
-
-// Contains transaction meta data, currently, set up compute_budget instructions
-// to commit or request "resource" allocation for transaction.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TransactionMeta {
-    pub updated_heap_bytes: usize,
-    pub compute_unit_limit: u32,
-    pub compute_unit_price: u64,
-    /// Maximum accounts data size, in bytes, that a transaction is allowed to load; The
-    /// value is capped by MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES to prevent overuse of memory.
-    pub accounts_loaded_bytes: usize,
-    // NOTE -
-    // is_simple_vote can be consolidated into Meta here.
-    //
-    // other potential compute_budget ix or TLV ix related data here:
-    //    pub accounts_written_bytes: usize,
-    //    pub storage_bytes: usize,
-    //    pub network_usage_bytes: usize,
-    // below are meta data _after_ all accounts are loaded
-    //    pub durable_nonce_account: Pubkey,
-    //    pub cost_basis: something of cost_model,
-}
-
-impl Default for TransactionMeta {
-    fn default() -> Self {
-        TransactionMeta {
-            updated_heap_bytes: MIN_HEAP_FRAME_BYTES,
-            compute_unit_limit: MAX_COMPUTE_UNIT_LIMIT,
-            compute_unit_price: 0,
-            accounts_loaded_bytes: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
-        }
-    }
-}
-
-impl TransactionMeta {
     // Processing compute_budget could be part of tx sanitizing, failed to process
     // these instructions will drop the transaction eventually without execution,
     // may as well fail it early.
@@ -56,10 +23,20 @@ impl TransactionMeta {
     // are retrieved and returned,
     pub fn process_compute_budget_instruction<'a>(
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-        support_request_units_deprecated: bool,
-        enable_request_heap_frame_ix: bool,
-        support_set_loaded_accounts_data_size_limit_ix: bool,
+        feature_set: &FeatureSet,
+        maybe_cluster_type: Option<ClusterType>,
     ) -> Result<TransactionMeta, SanitizeError> {
+        // A cluster specific feature gate, when not activated it keeps v1.13 behavior in mainnet-beta;
+        // once activated for v1.14+, it allows compute_budget::request_heap_frame and
+        // compute_budget::set_compute_unit_price co-exist in same transaction.
+        let enable_request_heap_frame_ix = feature_set
+            .is_active(&enable_request_heap_frame_ix::id())
+            || maybe_cluster_type
+                .and_then(|cluster_type| (cluster_type != ClusterType::MainnetBeta).then_some(0))
+                .is_some();
+        let support_request_units_deprecated = !feature_set.is_active(&remove_deprecated_request_unit_ix::id());
+        let support_set_loaded_accounts_data_size_limit_ix = feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id());
+
         let mut num_non_compute_budget_instructions: u32 = 0;
         let mut updated_compute_unit_limit = None;
         let mut updated_compute_unit_price = None;
@@ -86,7 +63,7 @@ impl TransactionMeta {
                             return Err(duplicate_instruction_error);
                         }
                         updated_compute_unit_limit = Some(compute_unit_limit);
-                        updated_compute_unit_price = Self::support_deprecated_requested_units(
+                        updated_compute_unit_price = support_deprecated_requested_units(
                             additional_fee,
                             compute_unit_limit,
                         );
@@ -95,7 +72,7 @@ impl TransactionMeta {
                         if updated_heap_size.is_some() {
                             return Err(duplicate_instruction_error);
                         }
-                        if Self::sanitize_updated_heap_size(
+                        if sanitize_updated_heap_size(
                             bytes as usize,
                             enable_request_heap_frame_ix,
                         ) {
@@ -180,4 +157,3 @@ impl TransactionMeta {
             .checked_div(compute_unit_limit as u128)
             .map(|cu_price| u64::try_from(cu_price).unwrap_or(u64::MAX))
     }
-}
