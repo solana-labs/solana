@@ -4265,14 +4265,16 @@ impl AccountsDb {
     /// Given the input `ShrinkCandidates`, this function sorts the stores by their alive ratio
     /// in increasing order with the most sparse entries in the front. It will then simulate the
     /// shrinking by working on the most sparse entries first and if the overall alive ratio is
-    /// achieved, it will stop and return the filtered-down candidates and the candidates which
+    /// achieved, it will stop and return:
+    /// first tuple element: the filtered-down candidates and
+    /// second duple element: the candidates which
     /// are skipped in this round and might be eligible for the future shrink.
     fn select_candidates_by_total_usage(
         &self,
         shrink_slots: &ShrinkCandidates,
         shrink_ratio: f64,
         oldest_non_ancient_slot: Option<Slot>,
-    ) -> (ShrinkCandidates, ShrinkCandidates) {
+    ) -> (HashMap<Slot, Arc<AccountStorageEntry>>, ShrinkCandidates) {
         struct StoreUsageInfo {
             slot: Slot,
             alive_ratio: f64,
@@ -4315,7 +4317,7 @@ impl AccountsDb {
 
         // Working from the beginning of store_usage which are the most sparse and see when we can stop
         // shrinking while still achieving the overall goals.
-        let mut shrink_slots = ShrinkCandidates::new();
+        let mut shrink_slots = HashMap::new();
         let mut shrink_slots_next_batch = ShrinkCandidates::new();
         for usage in &store_usage {
             let store = &usage.store;
@@ -4339,7 +4341,7 @@ impl AccountsDb {
                 let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
                 let bytes_saved = current_store_size.saturating_sub(after_shrink_size);
                 total_bytes -= bytes_saved;
-                shrink_slots.insert(usage.slot);
+                shrink_slots.insert(usage.slot, Arc::clone(store));
             }
         }
         measure.stop();
@@ -4756,7 +4758,18 @@ impl AccountsDb {
                     );
                 (shrink_slots, Some(shrink_slots_next_batch))
             } else {
-                (shrink_candidates_slots, None)
+                (
+                    // lookup storage for each slot
+                    shrink_candidates_slots
+                        .into_iter()
+                        .filter_map(|slot| {
+                            self.storage
+                                .get_slot_storage_entry(slot)
+                                .map(|storage| (slot, storage))
+                        })
+                        .collect(),
+                    None,
+                )
             }
         };
 
@@ -4775,14 +4788,14 @@ impl AccountsDb {
         let num_candidates = shrink_slots.len();
         let shrink_candidates_count = shrink_slots.len();
         self.thread_pool_clean.install(|| {
-            shrink_slots.into_par_iter().for_each(|slot| {
-                let mut measure = Measure::start("shrink_candidate_slots-ms");
-                if let Some(slot_shrink_candidate) = self.storage.get_slot_storage_entry(slot) {
+            shrink_slots
+                .into_par_iter()
+                .for_each(|(slot, slot_shrink_candidate)| {
+                    let mut measure = Measure::start("shrink_candidate_slots-ms");
                     self.do_shrink_slot_store(slot, &slot_shrink_candidate);
-                }
-                measure.stop();
-                inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
-            });
+                    measure.stop();
+                    inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
+                });
         });
         measure_shrink_all_candidates.stop();
         inc_new_counter_info!(
