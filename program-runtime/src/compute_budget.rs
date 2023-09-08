@@ -1,12 +1,5 @@
 use solana_sdk::{
-    feature_set::{
-        add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
-        remove_deprecated_request_unit_ix, FeatureSet,
-    },
     fee::FeeBudgetLimits,
-    genesis_config::ClusterType,
-    instruction::CompiledInstruction,
-    pubkey::Pubkey,
     transaction_meta::TransactionMeta,
 };
 
@@ -182,28 +175,8 @@ impl ComputeBudget {
     }
 
     pub fn fee_budget_limits<'a>(
-//        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-//        feature_set: &FeatureSet,
-//        maybe_cluster_type: Option<ClusterType>,
         transaction_meta: &TransactionMeta,
     ) -> FeeBudgetLimits {
-//        // A cluster specific feature gate, when not activated it keeps v1.13 behavior in mainnet-beta;
-//        // once activated for v1.14+, it allows compute_budget::request_heap_frame and
-//        // compute_budget::set_compute_unit_price co-exist in same transaction.
-//        let enable_request_heap_frame_ix = feature_set
-//            .is_active(&enable_request_heap_frame_ix::id())
-//            || maybe_cluster_type
-//                .and_then(|cluster_type| (cluster_type != ClusterType::MainnetBeta).then_some(0))
-//                .is_some();
-//
-//        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
-//            instructions,
-//            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-//            enable_request_heap_frame_ix,
-//            feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-//        )
-//        .unwrap_or_default();
-//
         FeeBudgetLimits {
             loaded_accounts_data_size_limit: transaction_meta.accounts_loaded_bytes,
             heap_cost: ComputeBudget::default().heap_cost,

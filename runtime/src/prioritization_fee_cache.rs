@@ -1,7 +1,6 @@
 use {
     crate::{
         bank::Bank, prioritization_fee::*,
-        transaction_priority_details::GetTransactionPriorityDetails,
     },
     crossbeam_channel::{unbounded, Receiver, Sender},
     log::*,
@@ -9,6 +8,7 @@ use {
     solana_measure::measure,
     solana_sdk::{
         clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::SanitizedTransaction,
+        transaction_meta_util::GetTransactionMeta,
     },
     std::{
         collections::HashMap,
@@ -212,20 +212,23 @@ impl PrioritizationFeeCache {
                         continue;
                     }
 
+                    let transaction_meta = sanitized_transaction.get_transaction_meta(&bank.feature_set, Some(bank.cluster_type())).ok();
+/*
                     let round_compute_unit_price_enabled = false; // TODO: bank.feture_set.is_active(round_compute_unit_price)
                     let priority_details = sanitized_transaction
                         .get_transaction_priority_details(round_compute_unit_price_enabled);
+// */
                     let account_locks = sanitized_transaction
                         .get_account_locks(bank.get_transaction_account_lock_limit());
 
-                    if priority_details.is_none() || account_locks.is_err() {
+                    if transaction_meta.is_none() || account_locks.is_err() {
                         continue;
                     }
-                    let priority_details = priority_details.unwrap();
+                    let transaction_meta = transaction_meta.unwrap();
 
                     // filter out any transaction that requests zero compute_unit_limit
                     // since its priority fee amount is not instructive
-                    if priority_details.compute_unit_limit == 0 {
+                    if transaction_meta.compute_unit_limit == 0 {
                         continue;
                     }
 
@@ -241,7 +244,7 @@ impl PrioritizationFeeCache {
                     self.sender
                         .send(CacheServiceUpdate::TransactionUpdate {
                             slot: bank.slot(),
-                            transaction_fee: priority_details.priority,
+                            transaction_fee: transaction_meta.compute_unit_price,
                             writable_accounts,
                         })
                         .unwrap_or_else(|err| {

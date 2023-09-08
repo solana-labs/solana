@@ -134,11 +134,11 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, add_set_tx_loaded_accounts_data_size_instruction,
+            self,
             enable_early_verification_of_account_modifications,
             include_loaded_accounts_data_size_in_fee_calculation,
             reduce_stake_warmup_cooldown::NewWarmupCooldownRateEpoch,
-            remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
+            remove_congestion_multiplier_from_fee_calculation,
             FeatureSet,
         },
         fee::FeeStructure,

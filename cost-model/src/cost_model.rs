@@ -15,9 +15,8 @@ use {
         borsh0_10::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
         feature_set::{
-            add_set_tx_loaded_accounts_data_size_instruction,
             include_loaded_accounts_data_size_in_fee_calculation,
-            remove_deprecated_request_unit_ix, FeatureSet,
+            FeatureSet,
         },
         fee::FeeStructure,
         instruction::CompiledInstruction,
