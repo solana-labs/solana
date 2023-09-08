@@ -1,10 +1,25 @@
 #!/bin/bash
+set -e
+validator_type=""
+
+while getopts "t:" opt; do
+  case "$opt" in
+    t) validator_type="$OPTARG";;
+    \?) echo "Usage: $0 -t <validator_type>"; exit 1;;
+  esac
+done
+
+# Check if validator_type is empty
+if [ -z "$validator_type" ]; then
+  echo "Validator type is required. Usage: $0 -t <validator_type>"
+  exit 1
+fi
 
 # Define an array of secret files to process
 SECRET_FILES=(
-    "/home/solana/bootstrap-accounts/identity.base64"
-    "/home/solana/bootstrap-accounts/vote.base64"
-    "/home/solana/bootstrap-accounts/stake.base64"
+    "/home/solana/${validator_type}-accounts/identity.base64"
+    "/home/solana/${validator_type}-accounts/vote.base64"
+    "/home/solana/${validator_type}-accounts/stake.base64"
 )
 
 # Define an array of decoded file paths
@@ -33,6 +48,3 @@ for i in "${!SECRET_FILES[@]}"; do
         echo "Secret file not found at $SECRET_FILE"
     fi
 done
-
-# Sleep for an hour (3600 seconds)
-sleep 3600
