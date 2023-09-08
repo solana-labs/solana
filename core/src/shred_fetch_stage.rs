@@ -38,7 +38,7 @@ impl ShredFetchStage {
         recvr: PacketBatchReceiver,
         sendr: Sender<PacketBatch>,
         bank_forks: &RwLock<BankForks>,
-        shred_version: Arc<RwLock<u16>>,
+        shred_version: u16,
         name: &'static str,
         flags: PacketFlags,
         repair_context: Option<(&UdpSocket, &ClusterInfo)>,
@@ -64,7 +64,6 @@ impl ShredFetchStage {
         let mut is_in_wen_restart = slots_to_repair_for_wen_restart.is_some();
 
         for mut packet_batch in recvr {
-            let cur_shred_version = *shred_version.read().unwrap();
             let mut my_slots_to_repair_for_wen_restart = None;
             if is_in_wen_restart {
                 my_slots_to_repair_for_wen_restart = match slots_to_repair_for_wen_restart.clone() {
@@ -109,7 +108,15 @@ impl ShredFetchStage {
             let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
             for packet in packet_batch.iter_mut().filter(|p| !p.meta().discard()) {
                 if turbine_disabled
-                    || should_discard_shred(packet, last_root, max_slot, shred_version, &mut stats)
+                    || should_discard_shred(
+                        packet,
+                        last_root,
+                        max_slot,
+                        shred_version,
+                        should_drop_merkle_shreds,
+                        &my_slots_to_repair_for_wen_restart,
+                        &mut stats,
+                    )
                 {
                     packet.meta_mut().set_discard(true);
                 } else {
@@ -130,7 +137,7 @@ impl ShredFetchStage {
         sender: Sender<PacketBatch>,
         recycler: PacketBatchRecycler,
         bank_forks: Arc<RwLock<BankForks>>,
-        shred_version: Arc<RwLock<u16>>,
+        shred_version: u16,
         name: &'static str,
         flags: PacketFlags,
         repair_context: Option<(Arc<UdpSocket>, Arc<ClusterInfo>)>,
@@ -163,7 +170,7 @@ impl ShredFetchStage {
                     packet_receiver,
                     sender,
                     &bank_forks,
-                    shred_version.clone(),
+                    shred_version,
                     name,
                     flags,
                     repair_context,
@@ -181,7 +188,7 @@ impl ShredFetchStage {
         quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
         repair_socket: Arc<UdpSocket>,
         sender: Sender<PacketBatch>,
-        shred_version: Arc<RwLock<u16>>,
+        shred_version: u16,
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<ClusterInfo>,
         turbine_disabled: Arc<AtomicBool>,
@@ -196,7 +203,7 @@ impl ShredFetchStage {
             sender.clone(),
             recycler.clone(),
             bank_forks.clone(),
-            shred_version.clone(),
+            shred_version,
             "shred_fetch",
             PacketFlags::empty(),
             None, // repair_context
@@ -210,7 +217,7 @@ impl ShredFetchStage {
             sender.clone(),
             recycler.clone(),
             bank_forks.clone(),
-            shred_version.clone(),
+            shred_version,
             "shred_fetch_repair",
             PacketFlags::REPAIR,
             Some((repair_socket, cluster_info)),
@@ -237,7 +244,7 @@ impl ShredFetchStage {
                         packet_receiver,
                         sender,
                         &bank_forks,
-                        shred_version.clone(),
+                        shred_version,
                         "shred_fetch_quic",
                         PacketFlags::empty(),
                         None, // repair_context

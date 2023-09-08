@@ -1095,7 +1095,7 @@ impl Validator {
         let last_vote = tower.last_vote();
         // TVU shred version should be the old one before wen_restart, otherwise repair results
         // from before the restart will be rejected.
-        let tvu_shred_version = Arc::new(RwLock::new(node.info.shred_version()));
+        let tvu_shred_version = node.info.shred_version();
         let in_wen_restart_phase_one = config.wen_restart.is_some() && !waited_for_supermajority;
         if in_wen_restart_phase_one {
             node.info
@@ -1234,7 +1234,7 @@ impl Validator {
             cluster_confirmed_slot_receiver,
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
-                shred_version: tvu_shred_version.clone(),
+                shred_version: tvu_shred_version,
                 repair_validators: config.repair_validators.clone(),
                 repair_whitelist: config.repair_whitelist.clone(),
                 wait_for_vote_to_start_leader,

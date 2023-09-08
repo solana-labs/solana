@@ -82,7 +82,7 @@ pub struct TvuSockets {
 #[derive(Default)]
 pub struct TvuConfig {
     pub max_ledger_shreds: Option<u64>,
-    pub shred_version: Arc<RwLock<u16>>,
+    pub shred_version: u16,
     // Validators from which repairs are requested
     pub repair_validators: Option<HashSet<Pubkey>>,
     // Validators which should be given priority when serving repairs
