@@ -4,13 +4,19 @@ use {
         connection_cache_stats::{ConnectionCacheStats, CONNECTION_STAT_SUBMISSION_INTERVAL},
         nonblocking::client_connection::ClientConnection as NonblockingClientConnection,
     },
+    crossbeam_channel::{Receiver, RecvTimeoutError},
     indexmap::map::IndexMap,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
     solana_sdk::timing::AtomicInterval,
     std::{
         net::SocketAddr,
-        sync::{atomic::Ordering, Arc, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{Builder, JoinHandle},
+        time::Duration,
     },
     thiserror::Error,
 };
@@ -27,9 +33,9 @@ pub enum Protocol {
     QUIC,
 }
 
-pub trait ConnectionManager {
+pub trait ConnectionManager: Send + Sync {
     type ConnectionPool: ConnectionPool;
-    type NewConnectionConfig;
+    type NewConnectionConfig: NewConnectionConfig;
 
     const PROTOCOL: Protocol;
 
@@ -55,6 +61,7 @@ impl<P, M, C> ConnectionCache<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
 {
     pub fn new(
         name: &'static str,
@@ -87,6 +94,36 @@ where
         }
     }
 
+    fn create_connection_thread(
+        map: RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ P>>,
+        config: C,
+        connection_manager: M,
+        receiver: Receiver<SocketAddr>,
+        exit: Arc<AtomicBool>,
+    ) -> JoinHandle<()> {
+        Builder::new()
+            .name("solStxReceive".to_string())
+            .spawn(move || loop {
+                let recv_timeout_ms = 100;
+                let recv_result = receiver.recv_timeout(Duration::from_millis(recv_timeout_ms));
+                if exit.load(Ordering::Relaxed) {
+                    break;
+                }
+                match recv_result {
+                    Err(RecvTimeoutError::Disconnected) => {
+                        exit.store(true, Ordering::Relaxed);
+                        break;
+                    }
+                    Err(RecvTimeoutError::Timeout) => {}
+                    Ok(addr) => {
+                        let mut map = map.write().unwrap();
+                        Self::create_connection_internal(config, connection_manager, &mut map, &addr);
+                    }
+                }
+            })
+            .unwrap()
+    }
+
     /// Create a lazy connection object under the exclusive lock of the cache map if there is not
     /// enough used connections in the connection pool for the specified address.
     /// Returns CreateConnectionResult.
@@ -102,44 +139,13 @@ where
         // Read again, as it is possible that between read lock dropped and the write lock acquired
         // another thread could have setup the connection.
 
-        let should_create_connection = map
+        let (need_new_connection, should_create_connection) = map
             .get(addr)
             .map(|pool| pool.need_new_connection(self.connection_pool_size))
-            .unwrap_or(true);
+            .unwrap_or((true, true));
 
         let (cache_hit, num_evictions, eviction_timing_ms) = if should_create_connection {
-            // evict a connection if the cache is reaching upper bounds
-            let mut num_evictions = 0;
-            let mut get_connection_cache_eviction_measure =
-                Measure::start("get_connection_cache_eviction_measure");
-            let existing_index = map.get_index_of(addr);
-            while map.len() >= MAX_CONNECTIONS {
-                let mut rng = thread_rng();
-                let n = rng.gen_range(0..MAX_CONNECTIONS);
-                if let Some(index) = existing_index {
-                    if n == index {
-                        continue;
-                    }
-                }
-                map.swap_remove_index(n);
-                num_evictions += 1;
-            }
-            get_connection_cache_eviction_measure.stop();
-
-            map.entry(*addr)
-                .and_modify(|pool| {
-                    pool.add_connection(&self.connection_config, addr);
-                })
-                .or_insert_with(|| {
-                    let mut pool = self.connection_manager.new_connection_pool();
-                    pool.add_connection(&self.connection_config, addr);
-                    pool
-                });
-            (
-                false,
-                num_evictions,
-                get_connection_cache_eviction_measure.as_ms(),
-            )
+            Self::create_connection_internal(self.connection_config, self.connection_manager, &mut map, addr)
         } else {
             (true, 0, 0)
         };
@@ -154,6 +160,46 @@ where
             num_evictions,
             eviction_timing_ms,
         }
+    }
+
+    fn create_connection_internal(
+        config: C,
+        connection_manager: M,
+        map: &mut std::sync::RwLockWriteGuard<'_, IndexMap<SocketAddr, P>>,
+        addr: &SocketAddr,
+    ) -> (bool, u64, u64) {
+        // evict a connection if the cache is reaching upper bounds
+        let mut num_evictions = 0;
+        let mut get_connection_cache_eviction_measure =
+            Measure::start("get_connection_cache_eviction_measure");
+        let existing_index = map.get_index_of(addr);
+        while map.len() >= MAX_CONNECTIONS {
+            let mut rng = thread_rng();
+            let n = rng.gen_range(0..MAX_CONNECTIONS);
+            if let Some(index) = existing_index {
+                if n == index {
+                    continue;
+                }
+            }
+            map.swap_remove_index(n);
+            num_evictions += 1;
+        }
+        get_connection_cache_eviction_measure.stop();
+
+        map.entry(*addr)
+            .and_modify(|pool| {
+                pool.add_connection(&config, addr);
+            })
+            .or_insert_with(|| {
+                let mut pool = connection_manager.new_connection_pool();
+                pool.add_connection(&config, addr);
+                pool
+            });
+        (
+            false,
+            num_evictions,
+            get_connection_cache_eviction_measure.as_ms(),
+        )
     }
 
     fn get_or_add_connection(
@@ -179,7 +225,9 @@ where
             eviction_timing_ms,
         } = match map.get(addr) {
             Some(pool) => {
-                if pool.need_new_connection(self.connection_pool_size) {
+                let (need_connection, create_connection_immediately) =
+                    pool.need_new_connection(self.connection_pool_size);
+                if create_connection_immediately {
                     // create more connection and put it in the pool
                     drop(map);
                     self.create_connection(&mut lock_timing_ms, addr)
@@ -299,8 +347,13 @@ pub enum ClientError {
     IoError(#[from] std::io::Error),
 }
 
-pub trait ConnectionPool {
-    type NewConnectionConfig;
+
+pub trait NewConnectionConfig: Sized + Send + Sync {
+    fn new() -> Result<Self, ClientError>;
+}
+
+pub trait ConnectionPool: Send + Sync {
+    type NewConnectionConfig: NewConnectionConfig;
     type BaseClientConnection: BaseClientConnection;
 
     /// Add a connection to the pool
@@ -319,10 +372,14 @@ pub trait ConnectionPool {
         let n = rng.gen_range(0..self.num_connections());
         self.get(n).expect("index is within num_connections")
     }
+
     /// Check if we need to create a new connection. If the count of the connections
-    /// is smaller than the pool size.
-    fn need_new_connection(&self, required_pool_size: usize) -> bool {
-        self.num_connections() < required_pool_size
+    /// is smaller than the pool size and if there is no connection at all.
+    fn need_new_connection(&self, required_pool_size: usize) -> (bool, bool) {
+        (
+            self.num_connections() < required_pool_size,
+            self.num_connections() == 0,
+        )
     }
 
     fn create_pool_entry(
