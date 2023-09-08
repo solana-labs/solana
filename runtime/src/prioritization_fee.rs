@@ -118,6 +118,7 @@ impl PrioritizationFeeMetrics {
     }
 }
 
+#[derive(Debug)]
 pub enum PrioritizationFeeError {
     // Not able to get account locks from sanitized transaction, which is required to update block
     // minimum fees.

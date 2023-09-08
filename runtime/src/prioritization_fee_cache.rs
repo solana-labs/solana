@@ -11,7 +11,6 @@ use {
     solana_sdk::{
         clock::{BankId, Slot},
         pubkey::Pubkey,
-        saturating_add_assign,
         transaction::SanitizedTransaction,
     },
     std::{
@@ -212,7 +211,6 @@ impl PrioritizationFeeCache {
     /// transactions have both valid priority_detail and account_locks will be used to update
     /// fee_cache asynchronously.
     pub fn update<'a>(&self, bank: &Bank, txs: impl Iterator<Item = &'a SanitizedTransaction>) {
-        let mut successful_transaction_update_count: u64 = 0;
         let (_, send_updates_time) = measure!(
             {
                 for sanitized_transaction in txs {
@@ -261,7 +259,6 @@ impl PrioritizationFeeCache {
                                 err
                             );
                         });
-                    saturating_add_assign!(successful_transaction_update_count, 1)
                 }
             },
             "send_updates",
@@ -269,8 +266,6 @@ impl PrioritizationFeeCache {
 
         self.metrics
             .accumulate_total_update_elapsed_us(send_updates_time.as_us());
-        self.metrics
-            .accumulate_successful_transaction_update_count(successful_transaction_update_count);
     }
 
     /// Finalize prioritization fee when it's bank is completely replayed from blockstore,
@@ -310,6 +305,7 @@ impl PrioritizationFeeCache {
         );
         metrics.accumulate_total_cache_lock_elapsed_us(cache_lock_time.as_us());
         metrics.accumulate_total_entry_update_elapsed_us(entry_update_time.as_us());
+        metrics.accumulate_successful_transaction_update_count(1);
     }
 
     fn finalize_slot(
@@ -324,7 +320,7 @@ impl PrioritizationFeeCache {
         // prune cache by evicting write account entry from prioritization fee if its fee is less
         // or equal to block's minimum transaction fee, because they are irrelevant in calculating
         // block minimum fee.
-        let (_, slot_finalize_time) = measure!(
+        let (result, slot_finalize_time) = measure!(
             {
                 let pre_purge_bank_count = slot_prioritization_fee.len() as u64;
                 slot_prioritization_fee.retain(|id, _| id == bank_id);
@@ -347,6 +343,13 @@ impl PrioritizationFeeCache {
         );
         metrics.accumulate_total_cache_lock_elapsed_us(cache_lock_time.as_us());
         metrics.accumulate_total_block_finalize_elapsed_us(slot_finalize_time.as_us());
+
+        if let Err(err) = result {
+            error!(
+                "Unsuccessful finalizing slot {slot}, bank ID {bank_id}: {:?}",
+                err
+            );
+        }
     }
 
     fn service_loop(
@@ -403,14 +406,14 @@ impl PrioritizationFeeCache {
             .filter_map(|(slot, slot_prioritization_fee)| {
                 slot_prioritization_fee
                     .iter()
-                    .find_map(|prioritization_fee_read| {
-                        prioritization_fee_read.is_finalized().then(|| {
-                            let mut fee = prioritization_fee_read
+                    .find_map(|prioritization_fee| {
+                        prioritization_fee.is_finalized().then(|| {
+                            let mut fee = prioritization_fee
                                 .get_min_transaction_fee()
                                 .unwrap_or_default();
                             for account_key in account_keys {
                                 if let Some(account_fee) =
-                                    prioritization_fee_read.get_writable_account_fee(account_key)
+                                    prioritization_fee.get_writable_account_fee(account_key)
                                 {
                                     fee = std::cmp::max(fee, account_fee);
                                 }
@@ -462,20 +465,17 @@ mod tests {
     fn sync_update<'a>(
         prioritization_fee_cache: &PrioritizationFeeCache,
         bank: Arc<Bank>,
-        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        txs: impl Iterator<Item = &'a SanitizedTransaction> + ExactSizeIterator,
     ) {
+        let expected_update_count = txs.len() as u64;
         prioritization_fee_cache.update(&bank, txs);
 
-        let block_fee = PrioritizationFeeCache::get_prioritization_fee(
-            prioritization_fee_cache.cache.clone(),
-            &bank.slot(),
-        );
-
-        // wait till update is done
-        while block_fee
-            .get(&bank.bank_id())
-            .map(|block_fee| block_fee.get_min_transaction_fee())
-            .is_none()
+        // wait till expected number of transaction updates have occurred...
+        while prioritization_fee_cache
+            .metrics
+            .successful_transaction_update_count
+            .load(Ordering::Relaxed)
+            != expected_update_count
         {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
@@ -496,7 +496,7 @@ mod tests {
         // wait till finalization is done
         while !fee
             .get(&bank_id)
-            .map_or_else(|| false, |block_fee| block_fee.is_finalized())
+            .map_or(false, |block_fee| block_fee.is_finalized())
         {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
