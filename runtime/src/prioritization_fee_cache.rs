@@ -1,7 +1,5 @@
 use {
-    crate::{
-        bank::Bank, prioritization_fee::*,
-    },
+    crate::{bank::Bank, prioritization_fee::*},
     crossbeam_channel::{unbounded, Receiver, Sender},
     log::*,
     lru::LruCache,
@@ -212,12 +210,9 @@ impl PrioritizationFeeCache {
                         continue;
                     }
 
-                    let transaction_meta = sanitized_transaction.get_transaction_meta(&bank.feature_set, Some(bank.cluster_type())).ok();
-/*
-                    let round_compute_unit_price_enabled = false; // TODO: bank.feture_set.is_active(round_compute_unit_price)
-                    let priority_details = sanitized_transaction
-                        .get_transaction_priority_details(round_compute_unit_price_enabled);
-// */
+                    let transaction_meta = sanitized_transaction
+                        .get_transaction_meta(&bank.feature_set, Some(bank.cluster_type()))
+                        .ok();
                     let account_locks = sanitized_transaction
                         .get_account_locks(bank.get_transaction_account_lock_limit());
 

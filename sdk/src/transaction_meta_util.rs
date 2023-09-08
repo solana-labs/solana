@@ -1,5 +1,5 @@
 //! util to support api `sanitized_transaction.get_transaction_meta() -> Result<TransactionMeta>`
-//! for now, which will be replaced by: 
+//! for now, which will be replaced by:
 //! ```sanitized_transaction.get_transaction_meta() -> &TransactionMeta```
 //! when compute_budget instructions are processed suring transaction sanitizing.
 //!
@@ -64,4 +64,3 @@ impl GetTransactionMeta for SanitizedMessage {
         )?)
     }
 }
-

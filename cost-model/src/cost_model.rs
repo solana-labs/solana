@@ -8,16 +8,11 @@
 use {
     crate::{block_cost_limits::*, transaction_cost::TransactionCost},
     log::*,
-    solana_program_runtime::compute_budget::{
-        ComputeBudget, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
-    },
+    solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
         borsh0_10::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
-        feature_set::{
-            include_loaded_accounts_data_size_in_fee_calculation,
-            FeatureSet,
-        },
+        feature_set::{include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
         fee::FeeStructure,
         instruction::CompiledInstruction,
         program_utils::limited_deserialize,
@@ -25,6 +20,7 @@ use {
         system_instruction::SystemInstruction,
         system_program,
         transaction::SanitizedTransaction,
+        transaction_meta::{DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT},
         transaction_meta_util::GetTransactionMeta,
     },
 };
@@ -125,13 +121,13 @@ impl CostModel {
         // during block packing, different costs for same transaction due to different versions
         // will not impact consensus. So for v1.15+, should call compute budget with
         // the feature gate `enable_request_heap_frame_ix` enabled.
-//        let enable_request_heap_frame_ix = true;
-//        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
-//            transaction.message().program_instructions_iter(),
-//            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-//            enable_request_heap_frame_ix,
-//            feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-//        );
+        //        let enable_request_heap_frame_ix = true;
+        //        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
+        //            transaction.message().program_instructions_iter(),
+        //            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+        //            enable_request_heap_frame_ix,
+        //            feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+        //        );
 
         // TODO - wire ClusterType in, or get feature activated in mainnet first
         let transaction_meta = transaction.get_transaction_meta(feature_set, None);

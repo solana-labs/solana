@@ -1,14 +1,7 @@
 use solana_sdk::{
     fee::FeeBudgetLimits,
-    transaction_meta::TransactionMeta,
+    transaction_meta::{TransactionMeta, MAX_COMPUTE_UNIT_LIMIT},
 };
-
-/// The total accounts data a transaction can load is limited to 64MiB to not break
-/// anyone in Mainnet-beta today. It can be set by set_loaded_accounts_data_size_limit instruction
-pub const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES: usize = 64 * 1024 * 1024;
-
-pub const DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT: u32 = 200_000;
-pub const MAX_COMPUTE_UNIT_LIMIT: u32 = 1_400_000;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
@@ -115,7 +108,6 @@ pub struct ComputeBudget {
     pub poseidon_cost_coefficient_c: u64,
 }
 
-// TODO - this can be removed once new_from_transactino_meta() is in
 impl Default for ComputeBudget {
     fn default() -> Self {
         Self::new(MAX_COMPUTE_UNIT_LIMIT as u64)
@@ -174,9 +166,7 @@ impl ComputeBudget {
         compute_budget
     }
 
-    pub fn fee_budget_limits<'a>(
-        transaction_meta: &TransactionMeta,
-    ) -> FeeBudgetLimits {
+    pub fn fee_budget_limits<'a>(transaction_meta: &TransactionMeta) -> FeeBudgetLimits {
         FeeBudgetLimits {
             loaded_accounts_data_size_limit: transaction_meta.accounts_loaded_bytes,
             heap_cost: ComputeBudget::default().heap_cost,
@@ -232,6 +222,7 @@ mod tests {
             signer::Signer,
             system_instruction::{self},
             transaction::{SanitizedTransaction, Transaction},
+            transaction_meta::*,
         },
     };
 

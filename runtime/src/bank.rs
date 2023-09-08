@@ -134,12 +134,10 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self,
-            enable_early_verification_of_account_modifications,
+            self, enable_early_verification_of_account_modifications,
             include_loaded_accounts_data_size_in_fee_calculation,
             reduce_stake_warmup_cooldown::NewWarmupCooldownRateEpoch,
-            remove_congestion_multiplier_from_fee_calculation,
-            FeatureSet,
+            remove_congestion_multiplier_from_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -4087,10 +4085,10 @@ impl Bank {
             message,
             lamports_per_signature,
             &ComputeBudget::fee_budget_limits(
-                &message.get_transaction_meta(
-                    &self.feature_set, 
-                    Some(self.cluster_type()))
-                .unwrap_or_default()),
+                &message
+                    .get_transaction_meta(&self.feature_set, Some(self.cluster_type()))
+                    .unwrap_or_default(),
+            ),
             self.feature_set
                 .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
             self.feature_set
@@ -5124,35 +5122,26 @@ impl Bank {
             .map(|(accs, tx)| match accs {
                 (Err(e), _nonce) => TransactionExecutionResult::NotExecuted(e.clone()),
                 (Ok(loaded_transaction), nonce) => {
-                    let compute_budget = if let Some(compute_budget) =
-                        self.runtime_config.compute_budget
-                    {
-                        compute_budget
-                    } else {
-                        let mut compute_budget_process_transaction_time =
-                            Measure::start("compute_budget_process_transaction_time");
-//                        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
-//                            tx.message().program_instructions_iter(),
-//                            !self
-//                                .feature_set
-//                                .is_active(&remove_deprecated_request_unit_ix::id()),
-//                            true, // don't reject txs that use request heap size ix
-//                            self.feature_set
-//                                .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-//                        );
-                        let transaction_meta = tx.get_transaction_meta(&self.feature_set, self.cluster_type);
-                        compute_budget_process_transaction_time.stop();
-                        saturating_add_assign!(
-                            timings
-                                .execute_accessories
-                                .compute_budget_process_transaction_us,
-                            compute_budget_process_transaction_time.as_us()
-                        );
-                        if let Err(err) = transaction_meta {
-                            return TransactionExecutionResult::NotExecuted(err.into());
-                        }
-                        ComputeBudget::new_from_transaction_meta(&transaction_meta.unwrap())
-                    };
+                    let compute_budget =
+                        if let Some(compute_budget) = self.runtime_config.compute_budget {
+                            compute_budget
+                        } else {
+                            let mut compute_budget_process_transaction_time =
+                                Measure::start("compute_budget_process_transaction_time");
+                            let transaction_meta =
+                                tx.get_transaction_meta(&self.feature_set, self.cluster_type);
+                            compute_budget_process_transaction_time.stop();
+                            saturating_add_assign!(
+                                timings
+                                    .execute_accessories
+                                    .compute_budget_process_transaction_us,
+                                compute_budget_process_transaction_time.as_us()
+                            );
+                            if let Err(err) = transaction_meta {
+                                return TransactionExecutionResult::NotExecuted(err.into());
+                            }
+                            ComputeBudget::new_from_transaction_meta(&transaction_meta.unwrap())
+                        };
 
                     let result = self.execute_loaded_transaction(
                         tx,

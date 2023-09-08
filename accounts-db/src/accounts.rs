@@ -34,8 +34,7 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
-            self,
-            include_loaded_accounts_data_size_in_fee_calculation,
+            self, include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation,
             simplify_writable_program_account_check, FeatureSet,
         },
@@ -247,15 +246,16 @@ impl Accounts {
         feature_set: &FeatureSet,
     ) -> Result<Option<NonZeroUsize>> {
         if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
-//            let transaction_meta = TransactionMeta::process_compute_budget_instruction(
-//                tx.message().program_instructions_iter(),
-//                !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-//                true, // don't reject txs that use request heap size ix
-//                feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-//            )
+            //            let transaction_meta = TransactionMeta::process_compute_budget_instruction(
+            //                tx.message().program_instructions_iter(),
+            //                !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+            //                true, // don't reject txs that use request heap size ix
+            //                feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+            //            )
             // TODO - wire in ClusterType, or have feature activated in mainnet first
-            let transaction_meta = tx.get_transaction_meta(feature_set, None)
-            .unwrap_or_default();
+            let transaction_meta = tx
+                .get_transaction_meta(feature_set, None)
+                .unwrap_or_default();
             // sanitize against setting size limit to zero
             NonZeroUsize::new(transaction_meta.accounts_loaded_bytes).map_or(
                 Err(TransactionError::InvalidLoadedAccountsDataSizeLimit),
