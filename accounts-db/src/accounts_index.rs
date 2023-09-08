@@ -5,7 +5,7 @@ use {
         ancestors::Ancestors,
         bucket_map_holder::{Age, BucketMapHolder},
         contains::Contains,
-        in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
+        in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults, StartupStats},
         inline_spl_token::{self, GenericTokenAccount},
         inline_spl_token_2022,
         pubkey_bins::PubkeyBinCalculator24,
@@ -1334,6 +1334,11 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     {
         let iter = self.iter(Some(range), true);
         iter.hold_range_in_memory(range, start_holding, thread_pool);
+    }
+
+    /// get stats related to startup
+    pub(crate) fn get_startup_stats(&self) -> &StartupStats {
+        &self.storage.storage.startup_stats
     }
 
     pub fn set_startup(&self, value: Startup) {

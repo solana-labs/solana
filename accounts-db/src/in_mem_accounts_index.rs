@@ -27,6 +27,11 @@ type CacheRangesHeld = RwLock<Vec<RangeInclusive<Pubkey>>>;
 
 type InMemMap<T> = HashMap<Pubkey, AccountMapEntry<T>>;
 
+#[derive(Debug, Default)]
+pub struct StartupStats {
+    pub copy_data_us: AtomicU64,
+}
+
 #[derive(Debug)]
 pub struct PossibleEvictions<T: IndexValue> {
     /// vec per age in the future, up to size 'ages_to_stay_in_cache'
@@ -116,6 +121,9 @@ pub struct InMemAccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<
     /// Higher numbers mean we flush less buckets/s
     /// Lower numbers mean we flush more buckets/s
     num_ages_to_distribute_flushes: Age,
+
+    /// stats related to starting up
+    pub(crate) startup_stats: Arc<StartupStats>,
 }
 
 impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> Debug for InMemAccountsIndex<T, U> {
@@ -182,6 +190,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                 thread_rng().gen_range(0..num_ages_to_distribute_flushes),
             ),
             num_ages_to_distribute_flushes,
+            startup_stats: Arc::clone(&storage.startup_stats),
         }
     }
 
@@ -681,8 +690,8 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         items
             .into_iter()
             .for_each(|(k, (slot, v))| insert.push((k, (slot, v.into()))));
-        self.stats()
-            .copy_us
+        self.startup_stats
+            .copy_data_us
             .fetch_add(m.end_as_us(), Ordering::Relaxed);
     }
 

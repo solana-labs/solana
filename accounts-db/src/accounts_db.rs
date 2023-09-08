@@ -60,6 +60,7 @@ use {
         cache_hash_data::{CacheHashData, CacheHashDataFileReference},
         contains::Contains,
         epoch_accounts_hash::EpochAccountsHashManager,
+        in_mem_accounts_index::StartupStats,
         partitioned_rewards::{PartitionedEpochRewardsConfig, TestPartitionedEpochRewards},
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
@@ -636,7 +637,7 @@ struct StorageSizeAndCount {
 type StorageSizeAndCountMap = DashMap<AppendVecId, StorageSizeAndCount>;
 
 impl GenerateIndexTimings {
-    pub fn report(&self) {
+    pub fn report(&self, startup_stats: &StartupStats) {
         datapoint_info!(
             "generate_index",
             ("overall_us", self.total_time_us, i64),
@@ -695,6 +696,11 @@ impl GenerateIndexTimings {
             ),
             ("total_slots", self.total_slots, i64),
             ("slots_to_clean", self.slots_to_clean, i64),
+            (
+                "copy_data_us",
+                startup_stats.copy_data_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
         );
     }
 }
@@ -9369,7 +9375,7 @@ impl AccountsDb {
             }
             total_time.stop();
             timings.total_time_us = total_time.as_us();
-            timings.report();
+            timings.report(self.accounts_index.get_startup_stats());
         }
 
         self.accounts_index.log_secondary_indexes();
