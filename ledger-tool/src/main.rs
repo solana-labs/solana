@@ -79,6 +79,7 @@ use {
         transaction::{
             MessageHash, SanitizedTransaction, SimpleAddressLoader, VersionedTransaction,
         },
+        transaction_meta_util::GetTransactionMeta,
     },
     solana_stake_program::stake_state::{self, PointValue},
     solana_vote_program::{
@@ -932,7 +933,11 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
             .for_each(|transaction| {
                 num_programs += transaction.message().instructions().len();
 
-                let tx_cost = CostModel::calculate_cost(&transaction, &FeatureSet::all_enabled());
+                let tx_cost = CostModel::calculate_cost(
+                    &transaction,
+                    &transaction.get_transaction_meta(&FeatureSet::all_enabled(), None),
+                    &FeatureSet::all_enabled()
+                );
                 let result = cost_tracker.try_add(&tx_cost);
                 if result.is_err() {
                     println!(

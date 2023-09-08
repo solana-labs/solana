@@ -19,9 +19,10 @@ use {
         pubkey::Pubkey,
         system_instruction::SystemInstruction,
         system_program,
-        transaction::SanitizedTransaction,
-        transaction_meta::{DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT},
-        transaction_meta_util::GetTransactionMeta,
+        transaction::{Result, SanitizedTransaction},
+        transaction_meta::{
+            TransactionMeta, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
+        },
     },
 };
 
@@ -30,37 +31,20 @@ pub struct CostModel;
 impl CostModel {
     pub fn calculate_cost(
         transaction: &SanitizedTransaction,
+        transaction_meta: &Result<TransactionMeta>,
         feature_set: &FeatureSet,
     ) -> TransactionCost {
         let mut tx_cost = TransactionCost::new_with_default_capacity();
 
         tx_cost.signature_cost = Self::get_signature_cost(transaction);
         Self::get_write_lock_cost(&mut tx_cost, transaction);
-        Self::get_transaction_cost(&mut tx_cost, transaction, feature_set);
+        Self::get_transaction_cost(&mut tx_cost, transaction, transaction_meta, feature_set);
         tx_cost.account_data_size = Self::calculate_account_data_size(transaction);
         tx_cost.is_simple_vote = transaction.is_simple_vote_transaction();
 
         debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
         tx_cost
     }
-
-    // Calculate cost of loaded accounts size in the same way heap cost is charged at
-    // rate of 8cu per 32K. Citing `program_runtime\src\compute_budget.rs`: "(cost of
-    // heap is about) 0.5us per 32k at 15 units/us rounded up"
-    //
-    // Before feature `support_set_loaded_accounts_data_size_limit_ix` is enabled, or
-    // if user doesn't use compute budget ix `set_loaded_accounts_data_size_limit_ix`
-    // to set limit, `compute_budget.loaded_accounts_data_size_limit` is set to default
-    // limit of 64MB; which will convert to (64M/32K)*8CU = 16_000 CUs
-    //
-    /*
-    pub fn calculate_loaded_accounts_data_size_cost(compute_budget: &ComputeBudget) -> u64 {
-        FeeStructure::calculate_memory_usage_cost(
-            compute_budget.loaded_accounts_data_size_limit,
-            compute_budget.heap_cost,
-        )
-    }
-    // */
 
     fn get_signature_cost(transaction: &SanitizedTransaction) -> u64 {
         transaction.signatures().len() as u64 * SIGNATURE_COST
@@ -85,6 +69,7 @@ impl CostModel {
     fn get_transaction_cost(
         tx_cost: &mut TransactionCost,
         transaction: &SanitizedTransaction,
+        transaction_meta: &Result<TransactionMeta>,
         feature_set: &FeatureSet,
     ) {
         let mut builtin_costs = 0u64;
@@ -113,24 +98,6 @@ impl CostModel {
                 }
             }
         }
-
-        // calculate bpf cost based on compute budget instructions
-        // Starting from v1.15, cost model uses compute_budget.set_compute_unit_limit to
-        // measure bpf_costs (code below), vs earlier versions that use estimated
-        // bpf instruction costs. The calculated transaction costs are used by leaders
-        // during block packing, different costs for same transaction due to different versions
-        // will not impact consensus. So for v1.15+, should call compute budget with
-        // the feature gate `enable_request_heap_frame_ix` enabled.
-        //        let enable_request_heap_frame_ix = true;
-        //        let transaction_meta = TransactionMeta::process_compute_budget_instruction(
-        //            transaction.message().program_instructions_iter(),
-        //            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-        //            enable_request_heap_frame_ix,
-        //            feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-        //        );
-
-        // TODO - wire ClusterType in, or get feature activated in mainnet first
-        let transaction_meta = transaction.get_transaction_meta(feature_set, None);
 
         // if failed to process compute_budget instructions, the transaction will not be executed
         // by `bank`, therefore it should be considered as no execution cost by cost model.

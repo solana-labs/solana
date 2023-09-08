@@ -6,7 +6,10 @@ use {
         cost_tracker::{CostTracker, CostTrackerError},
     },
     solana_perf::packet::Packet,
-    solana_sdk::{feature_set::FeatureSet, transaction::SanitizedTransaction},
+    solana_sdk::{
+        feature_set::FeatureSet, transaction::SanitizedTransaction,
+        transaction_meta_util::GetTransactionMeta,
+    },
     std::sync::Arc,
 };
 
@@ -62,7 +65,11 @@ impl ForwardBatch {
         immutable_packet: Arc<ImmutableDeserializedPacket>,
         feature_set: &FeatureSet,
     ) -> Result<u64, CostTrackerError> {
-        let tx_cost = CostModel::calculate_cost(sanitized_transaction, feature_set);
+        let tx_cost = CostModel::calculate_cost(
+            sanitized_transaction,
+            &sanitized_transaction.get_transaction_meta(feature_set, None),
+            feature_set,
+        );
         let res = self.cost_tracker.try_add(&tx_cost);
         if res.is_ok() {
             self.forwardable_packets.push(immutable_packet);
