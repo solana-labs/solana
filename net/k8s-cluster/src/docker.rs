@@ -129,6 +129,7 @@ COPY ./{solana_build_directory}/version.yml /home/solana/
 RUN mkdir -p /home/solana/config
 ENV PATH="/home/solana/.cargo/bin:${{PATH}}"
 
+
 WORKDIR /home/solana
 "#,
             self.image_config.base_image
@@ -175,3 +176,9 @@ WORKDIR /home/solana
 // RUN apt install -y iputils-ping curl vim bzip2 psmisc \
 // iproute2 software-properties-common apt-transport-https \
 // ca-certificates openssh-client openssh-server
+
+
+// RUN groupadd -r -g 1000 solana 
+// RUN useradd -m -u 1000 -g solana -s /bin/bash solana
+// RUN useradd -ms /bin/bash solana
+// // RUN chown -R solana:solana /home/solana
