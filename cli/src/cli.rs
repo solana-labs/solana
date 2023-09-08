@@ -238,6 +238,7 @@ pub enum CliCommand {
         lamports: u64,
         fee_payer: SignerIndex,
         compute_unit_price: Option<u64>,
+        rent_exempt_reserve: Option<u64>,
     },
     MergeStake {
         stake_account_pubkey: Pubkey,
@@ -1226,6 +1227,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             lamports,
             fee_payer,
             compute_unit_price,
+            rent_exempt_reserve,
         } => process_split_stake(
             &rpc_client,
             config,
@@ -1242,6 +1244,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *lamports,
             *fee_payer,
             compute_unit_price.as_ref(),
+            rent_exempt_reserve.as_ref(),
         ),
         CliCommand::MergeStake {
             stake_account_pubkey,
@@ -2243,6 +2246,7 @@ mod tests {
             lamports: 30,
             fee_payer: 0,
             compute_unit_price: None,
+            rent_exempt_reserve: None,
         };
         config.signers = vec![&keypair, &split_stake_account];
         let result = process_command(&config);

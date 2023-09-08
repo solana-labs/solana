@@ -1469,6 +1469,10 @@ fn test_stake_split() {
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
+    let minimum_balance = rpc_client
+        .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())
+        .unwrap();
+
     let mut config_offline = CliConfig::recent_for_tests();
     config_offline.json_rpc_url = String::default();
     config_offline.signers = vec![&offline_signer];
@@ -1496,10 +1500,7 @@ fn test_stake_split() {
     check_balance!(1_000_000_000_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
-    let stake_balance = rpc_client
-        .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())
-        .unwrap()
-        + 10_000_000_000;
+    let stake_balance = minimum_balance + 10_000_000_000;
     let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let stake_account_pubkey = stake_keypair.pubkey();
     config.signers.push(&stake_keypair);
@@ -1569,6 +1570,7 @@ fn test_stake_split() {
         lamports: 2 * stake_balance,
         fee_payer: 0,
         compute_unit_price: None,
+        rent_exempt_reserve: Some(minimum_balance),
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
@@ -1593,10 +1595,15 @@ fn test_stake_split() {
         lamports: 2 * stake_balance,
         fee_payer: 0,
         compute_unit_price: None,
+        rent_exempt_reserve: None,
     };
     process_command(&config).unwrap();
-    check_balance!(8 * stake_balance, &rpc_client, &stake_account_pubkey,);
-    check_balance!(2 * stake_balance, &rpc_client, &split_account.pubkey(),);
+    check_balance!(8 * stake_balance, &rpc_client, &stake_account_pubkey);
+    check_balance!(
+        2 * stake_balance + minimum_balance,
+        &rpc_client,
+        &split_account.pubkey()
+    );
 }
 
 #[test]
