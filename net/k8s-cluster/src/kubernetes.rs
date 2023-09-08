@@ -111,7 +111,7 @@ impl<'a> Kubernetes<'a> {
         let accounts_volume = Volume {
             name: "bootstrap-accounts-volume".into(),
             secret: Some(SecretVolumeSource {
-                secret_name: secret_name,
+                secret_name,
                 ..Default::default()
             }),
             ..Default::default()
@@ -126,7 +126,7 @@ impl<'a> Kubernetes<'a> {
 
         // let command = vec!["/workspace/start-bootstrap-validator.sh".to_string()];
         // let command = vec!["sleep".to_string(), "3600".to_string()];
-        let command = vec!["/home/solana/k8s-cluster/src/bootstrap-startup-script.sh".to_string()];
+        let command = vec!["/home/solana/k8s-cluster/src/scripts/bootstrap-startup-script.sh".to_string(), ];
         // let command = vec!["nohup"]
 
         self.create_replicas_set(
@@ -437,7 +437,8 @@ impl<'a> Kubernetes<'a> {
 
 
         // let command = vec!["/workspace/start-validator.sh".to_string()];
-        let command = vec!["sleep".to_string(), "3600".to_string()];
+        // let command = vec!["sleep".to_string(), "3600".to_string()];
+        let command = vec!["/home/solana/k8s-cluster/src/scripts/validator-startup-script.sh".to_string(), ];
 
         self.create_replicas_set(
             format!("validator-{}", validator_index).as_str(),
