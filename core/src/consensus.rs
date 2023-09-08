@@ -293,6 +293,7 @@ impl Tower {
                 bank_forks.frozen_banks().values().cloned().collect(),
                 node_pubkey,
                 vote_account,
+                vec![],
             );
         let root = root_bank.slot();
 

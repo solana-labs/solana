@@ -330,7 +330,7 @@ mod test {
     use {
         super::*,
         crate::shred::{shred_code::MAX_CODE_SHREDS_PER_SLOT, ShredType, MAX_DATA_SHREDS_PER_SLOT},
-        matches::assert_matches,
+        assert_matches::assert_matches,
     };
 
     #[test]

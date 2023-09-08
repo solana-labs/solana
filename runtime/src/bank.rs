@@ -5108,6 +5108,7 @@ impl Bank {
             bpf_loader_upgradeable::id(),
             bpf_loader::id(),
             bpf_loader_deprecated::id(),
+            loader_v4::id(),
         ];
         let program_owners_refs: Vec<&Pubkey> = program_owners.iter().collect();
         let mut program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
@@ -8119,23 +8120,15 @@ impl Bank {
             )
             .unwrap();
             let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-            if *loaded_programs_cache.environments.program_runtime_v1
-                != program_runtime_environment_v1
-            {
-                loaded_programs_cache.environments.program_runtime_v1 =
-                    Arc::new(program_runtime_environment_v1);
-            }
+            loaded_programs_cache.environments.program_runtime_v1 =
+                Arc::new(program_runtime_environment_v1);
             let program_runtime_environment_v2 =
                 solana_loader_v4_program::create_program_runtime_environment_v2(
                     &self.runtime_config.compute_budget.unwrap_or_default(),
                     false, /* debugging_features */
                 );
-            if *loaded_programs_cache.environments.program_runtime_v2
-                != program_runtime_environment_v2
-            {
-                loaded_programs_cache.environments.program_runtime_v2 =
-                    Arc::new(program_runtime_environment_v2);
-            }
+            loaded_programs_cache.environments.program_runtime_v2 =
+                Arc::new(program_runtime_environment_v2);
             loaded_programs_cache.prune_feature_set_transition();
         }
         for builtin in BUILTINS.iter() {

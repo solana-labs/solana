@@ -41,7 +41,7 @@ impl CacheBlockMetaService {
                     }
                     Ok(bank) => {
                         let mut cache_block_meta_timer = Measure::start("cache_block_meta_timer");
-                        Self::cache_block_meta(bank, &blockstore);
+                        Self::cache_block_meta(&bank, &blockstore);
                         cache_block_meta_timer.stop();
                         if cache_block_meta_timer.as_ms() > CACHE_BLOCK_TIME_WARNING_MS {
                             warn!(
@@ -57,7 +57,7 @@ impl CacheBlockMetaService {
         Self { thread_hdl }
     }
 
-    fn cache_block_meta(bank: Arc<Bank>, blockstore: &Blockstore) {
+    fn cache_block_meta(bank: &Bank, blockstore: &Blockstore) {
         if let Err(e) = blockstore.cache_block_time(bank.slot(), bank.clock().unix_timestamp) {
             error!("cache_block_time failed: slot {:?} {:?}", bank.slot(), e);
         }

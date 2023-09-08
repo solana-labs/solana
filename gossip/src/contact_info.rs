@@ -1,6 +1,6 @@
 use {
     crate::crds_value::MAX_WALLCLOCK,
-    matches::{assert_matches, debug_assert_matches},
+    assert_matches::{assert_matches, debug_assert_matches},
     serde::{Deserialize, Deserializer, Serialize},
     solana_sdk::{
         pubkey::Pubkey,

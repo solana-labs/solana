@@ -1,6 +1,7 @@
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+use solana_frozen_abi::abi_example::AbiExample;
 use {
     itertools::Itertools,
-    once_cell::sync::OnceCell,
     serde::ser::{Serialize, Serializer},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -12,7 +13,7 @@ use {
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         iter::FromIterator,
-        sync::Arc,
+        sync::{Arc, OnceLock},
     },
     thiserror::Error,
 };
@@ -29,20 +30,20 @@ pub enum Error {
     InvalidOwner(/*owner:*/ Pubkey),
 }
 
-#[derive(Debug, AbiExample)]
+#[derive(Debug)]
 struct VoteAccountInner {
     account: AccountSharedData,
-    vote_state: OnceCell<Result<VoteState, Error>>,
+    vote_state: OnceLock<Result<VoteState, Error>>,
 }
 
 pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
 
-#[derive(Clone, Debug, AbiExample, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(from = "Arc<VoteAccountsHashMap>")]
 pub struct VoteAccounts {
     vote_accounts: Arc<VoteAccountsHashMap>,
     // Inner Arc is meant to implement copy-on-write semantics.
-    staked_nodes: OnceCell<
+    staked_nodes: OnceLock<
         Arc<
             HashMap<
                 Pubkey, // VoteAccount.vote_state.node_pubkey.
@@ -243,7 +244,7 @@ impl TryFrom<AccountSharedData> for VoteAccountInner {
         }
         Ok(Self {
             account,
-            vote_state: OnceCell::new(),
+            vote_state: OnceLock::new(),
         })
     }
 }
@@ -262,7 +263,7 @@ impl Default for VoteAccounts {
     fn default() -> Self {
         Self {
             vote_accounts: Arc::default(),
-            staked_nodes: OnceCell::new(),
+            staked_nodes: OnceLock::new(),
         }
     }
 }
@@ -281,7 +282,7 @@ impl From<Arc<VoteAccountsHashMap>> for VoteAccounts {
     fn from(vote_accounts: Arc<VoteAccountsHashMap>) -> Self {
         Self {
             vote_accounts,
-            staked_nodes: OnceCell::new(),
+            staked_nodes: OnceLock::new(),
         }
     }
 }
@@ -313,6 +314,26 @@ impl Serialize for VoteAccounts {
         S: Serializer,
     {
         self.vote_accounts.serialize(serializer)
+    }
+}
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for VoteAccountInner {
+    fn example() -> Self {
+        Self {
+            account: AccountSharedData::example(),
+            vote_state: OnceLock::from(Result::<VoteState, Error>::example()),
+        }
+    }
+}
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for VoteAccounts {
+    fn example() -> Self {
+        Self {
+            vote_accounts: Arc::<VoteAccountsHashMap>::example(),
+            staked_nodes: OnceLock::from(Arc::<HashMap<Pubkey, u64>>::example()),
+        }
     }
 }
 

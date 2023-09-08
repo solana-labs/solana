@@ -19,13 +19,13 @@ use {
     error::TieredStorageError,
     footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
     index::AccountIndexFormat,
-    once_cell::sync::OnceCell,
     readable::TieredStorageReader,
     solana_sdk::{account::ReadableAccount, hash::Hash},
     std::{
         borrow::Borrow,
         fs::OpenOptions,
         path::{Path, PathBuf},
+        sync::OnceLock,
     },
     writer::TieredStorageWriter,
 };
@@ -45,7 +45,7 @@ pub struct TieredStorageFormat {
 
 #[derive(Debug)]
 pub struct TieredStorage {
-    reader: OnceCell<TieredStorageReader>,
+    reader: OnceLock<TieredStorageReader>,
     format: Option<TieredStorageFormat>,
     path: PathBuf,
 }
@@ -66,7 +66,7 @@ impl TieredStorage {
     /// is called.
     pub fn new_writable(path: impl Into<PathBuf>, format: TieredStorageFormat) -> Self {
         Self {
-            reader: OnceCell::<TieredStorageReader>::new(),
+            reader: OnceLock::<TieredStorageReader>::new(),
             format: Some(format),
             path: path.into(),
         }
@@ -77,7 +77,7 @@ impl TieredStorage {
     pub fn new_readonly(path: impl Into<PathBuf>) -> TieredStorageResult<Self> {
         let path = path.into();
         Ok(Self {
-            reader: OnceCell::with_value(TieredStorageReader::new_from_path(&path)?),
+            reader: TieredStorageReader::new_from_path(&path).map(OnceLock::from)?,
             format: None,
             path,
         })

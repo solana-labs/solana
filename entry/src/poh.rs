@@ -128,7 +128,7 @@ pub fn compute_hashes_per_tick(duration: Duration, hashes_sample_size: u64) -> u
 mod tests {
     use {
         crate::poh::{Poh, PohEntry},
-        matches::assert_matches,
+        assert_matches::assert_matches,
         solana_sdk::hash::{hash, hashv, Hash},
         std::time::Duration,
     };

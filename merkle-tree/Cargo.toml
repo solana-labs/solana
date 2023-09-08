@@ -13,10 +13,6 @@ edition = { workspace = true }
 fast-math = { workspace = true }
 solana-program = { workspace = true }
 
-# This can go once the SBF toolchain target Rust 1.42.0+
-[target.bpfel-unknown-unknown.dependencies]
-matches = { workspace = true }
-
 [dev-dependencies]
 hex = { workspace = true }
 

@@ -27,10 +27,7 @@ use {
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
-    solana_rbpf::{
-        elf::Executable,
-        verifier::{RequisiteVerifier, TautologyVerifier},
-    },
+    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
@@ -2033,13 +2030,12 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
         false,
     )
     .unwrap();
-    let executable = Executable::<TautologyVerifier, InvokeContext>::from_elf(
-        &program_data,
-        Arc::new(program_runtime_environment),
-    )
-    .map_err(|err| format!("ELF error: {err}"))?;
+    let executable =
+        Executable::<InvokeContext>::from_elf(&program_data, Arc::new(program_runtime_environment))
+            .map_err(|err| format!("ELF error: {err}"))?;
 
-    let _ = Executable::<RequisiteVerifier, InvokeContext>::verified(executable)
+    executable
+        .verify::<RequisiteVerifier>()
         .map_err(|err| format!("ELF error: {err}"))?;
 
     Ok(program_data)
