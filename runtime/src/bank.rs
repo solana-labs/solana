@@ -117,7 +117,7 @@ use {
         hash::{extend_and_hash, hashv, Hash},
         incinerator,
         inflation::Inflation,
-        instruction::CompiledInstruction,
+        instruction::{CompiledInstruction, InstructionError},
         lamports::LamportsError,
         message::{AccountKeys, SanitizedMessage},
         native_loader,
@@ -4087,6 +4087,42 @@ impl Bank {
 
         let prev_accounts_data_len = self.load_accounts_data_size();
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
+
+        fn transaction_accounts_lamports_sum(
+            accounts: &[(Pubkey, AccountSharedData)],
+            message: &SanitizedMessage,
+        ) -> Option<u128> {
+            let mut lamports_sum = 0u128;
+            for i in 0..message.account_keys().len() {
+                let account = match accounts.get(i) {
+                    Some((_, account)) => account,
+                    None => return None,
+                };
+
+                lamports_sum = match lamports_sum.checked_add(u128::from(account.lamports())) {
+                    Some(lamports_sum) => lamports_sum,
+                    None => {
+                        return None;
+                    }
+                }
+            }
+
+            Some(lamports_sum)
+        }
+
+        let lamports_before_tx =
+            match transaction_accounts_lamports_sum(&transaction_accounts, tx.message()) {
+                Some(lamports) => lamports,
+                None => {
+                    return TransactionExecutionResult::NotExecuted(
+                        TransactionError::InstructionError(
+                            0,
+                            InstructionError::UnbalancedInstruction,
+                        ),
+                    )
+                }
+            };
+
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
             if self
@@ -4199,6 +4235,18 @@ impl Bank {
             total_size_of_touched_accounts,
             accounts_resize_delta,
         } = transaction_context.into();
+
+        if status.is_ok()
+            && transaction_accounts_lamports_sum(&accounts, tx.message())
+                .filter(|lamports_after_tx| lamports_before_tx == *lamports_after_tx)
+                .is_none()
+        {
+            return TransactionExecutionResult::NotExecuted(TransactionError::InstructionError(
+                0,
+                InstructionError::UnbalancedInstruction,
+            ));
+        }
+
         loaded_transaction.accounts = accounts;
         if self
             .feature_set
