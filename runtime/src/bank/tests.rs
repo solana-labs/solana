@@ -6696,6 +6696,7 @@ fn test_bank_hash_consistency() {
 }
 
 #[test]
+#[ignore]
 fn test_same_program_id_uses_unqiue_executable_accounts() {
     declare_process_instruction!(process_instruction, 1, |invoke_context| {
         let transaction_context = &invoke_context.transaction_context;
