@@ -1,4 +1,4 @@
-use k8s_openapi::api::core::v1::SecretVolumeSource;
+use k8s_openapi::api::core::v1::PodSecurityContext;
 
 use {
     crate::{boxed_error, SOLANA_ROOT},
@@ -12,7 +12,7 @@ use {
             core::v1::{
                 ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource,
                 Namespace, ObjectFieldSelector, PodSpec, PodTemplateSpec,
-                Secret, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
+                Secret, Service, SecretVolumeSource, ServicePort, ServiceSpec, Volume, VolumeMount,
             },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
@@ -125,7 +125,8 @@ impl<'a> Kubernetes<'a> {
 
 
         // let command = vec!["/workspace/start-bootstrap-validator.sh".to_string()];
-        let command = vec!["sleep".to_string(), "3600".to_string()];
+        // let command = vec!["sleep".to_string(), "3600".to_string()];
+        let command = vec!["/home/solana/k8s-cluster/src/bootstrap-startup-script.sh".to_string()];
         // let command = vec!["nohup"]
 
         self.create_replicas_set(
@@ -176,20 +177,6 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         };
 
-        // let accounts_volume = Volume {
-        //     name: "bootstrap-accounts-volume".into(),
-        //     secret: Some(SecretVolumeSource {
-        //         secret_name: Some("bootstrap-accounts-secret".to_string()),
-        //         ..Default::default()
-        //     }),
-        //     ..Default::default()
-        // };
-
-        // let accounts_volume_mount = VolumeMount {
-        //     name: "bootstrap-accounts-volume".to_string(),
-        //     mount_path: "/home/solana/bootstrap-accounts".to_string(),
-        //     ..Default::default()
-        // };
 
         // Define the pod spec
         let pod_spec = PodTemplateSpec {
@@ -205,10 +192,14 @@ impl<'a> Kubernetes<'a> {
                     env: Some(env_vars),
                     command: Some(command.clone()),
                     volume_mounts: Some(vec![genesis_volume_mount, accounts_volume_mount]),
-
                     ..Default::default()
                 }],
                 volumes: Some(vec![genesis_volume, accounts_volume]),
+                security_context: Some(PodSecurityContext {
+                    run_as_user: Some(1000),
+                    run_as_group: Some(1000),
+                    ..Default::default()
+                }),
                 // image_pull_secrets: Some(vec![LocalObjectReference {
                 //     name: Some("dockerhub-login".to_string()),
                 //     ..Default::default()
@@ -258,9 +249,9 @@ impl<'a> Kubernetes<'a> {
             .expect(format!("Failed to read stake-account.json file! at: {:?}", key_path).as_str());
 
         let mut data = BTreeMap::new();
-        data.insert("identity.json".to_string(), ByteString(general_purpose::STANDARD.encode(identity_keypair).as_bytes().to_vec()));
-        data.insert("vote.json".to_string(), ByteString(general_purpose::STANDARD.encode(vote_keypair).as_bytes().to_vec()));
-        data.insert("stake.json".to_string(), ByteString(general_purpose::STANDARD.encode(stake_keypair).as_bytes().to_vec()));
+        data.insert("identity.base64".to_string(), ByteString(general_purpose::STANDARD.encode(identity_keypair).as_bytes().to_vec()));
+        data.insert("vote.base64".to_string(), ByteString(general_purpose::STANDARD.encode(vote_keypair).as_bytes().to_vec()));
+        data.insert("stake.base64".to_string(), ByteString(general_purpose::STANDARD.encode(stake_keypair).as_bytes().to_vec()));
 
         let secret = Secret {
             metadata: ObjectMeta {
@@ -292,7 +283,7 @@ impl<'a> Kubernetes<'a> {
             }
             let keypair = std::fs::read(key_path.join(file_name.clone()))
                 .expect(format!("Failed to read {} file! at: {:?}", file_name, key_path).as_str());
-            data.insert(format!("{}.json", account), ByteString(general_purpose::STANDARD.encode(keypair).as_bytes().to_vec()));
+            data.insert(format!("{}.base64", account), ByteString(general_purpose::STANDARD.encode(keypair).as_bytes().to_vec()));
         }
         let secret = Secret {
             metadata: ObjectMeta {
