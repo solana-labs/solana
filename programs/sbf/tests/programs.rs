@@ -65,6 +65,7 @@ use {
             bootstrap_validator_stake_lamports, create_genesis_config,
             create_genesis_config_with_leader_ex, GenesisConfigInfo,
         },
+        installed_scheduler_pool::BankWithScheduler,
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -4006,7 +4007,10 @@ fn test_cpi_account_ownership_writability() {
                 TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLEE,
                 TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLER,
             ] {
-                bank.register_recent_blockhash(&Hash::new_unique());
+                bank.register_recent_blockhash(
+                    &Hash::new_unique(),
+                    &BankWithScheduler::no_scheduler_available(),
+                );
                 let account = AccountSharedData::new(42, account_size, &invoke_program_id);
                 bank.store_account(&account_keypair.pubkey(), &account);
 
