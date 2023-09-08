@@ -467,7 +467,12 @@ mod tests {
         bank: Arc<Bank>,
         txs: impl Iterator<Item = &'a SanitizedTransaction> + ExactSizeIterator,
     ) {
-        let expected_update_count = txs.len() as u64;
+        let expected_update_count = prioritization_fee_cache
+            .metrics
+            .successful_transaction_update_count
+            .load(Ordering::Relaxed)
+            .saturating_add(txs.len() as u64);
+
         prioritization_fee_cache.update(&bank, txs);
 
         // wait till expected number of transaction updates have occurred...
