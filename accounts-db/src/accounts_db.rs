@@ -7233,7 +7233,7 @@ impl AccountsDb {
                     // so, build a file name:
                     let hash = hasher.finish();
                     let file_name = format!(
-                        "{}.{}.{}.{}.{}",
+                        "{}.{}.{}.{}.{:016x}",
                         range_this_chunk.start,
                         range_this_chunk.end,
                         bin_range.start,
@@ -7243,6 +7243,22 @@ impl AccountsDb {
                     if load_from_cache {
                         if let Ok(mapped_file) =
                             cache_hash_data.get_file_reference_to_map_later(&file_name)
+                        {
+                            return Some(mapped_file);
+                        }
+
+                        // if we didn't find the cache file, try again one more time
+                        // with the old file name format
+                        let old_file_name = format!(
+                            "{}.{}.{}.{}.{}",
+                            range_this_chunk.start,
+                            range_this_chunk.end,
+                            bin_range.start,
+                            bin_range.end,
+                            hash
+                        );
+                        if let Ok(mapped_file) =
+                            cache_hash_data.get_file_reference_to_map_later(&old_file_name)
                         {
                             return Some(mapped_file);
                         }
