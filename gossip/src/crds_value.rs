@@ -162,7 +162,7 @@ pub(crate) fn new_rand_timestamp<R: Rng>(rng: &mut R) -> u64 {
 impl CrdsData {
     /// New random CrdsData for tests and benchmarks.
     fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> CrdsData {
-        let kind = rng.gen_range(0, 9);
+        let kind = rng.gen_range(0..9);
         // TODO: Implement other kinds of CrdsData here.
         // TODO: Assign ranges to each arm proportional to their frequency in
         // the mainnet crds table.
@@ -173,16 +173,16 @@ impl CrdsData {
             2 => CrdsData::LegacySnapshotHashes(LegacySnapshotHashes::new_rand(rng, pubkey)),
             3 => CrdsData::AccountsHashes(AccountsHashes::new_rand(rng, pubkey)),
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
-            5 => CrdsData::Vote(rng.gen_range(0, MAX_VOTES), Vote::new_rand(rng, pubkey)),
+            5 => CrdsData::Vote(rng.gen_range(0..MAX_VOTES), Vote::new_rand(rng, pubkey)),
             6 => CrdsData::RestartLastVotedForkSlots(
-                rng.gen_range(0, MAX_EPOCH_SLOTS),
+                rng.gen_range(0..MAX_EPOCH_SLOTS),
                 EpochSlots::new_rand(rng, pubkey),
                 0,
                 Hash::default(),
             ),
             7 => CrdsData::RestartHeaviestFork(0, Hash::default(), Percent::new(pubkey.unwrap(), 1)),
             _ => CrdsData::EpochSlots(
-                rng.gen_range(0, MAX_RESTART_LAST_VOTED_FORK_SLOTS),
+                rng.gen_range(0..MAX_RESTART_LAST_VOTED_FORK_SLOTS),
                 EpochSlots::new_rand(rng, pubkey),
             ),
         }

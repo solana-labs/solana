@@ -19,7 +19,6 @@ indexmap = { workspace = true, features = ["rayon"] }
 itertools = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
-matches = { workspace = true }
 num-traits = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }

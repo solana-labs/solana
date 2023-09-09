@@ -10,7 +10,7 @@ use {
     solana_perf::packet::{PacketBatch, PacketBatchRecycler, PacketFlags, PACKETS_PER_BATCH},
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
-        clock::DEFAULT_MS_PER_SLOT,
+        clock::{DEFAULT_MS_PER_SLOT, Slot},
         packet::{Meta, PACKET_DATA_SIZE},
         pubkey::Pubkey,
     },
@@ -113,7 +113,6 @@ impl ShredFetchStage {
                         last_root,
                         max_slot,
                         shred_version,
-                        should_drop_merkle_shreds,
                         &my_slots_to_repair_for_wen_restart,
                         &mut stats,
                     )

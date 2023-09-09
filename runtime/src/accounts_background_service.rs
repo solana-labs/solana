@@ -393,8 +393,8 @@ impl SnapshotRequestHandler {
         let snapshot_storages = snapshot_bank_utils::get_snapshot_storages(&snapshot_root_bank);
         let accounts_package = match request_kind {
             SnapshotRequestKind::Snapshot
-            | SnapshotRequestKind::WenRestartSnapshot => match &accounts_package_type {
-                AccountsPackageType::Snapshot(_) => {
+            | SnapshotRequestKind::WenRestartSnapshot => match &accounts_package_kind {
+                AccountsPackageKind::Snapshot(_) => {
                     let bank_snapshot_info = snapshot_bank_utils::add_bank_snapshot(
                         &self.snapshot_config.bank_snapshots_dir,
                         &snapshot_root_bank,
@@ -767,8 +767,8 @@ fn new_accounts_package_kind(
 ) -> AccountsPackageKind {
     let block_height = snapshot_request.snapshot_root_bank.block_height();
     match snapshot_request.request_kind {
-        SnapshotRequestKind::EpochAccountsHash => AccountsPackageType::EpochAccountsHash,
-        SnapshotRequestKind::WenRestartSnapshot => AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(
+        SnapshotRequestKind::EpochAccountsHash => AccountsPackageKind::EpochAccountsHash,
+        SnapshotRequestKind::WenRestartSnapshot => AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(
             last_full_snapshot_slot.unwrap(),
         )),
         _ => {
