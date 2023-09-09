@@ -170,7 +170,7 @@ pub fn signer_of(
     name: &str,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<(Option<Box<dyn Signer>>, Option<Pubkey>), Box<dyn std::error::Error>> {
-    if let Some(location) = matches.value_of(name) {
+    if let Some(location) = matches.try_get_one::<String>(name)? {
         let signer = signer_from_path(matches, location, name, wallet_manager)?;
         let signer_pubkey = signer.pubkey();
         Ok((Some(signer), Some(signer_pubkey)))
@@ -184,7 +184,7 @@ pub fn pubkey_of_signer(
     name: &str,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Option<Pubkey>, Box<dyn std::error::Error>> {
-    if let Some(location) = matches.value_of(name) {
+    if let Some(location) = matches.try_get_one::<String>(name)? {
         Ok(Some(pubkey_from_path(
             matches,
             location,
@@ -201,7 +201,7 @@ pub fn pubkeys_of_multiple_signers(
     name: &str,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Option<Vec<Pubkey>>, Box<dyn std::error::Error>> {
-    if let Some(pubkey_matches) = matches.values_of(name) {
+    if let Some(pubkey_matches) = matches.try_get_many::<String>(name)? {
         let mut pubkeys: Vec<Pubkey> = vec![];
         for signer in pubkey_matches {
             pubkeys.push(pubkey_from_path(matches, signer, name, wallet_manager)?);
@@ -219,7 +219,7 @@ pub fn resolve_signer(
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
     resolve_signer_from_path(
         matches,
-        matches.value_of(name).unwrap(),
+        matches.try_get_one::<String>(name)?.unwrap(),
         name,
         wallet_manager,
     )

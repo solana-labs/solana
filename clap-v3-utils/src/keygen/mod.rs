@@ -38,7 +38,7 @@ pub fn check_for_overwrite(
     outfile: &str,
     matches: &ArgMatches,
 ) -> Result<(), Box<dyn error::Error>> {
-    let force = matches.is_present("force");
+    let force = matches.try_contains_id("force")?;
     if !force && Path::new(outfile).exists() {
         let err_msg = format!("Refusing to overwrite {outfile} without --force flag");
         return Err(err_msg.into());
