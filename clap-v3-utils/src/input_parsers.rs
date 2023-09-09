@@ -14,7 +14,7 @@ use {
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair, Signature, Signer},
     },
-    std::{rc::Rc, str::FromStr},
+    std::{error, rc::Rc, str::FromStr},
 };
 
 // Sentinel value used to indicate to write to screen instead of file
@@ -69,6 +69,15 @@ pub fn keypair_of(matches: &ArgMatches, name: &str) -> Option<Keypair> {
     }
 }
 
+// Return the keypair for an argument with filename `name` or `None` if not present wrapped inside `Result`.
+pub fn try_keypair_of(
+    matches: &ArgMatches,
+    name: &str,
+) -> Result<Option<Keypair>, Box<dyn error::Error>> {
+    matches.try_contains_id(name)?;
+    Ok(keypair_of(matches, name))
+}
+
 pub fn keypairs_of(matches: &ArgMatches, name: &str) -> Option<Vec<Keypair>> {
     matches.values_of(name).map(|values| {
         values
@@ -84,10 +93,28 @@ pub fn keypairs_of(matches: &ArgMatches, name: &str) -> Option<Vec<Keypair>> {
     })
 }
 
+pub fn try_keypairs_of(
+    matches: &ArgMatches,
+    name: &str,
+) -> Result<Option<Vec<Keypair>>, Box<dyn error::Error>> {
+    matches.try_contains_id(name)?;
+    Ok(keypairs_of(matches, name))
+}
+
 // Return a pubkey for an argument that can itself be parsed into a pubkey,
 // or is a filename that can be read as a keypair
 pub fn pubkey_of(matches: &ArgMatches, name: &str) -> Option<Pubkey> {
     value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
+}
+
+// Return a `Result` wrapped pubkey for an argument that can itself be parsed into a pubkey,
+// or is a filename that can be read as a keypair
+pub fn try_pubkey_of(
+    matches: &ArgMatches,
+    name: &str,
+) -> Result<Option<Pubkey>, Box<dyn error::Error>> {
+    matches.try_contains_id(name)?;
+    Ok(pubkey_of(matches, name))
 }
 
 pub fn pubkeys_of(matches: &ArgMatches, name: &str) -> Option<Vec<Pubkey>> {
@@ -104,6 +131,14 @@ pub fn pubkeys_of(matches: &ArgMatches, name: &str) -> Option<Vec<Pubkey>> {
     })
 }
 
+pub fn try_pubkeys_of(
+    matches: &ArgMatches,
+    name: &str,
+) -> Result<Option<Vec<Pubkey>>, Box<dyn error::Error>> {
+    matches.try_contains_id(name)?;
+    Ok(pubkeys_of(matches, name))
+}
+
 // Return pubkey/signature pairs for a string of the form pubkey=signature
 pub fn pubkeys_sigs_of(matches: &ArgMatches, name: &str) -> Option<Vec<(Pubkey, Signature)>> {
     matches.values_of(name).map(|values| {
@@ -116,6 +151,16 @@ pub fn pubkeys_sigs_of(matches: &ArgMatches, name: &str) -> Option<Vec<(Pubkey, 
             })
             .collect()
     })
+}
+
+// Return pubkey/signature pairs for a string of the form pubkey=signature wrapped inside `Result`
+#[allow(clippy::type_complexity)]
+pub fn try_pubkeys_sigs_of(
+    matches: &ArgMatches,
+    name: &str,
+) -> Result<Option<Vec<(Pubkey, Signature)>>, Box<dyn error::Error>> {
+    matches.try_contains_id(name)?;
+    Ok(pubkeys_sigs_of(matches, name))
 }
 
 // Return a signer from matches at `name`
