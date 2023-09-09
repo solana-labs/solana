@@ -33,7 +33,7 @@ pub enum Protocol {
     QUIC,
 }
 
-pub trait ConnectionManager: Send + Sync {
+pub trait ConnectionManager: Send + Sync + 'static {
     type ConnectionPool: ConnectionPool;
     type NewConnectionConfig: NewConnectionConfig;
 
@@ -50,16 +50,16 @@ pub struct ConnectionCache<
 > {
     name: &'static str,
     map: RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ R>>,
-    connection_manager: S,
+    connection_manager: Arc<S>,
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     connection_pool_size: usize,
-    connection_config: T,
+    connection_config: Arc<T>,
 }
 
 impl<P, M, C> ConnectionCache<P, M, C>
 where
-    P: ConnectionPool<NewConnectionConfig = C>,
+    P: ConnectionPool<NewConnectionConfig = C> + 'static,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
     C: NewConnectionConfig,
 {
@@ -87,17 +87,17 @@ where
             name,
             map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
             stats: Arc::new(ConnectionCacheStats::default()),
-            connection_manager,
+            connection_manager: Arc::new(connection_manager),
             last_stats: AtomicInterval::default(),
             connection_pool_size: 1.max(connection_pool_size), // The minimum pool size is 1.
-            connection_config,
+            connection_config: Arc::new(connection_config),
         }
     }
 
     fn create_connection_thread(
         map: RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ P>>,
-        config: C,
-        connection_manager: M,
+        config: Arc<C>,
+        connection_manager: Arc<M>,
         receiver: Receiver<SocketAddr>,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
@@ -117,7 +117,12 @@ where
                     Err(RecvTimeoutError::Timeout) => {}
                     Ok(addr) => {
                         let mut map = map.write().unwrap();
-                        Self::create_connection_internal(config, connection_manager, &mut map, &addr);
+                        Self::create_connection_internal(
+                            config.clone(),
+                            connection_manager.clone(),
+                            &mut map,
+                            &addr,
+                        );
                     }
                 }
             })
@@ -145,7 +150,12 @@ where
             .unwrap_or((true, true));
 
         let (cache_hit, num_evictions, eviction_timing_ms) = if should_create_connection {
-            Self::create_connection_internal(self.connection_config, self.connection_manager, &mut map, addr)
+            Self::create_connection_internal(
+                self.connection_config.clone(),
+                self.connection_manager.clone(),
+                &mut map,
+                addr,
+            )
         } else {
             (true, 0, 0)
         };
@@ -163,8 +173,8 @@ where
     }
 
     fn create_connection_internal(
-        config: C,
-        connection_manager: M,
+        config: Arc<C>,
+        connection_manager: Arc<M>,
         map: &mut std::sync::RwLockWriteGuard<'_, IndexMap<SocketAddr, P>>,
         addr: &SocketAddr,
     ) -> (bool, u64, u64) {
@@ -347,8 +357,7 @@ pub enum ClientError {
     IoError(#[from] std::io::Error),
 }
 
-
-pub trait NewConnectionConfig: Sized + Send + Sync {
+pub trait NewConnectionConfig: Sized + Send + Sync + 'static {
     fn new() -> Result<Self, ClientError>;
 }
 
