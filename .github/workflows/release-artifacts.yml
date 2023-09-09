@@ -54,6 +54,7 @@ jobs:
           echo "::set-output name=tag::$CI_TAG"
           eval "$(ci/channel-info.sh)"
           echo "::set-output name=channel::$CHANNEL"
+          choco install llvm --version=15.0.7 --force
           ci/publish-tarball.sh
 
       - name: Prepare Upload Files
