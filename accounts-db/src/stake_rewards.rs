@@ -98,7 +98,7 @@ impl StakeReward {
             stake_pubkey: Pubkey::new_unique(),
             stake_reward_info: RewardInfo {
                 reward_type: RewardType::Staking,
-                lamports: rng.gen_range(1, 200),
+                lamports: rng.gen_range(1..200),
                 post_balance: 0,  /* unused atm */
                 commission: None, /* unused atm */
             },

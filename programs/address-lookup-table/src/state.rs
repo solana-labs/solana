@@ -329,8 +329,7 @@ mod tests {
         serialized_table_1.resize(LOOKUP_TABLE_META_SIZE, 0);
 
         let address_table = AddressLookupTable::new_for_tests(meta, 0);
-        let mut serialized_table_2 = Vec::new();
-        serialized_table_2.resize(LOOKUP_TABLE_META_SIZE, 0);
+        let mut serialized_table_2 = vec![0; LOOKUP_TABLE_META_SIZE];
         AddressLookupTable::overwrite_meta_data(&mut serialized_table_2, address_table.meta)
             .unwrap();
 

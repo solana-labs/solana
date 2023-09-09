@@ -1719,14 +1719,10 @@ impl JsonRpcRequestProcessor {
             min_context_slot: config.min_context_slot,
         })?;
         let epoch = config.epoch.unwrap_or_else(|| bank.epoch());
-        if bank.epoch().saturating_sub(epoch) > solana_sdk::stake_history::MAX_ENTRIES as u64 {
+        if epoch != bank.epoch() {
             return Err(Error::invalid_params(format!(
-                "Invalid param: epoch {epoch:?} is too far in the past"
-            )));
-        }
-        if epoch > bank.epoch() {
-            return Err(Error::invalid_params(format!(
-                "Invalid param: epoch {epoch:?} has not yet started"
+                "Invalid param: epoch {epoch:?}. Only the current epoch ({:?}) is supported",
+                bank.epoch()
             )));
         }
 
@@ -7372,7 +7368,7 @@ pub mod tests {
         let bank = Arc::new(Bank::default_for_tests());
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        blockstore.set_roots(vec![0, 1].iter()).unwrap();
+        blockstore.set_roots([0, 1].iter()).unwrap();
         // Build BlockCommitmentCache with rooted slots
         let mut cache0 = BlockCommitment::default();
         cache0.increase_rooted_stake(50);

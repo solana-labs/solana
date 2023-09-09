@@ -41,7 +41,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
-matches = { workspace = true }
+assert_matches = { workspace = true }
 solana-logger = { workspace = true }
 
 [[bench]]

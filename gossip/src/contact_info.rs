@@ -1,6 +1,6 @@
 use {
     crate::crds_value::MAX_WALLCLOCK,
-    matches::{assert_matches, debug_assert_matches},
+    assert_matches::{assert_matches, debug_assert_matches},
     serde::{Deserialize, Deserializer, Serialize},
     solana_sdk::{
         pubkey::Pubkey,
@@ -527,9 +527,7 @@ fn sanitize_entries(addrs: &[IpAddr], sockets: &[SocketEntry]) -> Result<(), Err
     // Verify that port offsets don't overflow.
     if sockets
         .iter()
-        .fold(Some(0u16), |offset, entry| {
-            offset?.checked_add(entry.offset)
-        })
+        .try_fold(0u16, |offset, entry| offset.checked_add(entry.offset))
         .is_none()
     {
         return Err(Error::PortOffsetsOverflow);
@@ -611,7 +609,7 @@ mod tests {
     fn new_rand_port<R: Rng>(rng: &mut R) -> u16 {
         let port = rng.gen::<u16>();
         let bits = u16::BITS - port.leading_zeros();
-        let shift = rng.gen_range(0u32, bits + 1u32);
+        let shift = rng.gen_range(0u32..bits + 1u32);
         port.checked_shr(shift).unwrap_or_default()
     }
 
@@ -679,8 +677,8 @@ mod tests {
                 .iter()
                 .map(|&key| SocketEntry {
                     key,
-                    index: rng.gen_range(0u8, addrs.len() as u8),
-                    offset: rng.gen_range(0u16, u16::MAX / 64),
+                    index: rng.gen_range(0u8..addrs.len() as u8),
+                    offset: rng.gen_range(0u16..u16::MAX / 64),
                 })
                 .collect();
             assert_matches!(
@@ -693,8 +691,8 @@ mod tests {
                 .iter()
                 .map(|&key| SocketEntry {
                     key,
-                    index: rng.gen_range(0u8, addrs.len() as u8),
-                    offset: rng.gen_range(0u16, u16::MAX / 256),
+                    index: rng.gen_range(0u8..addrs.len() as u8),
+                    offset: rng.gen_range(0u16..u16::MAX / 256),
                 })
                 .collect();
             assert_matches!(sanitize_entries(&addrs, &sockets), Ok(()));
@@ -721,7 +719,7 @@ mod tests {
         for _ in 0..1 << 14 {
             let addr = addrs.choose(&mut rng).unwrap();
             let socket = SocketAddr::new(*addr, new_rand_port(&mut rng));
-            let key = rng.gen_range(KEYS.start, KEYS.end);
+            let key = rng.gen_range(KEYS.start..KEYS.end);
             if sanitize_socket(&socket).is_ok() {
                 sockets.insert(key, socket);
                 assert_matches!(node.set_socket(key, socket), Ok(()));

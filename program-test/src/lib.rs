@@ -1,5 +1,5 @@
 //! The solana-program-test provides a BanksClient-based test framework SBF programs
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 // Export tokio for test clients
 pub use tokio;
@@ -17,7 +17,7 @@ use {
         loaded_programs::LoadedProgram, stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
-        accounts_background_service::{AbsRequestSender, SnapshotRequestType},
+        accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
         bank::Bank,
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
@@ -25,7 +25,7 @@ use {
         runtime_config::RuntimeConfig,
     },
     solana_sdk::{
-        account::{Account, AccountSharedData},
+        account::{create_account_shared_data_for_test, Account, AccountSharedData},
         account_info::AccountInfo,
         clock::Slot,
         entrypoint::{deserialize, ProgramResult, SUCCESS},
@@ -591,6 +591,11 @@ impl ProgramTest {
         );
     }
 
+    pub fn add_sysvar_account<S: Sysvar>(&mut self, address: Pubkey, sysvar: &S) {
+        let account = create_account_shared_data_for_test(sysvar);
+        self.add_account(address, account.into());
+    }
+
     /// Add a SBF program to the test environment.
     ///
     /// `program_name` will also be used to locate the SBF shared object in the current or fixtures
@@ -1137,7 +1142,7 @@ impl ProgramTestContext {
         snapshot_request_receiver
             .try_iter()
             .filter(|snapshot_request| {
-                snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+                snapshot_request.request_kind == SnapshotRequestKind::EpochAccountsHash
             })
             .for_each(|snapshot_request| {
                 snapshot_request

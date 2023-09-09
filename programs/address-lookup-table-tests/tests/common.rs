@@ -85,13 +85,13 @@ pub async fn add_lookup_table_account(
         data.len(),
         &solana_address_lookup_table_program::id(),
     );
-    account.set_data(data);
+    account.set_data_from_slice(&data);
     context.set_account(&account_address, &account);
 
     account
 }
 
-pub fn overwrite_slot_hashes_with_slots(context: &mut ProgramTestContext, slots: &[Slot]) {
+pub fn overwrite_slot_hashes_with_slots(context: &ProgramTestContext, slots: &[Slot]) {
     let mut slot_hashes = SlotHashes::default();
     for slot in slots {
         slot_hashes.add(*slot, Hash::new_unique());

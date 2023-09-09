@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -eo pipefail
 
 here="$(dirname "$0")"
 
@@ -46,12 +46,7 @@ if [ "$INDEX" -eq "$((LIMIT - 1))" ]; then
     ARGS+=(-p "$package")
   done
 
-  if need_to_generate_test_result; then
-    _ cargo test "${ARGS[@]}" --verbose -- -Z unstable-options --format json --report-time | tee results.json
-    exit_if_error "${PIPESTATUS[0]}"
-  else
-    _ cargo test "${ARGS[@]}"
-  fi
+  _ cargo test "${ARGS[@]}"
 else
   ARGS=(
     --profile ci

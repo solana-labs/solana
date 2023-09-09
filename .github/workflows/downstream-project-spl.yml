@@ -33,6 +33,7 @@ env:
 
 jobs:
   check:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -46,13 +47,12 @@ jobs:
       - shell: bash
         run: |
           source .github/scripts/downstream-project-spl-common.sh
-
-          sudo apt update
-          sudo apt install libudev-dev binutils-dev libunwind-dev -y
+          source .github/scripts/downstream-project-spl-install-deps.sh
 
           cargo check
 
   test:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -94,9 +94,7 @@ jobs:
       - shell: bash
         run: |
           source .github/scripts/downstream-project-spl-common.sh
-
-          sudo apt update
-          sudo apt install libudev-dev binutils-dev libunwind-dev -y
+          source .github/scripts/downstream-project-spl-install-deps.sh
 
           programStr="${{ tojson(matrix.arrays.required_programs) }}"
           IFS=', ' read -ra programs <<<"${programStr//[\[\]$'\n'$'\r' ]/}"

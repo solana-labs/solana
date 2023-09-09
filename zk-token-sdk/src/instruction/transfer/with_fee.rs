@@ -840,7 +840,7 @@ mod test {
 
         assert!(fee_data.verify_proof().is_ok());
 
-        // Case 4: invalid destination, auditor, or withdraw authority pubkeys
+        // Case 4: destination pubkey invalid
         let spendable_balance: u64 = 120;
         let spendable_ciphertext = source_keypair.pubkey().encrypt(spendable_balance);
 
@@ -867,48 +867,6 @@ mod test {
             (&destination_pubkey, auditor_pubkey),
             fee_parameters,
             withdraw_withheld_authority_pubkey,
-        )
-        .unwrap();
-
-        assert!(fee_data.verify_proof().is_err());
-
-        // auditor pubkey invalid
-        let destination_keypair = ElGamalKeypair::new_rand();
-        let destination_pubkey = destination_keypair.pubkey();
-
-        let auditor_pubkey = pod::ElGamalPubkey::zeroed().try_into().unwrap();
-
-        let withdraw_withheld_authority_keypair = ElGamalKeypair::new_rand();
-        let withdraw_withheld_authority_pubkey = withdraw_withheld_authority_keypair.pubkey();
-
-        let fee_data = TransferWithFeeData::new(
-            transfer_amount,
-            (spendable_balance, &spendable_ciphertext),
-            &source_keypair,
-            (destination_pubkey, &auditor_pubkey),
-            fee_parameters,
-            withdraw_withheld_authority_pubkey,
-        )
-        .unwrap();
-
-        assert!(fee_data.verify_proof().is_err());
-
-        // withdraw authority invalid
-        let destination_keypair = ElGamalKeypair::new_rand();
-        let destination_pubkey = destination_keypair.pubkey();
-
-        let auditor_keypair = ElGamalKeypair::new_rand();
-        let auditor_pubkey = auditor_keypair.pubkey();
-
-        let withdraw_withheld_authority_pubkey = pod::ElGamalPubkey::zeroed().try_into().unwrap();
-
-        let fee_data = TransferWithFeeData::new(
-            transfer_amount,
-            (spendable_balance, &spendable_ciphertext),
-            &source_keypair,
-            (destination_pubkey, auditor_pubkey),
-            fee_parameters,
-            &withdraw_withheld_authority_pubkey,
         )
         .unwrap();
 

@@ -11,7 +11,7 @@ use {
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
         snapshot_hash::SnapshotHash,
-        snapshot_package::{AccountsPackage, AccountsPackageType, SnapshotKind, SnapshotPackage},
+        snapshot_package::{AccountsPackage, AccountsPackageKind, SnapshotKind, SnapshotPackage},
         snapshot_utils::{
             self, archive_snapshot_package, build_storage_from_snapshot_dir,
             delete_contents_of_path, deserialize_snapshot_data_file,
@@ -300,7 +300,7 @@ pub fn bank_from_snapshot_archives(
     if let Some(ref mut unarchive_preparation_result) = unarchived_incremental_snapshot {
         let incremental_snapshot_storages =
             std::mem::take(&mut unarchive_preparation_result.storage);
-        storage.extend(incremental_snapshot_storages.into_iter());
+        storage.extend(incremental_snapshot_storages);
     }
 
     let storage_and_next_append_vec_id = StorageAndNextAppendVecId {
@@ -1079,7 +1079,7 @@ pub fn package_and_archive_full_snapshot(
     maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
 ) -> snapshot_utils::Result<FullSnapshotArchiveInfo> {
     let accounts_package = AccountsPackage::new_for_snapshot(
-        AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+        AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
         bank,
         bank_snapshot_info,
         &full_snapshot_archives_dir,
@@ -1129,7 +1129,7 @@ pub fn package_and_archive_incremental_snapshot(
     maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
 ) -> snapshot_utils::Result<IncrementalSnapshotArchiveInfo> {
     let accounts_package = AccountsPackage::new_for_snapshot(
-        AccountsPackageType::Snapshot(SnapshotKind::IncrementalSnapshot(
+        AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(
             incremental_snapshot_base_slot,
         )),
         bank,
@@ -1142,7 +1142,7 @@ pub fn package_and_archive_incremental_snapshot(
         None,
     );
 
-    let (accounts_hash_enum, accounts_hash_for_reserialize, bank_incremental_snapshot_persistence) =
+    let (accounts_hash_kind, accounts_hash_for_reserialize, bank_incremental_snapshot_persistence) =
         if bank
             .feature_set
             .is_active(&feature_set::incremental_snapshot_only_incremental_hash_calculation::id())
@@ -1185,7 +1185,7 @@ pub fn package_and_archive_incremental_snapshot(
         bank_incremental_snapshot_persistence.as_ref(),
     );
 
-    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash_enum);
+    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash_kind);
     archive_snapshot_package(
         &snapshot_package,
         full_snapshot_archives_dir,

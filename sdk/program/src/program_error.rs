@@ -1,6 +1,6 @@
 //! The [`ProgramError`] type and related definitions.
 
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     crate::{decode_error::DecodeError, instruction::InstructionError, msg, pubkey::PubkeyError},
     borsh::maybestd::io::Error as BorshIoError,

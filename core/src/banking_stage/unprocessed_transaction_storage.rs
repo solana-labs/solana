@@ -1046,7 +1046,7 @@ mod tests {
         // all packets are forwarded
         {
             let buffered_packet_batches: UnprocessedPacketBatches =
-                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+                UnprocessedPacketBatches::from_iter(packets.clone(), packets.len());
             let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
                 buffered_packet_batches,
                 ThreadType::Transactions,
@@ -1085,7 +1085,7 @@ mod tests {
                 packet.forwarded = true;
             }
             let buffered_packet_batches: UnprocessedPacketBatches =
-                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+                UnprocessedPacketBatches::from_iter(packets.clone(), packets.len());
             let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
                 buffered_packet_batches,
                 ThreadType::Transactions,
@@ -1119,7 +1119,7 @@ mod tests {
                 assert_eq!(current_bank.process_transaction(tx), Ok(()));
             }
             let buffered_packet_batches: UnprocessedPacketBatches =
-                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+                UnprocessedPacketBatches::from_iter(packets.clone(), packets.len());
             let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
                 buffered_packet_batches,
                 ThreadType::Transactions,
@@ -1285,7 +1285,7 @@ mod tests {
         // all tracer packets are forwardable
         {
             let buffered_packet_batches: UnprocessedPacketBatches =
-                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+                UnprocessedPacketBatches::from_iter(packets.clone(), packets.len());
             let (
                 total_tracer_packets_in_buffer,
                 total_packets_to_forward,
@@ -1303,7 +1303,7 @@ mod tests {
                 packet.forwarded = true;
             }
             let buffered_packet_batches: UnprocessedPacketBatches =
-                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+                UnprocessedPacketBatches::from_iter(packets.clone(), packets.len());
             let (
                 total_tracer_packets_in_buffer,
                 total_packets_to_forward,
@@ -1320,7 +1320,7 @@ mod tests {
                 packet.forwarded = true;
             }
             let buffered_packet_batches: UnprocessedPacketBatches =
-                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+                UnprocessedPacketBatches::from_iter(packets.clone(), packets.len());
             let (
                 total_tracer_packets_in_buffer,
                 total_packets_to_forward,

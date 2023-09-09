@@ -150,7 +150,7 @@ use {
         inflation::Inflation,
         instruction::InstructionError,
         lamports::LamportsError,
-        loader_v4::{self, LoaderV4State},
+        loader_v4::{self, LoaderV4State, LoaderV4Status},
         message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::LAMPORTS_PER_SOL,
@@ -2116,6 +2116,16 @@ impl Bank {
             .is_active(&feature_set::last_restart_slot_sysvar::id());
 
         if feature_flag {
+            // First, see what the currently stored last restart slot is. This
+            // account may not exist yet if the feature was just activated.
+            let current_last_restart_slot = self
+                .get_account(&sysvar::last_restart_slot::id())
+                .and_then(|account| {
+                    let lrs: Option<LastRestartSlot> = from_account(&account);
+                    lrs
+                })
+                .map(|account| account.last_restart_slot);
+
             let last_restart_slot = {
                 let slot = self.slot;
                 let hard_forks_r = self.hard_forks.read().unwrap();
@@ -2129,12 +2139,16 @@ impl Bank {
                     .map(|(slot, _)| *slot)
                     .unwrap_or(0)
             };
-            self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
-                create_account(
-                    &LastRestartSlot { last_restart_slot },
-                    self.inherit_specially_retained_account_fields(account),
-                )
-            });
+
+            // Only need to write if the last restart has changed
+            if current_last_restart_slot != Some(last_restart_slot) {
+                self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
+                    create_account(
+                        &LastRestartSlot { last_restart_slot },
+                        self.inherit_specially_retained_account_fields(account),
+                    )
+                });
+            }
         }
     }
 
@@ -2949,7 +2963,7 @@ impl Bank {
         reward_calculate_params: &EpochRewardCalculateParamInfo,
         rewards: u64,
         thread_pool: &ThreadPool,
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) -> Option<PointValue> {
         let EpochRewardCalculateParamInfo {
             stake_history,
@@ -3009,7 +3023,7 @@ impl Bank {
         rewards: u64,
         stake_history: &StakeHistory,
         thread_pool: &ThreadPool,
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) -> Option<PointValue> {
         let (points, measure) = measure!(thread_pool.install(|| {
             vote_with_stake_delegations_map
@@ -3277,7 +3291,7 @@ impl Bank {
         &self,
         thread_pool: &ThreadPool,
         stake_rewards: &[StakeReward],
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) {
         // store stake account even if stake_reward is 0
         // because credits observed has changed
@@ -3338,7 +3352,7 @@ impl Bank {
     fn store_vote_accounts_partitioned(
         &self,
         vote_account_rewards: VoteRewardsAccounts,
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) -> Vec<(Pubkey, RewardInfo)> {
         let (_, measure_us) = measure_us!({
             // reformat data to make it not sparse.
@@ -3364,7 +3378,7 @@ impl Bank {
     fn store_vote_accounts(
         &self,
         vote_account_rewards: VoteRewards,
-        metrics: &mut RewardsMetrics,
+        metrics: &RewardsMetrics,
     ) -> Vec<(Pubkey, RewardInfo)> {
         let (vote_rewards, measure) = measure!(vote_account_rewards
             .into_iter()
@@ -3541,7 +3555,7 @@ impl Bank {
         }
     }
 
-    /// Create EpochRewards syavar with calculated rewards
+    /// Create EpochRewards sysvar with calculated rewards
     fn create_epoch_rewards_sysvar(
         &self,
         total_rewards: u64,
@@ -4607,7 +4621,9 @@ impl Bank {
         if loader_v4::check_id(program_account.owner()) {
             return solana_loader_v4_program::get_state(program_account.data())
                 .ok()
-                .and_then(|state| state.is_deployed.then_some(state.slot))
+                .and_then(|state| {
+                    (!matches!(state.status, LoaderV4Status::Retracted)).then_some(state.slot)
+                })
                 .map(|slot| ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot))
                 .unwrap_or(ProgramAccountLoadResult::InvalidV4Program);
         }
@@ -4881,7 +4897,7 @@ impl Bank {
         let log_messages: Option<TransactionLogMessages> =
             log_collector.and_then(|log_collector| {
                 Rc::try_unwrap(log_collector)
-                    .map(|log_collector| log_collector.into_inner().into())
+                    .map(|log_collector| log_collector.into_inner().into_messages())
                     .ok()
             });
 
@@ -5063,6 +5079,7 @@ impl Bank {
             bpf_loader_upgradeable::id(),
             bpf_loader::id(),
             bpf_loader_deprecated::id(),
+            loader_v4::id(),
         ];
         let program_owners_refs: Vec<&Pubkey> = program_owners.iter().collect();
         let mut program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
@@ -8055,6 +8072,7 @@ impl Bank {
             feature_set::enable_partitioned_epoch_reward::id(),
             feature_set::disable_deploy_of_alloc_free_syscall::id(),
             feature_set::last_restart_slot_sysvar::id(),
+            feature_set::delay_visibility_of_program_deployment::id(),
         ];
         if !only_apply_transitions_for_new_features
             || FEATURES_AFFECTING_RBPF
@@ -8069,23 +8087,15 @@ impl Bank {
             )
             .unwrap();
             let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
-            if *loaded_programs_cache.environments.program_runtime_v1
-                != program_runtime_environment_v1
-            {
-                loaded_programs_cache.environments.program_runtime_v1 =
-                    Arc::new(program_runtime_environment_v1);
-            }
+            loaded_programs_cache.environments.program_runtime_v1 =
+                Arc::new(program_runtime_environment_v1);
             let program_runtime_environment_v2 =
                 solana_loader_v4_program::create_program_runtime_environment_v2(
                     &self.runtime_config.compute_budget.unwrap_or_default(),
                     false, /* debugging_features */
                 );
-            if *loaded_programs_cache.environments.program_runtime_v2
-                != program_runtime_environment_v2
-            {
-                loaded_programs_cache.environments.program_runtime_v2 =
-                    Arc::new(program_runtime_environment_v2);
-            }
+            loaded_programs_cache.environments.program_runtime_v2 =
+                Arc::new(program_runtime_environment_v2);
             loaded_programs_cache.prune_feature_set_transition();
         }
         for builtin in BUILTINS.iter() {
@@ -8430,7 +8440,7 @@ pub mod test_utils {
         solana_sdk::{hash::hashv, pubkey::Pubkey},
         solana_vote_program::vote_state::{self, BlockTimestamp, VoteStateVersions},
     };
-    pub fn goto_end_of_slot(bank: &mut Bank) {
+    pub fn goto_end_of_slot(bank: &Bank) {
         let mut tick_hash = bank.last_blockhash();
         loop {
             tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);

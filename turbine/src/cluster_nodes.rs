@@ -362,7 +362,7 @@ impl<T: 'static> ClusterNodesCache<T> {
         working_bank: &Bank,
         cluster_info: &ClusterInfo,
     ) -> Arc<ClusterNodes<T>> {
-        let epoch = root_bank.get_leader_schedule_epoch(shred_slot);
+        let epoch = get_epoch(shred_slot, root_bank);
         let entry = self.get_cache_entry(epoch);
         if let Some((_, nodes)) = entry
             .read()
@@ -383,7 +383,7 @@ impl<T: 'static> ClusterNodesCache<T> {
             .find_map(|bank| bank.epoch_staked_nodes(epoch));
         if epoch_staked_nodes.is_none() {
             inc_new_counter_debug!("cluster_nodes-unknown_epoch_staked_nodes", 1);
-            if epoch != root_bank.get_leader_schedule_epoch(root_bank.slot()) {
+            if epoch != get_epoch(root_bank.slot(), root_bank) {
                 return self.get(root_bank.slot(), root_bank, working_bank, cluster_info);
             }
             inc_new_counter_info!("cluster_nodes-unknown_epoch_staked_nodes_root", 1);
@@ -394,6 +394,18 @@ impl<T: 'static> ClusterNodesCache<T> {
         ));
         *entry = Some((Instant::now(), Arc::clone(&nodes)));
         nodes
+    }
+}
+
+fn get_epoch(shred_slot: Slot, root_bank: &Bank) -> Epoch {
+    if check_feature_activation(
+        &feature_set::revise_turbine_epoch_stakes::id(),
+        shred_slot,
+        root_bank,
+    ) {
+        root_bank.epoch_schedule().get_epoch(shred_slot)
+    } else {
+        root_bank.get_leader_schedule_epoch(shred_slot)
     }
 }
 
@@ -441,12 +453,12 @@ pub fn make_test_cluster<R: Rng>(
             if rng.gen_ratio(unstaked_numerator, unstaked_denominator) {
                 None // No stake for some of the nodes.
             } else {
-                Some((*node.pubkey(), rng.gen_range(0, 20)))
+                Some((*node.pubkey(), rng.gen_range(0..20)))
             }
         })
         .collect();
     // Add some staked nodes with no contact-info.
-    stakes.extend(repeat_with(|| (Pubkey::new_unique(), rng.gen_range(0, 20))).take(100));
+    stakes.extend(repeat_with(|| (Pubkey::new_unique(), rng.gen_range(0..20))).take(100));
     let cluster_info = ClusterInfo::new(this_node, keypair, SocketAddrSpace::Unspecified);
     let nodes: Vec<_> = nodes
         .iter()
@@ -501,7 +513,7 @@ fn enable_turbine_fanout_experiments(shred_slot: Slot, root_bank: &Bank) -> bool
 
 // Returns true if the feature is effective for the shred slot.
 #[must_use]
-pub fn check_feature_activation(feature: &Pubkey, shred_slot: Slot, root_bank: &Bank) -> bool {
+fn check_feature_activation(feature: &Pubkey, shred_slot: Slot, root_bank: &Bank) -> bool {
     match root_bank.feature_set.activated_slot(feature) {
         None => false,
         Some(feature_slot) => {

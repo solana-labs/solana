@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 pub mod send_transaction_service;
 pub mod tpu_info;
 

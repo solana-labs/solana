@@ -27,6 +27,11 @@ type CacheRangesHeld = RwLock<Vec<RangeInclusive<Pubkey>>>;
 
 type InMemMap<T> = HashMap<Pubkey, AccountMapEntry<T>>;
 
+#[derive(Debug, Default)]
+pub struct StartupStats {
+    pub copy_data_us: AtomicU64,
+}
+
 #[derive(Debug)]
 pub struct PossibleEvictions<T: IndexValue> {
     /// vec per age in the future, up to size 'ages_to_stay_in_cache'
@@ -103,7 +108,7 @@ pub struct InMemAccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<
     flushing_active: AtomicBool,
 
     /// info to streamline initial index generation
-    startup_info: StartupInfo<T>,
+    startup_info: StartupInfo<T, U>,
 
     /// possible evictions for next few slots coming up
     possible_evictions: RwLock<PossibleEvictions<T>>,
@@ -116,6 +121,9 @@ pub struct InMemAccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<
     /// Higher numbers mean we flush less buckets/s
     /// Lower numbers mean we flush more buckets/s
     num_ages_to_distribute_flushes: Age,
+
+    /// stats related to starting up
+    pub(crate) startup_stats: Arc<StartupStats>,
 }
 
 impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> Debug for InMemAccountsIndex<T, U> {
@@ -140,9 +148,9 @@ struct StartupInfoDuplicates<T: IndexValue> {
 }
 
 #[derive(Default, Debug)]
-struct StartupInfo<T: IndexValue> {
+struct StartupInfo<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     /// entries to add next time we are flushing to disk
-    insert: Mutex<Vec<(Slot, Pubkey, T)>>,
+    insert: Mutex<Vec<(Pubkey, (Slot, U))>>,
     /// pubkeys with more than 1 entry
     duplicates: Mutex<StartupInfoDuplicates<T>>,
 }
@@ -179,9 +187,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             // Spread out the scanning across all ages within the window.
             // This causes us to scan 1/N of the bins each 'Age'
             remaining_ages_to_skip_flushing: AtomicU8::new(
-                thread_rng().gen_range(0, num_ages_to_distribute_flushes),
+                thread_rng().gen_range(0..num_ages_to_distribute_flushes),
             ),
             num_ages_to_distribute_flushes,
+            startup_stats: Arc::clone(&storage.startup_stats),
         }
     }
 
@@ -672,14 +681,18 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
 
     /// Queue up these insertions for when the flush thread is dealing with this bin.
     /// This is very fast and requires no lookups or disk access.
-    pub fn startup_insert_only(&self, slot: Slot, items: impl Iterator<Item = (Pubkey, T)>) {
+    pub fn startup_insert_only(&self, items: impl Iterator<Item = (Pubkey, (Slot, T))>) {
         assert!(self.storage.get_startup());
         assert!(self.bucket.is_some());
 
         let mut insert = self.startup_info.insert.lock().unwrap();
+        let m = Measure::start("copy");
         items
             .into_iter()
-            .for_each(|(k, v)| insert.push((slot, k, v)));
+            .for_each(|(k, (slot, v))| insert.push((k, (slot, v.into()))));
+        self.startup_stats
+            .copy_data_us
+            .fetch_add(m.end_as_us(), Ordering::Relaxed);
     }
 
     pub fn insert_new_entry_if_missing_with_lock(
@@ -932,7 +945,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         // random eviction
         const N: usize = 1000;
         // 1/N chance of eviction
-        thread_rng().gen_range(0, N) == 0
+        thread_rng().gen_range(0..N) == 0
     }
 
     /// assumes 1 entry in the slot list. Ignores overhead of the HashMap and such
@@ -1068,17 +1081,15 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         // merge all items into the disk index now
         let disk = self.bucket.as_ref().unwrap();
         let mut count = insert.len() as u64;
-        for (k, entry, duplicate_entry) in disk.batch_insert_non_duplicates(
-            insert.into_iter().map(|(slot, k, v)| (k, (slot, v.into()))),
-            count as usize,
-        ) {
-            duplicates.duplicates.push((entry.0, k, entry.1.into()));
+        for (i, duplicate_entry) in disk.batch_insert_non_duplicates(&insert) {
+            let (k, entry) = &insert[i];
+            duplicates.duplicates.push((entry.0, *k, entry.1.into()));
             // accurately account for there being a duplicate for the first entry that was previously added to the disk index.
             // That entry could not have known yet that it was a duplicate.
             // It is important to capture each slot with a duplicate because of slot limits applied to clean.
             duplicates
                 .duplicates_put_on_disk
-                .insert((duplicate_entry.0, k));
+                .insert((duplicate_entry.0, *k));
             count -= 1;
         }
 
@@ -1512,6 +1523,7 @@ mod tests {
     use {
         super::*,
         crate::accounts_index::{AccountsIndexConfig, IndexLimitMb, BINS_FOR_TESTING},
+        assert_matches::assert_matches,
         itertools::Itertools,
     };
 
@@ -2072,12 +2084,12 @@ mod tests {
             // item is NOT in index at all, still return true from remove_if_slot_list_empty_entry
             // make sure not initially in index
             let entry = map.entry(unknown_key);
-            assert!(matches!(entry, Entry::Vacant(_)));
+            assert_matches!(entry, Entry::Vacant(_));
             let entry = map.entry(unknown_key);
             assert!(test.remove_if_slot_list_empty_entry(entry));
             // make sure still not in index
             let entry = map.entry(unknown_key);
-            assert!(matches!(entry, Entry::Vacant(_)));
+            assert_matches!(entry, Entry::Vacant(_));
         }
 
         {
@@ -2085,11 +2097,11 @@ mod tests {
             let val = Arc::new(AccountMapEntryInner::<u64>::default());
             map.insert(key, val);
             let entry = map.entry(key);
-            assert!(matches!(entry, Entry::Occupied(_)));
+            assert_matches!(entry, Entry::Occupied(_));
             // should have removed it since it had an empty slot list
             assert!(test.remove_if_slot_list_empty_entry(entry));
             let entry = map.entry(key);
-            assert!(matches!(entry, Entry::Vacant(_)));
+            assert_matches!(entry, Entry::Vacant(_));
             // return true - item is not in index at all now
             assert!(test.remove_if_slot_list_empty_entry(entry));
         }
@@ -2103,7 +2115,7 @@ mod tests {
             let entry = map.entry(key);
             assert!(!test.remove_if_slot_list_empty_entry(entry));
             let entry = map.entry(key);
-            assert!(matches!(entry, Entry::Occupied(_)));
+            assert_matches!(entry, Entry::Occupied(_));
         }
     }
 

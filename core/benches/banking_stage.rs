@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #![feature(test)]
 
 extern crate test;
@@ -102,7 +102,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             .collect::<Vec<_>>();
         let batches_len = batches.len();
         let mut transaction_buffer = UnprocessedTransactionStorage::new_transaction_storage(
-            UnprocessedPacketBatches::from_iter(batches.into_iter(), 2 * batches_len),
+            UnprocessedPacketBatches::from_iter(batches, 2 * batches_len),
             ThreadType::Transactions,
         );
         let (s, _r) = unbounded();

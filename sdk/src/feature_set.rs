@@ -282,7 +282,7 @@ pub mod stake_deactivate_delinquent_instruction {
 }
 
 pub mod stake_redelegate_instruction {
-    solana_sdk::declare_id!("3EPmAX94PvVJCjMeFfRFvj4avqCPL8vv3TGsZQg7ydMx");
+    solana_sdk::declare_id!("GUrp5BKMyDazsAp9mBoVD6orE5ihXNRPC3jkBRfx6Lq7");
 }
 
 pub mod vote_withdraw_authority_may_change_authorized_voter {
@@ -573,14 +573,6 @@ pub mod disable_turbine_fanout_experiments {
     solana_sdk::declare_id!("Gz1aLrbeQ4Q6PTSafCZcGWZXz91yVRi7ASFzFEr1U4sa");
 }
 
-pub mod drop_merkle_shreds {
-    solana_sdk::declare_id!("84zy5N23Q9vTZuLc9h1HWUtyM9yCFV2SCmyP9W9C3yHZ");
-}
-
-pub mod keep_merkle_shreds {
-    solana_sdk::declare_id!("HyNQzc7TMNmRhpVHXqDGjpsHzeQie82mDQXSF9hj7nAH");
-}
-
 pub mod move_serialized_len_ptr_in_cpi {
     solana_sdk::declare_id!("74CoWuBmt3rUVUrCb2JiSTvh6nXyBWUsK4SaMj3CtE3T");
 }
@@ -621,7 +613,7 @@ pub mod apply_cost_tracker_during_replay {
     solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
 }
 pub mod bpf_account_data_direct_mapping {
-    solana_sdk::declare_id!("9gwzizfABsKUereT6phZZxbTzuAnovkgwpVVpdcSxv9h");
+    solana_sdk::declare_id!("EenyoWx9UMXYKpR8mW5Jmfmy2fRjzUtM7NduYMY8bx33");
 }
 
 pub mod add_set_tx_loaded_accounts_data_size_instruction {
@@ -685,6 +677,14 @@ pub mod reduce_stake_warmup_cooldown {
                 .map(|slot| epoch_schedule.get_epoch(slot))
         }
     }
+}
+
+pub mod revise_turbine_epoch_stakes {
+    solana_sdk::declare_id!("BTWmtJC8U5ZLMbBUUA1k6As62sYjPEjAiNAT55xYGdJU");
+}
+
+pub mod enable_poseidon_syscall {
+    solana_sdk::declare_id!("FL9RsQA6TVUoh5xJQ9d936RHSebA1NLQqe3Zv9sXZRpr");
 }
 
 lazy_static! {
@@ -825,8 +825,6 @@ lazy_static! {
         (commission_updates_only_allowed_in_first_half_of_epoch::id(), "validator commission updates are only allowed in the first half of an epoch #29362"),
         (enable_turbine_fanout_experiments::id(), "enable turbine fanout experiments #29393"),
         (disable_turbine_fanout_experiments::id(), "disable turbine fanout experiments #29393"),
-        (drop_merkle_shreds::id(), "drop merkle shreds #29711"),
-        (keep_merkle_shreds::id(), "keep merkle shreds #29711"),
         (move_serialized_len_ptr_in_cpi::id(), "cpi ignore serialized_len_ptr #29592"),
         (update_hashes_per_tick::id(), "Update desired hashes per tick on epoch boundary"),
         (enable_big_mod_exp_syscall::id(), "add big_mod_exp syscall #28503"),
@@ -851,6 +849,8 @@ lazy_static! {
         (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
         (last_restart_slot_sysvar::id(), "enable new sysvar last_restart_slot"),
         (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
+        (revise_turbine_epoch_stakes::id(), "revise turbine epoch stakes"),
+        (enable_poseidon_syscall::id(), "Enable Poseidon syscall"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

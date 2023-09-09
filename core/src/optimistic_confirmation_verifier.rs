@@ -304,7 +304,7 @@ mod test {
         assert!(optimistic_confirmation_verifier.unchecked_slots.is_empty());
 
         // If we know set the root in blockstore, should return nothing
-        blockstore.set_roots(vec![1, 3].iter()).unwrap();
+        blockstore.set_roots([1, 3].iter()).unwrap();
         optimistic_confirmation_verifier
             .add_new_optimistic_confirmed_slots(optimistic_slots, &blockstore);
         assert!(optimistic_confirmation_verifier

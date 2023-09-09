@@ -35,7 +35,7 @@ use {
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
-        accounts_background_service::{AbsRequestSender, SnapshotRequestType},
+        accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
         bank::{Bank, TransactionBalancesSet},
         bank_forks::BankForks,
         bank_utils,
@@ -657,7 +657,7 @@ pub fn test_process_blockstore(
                 snapshot_request_receiver
                     .try_iter()
                     .filter(|snapshot_request| {
-                        snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+                        snapshot_request.request_kind == SnapshotRequestKind::EpochAccountsHash
                     })
                     .for_each(|snapshot_request| {
                         snapshot_request
@@ -1859,7 +1859,7 @@ pub mod tests {
                 create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
             },
         },
-        matches::assert_matches,
+        assert_matches::assert_matches,
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
         solana_program_runtime::declare_process_instruction,
@@ -2241,7 +2241,7 @@ pub mod tests {
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blockstore.set_roots(vec![0, 1, 4].iter()).unwrap();
+        blockstore.set_roots([0, 1, 4].iter()).unwrap();
 
         let opts = ProcessOptions {
             run_verification: true,
@@ -2321,7 +2321,7 @@ pub mod tests {
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blockstore.set_roots(vec![0, 1].iter()).unwrap();
+        blockstore.set_roots([0, 1].iter()).unwrap();
 
         let opts = ProcessOptions {
             run_verification: true,
@@ -3528,7 +3528,7 @@ pub mod tests {
             genesis_config.ticks_per_slot,
             genesis_config.hash(),
         );
-        blockstore.set_roots(vec![0, 1].iter()).unwrap();
+        blockstore.set_roots([0, 1].iter()).unwrap();
 
         // Specify halting at slot 0
         let opts = ProcessOptions {
@@ -3580,7 +3580,7 @@ pub mod tests {
             last_hash =
                 fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, i + 1, i, last_hash);
         }
-        blockstore.set_roots(vec![3, 5].iter()).unwrap();
+        blockstore.set_roots([3, 5].iter()).unwrap();
 
         // Set up bank1
         let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
@@ -3753,7 +3753,7 @@ pub mod tests {
             }
             i += 1;
 
-            let slot = bank.slot() + thread_rng().gen_range(1, 3);
+            let slot = bank.slot() + thread_rng().gen_range(1..3);
             bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
         }
     }

@@ -11,3 +11,11 @@ path = "junit.xml"
 [[profile.ci.overrides]]
 filter = "package(solana-zk-token-proof-program-tests) & test(/^test_batched_range_proof_u256$/)"
 threads-required = "num-cpus"
+
+[[profile.ci.overrides]]
+filter = "package(solana-gossip) & test(/^test_star_network_push_star_200/)"
+threads-required = "num-cpus"
+
+[[profile.ci.overrides]]
+filter = "package(solana-gossip) & test(/^test_star_network_push_ring_200/)"
+threads-required = "num-cpus"

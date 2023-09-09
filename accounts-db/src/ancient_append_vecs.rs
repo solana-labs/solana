@@ -91,7 +91,7 @@ impl AncientSlotInfos {
             let should_shrink = if capacity > 0 {
                 let alive_ratio = alive_bytes * 100 / capacity;
                 alive_ratio < 90
-                    || if can_randomly_shrink && thread_rng().gen_range(0, 10000) == 0 {
+                    || if can_randomly_shrink && thread_rng().gen_range(0..10000) == 0 {
                         was_randomly_shrunk = true;
                         true
                     } else {
@@ -993,7 +993,7 @@ pub mod tests {
 
     #[test]
     #[should_panic(
-        expected = "assertion failed: accounts_to_combine.target_slots_sorted.len() >= packed_contents.len()"
+        expected = "accounts_to_combine.target_slots_sorted.len() >= packed_contents.len()"
     )]
     fn test_write_packed_storages_too_few_slots() {
         let (db, storages, slots, _infos) = get_sample_storages(1, None);
@@ -1202,7 +1202,7 @@ pub mod tests {
                 let mut data_size = 450;
                 // random # of extra accounts here
                 let total_accounts_per_storage =
-                    thread_rng().gen_range(0, total_accounts_per_storage);
+                    thread_rng().gen_range(0..total_accounts_per_storage);
                 let _pubkeys_and_accounts = storages
                     .iter()
                     .map(|storage| {
@@ -1347,10 +1347,7 @@ pub mod tests {
                         let storage = db.storage.get_slot_storage_entry(slot);
                         assert!(storage.is_some());
                         if in_shrink_candidate_slots {
-                            db.shrink_candidate_slots
-                                .lock()
-                                .unwrap()
-                                .insert(slot, storage.unwrap());
+                            db.shrink_candidate_slots.lock().unwrap().insert(slot);
                         }
                     });
 
@@ -1379,11 +1376,7 @@ pub mod tests {
                     );
 
                     slots.clone().for_each(|slot| {
-                        assert!(!db
-                            .shrink_candidate_slots
-                            .lock()
-                            .unwrap()
-                            .contains_key(&slot));
+                        assert!(!db.shrink_candidate_slots.lock().unwrap().contains(&slot));
                     });
 
                     let roots_after = db
@@ -2071,7 +2064,7 @@ pub mod tests {
         let can_randomly_shrink = false;
         for method in TestCollectInfo::iter() {
             for slot1_is_alive in [false, true] {
-                let alives = vec![false /*dummy*/, slot1_is_alive, !slot1_is_alive];
+                let alives = [false /*dummy*/, slot1_is_alive, !slot1_is_alive];
                 let slots = 2;
                 // 1_040_000 is big enough relative to page size to cause shrink ratio to be triggered
                 for data_size in [None, Some(1_040_000)] {
@@ -2098,7 +2091,7 @@ pub mod tests {
                     });
                     let alive_storages = storages
                         .iter()
-                        .filter_map(|storage| alives[storage.slot() as usize].then_some(storage))
+                        .filter(|storage| alives[storage.slot() as usize])
                         .collect::<Vec<_>>();
                     let alive_bytes_expected = alive_storages
                         .iter()
@@ -2362,7 +2355,7 @@ pub mod tests {
         let can_randomly_shrink = false;
         for method in TestCollectInfo::iter() {
             for slot1_shrink in [false, true] {
-                let shrinks = vec![false /*dummy*/, slot1_shrink, !slot1_shrink];
+                let shrinks = [false /*dummy*/, slot1_shrink, !slot1_shrink];
                 let slots = 2;
                 // 1_040_000 is big enough relative to page size to cause shrink ratio to be triggered
                 let data_sizes = shrinks

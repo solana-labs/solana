@@ -2,7 +2,7 @@ use {
     crate::{
         accounts_index::{AccountsIndexConfig, DiskIndexValue, IndexLimitMb, IndexValue},
         bucket_map_holder_stats::BucketMapHolderStats,
-        in_mem_accounts_index::InMemAccountsIndex,
+        in_mem_accounts_index::{InMemAccountsIndex, StartupStats},
         waitable_condvar::WaitableCondvar,
     },
     solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig},
@@ -68,6 +68,8 @@ pub struct BucketMapHolder<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>
     /// Note startup is an optimization and is not required for correctness.
     startup: AtomicBool,
     _phantom: PhantomData<T>,
+
+    pub(crate) startup_stats: Arc<StartupStats>,
 }
 
 impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> Debug for BucketMapHolder<T, U> {
@@ -259,6 +261,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> BucketMapHolder<T, U>
             mem_budget_mb,
             threads,
             _phantom: PhantomData,
+            startup_stats: Arc::default(),
         }
     }
 

@@ -60,6 +60,7 @@ mod tests {
             packet::Packet,
             sendmmsg::SendPktsError,
         },
+        assert_matches::assert_matches,
         solana_sdk::packet::PACKET_DATA_SIZE,
         std::{
             io::ErrorKind,
@@ -207,7 +208,7 @@ mod tests {
         if let Err(SendPktsError::IoError(ioerror, num_failed)) =
             batch_send(&sender, &packet_refs[..]).await
         {
-            assert!(matches!(ioerror.kind(), ErrorKind::PermissionDenied));
+            assert_matches!(ioerror.kind(), ErrorKind::PermissionDenied);
             assert_eq!(num_failed, 2);
         }
 
@@ -222,7 +223,7 @@ mod tests {
         if let Err(SendPktsError::IoError(ioerror, num_failed)) =
             batch_send(&sender, &packet_refs[..]).await
         {
-            assert!(matches!(ioerror.kind(), ErrorKind::PermissionDenied));
+            assert_matches!(ioerror.kind(), ErrorKind::PermissionDenied);
             assert_eq!(num_failed, 3);
         }
 
@@ -237,7 +238,7 @@ mod tests {
         if let Err(SendPktsError::IoError(ioerror, num_failed)) =
             batch_send(&sender, &packet_refs[..]).await
         {
-            assert!(matches!(ioerror.kind(), ErrorKind::PermissionDenied));
+            assert_matches!(ioerror.kind(), ErrorKind::PermissionDenied);
             assert_eq!(num_failed, 2);
         }
 
@@ -252,7 +253,7 @@ mod tests {
         if let Err(SendPktsError::IoError(ioerror, num_failed)) =
             multi_target_send(&sender, &packets[0], &dest_refs).await
         {
-            assert!(matches!(ioerror.kind(), ErrorKind::PermissionDenied));
+            assert_matches!(ioerror.kind(), ErrorKind::PermissionDenied);
             assert_eq!(num_failed, 2);
         }
 
@@ -267,7 +268,7 @@ mod tests {
         if let Err(SendPktsError::IoError(ioerror, num_failed)) =
             multi_target_send(&sender, &packets[0], &dest_refs).await
         {
-            assert!(matches!(ioerror.kind(), ErrorKind::PermissionDenied));
+            assert_matches!(ioerror.kind(), ErrorKind::PermissionDenied);
             assert_eq!(num_failed, 3);
         }
     }

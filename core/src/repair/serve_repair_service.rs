@@ -59,10 +59,7 @@ impl ServeRepairService {
         Self { thread_hdls }
     }
 
-    pub fn join(self) -> thread::Result<()> {
-        for thread_hdl in self.thread_hdls {
-            thread_hdl.join()?;
-        }
-        Ok(())
+    pub(crate) fn join(self) -> thread::Result<()> {
+        self.thread_hdls.into_iter().try_for_each(JoinHandle::join)
     }
 }

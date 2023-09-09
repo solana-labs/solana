@@ -192,7 +192,7 @@ impl PartialEq for HeaviestSubtreeForkChoice {
 impl PartialOrd for HeaviestSubtreeForkChoice {
     // Sort by root
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.tree_root.partial_cmp(&other.tree_root)
+        Some(self.tree_root.cmp(&other.tree_root))
     }
 }
 

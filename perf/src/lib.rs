@@ -18,7 +18,7 @@ extern crate log;
 
 #[cfg(test)]
 #[macro_use]
-extern crate matches;
+extern crate assert_matches;
 
 #[macro_use]
 extern crate solana_metrics;

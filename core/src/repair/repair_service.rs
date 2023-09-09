@@ -14,7 +14,7 @@ use {
             duplicate_repair_status::AncestorDuplicateSlotToRepair,
             outstanding_requests::OutstandingRequests,
             repair_weight::RepairWeight,
-            serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
+            serve_repair::{self, ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
         },
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
@@ -305,17 +305,14 @@ impl RepairService {
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
         let mut popular_pruned_forks_requests = HashSet::new();
 
-        loop {
-            if exit.load(Ordering::Relaxed) {
-                break;
-            }
-
+        while !exit.load(Ordering::Relaxed) {
             let mut set_root_elapsed;
             let mut dump_slots_elapsed;
             let mut get_votes_elapsed;
             let mut add_votes_elapsed;
 
             let root_bank = repair_info.bank_forks.read().unwrap().root_bank();
+            let repair_protocol = serve_repair::get_repair_protocol(root_bank.cluster_type());
             let repairs = {
                 let new_root = root_bank.slot();
 
@@ -425,17 +422,18 @@ impl RepairService {
             let batch: Vec<(Vec<u8>, SocketAddr)> = {
                 let mut outstanding_requests = outstanding_requests.write().unwrap();
                 repairs
-                    .iter()
+                    .into_iter()
                     .filter_map(|repair_request| {
                         let (to, req) = serve_repair
                             .repair_request(
                                 &repair_info.cluster_slots,
-                                *repair_request,
+                                repair_request,
                                 &mut peers_cache,
                                 &mut repair_stats,
                                 &repair_info.repair_validators,
                                 &mut outstanding_requests,
                                 identity_keypair,
+                                repair_protocol,
                             )
                             .ok()?;
                         Some((req, to))

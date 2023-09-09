@@ -169,26 +169,26 @@ fn get_slot_leaders(
     bank: &Bank,
 ) -> HashMap<Slot, Option<Pubkey>> {
     let mut leaders = HashMap::<Slot, Option<Pubkey>>::new();
-    for batch in batches {
-        for packet in batch.iter_mut() {
-            if packet.meta().discard() {
-                continue;
-            }
+    batches
+        .iter_mut()
+        .flat_map(PacketBatch::iter_mut)
+        .filter(|packet| !packet.meta().discard())
+        .filter(|packet| {
             let shred = shred::layout::get_shred(packet);
             let Some(slot) = shred.and_then(shred::layout::get_slot) else {
-                packet.meta_mut().set_discard(true);
-                continue;
+                return true;
             };
-            let leader = leaders.entry(slot).or_insert_with(|| {
-                let leader = leader_schedule_cache.slot_leader_at(slot, Some(bank))?;
-                // Discard the shred if the slot leader is the node itself.
-                (&leader != self_pubkey).then_some(leader)
-            });
-            if leader.is_none() {
-                packet.meta_mut().set_discard(true);
-            }
-        }
-    }
+            leaders
+                .entry(slot)
+                .or_insert_with(|| {
+                    // Discard the shred if the slot leader is the node itself.
+                    leader_schedule_cache
+                        .slot_leader_at(slot, Some(bank))
+                        .filter(|leader| leader != self_pubkey)
+                })
+                .is_none()
+        })
+        .for_each(|packet| packet.meta_mut().set_discard(true));
     leaders
 }
 

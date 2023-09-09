@@ -226,12 +226,12 @@ impl CacheHashData {
         result
     }
     fn delete_old_cache_files(&self) {
-        let pre_existing_cache_files = self.pre_existing_cache_files.lock().unwrap();
-        if !pre_existing_cache_files.is_empty() {
+        let old_cache_files = std::mem::take(&mut *self.pre_existing_cache_files.lock().unwrap());
+        if !old_cache_files.is_empty() {
             self.stats
                 .unused_cache_files
-                .fetch_add(pre_existing_cache_files.len(), Ordering::Relaxed);
-            for file_name in pre_existing_cache_files.iter() {
+                .fetch_add(old_cache_files.len(), Ordering::Relaxed);
+            for file_name in old_cache_files.iter() {
                 let result = self.cache_dir.join(file_name);
                 let _ = fs::remove_file(result);
             }
@@ -254,26 +254,9 @@ impl CacheHashData {
         }
     }
 
-    #[cfg(test)]
-    /// load from 'file_name' into 'accumulator'
-    pub(crate) fn load(
-        &self,
-        file_name: impl AsRef<Path>,
-        accumulator: &mut SavedType,
-        start_bin_index: usize,
-        bin_calculator: &PubkeyBinCalculator24,
-    ) -> Result<(), std::io::Error> {
-        let mut m = Measure::start("overall");
-        let cache_file = self.load_map(file_name)?;
-        cache_file.load_all(accumulator, start_bin_index, bin_calculator);
-        m.stop();
-        self.stats.load_us.fetch_add(m.as_us(), Ordering::Relaxed);
-        Ok(())
-    }
-
     /// open a cache hash file, but don't map it.
     /// This allows callers to know a file exists, but preserves the # mmapped files.
-    fn get_file_reference_to_map_later(
+    pub(crate) fn get_file_reference_to_map_later(
         &self,
         file_name: impl AsRef<Path>,
     ) -> Result<CacheHashDataFileReference, std::io::Error> {
@@ -296,15 +279,6 @@ impl CacheHashData {
             path,
             stats: Arc::clone(&self.stats),
         })
-    }
-
-    /// map 'file_name' into memory
-    pub(crate) fn load_map(
-        &self,
-        file_name: impl AsRef<Path>,
-    ) -> Result<CacheHashDataFile, std::io::Error> {
-        let reference = self.get_file_reference_to_map_later(file_name)?;
-        reference.map()
     }
 
     pub(crate) fn pre_existing_cache_file_will_be_used(&self, file_name: impl AsRef<Path>) {
@@ -384,8 +358,35 @@ impl CacheHashData {
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use {super::*, rand::Rng};
+
+    impl CacheHashData {
+        /// load from 'file_name' into 'accumulator'
+        fn load(
+            &self,
+            file_name: impl AsRef<Path>,
+            accumulator: &mut SavedType,
+            start_bin_index: usize,
+            bin_calculator: &PubkeyBinCalculator24,
+        ) -> Result<(), std::io::Error> {
+            let mut m = Measure::start("overall");
+            let cache_file = self.load_map(file_name)?;
+            cache_file.load_all(accumulator, start_bin_index, bin_calculator);
+            m.stop();
+            self.stats.load_us.fetch_add(m.as_us(), Ordering::Relaxed);
+            Ok(())
+        }
+
+        /// map 'file_name' into memory
+        fn load_map(
+            &self,
+            file_name: impl AsRef<Path>,
+        ) -> Result<CacheHashDataFile, std::io::Error> {
+            let reference = self.get_file_reference_to_map_later(file_name)?;
+            reference.map()
+        }
+    }
 
     #[test]
     fn test_read_write() {
@@ -499,7 +500,7 @@ pub mod tests {
                                 }
 
                                 CalculateHashIntermediate::new(
-                                    solana_sdk::hash::new_rand(&mut rng),
+                                    solana_sdk::hash::Hash::new_unique(),
                                     ct as u64,
                                     pk,
                                 )

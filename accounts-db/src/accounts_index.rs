@@ -5,7 +5,7 @@ use {
         ancestors::Ancestors,
         bucket_map_holder::{Age, BucketMapHolder},
         contains::Contains,
-        in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
+        in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults, StartupStats},
         inline_spl_token::{self, GenericTokenAccount},
         inline_spl_token_2022,
         pubkey_bins::PubkeyBinCalculator24,
@@ -13,7 +13,6 @@ use {
         secondary_index::*,
     },
     log::*,
-    once_cell::sync::OnceCell,
     ouroboros::self_referencing,
     rand::{thread_rng, Rng},
     rayon::{
@@ -37,7 +36,7 @@ use {
         path::PathBuf,
         sync::{
             atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering},
-            Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
+            Arc, Mutex, OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
     },
     thiserror::Error,
@@ -451,7 +450,6 @@ pub struct RootsTracker {
     /// Range is approximately the last N slots where N is # slots per epoch.
     pub alive_roots: RollingBitField,
     uncleaned_roots: HashSet<Slot>,
-    previous_uncleaned_roots: HashSet<Slot>,
 }
 
 impl Default for RootsTracker {
@@ -468,7 +466,6 @@ impl RootsTracker {
         Self {
             alive_roots: RollingBitField::new(max_width),
             uncleaned_roots: HashSet::new(),
-            previous_uncleaned_roots: HashSet::new(),
         }
     }
 
@@ -481,7 +478,6 @@ impl RootsTracker {
 pub struct AccountsIndexRootsStats {
     pub roots_len: Option<usize>,
     pub uncleaned_roots_len: Option<usize>,
-    pub previous_uncleaned_roots_len: Option<usize>,
     pub roots_range: Option<u64>,
     pub rooted_cleaned_count: usize,
     pub unrooted_cleaned_count: usize,
@@ -706,7 +702,7 @@ pub struct AccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     pub max_distance_to_min_scan_slot: AtomicU64,
 
     /// populated at generate_index time - accounts that could possibly be rent paying
-    pub rent_paying_accounts_by_partition: OnceCell<RentPayingAccountsByPartition>,
+    pub rent_paying_accounts_by_partition: OnceLock<RentPayingAccountsByPartition>,
 }
 
 impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
@@ -740,7 +736,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             roots_removed: AtomicUsize::default(),
             active_scans: AtomicUsize::default(),
             max_distance_to_min_scan_slot: AtomicU64::default(),
-            rent_paying_accounts_by_partition: OnceCell::default(),
+            rent_paying_accounts_by_partition: OnceLock::default(),
         }
     }
 
@@ -1340,6 +1336,11 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         iter.hold_range_in_memory(range, start_holding, thread_pool);
     }
 
+    /// get stats related to startup
+    pub(crate) fn get_startup_stats(&self) -> &StartupStats {
+        &self.storage.storage.startup_stats
+    }
+
     pub fn set_startup(&self, value: Startup) {
         self.storage.set_startup(value);
     }
@@ -1507,27 +1508,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         }
     }
 
-    pub fn get_largest_keys(
-        &self,
-        index: &AccountIndex,
-        max_entries: usize,
-    ) -> Vec<(usize, Pubkey)> {
-        match index {
-            AccountIndex::ProgramId => self
-                .program_id_index
-                .key_size_index
-                .get_largest_keys(max_entries),
-            AccountIndex::SplTokenOwner => self
-                .spl_token_owner_index
-                .key_size_index
-                .get_largest_keys(max_entries),
-            AccountIndex::SplTokenMint => self
-                .spl_token_mint_index
-                .key_size_index
-                .get_largest_keys(max_entries),
-        }
-    }
-
     /// log any secondary index counts, if non-zero
     pub(crate) fn log_secondary_indexes(&self) {
         if !self.program_id_index.index.is_empty() {
@@ -1619,7 +1599,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         let expected_items_per_bin = item_len * 2 / bins;
         // offset bin 0 in the 'binned' array by a random amount.
         // This results in calls to insert_new_entry_if_missing_with_lock from different threads starting at different bins.
-        let random_offset = thread_rng().gen_range(0, bins);
+        let random_offset = thread_rng().gen_range(0..bins);
         let use_disk = self.storage.storage.disk.is_some();
         let mut binned = (0..bins)
             .map(|mut pubkey_bin| {
@@ -1640,7 +1620,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                 let is_zero_lamport = account_info.is_zero_lamport();
                 let result = if is_zero_lamport { Some(pubkey) } else { None };
 
-                binned[binned_index].1.push((pubkey, account_info));
+                binned[binned_index].1.push((pubkey, (slot, account_info)));
                 result
             })
             .collect::<Vec<_>>();
@@ -1652,25 +1632,29 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             let r_account_maps = &self.account_maps[pubkey_bin];
             let mut insert_time = Measure::start("insert_into_primary_index");
             if use_disk {
-                r_account_maps.startup_insert_only(slot, items.into_iter());
+                r_account_maps.startup_insert_only(items.into_iter());
             } else {
                 // not using disk buckets, so just write to in-mem
                 // this is no longer the default case
-                items.into_iter().for_each(|(pubkey, account_info)| {
-                    let new_entry = PreAllocatedAccountMapEntry::new(
-                        slot,
-                        account_info,
-                        &self.storage.storage,
-                        use_disk,
-                    );
-                    match r_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_entry) {
-                        InsertNewEntryResults::DidNotExist => {}
-                        InsertNewEntryResults::ExistedNewEntryZeroLamports => {}
-                        InsertNewEntryResults::ExistedNewEntryNonZeroLamports => {
-                            dirty_pubkeys.push(pubkey);
+                items
+                    .into_iter()
+                    .for_each(|(pubkey, (slot, account_info))| {
+                        let new_entry = PreAllocatedAccountMapEntry::new(
+                            slot,
+                            account_info,
+                            &self.storage.storage,
+                            use_disk,
+                        );
+                        match r_account_maps
+                            .insert_new_entry_if_missing_with_lock(pubkey, new_entry)
+                        {
+                            InsertNewEntryResults::DidNotExist => {}
+                            InsertNewEntryResults::ExistedNewEntryZeroLamports => {}
+                            InsertNewEntryResults::ExistedNewEntryNonZeroLamports => {
+                                dirty_pubkeys.push(pubkey);
+                            }
                         }
-                    }
-                });
+                    });
             }
             insert_time.stop();
             insertion_time.fetch_add(insert_time.as_us(), Ordering::Relaxed);
@@ -1679,17 +1663,18 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         (dirty_pubkeys, insertion_time.load(Ordering::Relaxed))
     }
 
-    /// return Vec<Vec<>> because the internal vecs are already allocated per bin
+    /// use Vec<> because the internal vecs are already allocated per bin
     pub(crate) fn populate_and_retrieve_duplicate_keys_from_startup(
         &self,
-    ) -> Vec<Vec<(Slot, Pubkey)>> {
+        f: impl Fn(Vec<(Slot, Pubkey)>) + Sync + Send,
+    ) {
         (0..self.bins())
             .into_par_iter()
             .map(|pubkey_bin| {
                 let r_account_maps = &self.account_maps[pubkey_bin];
                 r_account_maps.populate_and_retrieve_duplicate_keys_from_startup()
             })
-            .collect()
+            .for_each(f);
     }
 
     /// Updates the given pubkey at the given slot with the new account information.
@@ -1895,23 +1880,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     pub fn clean_dead_slot(&self, slot: Slot) -> bool {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         let removed_from_unclean_roots = w_roots_tracker.uncleaned_roots.remove(&slot);
-        let removed_from_previous_uncleaned_roots =
-            w_roots_tracker.previous_uncleaned_roots.remove(&slot);
         if !w_roots_tracker.alive_roots.remove(&slot) {
             if removed_from_unclean_roots {
                 error!("clean_dead_slot-removed_from_unclean_roots: {}", slot);
                 inc_new_counter_error!("clean_dead_slot-removed_from_unclean_roots", 1, 1);
-            }
-            if removed_from_previous_uncleaned_roots {
-                error!(
-                    "clean_dead_slot-removed_from_previous_uncleaned_roots: {}",
-                    slot
-                );
-                inc_new_counter_error!(
-                    "clean_dead_slot-removed_from_previous_uncleaned_roots",
-                    1,
-                    1
-                );
             }
             false
         } else {
@@ -1925,7 +1897,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         let roots_tracker = self.roots_tracker.read().unwrap();
         stats.roots_len = Some(roots_tracker.alive_roots.len());
         stats.uncleaned_roots_len = Some(roots_tracker.uncleaned_roots.len());
-        stats.previous_uncleaned_roots_len = Some(roots_tracker.previous_uncleaned_roots.len());
         stats.roots_range = Some(roots_tracker.alive_roots.range_width());
     }
 
@@ -1933,7 +1904,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         self.roots_tracker.read().unwrap().min_alive_root()
     }
 
-    pub fn reset_uncleaned_roots(&self, max_clean_root: Option<Slot>) -> HashSet<Slot> {
+    pub(crate) fn reset_uncleaned_roots(&self, max_clean_root: Option<Slot>) {
         let mut cleaned_roots = HashSet::new();
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         w_roots_tracker.uncleaned_roots.retain(|root| {
@@ -1946,32 +1917,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             // Only keep the slots that have yet to be cleaned
             !is_cleaned
         });
-        std::mem::replace(&mut w_roots_tracker.previous_uncleaned_roots, cleaned_roots)
-    }
-
-    #[cfg(test)]
-    pub fn clear_uncleaned_roots(&self, max_clean_root: Option<Slot>) -> HashSet<Slot> {
-        let mut cleaned_roots = HashSet::new();
-        let mut w_roots_tracker = self.roots_tracker.write().unwrap();
-        w_roots_tracker.uncleaned_roots.retain(|root| {
-            let is_cleaned = max_clean_root
-                .map(|max_clean_root| *root <= max_clean_root)
-                .unwrap_or(true);
-            if is_cleaned {
-                cleaned_roots.insert(*root);
-            }
-            // Only keep the slots that have yet to be cleaned
-            !is_cleaned
-        });
-        cleaned_roots
-    }
-
-    pub fn is_uncleaned_root(&self, slot: Slot) -> bool {
-        self.roots_tracker
-            .read()
-            .unwrap()
-            .uncleaned_roots
-            .contains(&slot)
     }
 
     pub fn num_alive_roots(&self) -> usize {
@@ -1981,11 +1926,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     pub fn all_alive_roots(&self) -> Vec<Slot> {
         let tracker = self.roots_tracker.read().unwrap();
         tracker.alive_roots.get_all()
-    }
-
-    #[cfg(test)]
-    pub fn clear_roots(&self) {
-        self.roots_tracker.write().unwrap().alive_roots.clear()
     }
 
     pub fn clone_uncleaned_roots(&self) -> HashSet<Slot> {
@@ -2497,7 +2437,7 @@ pub mod tests {
             index.set_startup(Startup::Normal);
         }
         assert!(gc.is_empty());
-        index.populate_and_retrieve_duplicate_keys_from_startup();
+        index.populate_and_retrieve_duplicate_keys_from_startup(|_slot_keys| {});
 
         for lock in &[false, true] {
             let read_lock = if *lock {
@@ -2988,71 +2928,26 @@ pub mod tests {
         assert_eq!(0, index.roots_tracker.read().unwrap().uncleaned_roots.len());
         index.add_root(0);
         index.add_root(1);
-        index.add_uncleaned_roots([0, 1].into_iter());
+        index.add_uncleaned_roots([0, 1]);
         assert_eq!(2, index.roots_tracker.read().unwrap().uncleaned_roots.len());
 
-        assert_eq!(
-            0,
-            index
-                .roots_tracker
-                .read()
-                .unwrap()
-                .previous_uncleaned_roots
-                .len()
-        );
         index.reset_uncleaned_roots(None);
         assert_eq!(2, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(0, index.roots_tracker.read().unwrap().uncleaned_roots.len());
-        assert_eq!(
-            2,
-            index
-                .roots_tracker
-                .read()
-                .unwrap()
-                .previous_uncleaned_roots
-                .len()
-        );
 
         index.add_root(2);
         index.add_root(3);
-        index.add_uncleaned_roots([2, 3].into_iter());
+        index.add_uncleaned_roots([2, 3]);
         assert_eq!(4, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(2, index.roots_tracker.read().unwrap().uncleaned_roots.len());
-        assert_eq!(
-            2,
-            index
-                .roots_tracker
-                .read()
-                .unwrap()
-                .previous_uncleaned_roots
-                .len()
-        );
 
         index.clean_dead_slot(1);
         assert_eq!(3, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(2, index.roots_tracker.read().unwrap().uncleaned_roots.len());
-        assert_eq!(
-            1,
-            index
-                .roots_tracker
-                .read()
-                .unwrap()
-                .previous_uncleaned_roots
-                .len()
-        );
 
         index.clean_dead_slot(2);
         assert_eq!(2, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(1, index.roots_tracker.read().unwrap().uncleaned_roots.len());
-        assert_eq!(
-            1,
-            index
-                .roots_tracker
-                .read()
-                .unwrap()
-                .previous_uncleaned_roots
-                .len()
-        );
     }
 
     #[test]
@@ -3900,6 +3795,34 @@ pub mod tests {
                 UPSERT_POPULATE_RECLAIMS,
             );
             assert!(gc.is_empty());
+        }
+
+        pub fn clear_uncleaned_roots(&self, max_clean_root: Option<Slot>) -> HashSet<Slot> {
+            let mut cleaned_roots = HashSet::new();
+            let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+            w_roots_tracker.uncleaned_roots.retain(|root| {
+                let is_cleaned = max_clean_root
+                    .map(|max_clean_root| *root <= max_clean_root)
+                    .unwrap_or(true);
+                if is_cleaned {
+                    cleaned_roots.insert(*root);
+                }
+                // Only keep the slots that have yet to be cleaned
+                !is_cleaned
+            });
+            cleaned_roots
+        }
+
+        pub(crate) fn is_uncleaned_root(&self, slot: Slot) -> bool {
+            self.roots_tracker
+                .read()
+                .unwrap()
+                .uncleaned_roots
+                .contains(&slot)
+        }
+
+        pub fn clear_roots(&self) {
+            self.roots_tracker.write().unwrap().alive_roots.clear()
         }
     }
 

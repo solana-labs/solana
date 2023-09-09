@@ -1,5 +1,5 @@
 #![feature(test)]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 extern crate test;
 
@@ -248,7 +248,7 @@ fn bench_concurrent_read_write(bencher: &mut Bencher) {
         |accounts, pubkeys| {
             let mut rng = rand::thread_rng();
             loop {
-                let i = rng.gen_range(0, pubkeys.len());
+                let i = rng.gen_range(0..pubkeys.len());
                 test::black_box(
                     accounts
                         .load_without_fixed_root(&Ancestors::default(), &pubkeys[i])

@@ -194,7 +194,7 @@ mod test {
         shards.check(&values);
         // Remove some of the values.
         for _ in 0..512 {
-            let index = rng.gen_range(0, values.len());
+            let index = rng.gen_range(0..values.len());
             let value = values.swap_remove(index);
             assert!(shards.remove(index, &value));
             if index < values.len() {
@@ -223,7 +223,7 @@ mod test {
         }
         // Remove everything.
         while !values.is_empty() {
-            let index = rng.gen_range(0, values.len());
+            let index = rng.gen_range(0..values.len());
             let value = values.swap_remove(index);
             assert!(shards.remove(index, &value));
             if index < values.len() {

@@ -1,6 +1,6 @@
 # Note: when the rust version is changed also modify
 # ci/rust-version.sh to pick up the new image tag
-FROM rust:1.69.0
+FROM rust:1.72.0
 
 RUN set -x \
  && apt update \
@@ -24,6 +24,7 @@ RUN set -x \
       golang \
       unzip \
       lld \
+      protobuf-compiler \
       \
  && apt remove -y libcurl4-openssl-dev \
  && rm -rf /var/lib/apt/lists/* \

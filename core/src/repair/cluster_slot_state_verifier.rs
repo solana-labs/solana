@@ -94,10 +94,10 @@ pub struct DeadState {
 impl DeadState {
     pub fn new_from_state(
         slot: Slot,
-        duplicate_slots_tracker: &mut DuplicateSlotsTracker,
+        duplicate_slots_tracker: &DuplicateSlotsTracker,
         gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
-        fork_choice: &mut HeaviestSubtreeForkChoice,
-        epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
+        fork_choice: &HeaviestSubtreeForkChoice,
+        epoch_slots_frozen_slots: &EpochSlotsFrozenSlots,
     ) -> Self {
         let cluster_confirmed_hash = get_cluster_confirmed_hash_from_state(
             slot,
@@ -131,9 +131,9 @@ impl BankFrozenState {
     pub fn new_from_state(
         slot: Slot,
         frozen_hash: Hash,
-        duplicate_slots_tracker: &mut DuplicateSlotsTracker,
+        duplicate_slots_tracker: &DuplicateSlotsTracker,
         gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
-        fork_choice: &mut HeaviestSubtreeForkChoice,
+        fork_choice: &HeaviestSubtreeForkChoice,
         epoch_slots_frozen_slots: &EpochSlotsFrozenSlots,
     ) -> Self {
         let cluster_confirmed_hash = get_cluster_confirmed_hash_from_state(
@@ -197,7 +197,7 @@ impl DuplicateState {
     pub fn new_from_state(
         slot: Slot,
         gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
-        fork_choice: &mut HeaviestSubtreeForkChoice,
+        fork_choice: &HeaviestSubtreeForkChoice,
         is_dead: impl Fn() -> bool,
         get_hash: impl Fn() -> Option<Hash>,
     ) -> Self {
@@ -237,7 +237,7 @@ impl EpochSlotsFrozenState {
         slot: Slot,
         epoch_slots_frozen_hash: Hash,
         gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
-        fork_choice: &mut HeaviestSubtreeForkChoice,
+        fork_choice: &HeaviestSubtreeForkChoice,
         is_dead: impl Fn() -> bool,
         get_hash: impl Fn() -> Option<Hash>,
         is_popular_pruned: bool,
@@ -691,7 +691,7 @@ fn get_cluster_confirmed_hash_from_state(
     slot: Slot,
     gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
     epoch_slots_frozen_slots: &EpochSlotsFrozenSlots,
-    fork_choice: &mut HeaviestSubtreeForkChoice,
+    fork_choice: &HeaviestSubtreeForkChoice,
     bank_frozen_hash: Option<Hash>,
 ) -> Option<ClusterConfirmedHash> {
     let gossip_duplicate_confirmed_hash = gossip_duplicate_confirmed_slots.get(&slot).cloned();
@@ -722,7 +722,7 @@ fn get_cluster_confirmed_hash_from_state(
 fn get_duplicate_confirmed_hash_from_state(
     slot: Slot,
     gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
-    fork_choice: &mut HeaviestSubtreeForkChoice,
+    fork_choice: &HeaviestSubtreeForkChoice,
     bank_frozen_hash: Option<Hash>,
 ) -> Option<Hash> {
     let gossip_duplicate_confirmed_hash = gossip_duplicate_confirmed_slots.get(&slot).cloned();
@@ -1324,9 +1324,9 @@ mod test {
             )
         },
         duplicate_state_update_5: {
-            let duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_status = BankStatus::Frozen(duplicate_confirmed_hash.unwrap());
-            let duplicate_state = DuplicateState::new(duplicate_confirmed_hash, bank_status);
+            let duplicate_confirmed_hash = Hash::new_unique();
+            let bank_status = BankStatus::Frozen(duplicate_confirmed_hash);
+            let duplicate_state = DuplicateState::new(Some(duplicate_confirmed_hash), bank_status);
             (
                 SlotStateUpdate::Duplicate(duplicate_state),
                 Vec::<ResultingStateChange>::new()
@@ -1447,9 +1447,9 @@ mod test {
         },
         epoch_slots_frozen_state_update_10: {
             let epoch_slots_frozen_hash = Hash::new_unique();
-            let duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_status = BankStatus::Frozen(duplicate_confirmed_hash.unwrap());
-            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, false);
+            let duplicate_confirmed_hash = Hash::new_unique();
+            let bank_status = BankStatus::Frozen(duplicate_confirmed_hash);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, Some(duplicate_confirmed_hash), bank_status, false);
             (
                 SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
                 Vec::<ResultingStateChange>::new()
@@ -1849,7 +1849,7 @@ mod test {
         let duplicate_state = DuplicateState::new_from_state(
             duplicate_slot,
             &gossip_duplicate_confirmed_slots,
-            &mut heaviest_subtree_fork_choice,
+            &heaviest_subtree_fork_choice,
             || progress.is_dead(duplicate_slot).unwrap_or(false),
             || initial_bank_hash,
         );
@@ -1886,9 +1886,9 @@ mod test {
         let bank_frozen_state = BankFrozenState::new_from_state(
             duplicate_slot,
             frozen_duplicate_slot_hash,
-            &mut duplicate_slots_tracker,
+            &duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
-            &mut heaviest_subtree_fork_choice,
+            &heaviest_subtree_fork_choice,
             &epoch_slots_frozen_slots,
         );
         check_slot_agrees_with_cluster(
@@ -1997,7 +1997,7 @@ mod test {
         let duplicate_state = DuplicateState::new_from_state(
             3,
             &gossip_duplicate_confirmed_slots,
-            &mut heaviest_subtree_fork_choice,
+            &heaviest_subtree_fork_choice,
             || progress.is_dead(3).unwrap_or(false),
             || Some(slot3_hash),
         );
@@ -2067,7 +2067,7 @@ mod test {
         let duplicate_state = DuplicateState::new_from_state(
             2,
             &gossip_duplicate_confirmed_slots,
-            &mut heaviest_subtree_fork_choice,
+            &heaviest_subtree_fork_choice,
             || progress.is_dead(2).unwrap_or(false),
             || Some(slot2_hash),
         );
@@ -2216,7 +2216,7 @@ mod test {
         let duplicate_state = DuplicateState::new_from_state(
             1,
             &gossip_duplicate_confirmed_slots,
-            &mut heaviest_subtree_fork_choice,
+            &heaviest_subtree_fork_choice,
             || progress.is_dead(1).unwrap_or(false),
             || Some(slot1_hash),
         );
@@ -2270,7 +2270,7 @@ mod test {
             3,
             slot3_hash,
             &gossip_duplicate_confirmed_slots,
-            &mut heaviest_subtree_fork_choice,
+            &heaviest_subtree_fork_choice,
             || progress.is_dead(3).unwrap_or(false),
             || Some(slot3_hash),
             false,
@@ -2364,7 +2364,7 @@ mod test {
             3,
             mismatched_hash,
             &gossip_duplicate_confirmed_slots,
-            &mut heaviest_subtree_fork_choice,
+            &heaviest_subtree_fork_choice,
             || progress.is_dead(3).unwrap_or(false),
             || Some(slot3_hash),
             false,

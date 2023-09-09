@@ -33,7 +33,9 @@ use {
     },
     solana_tpu_client::tpu_client::DEFAULT_TPU_ENABLE_UDP,
     solana_vote_program::vote_state::VoteAuthorize,
-    std::{collections::HashMap, error, io::stdout, str::FromStr, sync::Arc, time::Duration},
+    std::{
+        collections::HashMap, error, io::stdout, rc::Rc, str::FromStr, sync::Arc, time::Duration,
+    },
     thiserror::Error,
 };
 
@@ -568,7 +570,7 @@ impl Default for CliConfig<'_> {
 pub fn parse_command(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
         // Autocompletion Command
@@ -1917,8 +1919,8 @@ mod tests {
         assert!(parse_command(&test_bad_signature, &default_signer, &mut None).is_err());
 
         // Test CreateAddressWithSeed
-        let from_pubkey = Some(solana_sdk::pubkey::new_rand());
-        let from_str = from_pubkey.unwrap().to_string();
+        let from_pubkey = solana_sdk::pubkey::new_rand();
+        let from_str = from_pubkey.to_string();
         for (name, program_id) in &[
             ("STAKE", stake::program::id()),
             ("VOTE", solana_vote_program::id()),
@@ -1936,7 +1938,7 @@ mod tests {
                 parse_command(&test_create_address_with_seed, &default_signer, &mut None).unwrap(),
                 CliCommandInfo {
                     command: CliCommand::CreateAddressWithSeed {
-                        from_pubkey,
+                        from_pubkey: Some(from_pubkey),
                         seed: "seed".to_string(),
                         program_id: *program_id
                     },

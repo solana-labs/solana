@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {
     crate::snapshot_utils::create_tmp_accounts_dir_for_tests,
@@ -30,7 +30,7 @@ use {
         snapshot_bank_utils::{self, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL},
         snapshot_config::SnapshotConfig,
         snapshot_hash::SnapshotHash,
-        snapshot_package::{AccountsPackage, AccountsPackageType, SnapshotKind, SnapshotPackage},
+        snapshot_package::{AccountsPackage, AccountsPackageKind, SnapshotKind, SnapshotPackage},
         snapshot_utils::{
             self,
             SnapshotVersion::{self, V1_2_0},
@@ -244,7 +244,7 @@ fn run_bank_forks_snapshot_n<F>(
     let last_bank_snapshot_info = snapshot_utils::get_highest_bank_snapshot_pre(bank_snapshots_dir)
         .expect("no bank snapshots found in path");
     let accounts_package = AccountsPackage::new_for_snapshot(
-        AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+        AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
         &last_bank,
         &last_bank_snapshot_info,
         &snapshot_config.full_snapshot_archives_dir,
@@ -306,7 +306,7 @@ fn test_bank_forks_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clu
     );
 }
 
-fn goto_end_of_slot(bank: &mut Bank) {
+fn goto_end_of_slot(bank: &Bank) {
     let mut tick_hash = bank.last_blockhash();
     loop {
         tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
@@ -412,7 +412,7 @@ fn test_concurrent_snapshot_packaging(
         )
         .unwrap();
         let accounts_package = AccountsPackage::new_for_snapshot(
-            AccountsPackageType::Snapshot(SnapshotKind::FullSnapshot),
+            AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
             &bank,
             &bank_snapshot_info,
             full_snapshot_archives_dir,

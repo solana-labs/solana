@@ -153,7 +153,7 @@ mod tests {
         // Case 2: Frozen vote should be added, but the same vote added again
         // shouldn't update state
         let num_repeated_iterations = 3;
-        let frozen_hash = Some(Hash::new_unique());
+        let frozen_hash = Hash::new_unique();
         for i in 0..num_repeated_iterations {
             let expected_result = if i == 0 {
                 (true, Some(vote_slot))
@@ -164,7 +164,7 @@ mod tests {
                 latest_validator_votes_for_frozen_banks.check_add_vote(
                     vote_pubkey,
                     vote_slot,
-                    frozen_hash,
+                    Some(frozen_hash),
                     is_replay_vote,
                 ),
                 expected_result
@@ -173,7 +173,7 @@ mod tests {
                 *latest_validator_votes_for_frozen_banks
                     .latest_vote(&vote_pubkey, is_replay_vote)
                     .unwrap(),
-                (vote_slot, vec![frozen_hash.unwrap()])
+                (vote_slot, vec![frozen_hash])
             );
             if is_replay_vote {
                 assert_eq!(
@@ -181,7 +181,7 @@ mod tests {
                         .fork_choice_dirty_set
                         .get(&vote_pubkey)
                         .unwrap(),
-                    (vote_slot, vec![frozen_hash.unwrap()])
+                    (vote_slot, vec![frozen_hash])
                 );
             } else {
                 assert!(latest_validator_votes_for_frozen_banks
@@ -192,13 +192,13 @@ mod tests {
         }
 
         // Case 3: Adding duplicate vote for same slot should update the state
-        let duplicate_frozen_hash = Some(Hash::new_unique());
-        let all_frozen_hashes = vec![frozen_hash.unwrap(), duplicate_frozen_hash.unwrap()];
+        let duplicate_frozen_hash = Hash::new_unique();
+        let all_frozen_hashes = vec![frozen_hash, duplicate_frozen_hash];
         assert_eq!(
             latest_validator_votes_for_frozen_banks.check_add_vote(
                 vote_pubkey,
                 vote_slot,
-                duplicate_frozen_hash,
+                Some(duplicate_frozen_hash),
                 is_replay_vote,
             ),
             (true, Some(vote_slot))
@@ -293,12 +293,12 @@ mod tests {
 
         // Case 6: Adding a vote for a new higher slot that *is* frozen
         // should upate the state
-        let frozen_hash = Some(Hash::new_unique());
+        let frozen_hash = Hash::new_unique();
         assert_eq!(
             latest_validator_votes_for_frozen_banks.check_add_vote(
                 vote_pubkey,
                 vote_slot,
-                frozen_hash,
+                Some(frozen_hash),
                 is_replay_vote,
             ),
             (true, Some(vote_slot))
@@ -307,7 +307,7 @@ mod tests {
             *latest_validator_votes_for_frozen_banks
                 .latest_vote(&vote_pubkey, is_replay_vote)
                 .unwrap(),
-            (vote_slot, vec![frozen_hash.unwrap()])
+            (vote_slot, vec![frozen_hash])
         );
         if is_replay_vote {
             assert_eq!(
@@ -315,7 +315,7 @@ mod tests {
                     .fork_choice_dirty_set
                     .get(&vote_pubkey)
                     .unwrap(),
-                (vote_slot, vec![frozen_hash.unwrap()])
+                (vote_slot, vec![frozen_hash])
             );
         } else {
             assert!(latest_validator_votes_for_frozen_banks
@@ -326,13 +326,13 @@ mod tests {
 
         // Case 7: Adding a vote for a new pubkey should also update the state
         vote_slot += 1;
-        let frozen_hash = Some(Hash::new_unique());
+        let frozen_hash = Hash::new_unique();
         let vote_pubkey = Pubkey::new_unique();
         assert_eq!(
             latest_validator_votes_for_frozen_banks.check_add_vote(
                 vote_pubkey,
                 vote_slot,
-                frozen_hash,
+                Some(frozen_hash),
                 is_replay_vote,
             ),
             (true, Some(vote_slot))
@@ -341,7 +341,7 @@ mod tests {
             *latest_validator_votes_for_frozen_banks
                 .latest_vote(&vote_pubkey, is_replay_vote)
                 .unwrap(),
-            (vote_slot, vec![frozen_hash.unwrap()])
+            (vote_slot, vec![frozen_hash])
         );
         if is_replay_vote {
             assert_eq!(
@@ -349,7 +349,7 @@ mod tests {
                     .fork_choice_dirty_set
                     .get(&vote_pubkey)
                     .unwrap(),
-                (vote_slot, vec![frozen_hash.unwrap()])
+                (vote_slot, vec![frozen_hash])
             );
         } else {
             assert!(latest_validator_votes_for_frozen_banks

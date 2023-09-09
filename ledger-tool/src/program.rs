@@ -177,7 +177,7 @@ impl ProgramSubCommand for App<'_, '_> {
                 .arg(
                     Arg::with_name("input")
                         .help(
-                            r##"Input for the program to run on, where FILE is a name of a JSON file
+                            r#"Input for the program to run on, where FILE is a name of a JSON file
 with input data, or BYTES is the number of 0-valued bytes to allocate for program parameters"
 
 The input data for a program execution have to be in JSON format
@@ -196,7 +196,7 @@ and the following fields are required
     ],
     "instruction_data": [31, 32, 23, 24]
 }
-"##,
+"#,
                         )
                         .short("i")
                         .long("input")
@@ -283,11 +283,11 @@ impl Debug for Output {
 // https://github.com/rust-lang/rust/issues/74465
 struct LazyAnalysis<'a, 'b> {
     analysis: Option<Analysis<'a>>,
-    executable: &'a Executable<RequisiteVerifier, InvokeContext<'b>>,
+    executable: &'a Executable<InvokeContext<'b>>,
 }
 
 impl<'a, 'b> LazyAnalysis<'a, 'b> {
-    fn new(executable: &'a Executable<RequisiteVerifier, InvokeContext<'b>>) -> Self {
+    fn new(executable: &'a Executable<InvokeContext<'b>>) -> Self {
         Self {
             analysis: None,
             executable,
@@ -330,7 +330,7 @@ fn load_program<'a>(
     filename: &Path,
     program_id: Pubkey,
     invoke_context: &InvokeContext<'a>,
-) -> Executable<RequisiteVerifier, InvokeContext<'a>> {
+) -> Executable<InvokeContext<'a>> {
     let mut file = File::open(filename).unwrap();
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic).unwrap();
@@ -374,22 +374,25 @@ fn load_program<'a>(
             Err(err) => Err(format!("Loading executable failed: {err:?}")),
         }
     } else {
-        let executable = assemble::<InvokeContext>(
+        assemble::<InvokeContext>(
             std::str::from_utf8(contents.as_slice()).unwrap(),
             Arc::new(program_runtime_environment),
         )
-        .unwrap();
-        Executable::<RequisiteVerifier, InvokeContext>::verified(executable)
-            .map_err(|err| format!("Assembling executable failed: {err:?}"))
+        .map_err(|err| format!("Assembling executable failed: {err:?}"))
+        .and_then(|executable| {
+            executable
+                .verify::<RequisiteVerifier>()
+                .map_err(|err| format!("Verifying executable failed: {err:?}"))?;
+            Ok(executable)
+        })
     }
     .unwrap();
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     verified_executable.jit_compile().unwrap();
     unsafe {
-        std::mem::transmute::<
-            Executable<RequisiteVerifier, InvokeContext<'static>>,
-            Executable<RequisiteVerifier, InvokeContext<'a>>,
-        >(verified_executable)
+        std::mem::transmute::<Executable<InvokeContext<'static>>, Executable<InvokeContext<'a>>>(
+            verified_executable,
+        )
     }
 }
 
@@ -493,7 +496,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
                     if space > 0 {
                         let lamports = account_info.lamports.unwrap_or(account.lamports());
                         let mut account = AccountSharedData::new(lamports, space, &owner);
-                        account.set_data(data);
+                        account.set_data_from_slice(&data);
                         account
                     } else {
                         account
@@ -508,7 +511,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
                     });
                     let lamports = account_info.lamports.unwrap_or(0);
                     let mut account = AccountSharedData::new(lamports, space, &owner);
-                    account.set_data(data);
+                    account.set_data_from_slice(&data);
                     account
                 };
                 transaction_accounts.push((pubkey, account));

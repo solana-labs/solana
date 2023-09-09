@@ -162,6 +162,6 @@ mod tests {
         let packet = Packet::from_data(None, tx).unwrap();
         let deserialized_packet = ImmutableDeserializedPacket::new(packet);
 
-        assert!(matches!(deserialized_packet, Ok(_)));
+        assert!(deserialized_packet.is_ok());
     }
 }
