@@ -124,16 +124,7 @@ impl AncestorRepairRequestsStats {
             .ancestor_requests
             .slot_pubkeys
             .iter()
-            .map(|(slot, slot_repairs)| {
-                (
-                    slot,
-                    slot_repairs
-                        .pubkey_repairs()
-                        .iter()
-                        .map(|(_key, count)| count)
-                        .sum::<u64>(),
-                )
-            })
+            .map(|(slot, slot_repairs)| (slot, slot_repairs.pubkey_repairs().values().sum::<u64>()))
             .collect();
 
         let repair_total = self.ancestor_requests.count;
@@ -161,8 +152,7 @@ impl AncestorHashesService {
         repair_info: RepairInfo,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
-        let outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>> =
-            Arc::new(RwLock::new(OutstandingAncestorHashesRepairs::default()));
+        let outstanding_requests = Arc::<RwLock<OutstandingAncestorHashesRepairs>>::default();
         let (response_sender, response_receiver) = unbounded();
         let t_receiver = streamer::receiver(
             ancestor_hashes_request_socket.clone(),
@@ -864,6 +854,7 @@ mod test {
                 cluster_slot_state_verifier::{DuplicateSlotsToRepair, PurgeRepairSlotCounter},
                 duplicate_repair_status::DuplicateAncestorDecision,
                 serve_repair::MAX_ANCESTOR_RESPONSES,
+                serve_repair_service::adapt_repair_requests_packets,
             },
             replay_stage::{
                 tests::{replay_blockstore_components, ReplayBlockstoreComponents},
@@ -1189,6 +1180,7 @@ mod test {
     struct ResponderThreads {
         t_request_receiver: JoinHandle<()>,
         t_listen: JoinHandle<()>,
+        t_packet_adapter: JoinHandle<()>,
         exit: Arc<AtomicBool>,
         responder_info: ContactInfo,
         response_receiver: PacketBatchReceiver,
@@ -1200,6 +1192,7 @@ mod test {
             self.exit.store(true, Ordering::Relaxed);
             self.t_request_receiver.join().unwrap();
             self.t_listen.join().unwrap();
+            self.t_packet_adapter.join().unwrap();
         }
 
         fn new(slot_to_query: Slot) -> Self {
@@ -1255,9 +1248,13 @@ mod test {
                 false,
                 None,
             );
+            let (remote_request_sender, remote_request_receiver) = unbounded();
+            let t_packet_adapter = Builder::new()
+                .spawn(|| adapt_repair_requests_packets(requests_receiver, remote_request_sender))
+                .unwrap();
             let t_listen = responder_serve_repair.listen(
                 blockstore,
-                requests_receiver,
+                remote_request_receiver,
                 response_sender,
                 exit.clone(),
             );
@@ -1265,6 +1262,7 @@ mod test {
             Self {
                 t_request_receiver,
                 t_listen,
+                t_packet_adapter,
                 exit,
                 responder_info: responder_node.info,
                 response_receiver,

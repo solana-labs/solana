@@ -1,16 +1,22 @@
 use {
     assert_matches::assert_matches,
     common::{assert_ix_error, overwrite_slot_hashes_with_slots, setup_test_context},
-    solana_address_lookup_table_program::{
-        id,
-        instruction::{create_lookup_table, create_lookup_table_signed},
-        processor::process_instruction,
-        state::{AddressLookupTable, LOOKUP_TABLE_META_SIZE},
-    },
+    solana_address_lookup_table_program::processor::process_instruction,
     solana_program_test::*,
     solana_sdk::{
-        clock::Slot, feature_set, instruction::InstructionError, pubkey::Pubkey, rent::Rent,
-        signature::Signer, signer::keypair::Keypair, transaction::Transaction,
+        address_lookup_table::{
+            instruction::{create_lookup_table, create_lookup_table_signed},
+            program::id,
+            state::{AddressLookupTable, LOOKUP_TABLE_META_SIZE},
+        },
+        clock::Slot,
+        feature_set,
+        instruction::InstructionError,
+        pubkey::Pubkey,
+        rent::Rent,
+        signature::Signer,
+        signer::keypair::Keypair,
+        transaction::Transaction,
     },
 };
 

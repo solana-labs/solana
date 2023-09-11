@@ -197,7 +197,7 @@ impl OptimisticallyConfirmedBankTracker {
                 );
 
                 // finalize block's minimum prioritization fee cache for this bank
-                prioritization_fee_cache.finalize_priority_fee(bank.slot());
+                prioritization_fee_cache.finalize_priority_fee(bank.slot(), bank.bank_id());
             }
         } else if bank.slot() > bank_forks.read().unwrap().root() {
             pending_optimistically_confirmed_banks.insert(bank.slot());

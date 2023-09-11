@@ -1,13 +1,14 @@
 use {
-    crate::{
-        instruction::ProgramInstruction,
-        state::{
-            AddressLookupTable, LookupTableMeta, LookupTableStatus, ProgramState,
-            LOOKUP_TABLE_MAX_ADDRESSES, LOOKUP_TABLE_META_SIZE,
-        },
-    },
     solana_program_runtime::{declare_process_instruction, ic_msg, invoke_context::InvokeContext},
     solana_sdk::{
+        address_lookup_table::{
+            instruction::ProgramInstruction,
+            program::{check_id, id},
+            state::{
+                AddressLookupTable, LookupTableMeta, LookupTableStatus, ProgramState,
+                LOOKUP_TABLE_MAX_ADDRESSES, LOOKUP_TABLE_META_SIZE,
+            },
+        },
         clock::Slot,
         feature_set,
         instruction::InstructionError,
@@ -117,7 +118,7 @@ impl Processor {
                 &derivation_slot.to_le_bytes(),
                 &[bump_seed],
             ],
-            &crate::id(),
+            &id(),
         )?;
 
         if table_key != derived_table_key {
@@ -132,7 +133,7 @@ impl Processor {
         if invoke_context
             .feature_set
             .is_active(&feature_set::relax_authority_signer_check_for_lookup_table_creation::id())
-            && crate::check_id(&lookup_table_owner)
+            && check_id(&lookup_table_owner)
         {
             return Ok(());
         }
@@ -157,7 +158,7 @@ impl Processor {
         )?;
 
         invoke_context.native_invoke(
-            system_instruction::assign(&table_key, &crate::id()).into(),
+            system_instruction::assign(&table_key, &id()).into(),
             &[table_key],
         )?;
 
@@ -178,7 +179,7 @@ impl Processor {
 
         let lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        if *lookup_table_account.get_owner() != crate::id() {
+        if *lookup_table_account.get_owner() != id() {
             return Err(InstructionError::InvalidAccountOwner);
         }
         drop(lookup_table_account);
@@ -233,7 +234,7 @@ impl Processor {
         let lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
         let table_key = *lookup_table_account.get_key();
-        if *lookup_table_account.get_owner() != crate::id() {
+        if *lookup_table_account.get_owner() != id() {
             return Err(InstructionError::InvalidAccountOwner);
         }
         drop(lookup_table_account);
@@ -348,7 +349,7 @@ impl Processor {
 
         let lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        if *lookup_table_account.get_owner() != crate::id() {
+        if *lookup_table_account.get_owner() != id() {
             return Err(InstructionError::InvalidAccountOwner);
         }
         drop(lookup_table_account);
@@ -397,7 +398,7 @@ impl Processor {
 
         let lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        if *lookup_table_account.get_owner() != crate::id() {
+        if *lookup_table_account.get_owner() != id() {
             return Err(InstructionError::InvalidAccountOwner);
         }
         drop(lookup_table_account);

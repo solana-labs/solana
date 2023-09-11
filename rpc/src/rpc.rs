@@ -4631,7 +4631,6 @@ pub mod tests {
         jsonrpc_core_client::transports::local,
         serde::de::DeserializeOwned,
         solana_accounts_db::{inline_spl_token, inline_spl_token_2022},
-        solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_entry::entry::next_versioned_entry,
         solana_gossip::socketaddr,
         solana_ledger::{
@@ -4653,6 +4652,10 @@ pub mod tests {
         },
         solana_sdk::{
             account::{Account, WritableAccount},
+            address_lookup_table::{
+                self,
+                state::{AddressLookupTable, LookupTableMeta},
+            },
             clock::MAX_RECENT_BLOCKHASHES,
             compute_budget::ComputeBudgetInstruction,
             fee_calculator::{FeeRateGovernor, DEFAULT_BURN_PERCENT},
@@ -4934,7 +4937,7 @@ pub mod tests {
                 AccountSharedData::create(
                     min_balance_lamports,
                     address_table_data,
-                    solana_address_lookup_table_program::id(),
+                    address_lookup_table::program::id(),
                     false,
                     0,
                 )
@@ -8658,6 +8661,7 @@ pub mod tests {
             0
         );
         let slot0 = rpc.working_bank().slot();
+        let bank0_id = rpc.working_bank().bank_id();
         let account0 = Pubkey::new_unique();
         let account1 = Pubkey::new_unique();
         let account2 = Pubkey::new_unique();
@@ -8677,7 +8681,7 @@ pub mod tests {
         ];
         rpc.update_prioritization_fee_cache(transactions);
         let cache = rpc.get_prioritization_fee_cache();
-        cache.finalize_priority_fee(slot0);
+        cache.finalize_priority_fee(slot0, bank0_id);
         wait_for_cache_blocks(cache, 1);
 
         let request = create_test_request("getRecentPrioritizationFees", None);
@@ -8721,6 +8725,7 @@ pub mod tests {
 
         rpc.advance_bank_to_confirmed_slot(1);
         let slot1 = rpc.working_bank().slot();
+        let bank1_id = rpc.working_bank().bank_id();
         let price1 = 11;
         let transactions = vec![
             Transaction::new_unsigned(Message::new(
@@ -8737,7 +8742,7 @@ pub mod tests {
         ];
         rpc.update_prioritization_fee_cache(transactions);
         let cache = rpc.get_prioritization_fee_cache();
-        cache.finalize_priority_fee(slot1);
+        cache.finalize_priority_fee(slot1, bank1_id);
         wait_for_cache_blocks(cache, 2);
 
         let request = create_test_request("getRecentPrioritizationFees", None);

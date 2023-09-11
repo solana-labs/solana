@@ -14,7 +14,6 @@ pub struct CacheHashDataStats {
     pub create_save_us: AtomicU64,
     pub load_us: AtomicU64,
     pub read_us: AtomicU64,
-    pub merge_us: AtomicU64,
     pub unused_cache_files: AtomicUsize,
 }
 

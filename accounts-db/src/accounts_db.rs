@@ -1493,8 +1493,7 @@ pub struct AccountsDb {
     #[allow(dead_code)]
     base_working_temp_dir: Option<TempDir>,
 
-    full_accounts_hash_cache_path: PathBuf,
-    incremental_accounts_hash_cache_path: PathBuf,
+    accounts_hash_cache_path: PathBuf,
     transient_accounts_hash_cache_path: PathBuf,
 
     pub shrink_paths: RwLock<Option<Vec<PathBuf>>>,
@@ -2458,8 +2457,15 @@ impl AccountsDb {
                 (base_working_path, Some(base_working_temp_dir))
             };
 
-        let accounts_hash_cache_path = accounts_hash_cache_path
-            .unwrap_or_else(|| base_working_path.join(Self::DEFAULT_ACCOUNTS_HASH_CACHE_DIR));
+        let accounts_hash_cache_path = accounts_hash_cache_path.unwrap_or_else(|| {
+            let accounts_hash_cache_path =
+                base_working_path.join(Self::DEFAULT_ACCOUNTS_HASH_CACHE_DIR);
+            if !accounts_hash_cache_path.exists() {
+                fs_err::create_dir(&accounts_hash_cache_path)
+                    .expect("create accounts hash cache dir");
+            }
+            accounts_hash_cache_path
+        });
 
         let mut bank_hash_stats = HashMap::new();
         bank_hash_stats.insert(0, BankHashStats::default());
@@ -2493,9 +2499,8 @@ impl AccountsDb {
             paths: vec![],
             base_working_path,
             base_working_temp_dir,
-            full_accounts_hash_cache_path: accounts_hash_cache_path.join("full"),
-            incremental_accounts_hash_cache_path: accounts_hash_cache_path.join("incremental"),
             transient_accounts_hash_cache_path: accounts_hash_cache_path.join("transient"),
+            accounts_hash_cache_path,
             shrink_paths: RwLock::new(None),
             temp_paths: None,
             file_size: DEFAULT_FILE_SIZE,
@@ -7649,18 +7654,20 @@ impl AccountsDb {
     fn get_cache_hash_data(
         accounts_hash_cache_path: PathBuf,
         config: &CalcAccountsHashConfig<'_>,
+        kind: CalcAccountsHashKind,
         slot: Slot,
     ) -> CacheHashData {
-        if !config.store_detailed_debug_info_on_failure {
-            CacheHashData::new(accounts_hash_cache_path)
+        let accounts_hash_cache_path = if !config.store_detailed_debug_info_on_failure {
+            accounts_hash_cache_path
         } else {
             // this path executes when we are failing with a hash mismatch
             let failed_dir = accounts_hash_cache_path
                 .join("failed_calculate_accounts_hash_cache")
                 .join(slot.to_string());
-            let _ = std::fs::remove_dir_all(&failed_dir);
-            CacheHashData::new(failed_dir)
-        }
+            _ = std::fs::remove_dir_all(&failed_dir);
+            failed_dir
+        };
+        CacheHashData::new(accounts_hash_cache_path, kind == CalcAccountsHashKind::Full)
     }
 
     // modeled after calculate_accounts_delta_hash
@@ -7676,7 +7683,6 @@ impl AccountsDb {
             storages,
             stats,
             CalcAccountsHashKind::Full,
-            self.full_accounts_hash_cache_path.clone(),
         )?;
         let AccountsHashKind::Full(accounts_hash) = accounts_hash else {
             panic!("calculate_accounts_hash_from_storages must return a FullAccountsHash");
@@ -7704,7 +7710,6 @@ impl AccountsDb {
             storages,
             stats,
             CalcAccountsHashKind::Incremental,
-            self.incremental_accounts_hash_cache_path.clone(),
         )?;
         let AccountsHashKind::Incremental(incremental_accounts_hash) = accounts_hash else {
             panic!("calculate_incremental_accounts_hash must return an IncrementalAccountsHash");
@@ -7718,7 +7723,6 @@ impl AccountsDb {
         storages: &SortedStorages<'_>,
         mut stats: HashStats,
         kind: CalcAccountsHashKind,
-        accounts_hash_cache_path: PathBuf,
     ) -> Result<(AccountsHashKind, u64), AccountsHashVerificationError> {
         let total_time = Measure::start("");
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
@@ -7728,10 +7732,12 @@ impl AccountsDb {
 
         let slot = storages.max_slot_inclusive();
         let use_bg_thread_pool = config.use_bg_thread_pool;
+        let accounts_hash_cache_path = self.accounts_hash_cache_path.clone();
         let scan_and_hash = || {
             let (cache_hash_data, cache_hash_data_us) = measure_us!(Self::get_cache_hash_data(
                 accounts_hash_cache_path,
                 config,
+                kind,
                 slot
             ));
             stats.cache_hash_data_us += cache_hash_data_us;
@@ -9984,7 +9990,7 @@ pub mod tests {
             let temp_dir = TempDir::new().unwrap();
             let accounts_hash_cache_path = temp_dir.path().to_path_buf();
             self.scan_snapshot_stores_with_cache(
-                &CacheHashData::new(accounts_hash_cache_path),
+                &CacheHashData::new(accounts_hash_cache_path, true),
                 storage,
                 stats,
                 bins,
@@ -11024,7 +11030,7 @@ pub mod tests {
         };
 
         let result = accounts_db.scan_account_storage_no_bank(
-            &CacheHashData::new(accounts_hash_cache_path),
+            &CacheHashData::new(accounts_hash_cache_path, true),
             &CalcAccountsHashConfig::default(),
             &get_storage_refs(&[storage]),
             test_scan,

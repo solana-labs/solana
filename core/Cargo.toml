@@ -42,7 +42,6 @@ serde = { workspace = true }
 serde_bytes = { workspace = true }
 serde_derive = { workspace = true }
 solana-accounts-db = { workspace = true }
-solana-address-lookup-table-program = { workspace = true }
 solana-bloom = { workspace = true }
 solana-client = { workspace = true }
 solana-cost-model = { workspace = true }
