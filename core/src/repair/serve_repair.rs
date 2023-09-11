@@ -3,7 +3,7 @@ use {
         cluster_slots_service::cluster_slots::ClusterSlots,
         repair::{
             duplicate_repair_status::get_ancestor_hash_repair_sample_size,
-            quic_endpoint::RemoteRequest,
+            quic_endpoint::{LocalRequest, RemoteRequest},
             repair_response,
             repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
             request_response::RequestResponse,
@@ -11,7 +11,7 @@ use {
         },
     },
     bincode::{serialize, Options},
-    crossbeam_channel::{Receiver, RecvTimeoutError},
+    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     lru::LruCache,
     rand::{
         distributions::{Distribution, WeightedError, WeightedIndex},
@@ -59,7 +59,7 @@ use {
         thread::{Builder, JoinHandle},
         time::{Duration, Instant},
     },
-    tokio::sync::oneshot::Sender as OneShotSender,
+    tokio::sync::{mpsc::Sender as AsyncSender, oneshot::Sender as OneShotSender},
 };
 
 /// the number of slots to respond with when responding to `Orphan` requests
@@ -132,6 +132,7 @@ impl RequestResponse for ShredRepairType {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct AncestorHashesRepairType(pub Slot);
 impl AncestorHashesRepairType {
     pub fn slot(&self) -> Slot {
@@ -339,7 +340,6 @@ pub(crate) struct RepairPeers {
 struct Node {
     pubkey: Pubkey,
     serve_repair: SocketAddr,
-    #[allow(dead_code)]
     serve_repair_quic: SocketAddr,
 }
 
@@ -1027,6 +1027,7 @@ impl ServeRepair {
         Self::repair_proto_to_bytes(&request, keypair)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn repair_request(
         &self,
         cluster_slots: &ClusterSlots,
@@ -1036,8 +1037,10 @@ impl ServeRepair {
         repair_validators: &Option<HashSet<Pubkey>>,
         outstanding_requests: &mut OutstandingShredRepairs,
         identity_keypair: &Keypair,
+        quic_endpoint_sender: &AsyncSender<LocalRequest>,
+        quic_endpoint_response_sender: &Sender<(SocketAddr, Vec<u8>)>,
         repair_protocol: Protocol,
-    ) -> Result<(SocketAddr, Vec<u8>)> {
+    ) -> Result<Option<(SocketAddr, Vec<u8>)>> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
         let slot = repair_request.slot();
@@ -1067,8 +1070,21 @@ impl ServeRepair {
             repair_request
         );
         match repair_protocol {
-            Protocol::UDP => Ok((peer.serve_repair, out)),
-            Protocol::QUIC => todo!(),
+            Protocol::UDP => Ok(Some((peer.serve_repair, out))),
+            Protocol::QUIC => {
+                let num_expected_responses =
+                    usize::try_from(repair_request.num_expected_responses()).unwrap();
+                let request = LocalRequest {
+                    remote_address: peer.serve_repair_quic,
+                    bytes: out,
+                    num_expected_responses,
+                    response_sender: quic_endpoint_response_sender.clone(),
+                };
+                quic_endpoint_sender
+                    .blocking_send(request)
+                    .map_err(|_| Error::SendError)
+                    .map(|()| None)
+            }
         }
     }
 
@@ -1970,6 +1986,10 @@ mod tests {
         );
         let identity_keypair = cluster_info.keypair().clone();
         let mut outstanding_requests = OutstandingShredRepairs::default();
+        let (quic_endpoint_sender, _quic_endpoint_receiver) =
+            tokio::sync::mpsc::channel(/*buffer:*/ 128);
+        let (quic_endpoint_response_sender, _quic_endpoint_response_receiver) =
+            crossbeam_channel::unbounded();
         let rv = serve_repair.repair_request(
             &cluster_slots,
             ShredRepairType::Shred(0, 0),
@@ -1978,6 +1998,8 @@ mod tests {
             &None,
             &mut outstanding_requests,
             &identity_keypair,
+            &quic_endpoint_sender,
+            &quic_endpoint_response_sender,
             Protocol::UDP, // repair_protocol
         );
         assert_matches!(rv, Err(Error::ClusterInfo(ClusterInfoError::NoPeers)));
@@ -2009,8 +2031,11 @@ mod tests {
                 &None,
                 &mut outstanding_requests,
                 &identity_keypair,
+                &quic_endpoint_sender,
+                &quic_endpoint_response_sender,
                 Protocol::UDP, // repair_protocol
             )
+            .unwrap()
             .unwrap();
         assert_eq!(nxt.serve_repair(Protocol::UDP).unwrap(), serve_repair_addr);
         assert_eq!(rv.0, nxt.serve_repair(Protocol::UDP).unwrap());
@@ -2046,8 +2071,11 @@ mod tests {
                     &None,
                     &mut outstanding_requests,
                     &identity_keypair,
+                    &quic_endpoint_sender,
+                    &quic_endpoint_response_sender,
                     Protocol::UDP, // repair_protocol
                 )
+                .unwrap()
                 .unwrap();
             if rv.0 == serve_repair_addr {
                 one = true;
@@ -2294,7 +2322,10 @@ mod tests {
         let cluster_slots = ClusterSlots::default();
         let cluster_info = Arc::new(new_test_cluster_info());
         let me = cluster_info.my_contact_info();
-
+        let (quic_endpoint_sender, _quic_endpoint_receiver) =
+            tokio::sync::mpsc::channel(/*buffer:*/ 128);
+        let (quic_endpoint_response_sender, _quic_endpoint_response_receiver) =
+            crossbeam_channel::unbounded();
         // Insert two peers on the network
         let contact_info2 =
             ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
@@ -2325,6 +2356,8 @@ mod tests {
                     &known_validators,
                     &mut OutstandingShredRepairs::default(),
                     &identity_keypair,
+                    &quic_endpoint_sender,
+                    &quic_endpoint_response_sender,
                     Protocol::UDP, // repair_protocol
                 ),
                 Err(Error::ClusterInfo(ClusterInfoError::NoPeers))
@@ -2345,9 +2378,11 @@ mod tests {
                 &known_validators,
                 &mut OutstandingShredRepairs::default(),
                 &identity_keypair,
+                &quic_endpoint_sender,
+                &quic_endpoint_response_sender,
                 Protocol::UDP, // repair_protocol
             ),
-            Ok(_)
+            Ok(Some(_))
         );
 
         // Using no known validators should default to all
@@ -2369,9 +2404,11 @@ mod tests {
                 &None,
                 &mut OutstandingShredRepairs::default(),
                 &identity_keypair,
+                &quic_endpoint_sender,
+                &quic_endpoint_response_sender,
                 Protocol::UDP, // repair_protocol
             ),
-            Ok(_)
+            Ok(Some(_))
         );
     }
 
