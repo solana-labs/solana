@@ -6,18 +6,21 @@ use {
 /// Tracks the number of transactions that are in flight for each thread.
 pub struct InFlightTracker {
     num_in_flight_per_thread: Vec<usize>,
+    cus_in_flight_per_thread: Vec<u64>,
     batches: HashMap<TransactionBatchId, BatchEntry>,
 }
 
 struct BatchEntry {
     thread_id: ThreadId,
     num_transactions: usize,
+    total_cus: u64,
 }
 
 impl InFlightTracker {
     pub fn new(num_threads: usize) -> Self {
         Self {
             num_in_flight_per_thread: vec![0; num_threads],
+            cus_in_flight_per_thread: vec![0; num_threads],
             batches: HashMap::new(),
         }
     }
@@ -27,27 +30,36 @@ impl InFlightTracker {
         &self.num_in_flight_per_thread
     }
 
+    /// Returns the number of cus that are in flight for each thread.
+    pub fn cus_in_flight_per_thread(&self) -> &[u64] {
+        &self.cus_in_flight_per_thread
+    }
+
     /// Add a new batch with given `batch_id` and `num_transactions` to the
     /// thread with given `thread_id`.
     pub fn track_batch(
         &mut self,
         batch_id: TransactionBatchId,
         num_transactions: usize,
+        total_cus: u64,
         thread_id: ThreadId,
     ) {
         self.num_in_flight_per_thread[thread_id] += num_transactions;
-        assert!(
-            self.batches
-                .insert(
-                    batch_id,
-                    BatchEntry {
-                        thread_id,
-                        num_transactions,
-                    }
-                )
-                .is_none(),
-            "batch id {batch_id} is already being tracked"
-        );
+        self.cus_in_flight_per_thread[thread_id] += total_cus;
+        if self
+            .batches
+            .insert(
+                batch_id,
+                BatchEntry {
+                    thread_id,
+                    num_transactions,
+                    total_cus,
+                },
+            )
+            .is_some()
+        {
+            panic!("batch id {batch_id} is already being tracked");
+        }
     }
 
     /// Stop tracking the batch with given `batch_id`.
@@ -57,14 +69,16 @@ impl InFlightTracker {
     /// # Panics
     /// Panics if the batch id does not exist in the tracker.
     pub fn complete_batch(&mut self, batch_id: TransactionBatchId) -> ThreadId {
-        let BatchEntry {
+        let Some(BatchEntry {
             thread_id,
             num_transactions,
-        } = self
-            .batches
-            .remove(&batch_id)
-            .expect("batch id {batch} is not being tracked");
+            total_cus,
+        }) = self.batches.remove(&batch_id)
+        else {
+            panic!("batch id {batch_id} is not being tracked");
+        };
         self.num_in_flight_per_thread[thread_id] -= num_transactions;
+        self.cus_in_flight_per_thread[thread_id] -= total_cus;
 
         thread_id
     }
@@ -81,9 +95,10 @@ mod tests {
 
         let batch_id = TransactionBatchId::new(0);
         let batch_num_transactions = 2;
+        let batch_total_cus = 5000;
 
-        in_flight_tracker.track_batch(batch_id, batch_num_transactions, 0);
-        in_flight_tracker.track_batch(batch_id, batch_num_transactions, 1);
+        in_flight_tracker.track_batch(batch_id, batch_num_transactions, batch_total_cus, 0);
+        in_flight_tracker.track_batch(batch_id, batch_num_transactions, batch_total_cus, 1);
     }
 
     #[test]
@@ -100,20 +115,25 @@ mod tests {
         let batch_id_0 = TransactionBatchId::new(0);
         let batch_id_1 = TransactionBatchId::new(1);
 
-        // Add a batch with 2 transactions to thread 0.
-        in_flight_tracker.track_batch(batch_id_0, 2, 0);
+        // Add a batch with 2 transactions, 10 kCUs to thread 0.
+        in_flight_tracker.track_batch(batch_id_0, 2, 10_000, 0);
         assert_eq!(in_flight_tracker.num_in_flight_per_thread(), &[2, 0]);
+        assert_eq!(in_flight_tracker.cus_in_flight_per_thread(), &[10_000, 0]);
 
-        // Add a batch with 1 transaction to thread 1.
-        in_flight_tracker.track_batch(batch_id_1, 1, 1);
+        // Add a batch with 1 transaction, 15 kCUs to thread 1.
+        in_flight_tracker.track_batch(batch_id_1, 1, 15_000, 1);
         assert_eq!(in_flight_tracker.num_in_flight_per_thread(), &[2, 1]);
+        assert_eq!(
+            in_flight_tracker.cus_in_flight_per_thread(),
+            &[10_000, 15_000]
+        );
 
-        // Complete the batch with 2 transactions on thread 0.
         in_flight_tracker.complete_batch(batch_id_0);
         assert_eq!(in_flight_tracker.num_in_flight_per_thread(), &[0, 1]);
+        assert_eq!(in_flight_tracker.cus_in_flight_per_thread(), &[0, 15_000]);
 
-        // Complete the batch with 1 transaction on thread 1.
         in_flight_tracker.complete_batch(batch_id_1);
         assert_eq!(in_flight_tracker.num_in_flight_per_thread(), &[0, 0]);
+        assert_eq!(in_flight_tracker.cus_in_flight_per_thread(), &[0, 0]);
     }
 }
