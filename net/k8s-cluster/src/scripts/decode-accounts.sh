@@ -48,3 +48,5 @@ for i in "${!SECRET_FILES[@]}"; do
         echo "Secret file not found at $SECRET_FILE"
     fi
 done
+
+mkdir -p /home/solana/logs
