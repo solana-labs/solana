@@ -37,6 +37,9 @@ impl InFlightTracker {
 
     /// Add a new batch with given `batch_id` and `num_transactions` to the
     /// thread with given `thread_id`.
+    ///
+    /// # Panics
+    /// Panics if the batch id is already being tracked.
     pub fn track_batch(
         &mut self,
         batch_id: TransactionBatchId,
