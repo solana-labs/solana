@@ -142,27 +142,17 @@ impl CacheHashDataFile {
 
 pub struct CacheHashData {
     cache_dir: PathBuf,
-<<<<<<< HEAD:runtime/src/cache_hash_data.rs
-    pre_existing_cache_files: Arc<Mutex<PreExistingCacheFiles>>,
-    pub stats: Arc<Mutex<CacheHashDataStats>>,
-=======
     pre_existing_cache_files: Arc<Mutex<HashSet<PathBuf>>>,
     should_delete_old_cache_files_on_drop: bool,
-    pub stats: Arc<CacheHashDataStats>,
->>>>>>> 6298c6c31e (Shares accounts hash cache data between full and incremental (#33164)):accounts-db/src/cache_hash_data.rs
+    pub stats: Arc<Mutex<CacheHashDataStats>>,
 }
 
 impl Drop for CacheHashData {
     fn drop(&mut self) {
-<<<<<<< HEAD:runtime/src/cache_hash_data.rs
-        self.delete_old_cache_files();
-        self.stats.lock().unwrap().report();
-=======
         if self.should_delete_old_cache_files_on_drop {
             self.delete_old_cache_files();
         }
-        self.stats.report();
->>>>>>> 6298c6c31e (Shares accounts hash cache data between full and incremental (#33164)):accounts-db/src/cache_hash_data.rs
+        self.stats.lock().unwrap().report();
     }
 }
 
@@ -174,14 +164,9 @@ impl CacheHashData {
 
         let result = CacheHashData {
             cache_dir,
-<<<<<<< HEAD:runtime/src/cache_hash_data.rs
-            pre_existing_cache_files: Arc::new(Mutex::new(PreExistingCacheFiles::default())),
-            stats: Arc::new(Mutex::new(CacheHashDataStats::default())),
-=======
             pre_existing_cache_files: Arc::new(Mutex::new(HashSet::default())),
             should_delete_old_cache_files_on_drop,
-            stats: Arc::default(),
->>>>>>> 6298c6c31e (Shares accounts hash cache data between full and incremental (#33164)):accounts-db/src/cache_hash_data.rs
+            stats: Arc::new(Mutex::new(CacheHashDataStats::default())),
         };
 
         result.get_cache_files();
@@ -288,10 +273,6 @@ impl CacheHashData {
         stats.total_entries = entries;
         stats.cache_file_size += capacity as usize;
 
-<<<<<<< HEAD:runtime/src/cache_hash_data.rs
-=======
-    fn pre_existing_cache_file_will_be_used(&self, file_name: impl AsRef<Path>) {
->>>>>>> 6298c6c31e (Shares accounts hash cache data between full and incremental (#33164)):accounts-db/src/cache_hash_data.rs
         self.pre_existing_cache_files
             .lock()
             .unwrap()
