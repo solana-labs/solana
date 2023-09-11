@@ -125,11 +125,7 @@ impl AccountHashesFile {
         let (count, writer) = self.count_and_writer.as_mut().unwrap();
         let start = *count * std::mem::size_of::<Hash>();
         let end = start + std::mem::size_of::<Hash>();
-
-        unsafe {
-            let ptr = writer.mmap[start..end].as_mut_ptr() as *mut Hash;
-            *ptr = *hash;
-        };
+        writer.mmap[start..end].copy_from_slice(hash.as_ref());
         *count += 1;
     }
 }
@@ -1027,7 +1023,7 @@ impl<'a> AccountsHasher<'a> {
                             != pubkey_bin
                         {
                             break;
-                }
+                        }
                         first_pubkey_in_next_bin += 1;
                     }
                     first_pubkey_in_next_bin - first_pubkey_in_bin
