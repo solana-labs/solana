@@ -140,30 +140,48 @@ impl CacheHashDataFile {
     }
 }
 
-pub type PreExistingCacheFiles = HashSet<PathBuf>;
 pub struct CacheHashData {
     cache_dir: PathBuf,
+<<<<<<< HEAD:runtime/src/cache_hash_data.rs
     pre_existing_cache_files: Arc<Mutex<PreExistingCacheFiles>>,
     pub stats: Arc<Mutex<CacheHashDataStats>>,
+=======
+    pre_existing_cache_files: Arc<Mutex<HashSet<PathBuf>>>,
+    should_delete_old_cache_files_on_drop: bool,
+    pub stats: Arc<CacheHashDataStats>,
+>>>>>>> 6298c6c31e (Shares accounts hash cache data between full and incremental (#33164)):accounts-db/src/cache_hash_data.rs
 }
 
 impl Drop for CacheHashData {
     fn drop(&mut self) {
+<<<<<<< HEAD:runtime/src/cache_hash_data.rs
         self.delete_old_cache_files();
         self.stats.lock().unwrap().report();
+=======
+        if self.should_delete_old_cache_files_on_drop {
+            self.delete_old_cache_files();
+        }
+        self.stats.report();
+>>>>>>> 6298c6c31e (Shares accounts hash cache data between full and incremental (#33164)):accounts-db/src/cache_hash_data.rs
     }
 }
 
 impl CacheHashData {
-    pub fn new(cache_dir: PathBuf) -> CacheHashData {
+    pub fn new(cache_dir: PathBuf, should_delete_old_cache_files_on_drop: bool) -> CacheHashData {
         std::fs::create_dir_all(&cache_dir).unwrap_or_else(|err| {
             panic!("error creating cache dir {}: {err}", cache_dir.display())
         });
 
         let result = CacheHashData {
             cache_dir,
+<<<<<<< HEAD:runtime/src/cache_hash_data.rs
             pre_existing_cache_files: Arc::new(Mutex::new(PreExistingCacheFiles::default())),
             stats: Arc::new(Mutex::new(CacheHashDataStats::default())),
+=======
+            pre_existing_cache_files: Arc::new(Mutex::new(HashSet::default())),
+            should_delete_old_cache_files_on_drop,
+            stats: Arc::default(),
+>>>>>>> 6298c6c31e (Shares accounts hash cache data between full and incremental (#33164)):accounts-db/src/cache_hash_data.rs
         };
 
         result.get_cache_files();
@@ -270,6 +288,10 @@ impl CacheHashData {
         stats.total_entries = entries;
         stats.cache_file_size += capacity as usize;
 
+<<<<<<< HEAD:runtime/src/cache_hash_data.rs
+=======
+    fn pre_existing_cache_file_will_be_used(&self, file_name: impl AsRef<Path>) {
+>>>>>>> 6298c6c31e (Shares accounts hash cache data between full and incremental (#33164)):accounts-db/src/cache_hash_data.rs
         self.pre_existing_cache_files
             .lock()
             .unwrap()
@@ -386,7 +408,7 @@ pub mod tests {
                                 data_this_pass.push(this_bin_data);
                             }
                         }
-                        let cache = CacheHashData::new(cache_dir.clone());
+                        let cache = CacheHashData::new(cache_dir.clone(), true);
                         let file_name = PathBuf::from("test");
                         cache.save(&file_name, &data_this_pass).unwrap();
                         cache.get_cache_files();
