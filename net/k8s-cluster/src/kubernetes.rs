@@ -23,7 +23,7 @@ use {
         Client,
     },
     log::*,
-    std::{collections::BTreeMap, error::Error},
+    std::{collections::BTreeMap, error::Error, fs::File, io::Read},
 };
 
 pub struct Kubernetes<'a> {
@@ -39,20 +39,31 @@ impl<'a> Kubernetes<'a> {
             namespace: namespace,
         }
     }
-
+    
     pub async fn create_config_map(
         &self,
         base64_content: String,
     ) -> Result<ConfigMap, kube::Error> {
         let mut metadata = ObjectMeta::default();
         metadata.name = Some("genesis-config".to_string());
+        let genesis_tar_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/genesis.tar.bz2");
+        let mut genesis_tar_file = File::open(genesis_tar_path).unwrap();
+        let mut buffer = Vec::new();
+
+        match genesis_tar_file.read_to_end(&mut buffer) {
+            Ok(_) => (),
+            Err(err) => panic!("failed to read genesis.tar.bz: {}", err)
+        }
+
         // Define the data for the ConfigMap
-        let mut data = BTreeMap::<String, String>::new();
-        data.insert("genesis.bin".to_string(), base64_content);
+        let mut data = BTreeMap::<String, ByteString>::new();
+        // data.insert("genesis.bin".to_string(), base64_content);
+        data.insert("genesis.tar.bz2".to_string(), ByteString(buffer));
+
         // Create the ConfigMap object
         let config_map = ConfigMap {
             metadata,
-            data: Some(data),
+            binary_data: Some(data),
             ..Default::default()
         };
 
@@ -122,6 +133,8 @@ impl<'a> Kubernetes<'a> {
             mount_path: "/home/solana/bootstrap-accounts".to_string(),
             ..Default::default()
         };
+
+
 
 
         // let command = vec!["/workspace/start-bootstrap-validator.sh".to_string()];
