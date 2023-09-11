@@ -19,8 +19,7 @@ use {
     std::{
         borrow::Borrow,
         convert::TryInto,
-        fs::File,
-        io::{BufWriter, Write},
+        io::{Seek, SeekFrom, Write},
         path::PathBuf,
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -33,14 +32,17 @@ pub const MERKLE_FANOUT: usize = 16;
 
 /// 1 file containing account hashes sorted by pubkey, mapped into memory
 struct MmapAccountHashesFile {
+    /// raw slice of `Hash` values. Can be a larger slice than `count`
     mmap: MmapMut,
+    /// # of valid Hash entries in `mmap`
+    count: usize,
 }
 
 impl MmapAccountHashesFile {
     /// return a slice of account hashes starting at 'index'
     fn read(&self, index: usize) -> &[Hash] {
         let start = std::mem::size_of::<Hash>() * index;
-        let item_slice: &[u8] = &self.mmap[start..];
+        let item_slice: &[u8] = &self.mmap[start..self.count * std::mem::size_of::<Hash>()];
         let remaining_elements = item_slice.len() / std::mem::size_of::<Hash>();
         unsafe {
             let item = item_slice.as_ptr() as *const Hash;
@@ -52,23 +54,23 @@ impl MmapAccountHashesFile {
 /// 1 file containing account hashes sorted by pubkey
 pub struct AccountHashesFile {
     /// # hashes and an open file that will be deleted on drop. None if there are zero hashes to represent, and thus, no file.
-    count_and_writer: Option<(usize, BufWriter<File>)>,
+    count_and_writer: Option<(usize, MmapAccountHashesFile)>,
     /// The directory where temporary cache files are put
     dir_for_temp_cache_files: PathBuf,
+    /// # bytes allocated
+    capacity: usize,
 }
 
 impl AccountHashesFile {
     /// map the file into memory and return a reader that can access it by slice
     fn get_reader(&mut self) -> Option<(usize, MmapAccountHashesFile)> {
-        std::mem::take(&mut self.count_and_writer).map(|(count, writer)| {
-            let file = Some(writer.into_inner().unwrap());
-            (
-                count,
-                MmapAccountHashesFile {
-                    mmap: unsafe { MmapMut::map_mut(file.as_ref().unwrap()).unwrap() },
-                },
-            )
-        })
+        let mut count_and_writer = std::mem::take(&mut self.count_and_writer);
+        if let Some((count, reader)) = count_and_writer.as_mut() {
+            assert!(*count * std::mem::size_of::<Hash>() <= self.capacity);
+            // file was likely over allocated
+            reader.count = *count;
+        }
+        count_and_writer
     }
 
     /// # hashes stored in this file
@@ -84,30 +86,51 @@ impl AccountHashesFile {
     pub fn write(&mut self, hash: &Hash) {
         if self.count_and_writer.is_none() {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
-            self.count_and_writer = Some((
-                0,
-                BufWriter::new(
-                    tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
-                        panic!(
-                            "Unable to create file within {}: {err}",
-                            self.dir_for_temp_cache_files.display()
-                        )
-                    }),
-                ),
-            ));
-        }
-        let count_and_writer = self.count_and_writer.as_mut().unwrap();
-        count_and_writer
-            .1
-            .write_all(hash.as_ref())
-            .unwrap_or_else(|err| {
+
+            let mut data = tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
                 panic!(
-                    "Unable to write file within {}: {err}",
+                    "Unable to create file within {}: {err}",
                     self.dir_for_temp_cache_files.display()
                 )
             });
 
-        count_and_writer.0 += 1;
+            // Theoretical performance optimization: write a zero to the end of
+            // the file so that we won't have to resize it later, which may be
+            // expensive.
+            data.seek(SeekFrom::Start((self.capacity - 1) as u64))
+                .unwrap();
+            data.write_all(&[0]).unwrap();
+            data.rewind().unwrap();
+            data.flush().unwrap();
+
+            //UNSAFE: Required to create a Mmap
+            let map = unsafe { MmapMut::map_mut(&data) };
+            let map = map.unwrap_or_else(|e| {
+                error!(
+                    "Failed to map the data file (size: {}): {}.\n
+                        Please increase sysctl vm.max_map_count or equivalent for your platform.",
+                    self.capacity, e
+                );
+                std::process::exit(1);
+            });
+
+            self.count_and_writer = Some((
+                0,
+                MmapAccountHashesFile {
+                    mmap: map,
+                    count: self.capacity / std::mem::size_of::<Hash>(),
+                },
+            ));
+        }
+        let (count, writer) = self.count_and_writer.as_mut().unwrap();
+        let start = *count * std::mem::size_of::<Hash>();
+        let end = start + std::mem::size_of::<Hash>();
+
+        unsafe {
+            let ptr = writer.mmap[start..end].as_ptr() as *mut Hash;
+            *ptr = *hash;
+        };
+        *count += 1;
     }
 }
 
@@ -985,10 +1008,7 @@ impl<'a> AccountsHasher<'a> {
         // map from index of an item in first_items[] to index of the corresponding item in sorted_data_by_pubkey[]
         // this will change as items in sorted_data_by_pubkey[] are exhausted
         let mut first_item_to_pubkey_division = Vec::with_capacity(len);
-        let mut hashes = AccountHashesFile {
-            count_and_writer: None,
-            dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
-        };
+
         // initialize 'first_items', which holds the current lowest item in each slot group
         let max_inclusive_num_pubkeys = sorted_data_by_pubkey
             .iter()
@@ -1016,6 +1036,12 @@ impl<'a> AccountsHasher<'a> {
                 }
             })
             .sum::<usize>();
+        let mut hashes = AccountHashesFile {
+            count_and_writer: None,
+            dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
+            capacity: max_inclusive_num_pubkeys * std::mem::size_of::<Hash>(),
+        };
+
         let mut overall_sum = 0;
         let mut duplicate_pubkey_indexes = Vec::with_capacity(len);
         let filler_accounts_enabled = self.filler_accounts_enabled();
@@ -1253,6 +1279,7 @@ pub mod tests {
             Self {
                 count_and_writer: None,
                 dir_for_temp_cache_files,
+                capacity: 1024, /* default 1k for tests */
             }
         }
     }
