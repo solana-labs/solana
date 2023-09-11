@@ -352,7 +352,7 @@ fn execute_batches(
         })
         .collect::<Vec<_>>();
 
-    if bank
+    if false && bank
         .feature_set
         .is_active(&feature_set::apply_cost_tracker_during_replay::id())
     {

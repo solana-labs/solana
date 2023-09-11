@@ -2,6 +2,7 @@
 
 use {
     solana_metrics::datapoint_info,
+    solana_sdk::slot_history::Slot,
     std::time::{Duration, Instant},
 };
 
@@ -28,13 +29,13 @@ impl StatsManager {
 
     /// Record stats from this iteration, and maybe submit the datapoints based on how long it has
     /// been since the previous submission.
-    pub(super) fn record_and_maybe_submit(&mut self, runtime: Duration) {
+    pub(super) fn record_and_maybe_submit(&mut self, runtime: Duration, slot: Slot) {
         self.stats.record(runtime);
-        self.maybe_submit();
+        self.maybe_submit(slot);
     }
 
     /// Maybe submit the datapoints based on how long it has been since the previous submission.
-    fn maybe_submit(&mut self) {
+    fn maybe_submit(&mut self, slot: Slot) {
         let duration_since_previous_submit = Instant::now() - self.previous_submit;
         if duration_since_previous_submit < SUBMIT_INTERVAL {
             return;
@@ -60,6 +61,7 @@ impl StatsManager {
             ),
             ("min_runtime_us", self.stats.min_runtime.as_micros(), i64),
             ("max_runtime_us", self.stats.max_runtime.as_micros(), i64),
+            ("slot", slot, i64),
         );
 
         // reset the stats back to default

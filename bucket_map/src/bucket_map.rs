@@ -86,7 +86,8 @@ impl<T: Clone + Copy + Debug + PartialEq> BucketMap<T> {
             config.max_buckets.is_power_of_two(),
             "Max number of buckets must be a power of two"
         );
-        let max_search = config.max_search.unwrap_or(MAX_SEARCH_DEFAULT);
+        const MAX_SEARCH: MaxSearch = 128;
+        let max_search = config.max_search.unwrap_or(MAX_SEARCH);        
 
         let mut restart = Restart::get_restart_file(&config);
 

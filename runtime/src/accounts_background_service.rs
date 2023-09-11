@@ -36,7 +36,7 @@ use {
     },
 };
 
-const INTERVAL_MS: u64 = 100;
+const INTERVAL_MS: u64 = 1000;
 const CLEAN_INTERVAL_BLOCKS: u64 = 100;
 
 // This value is chosen to spread the dropping cost over 3 expiration checks
@@ -318,7 +318,9 @@ impl SnapshotRequestHandler {
         } = snapshot_request;
 
         // we should not rely on the state of this validator until startup verification is complete
+        log::error!("abs: {}", line!());
         assert!(snapshot_root_bank.is_startup_verification_complete());
+        log::error!("abs: {}", line!());
 
         if accounts_package_kind == AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot) {
             *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
@@ -343,6 +345,12 @@ impl SnapshotRequestHandler {
         // Ensure all roots <= `self.slot()` have been flushed.
         // Note `max_flush_root` could be larger than self.slot() if there are
         // `> MAX_CACHE_SLOT` cached and rooted slots which triggered earlier flushes.
+        log::error!("abs: {}, {}, {}", line!(), snapshot_root_bank.slot(), snapshot_root_bank
+        .rc
+        .accounts
+        .accounts_db
+        .accounts_cache
+        .fetch_max_flush_root());
         assert!(
             snapshot_root_bank.slot()
                 <= snapshot_root_bank
@@ -354,6 +362,7 @@ impl SnapshotRequestHandler {
         );
         flush_accounts_cache_time.stop();
 
+        log::error!("abs: {}", line!());
         let accounts_hash_for_testing = previous_accounts_hash.map(|previous_accounts_hash| {
             let check_hash = false;
 
@@ -379,16 +388,19 @@ impl SnapshotRequestHandler {
             this_accounts_hash
         });
 
+        log::error!("abs: {}", line!());
         let mut clean_time = Measure::start("clean_time");
         snapshot_root_bank.clean_accounts(*last_full_snapshot_slot);
         clean_time.stop();
 
+        log::error!("abs: {}", line!());
         let mut shrink_time = Measure::start("shrink_time");
         snapshot_root_bank.shrink_candidate_slots();
         shrink_time.stop();
 
         // Snapshot the bank and send over an accounts package
         let mut snapshot_time = Measure::start("snapshot_time");
+        log::error!("abs: {}", line!());
         let snapshot_storages = snapshot_bank_utils::get_snapshot_storages(&snapshot_root_bank);
         let accounts_package = match request_kind {
             SnapshotRequestKind::Snapshot => match &accounts_package_kind {
@@ -400,6 +412,7 @@ impl SnapshotRequestHandler {
                         self.snapshot_config.snapshot_version,
                         status_cache_slot_deltas,
                     )?;
+                    log::error!("abs: {}", line!());
                     AccountsPackage::new_for_snapshot(
                         accounts_package_kind,
                         &snapshot_root_bank,
@@ -424,6 +437,7 @@ impl SnapshotRequestHandler {
                 AccountsPackageKind::EpochAccountsHash => panic!("Illegal account package type: EpochAccountsHash packages must be from an EpochAccountsHash request!"),
             },
             SnapshotRequestKind::EpochAccountsHash => {
+                log::error!("abs: {}", line!());
                 // skip the bank snapshot, just make an accounts package to send to AHV
                 AccountsPackage::new_for_epoch_accounts_hash(
                     accounts_package_kind,
@@ -433,15 +447,19 @@ impl SnapshotRequestHandler {
                 )
             }
         };
+        log::error!("abs: {}", line!());
         let send_result = self.accounts_package_sender.send(accounts_package);
+        log::error!("abs: {}", line!());
         if let Err(err) = send_result {
             // Sending the accounts package should never fail *unless* we're shutting down.
             let accounts_package = &err.0;
+            log::error!("abs: {}", line!());
             assert!(
                 exit.load(Ordering::Relaxed),
                 "Failed to send accounts package: {err}, {accounts_package:?}"
             );
         }
+        log::error!("abs: {}", line!());
         snapshot_time.stop();
         info!(
             "Took bank snapshot. accounts package kind: {:?}, slot: {}, bank hash: {}",
@@ -503,42 +521,11 @@ pub struct PrunedBanksRequestHandler {
 }
 
 impl PrunedBanksRequestHandler {
-    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-    fn handle_request(&self, bank: &Bank) -> usize {
-        let mut banks_to_purge: Vec<_> = self.pruned_banks_receiver.try_iter().collect();
-        // We need a stable sort to ensure we purge banks—with the same slot—in the same order
-        // they were sent into the channel.
-        banks_to_purge.sort_by_key(|(slot, _id)| *slot);
-        let num_banks_to_purge = banks_to_purge.len();
-
-        // Group the banks into slices with the same slot
-        let grouped_banks_to_purge: Vec<_> =
-            GroupBy::new(banks_to_purge.as_slice(), |a, b| a.0 == b.0).collect();
-
-        // Log whenever we need to handle banks with the same slot.  Purposely do this *before* we
-        // call `purge_slot()` to ensure we get the datapoint (in case there's an assert/panic).
-        let num_banks_with_same_slot =
-            num_banks_to_purge.saturating_sub(grouped_banks_to_purge.len());
-        if num_banks_with_same_slot > 0 {
-            datapoint_info!(
-                "pruned_banks_request_handler",
-                ("num_pruned_banks", num_banks_to_purge, i64),
-                ("num_banks_with_same_slot", num_banks_with_same_slot, i64),
-            );
-        }
-
-        // Purge all the slots in parallel
-        // Banks for the same slot are purged sequentially
-        let accounts_db = bank.rc.accounts.accounts_db.as_ref();
-        accounts_db.thread_pool_clean.install(|| {
-            grouped_banks_to_purge.into_par_iter().for_each(|group| {
-                group.iter().for_each(|(slot, bank_id)| {
-                    accounts_db.purge_slot(*slot, *bank_id, true);
-                })
-            });
-        });
-
-        num_banks_to_purge
+    pub fn handle_request(&self, bank: &Bank) -> usize {
+        bank.rc
+            .accounts
+            .accounts_db
+            .do_handle_pruned_banks_request(&self.pruned_banks_receiver)
     }
 
     fn remove_dead_slots(
@@ -619,7 +606,7 @@ impl AccountsBackgroundService {
 
                     // Grab the current root bank
                     let bank = bank_forks.read().unwrap().root_bank();
-
+                    log::error!("AccountsBackgroundService: {}", line!());
                     // Purge accounts of any dead slots
                     request_handlers
                         .pruned_banks_request_handler
@@ -629,15 +616,17 @@ impl AccountsBackgroundService {
                             &mut total_remove_slots_time,
                         );
 
-                    Self::expire_old_recycle_stores(&bank, &mut last_expiration_check_time);
+                        log::error!("AccountsBackgroundService: {}", line!());
+                        Self::expire_old_recycle_stores(&bank, &mut last_expiration_check_time);
 
-                    let non_snapshot_time = last_snapshot_end_time
+                        log::error!("AccountsBackgroundService: {}", line!());
+                        let non_snapshot_time = last_snapshot_end_time
                         .map(|last_snapshot_end_time: Instant| {
                             last_snapshot_end_time.elapsed().as_micros()
                         })
                         .unwrap_or_default();
 
-                    // Check to see if there were any requests for snapshotting banks
+                        // Check to see if there were any requests for snapshotting banks
                     // < the current root bank `bank` above.
 
                     // Claim: Any snapshot request for slot `N` found here implies that the last cleanup
@@ -659,6 +648,7 @@ impl AccountsBackgroundService {
                     // snapshot requests.  This is because startup verification and snapshot
                     // request handling can both kick off accounts hash calculations in background
                     // threads, and these must not happen concurrently.
+                    log::error!("AccountsBackgroundService: {}", line!());
                     let snapshot_handle_result = bank
                         .is_startup_verification_complete()
                         .then(|| {
@@ -673,12 +663,14 @@ impl AccountsBackgroundService {
                     if snapshot_handle_result.is_some() {
                         last_snapshot_end_time = Some(Instant::now());
                     }
+                    log::error!("AccountsBackgroundService: {}", line!());
 
                     // Note that the flush will do an internal clean of the
                     // cache up to bank.slot(), so should be safe as long
                     // as any later snapshots that are taken are of
                     // slots >= bank.slot()
                     bank.flush_accounts_cache_if_needed();
+                    log::error!("AccountsBackgroundService: {}", line!());
 
                     if let Some(snapshot_handle_result) = snapshot_handle_result {
                         // Safe, see proof above
@@ -706,9 +698,12 @@ impl AccountsBackgroundService {
                             bank.clean_accounts(last_full_snapshot_slot);
                             last_cleaned_block_height = bank.block_height();
                         }
-                        bank.shrink_candidate_slots();
+                        bank.shrink_candidate_slots_arc(
+                            exit.clone(),
+                            &request_handlers.pruned_banks_request_handler.pruned_banks_receiver,
+                        );
                     }
-                    stats.record_and_maybe_submit(start_time.elapsed());
+                    stats.record_and_maybe_submit(start_time.elapsed(), bank.slot());
                     sleep(Duration::from_millis(INTERVAL_MS));
                 }
                 info!("AccountsBackgroundService has stopped");

@@ -689,7 +689,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
             loop {
                 count += 1;
                 // grow relative to the current capacity
-                let new_capacity = (current_capacity * 110 / 100).max(anticipated_size);
+                let new_capacity = (current_capacity * 120 / 100).max(anticipated_size);
                 let (mut index, file_name) = BucketStorage::new_with_capacity(
                     Arc::clone(&self.drives),
                     1,

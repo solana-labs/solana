@@ -107,6 +107,7 @@ pub(crate) fn report_new_epoch_metrics(
 }
 
 pub(crate) fn report_new_bank_metrics(
+    bank: &Bank,
     slot: Slot,
     parent_slot: Slot,
     block_height: u64,
@@ -150,6 +151,11 @@ pub(crate) fn report_new_bank_metrics(
             timings.fill_sysvar_cache_time_us,
             i64
         ),
+        ("waiting_for_epoch_accounts_hash", bank
+        .rc
+        .accounts
+        .accounts_db
+        .epoch_accounts_hash_manager.waiting.load(std::sync::atomic::Ordering::Relaxed) as i32,i64),
     );
 }
 
