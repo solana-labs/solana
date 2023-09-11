@@ -90,7 +90,10 @@ We currently do not use the Github workflow to publish security advisories. Once
 
 <a name="bounty"></a>
 ## Security Bug Bounties
-At its sole discretion, the Solana Foundation may offer a bounty for [valid reports](#reporting) of critical Solana vulnerabilities. Please see below for more details. The submitter is not required to provide a mitigation to qualify.
+At its sole discretion, the Solana Foundation may offer a bounty for
+[valid reports](#reporting) of critical Solana vulnerabilities. Please see below
+for more details. The submitter is not required to provide a
+mitigation to qualify.
 
 #### Loss of Funds:
 $2,000,000 USD in locked SOL tokens (locked for 12 months)
