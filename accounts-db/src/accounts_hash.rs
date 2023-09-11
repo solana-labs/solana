@@ -49,12 +49,20 @@ impl MmapAccountHashesFile {
             std::slice::from_raw_parts(item, remaining_elements)
         }
     }
+
+    /// write a hash to the end of mmap file.
+    fn write(&mut self, hash: &Hash) {
+        let start = self.count * std::mem::size_of::<Hash>();
+        let end = start + std::mem::size_of::<Hash>();
+        self.mmap[start..end].copy_from_slice(hash.as_ref());
+        self.count += 1;
+    }
 }
 
 /// 1 file containing account hashes sorted by pubkey
 pub struct AccountHashesFile {
     /// # hashes and an open file that will be deleted on drop. None if there are zero hashes to represent, and thus, no file.
-    count_and_writer: Option<(usize, MmapAccountHashesFile)>,
+    writer: Option<MmapAccountHashesFile>,
     /// The directory where temporary cache files are put
     dir_for_temp_cache_files: PathBuf,
     /// # bytes allocated
@@ -62,29 +70,23 @@ pub struct AccountHashesFile {
 }
 
 impl AccountHashesFile {
-    /// map the file into memory and return a reader that can access it by slice
-    fn get_reader(&mut self) -> Option<(usize, MmapAccountHashesFile)> {
-        let mut count_and_writer = std::mem::take(&mut self.count_and_writer);
-        if let Some((count, reader)) = count_and_writer.as_mut() {
-            assert!(*count * std::mem::size_of::<Hash>() <= self.capacity);
-            // file was likely over allocated
-            reader.count = *count;
-        }
-        count_and_writer
+    /// return a mmap reader that can be accessed  by slice
+    fn get_reader(&mut self) -> Option<MmapAccountHashesFile> {
+        std::mem::take(&mut self.writer)
     }
 
     /// # hashes stored in this file
     pub fn count(&self) -> usize {
-        self.count_and_writer
+        self.writer
             .as_ref()
-            .map(|(count, _)| *count)
+            .map(|writer| writer.count)
             .unwrap_or_default()
     }
 
     /// write 'hash' to the file
     /// If the file isn't open, create it first.
     pub fn write(&mut self, hash: &Hash) {
-        if self.count_and_writer.is_none() {
+        if self.writer.is_none() {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
 
             let mut data = tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
@@ -114,19 +116,12 @@ impl AccountHashesFile {
                 std::process::exit(1);
             });
 
-            self.count_and_writer = Some((
-                0,
-                MmapAccountHashesFile {
-                    mmap: map,
-                    count: self.capacity / std::mem::size_of::<Hash>(),
-                },
-            ));
+            self.writer = Some(MmapAccountHashesFile {
+                mmap: map,
+                count: 0,
+            });
         }
-        let (count, writer) = self.count_and_writer.as_mut().unwrap();
-        let start = *count * std::mem::size_of::<Hash>();
-        let end = start + std::mem::size_of::<Hash>();
-        writer.mmap[start..end].copy_from_slice(hash.as_ref());
-        *count += 1;
+        self.writer.as_mut().unwrap().write(hash);
     }
 }
 
@@ -357,7 +352,8 @@ impl CumulativeHashesFromFiles {
         let mut readers = Vec::with_capacity(hashes.len());
         let cumulative = CumulativeOffsets::new(hashes.into_iter().filter_map(|mut hash_file| {
             // ignores all hashfiles that have zero entries
-            hash_file.get_reader().map(|(count, reader)| {
+            hash_file.get_reader().map(|reader| {
+                let count = reader.count;
                 readers.push(reader);
                 count
             })
@@ -1033,7 +1029,7 @@ impl<'a> AccountsHasher<'a> {
             })
             .sum::<usize>();
         let mut hashes = AccountHashesFile {
-            count_and_writer: None,
+            writer: None,
             dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
             capacity: max_inclusive_num_pubkeys * std::mem::size_of::<Hash>(),
         };
@@ -1273,7 +1269,7 @@ pub mod tests {
     impl AccountHashesFile {
         fn new(dir_for_temp_cache_files: PathBuf) -> Self {
             Self {
-                count_and_writer: None,
+                writer: None,
                 dir_for_temp_cache_files,
                 capacity: 1024, /* default 1k for tests */
             }
@@ -1344,16 +1340,16 @@ pub mod tests {
         // 1 hash
         file.write(&hashes[0]);
         let reader = file.get_reader().unwrap();
-        assert_eq!(&[hashes[0]][..], reader.1.read(0));
-        assert!(reader.1.read(1).is_empty());
+        assert_eq!(&[hashes[0]][..], reader.read(0));
+        assert!(reader.read(1).is_empty());
 
         // multiple hashes
         let mut file = AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf());
         assert!(file.get_reader().is_none());
         hashes.iter().for_each(|hash| file.write(hash));
         let reader = file.get_reader().unwrap();
-        (0..2).for_each(|i| assert_eq!(&hashes[i..], reader.1.read(i)));
-        assert!(reader.1.read(2).is_empty());
+        (0..2).for_each(|i| assert_eq!(&hashes[i..], reader.read(i)));
+        assert!(reader.read(2).is_empty());
     }
 
     #[test]
@@ -1512,7 +1508,7 @@ pub mod tests {
         let accounts_hasher = AccountsHasher::new(dir_for_temp_cache_files.path().to_path_buf());
         let (mut hashes, lamports) =
             accounts_hasher.de_dup_accounts_in_parallel(&slice, 0, 1, &HashStats::default());
-        assert_eq!(&[Hash::default()], hashes.get_reader().unwrap().1.read(0));
+        assert_eq!(&[Hash::default()], hashes.get_reader().unwrap().read(0));
         assert_eq!(lamports, 1);
     }
 
@@ -1522,7 +1518,7 @@ pub mod tests {
     fn get_vec(mut hashes: AccountHashesFile) -> Vec<Hash> {
         hashes
             .get_reader()
-            .map(|r| r.1.read(0).to_vec())
+            .map(|r| r.read(0).to_vec())
             .unwrap_or_default()
     }
 
