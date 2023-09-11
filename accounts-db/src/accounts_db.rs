@@ -2412,7 +2412,11 @@ impl<'a> AppendVecScan for ScanState<'a> {
                 self.mismatch_found.fetch_add(1, Ordering::Relaxed);
             }
         }
-        let source_item = CalculateHashIntermediate::new(loaded_hash, balance, *pubkey);
+        let source_item = CalculateHashIntermediate {
+            hash: loaded_hash,
+            lamports: balance,
+            pubkey: *pubkey,
+        };
         self.init_accum(self.range);
         self.accum[self.pubkey_to_bin_index].push(source_item);
     }
@@ -10388,10 +10392,26 @@ pub mod tests {
         let pubkey255 = Pubkey::from([0xffu8; 32]);
 
         let mut raw_expected = vec![
-            CalculateHashIntermediate::new(Hash::default(), 1, pubkey0),
-            CalculateHashIntermediate::new(Hash::default(), 128, pubkey127),
-            CalculateHashIntermediate::new(Hash::default(), 129, pubkey128),
-            CalculateHashIntermediate::new(Hash::default(), 256, pubkey255),
+            CalculateHashIntermediate {
+                hash: Hash::default(),
+                lamports: 1,
+                pubkey: pubkey0,
+            },
+            CalculateHashIntermediate {
+                hash: Hash::default(),
+                lamports: 128,
+                pubkey: pubkey127,
+            },
+            CalculateHashIntermediate {
+                hash: Hash::default(),
+                lamports: 129,
+                pubkey: pubkey128,
+            },
+            CalculateHashIntermediate {
+                hash: Hash::default(),
+                lamports: 256,
+                pubkey: pubkey255,
+            },
         ];
 
         let expected_hashes = [
@@ -10983,11 +11003,11 @@ pub mod tests {
             self.calls.fetch_add(1, Ordering::Relaxed);
             assert_eq!(loaded_account.pubkey(), &self.pubkey);
             assert_eq!(self.slot_expected, self.current_slot);
-            self.accum.push(vec![CalculateHashIntermediate::new(
-                Hash::default(),
-                self.value_to_use_for_lamports,
-                self.pubkey,
-            )]);
+            self.accum.push(vec![CalculateHashIntermediate {
+                hash: Hash::default(),
+                lamports: self.value_to_use_for_lamports,
+                pubkey: self.pubkey,
+            }]);
         }
         fn scanning_complete(self) -> BinnedHashData {
             self.accum
@@ -11044,11 +11064,11 @@ pub mod tests {
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_scan(
             result2,
-            vec![vec![vec![CalculateHashIntermediate::new(
-                Hash::default(),
-                expected,
+            vec![vec![vec![CalculateHashIntermediate {
+                hash: Hash::default(),
+                lamports: expected,
                 pubkey,
-            )]]],
+            }]]],
             1,
             0,
             1,

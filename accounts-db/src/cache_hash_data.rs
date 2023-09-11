@@ -502,11 +502,11 @@ mod tests {
                                     }
                                 }
 
-                                CalculateHashIntermediate::new(
-                                    solana_sdk::hash::Hash::new_unique(),
-                                    ct as u64,
-                                    pk,
-                                )
+                                CalculateHashIntermediate {
+                                    hash: solana_sdk::hash::Hash::new_unique(),
+                                    lamports: ct as u64,
+                                    pubkey: pk,
+                                }
                             })
                             .collect::<Vec<_>>()
                     } else {
