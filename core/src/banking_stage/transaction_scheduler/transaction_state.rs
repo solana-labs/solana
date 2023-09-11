@@ -84,7 +84,7 @@ impl TransactionState {
     }
 
     /// Sets the transaction as forwarded.
-    pub(crate) fn set_forwarded(&self) {
+    pub(crate) fn set_forwarded(&mut self) {
         match self {
             Self::Unprocessed { forwarded, .. } => *forwarded = true,
             Self::Pending { forwarded, .. } => *forwarded = true,
