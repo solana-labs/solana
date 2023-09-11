@@ -361,7 +361,7 @@ pub trait NewConnectionConfig: Sized + Send + Sync + 'static {
     fn new() -> Result<Self, ClientError>;
 }
 
-pub trait ConnectionPool: Send + Sync {
+pub trait ConnectionPool: Send + Sync + 'static {
     type NewConnectionConfig: NewConnectionConfig;
     type BaseClientConnection: BaseClientConnection;
 

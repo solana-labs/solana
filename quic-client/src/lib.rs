@@ -19,7 +19,7 @@ use {
     solana_connection_cache::{
         connection_cache::{
             BaseClientConnection, ClientError, ConnectionCache, ConnectionManager, ConnectionPool,
-            ConnectionPoolError, Protocol,
+            ConnectionPoolError, NewConnectionConfig, Protocol,
         },
         connection_cache_stats::ConnectionCacheStats,
     },
@@ -91,6 +91,22 @@ pub struct QuicConfig {
     // The optional specified endpoint for the quic based client connections
     // If not specified, the connection cache will create as needed.
     client_endpoint: Option<Endpoint>,
+}
+
+impl NewConnectionConfig for QuicConfig {
+    fn new() -> Result<Self, ClientError> {
+        let (cert, priv_key) =
+            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))?;
+        Ok(Self {
+            client_certificate: Arc::new(QuicClientCertificate {
+                certificate: cert,
+                key: priv_key,
+            }),
+            maybe_staked_nodes: None,
+            maybe_client_pubkey: None,
+            client_endpoint: None,
+        })
+    }
 }
 
 impl QuicConfig {
