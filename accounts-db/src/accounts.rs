@@ -23,6 +23,7 @@ use {
     dashmap::DashMap,
     itertools::Itertools,
     log::*,
+    solana_measure::measure_us,
     solana_program_runtime::{
         compute_budget_processor::process_compute_budget_instructions,
         loaded_programs::LoadedProgramsForTxBatch,
@@ -40,6 +41,7 @@ use {
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
+        hash::Hasher,
         message::{
             v0::{LoadedAddresses, MessageAddressTableLookup},
             SanitizedMessage,
@@ -317,6 +319,7 @@ impl Accounts {
         reward_interval: RewardInterval,
         program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
+        set_exempt_rent_epoch_max: bool,
     ) -> Result<LoadedTransaction> {
         let in_reward_interval = reward_interval == RewardInterval::InsideInterval;
 
@@ -335,7 +338,7 @@ impl Accounts {
         let mut account_deps = Vec::with_capacity(account_keys.len());
         let mut rent_debits = RentDebits::default();
 
-        let set_exempt_rent_epoch_max =
+        let _set_exempt_rent_epoch_max =
             feature_set.is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
 
         let requested_loaded_accounts_data_size_limit =
@@ -706,6 +709,7 @@ impl Accounts {
         in_reward_interval: RewardInterval,
         program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
+        set_exempt_rent_epoch_max: bool,
     ) -> Vec<TransactionLoadResult> {
         txs.iter()
             .zip(lock_results)
@@ -740,6 +744,7 @@ impl Accounts {
                         in_reward_interval,
                         program_accounts,
                         loaded_programs,
+                        set_exempt_rent_epoch_max,
                     ) {
                         Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
@@ -1299,8 +1304,10 @@ impl Accounts {
     }
 
     /// Store the accounts into the DB
-    // allow(clippy) needed for various gating flags
+    /// allow(clippy) needed for various gating flags
+    /// returns additional lamports used to create dummy accounts
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
     pub fn store_cached(
         &self,
         slot: Slot,
@@ -1310,7 +1317,9 @@ impl Accounts {
         rent_collector: &RentCollector,
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
-    ) {
+        include_slot_in_hash: crate::accounts_db::IncludeSlotInHash,
+        ancestors: &Ancestors,
+    ) -> Option<u64> {
         let (accounts_to_store, transactions) = self.collect_accounts_to_store(
             txs,
             res,
@@ -1319,8 +1328,104 @@ impl Accounts {
             durable_nonce,
             lamports_per_signature,
         );
+        let mut additional_lamports_result = None;
+        let create_dummy_accounts = true;
+        let mut pks = Vec::default();
+        let solana_vote_program: Pubkey = solana_vote_program::id();
+        if create_dummy_accounts {
+            let mut additional_lamports = 0;
+            let (_, us) = measure_us!({
+                for i in 0..accounts_to_store.len() {
+                    self.accounts_db.maybe_throttle_add();
+                    if accounts_to_store[i].1.owner() == &solana_vote_program {
+                        // vote programs will be stored on each slot and all dummys will all be duplicates
+                        continue;
+                    }
+                    let mut src_account = AccountSharedData::default();
+                    src_account.set_lamports(1_000_000_000);
+                    let mut pk = accounts_to_store[i].0.clone();
+                    let range = 4_000_000usize;
+                    let num_duplicates: usize = (900
+                        * (range
+                            .saturating_sub((slot as usize).saturating_sub(280_000).min(range))
+                            * 100000
+                            / range)
+                        / 100000
+                        + 100)
+                        .min(1000);
+                    for _duplicates in 0..num_duplicates {
+                        // only add this if it doesn't already exist in the index
+                        let mut hasher = Hasher::default();
+                        hasher.hash(pk.as_ref());
+                        hasher.hash(&slot.to_be_bytes());
+                        pk = Pubkey::from(hasher.result().to_bytes());
+                        pks.push((pk, src_account.clone()));
+                    }
+                }
+
+                use rayon::iter::IntoParallelRefIterator;
+                use rayon::iter::ParallelIterator;
+                use std::sync::atomic::AtomicU64;
+                // only add pubkeys which don't exist yet.
+                // if it already exists, then cap changes will not be right
+                self.accounts_db.maybe_throttle_add();
+                let additional_lamports_atomic = AtomicU64::default();
+                let retain = pks
+                    .par_iter()
+                    .map(|(k, acct)| {
+                        self.accounts_db.maybe_throttle_add();
+                        let retain = self
+                            .accounts_db
+                            .load_with_fixed_root(ancestors, k)
+                            .is_none();
+                        if retain {
+                            additional_lamports_atomic
+                                .fetch_add(acct.lamports(), Ordering::Relaxed);
+                        }
+                        /*
+                        self.accounts_db.accounts_index.scan(
+                            std::iter::once(k),
+                            |_pk, slot_ref, _entry| {
+                                retain = slot_ref.is_none();
+                                if retain {
+                                    additional_lamports_atomic.fetch_add(acct.lamports(), Ordering::Relaxed);
+                                }
+                                crate::accounts_index::AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
+                            },
+                            None,
+                            false,
+                        );
+                        */
+                        retain
+                    })
+                    .collect::<Vec<_>>();
+                self.accounts_db.maybe_throttle_add();
+                additional_lamports = additional_lamports_atomic.load(Ordering::Relaxed);
+                let mut i = 0;
+                pks.retain(|(k, acct)| {
+                    let r = retain[i];
+                    i += 1;
+                    r
+                });
+            });
+            //log::error!("adding {} dummy accounts, took: {}us, slot: {slot}", pks.len(), us);
+            datapoint_info!(
+                "dummy_accounts",
+                ("count", pks.len(), i64),
+                ("total_us", us, i64),
+            );
+
+            let additional = pks
+                .iter()
+                .map(|(k, account)| (k, account))
+                .collect::<Vec<_>>();
+            self.accounts_db.store_cached((slot, &additional[..]), None);
+
+            additional_lamports_result = Some(additional_lamports);
+        }
         self.accounts_db
-            .store_cached_inline_update_index((slot, &accounts_to_store[..]), Some(&transactions));
+            .store_cached((slot, &accounts_to_store[..]), Some(&transactions));
+        additional_lamports_result
     }
 
     pub fn store_accounts_cached<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
@@ -1564,6 +1669,7 @@ mod tests {
             RewardInterval::OutsideInterval,
             &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
+            false,
         )
     }
 
@@ -3377,6 +3483,7 @@ mod tests {
             RewardInterval::OutsideInterval,
             &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
+            false,
         )
     }
 

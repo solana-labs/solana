@@ -28,7 +28,7 @@ const _: () = assert!(std::mem::size_of::<Age>() == std::mem::size_of::<AtomicAg
 const AGE_MS: u64 = DEFAULT_MS_PER_SLOT; // match one age per slot time
 
 // 10 GB limit for in-mem idx. In practice, we don't get this high. This tunes how aggressively to save items we expect to use soon.
-pub const DEFAULT_DISK_INDEX: Option<usize> = Some(10_000);
+pub const DEFAULT_DISK_INDEX: Option<usize> = Some(100_000);
 
 pub struct BucketMapHolder<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     pub disk: Option<BucketMap<(Slot, U)>>,

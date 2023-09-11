@@ -67,9 +67,9 @@ pub const BANK_SNAPSHOT_PRE_FILENAME_EXTENSION: &str = "pre";
 // - Necessary in order to have a plain NonZeroUsize as the constant, NonZeroUsize
 //   returns an Option<NonZeroUsize> and we can't .unwrap() at compile time
 pub const DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN: NonZeroUsize =
-    unsafe { NonZeroUsize::new_unchecked(2) };
+    unsafe { NonZeroUsize::new_unchecked(1) };
 pub const DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN: NonZeroUsize =
-    unsafe { NonZeroUsize::new_unchecked(4) };
+    unsafe { NonZeroUsize::new_unchecked(1) };
 pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^snapshot-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz|tar\.lz4)$";
 pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^incremental-snapshot-(?P<base>[[:digit:]]+)-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz|tar\.lz4)$";
 
@@ -991,17 +991,24 @@ where
     F: FnOnce(&mut BufWriter<std::fs::File>) -> Result<()>,
 {
     let data_file = fs_err::File::create(data_file_path)?.into();
+    log::error!("abs: {}", line!());
     let mut data_file_stream = BufWriter::new(data_file);
+    log::error!("abs: {}", line!());
     serializer(&mut data_file_stream)?;
+    log::error!("abs: {}", line!());
     data_file_stream.flush()?;
+    log::error!("abs: {}", line!());
 
     let consumed_size = data_file_stream.stream_position()?;
+    log::error!("abs: {}", line!());
     if consumed_size > maximum_file_size {
+        log::error!("abs: {}, {consumed_size}, {maximum_file_size}", line!());
         let error_message = format!(
             "too large snapshot data file to serialize: {data_file_path:?} has {consumed_size} bytes"
         );
         return Err(get_io_error(&error_message));
     }
+    log::error!("abs: {}", line!());
     Ok(consumed_size)
 }
 

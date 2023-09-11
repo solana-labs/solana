@@ -15,6 +15,8 @@ const STATS_INTERVAL_MS: u64 = 10_000;
 
 #[derive(Debug, Default)]
 pub struct BucketMapHeldInMemStats {
+    pub ref_count0: AtomicU64,
+    pub ref_count2: AtomicU64,
     pub ref_count: AtomicU64,
     pub slot_list_len: AtomicU64,
     pub slot_list_cached: AtomicU64,
@@ -27,6 +29,7 @@ pub struct BucketMapHolderStats {
     pub gets_from_mem: AtomicU64,
     pub get_missing_us: AtomicU64,
     pub gets_missing: AtomicU64,
+    pub flush_evict_remove_us: AtomicU64,
     pub entry_mem_us: AtomicU64,
     pub entries_from_mem: AtomicU64,
     pub entry_missing_us: AtomicU64,
@@ -51,6 +54,14 @@ pub struct BucketMapHolderStats {
     pub flush_entries_updated_on_disk: AtomicU64,
     pub flush_entries_evicted_from_mem: AtomicU64,
     pub active_threads: AtomicU64,
+    pub upsert_found_in_mem_read_lock: AtomicU64,
+    pub upsert_found_in_mem_write_lock: AtomicU64,
+    pub upsert_disk_lookup_us: AtomicU64,
+    pub upsert_missing_disk: AtomicU64,
+    pub upsert_found_disk: AtomicU64,
+    pub upsert_second_lookup_us: AtomicU64,
+    pub read_lock_wait_us: AtomicU64,
+    pub scan_missing_us: AtomicU64,
     pub get_range_us: AtomicU64,
     last_age: AtomicAge,
     last_ages_flushed: AtomicU64,
@@ -63,6 +74,8 @@ pub struct BucketMapHolderStats {
     bins: u64,
     pub estimate_mem: AtomicU64,
     pub flush_should_evict_us: AtomicU64,
+    pub lazy_disk_index_lookup_set_count: AtomicU64,
+    pub lazy_disk_index_lookup_clear_count: AtomicU64,
 }
 
 impl BucketMapHolderStats {
@@ -304,6 +317,16 @@ impl BucketMapHolderStats {
                     i64
                 ),
                 (
+                    "ref_count0",
+                    self.held_in_mem.ref_count0.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "ref_count2",
+                    self.held_in_mem.ref_count2.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
                     "slot_list_cached",
                     self.held_in_mem.slot_list_cached.swap(0, Ordering::Relaxed),
                     i64
@@ -329,6 +352,11 @@ impl BucketMapHolderStats {
                 (
                     "gets_missing",
                     self.gets_missing.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "flush_evict_remove_us",
+                    self.flush_evict_remove_us.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
@@ -394,8 +422,50 @@ impl BucketMapHolderStats {
                 ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
                 ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
                 (
+                    "scan_missing_us",
+                    self.scan_missing_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
                     "active_threads",
                     self.active_threads.load(Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "upsert_found_in_mem_read_lock",
+                    self.upsert_found_in_mem_read_lock
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "upsert_found_in_mem_write_lock",
+                    self.upsert_found_in_mem_write_lock
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "upsert_disk_lookup_us",
+                    self.upsert_disk_lookup_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "upsert_found_disk",
+                    self.upsert_found_disk.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "upsert_missing_disk",
+                    self.upsert_missing_disk.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "upsert_second_lookup_us",
+                    self.upsert_second_lookup_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "read_lock_wait_us",
+                    self.read_lock_wait_us.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 ("items", self.items.swap(0, Ordering::Relaxed), i64),
@@ -441,6 +511,12 @@ impl BucketMapHolderStats {
                 (
                     "disk_index_max_size",
                     disk.map(|disk| { disk.stats.index.max_size.swap(0, Ordering::Relaxed) })
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
+                    "disk_data_copy_us",
+                    disk.map(|disk| disk.stats.data.copy_us.swap(0, Ordering::Relaxed))
                         .unwrap_or_default(),
                     i64
                 ),
@@ -544,6 +620,18 @@ impl BucketMapHolderStats {
                         .swap(0, Ordering::Relaxed),
                     i64
                 ),
+                (
+                    "lazy_disk_index_lookup_set_count",
+                    self.lazy_disk_index_lookup_set_count
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "lazy_disk_index_lookup_clear_count",
+                    self.lazy_disk_index_lookup_clear_count
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                )
             );
         } else {
             datapoint_info!(

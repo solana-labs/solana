@@ -27,6 +27,7 @@ pub struct SlotCacheInner {
     unique_account_writes_size: AtomicU64,
     size: AtomicU64,
     total_size: Arc<AtomicU64>,
+    total_count: Arc<AtomicU64>,
     is_frozen: AtomicBool,
 }
 
@@ -35,6 +36,7 @@ impl Drop for SlotCacheInner {
         // broader cache no longer holds our size in memory
         self.total_size
             .fetch_sub(self.size.load(Ordering::Relaxed), Ordering::Relaxed);
+        self.total_count.fetch_sub(self.cache.len() as u64, Ordering::Relaxed);
     }
 }
 
@@ -57,7 +59,8 @@ impl SlotCacheInner {
                 self.unique_account_writes_size.load(Ordering::Relaxed),
                 i64
             ),
-            ("size", self.size.load(Ordering::Relaxed), i64)
+            ("size", self.size.load(Ordering::Relaxed), i64),
+            ("count", self.total_count.load(Ordering::Relaxed), i64)
         );
     }
 
@@ -90,6 +93,7 @@ impl SlotCacheInner {
                 }
             }
         } else {
+            self.total_count.fetch_add(1, Ordering::Relaxed);
             self.size.fetch_add(data_len, Ordering::Relaxed);
             self.total_size.fetch_add(data_len, Ordering::Relaxed);
             self.unique_account_writes_size
@@ -162,6 +166,7 @@ pub struct AccountsCache {
     maybe_unflushed_roots: RwLock<BTreeSet<Slot>>,
     max_flushed_root: AtomicU64,
     total_size: Arc<AtomicU64>,
+    total_count: Arc<AtomicU64>,
 }
 
 impl AccountsCache {
@@ -174,6 +179,7 @@ impl AccountsCache {
             size: AtomicU64::default(),
             total_size: Arc::clone(&self.total_size),
             is_frozen: AtomicBool::default(),
+            total_count: Arc::clone(&self.total_count),
         })
     }
     fn unique_account_writes_size(&self) -> u64 {
@@ -205,6 +211,7 @@ impl AccountsCache {
                 i64
             ),
             ("total_size", self.size(), i64),
+            ("total_count", self.total_count.load(Ordering::Relaxed), i64),
         );
     }
 
@@ -245,6 +252,7 @@ impl AccountsCache {
 
     pub fn clear_roots(&self, max_root: Option<Slot>) -> BTreeSet<Slot> {
         let mut w_maybe_unflushed_roots = self.maybe_unflushed_roots.write().unwrap();
+        log::error!("maybe_Unflushed_roots: {}", w_maybe_unflushed_roots.len());
         if let Some(max_root) = max_root {
             // `greater_than_max_root` contains all slots >= `max_root + 1`, or alternatively,
             // all slots > `max_root`. Meanwhile, `w_maybe_unflushed_roots` is left with all slots

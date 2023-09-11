@@ -131,6 +131,7 @@ impl StandardBroadcastRun {
                         process_stats.num_extant_slots += 1;
                         // This is a faulty situation that should not happen.
                         // Refrain from generating shreds for the slot.
+                        log::error!("jwash, unexpected: {}", line!());
                         return Ok((Vec::default(), Vec::default()));
                     }
                 }
@@ -428,6 +429,18 @@ impl StandardBroadcastRun {
     }
 
     fn report_and_reset_stats(&mut self, was_interrupted: bool) {
+        if self.unfinished_slot.is_none() {
+            log::error!("unfinished_slot is none!");
+            datapoint_info!(
+                "report_and_reset_stats",
+                (
+                    "failure",
+                    1,
+                    i64
+                ),
+            );
+            return;
+        }
         let unfinished_slot = self.unfinished_slot.as_ref().unwrap();
         if was_interrupted {
             self.process_shreds_stats.submit(

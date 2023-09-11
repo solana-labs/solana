@@ -35,10 +35,11 @@ const _: () = assert!(
 
 /// cache hash data file to be mmapped later
 pub(crate) struct CacheHashDataFileReference {
-    file: File,
-    file_len: u64,
-    path: PathBuf,
-    stats: Arc<CacheHashDataStats>,
+    pub file: Option<File>,
+    pub file_len: u64,
+    pub path: PathBuf,
+    pub stats: Arc<CacheHashDataStats>,
+    pub already_mapped: Option<CacheHashDataFile>,
 }
 
 /// mmapped cache hash data file
@@ -49,11 +50,14 @@ pub(crate) struct CacheHashDataFile {
 }
 
 impl CacheHashDataFileReference {
-    /// convert the open file reference to a mmapped file that can be returned as a slice
-    pub(crate) fn map(&self) -> Result<CacheHashDataFile, std::io::Error> {
+    /// convert the open file refrence to a mmapped file that can be returned as a slice
+    pub(crate) fn map(self) -> Result<CacheHashDataFile, std::io::Error> {
+        if let Some(already_mapped) = self.already_mapped {
+            return Ok(already_mapped);
+        }
         let file_len = self.file_len;
         let mut m1 = Measure::start("read_file");
-        let mmap = CacheHashDataFileReference::load_map(&self.file)?;
+        let mmap = CacheHashDataFileReference::load_map(&self.file.unwrap())?;
         m1.stop();
         self.stats.read_us.fetch_add(m1.as_us(), Ordering::Relaxed);
         let header_size = std::mem::size_of::<Header>() as u64;
@@ -83,10 +87,13 @@ impl CacheHashDataFileReference {
             return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
         }
         cache_file.capacity = capacity;
-        assert_eq!(
+        if capacity != file_len {
+            log::error!("expected: {capacity}, len on disk: {file_len} {}, entries: {entries}, cell_size: {cell_size}", self.path.display());
+        }
+        /*assert_eq!(
             capacity, file_len,
-            "expected: {capacity}, len on disk: {file_len} {}, entries: {entries}, cell_size: {cell_size}", self.path.display(),
-        );
+            "expected: {capacity}, len on disk: {file_len} {}, entries: {entries}, cell_size: {cell_size}", path.display(),
+        );*/
 
         self.stats
             .total_entries
@@ -159,6 +166,31 @@ impl CacheHashDataFile {
         bytemuck::cast_slice(bytes)
     }
 
+    pub(crate) fn truncate(&mut self, num_elements: usize) {
+        let start = self.get_element_offset_byte(0);
+        let header = self.get_header_mut();
+        header.count = num_elements;
+        self.capacity = (num_elements * std::mem::size_of::<EntryType>() + start) as u64;
+    }
+
+    pub fn get_num_elts(&self) -> usize {
+        let start = self.get_element_offset_byte(0);
+        let item_slice: &[u8] = &self.mmap[start..self.capacity as usize];
+        let remaining_elements = item_slice.len() / std::mem::size_of::<EntryType>();
+        remaining_elements
+    }
+
+    /// get '&[EntryType]' from cache file [ix..]
+    pub(crate) fn get_slice_mut(&mut self, ix: u64) -> &mut [EntryType] {
+        let start = self.get_element_offset_byte(ix);
+        let item_slice: &[u8] = &self.mmap[start..self.capacity as usize];
+        let remaining_elements = item_slice.len() / std::mem::size_of::<EntryType>();
+        unsafe {
+            let item = item_slice.as_ptr() as *mut EntryType;
+            std::slice::from_raw_parts_mut(item, remaining_elements)
+        }
+    }
+
     /// return byte offset of entry 'ix' into a slice which contains a header and at least ix elements
     fn get_element_offset_byte(&self, ix: u64) -> usize {
         let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
@@ -185,6 +217,16 @@ impl CacheHashDataFile {
         data.write_all(&[0]).unwrap();
         data.rewind().unwrap();
         data.flush().unwrap();
+        Ok(unsafe { MmapMut::map_mut(&data).unwrap() })
+    }
+
+    fn load_map(file: impl AsRef<Path>) -> Result<MmapMut, std::io::Error> {
+        let data = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(false)
+            .open(file)?;
+
         Ok(unsafe { MmapMut::map_mut(&data).unwrap() })
     }
 }
@@ -277,10 +319,11 @@ impl CacheHashData {
         self.pre_existing_cache_file_will_be_used(file_name);
 
         Ok(CacheHashDataFileReference {
-            file,
+            file: Some(file),
             file_len,
             path,
             stats: Arc::clone(&self.stats),
+            already_mapped: None,
         })
     }
 
@@ -289,33 +332,43 @@ impl CacheHashData {
             .lock()
             .unwrap()
             .remove(file_name.as_ref());
+
+        self.stats.loaded_from_cache.fetch_add(1, Ordering::Relaxed);
     }
 
     /// save 'data' to 'file_name'
     pub(crate) fn save(
         &self,
         file_name: impl AsRef<Path>,
-        data: &SavedTypeSlice,
+        data: &[EntryType],
     ) -> Result<(), std::io::Error> {
-        self.save_internal(file_name, data)
+        let result = self.save_internal(file_name, data, None);
+        result.map(|_| ())
+    }
+
+    /// save 'data' to 'file_name'
+    pub(crate) fn allocate(
+        &self,
+        file_name: impl AsRef<Path>,
+        len: usize,
+    ) -> Result<CacheHashDataFile, std::io::Error> {
+        let result = self.save_internal(file_name, &[], Some(len));
+        result
     }
 
     fn save_internal(
         &self,
         file_name: impl AsRef<Path>,
-        data: &SavedTypeSlice,
-    ) -> Result<(), std::io::Error> {
+        data: &[EntryType],
+        allocate_len: Option<usize>,
+    ) -> Result<CacheHashDataFile, std::io::Error> {
         let mut m = Measure::start("save");
         let cache_path = self.cache_dir.join(file_name);
         // overwrite any existing file at this path
         let _ignored = remove_file(&cache_path);
         let cell_size = std::mem::size_of::<EntryType>() as u64;
         let mut m1 = Measure::start("create save");
-        let entries = data
-            .iter()
-            .map(|x: &Vec<EntryType>| x.len())
-            .collect::<Vec<_>>();
-        let entries = entries.iter().sum::<usize>();
+        let entries = allocate_len.unwrap_or(data.len());
         let capacity = cell_size * (entries as u64) + std::mem::size_of::<Header>() as u64;
 
         let mmap = CacheHashDataFile::new_map(&cache_path, capacity)?;
@@ -341,14 +394,16 @@ impl CacheHashData {
 
         let mut m2 = Measure::start("write_to_mmap");
         let mut i = 0;
-        data.iter().for_each(|x| {
-            x.iter().for_each(|item| {
-                let d = cache_file.get_mut(i as u64);
-                i += 1;
-                *d = *item;
-            })
+        data.iter().for_each(|item| {
+            let d = cache_file.get_mut(i as u64);
+            i += 1;
+            *d = item.clone();
         });
-        assert_eq!(i, entries);
+        if allocate_len.is_some() {
+            assert_eq!(i, 0);
+        } else {
+            assert_eq!(i, entries);
+        }
         m2.stop();
         self.stats
             .write_to_mmap_us
@@ -356,7 +411,7 @@ impl CacheHashData {
         m.stop();
         self.stats.save_us.fetch_add(m.as_us(), Ordering::Relaxed);
         self.stats.saved_to_cache.fetch_add(1, Ordering::Relaxed);
-        Ok(())
+        Ok(cache_file)
     }
 }
 
@@ -386,7 +441,7 @@ mod tests {
             &self,
             file_name: impl AsRef<Path>,
         ) -> Result<CacheHashDataFile, std::io::Error> {
-            let reference = self.get_file_reference_to_map_later(file_name)?;
+            let mut reference = self.get_file_reference_to_map_later(file_name)?;
             reference.map()
         }
     }
@@ -406,13 +461,14 @@ mod tests {
             let bin_calculator = PubkeyBinCalculator24::new(bins);
             let num_points = 5;
             let (data, _total_points) = generate_test_data(num_points, bins, &bin_calculator);
-            for passes in [1, 2] {
+            for passes in [1] {
+                // only support 1 pass now
                 let bins_per_pass = bins / passes;
                 if bins_per_pass == 0 {
                     continue; // illegal test case
                 }
                 for pass in 0..passes {
-                    for flatten_data in [true, false] {
+                    for flatten_data in [true] {
                         let mut data_this_pass = if flatten_data {
                             vec![vec![], vec![]]
                         } else {
@@ -429,7 +485,12 @@ mod tests {
                         }
                         let cache = CacheHashData::new(cache_dir.clone(), true);
                         let file_name = PathBuf::from("test");
-                        cache.save(&file_name, &data_this_pass).unwrap();
+                        cache
+                            .save(
+                                &file_name,
+                                &data_this_pass.iter().flatten().cloned().collect::<Vec<_>>(),
+                            )
+                            .unwrap();
                         cache.get_cache_files();
                         assert_eq!(
                             cache

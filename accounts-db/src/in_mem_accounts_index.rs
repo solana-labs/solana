@@ -10,7 +10,7 @@ use {
     },
     rand::{thread_rng, Rng},
     solana_bucket_map::bucket_api::BucketApi,
-    solana_measure::measure::Measure,
+    solana_measure::{measure::Measure, measure_us},
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
@@ -289,12 +289,14 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
     ) -> RT {
         let mut found = true;
         let mut m = Measure::start("get");
+        let read_us;
         let result = {
-            let map = self.map_internal.read().unwrap();
+            let (map, local_read_us) = measure_us!(self.map_internal.read().unwrap());
+            read_us = local_read_us;
             let result = map.get(pubkey);
             m.stop();
 
-            callback(if let Some(entry) = result {
+            let r = callback(if let Some(entry) = result {
                 if update_age {
                     self.set_age_to_future(entry, false);
                 }
@@ -303,8 +305,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                 drop(map);
                 found = false;
                 None
-            })
+            });
+            r
         };
+        Self::update_stat(&self.stats().read_lock_wait_us, read_us);
 
         let stats = self.stats();
         let (count, time) = if found {
@@ -485,30 +489,43 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         reclaim: UpsertReclaim,
     ) {
         let mut updated_in_mem = true;
+        let mut found_with_read_lock = true;
+        let mut found_initially_with_write_lock = false;
+        let mut missing_on_disk = false;
+        let mut upsert_found_disk = false;
         // try to get it just from memory first using only a read lock
         self.get_only_in_mem(pubkey, false, |entry| {
             if let Some(entry) = entry {
                 self.update_slot_list_entry(entry, new_value, other_slot, reclaims, reclaim);
             } else {
-                let mut m = Measure::start("entry");
+                // not in memory, so try to load a copy from disk
+                // would like to do disk load here
+                found_with_read_lock = false;
+
+                let mut m_second_lookup = Measure::start("entry");
                 let mut map = self.map_internal.write().unwrap();
                 let entry = map.entry(*pubkey);
-                m.stop();
+                m_second_lookup.stop();
                 let found = matches!(entry, Entry::Occupied(_));
+                let mut disk_read_inside_write_lock_us = None;
                 match entry {
                     Entry::Occupied(mut occupied) => {
                         let current = occupied.get_mut();
                         self.update_slot_list_entry(
                             current, new_value, other_slot, reclaims, reclaim,
                         );
+                        found_initially_with_write_lock = true;
                     }
                     Entry::Vacant(vacant) => {
                         // not in cache, look on disk
                         updated_in_mem = false;
 
                         // go to in-mem cache first
-                        let disk_entry = self.load_account_entry_from_disk(vacant.key());
+                        let (disk_entry, local_disk_read_inside_write_lock_us) =
+                            measure_us!(self.load_account_entry_from_disk(vacant.key()));
+                        disk_read_inside_write_lock_us = Some(local_disk_read_inside_write_lock_us);
                         let new_value = if let Some(disk_entry) = disk_entry {
+                            upsert_found_disk = true;
                             // on disk, so merge new_value with what was on disk
                             self.update_slot_list_entry(
                                 &disk_entry,
@@ -520,6 +537,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                             disk_entry
                         } else {
                             // not on disk, so insert new thing
+                            missing_on_disk = true;
                             self.stats().inc_insert();
                             new_value.into_account_map_entry(&self.storage)
                         };
@@ -530,11 +548,34 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                 };
 
                 drop(map);
-                self.update_entry_stats(m, found);
+                let upsert_second_lookup_us = m_second_lookup.as_us();
+                self.update_entry_stats(m_second_lookup, found);
+                if let Some(disk_read_inside_write_lock_us) = disk_read_inside_write_lock_us {
+                    Self::update_stat(
+                        &self.stats().upsert_disk_lookup_us,
+                        disk_read_inside_write_lock_us,
+                    );
+                }
+                if upsert_found_disk {
+                    Self::update_stat(&self.stats().upsert_found_disk, 1);
+                }
+                Self::update_stat(
+                    &self.stats().upsert_second_lookup_us,
+                    upsert_second_lookup_us,
+                );
             };
         });
         if updated_in_mem {
             Self::update_stat(&self.stats().updates_in_mem, 1);
+        }
+        if found_with_read_lock {
+            Self::update_stat(&self.stats().upsert_found_in_mem_read_lock, 1);
+        }
+        if found_initially_with_write_lock {
+            Self::update_stat(&self.stats().upsert_found_in_mem_write_lock, 1);
+        }
+        if missing_on_disk {
+            Self::update_stat(&self.stats().upsert_missing_disk, 1);
         }
     }
 
@@ -980,24 +1021,36 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             if exceeds_budget {
                 // if we are already holding too many items in-mem, then we need to be more aggressive at kicking things out
                 (true, None)
-            } else if entry.ref_count() != 1 {
-                Self::update_stat(&self.stats().held_in_mem.ref_count, 1);
-                (false, None)
             } else {
-                // only read the slot list if we are planning to throw the item out
-                let slot_list = entry.slot_list.read().unwrap();
-                if slot_list.len() != 1 {
-                    if update_stats {
-                        Self::update_stat(&self.stats().held_in_mem.slot_list_len, 1);
+                let rc = entry.ref_count();
+                if rc != 1 {
+
+                    Self::update_stat(&self.stats().held_in_mem.ref_count, 1);
+                    if rc == 0 {
+                        Self::update_stat(&self.stats().held_in_mem.ref_count0, 1);
+
                     }
-                    (false, None) // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
+                    else if rc == 2 {
+                        Self::update_stat(&self.stats().held_in_mem.ref_count2, 1);
+
+                    }
+                    (false, None)
                 } else {
-                    // keep items with slot lists that contained cached items
-                    let evict = !slot_list.iter().any(|(_, info)| info.is_cached());
-                    if !evict && update_stats {
-                        Self::update_stat(&self.stats().held_in_mem.slot_list_cached, 1);
+                    // only read the slot list if we are planning to throw the item out
+                    let slot_list = entry.slot_list.read().unwrap();
+                    if slot_list.len() != 1 {
+                        if update_stats {
+                            Self::update_stat(&self.stats().held_in_mem.slot_list_len, 1);
+                        }
+                        (false, None) // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
+                    } else {
+                        // keep items with slot lists that contained cached items
+                        let evict = !slot_list.iter().any(|(_, info)| info.is_cached());
+                        if !evict && update_stats {
+                            Self::update_stat(&self.stats().held_in_mem.slot_list_cached, 1);
+                        }
+                        (evict, if evict { Some(slot_list) } else { None })
                     }
-                    (evict, if evict { Some(slot_list) } else { None })
                 }
             }
         } else {

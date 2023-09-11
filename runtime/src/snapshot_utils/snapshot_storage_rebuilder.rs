@@ -314,6 +314,7 @@ impl SnapshotStorageRebuilder {
                     .unwrap()
                     .get(&old_append_vec_id)
                     .unwrap();
+                // error!("storage len: {:?}, id: {}, len: {}", filename, old_append_vec_id, current_len);
 
                 let storage_entry = match &self.snapshot_from {
                     SnapshotFrom::Archive => remap_and_reconstruct_single_storage(

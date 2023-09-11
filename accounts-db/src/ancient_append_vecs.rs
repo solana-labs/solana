@@ -181,7 +181,7 @@ impl AncientSlotInfos {
         self.shrink_indexes.clear();
         let total_storages = self.all_infos.len();
         let mut cumulative_bytes = 0u64;
-        let low_threshold = max_storages * 50 / 100;
+        //let max_slots = 300;
         for (i, info) in self.all_infos.iter().enumerate() {
             saturating_add_assign!(cumulative_bytes, info.alive_bytes);
             let ancient_storages_required = (cumulative_bytes / ideal_storage_size + 1) as usize;
@@ -191,11 +191,30 @@ impl AncientSlotInfos {
             // combined ancient storages is less than the threshold, then
             // we've gone too far, so get rid of this entry and all after it.
             // Every storage after this one is larger.
-            if storages_remaining + ancient_storages_required < low_threshold {
+            let low_water_mark_offset = max_storages / 2;
+            if storages_remaining + ancient_storages_required + low_water_mark_offset < max_storages
+            {
+                log::error!(
+                    "ancient_append_vecs_packed: {}, would truncate to {}, bytes: {}, len: {}",
+                    line!(),
+                    i,
+                    cumulative_bytes,
+                    self.all_infos.len()
+                );
+                //self.all_infos.truncate(i.min(max_slots));
                 self.all_infos.truncate(i);
                 break;
             }
         }
+        log::error!(
+            "ancient_append_vecs_packed: {}, {}, bytes: {}",
+            line!(),
+            self.all_infos.len(),
+            cumulative_bytes
+        );
+        //if self.all_infos.len() > max_slots {
+        //self.all_infos.truncate(max_slots);
+        //}
     }
 
     /// remove entries from 'all_infos' such that combining
@@ -211,6 +230,7 @@ impl AncientSlotInfos {
             // currently fewer storages than max, so nothing to shrink
             self.shrink_indexes.clear();
             self.all_infos.clear();
+            log::error!("ancient_append_vecs_packed: {}, all filtered out", line!());
             return;
         }
 
@@ -256,6 +276,7 @@ impl AccountsDb {
             ideal_storage_size: NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
             can_randomly_shrink,
         };
+        assert!(!tuning.can_randomly_shrink);
 
         let _guard = self.active_stats.activate(ActiveStatItem::SquashAncient);
 
@@ -416,6 +437,8 @@ impl AccountsDb {
         slots: Vec<Slot>,
         tuning: &PackedAncientStorageTuning,
     ) -> AncientSlotInfos {
+        assert!(!tuning.can_randomly_shrink);
+
         let mut ancient_slot_infos = self.calc_ancient_slot_info(slots, tuning.can_randomly_shrink);
 
         ancient_slot_infos.filter_ancient_slots(tuning);
@@ -466,15 +489,40 @@ impl AccountsDb {
             all_infos: Vec::with_capacity(len),
             ..AncientSlotInfos::default()
         };
+        assert!(!can_randomly_shrink);
         let mut randoms = 0;
 
+        log::error!(
+            "ancient_append_vecs_packed: {}, adding: {}",
+            line!(),
+            slots.len()
+        );
+        let mut too_big = 0;
         for slot in &slots {
             if let Some(storage) = self.storage.get_slot_storage_entry(*slot) {
+                // log::error!("ancient_append_vecs_packed: {}, adding: {}, refs: {}", line!(), slot, Arc::strong_count(&storage));
+
+                if storage.capacity() > 1_300_000_000 {
+                    // already so big we don't want to use it
+                    //too_big += 1;
+                    //continue;
+                }
+
                 if infos.add(*slot, storage, can_randomly_shrink) {
+                    log::error!(
+                        "ancient_append_vecs_packed: {}, random: {}",
+                        line!(),
+                        can_randomly_shrink
+                    );
                     randoms += 1;
                 }
             }
         }
+        log::error!(
+            "ancient_append_vecs_packed: {}, too big: {}",
+            line!(),
+            too_big
+        );
         if randoms > 0 {
             self.shrink_ancient_stats
                 .random_shrink
@@ -573,12 +621,25 @@ impl AccountsDb {
         metrics: &mut ShrinkStatsSub,
     ) {
         let mut dropped_roots = Vec::with_capacity(accounts_to_combine.accounts_to_combine.len());
+        log::error!(
+            "ancient_append_vecs_packed: {}, finish_combine: {}, shrinks in progress: {}",
+            line!(),
+            accounts_to_combine.accounts_to_combine.len(),
+            self.storage.shrink_in_progress_map.len()
+        );
         for shrink_collect in accounts_to_combine.accounts_to_combine {
             let slot = shrink_collect.slot;
 
             let shrink_in_progress = write_ancient_accounts.shrinks_in_progress.remove(&slot);
             if shrink_in_progress.is_none() {
+                log::error!(
+                    "ancient_append_vecs_packed: {}, no shrink in progress, slot: {}",
+                    line!(),
+                    slot
+                );
                 dropped_roots.push(slot);
+            } else {
+                log::error!("ancient_append_vecs_packed: {}, slot: {}", line!(), slot);
             }
             self.remove_old_stores_shrink(
                 &shrink_collect,
@@ -586,9 +647,14 @@ impl AccountsDb {
                 shrink_in_progress,
                 true,
             );
-
-            // If the slot is dead, remove the need to shrink the storage as the storage entries will be purged.
-            self.shrink_candidate_slots.lock().unwrap().remove(&slot);
+            // If the slot is dead, remove the need to shrink the storages as
+            // the storage entries will be purged.
+            {
+                let mut list = self.shrink_candidate_slots.lock().unwrap();
+                if list.remove(&slot) {
+                    log::error!("ancient_append_vecs_packed: {}, slot: {}, removed from shrink_candidate_slots", line!(), slot);
+                }
+            }
         }
         self.handle_dropped_roots_for_ancient(dropped_roots.into_iter());
         metrics.accumulate(&write_ancient_accounts.metrics);

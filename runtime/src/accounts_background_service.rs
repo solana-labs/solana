@@ -36,7 +36,7 @@ use {
     },
 };
 
-const INTERVAL_MS: u64 = 100;
+const INTERVAL_MS: u64 = 1000;
 const CLEAN_INTERVAL_BLOCKS: u64 = 100;
 
 // This value is chosen to spread the dropping cost over 3 expiration checks
@@ -401,7 +401,7 @@ impl SnapshotRequestHandler {
                         self.snapshot_config.snapshot_version,
                         status_cache_slot_deltas,
                     )?;
-                    AccountsPackage::new_for_snapshot(
+                                        AccountsPackage::new_for_snapshot(
                         accounts_package_kind,
                         &snapshot_root_bank,
                         &bank_snapshot_info,
@@ -425,7 +425,7 @@ impl SnapshotRequestHandler {
                 AccountsPackageKind::EpochAccountsHash => panic!("Illegal account package type: EpochAccountsHash packages must be from an EpochAccountsHash request!"),
             },
             SnapshotRequestKind::EpochAccountsHash => {
-                // skip the bank snapshot, just make an accounts package to send to AHV
+                                // skip the bank snapshot, just make an accounts package to send to AHV
                 AccountsPackage::new_for_epoch_accounts_hash(
                     accounts_package_kind,
                     &snapshot_root_bank,
@@ -505,42 +505,11 @@ pub struct PrunedBanksRequestHandler {
 }
 
 impl PrunedBanksRequestHandler {
-    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-    fn handle_request(&self, bank: &Bank) -> usize {
-        let mut banks_to_purge: Vec<_> = self.pruned_banks_receiver.try_iter().collect();
-        // We need a stable sort to ensure we purge banks—with the same slot—in the same order
-        // they were sent into the channel.
-        banks_to_purge.sort_by_key(|(slot, _id)| *slot);
-        let num_banks_to_purge = banks_to_purge.len();
-
-        // Group the banks into slices with the same slot
-        let grouped_banks_to_purge: Vec<_> =
-            GroupBy::new(banks_to_purge.as_slice(), |a, b| a.0 == b.0).collect();
-
-        // Log whenever we need to handle banks with the same slot.  Purposely do this *before* we
-        // call `purge_slot()` to ensure we get the datapoint (in case there's an assert/panic).
-        let num_banks_with_same_slot =
-            num_banks_to_purge.saturating_sub(grouped_banks_to_purge.len());
-        if num_banks_with_same_slot > 0 {
-            datapoint_info!(
-                "pruned_banks_request_handler",
-                ("num_pruned_banks", num_banks_to_purge, i64),
-                ("num_banks_with_same_slot", num_banks_with_same_slot, i64),
-            );
-        }
-
-        // Purge all the slots in parallel
-        // Banks for the same slot are purged sequentially
-        let accounts_db = bank.rc.accounts.accounts_db.as_ref();
-        accounts_db.thread_pool_clean.install(|| {
-            grouped_banks_to_purge.into_par_iter().for_each(|group| {
-                group.iter().for_each(|(slot, bank_id)| {
-                    accounts_db.purge_slot(*slot, *bank_id, true);
-                })
-            });
-        });
-
-        num_banks_to_purge
+    pub fn handle_request(&self, bank: &Bank) -> usize {
+        bank.rc
+            .accounts
+            .accounts_db
+            .do_handle_pruned_banks_request(&self.pruned_banks_receiver)
     }
 
     fn remove_dead_slots(
@@ -631,15 +600,15 @@ impl AccountsBackgroundService {
                             &mut total_remove_slots_time,
                         );
 
-                    Self::expire_old_recycle_stores(&bank, &mut last_expiration_check_time);
+                                                Self::expire_old_recycle_stores(&bank, &mut last_expiration_check_time);
 
-                    let non_snapshot_time = last_snapshot_end_time
+                                                let non_snapshot_time = last_snapshot_end_time
                         .map(|last_snapshot_end_time: Instant| {
                             last_snapshot_end_time.elapsed().as_micros()
                         })
                         .unwrap_or_default();
 
-                    // Check to see if there were any requests for snapshotting banks
+                        // Check to see if there were any requests for snapshotting banks
                     // < the current root bank `bank` above.
 
                     // Claim: Any snapshot request for slot `N` found here implies that the last cleanup
@@ -661,7 +630,7 @@ impl AccountsBackgroundService {
                     // snapshot requests.  This is because startup verification and snapshot
                     // request handling can both kick off accounts hash calculations in background
                     // threads, and these must not happen concurrently.
-                    let snapshot_handle_result = bank
+                                        let snapshot_handle_result = bank
                         .is_startup_verification_complete()
                         .then(|| {
                             request_handlers.handle_snapshot_requests(
@@ -707,11 +676,14 @@ impl AccountsBackgroundService {
                             bank.force_flush_accounts_cache();
                             bank.clean_accounts(last_full_snapshot_slot);
                             last_cleaned_block_height = bank.block_height();
-                            bank.shrink_ancient_slots();
+                            bank.shrink_candidate_slots_arc(exit.clone(), &request_handlers.pruned_banks_request_handler.pruned_banks_receiver);
                         }
-                        bank.shrink_candidate_slots();
+                        bank.shrink_candidate_slots_arc(
+                            exit.clone(),
+                            &request_handlers.pruned_banks_request_handler.pruned_banks_receiver,
+                        );
                     }
-                    stats.record_and_maybe_submit(start_time.elapsed());
+                    stats.record_and_maybe_submit(start_time.elapsed(), bank.slot());
                     sleep(Duration::from_millis(INTERVAL_MS));
                 }
                 info!("AccountsBackgroundService has stopped");

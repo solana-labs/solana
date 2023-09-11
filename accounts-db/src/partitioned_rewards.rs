@@ -34,7 +34,7 @@ impl Default for PartitionedEpochRewardsConfig {
             // Target to store 64 rewards per entry/tick in a block. A block has a minimum of 64
             // entries/tick. This gives 4096 total rewards to store in one block.
             // This constant affects consensus.
-            stake_account_stores_per_block: 4096,
+            stake_account_stores_per_block: 1,
             test_enable_partitioned_rewards: false,
             test_compare_partitioned_epoch_rewards: false,
         }

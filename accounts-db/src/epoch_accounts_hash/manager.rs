@@ -1,7 +1,7 @@
 use {
     super::EpochAccountsHash,
     solana_sdk::clock::Slot,
-    std::sync::{Condvar, Mutex},
+    std::sync::{Condvar, Mutex, atomic::{Ordering, AtomicBool}},
 };
 
 /// Manage the epoch accounts hash
@@ -14,6 +14,7 @@ pub struct Manager {
     state: Mutex<State>,
     /// This condition variable is used to wait for an in-flight EAH calculation to complete
     cvar: Condvar,
+    pub waiting: AtomicBool,
 }
 
 impl Manager {
@@ -22,6 +23,7 @@ impl Manager {
         Self {
             state: Mutex::new(state),
             cvar: Condvar::new(),
+            waiting: AtomicBool::default(),
         }
     }
 
@@ -64,12 +66,25 @@ impl Manager {
     ///
     /// If an EAH calculation is in-flight, then this call will block until it completes.
     pub fn wait_get_epoch_accounts_hash(&self) -> EpochAccountsHash {
+        log::error!("abs: {} waiting for eah", line!());
         let mut state = self.state.lock().unwrap();
+        log::error!("abs: {} waiting for eah", line!());
         loop {
             match &*state {
                 State::Valid(epoch_accounts_hash, _slot) => break *epoch_accounts_hash,
-                State::InFlight(_slot) => state = self.cvar.wait(state).unwrap(),
-                State::Invalid => panic!("The epoch accounts hash cannot be awaited when Invalid!"),
+                State::InFlight(_slot) => state = {
+                    log::error!("abs: {} waiting for eah", line!());
+                    self.waiting.store(true, Ordering::Relaxed);
+                    let r = self.cvar.wait(state).unwrap();
+                    self.waiting.store(false, Ordering::Relaxed);
+                    log::error!("abs: {} waiting for eah", line!());
+                    r
+                },
+
+                State::Invalid => {
+                    log::error!("abs: {} waiting for eah", line!());
+                    panic!("The epoch accounts hash cannot be awaited when Invalid!")
+                }
             }
         }
     }
