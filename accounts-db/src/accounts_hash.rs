@@ -127,7 +127,7 @@ impl AccountHashesFile {
         let end = start + std::mem::size_of::<Hash>();
 
         unsafe {
-            let ptr = writer.mmap[start..end].as_ptr() as *mut Hash;
+            let ptr = writer.mmap[start..end].as_mut_ptr() as *mut Hash;
             *ptr = *hash;
         };
         *count += 1;
