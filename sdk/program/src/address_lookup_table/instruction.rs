@@ -1,12 +1,12 @@
 use {
-    crate::id,
-    serde::{Deserialize, Serialize},
-    solana_program::{
+    crate::{
+        address_lookup_table::program::id,
         clock::Slot,
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         system_program,
     },
+    serde::{Deserialize, Serialize},
 };
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -80,6 +80,33 @@ pub fn derive_lookup_table_address(
 
 /// Constructs an instruction to create a table account and returns
 /// the instruction and the table account's derived address.
+fn create_lookup_table_common(
+    authority_address: Pubkey,
+    payer_address: Pubkey,
+    recent_slot: Slot,
+    authority_is_signer: bool,
+) -> (Instruction, Pubkey) {
+    let (lookup_table_address, bump_seed) =
+        derive_lookup_table_address(&authority_address, recent_slot);
+    let instruction = Instruction::new_with_bincode(
+        id(),
+        &ProgramInstruction::CreateLookupTable {
+            recent_slot,
+            bump_seed,
+        },
+        vec![
+            AccountMeta::new(lookup_table_address, false),
+            AccountMeta::new_readonly(authority_address, authority_is_signer),
+            AccountMeta::new(payer_address, true),
+            AccountMeta::new_readonly(system_program::id(), false),
+        ],
+    );
+
+    (instruction, lookup_table_address)
+}
+
+/// Constructs an instruction to create a table account and returns
+/// the instruction and the table account's derived address.
 ///
 /// # Note
 ///
@@ -108,33 +135,6 @@ pub fn create_lookup_table(
     recent_slot: Slot,
 ) -> (Instruction, Pubkey) {
     create_lookup_table_common(authority_address, payer_address, recent_slot, false)
-}
-
-/// Constructs an instruction to create a table account and returns
-/// the instruction and the table account's derived address.
-fn create_lookup_table_common(
-    authority_address: Pubkey,
-    payer_address: Pubkey,
-    recent_slot: Slot,
-    authority_is_signer: bool,
-) -> (Instruction, Pubkey) {
-    let (lookup_table_address, bump_seed) =
-        derive_lookup_table_address(&authority_address, recent_slot);
-    let instruction = Instruction::new_with_bincode(
-        id(),
-        &ProgramInstruction::CreateLookupTable {
-            recent_slot,
-            bump_seed,
-        },
-        vec![
-            AccountMeta::new(lookup_table_address, false),
-            AccountMeta::new_readonly(authority_address, authority_is_signer),
-            AccountMeta::new(payer_address, true),
-            AccountMeta::new_readonly(system_program::id(), false),
-        ],
-    );
-
-    (instruction, lookup_table_address)
 }
 
 /// Constructs an instruction that freezes an address lookup

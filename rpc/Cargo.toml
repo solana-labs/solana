@@ -61,7 +61,6 @@ tokio-util = { workspace = true, features = ["codec", "compat"] }
 
 [dev-dependencies]
 serial_test = { workspace = true }
-solana-address-lookup-table-program = { workspace = true }
 solana-net-utils = { workspace = true }
 solana-stake-program = { workspace = true }
 symlink = { workspace = true }
