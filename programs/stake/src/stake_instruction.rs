@@ -527,6 +527,12 @@ mod tests {
         feature_set
     }
 
+    fn feature_set_without_require_rent_exempt_split_destination() -> Arc<FeatureSet> {
+        let mut feature_set = FeatureSet::all_enabled();
+        feature_set.deactivate(&feature_set::require_rent_exempt_split_destination::id());
+        Arc::new(feature_set)
+    }
+
     fn create_default_account() -> AccountSharedData {
         AccountSharedData::new(0, 0, &Pubkey::new_unique())
     }
@@ -5961,6 +5967,172 @@ mod tests {
                     assert_eq!(Ok(StakeStateV2::Uninitialized), accounts[0].state());
                 }
                 _ => unreachable!(),
+            }
+        }
+    }
+
+    #[test_case(feature_set_without_require_rent_exempt_split_destination(), Ok(()); "without_require_rent_exempt_split_destination")]
+    #[test_case(feature_set_all_enabled(), Err(InstructionError::InsufficientFunds); "all_enabled")]
+    fn test_split_require_rent_exempt_destination(
+        feature_set: Arc<FeatureSet>,
+        expected_result: Result<(), InstructionError>,
+    ) {
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateV2::size_of());
+        let stake_history = StakeHistory::default();
+        let current_epoch = 100;
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
+        let delegation_amount = 3 * minimum_delegation;
+        let source_lamports = rent_exempt_reserve + delegation_amount;
+        let source_address = solana_sdk::pubkey::new_rand();
+        let destination_address = solana_sdk::pubkey::new_rand();
+        let meta = Meta {
+            authorized: Authorized::auto(&source_address),
+            rent_exempt_reserve,
+            ..Meta::default()
+        };
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: source_address,
+                is_signer: true,
+                is_writable: true,
+            },
+            AccountMeta {
+                pubkey: destination_address,
+                is_signer: false,
+                is_writable: true,
+            },
+        ];
+
+        for (split_amount, expected_result) in [
+            (2 * minimum_delegation, expected_result),
+            (source_lamports, Ok(())),
+        ] {
+            for (state, expected_result) in &[
+                (StakeStateV2::Initialized(meta), Ok(())),
+                (just_stake(meta, delegation_amount), expected_result),
+            ] {
+                let source_account = AccountSharedData::new_data_with_space(
+                    source_lamports,
+                    &state,
+                    StakeStateV2::size_of(),
+                    &id(),
+                )
+                .unwrap();
+
+                let transaction_accounts =
+                    |initial_balance: u64| -> Vec<(Pubkey, AccountSharedData)> {
+                        let destination_account = AccountSharedData::new_data_with_space(
+                            initial_balance,
+                            &StakeStateV2::Uninitialized,
+                            StakeStateV2::size_of(),
+                            &id(),
+                        )
+                        .unwrap();
+                        vec![
+                            (source_address, source_account.clone()),
+                            (destination_address, destination_account),
+                            (rent::id(), create_account_shared_data_for_test(&rent)),
+                            (
+                                stake_history::id(),
+                                create_account_shared_data_for_test(&stake_history),
+                            ),
+                            (
+                                clock::id(),
+                                create_account_shared_data_for_test(&Clock {
+                                    epoch: current_epoch,
+                                    ..Clock::default()
+                                }),
+                            ),
+                            (
+                                epoch_schedule::id(),
+                                create_account_shared_data_for_test(&EpochSchedule::default()),
+                            ),
+                        ]
+                    };
+
+                // Test insufficient recipient prefunding; should error once feature is activated
+                let split_lamport_balances = vec![0, rent_exempt_reserve - 1];
+                for initial_balance in split_lamport_balances {
+                    process_instruction(
+                        Arc::clone(&feature_set),
+                        &serialize(&StakeInstruction::Split(split_amount)).unwrap(),
+                        transaction_accounts(initial_balance),
+                        instruction_accounts.clone(),
+                        expected_result.clone(),
+                    );
+                }
+
+                // Test recipient prefunding, including exactly rent_exempt_reserve, and more than
+                // rent_exempt_reserve.
+                let split_lamport_balances = vec![rent_exempt_reserve, rent_exempt_reserve + 1];
+                for initial_balance in split_lamport_balances {
+                    let accounts = process_instruction(
+                        Arc::clone(&feature_set),
+                        &serialize(&StakeInstruction::Split(split_amount)).unwrap(),
+                        transaction_accounts(initial_balance),
+                        instruction_accounts.clone(),
+                        Ok(()),
+                    );
+
+                    // no lamport leakage
+                    assert_eq!(
+                        accounts[0].lamports() + accounts[1].lamports(),
+                        source_lamports + initial_balance
+                    );
+
+                    if let StakeStateV2::Stake(meta, stake, stake_flags) = state {
+                        // split entire source account, including rent-exempt reserve
+                        if accounts[0].lamports() == 0 {
+                            assert_eq!(Ok(StakeStateV2::Uninitialized), accounts[0].state());
+                            assert_eq!(
+                                Ok(StakeStateV2::Stake(
+                                    *meta,
+                                    Stake {
+                                        delegation: Delegation {
+                                            // delegated amount should not include source
+                                            // rent-exempt reserve
+                                            stake: delegation_amount,
+                                            ..stake.delegation
+                                        },
+                                        ..*stake
+                                    },
+                                    *stake_flags,
+                                )),
+                                accounts[1].state()
+                            );
+                        } else {
+                            assert_eq!(
+                                Ok(StakeStateV2::Stake(
+                                    *meta,
+                                    Stake {
+                                        delegation: Delegation {
+                                            stake: minimum_delegation,
+                                            ..stake.delegation
+                                        },
+                                        ..*stake
+                                    },
+                                    *stake_flags,
+                                )),
+                                accounts[0].state()
+                            );
+                            assert_eq!(
+                                Ok(StakeStateV2::Stake(
+                                    *meta,
+                                    Stake {
+                                        delegation: Delegation {
+                                            stake: split_amount,
+                                            ..stake.delegation
+                                        },
+                                        ..*stake
+                                    },
+                                    *stake_flags,
+                                )),
+                                accounts[1].state()
+                            );
+                        }
+                    }
+                }
             }
         }
     }
