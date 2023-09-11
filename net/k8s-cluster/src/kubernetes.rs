@@ -40,9 +40,8 @@ impl<'a> Kubernetes<'a> {
         }
     }
     
-    pub async fn create_config_map(
+    pub async fn create_genesis_config_map(
         &self,
-        base64_content: String,
     ) -> Result<ConfigMap, kube::Error> {
         let mut metadata = ObjectMeta::default();
         metadata.name = Some("genesis-config".to_string());
@@ -57,7 +56,6 @@ impl<'a> Kubernetes<'a> {
 
         // Define the data for the ConfigMap
         let mut data = BTreeMap::<String, ByteString>::new();
-        // data.insert("genesis.bin".to_string(), base64_content);
         data.insert("genesis.tar.bz2".to_string(), ByteString(buffer));
 
         // Create the ConfigMap object
@@ -133,8 +131,6 @@ impl<'a> Kubernetes<'a> {
             mount_path: "/home/solana/bootstrap-accounts".to_string(),
             ..Default::default()
         };
-
-
 
 
         // let command = vec!["/workspace/start-bootstrap-validator.sh".to_string()];
@@ -252,6 +248,10 @@ impl<'a> Kubernetes<'a> {
         &self,
         secret_name: &str,
     ) -> Result<Secret, Box<dyn Error>> {
+        let faucet_key_path = SOLANA_ROOT.join("config-k8s");
+        let faucet_keypair = std::fs::read(faucet_key_path.join("faucet.json"))
+            .expect(format!("Failed to read faucet.json file! at: {:?}", faucet_key_path).as_str());
+
         let key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator");
 
         let identity_keypair = std::fs::read(key_path.join("identity.json"))
@@ -265,6 +265,7 @@ impl<'a> Kubernetes<'a> {
         data.insert("identity.base64".to_string(), ByteString(general_purpose::STANDARD.encode(identity_keypair).as_bytes().to_vec()));
         data.insert("vote.base64".to_string(), ByteString(general_purpose::STANDARD.encode(vote_keypair).as_bytes().to_vec()));
         data.insert("stake.base64".to_string(), ByteString(general_purpose::STANDARD.encode(stake_keypair).as_bytes().to_vec()));
+        data.insert("faucet.base64".to_string(), ByteString(general_purpose::STANDARD.encode(faucet_keypair).as_bytes().to_vec()));
 
         let secret = Secret {
             metadata: ObjectMeta {

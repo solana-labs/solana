@@ -284,20 +284,20 @@ async fn main() {
         }
     }
 
-    let base64_genesis_string = match genesis.load_genesis_to_base64_from_file() {
-        Ok(genesis_string) => genesis_string,
-        Err(err) => {
-            error!("Failed to load genesis from file! {}", err);
-            return;
-        }
-    };
+    // let base64_genesis_string = match genesis.load_genesis_to_base64_from_file() {
+    //     Ok(genesis_string) => genesis_string,
+    //     Err(err) => {
+    //         error!("Failed to load genesis from file! {}", err);
+    //         return;
+    //     }
+    // };
 
-    let loaded_config =
-        GenesisConfig::load_from_base64_string(base64_genesis_string.as_str()).expect("load");
-    info!("loaded_config_hash: {}", loaded_config.hash());
+    // let loaded_config =
+    //     GenesisConfig::load_from_base64_string(base64_genesis_string.as_str()).expect("load");
+    // info!("loaded_config_hash: {}", loaded_config.hash());
 
     let config_map = match kub_controller
-        .create_config_map(base64_genesis_string)
+        .create_genesis_config_map()
         .await
     {
         Ok(config_map) => {
@@ -322,21 +322,6 @@ async fn main() {
     let validator_image_name = matches
         .value_of("validator_image_name")
         .expect("Validator image name is required");
-
-    // let secret = match kub_controller.create_secret_old().await {
-    //     Ok(secret) => secret,
-    //     Err(err) => {
-    //         error!("Failed to create secret! {}", err);
-    //         return;
-    //     }
-    // };
-    // match kub_controller.deploy_secret(&secret).await {
-    //     Ok(_) => (),
-    //     Err(err) => {
-    //         error!("{}", err);
-    //         return;
-    //     }
-    // }
 
     let bootstrap_secret = match kub_controller.create_bootstrap_secret("bootstrap-accounts-secret") {
         Ok(secret) => secret,

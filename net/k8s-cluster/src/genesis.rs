@@ -123,12 +123,12 @@ impl<'a> Genesis<'a> {
             self.generate_account(validator_type, filename_prefix.as_str(), i)?;
         }
 
-
         Ok(())
     }
 
     fn generate_account(&mut self, validator_type: &str, filename_prefix: &str, i: i32) -> Result<(), Box<dyn Error>> {
         let account_types = vec!["identity", "vote-account", "stake-account"];
+
         let mut identity: Option<Keypair> = None;
         let mut vote: Option<Keypair> = None;
         let mut stake: Option<Keypair> = None;

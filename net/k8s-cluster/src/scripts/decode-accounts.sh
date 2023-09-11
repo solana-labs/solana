@@ -29,6 +29,16 @@ DECODED_FILES=(
     "/home/solana/stake.json"
 )
 
+if [ "$validator_type" == "bootstrap" ]; then
+    echo "Validator type is equal to 'bootstrap'"
+    SECRET_FILES+=(
+      "/home/solana/${validator_type}-accounts/faucet.json"
+    )
+    DECODED_FILES+=(
+      "/home/solana/faucet.json"
+    )
+fi
+
 # Loop through the secret files
 for i in "${!SECRET_FILES[@]}"; do
     SECRET_FILE="${SECRET_FILES[i]}"
