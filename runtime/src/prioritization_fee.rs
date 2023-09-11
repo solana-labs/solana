@@ -19,6 +19,9 @@ struct PrioritizationFeeMetrics {
     // Count of transactions that have zero prioritization fee.
     non_prioritized_transactions_count: u64,
 
+    // Count of attempted update on finalized PrioritizationFee
+    attempted_update_on_finalized_fee_count: u64,
+
     // Total prioritization fees included in this slot.
     total_prioritization_fee: u64,
 
@@ -39,6 +42,10 @@ impl PrioritizationFeeMetrics {
 
     fn accumulate_total_update_elapsed_us(&mut self, val: u64) {
         saturating_add_assign!(self.total_update_elapsed_us, val);
+    }
+
+    fn increment_attempted_update_on_finalized_fee_count(&mut self, val: u64) {
+        saturating_add_assign!(self.attempted_update_on_finalized_fee_count, val);
     }
 
     fn update_prioritization_fee(&mut self, fee: u64) {
@@ -83,6 +90,11 @@ impl PrioritizationFeeMetrics {
                 i64
             ),
             (
+                "attempted_update_on_finalized_fee_count",
+                self.attempted_update_on_finalized_fee_count as i64,
+                i64
+            ),
+            (
                 "total_prioritization_fee",
                 self.total_prioritization_fee as i64,
                 i64
@@ -106,6 +118,7 @@ impl PrioritizationFeeMetrics {
     }
 }
 
+#[derive(Debug)]
 pub enum PrioritizationFeeError {
     // Not able to get account locks from sanitized transaction, which is required to update block
     // minimum fees.
@@ -159,22 +172,27 @@ impl PrioritizationFee {
     ) -> Result<(), PrioritizationFeeError> {
         let (_, update_time) = measure!(
             {
-                if transaction_fee < self.min_transaction_fee {
-                    self.min_transaction_fee = transaction_fee;
-                }
+                if !self.is_finalized {
+                    if transaction_fee < self.min_transaction_fee {
+                        self.min_transaction_fee = transaction_fee;
+                    }
 
-                for write_account in writable_accounts.iter() {
-                    self.min_writable_account_fees
-                        .entry(*write_account)
-                        .and_modify(|write_lock_fee| {
-                            *write_lock_fee = std::cmp::min(*write_lock_fee, transaction_fee)
-                        })
-                        .or_insert(transaction_fee);
-                }
+                    for write_account in writable_accounts.iter() {
+                        self.min_writable_account_fees
+                            .entry(*write_account)
+                            .and_modify(|write_lock_fee| {
+                                *write_lock_fee = std::cmp::min(*write_lock_fee, transaction_fee)
+                            })
+                            .or_insert(transaction_fee);
+                    }
 
-                self.metrics
-                    .accumulate_total_prioritization_fee(transaction_fee);
-                self.metrics.update_prioritization_fee(transaction_fee);
+                    self.metrics
+                        .accumulate_total_prioritization_fee(transaction_fee);
+                    self.metrics.update_prioritization_fee(transaction_fee);
+                } else {
+                    self.metrics
+                        .increment_attempted_update_on_finalized_fee_count(1);
+                }
             },
             "update_time",
         );
