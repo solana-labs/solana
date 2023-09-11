@@ -215,12 +215,17 @@ impl MerkleTree {
 
         let res = Self::commit_finish(&mut nodes, leaf_count);
 
-        let temp: Hash = "11111111111111111111111111111111".parse().unwrap();
+        /*let temp: Hash = "11111111111111111111111111111111".parse().unwrap();
 
         if res == Hash::default() || res == temp {
             panic!("Bad hash, data: {:?}", items);
-        }
+        }*/
 
+        let tree = Self::new(items);
+        let res2 = *tree.get_root().unwrap();
+        if res != res2 {
+            panic!("Bad hash, data: {:?}", items);
+        }
         Some(res)
     }
 
