@@ -32,7 +32,7 @@ DECODED_FILES=(
 if [ "$validator_type" == "bootstrap" ]; then
     echo "Validator type is equal to 'bootstrap'"
     SECRET_FILES+=(
-      "/home/solana/${validator_type}-accounts/faucet.json"
+      "/home/solana/${validator_type}-accounts/faucet.base64"
     )
     DECODED_FILES+=(
       "/home/solana/faucet.json"
@@ -60,3 +60,6 @@ for i in "${!SECRET_FILES[@]}"; do
 done
 
 mkdir -p /home/solana/logs
+
+mkdir -p /home/solana/ledger
+tar -xvf /home/solana/genesis/genesis.tar.bz2 -C /home/solana/ledger
