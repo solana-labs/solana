@@ -990,10 +990,10 @@ impl<'a> AccountsHasher<'a> {
             dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
         };
         // initialize 'first_items', which holds the current lowest item in each slot group
-        sorted_data_by_pubkey
+        let max_inclusive_num_pubkeys = sorted_data_by_pubkey
             .iter()
             .enumerate()
-            .for_each(|(i, hash_data)| {
+            .map(|(i, hash_data)| {
                 let first_pubkey_in_bin =
                     Self::find_first_pubkey_in_bin(hash_data, pubkey_bin, bins, &binner, stats);
                 if let Some(first_pubkey_in_bin) = first_pubkey_in_bin {
@@ -1001,8 +1001,21 @@ impl<'a> AccountsHasher<'a> {
                     first_items.push(k);
                     first_item_to_pubkey_division.push(i);
                     indexes.push(first_pubkey_in_bin);
+                    let mut first_pubkey_in_next_bin = first_pubkey_in_bin + 1;
+                    while first_pubkey_in_next_bin < hash_data.len() {
+                        if binner.bin_from_pubkey(&hash_data[first_pubkey_in_next_bin].pubkey)
+                            != pubkey_bin
+                        {
+                            break;
                 }
-            });
+                        first_pubkey_in_next_bin += 1;
+                    }
+                    first_pubkey_in_next_bin - first_pubkey_in_bin
+                } else {
+                    0
+                }
+            })
+            .sum::<usize>();
         let mut overall_sum = 0;
         let mut duplicate_pubkey_indexes = Vec::with_capacity(len);
         let filler_accounts_enabled = self.filler_accounts_enabled();
