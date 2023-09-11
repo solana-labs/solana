@@ -1731,7 +1731,10 @@ impl SplitAncientStorages {
         // 2. first unevenly divided chunk starting at 1 epoch old slot (may be empty)
         // 3. evenly divided full chunks in the middle
         // 4. unevenly divided chunk of most recent slots (may be empty)
-        let ancient_slots = Self::get_ancient_slots(oldest_non_ancient_slot, snapshot_storages);
+        let ancient_slots =
+            Self::get_ancient_slots(oldest_non_ancient_slot, snapshot_storages, |storage| {
+                storage.capacity() > get_ancient_append_vec_capacity() * 50 / 100
+            });
 
         let first_non_ancient_slot = ancient_slots
             .last()
@@ -1741,15 +1744,33 @@ impl SplitAncientStorages {
     }
 
     /// return all ancient append vec slots from the early slots referenced by 'snapshot_storages'
+    /// `treat_as_ancient` returns true if the storage at this slot is large and should be treated individually by accounts hash calculation.
+    /// `treat_as_ancient` is a fn so that we can test this well. Otherwise, we have to generate large append vecs to pass the intended checks.
     fn get_ancient_slots(
         oldest_non_ancient_slot: Slot,
         snapshot_storages: &SortedStorages,
+        treat_as_ancient: impl Fn(&AccountStorageEntry) -> bool,
     ) -> Vec<Slot> {
         let range = snapshot_storages.range();
-        snapshot_storages
+        let mut i = 0;
+        let mut len_trucate = 0;
+        let mut possible_ancient_slots = snapshot_storages
             .iter_range(&(range.start..oldest_non_ancient_slot))
-            .filter_map(|(slot, storage)| storage.map(|_| slot))
-            .collect()
+            .filter_map(|(slot, storage)| {
+                storage.map(|storage| {
+                    i += 1;
+                    if treat_as_ancient(storage) {
+                        // even though the slot is in range of being an ancient append vec, if it isn't actually a large append vec,
+                        // then we are better off treating all these slots as normally cachable to reduce work in dedup.
+                        // Since this one is large, for the moment, this one becomes the highest slot where we want to individually cache files.
+                        len_trucate = i;
+                    }
+                    slot
+                })
+            })
+            .collect::<Vec<_>>();
+        possible_ancient_slots.truncate(len_trucate);
+        possible_ancient_slots
     }
 
     /// create once ancient slots have been identified
@@ -16763,22 +16784,77 @@ pub mod tests {
             // 3 = ancient slots: 1, 2
             // 4 = ancient slots: 1, 2, 3
             // 5 = ...
+            for all_are_large in [false, true] {
+                for oldest_non_ancient_slot in 0..6 {
+                    let ancient_slots = SplitAncientStorages::get_ancient_slots(
+                        oldest_non_ancient_slot,
+                        &snapshot_storages,
+                        |_storage| all_are_large,
+                    );
+
+                    if all_are_large {
+                        assert_eq!(
+                            raw_storages
+                                .iter()
+                                .filter_map(|storage| {
+                                    let slot = storage.slot();
+                                    (slot < oldest_non_ancient_slot).then_some(slot)
+                                })
+                                .collect::<Vec<_>>(),
+                            ancient_slots,
+                            "count: {count}"
+                        );
+                    } else {
+                        // none are treated as ancient since none were deemed large enough append vecs.
+                        assert!(ancient_slots.is_empty());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_get_ancient_slots_one_large() {
+        let slot1 = 1;
+        let db = AccountsDb::new_single_for_tests();
+        // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
+        let storages = (0..3)
+            .map(|i| db.create_and_insert_store(slot1 + (i as Slot), 1000, "test"))
+            .collect::<Vec<_>>();
+
+        for count in 1..4 {
+            // use subset of storages
+            let mut raw_storages = storages.clone();
+            raw_storages.truncate(count);
+            let snapshot_storages = SortedStorages::new(&raw_storages);
+            // 0 = all storages are non-ancient
+            // 1 = all storages are non-ancient
+            // 2 = ancient slots: 1
+            // 3 = ancient slots: 1, 2
+            // 4 = ancient slots: 1, 2, 3 (except 2 is large, 3 is not, so treat 3 as non-ancient)
+            // 5 = ...
             for oldest_non_ancient_slot in 0..6 {
                 let ancient_slots = SplitAncientStorages::get_ancient_slots(
                     oldest_non_ancient_slot,
                     &snapshot_storages,
+                    |storage| storage.slot() == 2,
                 );
-                assert_eq!(
-                    raw_storages
-                        .iter()
-                        .filter_map(|storage| {
-                            let slot = storage.slot();
-                            (slot < oldest_non_ancient_slot).then_some(slot)
-                        })
-                        .collect::<Vec<_>>(),
-                    ancient_slots,
-                    "count: {count}"
-                );
+                let mut expected = raw_storages
+                    .iter()
+                    .filter_map(|storage| {
+                        let slot = storage.slot();
+                        (slot < oldest_non_ancient_slot).then_some(slot)
+                    })
+                    .collect::<Vec<_>>();
+                if expected.len() >= 2 {
+                    // slot 3 is not considered ancient since slot 3 is a small append vec.
+                    // slot 2 is the only large append vec, so 1 by itself is not ancient. [1, 2] is ancient, [1,2,3] becomes just [1,2]
+                    expected.truncate(2);
+                } else {
+                    // we're not asking about the big append vec at 2, so nothing
+                    expected.clear();
+                }
+                assert_eq!(expected, ancient_slots, "count: {count}");
             }
         }
     }
