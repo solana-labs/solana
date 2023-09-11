@@ -1799,6 +1799,82 @@ pub mod tests {
     }
 
     #[test]
+    fn test_accountsdb_dup_pubkey_2_chunks() {
+        // 2 chunks, a dup pubkey in each chunk
+        for reverse in [false, true] {
+            let key = Pubkey::new_from_array([1; 32]); // key is BEFORE key2
+            let key2 = Pubkey::new_from_array([2; 32]);
+            let hash = Hash::new_unique();
+            let mut account_maps = Vec::new();
+            let mut account_maps2 = Vec::new();
+            let val = CalculateHashIntermediate::new(hash, 1, key);
+            account_maps.push(val.clone());
+            let val2 = CalculateHashIntermediate::new(hash, 2, key2);
+            account_maps.push(val2.clone());
+            let val3 = CalculateHashIntermediate::new(hash, 3, key2);
+            account_maps2.push(val3.clone());
+
+            let mut vecs = vec![account_maps.to_vec(), account_maps2.to_vec()];
+            if reverse {
+                vecs = vecs.into_iter().rev().collect();
+            }
+            let slice = convert_to_slice(&vecs);
+            let (hashfile, lamports) = test_de_dup_accounts_in_parallel(&slice);
+            assert_eq!(
+                (get_vec(hashfile), lamports),
+                (
+                    vec![val.hash, if reverse { val2.hash } else { val3.hash }],
+                    val.lamports
+                        + if reverse {
+                            val2.lamports
+                        } else {
+                            val3.lamports
+                        }
+                ),
+                "reverse: {reverse}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_accountsdb_dup_pubkey_2_chunks_backwards() {
+        // 2 chunks, a dup pubkey in each chunk
+        for reverse in [false, true] {
+            let key = Pubkey::new_from_array([3; 32]); // key is AFTER key2
+            let key2 = Pubkey::new_from_array([2; 32]);
+            let hash = Hash::new_unique();
+            let mut account_maps = Vec::new();
+            let mut account_maps2 = Vec::new();
+            let val2 = CalculateHashIntermediate::new(hash, 2, key2);
+            account_maps.push(val2.clone());
+            let val = CalculateHashIntermediate::new(hash, 1, key);
+            account_maps.push(val.clone());
+            let val3 = CalculateHashIntermediate::new(hash, 3, key2);
+            account_maps2.push(val3.clone());
+
+            let mut vecs = vec![account_maps.to_vec(), account_maps2.to_vec()];
+            if reverse {
+                vecs = vecs.into_iter().rev().collect();
+            }
+            let slice = convert_to_slice(&vecs);
+            let (hashfile, lamports) = test_de_dup_accounts_in_parallel(&slice);
+            assert_eq!(
+                (get_vec(hashfile), lamports),
+                (
+                    vec![if reverse { val2.hash } else { val3.hash }, val.hash],
+                    val.lamports
+                        + if reverse {
+                            val2.lamports
+                        } else {
+                            val3.lamports
+                        }
+                ),
+                "reverse: {reverse}"
+            );
+        }
+    }
+
+    #[test]
     fn test_accountsdb_cumulative_offsets1_d() {
         let input = vec![vec![0, 1], vec![], vec![2, 3, 4], vec![]];
         let cumulative = CumulativeOffsets::from_raw(&input);
