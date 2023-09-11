@@ -60,7 +60,7 @@ impl MmapAccountHashesFile {
 }
 
 /// 1 file containing account hashes sorted by pubkey
-pub struct AccountHashesFile {
+struct AccountHashesFile {
     /// # hashes and an open file that will be deleted on drop. None if there are zero hashes to represent, and thus, no file.
     writer: Option<MmapAccountHashesFile>,
     /// The directory where temporary cache files are put
@@ -76,7 +76,7 @@ impl AccountHashesFile {
     }
 
     /// # hashes stored in this file
-    pub fn count(&self) -> usize {
+    fn count(&self) -> usize {
         self.writer
             .as_ref()
             .map(|writer| writer.count)
@@ -85,7 +85,7 @@ impl AccountHashesFile {
 
     /// write 'hash' to the file
     /// If the file isn't open, create it first.
-    pub fn write(&mut self, hash: &Hash) {
+    fn write(&mut self, hash: &Hash) {
         if self.writer.is_none() {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
 
@@ -331,14 +331,14 @@ impl<'b, T: 'b> ExtractSliceFromRawData<'b, T> for Vec<Vec<Vec<T>>> {
 // Allow retrieving &[start..end] from a logical src: Vec<T>, where src is really Vec<Vec<T>> (or later Vec<Vec<Vec<T>>>)
 // This model prevents callers from having to flatten which saves both working memory and time.
 #[derive(Default, Debug)]
-pub struct CumulativeOffsets {
+struct CumulativeOffsets {
     cumulative_offsets: Vec<CumulativeOffset>,
     total_count: usize,
 }
 
 /// used by merkle tree calculation to lookup account hashes by overall index
 #[derive(Default)]
-pub struct CumulativeHashesFromFiles {
+struct CumulativeHashesFromFiles {
     /// source of hashes in order
     readers: Vec<MmapAccountHashesFile>,
     /// look up reader index and offset by overall index
@@ -348,7 +348,7 @@ pub struct CumulativeHashesFromFiles {
 impl CumulativeHashesFromFiles {
     /// Calculate offset from overall index to which file and offset within that file based on the length of each hash file.
     /// Also collect readers to access the data.
-    pub fn from_files(hashes: Vec<AccountHashesFile>) -> Self {
+    fn from_files(hashes: Vec<AccountHashesFile>) -> Self {
         let mut readers = Vec::with_capacity(hashes.len());
         let cumulative = CumulativeOffsets::new(hashes.into_iter().filter_map(|mut hash_file| {
             // ignores all hashfiles that have zero entries
@@ -365,12 +365,12 @@ impl CumulativeHashesFromFiles {
     }
 
     /// total # of items referenced
-    pub fn total_count(&self) -> usize {
+    fn total_count(&self) -> usize {
         self.cumulative.total_count
     }
 
     // return the biggest slice possible that starts at the overall index 'start'
-    pub fn get_slice(&self, start: usize) -> &[Hash] {
+    fn get_slice(&self, start: usize) -> &[Hash] {
         let (start, offset) = self.cumulative.find(start);
         let data_source_index = offset.index[0];
         let data = &self.readers[data_source_index];
@@ -380,7 +380,7 @@ impl CumulativeHashesFromFiles {
 }
 
 impl CumulativeOffsets {
-    pub fn new<I>(iter: I) -> Self
+    fn new<I>(iter: I) -> Self
     where
         I: Iterator<Item = usize>,
     {
@@ -404,31 +404,8 @@ impl CumulativeOffsets {
         }
     }
 
-    pub fn from_raw<T>(raw: &[Vec<T>]) -> Self {
+    fn from_raw<T>(raw: &[Vec<T>]) -> Self {
         Self::new(raw.iter().map(|v| v.len()))
-    }
-
-    pub fn from_raw_2d<T>(raw: &[Vec<Vec<T>>]) -> Self {
-        let mut total_count: usize = 0;
-        let mut cumulative_offsets = Vec::with_capacity(0);
-        for (i, v_outer) in raw.iter().enumerate() {
-            for (j, v) in v_outer.iter().enumerate() {
-                let len = v.len();
-                if len > 0 {
-                    if cumulative_offsets.is_empty() {
-                        // the first inner, non-empty vector we find gives us an approximate rectangular shape
-                        cumulative_offsets = Vec::with_capacity(raw.len() * v_outer.len());
-                    }
-                    cumulative_offsets.push(CumulativeOffset::new(vec![i, j], total_count));
-                    total_count += len;
-                }
-            }
-        }
-
-        Self {
-            cumulative_offsets,
-            total_count,
-        }
     }
 
     /// find the index of the data source that contains 'start'
@@ -451,7 +428,7 @@ impl CumulativeOffsets {
     }
 
     // return the biggest slice possible that starts at 'start'
-    pub fn get_slice<'a, 'b, T, U>(&'a self, raw: &'b U, start: usize) -> &'b [T]
+    fn get_slice<'a, 'b, T, U>(&'a self, raw: &'b U, start: usize) -> &'b [T]
     where
         U: ExtractSliceFromRawData<'b, T> + 'b,
     {
@@ -1248,7 +1225,7 @@ impl From<IncrementalAccountsHash> for SerdeIncrementalAccountsHash {
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use {super::*, itertools::Itertools, std::str::FromStr, tempfile::tempdir};
 
     lazy_static! {
@@ -1272,6 +1249,31 @@ pub mod tests {
                 writer: None,
                 dir_for_temp_cache_files,
                 capacity: 1024, /* default 1k for tests */
+            }
+        }
+    }
+
+    impl CumulativeOffsets {
+        fn from_raw_2d<T>(raw: &[Vec<Vec<T>>]) -> Self {
+            let mut total_count: usize = 0;
+            let mut cumulative_offsets = Vec::with_capacity(0);
+            for (i, v_outer) in raw.iter().enumerate() {
+                for (j, v) in v_outer.iter().enumerate() {
+                    let len = v.len();
+                    if len > 0 {
+                        if cumulative_offsets.is_empty() {
+                            // the first inner, non-empty vector we find gives us an approximate rectangular shape
+                            cumulative_offsets = Vec::with_capacity(raw.len() * v_outer.len());
+                        }
+                        cumulative_offsets.push(CumulativeOffset::new(vec![i, j], total_count));
+                        total_count += len;
+                    }
+                }
+            }
+
+            Self {
+                cumulative_offsets,
+                total_count,
             }
         }
     }
