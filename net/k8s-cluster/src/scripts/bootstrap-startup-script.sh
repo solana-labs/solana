@@ -13,7 +13,7 @@ nohup solana-validator \
   --gossip-host $MY_POD_IP \
   --gossip-port 8001 \
   --rpc-port 8899 \
-  --rpc-faucet-address 127.0.0.1:9900 \
+  --rpc-faucet-address $MY_POD_IP:9900 \
   --full-rpc-api \
   --allow-private-addr \
   >logs/init-validator.log 2>&1 &
