@@ -90,35 +90,6 @@ impl AccountHashesFile {
     pub fn write(&mut self, hash: &Hash) {
         if self.writer.is_none() {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
-<<<<<<< HEAD:runtime/src/accounts_hash.rs
-            self.count_and_writer = Some((
-                0,
-                BufWriter::new(
-                    tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
-                        panic!(
-                            "Unable to create file within {}: {err}",
-                            self.dir_for_temp_cache_files.display()
-                        )
-                    }),
-                ),
-            ));
-        }
-        let count_and_writer = self.count_and_writer.as_mut().unwrap();
-        assert_eq!(
-            std::mem::size_of::<Hash>(),
-            count_and_writer
-                .1
-                .write(hash.as_ref())
-                .unwrap_or_else(|err| {
-                    panic!(
-                        "Unable to write file within {}: {err}",
-                        self.dir_for_temp_cache_files.display()
-                    )
-                })
-        );
-        count_and_writer.0 += 1;
-=======
-
             let mut data = tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
                 panic!(
                     "Unable to create file within {}: {err}",
@@ -152,7 +123,6 @@ impl AccountHashesFile {
             });
         }
         self.writer.as_mut().unwrap().write(hash);
->>>>>>> 4dfe62a2f0 (rework accounts hash calc dedup to avoid kernel file error (#33195)):accounts-db/src/accounts_hash.rs
     }
 }
 
@@ -988,7 +958,6 @@ impl AccountsHasher {
         let mut first_item_to_pubkey_division = Vec::with_capacity(len);
 
         // initialize 'first_items', which holds the current lowest item in each slot group
-<<<<<<< HEAD:runtime/src/accounts_hash.rs
         pubkey_division.iter().enumerate().for_each(|(i, bins)| {
             // check to make sure we can do bins[pubkey_bin]
             if bins.len() > pubkey_bin {
@@ -1000,32 +969,9 @@ impl AccountsHasher {
                 }
             }
         });
-=======
-        let max_inclusive_num_pubkeys = sorted_data_by_pubkey
+        let max_inclusive_num_pubkeys = pubkey_division
             .iter()
-            .enumerate()
-            .map(|(i, hash_data)| {
-                let first_pubkey_in_bin =
-                    Self::find_first_pubkey_in_bin(hash_data, pubkey_bin, bins, &binner, stats);
-                if let Some(first_pubkey_in_bin) = first_pubkey_in_bin {
-                    let k = hash_data[first_pubkey_in_bin].pubkey;
-                    first_items.push(k);
-                    first_item_to_pubkey_division.push(i);
-                    indexes.push(first_pubkey_in_bin);
-                    let mut first_pubkey_in_next_bin = first_pubkey_in_bin + 1;
-                    while first_pubkey_in_next_bin < hash_data.len() {
-                        if binner.bin_from_pubkey(&hash_data[first_pubkey_in_next_bin].pubkey)
-                            != pubkey_bin
-                        {
-                            break;
-                        }
-                        first_pubkey_in_next_bin += 1;
-                    }
-                    first_pubkey_in_next_bin - first_pubkey_in_bin
-                } else {
-                    0
-                }
-            })
+            .filter_map(|v| (pubkey_bin < v.len()).then(|| v[pubkey_bin].len()))
             .sum::<usize>();
         let mut hashes = AccountHashesFile {
             writer: None,
@@ -1033,7 +979,6 @@ impl AccountsHasher {
             capacity: max_inclusive_num_pubkeys * std::mem::size_of::<Hash>(),
         };
 
->>>>>>> 4dfe62a2f0 (rework accounts hash calc dedup to avoid kernel file error (#33195)):accounts-db/src/accounts_hash.rs
         let mut overall_sum = 0;
         let mut duplicate_pubkey_indexes = Vec::with_capacity(len);
         let filler_accounts_enabled = self.filler_accounts_enabled();
@@ -1400,14 +1345,8 @@ pub mod tests {
         let slice = convert_to_slice2(&temp_vec);
         let dir_for_temp_cache_files = tempdir().unwrap();
         let accounts_hasher = AccountsHasher::new(dir_for_temp_cache_files.path().to_path_buf());
-<<<<<<< HEAD:runtime/src/accounts_hash.rs
         let (mut hashes, lamports, _) = accounts_hasher.de_dup_accounts_in_parallel(&slice, 0);
-        assert_eq!(&[Hash::default()], hashes.get_reader().unwrap().1.read(0));
-=======
-        let (mut hashes, lamports) =
-            accounts_hasher.de_dup_accounts_in_parallel(&slice, 0, 1, &HashStats::default());
         assert_eq!(&[Hash::default()], hashes.get_reader().unwrap().read(0));
->>>>>>> 4dfe62a2f0 (rework accounts hash calc dedup to avoid kernel file error (#33195)):accounts-db/src/accounts_hash.rs
         assert_eq!(lamports, 1);
     }
 
