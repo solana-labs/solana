@@ -64,7 +64,7 @@ impl AccountsHashVerifier {
                 // To support fastboot, we must ensure the storages used in the latest POST snapshot are
                 // not recycled nor removed early.  Hold an Arc of their AppendVecs to prevent them from
                 // expiring.
-                let mut last_snapshot_storages = None;
+                let mut fastboot_storages = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -92,6 +92,7 @@ impl AccountsHashVerifier {
                         .is_some()
                         .then(|| accounts_package.snapshot_storages.clone());
 
+                    let slot = accounts_package.slot;
                     let (_, handling_time_us) = measure_us!(Self::process_accounts_package(
                         accounts_package,
                         &cluster_info,
@@ -103,7 +104,13 @@ impl AccountsHashVerifier {
                     ));
 
                     if let Some(snapshot_storages_for_fastboot) = snapshot_storages_for_fastboot {
-                        last_snapshot_storages = Some(snapshot_storages_for_fastboot)
+                        let num_storages = snapshot_storages_for_fastboot.len();
+                        fastboot_storages = Some(snapshot_storages_for_fastboot);
+                        datapoint_info!(
+                            "fastboot",
+                            ("slot", slot, i64),
+                            ("num_storages", num_storages, i64),
+                        );
                     }
 
                     datapoint_info!(
@@ -122,14 +129,14 @@ impl AccountsHashVerifier {
                         ("handling_time_us", handling_time_us, i64),
                     );
                 }
+                info!("AccountsHashVerifier has stopped");
                 debug!(
-                    "Number of snapshot storages kept alive for fastboot: {}",
-                    last_snapshot_storages
+                    "Number of storages kept alive for fastboot: {}",
+                    fastboot_storages
                         .as_ref()
                         .map(|storages| storages.len())
                         .unwrap_or(0)
                 );
-                info!("AccountsHashVerifier has stopped");
             })
             .unwrap();
         Self {
