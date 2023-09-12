@@ -1,4 +1,4 @@
-use {std::fmt::Debug, solana_program::hash::{hashv, Hash}};
+use solana_program::hash::{hashv, Hash};
 
 // We need to discern between leaf and intermediate nodes to prevent trivial second
 // pre-image attacks.
@@ -148,7 +148,7 @@ impl MerkleTree {
                 let arg1 = &leaf;
                 let arg2 = &nodes[layer];
                 //todo: verify and implement jump's fancy avx implementation
-                leaf = hash_intermediate!(arg1, arg2);
+                leaf = hash_intermediate!(arg2, arg1);
                 layer += 1;
                 cursor >>= 1;
             }
@@ -167,7 +167,6 @@ impl MerkleTree {
     }
 
     fn commit_finish(nodes: &mut [Hash], leaf_count: usize) -> Hash {
-        let leaf_count = leaf_count;
         let root_idx: usize = Self::private_depth(leaf_count) - 1;
 
         if !leaf_count.is_power_of_two() {
@@ -179,11 +178,11 @@ impl MerkleTree {
                 tmp = if (layer_count & 1) != 0 {
                     let arg1 = &tmp;
                     let arg2 = &tmp;
-                    hash_intermediate!(arg1, arg2)
+                    hash_intermediate!(arg2, arg1)
                 } else {
                     let arg1 = &tmp;
                     let arg2 = &nodes[layer];
-                    hash_intermediate!(arg1, arg2)
+                    hash_intermediate!(arg2, arg1)
                 };
                 layer += 1;
                 layer_count = (layer_count + 1) >> 1;
@@ -193,8 +192,11 @@ impl MerkleTree {
         nodes[root_idx]
     }
 
+    // Saves memory when one only needs the root
+    // of a merkle tree by computing the root of the merkle
+    // tree for the given data without building up a merkle tree
     #[allow(clippy::uninit_vec)]
-    pub fn merkle_root<T: AsRef<[u8]> + Debug>(items: &[T]) -> Option<Hash> {
+    pub fn merkle_root<T: AsRef<[u8]>>(items: &[T]) -> Option<Hash> {
         if items.is_empty() {
             return None;
         }
@@ -213,20 +215,7 @@ impl MerkleTree {
         let mut leaf_count = 0;
         leaf_count = Self::append_nodes(&mut nodes, leaf_count, hashes);
 
-        let res = Self::commit_finish(&mut nodes, leaf_count);
-
-        /*let temp: Hash = "11111111111111111111111111111111".parse().unwrap();
-
-        if res == Hash::default() || res == temp {
-            panic!("Bad hash, data: {:?}", items);
-        }*/
-
-        let tree = Self::new(items);
-        let res2 = *tree.get_root().unwrap();
-        if res != res2 {
-            panic!("Bad hash, data: {:?}", items);
-        }
-        Some(res)
+        Some(Self::commit_finish(&mut nodes, leaf_count))
     }
 
     pub fn find_path(&self, index: usize) -> Option<Proof> {
@@ -276,6 +265,19 @@ mod tests {
         b"make", b"prime",
     ];
     const BAD: &[&[u8]] = &[b"bad", b"missing", b"false"];
+
+    // Tests the correctness of MerkleTree::merkle_root,
+    // which saves memory by computing the root of the merkle
+    // tree for the given data without building up a merkle tree
+    // by comparing the result against the root of the fully
+    // built-up merkle tree from the same data
+    #[test]
+    fn test_merkle_root() {
+        let hash1 = MerkleTree::merkle_root(TEST).unwrap();
+        let mt = MerkleTree::new(TEST);
+        let hash2 = *mt.get_root().unwrap();
+        assert_eq!(hash1, hash2);
+    }
 
     #[test]
     fn test_tree_from_empty() {
