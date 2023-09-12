@@ -106,7 +106,6 @@ pub struct UsageCostDetails {
     pub bpf_execution_cost: u64,
     pub loaded_accounts_data_size_cost: u64,
     pub account_data_size: u64,
-    pub is_simple_vote: bool,
 }
 
 impl Default for UsageCostDetails {
@@ -120,7 +119,6 @@ impl Default for UsageCostDetails {
             bpf_execution_cost: 0u64,
             loaded_accounts_data_size_cost: 0u64,
             account_data_size: 0u64,
-            is_simple_vote: false,
         }
     }
 }
@@ -139,7 +137,6 @@ impl PartialEq for UsageCostDetails {
             && self.bpf_execution_cost == other.bpf_execution_cost
             && self.loaded_accounts_data_size_cost == other.loaded_accounts_data_size_cost
             && self.account_data_size == other.account_data_size
-            && self.is_simple_vote == other.is_simple_vote
             && to_hash_set(&self.writable_accounts) == to_hash_set(&other.writable_accounts)
     }
 }

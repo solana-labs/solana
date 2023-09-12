@@ -47,7 +47,6 @@ impl CostModel {
             Self::get_write_lock_cost(&mut tx_cost, transaction);
             Self::get_transaction_cost(&mut tx_cost, transaction, feature_set);
             tx_cost.account_data_size = Self::calculate_account_data_size(transaction);
-            tx_cost.is_simple_vote = transaction.is_simple_vote_transaction();
 
             debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
             TransactionCost::Transaction(tx_cost)
