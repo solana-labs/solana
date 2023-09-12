@@ -135,10 +135,11 @@ type Error = Box<dyn std::error::Error>;
 pub trait HasherImpl {
     const HASH_BYTES: usize;
     const NAME: &'static str;
+    type Output: AsRef<[u8]>;
 
     fn create_hasher() -> Self;
     fn hash(&mut self, val: &[u8]);
-    fn result(self) -> [u8; HASH_BYTES];
+    fn result(self) -> Self::Output;
     fn get_base_cost(compute_budget: &ComputeBudget) -> u64;
     fn get_byte_cost(compute_budget: &ComputeBudget) -> u64;
     fn get_max_slices(compute_budget: &ComputeBudget) -> u64;
@@ -151,6 +152,7 @@ pub struct Keccak256Hasher(keccak::Hasher);
 impl HasherImpl for Sha256Hasher {
     const HASH_BYTES: usize = HASH_BYTES;
     const NAME: &'static str = "Sha256";
+    type Output = [u8; Self::HASH_BYTES];
 
     fn create_hasher() -> Self {
         Sha256Hasher(Hasher::default())
@@ -160,7 +162,7 @@ impl HasherImpl for Sha256Hasher {
         self.0.hash(val);
     }
 
-    fn result(self) -> [u8; Self::HASH_BYTES] {
+    fn result(self) -> Self::Output {
         self.0.result().to_bytes()
     }
 
@@ -179,6 +181,7 @@ impl HasherImpl for Sha256Hasher {
 impl HasherImpl for Blake3Hasher {
     const HASH_BYTES: usize = blake3::HASH_BYTES;
     const NAME: &'static str = "Blake3";
+    type Output = [u8; Self::HASH_BYTES];
 
     fn create_hasher() -> Self {
         Blake3Hasher(blake3::Hasher::default())
@@ -188,7 +191,7 @@ impl HasherImpl for Blake3Hasher {
         self.0.hash(val);
     }
 
-    fn result(self) -> [u8; Self::HASH_BYTES]{
+    fn result(self) -> Self::Output {
         self.0.result().to_bytes()
     }
 
@@ -207,6 +210,7 @@ impl HasherImpl for Blake3Hasher {
 impl HasherImpl for Keccak256Hasher {
     const HASH_BYTES: usize = keccak::HASH_BYTES;
     const NAME: &'static str = "Keccak256";
+    type Output = [u8; Self::HASH_BYTES];
 
     fn create_hasher() -> Self {
         Keccak256Hasher(keccak::Hasher::default())
@@ -216,7 +220,7 @@ impl HasherImpl for Keccak256Hasher {
         self.0.hash(val);
     }
 
-    fn result(self) -> [u8; Self::HASH_BYTES] {
+    fn result(self) -> Self::Output {
         self.0.result().to_bytes()
     }
 
@@ -2015,7 +2019,7 @@ declare_syscallhash!(
                 hasher.hash(bytes);
             }
         }
-        hash_result.copy_from_slice(&hasher.result());
+        hash_result.copy_from_slice(&hasher.result().as_ref());
         Ok(0)
     }
 );
