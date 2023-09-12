@@ -190,7 +190,7 @@ impl<'a> Genesis<'a> {
             default_bootstrap_validator_lamports.parse().unwrap(); //TODO enable command line arg
 
         // stake account
-        let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
+        let default_bootstrap_validator_stake_lamports = &sol_to_lamports(100.0)
             .max(rent.minimum_balance(StakeStateV2::size_of()))
             .to_string();
         let bootstrap_validator_stake_lamports: u64 =
