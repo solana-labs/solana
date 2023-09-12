@@ -166,13 +166,13 @@ impl<'a> Genesis<'a> {
             }
         }
 
-        self.validator_keypairs.push(ValidatorAccountKeypairs {
-            vote_account: vote
-                .ok_or_else(|| boxed_error!("vote-account keypair not initialized"))?,
-            identity: identity.ok_or_else(|| boxed_error!("identity keypair not initialized"))?,
-            stake_account: stake
-                .ok_or_else(|| boxed_error!("stake-account keypair not initialized"))?,
-        });
+        // self.validator_keypairs.push(ValidatorAccountKeypairs {
+        //     vote_account: vote
+        //         .ok_or_else(|| boxed_error!("vote-account keypair not initialized"))?,
+        //     identity: identity.ok_or_else(|| boxed_error!("identity keypair not initialized"))?,
+        //     stake_account: stake
+        //         .ok_or_else(|| boxed_error!("stake-account keypair not initialized"))?,
+        // });
 
         Ok(())
     }
