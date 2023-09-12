@@ -35,6 +35,12 @@ pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 // Offset of VoteState::prior_voters, for determining initialization status without deserialization
 const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 114;
 
+// Number of slots of grace period for which maximum vote credits are awarded - votes landing within this number of slots of the slot that is being voted on are awarded full credits.
+pub const VOTE_CREDITS_GRACE_SLOTS: u8 = 2;
+
+// Maximum number of credits to award for a vote; this number of credits is awarded to votes on slots that land within the grace period. After that grace period, vote credits are reduced.
+pub const VOTE_CREDITS_MAXIMUM_PER_SLOT: u8 = 8;
+
 #[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
 pub struct Vote {
@@ -419,7 +425,12 @@ impl VoteState {
         }
     }
 
-    pub fn process_next_vote_slot(&mut self, next_vote_slot: Slot, epoch: Epoch) {
+    pub fn process_next_vote_slot(
+        &mut self,
+        next_vote_slot: Slot,
+        epoch: Epoch,
+        current_slot: Slot,
+    ) {
         // Ignore votes for slots earlier than we already have votes for
         if self
             .last_voted_slot()
@@ -428,18 +439,22 @@ impl VoteState {
             return;
         }
 
-        let lockout = Lockout::new(next_vote_slot);
-
         self.pop_expired_votes(next_vote_slot);
+
+        let landed_vote = LandedVote {
+            latency: Self::compute_vote_latency(next_vote_slot, current_slot),
+            lockout: Lockout::new(next_vote_slot),
+        };
 
         // Once the stack is full, pop the oldest lockout and distribute rewards
         if self.votes.len() == MAX_LOCKOUT_HISTORY {
-            let vote = self.votes.pop_front().unwrap();
-            self.root_slot = Some(vote.slot());
+            let credits = self.credits_for_vote_at_index(0);
+            let landed_vote = self.votes.pop_front().unwrap();
+            self.root_slot = Some(landed_vote.slot());
 
-            self.increment_credits(epoch, 1);
+            self.increment_credits(epoch, credits);
         }
-        self.votes.push_back(lockout.into());
+        self.votes.push_back(landed_vote);
         self.double_lockouts();
     }
 
@@ -470,6 +485,43 @@ impl VoteState {
 
         self.epoch_credits.last_mut().unwrap().1 =
             self.epoch_credits.last().unwrap().1.saturating_add(credits);
+    }
+
+    // Computes the vote latency for vote on voted_for_slot where the vote itself landed in current_slot
+    pub fn compute_vote_latency(voted_for_slot: Slot, current_slot: Slot) -> u8 {
+        std::cmp::min(current_slot.saturating_sub(voted_for_slot), u8::MAX as u64) as u8
+    }
+
+    /// Returns the credits to award for a vote at the given lockout slot index
+    pub fn credits_for_vote_at_index(&self, index: usize) -> u64 {
+        let latency = self
+            .votes
+            .get(index)
+            .map_or(0, |landed_vote| landed_vote.latency);
+
+        // If latency is 0, this means that the Lockout was created and stored from a software version that did not
+        // store vote latencies; in this case, 1 credit is awarded
+        if latency == 0 {
+            1
+        } else {
+            match latency.checked_sub(VOTE_CREDITS_GRACE_SLOTS) {
+                None | Some(0) => {
+                    // latency was <= VOTE_CREDITS_GRACE_SLOTS, so maximum credits are awarded
+                    VOTE_CREDITS_MAXIMUM_PER_SLOT as u64
+                }
+
+                Some(diff) => {
+                    // diff = latency - VOTE_CREDITS_GRACE_SLOTS, and diff > 0
+                    // Subtract diff from VOTE_CREDITS_MAXIMUM_PER_SLOT which is the number of credits to award
+                    match VOTE_CREDITS_MAXIMUM_PER_SLOT.checked_sub(diff) {
+                        // If diff >= VOTE_CREDITS_MAXIMUM_PER_SLOT, 1 credit is awarded
+                        None | Some(0) => 1,
+
+                        Some(credits) => credits as u64,
+                    }
+                }
+            }
+        }
     }
 
     pub fn nth_recent_lockout(&self, position: usize) -> Option<&Lockout> {
