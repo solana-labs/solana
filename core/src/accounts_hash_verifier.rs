@@ -53,6 +53,7 @@ impl AccountsHashVerifier {
         cluster_info: Arc<ClusterInfo>,
         accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
         snapshot_config: SnapshotConfig,
+        is_fastboot_enabled: bool,
     ) -> Self {
         // If there are no accounts packages to process, limit how often we re-check
         const LOOP_LIMITER: Duration = Duration::from_millis(DEFAULT_MS_PER_SLOT);
@@ -103,14 +104,17 @@ impl AccountsHashVerifier {
                         &exit,
                     ));
 
-                    if let Some(snapshot_storages_for_fastboot) = snapshot_storages_for_fastboot {
-                        let num_storages = snapshot_storages_for_fastboot.len();
-                        fastboot_storages = Some(snapshot_storages_for_fastboot);
-                        datapoint_info!(
-                            "fastboot",
-                            ("slot", slot, i64),
-                            ("num_storages", num_storages, i64),
-                        );
+                    if is_fastboot_enabled {
+                        if let Some(snapshot_storages_for_fastboot) = snapshot_storages_for_fastboot
+                        {
+                            let num_storages = snapshot_storages_for_fastboot.len();
+                            fastboot_storages = Some(snapshot_storages_for_fastboot);
+                            datapoint_info!(
+                                "fastboot",
+                                ("slot", slot, i64),
+                                ("num_storages", num_storages, i64),
+                            );
+                        }
                     }
 
                     datapoint_info!(

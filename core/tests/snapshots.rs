@@ -1010,6 +1010,7 @@ fn test_snapshots_with_background_services(
         cluster_info,
         None,
         snapshot_test_config.snapshot_config.clone(),
+        true,
     );
 
     let accounts_background_service = AccountsBackgroundService::new(

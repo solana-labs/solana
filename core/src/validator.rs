@@ -773,6 +773,7 @@ impl Validator {
             cluster_info.clone(),
             config.accounts_hash_fault_injector,
             config.snapshot_config.clone(),
+            config.use_snapshot_archives_at_startup != UseSnapshotArchivesAtStartup::Always,
         );
 
         let (snapshot_request_sender, snapshot_request_receiver) = unbounded();

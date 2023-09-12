@@ -1,5 +1,5 @@
 use {
-    crate::LEDGER_TOOL_DIRECTORY,
+    crate::{UseSnapshotArchivesAtStartup, LEDGER_TOOL_DIRECTORY},
     clap::{value_t, value_t_or_exit, values_t_or_exit, ArgMatches},
     crossbeam_channel::unbounded,
     log::*,
@@ -272,6 +272,7 @@ pub fn load_and_process_ledger(
         cluster_info,
         None,
         SnapshotConfig::new_load_only(),
+        process_options.use_snapshot_archives_at_startup != UseSnapshotArchivesAtStartup::Always,
     );
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
     let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender.clone());
