@@ -97,7 +97,6 @@ use {
         borrow::{Borrow, Cow},
         boxed::Box,
         collections::{hash_map, BTreeSet, HashMap, HashSet},
-        fs,
         hash::{Hash as StdHash, Hasher as StdHasher},
         io::Result as IoResult,
         ops::{Range, RangeBounds},
@@ -1494,7 +1493,6 @@ pub struct AccountsDb {
     base_working_temp_dir: Option<TempDir>,
 
     accounts_hash_cache_path: PathBuf,
-    transient_accounts_hash_cache_path: PathBuf,
 
     pub shrink_paths: RwLock<Option<Vec<PathBuf>>>,
 
@@ -2503,7 +2501,6 @@ impl AccountsDb {
             paths: vec![],
             base_working_path,
             base_working_temp_dir,
-            transient_accounts_hash_cache_path: accounts_hash_cache_path.join("transient"),
             accounts_hash_cache_path,
             shrink_paths: RwLock::new(None),
             temp_paths: None,
@@ -7737,6 +7734,10 @@ impl AccountsDb {
         let slot = storages.max_slot_inclusive();
         let use_bg_thread_pool = config.use_bg_thread_pool;
         let accounts_hash_cache_path = self.accounts_hash_cache_path.clone();
+        let transient_accounts_hash_cache_dir = TempDir::new_in(&accounts_hash_cache_path)
+            .expect("create transient accounts hash cache dir");
+        let transient_accounts_hash_cache_path =
+            transient_accounts_hash_cache_dir.path().to_path_buf();
         let scan_and_hash = || {
             let (cache_hash_data, cache_hash_data_us) = measure_us!(Self::get_cache_hash_data(
                 accounts_hash_cache_path,
@@ -7751,8 +7752,6 @@ impl AccountsDb {
                 end: PUBKEY_BINS_FOR_CALCULATING_HASHES,
             };
 
-            fs::create_dir_all(&self.transient_accounts_hash_cache_path)
-                .expect("create transient accounts hash cache dir");
             let accounts_hasher = AccountsHasher {
                 filler_account_suffix: if self.filler_accounts_config.count > 0 {
                     self.filler_account_suffix
@@ -7760,7 +7759,7 @@ impl AccountsDb {
                     None
                 },
                 zero_lamport_accounts: kind.zero_lamport_accounts(),
-                dir_for_temp_cache_files: self.transient_accounts_hash_cache_path.clone(),
+                dir_for_temp_cache_files: transient_accounts_hash_cache_path,
                 active_stats: &self.active_stats,
             };
 
