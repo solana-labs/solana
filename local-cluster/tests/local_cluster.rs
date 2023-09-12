@@ -59,7 +59,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_program, system_transaction,
-        vote::state::VoteStateUpdate,
+        vote::state::{VoteState, VoteStateUpdate},
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_turbine::broadcast_stage::{
@@ -4539,6 +4539,8 @@ fn test_vote_refresh_outside_slothash() {
         make_identical_validator_configs(&default_config, node_stakes.len());
     validator_configs[1].voting_disabled = true;
 
+    let a_vote_key = node_vote_keys[0].pubkey();
+
     let mut config = ClusterConfig {
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
         node_stakes,
@@ -4573,11 +4575,24 @@ fn test_vote_refresh_outside_slothash() {
     let mut last_vote_on_a;
     loop {
         last_vote_on_a = wait_for_last_vote_in_tower_to_land_in_ledger(&a_ledger_path, &a_pubkey);
-        if last_vote_on_a >= common_ancestor_slot {
+        if last_vote_on_a > common_ancestor_slot {
+            let rpc_client =
+                RpcClient::new_socket(cluster.get_contact_info(&a_pubkey).unwrap().rpc().unwrap());
+            let vote_account = rpc_client
+                .get_account_with_commitment(&a_vote_key, CommitmentConfig::processed())
+                .unwrap()
+                .value
+                .unwrap();
+            let vote_state = VoteState::deserialize(&vote_account.data).unwrap();
+            if vote_state.votes.iter().all(|v| v.slot() != last_vote_on_a) {
+                continue;
+            }
+            last_vote_on_a = vote_state.votes.back().unwrap().slot();
             let blockstore = open_blockstore(&a_ledger_path);
             info!(
-                "A majority fork: {:?} common_ancestor_slot: {}",
+                "A majority fork: {:?} last vote: {}, common_ancestor_slot: {}",
                 AncestorIterator::new(last_vote_on_a, &blockstore).collect::<Vec<Slot>>(),
+                last_vote_on_a,
                 common_ancestor_slot,
             );
             break;
@@ -4611,6 +4626,8 @@ fn test_vote_refresh_outside_slothash() {
     loop {
         sleep(Duration::from_millis(200));
         let (last_vote, _) = last_vote_in_tower(&b_ledger_path, &b_pubkey).unwrap();
+        // last_vote_on_a is normally num_a_leader_slots + num_b_leader_slots + a few slots,
+        // need to make sure B is on its own leader block here.
         if last_vote > (2 * num_a_leader_slots + num_b_leader_slots) as u64 {
             break;
         }
@@ -4619,26 +4636,30 @@ fn test_vote_refresh_outside_slothash() {
             "validator not creating blocks fast enough"
         );
     }
-    let last_vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
+    let last_vote_on_b_before_shutdown =
+        wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
     let blockstore = open_blockstore(&b_ledger_path);
     info!(
         "B last vote: {} minority fork: {:?}",
-        last_vote_on_b,
-        AncestorIterator::new(last_vote_on_b, &blockstore).collect::<Vec<Slot>>()
+        last_vote_on_b_before_shutdown,
+        AncestorIterator::new(last_vote_on_b_before_shutdown, &blockstore).collect::<Vec<Slot>>()
     );
 
     info!("Kill B");
     b_info = cluster.exit_node(&b_pubkey);
 
+    // There is a slight chance that B voted again before the new vote hits ledger, so we
+    // double check here. But that case should be rare because B shuts down pretty fast,
+    // and we have no other ways to ensure tower and ledger are consistent.
     let (last_vote, _) = last_vote_in_tower(&b_ledger_path, &b_pubkey).unwrap();
-    assert_eq!(last_vote, last_vote_on_b);
+    assert_eq!(last_vote, last_vote_on_b_before_shutdown);
 
     info!("Resolve the partition");
     {
         // Here we let B know about the missing blocks that A had produced on its partition
         let a_blockstore = open_blockstore(&a_ledger_path);
         let b_blockstore = open_blockstore(&b_ledger_path);
-        purge_slots_with_count(&b_blockstore, last_vote_on_b + 1, 100);
+        purge_slots_with_count(&b_blockstore, last_vote_on_b_before_shutdown + 1, 100);
         copy_blocks(last_vote_on_a, &a_blockstore, &b_blockstore);
     }
 
@@ -4649,7 +4670,7 @@ fn test_vote_refresh_outside_slothash() {
 
     let vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
     assert!(
-        vote_on_b == last_vote_on_b,
+        vote_on_b == last_vote_on_b_before_shutdown,
         "B should not have new votes immediately"
     );
 
@@ -4664,11 +4685,11 @@ fn test_vote_refresh_outside_slothash() {
     loop {
         sleep(Duration::from_millis(500));
         vote_on_b = wait_for_last_vote_in_tower_to_land_in_ledger(&b_ledger_path, &b_pubkey);
-        if vote_on_b > last_vote_on_b {
+        if vote_on_b > last_vote_on_b_before_shutdown {
             info!(
                 "B has voted again: {} last vote {} elapsed time {:?}",
                 vote_on_b,
-                last_vote_on_b,
+                last_vote_on_b_before_shutdown,
                 now.elapsed(),
             );
             break;
@@ -4683,13 +4704,14 @@ fn test_vote_refresh_outside_slothash() {
     let tower_slots = restore_tower(&b_ledger_path, &b_pubkey)
         .unwrap()
         .tower_slots();
-    assert!(tower_slots
-        .into_iter()
-        .all(|slot| { slot <= last_vote_on_b || slot > last_vote_on_b + MAX_SLOT_HASHES }));
+    assert!(tower_slots.into_iter().all(|slot| {
+        slot <= last_vote_on_b_before_shutdown
+            || slot > last_vote_on_b_before_shutdown + MAX_SLOT_HASHES
+    }));
     // check that B is voting on its own fork, not on A's fork. Reopen blockstore to refresh.
     let blockstore = open_blockstore(&b_ledger_path);
     let mut ancestors = AncestorIterator::new(vote_on_b, &blockstore);
-    assert!(ancestors.any(|x| x == last_vote_on_b));
+    assert!(ancestors.any(|x| x == last_vote_on_b_before_shutdown));
 }
 
 // This test simulates a case where a leader sends a duplicate block with different ancestory. One
