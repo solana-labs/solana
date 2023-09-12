@@ -13,7 +13,7 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
-        collections::{hash_map::Entry, HashMap, HashSet},
+        collections::{hash_map::Entry, HashMap},
         fmt::Debug,
         ops::{Bound, RangeBounds, RangeInclusive},
         sync::{
@@ -88,15 +88,15 @@ impl<T: IndexValue> PossibleEvictions<T> {
 }
 
 // one instance of this represents one bin of the accounts index.
-pub struct InMemAccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
+pub struct InMemAccountsIndex<T: IndexValue> {
     last_age_flushed: AtomicU8,
 
     // backing store
     map_internal: RwLock<InMemMap<T>>,
-    storage: Arc<BucketMapHolder<T, U>>,
+    storage: Arc<BucketMapHolder<T, T>>,
     bin: usize,
 
-    bucket: Option<Arc<BucketApi<(Slot, U)>>>,
+    bucket: Option<Arc<BucketApi<(Slot, T)>>>,
 
     // pubkey ranges that this bin must hold in the cache while the range is present in this vec
     pub cache_ranges_held: CacheRangesHeld,
@@ -108,7 +108,7 @@ pub struct InMemAccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<
     flushing_active: AtomicBool,
 
     /// info to streamline initial index generation
-    startup_info: StartupInfo<T, U>,
+    startup_info: StartupInfo<T>,
 
     /// possible evictions for next few slots coming up
     possible_evictions: RwLock<PossibleEvictions<T>>,
@@ -126,7 +126,7 @@ pub struct InMemAccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<
     pub(crate) startup_stats: Arc<StartupStats>,
 }
 
-impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> Debug for InMemAccountsIndex<T, U> {
+impl<T: IndexValue> Debug for InMemAccountsIndex<T> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
@@ -142,15 +142,21 @@ pub enum InsertNewEntryResults {
 struct StartupInfoDuplicates<T: IndexValue> {
     /// entries that were found to have duplicate index entries.
     /// When all entries have been inserted, these can be resolved and held in memory.
-    duplicates: Vec<(Slot, Pubkey, T)>,
-    /// pubkeys that were already added to disk and later found to be duplicates,
-    duplicates_put_on_disk: HashSet<(Slot, Pubkey)>,
+    duplicates: HashMap<(Pubkey, Slot), InsertIndex<T>>,
+}
+
+#[derive(Default, Debug, Copy, Clone)]
+pub(crate) struct InsertIndex<U: DiskIndexValue> {
+    pub(crate) slot: Slot,
+    pub(crate) info: U,
+    pub(crate) data_len: Option<usize>,
 }
 
 #[derive(Default, Debug)]
-struct StartupInfo<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
+struct StartupInfo<T: IndexValue> {
     /// entries to add next time we are flushing to disk
-    insert: Mutex<Vec<(Pubkey, (Slot, U))>>,
+    /// todo: Vec<(slot, Vec<pubkey, ...)
+    insert: Mutex<Vec<(Pubkey, (Slot, T), usize)>>,
     /// pubkeys with more than 1 entry
     duplicates: Mutex<StartupInfoDuplicates<T>>,
 }
@@ -164,8 +170,8 @@ struct FlushScanResult<T> {
     evictions_random: Vec<(Pubkey, AccountMapEntry<T>)>,
 }
 
-impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T, U> {
-    pub fn new(storage: &Arc<BucketMapHolder<T, U>>, bin: usize) -> Self {
+impl<T: IndexValue> InMemAccountsIndex<T> {
+    pub fn new(storage: &Arc<BucketMapHolder<T, T>>, bin: usize) -> Self {
         let num_ages_to_distribute_flushes = Age::MAX - storage.ages_to_stay_in_cache;
         Self {
             map_internal: RwLock::default(),
@@ -251,7 +257,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         keys
     }
 
-    fn load_from_disk(&self, pubkey: &Pubkey) -> Option<(SlotList<U>, RefCount)> {
+    fn load_from_disk(&self, pubkey: &Pubkey) -> Option<(SlotList<T>, RefCount)> {
         self.bucket.as_ref().and_then(|disk| {
             let m = Measure::start("load_disk_found_count");
             let entry_disk = disk.read_value(pubkey);
@@ -662,7 +668,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
     // convert from raw data on disk to AccountMapEntry, set to age in future
     fn disk_to_cache_entry(
         &self,
-        slot_list: SlotList<U>,
+        slot_list: SlotList<T>,
         ref_count: RefCount,
     ) -> AccountMapEntry<T> {
         Arc::new(AccountMapEntryInner::new(
@@ -681,18 +687,53 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
 
     /// Queue up these insertions for when the flush thread is dealing with this bin.
     /// This is very fast and requires no lookups or disk access.
-    pub fn startup_insert_only(&self, items: impl Iterator<Item = (Pubkey, (Slot, T))>) {
+    pub fn startup_insert_only(&self, mut items: Vec<(Pubkey, (Slot, T), usize)>) {
         assert!(self.storage.get_startup());
         assert!(self.bucket.is_some());
 
         let mut insert = self.startup_info.insert.lock().unwrap();
         let m = Measure::start("copy");
+        let required = insert.len() + items.len();
+        if insert.capacity() < required {
+            let m = Measure::start("");
+            insert.reserve(required); //(required * 150 / 100).max(50_000));
+            self.stats()
+                .reserve_us
+                .fetch_add(m.end_as_us(), Ordering::Relaxed);
+            self.stats().reserve_count.fetch_add(1, Ordering::Relaxed);
+        }
+        self.stats()
+            .max_reserve
+            .fetch_max(insert.capacity() as u64, Ordering::Relaxed);
+
+        self.stats()
+            .max_alloc
+            .fetch_max(items.len() as u64, Ordering::Relaxed);
+        // todo: memcpy the new slice into our vector already
+        // todo: avoid reallocs and just allocate another vec instead of likely resizing this one over and over
+        let m = Measure::start("");
+        //insert.append(&mut items);
         items
             .into_iter()
-            .for_each(|(k, (slot, v))| insert.push((k, (slot, v.into()))));
+            .for_each(|(k, (slot, v), data_len)| insert.push((k, (slot, v), data_len)));
+
         self.startup_stats
             .copy_data_us
             .fetch_add(m.end_as_us(), Ordering::Relaxed);
+    }
+
+    fn force_disk_contents_at_startup(&self, key: &Pubkey, slot: Slot, info: T) {
+        /*
+        if let Some(disk) = self.bucket.as_ref() {
+            disk.insert(key, (&[(slot, info.into())], 1));
+        }
+        */
+        // insert into in-mem map. This will be flushed to disk in the background.
+        let new_entry = PreAllocatedAccountMapEntry::new(slot, info, &self.storage, false);
+        let new_entry: AccountMapEntry<T> = new_entry.into_account_map_entry(&self.storage);
+        assert!(new_entry.dirty());
+        let mut map = self.map_internal.write().unwrap();
+        map.insert(*key, new_entry);
     }
 
     pub fn insert_new_entry_if_missing_with_lock(
@@ -709,7 +750,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             Entry::Occupied(occupied) => {
                 // in cache, so merge into cache
                 let (slot, account_info) = new_entry.into();
-                InMemAccountsIndex::<T, U>::lock_and_update_slot_list(
+                InMemAccountsIndex::<T>::lock_and_update_slot_list(
                     occupied.get(),
                     (slot, account_info),
                     None, // should be None because we don't expect a different slot # during index generation
@@ -727,7 +768,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                 self.stats().inc_mem_count(self.bin);
                 if let Some(disk_entry) = disk_entry {
                     let (slot, account_info) = new_entry.into();
-                    InMemAccountsIndex::<T, U>::lock_and_update_slot_list(
+                    InMemAccountsIndex::<T>::lock_and_update_slot_list(
                         &disk_entry,
                         (slot, account_info),
                         // None because we are inserting the first element in the slot list for this pubkey.
@@ -1082,14 +1123,28 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         let disk = self.bucket.as_ref().unwrap();
         let mut count = insert.len() as u64;
         for (i, duplicate_entry) in disk.batch_insert_non_duplicates(&insert) {
-            let (k, entry) = &insert[i];
-            duplicates.duplicates.push((entry.0, *k, entry.1.into()));
+            let (pubkey, (slot, info), data_len) = &insert[i];
+            let pubkey = *pubkey;
+            let slot = *slot;
             // accurately account for there being a duplicate for the first entry that was previously added to the disk index.
             // That entry could not have known yet that it was a duplicate.
             // It is important to capture each slot with a duplicate because of slot limits applied to clean.
-            duplicates
-                .duplicates_put_on_disk
-                .insert((duplicate_entry.0, *k));
+            duplicates.duplicates.insert(
+                (pubkey, slot),
+                InsertIndex {
+                    slot: slot,
+                    info: (*info).into(),
+                    data_len: Some(*data_len),
+                },
+            );
+            duplicates.duplicates.insert(
+                (pubkey, duplicate_entry.0),
+                InsertIndex {
+                    slot: duplicate_entry.0,
+                    info: duplicate_entry.1.into(),
+                    data_len: None,
+                },
+            );
             count -= 1;
         }
 
@@ -1099,24 +1154,55 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
     /// pull out all duplicate pubkeys from 'startup_info'
     /// duplicate pubkeys have a slot list with len > 1
     /// These were collected for this bin when we did batch inserts in the bg flush threads.
-    /// Insert these into the in-mem index, then return the duplicate (Slot, Pubkey)
-    pub fn populate_and_retrieve_duplicate_keys_from_startup(&self) -> Vec<(Slot, Pubkey)> {
+    /// Set the disk index to contain only the entry with the highest slot per pubkey, then return all entries.
+    pub(crate) fn populate_and_retrieve_duplicate_keys_from_startup(
+        &self,
+    ) -> Vec<(Pubkey, Vec<InsertIndex<T>>)> {
         // in order to return accurate and complete duplicates, we must have nothing left remaining to insert
         assert!(self.startup_info.insert.lock().unwrap().is_empty());
 
         let mut duplicate_items = self.startup_info.duplicates.lock().unwrap();
         let duplicates = std::mem::take(&mut duplicate_items.duplicates);
-        let duplicates_put_on_disk = std::mem::take(&mut duplicate_items.duplicates_put_on_disk);
-        drop(duplicate_items);
+        let mut duplicates = duplicates.into_iter().collect::<Vec<_>>();
+        // sort by pubkey, then slot, so highest slot of each pubkey is last
+        // we will iterate last to first
+        duplicates.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
-        duplicates_put_on_disk
-            .into_iter()
-            .chain(duplicates.into_iter().map(|(slot, key, info)| {
-                let entry = PreAllocatedAccountMapEntry::new(slot, info, &self.storage, true);
-                self.insert_new_entry_if_missing_with_lock(key, entry);
-                (slot, key)
-            }))
-            .collect()
+        let mut i = duplicates.len();
+        let mut result = Vec::with_capacity(i / 2);
+        let mut current_pubkey = None::<Pubkey>;
+        let mut current_pubkey_dups = Vec::default();
+
+        while i > 0 {
+            i -= 1;
+            let ((key, slot), account_info) = &duplicates[i];
+            if let Some(current_pubkey) = current_pubkey.as_ref() {
+                if current_pubkey == key {
+                    // already created this pubkey entry, so add this one to it
+                    current_pubkey_dups.push(account_info.clone());
+                    continue;
+                }
+                // different pubkey found, so write previous one before starting next one. We have found all slots `current_pubkey` was in.
+                result.push((*current_pubkey, std::mem::take(&mut current_pubkey_dups)));
+            }
+
+            // Found highest slot where this pubkey is a duplicate.
+            // We want the index to ONLY contain this one.
+            self.force_disk_contents_at_startup(&key, *slot, account_info.info);
+            current_pubkey = Some(*key);
+            current_pubkey_dups.push(InsertIndex {
+                info: account_info.info,
+                slot: *slot,
+                data_len: None,
+            });
+        }
+        if let Some(current_pubkey) = current_pubkey {
+            if !current_pubkey_dups.is_empty() {
+                result.push((current_pubkey, current_pubkey_dups));
+            }
+        }
+
+        result
     }
 
     /// synchronize the in-mem index with the disk index
@@ -1476,9 +1562,7 @@ struct EvictionsGuard<'a> {
 
 impl<'a> EvictionsGuard<'a> {
     #[must_use = "if unused, this evictions lock will be immediately unlocked"]
-    fn lock<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>(
-        in_mem_accounts_index: &'a InMemAccountsIndex<T, U>,
-    ) -> Self {
+    fn lock<T: IndexValue>(in_mem_accounts_index: &'a InMemAccountsIndex<T>) -> Self {
         Self::lock_with(
             &in_mem_accounts_index.stop_evictions,
             &in_mem_accounts_index.stop_evictions_changes,

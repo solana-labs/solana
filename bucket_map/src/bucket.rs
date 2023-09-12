@@ -282,18 +282,24 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
     /// for each item in `items`, get the hash value when hashed with `random`.
     /// Return a vec of tuples:
     /// (hash_value, index in `items`)
-    fn index_entries(items: &[(Pubkey, T)], random: u64) -> Vec<(u64, usize)> {
+    fn index_entries(items: &[(Pubkey, T, usize)], random: u64) -> Vec<(u64, usize)> {
         let mut inserts = Vec::with_capacity(items.len());
-        items.iter().enumerate().for_each(|(i, (key, _v))| {
-            let ix = Self::bucket_index_ix(key, random);
-            inserts.push((ix, i));
-        });
+        items
+            .iter()
+            .enumerate()
+            .for_each(|(i, (key, _v, _data_len))| {
+                let ix = Self::bucket_index_ix(key, random);
+                inserts.push((ix, i));
+            });
         inserts
     }
 
     /// batch insert of `items`. Assumption is a single slot list element and ref_count == 1.
     /// For any pubkeys that already exist, the index in `items` of the failed insertion and the existing data (previously put in the index) are returned.
-    pub(crate) fn batch_insert_non_duplicates(&mut self, items: &[(Pubkey, T)]) -> Vec<(usize, T)> {
+    pub(crate) fn batch_insert_non_duplicates(
+        &mut self,
+        items: &[(Pubkey, T, usize)],
+    ) -> Vec<(usize, T)> {
         assert!(
             !self.at_least_one_entry_deleted,
             "efficient batch insertion can only occur prior to any deletes"
@@ -345,7 +351,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
     pub fn batch_insert_non_duplicates_internal(
         index: &mut BucketStorage<IndexBucket<T>>,
         data_buckets: &[BucketStorage<DataBucket>],
-        items: &[(Pubkey, T)],
+        items: &[(Pubkey, T, usize)],
         reverse_sorted_entries: &mut Vec<(u64, usize)>,
         duplicates: &mut Vec<(usize, T)>,
     ) -> Result<(), BucketMapError> {
@@ -355,7 +361,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
 
         // pop one entry at a time to insert
         'outer: while let Some((ix_entry_raw, i)) = reverse_sorted_entries.pop() {
-            let (k, v) = &items[i];
+            let (k, v, _data_len) = &items[i];
             let ix_entry = ix_entry_raw % cap;
             // search for an empty spot starting at `ix_entry`
             for search in 0..search_end {

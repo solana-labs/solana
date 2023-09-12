@@ -63,6 +63,11 @@ pub struct BucketMapHolderStats {
     bins: u64,
     pub estimate_mem: AtomicU64,
     pub flush_should_evict_us: AtomicU64,
+    pub copy_us: AtomicU64,
+    pub reserve_count: AtomicU64,
+    pub reserve_us: AtomicU64,
+    pub max_alloc: AtomicU64,
+    pub max_reserve: AtomicU64,
 }
 
 impl BucketMapHolderStats {
@@ -514,6 +519,23 @@ impl BucketMapHolderStats {
                     "flush_entries_evicted_from_mem",
                     self.flush_entries_evicted_from_mem
                         .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                ("copy_us", self.copy_us.swap(0, Ordering::Relaxed), i64),
+                (
+                    "reserve_us",
+                    self.reserve_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "reserve_count",
+                    self.reserve_count.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                ("max_alloc", self.max_alloc.swap(0, Ordering::Relaxed), i64),
+                (
+                    "max_reserve",
+                    self.max_reserve.swap(0, Ordering::Relaxed),
                     i64
                 ),
             );

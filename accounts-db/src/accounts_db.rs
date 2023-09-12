@@ -60,6 +60,7 @@ use {
         cache_hash_data::{CacheHashData, CacheHashDataFileReference},
         contains::Contains,
         epoch_accounts_hash::EpochAccountsHashManager,
+        in_mem_accounts_index::InsertIndex,
         in_mem_accounts_index::StartupStats,
         partitioned_rewards::{PartitionedEpochRewardsConfig, TestPartitionedEpochRewards},
         pubkey_bins::PubkeyBinCalculator24,
@@ -71,10 +72,7 @@ use {
     },
     blake3::traits::digest::Digest,
     crossbeam_channel::{unbounded, Receiver, Sender},
-    dashmap::{
-        mapref::entry::Entry::{Occupied, Vacant},
-        DashMap, DashSet,
-    },
+    dashmap::{DashMap, DashSet},
     log::*,
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
@@ -624,6 +622,13 @@ struct GenerateIndexTimings {
     pub populate_duplicate_keys_us: u64,
     pub total_slots: u64,
     pub slots_to_clean: u64,
+    pub duplicate_accounts_loaded: AtomicUsize,
+    pub duplicate_accounts_not_loaded: AtomicUsize,
+    pub max_duplicate_accounts: AtomicUsize,
+    pub longest_us: AtomicU64,
+    pub max_active_threads: AtomicU64,
+    pub f_us: AtomicU64,
+    pub populate_dups_us: AtomicU64,
 }
 
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -632,6 +637,8 @@ struct StorageSizeAndCount {
     pub stored_size: usize,
     /// number of accounts in the storage including both alive and dead accounts
     pub count: usize,
+    /// bytes cleaned during index generation
+    pub dead_bytes: usize,
 }
 type StorageSizeAndCountMap = DashMap<AppendVecId, StorageSizeAndCount>;
 
@@ -688,6 +695,33 @@ impl GenerateIndexTimings {
             (
                 "copy_data_us",
                 startup_stats.copy_data_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "duplicate_accounts_loaded",
+                self.duplicate_accounts_loaded.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "duplicate_accounts_not_loaded",
+                self.duplicate_accounts_not_loaded.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "max_duplicate_accounts",
+                self.max_duplicate_accounts.load(Ordering::Relaxed),
+                i64
+            ),
+            ("longest_us", self.longest_us.load(Ordering::Relaxed), i64),
+            (
+                "max_active_threads",
+                self.max_active_threads.load(Ordering::Relaxed),
+                i64
+            ),
+            ("f_us", self.f_us.load(Ordering::Relaxed), i64),
+            (
+                "populate_dups_us",
+                self.populate_dups_us.load(Ordering::Relaxed),
                 i64
             ),
         );
@@ -1435,7 +1469,7 @@ struct RemoveUnrootedSlotsSynchronization {
     signal: Condvar,
 }
 
-type AccountInfoAccountsIndex = AccountsIndex<AccountInfo, AccountInfo>;
+type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
 
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
@@ -8995,6 +9029,7 @@ impl AccountsDb {
                     StorageLocation::AppendVec(store_id, stored_account.offset()), // will never be cached
                     stored_account.lamports(),
                 ),
+                stored_account.data_len() as usize, // pass through u64 todo
             )
         });
 
@@ -9271,6 +9306,13 @@ impl AccountsDb {
             // outer vec is accounts index bin (determined by pubkey value)
             // inner vec is the pubkeys within that bin that are present in > 1 slot
             let unique_pubkeys_by_bin = Mutex::new(Vec::<Vec<Pubkey>>::default());
+            let timings = GenerateIndexTimings::default();
+            let active_threads = AtomicU64::default();
+            let longest_us = AtomicU64::default();
+            let max_active_threads = AtomicU64::default();
+            let f_us = AtomicU64::default();
+            let populate_dups_us = AtomicU64::default();
+
             if pass == 0 {
                 // tell accounts index we are done adding the initial accounts at startup
                 let mut m = Measure::start("accounts_index_idle_us");
@@ -9282,27 +9324,71 @@ impl AccountsDb {
                     // this has to happen before visit_duplicate_pubkeys_during_startup below
                     // get duplicate keys from acct idx. We have to wait until we've finished flushing.
                     self.accounts_index
-                        .populate_and_retrieve_duplicate_keys_from_startup(|slot_keys| {
-                            total_duplicate_slot_keys
-                                .fetch_add(slot_keys.len() as u64, Ordering::Relaxed);
-                            let unique_keys =
-                                HashSet::<Pubkey>::from_iter(slot_keys.iter().map(|(_, key)| *key));
-                            for (slot, key) in slot_keys {
-                                match self.uncleaned_pubkeys.entry(slot) {
-                                    Occupied(mut occupied) => occupied.get_mut().push(key),
-                                    Vacant(vacant) => {
-                                        vacant.insert(vec![key]);
-                                    }
-                                }
-                            }
-                            let unique_pubkeys_by_bin_inner =
-                                unique_keys.into_iter().collect::<Vec<_>>();
-                            // does not matter that this is not ordered by slot
-                            unique_pubkeys_by_bin
-                                .lock()
-                                .unwrap()
-                                .push(unique_pubkeys_by_bin_inner);
-                        });
+                        .populate_and_retrieve_duplicate_keys_from_startup(
+                            &f_us,
+                            &populate_dups_us,
+                            |slot_keys| {
+                                let mut m = Measure::start("");
+                                total_duplicate_slot_keys
+                                    .fetch_add(slot_keys.len() as u64, Ordering::Relaxed);
+                                let a = active_threads.fetch_add(1, Ordering::Relaxed) + 1;
+                                max_active_threads.fetch_max(a + 1, Ordering::Relaxed);
+                                //let unique_keys = HashSet::<Pubkey>::from_iter(
+                                //    slot_keys.iter().map(|(key, _slot_infos)| *key),
+                                //);
+
+                                rayon::join(
+                                    || {
+                                        let mut map = self.shrink_candidate_slots.lock().unwrap();
+                                        for (_key, slot_infos) in &slot_keys {
+                                            for info in slot_infos {
+                                                map.insert(info.slot);
+                                            }
+                                        }
+                                    },
+                                    || {
+                                        for (_key, slot_infos) in &slot_keys {
+                                            // the first one needs to be cleaned
+                                            // todo: does it? why? zero lamports still exist in index and append vecs
+                                            /*
+                                            if let Some(insert_index) = slot_infos.first() {
+                                                match self.uncleaned_pubkeys.entry(insert_index.slot) {
+                                                    Occupied(mut occupied) => occupied.get_mut().push(key),
+                                                    Vacant(vacant) => {
+                                                        vacant.insert(vec![key]);
+                                                    }
+                                                }
+                                            }
+                                            */
+                                            // the others need to be used to reduce the data len, rent paying accounts, and storage alive bytes
+                                            let accounts_data_len_from_duplicates = self
+                                                .process_cleaned_pubkeys_during_generate_index(
+                                                    &slot_infos[1..],
+                                                    &storage_info,
+                                                    &timings,
+                                                );
+                                            accounts_data_len.fetch_sub(
+                                                accounts_data_len_from_duplicates as u64,
+                                                Ordering::Relaxed,
+                                            );
+                                        }
+                                    },
+                                );
+                                //let unique_pubkeys_by_bin_inner =
+                                //    unique_keys.into_iter().collect::<Vec<_>>();
+                                active_threads.fetch_sub(1, Ordering::Relaxed);
+                                m.stop();
+                                longest_us.fetch_max(m.as_us(), Ordering::Relaxed);
+
+                                // does not matter that this is not ordered by slot
+                                /*
+                                unique_pubkeys_by_bin
+                                    .lock()
+                                    .unwrap()
+                                    .push(unique_pubkeys_by_bin_inner);
+                                */
+                            },
+                        );
                 })
                 .1;
             }
@@ -9315,14 +9401,18 @@ impl AccountsDb {
                 insertion_time_us: insertion_time_us.load(Ordering::Relaxed),
                 min_bin_size,
                 max_bin_size,
+                longest_us,
+                max_active_threads,
                 total_items,
+                populate_dups_us,
+                f_us,
                 rent_paying,
                 amount_to_top_off_rent,
                 total_duplicate_slot_keys: total_duplicate_slot_keys.load(Ordering::Relaxed),
                 populate_duplicate_keys_us,
                 total_including_duplicates: total_including_duplicates.load(Ordering::Relaxed),
                 total_slots: slots.len() as u64,
-                ..GenerateIndexTimings::default()
+                ..timings
             };
 
             // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
@@ -9410,6 +9500,53 @@ impl AccountsDb {
         }
     }
 
+    /// reduce total data len by sum of all account's data len
+    /// reduce each append vec's alive count by removed account's len
+    /// if account's data len is not known, look it up
+    /// returns data len sum from all duplicate accounts that were cleaned
+    fn process_cleaned_pubkeys_during_generate_index(
+        &self,
+        infos: &[InsertIndex<AccountInfo>],
+        storage_info: &StorageSizeAndCountMap,
+        stats: &GenerateIndexTimings,
+    ) -> usize {
+        stats
+            .max_duplicate_accounts
+            .fetch_max(infos.len(), Ordering::Relaxed);
+        infos
+            .iter()
+            .map(
+                |InsertIndex {
+                     slot,
+                     info,
+                     data_len,
+                 }| {
+                    if data_len.is_some() {
+                        stats
+                            .duplicate_accounts_not_loaded
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                    let data_len = data_len.unwrap_or_else(|| {
+                        stats
+                            .duplicate_accounts_loaded
+                            .fetch_add(1, Ordering::Relaxed);
+                        let maybe_storage_entry = self
+                            .storage
+                            .get_account_storage_entry(*slot, info.store_id());
+                        let mut accessor = LoadedAccountAccessor::Stored(
+                            maybe_storage_entry.map(|entry| (entry, info.offset())),
+                        );
+                        let loaded_account = accessor.check_and_get_loaded_account();
+                        loaded_account.data().len()
+                    });
+                    let mut storage_info = storage_info.get_mut(&info.store_id()).unwrap();
+                    storage_info.dead_bytes += aligned_stored_size(data_len);
+                    data_len
+                },
+            )
+            .sum()
+    }
+
     /// Used during generate_index() to:
     /// 1. get the _duplicate_ accounts data len from the given pubkeys
     /// 2. get the slots that contained duplicate pubkeys
@@ -9488,15 +9625,12 @@ impl AccountsDb {
                     entry.count,
                     store.count(),
                 );
-                {
-                    let mut count_and_status = store.count_and_status.write().unwrap();
-                    assert_eq!(count_and_status.0, 0);
-                    count_and_status.0 = entry.count;
-                }
-                store.alive_bytes.store(entry.stored_size, Ordering::SeqCst);
-                store
-                    .approx_store_count
-                    .store(entry.count, Ordering::Relaxed);
+                store.count_and_status.write().unwrap().0 = entry.count;
+                assert_eq!(count_and_status.0, 0);
+                store.alive_bytes.store(
+                    entry.stored_size.saturating_sub(entry.dead_bytes),
+                    Ordering::SeqCst,
+                );
             } else {
                 trace!("id: {} clearing count", id);
                 store.count_and_status.write().unwrap().0 = 0;

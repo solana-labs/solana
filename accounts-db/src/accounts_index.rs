@@ -71,12 +71,6 @@ pub type SlotSlice<'s, T> = &'s [(Slot, T)];
 pub type RefCount = u64;
 pub type AccountMap<T, U> = Arc<InMemAccountsIndex<T, U>>;
 
-#[derive(Default, Debug, PartialEq, Eq)]
-pub(crate) struct GenerateIndexCount {
-    /// number of accounts inserted in the index
-    pub count: usize,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// how accounts index 'upsert' should handle reclaims
 pub enum UpsertReclaim {
@@ -491,8 +485,8 @@ pub struct AccountsIndexRootsStats {
     pub clean_dead_slot_us: u64,
 }
 
-pub struct AccountsIndexIterator<'a, T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
-    account_maps: &'a LockMapTypeSlice<T, U>,
+pub struct AccountsIndexIterator<'a, T: IndexValue> {
+    account_maps: &'a LockMapTypeSlice<T>,
     bin_calculator: &'a PubkeyBinCalculator24,
     start_bound: Bound<Pubkey>,
     end_bound: Bound<Pubkey>,
@@ -500,9 +494,9 @@ pub struct AccountsIndexIterator<'a, T: IndexValue, U: DiskIndexValue + From<T> 
     collect_all_unsorted: bool,
 }
 
-impl<'a, T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndexIterator<'a, T, U> {
+impl<'a, T: IndexValue> AccountsIndexIterator<'a, T> {
     fn range<R>(
-        map: &AccountMaps<T, U>,
+        map: &AccountMaps<T>,
         range: R,
         collect_all_unsorted: bool,
     ) -> Vec<(Pubkey, AccountMapEntry<T>)>
@@ -560,7 +554,7 @@ impl<'a, T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndexIter
     }
 
     pub fn new<R>(
-        index: &'a AccountsIndex<T, U>,
+        index: &'a AccountsIndex<T>,
         range: Option<&R>,
         collect_all_unsorted: bool,
     ) -> Self
@@ -600,9 +594,7 @@ impl<'a, T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndexIter
     }
 }
 
-impl<'a, T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> Iterator
-    for AccountsIndexIterator<'a, T, U>
-{
+impl<'a, T: IndexValue> Iterator for AccountsIndexIterator<'a, T> {
     type Item = Vec<(Pubkey, AccountMapEntry<T>)>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.is_finished {
@@ -640,10 +632,10 @@ pub trait ZeroLamport {
     fn is_zero_lamport(&self) -> bool;
 }
 
-type MapType<T, U> = AccountMap<T, U>;
-type LockMapType<T, U> = Vec<MapType<T, U>>;
-type LockMapTypeSlice<T, U> = [MapType<T, U>];
-type AccountMaps<'a, T, U> = &'a MapType<T, U>;
+type MapType<T> = AccountMap<T>;
+type LockMapType<T> = Vec<MapType<T>>;
+type LockMapTypeSlice<T> = [MapType<T>];
+type AccountMaps<'a, T> = &'a MapType<T>;
 
 #[derive(Debug, Default)]
 pub struct ScanSlotTracker {
@@ -673,8 +665,8 @@ pub enum AccountsIndexScanResult {
 #[derive(Debug)]
 /// T: account info type to interact in in-memory items
 /// U: account info type to be persisted to disk
-pub struct AccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
-    pub account_maps: LockMapType<T, U>,
+pub struct AccountsIndex<T: IndexValue> {
+    pub account_maps: LockMapType<T>,
     pub bin_calculator: PubkeyBinCalculator24,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
@@ -693,7 +685,7 @@ pub struct AccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     // scanning the fork with that Bank at the tip is no longer possible.
     pub removed_bank_ids: Mutex<HashSet<BankId>>,
 
-    storage: AccountsIndexStorage<T, U>,
+    storage: AccountsIndexStorage<T>,
 
     /// when a scan's accumulated data exceeds this limit, abort the scan
     pub scan_results_limit_bytes: Option<usize>,
@@ -711,7 +703,7 @@ pub struct AccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     pub rent_paying_accounts_by_partition: OnceLock<RentPayingAccountsByPartition>,
 }
 
-impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
+impl<T: IndexValue> AccountsIndex<T> {
     pub fn default_for_tests() -> Self {
         Self::new(Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING), Arc::default())
     }
@@ -750,9 +742,9 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         config: Option<AccountsIndexConfig>,
         exit: Arc<AtomicBool>,
     ) -> (
-        LockMapType<T, U>,
+        LockMapType<T>,
         PubkeyBinCalculator24,
-        AccountsIndexStorage<T, U>,
+        AccountsIndexStorage<T>,
     ) {
         let bins = config
             .as_ref()
@@ -767,7 +759,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         (account_maps, bin_calculator, storage)
     }
 
-    fn iter<R>(&self, range: Option<&R>, collect_all_unsorted: bool) -> AccountsIndexIterator<T, U>
+    fn iter<R>(&self, range: Option<&R>, collect_all_unsorted: bool) -> AccountsIndexIterator<T>
     where
         R: RangeBounds<Pubkey>,
     {
@@ -1129,7 +1121,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     pub fn get_account_read_entry_with_lock(
         &self,
         pubkey: &Pubkey,
-        lock: &AccountMaps<'_, T, U>,
+        lock: &AccountMaps<'_, T>,
     ) -> Option<ReadAccountMapEntry<T>> {
         lock.get(pubkey)
             .map(ReadAccountMapEntry::from_account_map_entry)
@@ -1578,7 +1570,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         );
     }
 
-    pub(crate) fn get_bin(&self, pubkey: &Pubkey) -> AccountMaps<T, U> {
+    pub(crate) fn get_bin(&self, pubkey: &Pubkey) -> AccountMaps<T> {
         &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
     }
 
@@ -1610,13 +1602,15 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             .collect::<Vec<_>>();
         let mut count = 0;
         let mut dirty_pubkeys = items
-            .filter_map(|(pubkey, account_info)| {
+            .filter_map(|(pubkey, account_info, data_len)| {
                 let pubkey_bin = self.bin_calculator.bin_from_pubkey(&pubkey);
                 // this value is equivalent to what update() below would have created if we inserted a new item
                 let is_zero_lamport = account_info.is_zero_lamport();
                 let result = if is_zero_lamport { Some(pubkey) } else { None };
 
-                binned[pubkey_bin].push((pubkey, (slot, account_info)));
+                binned[pubkey_bin]
+                    .1
+                    .push((pubkey, (slot, account_info), data_len));
                 result
             })
             .collect::<Vec<_>>();
@@ -1637,13 +1631,13 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             let mut insert_time = Measure::start("insert_into_primary_index");
             count += items.len();
             if use_disk {
-                r_account_maps.startup_insert_only(items.into_iter());
+                r_account_maps.startup_insert_only(items);
             } else {
                 // not using disk buckets, so just write to in-mem
                 // this is no longer the default case
                 items
                     .into_iter()
-                    .for_each(|(pubkey, (slot, account_info))| {
+                    .for_each(|(pubkey, (slot, account_info), _data_len)| {
                         let new_entry = PreAllocatedAccountMapEntry::new(
                             slot,
                             account_info,
@@ -1675,15 +1669,19 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     /// use Vec<> because the internal vecs are already allocated per bin
     pub(crate) fn populate_and_retrieve_duplicate_keys_from_startup(
         &self,
-        f: impl Fn(Vec<(Slot, Pubkey)>) + Sync + Send,
+        f_us: &AtomicU64,
+        populate_dups_us: &AtomicU64,
+        f: impl Fn(Vec<(Pubkey, Vec<crate::in_mem_accounts_index::InsertIndex<T>>)>) + Sync + Send,
     ) {
-        (0..self.bins())
-            .into_par_iter()
-            .map(|pubkey_bin| {
-                let r_account_maps = &self.account_maps[pubkey_bin];
-                r_account_maps.populate_and_retrieve_duplicate_keys_from_startup()
-            })
-            .for_each(f);
+        (0..self.bins()).into_par_iter().for_each(|pubkey_bin| {
+            let r_account_maps = &self.account_maps[pubkey_bin];
+            let m = Measure::start("");
+            let r = r_account_maps.populate_and_retrieve_duplicate_keys_from_startup();
+            populate_dups_us.fetch_add(m.end_as_us(), Ordering::Relaxed);
+            let m = Measure::start("");
+            f(r);
+            f_us.fetch_add(m.end_as_us(), Ordering::Relaxed);
+        })
     }
 
     /// Updates the given pubkey at the given slot with the new account information.

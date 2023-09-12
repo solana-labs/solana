@@ -334,7 +334,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> BucketMapHolder<T, U>
     pub fn background(
         &self,
         exit: Vec<Arc<AtomicBool>>,
-        in_mem: Vec<Arc<InMemAccountsIndex<T, U>>>,
+        in_mem: Vec<Arc<InMemAccountsIndex<T>>>,
         can_advance_age: bool,
     ) {
         let bins = in_mem.len();
