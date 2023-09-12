@@ -7138,7 +7138,7 @@ impl AccountsDb {
                     // so, build a file name:
                     let hash = hasher.finish();
                     let file_name = format!(
-                        "{}.{}.{}.{}.{}",
+                        "{}.{}.{}.{}.{:016x}",
                         range_this_chunk.start,
                         range_this_chunk.end,
                         bin_range.start,
