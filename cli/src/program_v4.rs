@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use {
     crate::{
         checks::*,
@@ -16,20 +15,20 @@ use {
     },
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::config::RpcSendTransactionConfig,
-    solana_sdk::loader_v4::{
-        self, LoaderV4State,
-        LoaderV4Status::{self, Retracted},
-    },
     solana_sdk::{
         account::Account,
         instruction::Instruction,
+        loader_v4::{
+            self, LoaderV4State,
+            LoaderV4Status::{self, Retracted},
+        },
         message::Message,
         pubkey::Pubkey,
         signature::Signer,
         system_instruction::{self, SystemError},
         transaction::Transaction,
     },
-    std::sync::Arc,
+    std::{cmp::Ordering, sync::Arc},
 };
 
 #[allow(dead_code)]
