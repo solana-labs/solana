@@ -18,6 +18,8 @@
 //! tracks the number of commits to the entire data store. So the latest
 //! commit for each slot entry would be indexed.
 
+#[cfg(feature = "load-accounts-histogram")]
+mod load_accounts_histogram;
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::qualifiers;
 use {
@@ -79,7 +81,7 @@ use {
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
-    solana_measure::{measure::Measure, measure_us},
+    solana_measure::{measure, measure::Measure, measure_us},
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -1594,6 +1596,10 @@ pub struct AccountsDb {
     /// Some time later (to allow for slow calculation time), the bank hash at a slot calculated using 'M' includes the full accounts hash.
     /// Thus, the state of all accounts on a validator is known to be correct at least once per epoch.
     pub epoch_accounts_hash_manager: EpochAccountsHashManager,
+
+    /// A histogram for how long it takes to load accounts
+    #[cfg(feature = "load-accounts-histogram")]
+    pub load_accounts_histogram: Mutex<load_accounts_histogram::LoadAccountsHistogram>,
 }
 
 #[derive(Debug, Default)]
@@ -2542,6 +2548,10 @@ impl AccountsDb {
             exhaustively_verify_refcounts: false,
             partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig::default(),
             epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
+            #[cfg(feature = "load-accounts-histogram")]
+            load_accounts_histogram: Mutex::new(
+                load_accounts_histogram::LoadAccountsHistogram::new(),
+            ),
         }
     }
 
@@ -5076,7 +5086,10 @@ impl AccountsDb {
         pubkey: &Pubkey,
         load_hint: LoadHint,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.do_load(ancestors, pubkey, None, load_hint, LoadZeroLamports::None)
+        let (account, measurement) =
+            measure!(self.do_load(ancestors, pubkey, None, load_hint, LoadZeroLamports::None));
+        self.record_load_accounts_measurement(measurement);
+        account
     }
 
     /// Return Ok(index_of_matching_owner) if the account owner at `offset` is one of the pubkeys in `owners`.
@@ -9593,6 +9606,21 @@ impl AccountsDb {
                 entry.accounts.capacity(),
             );
         }
+    }
+
+    /// Records how long it took to load an account
+    pub fn record_load_accounts_measurement(&self, _measurement: Measure) {
+        #[cfg(feature = "load-accounts-histogram")]
+        self.load_accounts_histogram
+            .lock()
+            .unwrap()
+            .record(_measurement.as_duration());
+    }
+
+    /// Submits the stats from the histogram for loading accounts
+    pub fn maybe_submit_load_accounts_stats(&self) {
+        #[cfg(feature = "load-accounts-histogram")]
+        self.load_accounts_histogram.lock().unwrap().maybe_submit()
     }
 }
 

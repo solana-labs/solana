@@ -5115,6 +5115,11 @@ impl Bank {
         );
         load_time.stop();
 
+        self.rc
+            .accounts
+            .accounts_db
+            .maybe_submit_load_accounts_stats();
+
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
 

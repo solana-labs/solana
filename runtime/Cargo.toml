@@ -24,6 +24,7 @@ dir-diff = { workspace = true }
 flate2 = { workspace = true }
 fnv = { workspace = true }
 fs-err = { workspace = true }
+hdrhistogram = { workspace = true }
 im = { workspace = true, features = ["rayon", "serde"] }
 index_list = { workspace = true }
 itertools = { workspace = true }
