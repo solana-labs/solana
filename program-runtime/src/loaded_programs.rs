@@ -244,6 +244,8 @@ impl LoadedProgram {
 
     /// Reloads a user program, *without* running the verifier.
     ///
+    /// # Safety
+    ///
     /// This method is unsafe since it assumes that the program has already been verified. Should
     /// only be called when the program was previously verified and loaded in the cache, but was
     /// unloaded due to inactivity. It should also be checked that the `program_runtime_environment`
