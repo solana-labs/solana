@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use {
     crate::{
         checks::*,
@@ -31,6 +32,7 @@ use {
     std::sync::Arc,
 };
 
+#[allow(dead_code)]
 fn process_deploy_program(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
@@ -52,7 +54,7 @@ fn process_deploy_program(
         program_data_len,
     )?;
 
-    let (initial_messages, balance_needed) = if create_buffer_instructions.len() > 0 {
+    let (initial_messages, balance_needed) = if !create_buffer_instructions.is_empty() {
         let message = Message::new_with_blockhash(
             &create_buffer_instructions,
             Some(&payer_pubkey),
@@ -111,6 +113,7 @@ fn process_deploy_program(
     Ok(config.output_format.formatted_string(&program_id))
 }
 
+#[allow(dead_code)]
 fn process_redeploy_program(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
@@ -122,12 +125,10 @@ fn process_redeploy_program(
     let blockhash = rpc_client.get_latest_blockhash()?;
     let payer_pubkey = config.signers[0].pubkey();
 
-    let program_account = if let Some(account) = rpc_client
+    let Some(program_account) = rpc_client
         .get_account_with_commitment(program_address, config.commitment)?
         .value
-    {
-        account
-    } else {
+    else {
         return Err("Program account does not exist".into());
     };
 
@@ -156,7 +157,7 @@ fn process_redeploy_program(
         program_data_len,
     )?;
 
-    if truncate_instructions.len() > 0 {
+    if !truncate_instructions.is_empty() {
         initial_messages.push(Message::new_with_blockhash(
             &truncate_instructions,
             Some(&payer_pubkey),
@@ -212,6 +213,7 @@ fn process_redeploy_program(
     Ok(config.output_format.formatted_string(&program_id))
 }
 
+#[allow(dead_code)]
 fn process_undeploy_program(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
@@ -221,12 +223,10 @@ fn process_undeploy_program(
     let blockhash = rpc_client.get_latest_blockhash()?;
     let payer_pubkey = config.signers[0].pubkey();
 
-    let program_account = if let Some(account) = rpc_client
+    let Some(program_account) = rpc_client
         .get_account_with_commitment(program_address, config.commitment)?
         .value
-    {
-        account
-    } else {
+    else {
         return Err("Program account does not exist".into());
     };
 
@@ -277,6 +277,7 @@ fn process_undeploy_program(
     Ok(config.output_format.formatted_string(&program_id))
 }
 
+#[allow(dead_code)]
 fn process_finalize_program(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
@@ -313,6 +314,7 @@ fn process_finalize_program(
     Ok(config.output_format.formatted_string(&program_id))
 }
 
+#[allow(dead_code)]
 fn check_payer(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -344,6 +346,7 @@ fn check_payer(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn send_messages(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
@@ -462,6 +465,7 @@ fn send_messages(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn build_create_buffer_instructions(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
@@ -513,6 +517,7 @@ fn build_create_buffer_instructions(
     }
 }
 
+#[allow(dead_code)]
 fn build_retract_instruction(
     account: &Account,
     buffer_address: &Pubkey,
@@ -544,6 +549,7 @@ fn build_retract_instruction(
     }
 }
 
+#[allow(dead_code)]
 fn build_truncate_instructions(
     rpc_client: Arc<RpcClient>,
     payer: &Pubkey,
@@ -584,29 +590,37 @@ fn build_truncate_instructions(
     let truncate_instruction =
         loader_v4::truncate(buffer_address, authority, program_data_length, payer);
 
-    if account.data.len() < expected_account_data_len {
-        if account.lamports < lamports_required {
-            let extra_lamports_required = lamports_required.saturating_sub(account.lamports);
-            Ok((
-                vec![
-                    system_instruction::transfer(payer, buffer_address, extra_lamports_required),
-                    truncate_instruction,
-                ],
-                extra_lamports_required,
-            ))
-        } else {
+    match account.data.len().cmp(&expected_account_data_len) {
+        Ordering::Less => {
+            if account.lamports < lamports_required {
+                let extra_lamports_required = lamports_required.saturating_sub(account.lamports);
+                Ok((
+                    vec![
+                        system_instruction::transfer(
+                            payer,
+                            buffer_address,
+                            extra_lamports_required,
+                        ),
+                        truncate_instruction,
+                    ],
+                    extra_lamports_required,
+                ))
+            } else {
+                Ok((vec![truncate_instruction], 0))
+            }
+        }
+        Ordering::Equal => {
+            if account.lamports < lamports_required {
+                return Err("Program account has less lamports than required for its size".into());
+            }
+            Ok((vec![], 0))
+        }
+        Ordering::Greater => {
+            if account.lamports < lamports_required {
+                return Err("Program account has less lamports than required for its size".into());
+            }
             Ok((vec![truncate_instruction], 0))
         }
-    } else if account.data.len() == expected_account_data_len {
-        if account.lamports < lamports_required {
-            return Err("Program account has less lamports than required for its size".into());
-        }
-        Ok((vec![], 0))
-    } else {
-        if account.lamports < lamports_required {
-            return Err("Program account has less lamports than required for its size".into());
-        }
-        Ok((vec![truncate_instruction], 0))
     }
 }
 
