@@ -72,9 +72,18 @@ pub fn max_lamports_for_prioritization(compute_unit_price: &Option<ComputeUnitPr
     u64::try_from(fee).unwrap_or(u64::MAX)
 }
 
-// set transfer transaction's loaded account data size to 30K - large enough yet smaller than
-// 32K page size, so it'd cost 0 extra CU.
+// In case of plain transfer transaction, set loaded account data size to 30K.
+// It is large enough yet smaller than 32K page size, so it'd cost 0 extra CU.
 const TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE: u32 = 30 * 1024;
+// In case of padding program usage, we need to take into account program size
+const PADDING_PROGRAM_ACCOUNT_DATA_SIZE: u32 = 28 * 1024;
+fn get_transaction_loaded_accounts_data_size(enable_padding: bool) -> u32 {
+    if enable_padding {
+        TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE + PADDING_PROGRAM_ACCOUNT_DATA_SIZE
+    } else {
+        TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE
+    }
+}
 
 pub type TimestampedTransaction = (Transaction, Option<u64>);
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<TimestampedTransaction>>>>;
@@ -610,18 +619,18 @@ fn transfer_with_compute_unit_price_and_padding(
     } else {
         transfer_instruction
     };
-    let mut instructions = vec![instruction];
+    let mut instructions = vec![
+        ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(
+            get_transaction_loaded_accounts_data_size(instruction_padding_config.is_some()),
+        ),
+        instruction,
+    ];
     if let Some(compute_unit_price) = compute_unit_price {
         instructions.extend_from_slice(&[
             ComputeBudgetInstruction::set_compute_unit_limit(TRANSFER_TRANSACTION_COMPUTE_UNIT),
             ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
         ])
     }
-    instructions.extend_from_slice(&[
-        ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(
-            TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
-        ),
-    ]);
     let message = Message::new(&instructions, Some(&from_pubkey));
     Transaction::new(&[from_keypair], message, recent_blockhash)
 }
@@ -708,12 +717,12 @@ fn nonced_transfer_with_padding(
     } else {
         transfer_instruction
     };
-    let mut instructions = vec![instruction];
-    instructions.extend_from_slice(&[
+    let instructions = vec![
         ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(
-            TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
+            get_transaction_loaded_accounts_data_size(instruction_padding_config.is_some()),
         ),
-    ]);
+        instruction,
+    ];
     let message = Message::new_with_nonce(
         instructions,
         Some(&from_pubkey),
@@ -1028,13 +1037,21 @@ pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?S
     funding_key: &Keypair,
     keypair_count: usize,
     lamports_per_account: u64,
+    enable_padding: bool,
 ) -> Result<Vec<Keypair>> {
     let rent = client.get_minimum_balance_for_rent_exemption(0)?;
     let lamports_per_account = lamports_per_account + rent;
 
     info!("Creating {} keypairs...", keypair_count);
     let (mut keypairs, extra) = generate_keypairs(funding_key, keypair_count as u64);
-    fund_keypairs(client, funding_key, &keypairs, extra, lamports_per_account)?;
+    fund_keypairs(
+        client,
+        funding_key,
+        &keypairs,
+        extra,
+        lamports_per_account,
+        enable_padding,
+    )?;
 
     // 'generate_keypairs' generates extra keys to be able to have size-aligned funding batches for fund_keys.
     keypairs.truncate(keypair_count);
@@ -1048,6 +1065,7 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     keypairs: &[Keypair],
     extra: u64,
     lamports_per_account: u64,
+    enable_padding: bool,
 ) -> Result<()> {
     let rent = client.get_minimum_balance_for_rent_exemption(0)?;
     info!("Get lamports...");
@@ -1112,7 +1130,7 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
             total,
             max_fee,
             lamports_per_account,
-            TRANSFER_TRANSACTION_LOADED_ACCOUNTS_DATA_SIZE,
+            get_transaction_loaded_accounts_data_size(enable_padding),
         );
     }
     Ok(())
@@ -1154,7 +1172,8 @@ mod tests {
 
         let keypair_count = config.tx_count * config.keypair_multiplier;
         let keypairs =
-            generate_and_fund_keypairs(client.clone(), &config.id, keypair_count, 20).unwrap();
+            generate_and_fund_keypairs(client.clone(), &config.id, keypair_count, 20, false)
+                .unwrap();
 
         do_bench_tps(client, config, keypairs, None);
     }
@@ -1169,7 +1188,8 @@ mod tests {
         let rent = client.get_minimum_balance_for_rent_exemption(0).unwrap();
 
         let keypairs =
-            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports).unwrap();
+            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports, false)
+                .unwrap();
 
         for kp in &keypairs {
             assert_eq!(
@@ -1193,7 +1213,8 @@ mod tests {
         let rent = client.get_minimum_balance_for_rent_exemption(0).unwrap();
 
         let keypairs =
-            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports).unwrap();
+            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports, false)
+                .unwrap();
 
         for kp in &keypairs {
             assert_eq!(client.get_balance(&kp.pubkey()).unwrap(), lamports + rent);
@@ -1209,7 +1230,8 @@ mod tests {
         let lamports = 10_000_000;
 
         let authority_keypairs =
-            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports).unwrap();
+            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports, false)
+                .unwrap();
 
         let nonce_keypairs = generate_durable_nonce_accounts(client.clone(), &authority_keypairs);
 
