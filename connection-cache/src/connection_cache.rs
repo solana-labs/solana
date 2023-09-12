@@ -92,13 +92,14 @@ where
         let config = Arc::new(connection_config);
         let connection_manager = Arc::new(connection_manager);
         let exit: Arc<AtomicBool> = Arc::default();
-
+        let connection_pool_size = 1.max(connection_pool_size); // The minimum pool size is 1.
         let async_connection_thread = Self::create_connection_thread(
             map.clone(),
             config.clone(),
             connection_manager.clone(),
             receiver,
             exit.clone(),
+            connection_pool_size,
         );
 
         Self {
@@ -107,7 +108,7 @@ where
             stats: Arc::new(ConnectionCacheStats::default()),
             connection_manager: connection_manager,
             last_stats: AtomicInterval::default(),
-            connection_pool_size: 1.max(connection_pool_size), // The minimum pool size is 1.
+            connection_pool_size,
             connection_config: config,
             exit,
             sender,
@@ -121,6 +122,7 @@ where
         connection_manager: Arc<M>,
         receiver: Receiver<SocketAddr>,
         exit: Arc<AtomicBool>,
+        connection_pool_size: usize,
     ) -> JoinHandle<()> {
         Builder::new()
             .name("solStxReceive".to_string())
@@ -143,6 +145,7 @@ where
                             connection_manager.clone(),
                             &mut map,
                             &addr,
+                            connection_pool_size,
                         );
                     }
                 }
@@ -176,6 +179,7 @@ where
                 self.connection_manager.clone(),
                 &mut map,
                 addr,
+                self.connection_pool_size,
             )
         } else {
             (true, 0, 0)
@@ -203,6 +207,7 @@ where
         connection_manager: Arc<M>,
         map: &mut std::sync::RwLockWriteGuard<'_, IndexMap<SocketAddr, P>>,
         addr: &SocketAddr,
+        connection_pool_size: usize,
     ) -> (bool, u64, u64) {
         // evict a connection if the cache is reaching upper bounds
         let mut num_evictions = 0;
@@ -222,9 +227,14 @@ where
         }
         get_connection_cache_eviction_measure.stop();
 
+        let mut hit_cache = false;
         map.entry(*addr)
             .and_modify(|pool| {
-                pool.add_connection(&config, addr);
+                if pool.need_new_connection(connection_pool_size).1 {
+                    pool.add_connection(&config, addr);
+                } else {
+                    hit_cache = true;
+                }
             })
             .or_insert_with(|| {
                 let mut pool = connection_manager.new_connection_pool();
@@ -232,7 +242,7 @@ where
                 pool
             });
         (
-            false,
+            hit_cache,
             num_evictions,
             get_connection_cache_eviction_measure.as_ms(),
         )
