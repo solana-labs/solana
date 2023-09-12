@@ -4,7 +4,7 @@ use {
         connection_cache_stats::{ConnectionCacheStats, CONNECTION_STAT_SUBMISSION_INTERVAL},
         nonblocking::client_connection::ClientConnection as NonblockingClientConnection,
     },
-    crossbeam_channel::{Receiver, RecvTimeoutError},
+    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     indexmap::map::IndexMap,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
@@ -15,7 +15,7 @@ use {
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
         },
-        thread::{Builder, JoinHandle},
+        thread::{self, Builder, JoinHandle},
         time::Duration,
     },
     thiserror::Error,
@@ -49,12 +49,15 @@ pub struct ConnectionCache<
     T, // NewConnectionConfig
 > {
     name: &'static str,
-    map: RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ R>>,
+    map: Arc<RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ R>>>,
     connection_manager: Arc<S>,
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     connection_pool_size: usize,
     connection_config: Arc<T>,
+    exit: Arc<AtomicBool>,
+    sender: Sender<SocketAddr>,
+    async_connection_thread: JoinHandle<()>,
 }
 
 impl<P, M, C> ConnectionCache<P, M, C>
@@ -83,19 +86,37 @@ where
         connection_config: C,
         connection_manager: M,
     ) -> Self {
+        let (sender, receiver) = crossbeam_channel::unbounded();
+
+        let map = Arc::new(RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)));
+        let config = Arc::new(connection_config);
+        let connection_manager = Arc::new(connection_manager);
+        let exit: Arc<AtomicBool> = Arc::default();
+
+        let async_connection_thread = Self::create_connection_thread(
+            map.clone(),
+            config.clone(),
+            connection_manager.clone(),
+            receiver,
+            exit.clone(),
+        );
+
         Self {
             name,
-            map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
+            map,
             stats: Arc::new(ConnectionCacheStats::default()),
-            connection_manager: Arc::new(connection_manager),
+            connection_manager: connection_manager,
             last_stats: AtomicInterval::default(),
             connection_pool_size: 1.max(connection_pool_size), // The minimum pool size is 1.
-            connection_config: Arc::new(connection_config),
+            connection_config: config,
+            exit,
+            sender,
+            async_connection_thread,
         }
     }
 
     fn create_connection_thread(
-        map: RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ P>>,
+        map: Arc<RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ P>>>,
         config: Arc<C>,
         connection_manager: Arc<M>,
         receiver: Receiver<SocketAddr>,
@@ -162,6 +183,11 @@ where
 
         let pool = map.get(addr).unwrap();
         let connection = pool.borrow_connection();
+
+        if need_new_connection && !should_create_connection {
+            // trigger an async connection create
+            self.sender.send(addr.clone()).unwrap();
+        }
 
         CreateConnectionResult {
             connection,
@@ -243,6 +269,9 @@ where
                     self.create_connection(&mut lock_timing_ms, addr)
                 } else {
                     let connection = pool.borrow_connection();
+                    if need_connection {
+                        self.sender.send(addr.clone()).unwrap();
+                    }
                     CreateConnectionResult {
                         connection,
                         cache_hit: true,
@@ -339,6 +368,11 @@ where
     ) -> Arc<<<P as ConnectionPool>::BaseClientConnection as BaseClientConnection>::NonblockingClientConnection>{
         let (connection, connection_cache_stats) = self.get_connection_and_log_stats(addr);
         connection.new_nonblocking_connection(*addr, connection_cache_stats)
+    }
+
+    pub fn join(self) -> thread::Result<()> {
+        self.exit.store(true, Ordering::Relaxed);
+        self.async_connection_thread.join()
     }
 }
 
