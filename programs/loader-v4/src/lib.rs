@@ -421,7 +421,6 @@ pub fn process_instruction_deploy(
         programdata,
         buffer.get_data().len(),
         &mut load_program_metrics,
-        false,
     )
     .map_err(|err| {
         ic_logger_msg!(log_collector, "{}", err);
@@ -665,7 +664,6 @@ mod tests {
                         programdata,
                         account.data().len(),
                         &mut load_program_metrics,
-                        false,
                     ) {
                         invoke_context.programs_modified_by_tx.set_slot_for_tests(0);
                         invoke_context

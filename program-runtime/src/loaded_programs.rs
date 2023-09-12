@@ -228,6 +228,58 @@ impl LoadedProgram {
         elf_bytes: &[u8],
         account_size: usize,
         metrics: &mut LoadProgramMetrics,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::new_internal(
+            loader_key,
+            program_runtime_environment,
+            deployment_slot,
+            effective_slot,
+            maybe_expiration_slot,
+            elf_bytes,
+            account_size,
+            metrics,
+            false, /* reloading */
+        )
+    }
+
+    /// Reloads a user program, *without* running the verifier.
+    ///
+    /// This method is unsafe since it assumes that the program has already been verified. Should
+    /// only be called when the program was previously verified and loaded in the cache, but was
+    /// unloaded due to inactivity. It should also be checked that the `program_runtime_environment`
+    /// hasn't changed since it was unloaded.
+    pub unsafe fn reload(
+        loader_key: &Pubkey,
+        program_runtime_environment: Arc<BuiltinProgram<InvokeContext<'static>>>,
+        deployment_slot: Slot,
+        effective_slot: Slot,
+        maybe_expiration_slot: Option<Slot>,
+        elf_bytes: &[u8],
+        account_size: usize,
+        metrics: &mut LoadProgramMetrics,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::new_internal(
+            loader_key,
+            program_runtime_environment,
+            deployment_slot,
+            effective_slot,
+            maybe_expiration_slot,
+            elf_bytes,
+            account_size,
+            metrics,
+            true, /* reloading */
+        )
+    }
+
+    fn new_internal(
+        loader_key: &Pubkey,
+        program_runtime_environment: Arc<BuiltinProgram<InvokeContext<'static>>>,
+        deployment_slot: Slot,
+        effective_slot: Slot,
+        maybe_expiration_slot: Option<Slot>,
+        elf_bytes: &[u8],
+        account_size: usize,
+        metrics: &mut LoadProgramMetrics,
         reloading: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut load_elf_time = Measure::start("load_elf_time");

@@ -4724,17 +4724,32 @@ impl Bank {
                     .data()
                     .get(LoaderV4State::program_data_offset()..)
                     .and_then(|elf_bytes| {
-                        LoadedProgram::new(
-                            &loader_v4::id(),
-                            environments.program_runtime_v2.clone(),
-                            slot,
-                            slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET),
-                            None,
-                            elf_bytes,
-                            program_account.data().len(),
-                            &mut load_program_metrics,
-                            reload,
-                        )
+                        if reload {
+                            // Safety: this is safe because the program is being reloaded in the cache.
+                            unsafe {
+                                LoadedProgram::reload(
+                                    &loader_v4::id(),
+                                    environments.program_runtime_v2.clone(),
+                                    slot,
+                                    slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET),
+                                    None,
+                                    elf_bytes,
+                                    program_account.data().len(),
+                                    &mut load_program_metrics,
+                                )
+                            }
+                        } else {
+                            LoadedProgram::new(
+                                &loader_v4::id(),
+                                environments.program_runtime_v2.clone(),
+                                slot,
+                                slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET),
+                                None,
+                                elf_bytes,
+                                program_account.data().len(),
+                                &mut load_program_metrics,
+                            )
+                        }
                         .ok()
                     })
                     .unwrap_or(LoadedProgram::new_tombstone(

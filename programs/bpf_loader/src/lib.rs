@@ -82,17 +82,32 @@ pub fn load_program_from_bytes(
     } else {
         deployment_slot
     };
-    let loaded_program = LoadedProgram::new(
-        loader_key,
-        program_runtime_environment,
-        deployment_slot,
-        effective_slot,
-        None,
-        programdata,
-        account_size,
-        load_program_metrics,
-        reloading,
-    )
+    let loaded_program = if reloading {
+        // Safety: this is safe because the program is being reloaded in the cache.
+        unsafe {
+            LoadedProgram::reload(
+                loader_key,
+                program_runtime_environment,
+                deployment_slot,
+                effective_slot,
+                None,
+                programdata,
+                account_size,
+                load_program_metrics,
+            )
+        }
+    } else {
+        LoadedProgram::new(
+            loader_key,
+            program_runtime_environment,
+            deployment_slot,
+            effective_slot,
+            None,
+            programdata,
+            account_size,
+            load_program_metrics,
+        )
+    }
     .map_err(|err| {
         ic_logger_msg!(log_collector, "{}", err);
         InstructionError::InvalidAccountData
