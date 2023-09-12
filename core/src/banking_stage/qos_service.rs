@@ -318,25 +318,25 @@ impl QosService {
             Ok(cost) => {
                 saturating_add_assign!(
                     batched_transaction_details.costs.batched_signature_cost,
-                    cost.signature_cost
+                    cost.signature_cost()
                 );
                 saturating_add_assign!(
                     batched_transaction_details.costs.batched_write_lock_cost,
-                    cost.write_lock_cost
+                    cost.write_lock_cost()
                 );
                 saturating_add_assign!(
                     batched_transaction_details.costs.batched_data_bytes_cost,
-                    cost.data_bytes_cost
+                    cost.data_bytes_cost()
                 );
                 saturating_add_assign!(
                     batched_transaction_details
                         .costs
                         .batched_builtins_execute_cost,
-                    cost.builtins_execution_cost
+                    cost.builtins_execution_cost()
                 );
                 saturating_add_assign!(
                     batched_transaction_details.costs.batched_bpf_execute_cost,
-                    cost.bpf_execution_cost
+                    cost.bpf_execution_cost()
                 );
             }
             Err(transaction_error) => match transaction_error {

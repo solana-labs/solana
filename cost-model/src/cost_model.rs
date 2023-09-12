@@ -6,7 +6,7 @@
 //!
 
 use {
-    crate::{block_cost_limits::*, transaction_cost::TransactionCost},
+    crate::{block_cost_limits::*, transaction_cost::*},
     log::*,
     solana_program_runtime::compute_budget::{
         ComputeBudget, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
@@ -36,16 +36,22 @@ impl CostModel {
         transaction: &SanitizedTransaction,
         feature_set: &FeatureSet,
     ) -> TransactionCost {
-        let mut tx_cost = TransactionCost::new_with_default_capacity();
+        if transaction.is_simple_vote_transaction() {
+            TransactionCost::Vote {
+                writable_accounts: Self::get_writable_accounts(transaction),
+            }
+        } else {
+            let mut tx_cost = UsageCostDetails::new_with_default_capacity();
 
-        tx_cost.signature_cost = Self::get_signature_cost(transaction);
-        Self::get_write_lock_cost(&mut tx_cost, transaction);
-        Self::get_transaction_cost(&mut tx_cost, transaction, feature_set);
-        tx_cost.account_data_size = Self::calculate_account_data_size(transaction);
-        tx_cost.is_simple_vote = transaction.is_simple_vote_transaction();
+            tx_cost.signature_cost = Self::get_signature_cost(transaction);
+            Self::get_write_lock_cost(&mut tx_cost, transaction);
+            Self::get_transaction_cost(&mut tx_cost, transaction, feature_set);
+            tx_cost.account_data_size = Self::calculate_account_data_size(transaction);
+            tx_cost.is_simple_vote = transaction.is_simple_vote_transaction();
 
-        debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
-        tx_cost
+            debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
+            TransactionCost::Transaction(tx_cost)
+        }
     }
 
     // Calculate cost of loaded accounts size in the same way heap cost is charged at
@@ -68,24 +74,30 @@ impl CostModel {
         transaction.signatures().len() as u64 * SIGNATURE_COST
     }
 
-    fn get_write_lock_cost(tx_cost: &mut TransactionCost, transaction: &SanitizedTransaction) {
+    fn get_writable_accounts(transaction: &SanitizedTransaction) -> Vec<Pubkey> {
         let message = transaction.message();
         message
             .account_keys()
             .iter()
             .enumerate()
-            .for_each(|(i, k)| {
-                let is_writable = message.is_writable(i);
-
-                if is_writable {
-                    tx_cost.writable_accounts.push(*k);
-                    tx_cost.write_lock_cost += WRITE_LOCK_UNITS;
+            .filter_map(|(i, k)| {
+                if message.is_writable(i) {
+                    Some(*k)
+                } else {
+                    None
                 }
-            });
+            })
+            .collect()
+    }
+
+    fn get_write_lock_cost(tx_cost: &mut UsageCostDetails, transaction: &SanitizedTransaction) {
+        tx_cost.writable_accounts = Self::get_writable_accounts(transaction);
+        tx_cost.write_lock_cost =
+            WRITE_LOCK_UNITS.saturating_mul(tx_cost.writable_accounts.len() as u64);
     }
 
     fn get_transaction_cost(
-        tx_cost: &mut TransactionCost,
+        tx_cost: &mut UsageCostDetails,
         transaction: &SanitizedTransaction,
         feature_set: &FeatureSet,
     ) {
@@ -298,7 +310,7 @@ mod tests {
             .get(&system_program::id())
             .unwrap();
 
-        let mut tx_cost = TransactionCost::default();
+        let mut tx_cost = UsageCostDetails::default();
         CostModel::get_transaction_cost(
             &mut tx_cost,
             &simple_transaction,
@@ -327,7 +339,7 @@ mod tests {
         let token_transaction = SanitizedTransaction::from_transaction_for_tests(tx);
         debug!("token_transaction {:?}", token_transaction);
 
-        let mut tx_cost = TransactionCost::default();
+        let mut tx_cost = UsageCostDetails::default();
         CostModel::get_transaction_cost(
             &mut tx_cost,
             &token_transaction,
@@ -364,7 +376,7 @@ mod tests {
         );
         let token_transaction = SanitizedTransaction::from_transaction_for_tests(tx);
 
-        let mut tx_cost = TransactionCost::default();
+        let mut tx_cost = UsageCostDetails::default();
         CostModel::get_transaction_cost(
             &mut tx_cost,
             &token_transaction,
@@ -414,7 +426,7 @@ mod tests {
         );
         let token_transaction = SanitizedTransaction::from_transaction_for_tests(tx);
 
-        let mut tx_cost = TransactionCost::default();
+        let mut tx_cost = UsageCostDetails::default();
         CostModel::get_transaction_cost(
             &mut tx_cost,
             &token_transaction,
@@ -446,7 +458,7 @@ mod tests {
             .unwrap();
         let expected_cost = program_cost * 2;
 
-        let mut tx_cost = TransactionCost::default();
+        let mut tx_cost = UsageCostDetails::default();
         CostModel::get_transaction_cost(&mut tx_cost, &tx, &FeatureSet::all_enabled());
         assert_eq!(expected_cost, tx_cost.builtins_execution_cost);
         assert_eq!(0, tx_cost.bpf_execution_cost);
@@ -478,7 +490,7 @@ mod tests {
         debug!("many random transaction {:?}", tx);
 
         let expected_cost = DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64 * 2;
-        let mut tx_cost = TransactionCost::default();
+        let mut tx_cost = UsageCostDetails::default();
         CostModel::get_transaction_cost(&mut tx_cost, &tx, &FeatureSet::all_enabled());
         assert_eq!(0, tx_cost.builtins_execution_cost);
         assert_eq!(expected_cost, tx_cost.bpf_execution_cost);
@@ -705,7 +717,7 @@ mod tests {
             .unwrap();
         let expected_bpf_cost = DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT;
 
-        let mut tx_cost = TransactionCost::default();
+        let mut tx_cost = UsageCostDetails::default();
         CostModel::get_transaction_cost(&mut tx_cost, &transaction, &FeatureSet::all_enabled());
 
         assert_eq!(expected_builtin_cost, tx_cost.builtins_execution_cost);

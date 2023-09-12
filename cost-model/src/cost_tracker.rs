@@ -119,7 +119,7 @@ impl CostTracker {
         estimated_tx_cost: &TransactionCost,
         actual_execution_units: u64,
     ) {
-        let estimated_execution_units = estimated_tx_cost.bpf_execution_cost;
+        let estimated_execution_units = estimated_tx_cost.bpf_execution_cost();
         match actual_execution_units.cmp(&estimated_execution_units) {
             Ordering::Equal => (),
             Ordering::Greater => {
@@ -180,16 +180,17 @@ impl CostTracker {
 
     fn would_fit(&self, tx_cost: &TransactionCost) -> Result<(), CostTrackerError> {
         let cost: u64 = tx_cost.sum();
-        let vote_cost = if tx_cost.is_simple_vote { cost } else { 0 };
 
-        // check against the total package cost
-        if self.block_cost.saturating_add(cost) > self.block_cost_limit {
-            return Err(CostTrackerError::WouldExceedBlockMaxLimit);
-        }
-
-        // if vote transaction, check if it exceeds vote_transaction_limit
-        if self.vote_cost.saturating_add(vote_cost) > self.vote_cost_limit {
-            return Err(CostTrackerError::WouldExceedVoteMaxLimit);
+        if tx_cost.is_simple_vote() {
+            // if vote transaction, check if it exceeds vote_transaction_limit
+            if self.vote_cost.saturating_add(cost) > self.vote_cost_limit {
+                return Err(CostTrackerError::WouldExceedVoteMaxLimit);
+            }
+        } else {
+            // check against the total package cost
+            if self.block_cost.saturating_add(cost) > self.block_cost_limit {
+                return Err(CostTrackerError::WouldExceedBlockMaxLimit);
+            }
         }
 
         // check if the transaction itself is more costly than the account_cost_limit
@@ -201,7 +202,7 @@ impl CostTracker {
         // size.  This way, transactions are not unnecessarily retried.
         let account_data_size = self
             .account_data_size
-            .saturating_add(tx_cost.account_data_size);
+            .saturating_add(tx_cost.account_data_size());
         if let Some(account_data_size_limit) = self.account_data_size_limit {
             if account_data_size > account_data_size_limit {
                 return Err(CostTrackerError::WouldExceedAccountDataTotalLimit);
@@ -213,7 +214,7 @@ impl CostTracker {
         }
 
         // check each account against account_cost_limit,
-        for account_key in tx_cost.writable_accounts.iter() {
+        for account_key in tx_cost.writable_accounts().iter() {
             match self.cost_by_writable_accounts.get(account_key) {
                 Some(chained_cost) => {
                     if chained_cost.saturating_add(cost) > self.account_cost_limit {
@@ -231,7 +232,7 @@ impl CostTracker {
 
     fn add_transaction_cost(&mut self, tx_cost: &TransactionCost) {
         self.add_transaction_execution_cost(tx_cost, tx_cost.sum());
-        saturating_add_assign!(self.account_data_size, tx_cost.account_data_size);
+        saturating_add_assign!(self.account_data_size, tx_cost.account_data_size());
         saturating_add_assign!(self.transaction_count, 1);
     }
 
@@ -240,13 +241,13 @@ impl CostTracker {
         self.sub_transaction_execution_cost(tx_cost, cost);
         self.account_data_size = self
             .account_data_size
-            .saturating_sub(tx_cost.account_data_size);
+            .saturating_sub(tx_cost.account_data_size());
         self.transaction_count = self.transaction_count.saturating_sub(1);
     }
 
     /// Apply additional actual execution units to cost_tracker
     fn add_transaction_execution_cost(&mut self, tx_cost: &TransactionCost, adjustment: u64) {
-        for account_key in tx_cost.writable_accounts.iter() {
+        for account_key in tx_cost.writable_accounts().iter() {
             let account_cost = self
                 .cost_by_writable_accounts
                 .entry(*account_key)
@@ -254,14 +255,14 @@ impl CostTracker {
             *account_cost = account_cost.saturating_add(adjustment);
         }
         self.block_cost = self.block_cost.saturating_add(adjustment);
-        if tx_cost.is_simple_vote {
+        if tx_cost.is_simple_vote() {
             self.vote_cost = self.vote_cost.saturating_add(adjustment);
         }
     }
 
     /// Subtract extra execution units from cost_tracker
     fn sub_transaction_execution_cost(&mut self, tx_cost: &TransactionCost, adjustment: u64) {
-        for account_key in tx_cost.writable_accounts.iter() {
+        for account_key in tx_cost.writable_accounts().iter() {
             let account_cost = self
                 .cost_by_writable_accounts
                 .entry(*account_key)
@@ -269,7 +270,7 @@ impl CostTracker {
             *account_cost = account_cost.saturating_sub(adjustment);
         }
         self.block_cost = self.block_cost.saturating_sub(adjustment);
-        if tx_cost.is_simple_vote {
+        if tx_cost.is_simple_vote() {
             self.vote_cost = self.vote_cost.saturating_sub(adjustment);
         }
     }

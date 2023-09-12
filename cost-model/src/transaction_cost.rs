@@ -1,10 +1,103 @@
-use solana_sdk::pubkey::Pubkey;
+use {crate::block_cost_limits, solana_sdk::pubkey::Pubkey};
+
+/// TransactionCost is used to represent resources required to process
+/// a transaction, denominated in CU (eg. Compute Units).
+/// Resources required to process a regular transaction often include
+/// an array of variables, such as execution cost, loaded bytes, write
+/// lock and read lock etc.
+/// Vote has a simple and pre-determined format, therefore can have
+/// a constant cost, skipping transaction inspection as required for
+/// non-vote transaction.
+#[derive(Debug)]
+pub enum TransactionCost {
+    Vote { writable_accounts: Vec<Pubkey> },
+    Transaction(UsageCostDetails),
+}
+
+impl TransactionCost {
+    pub fn sum(&self) -> u64 {
+        match self {
+            Self::Vote { writable_accounts } => {
+                let num_of_signatures = writable_accounts.len() as u64;
+
+                solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS
+                    .saturating_add(
+                        block_cost_limits::SIGNATURE_COST.saturating_mul(num_of_signatures),
+                    )
+                    .saturating_add(
+                        block_cost_limits::WRITE_LOCK_UNITS.saturating_mul(num_of_signatures),
+                    )
+            }
+            Self::Transaction(usage_cost) => usage_cost.sum(),
+        }
+    }
+
+    pub fn bpf_execution_cost(&self) -> u64 {
+        match self {
+            Self::Vote { .. } => 0,
+            Self::Transaction(usage_cost) => usage_cost.bpf_execution_cost,
+        }
+    }
+
+    pub fn is_simple_vote(&self) -> bool {
+        match self {
+            Self::Vote { .. } => true,
+            Self::Transaction(_) => false,
+        }
+    }
+
+    pub fn data_bytes_cost(&self) -> u64 {
+        match self {
+            Self::Vote { .. } => 0,
+            Self::Transaction(usage_cost) => usage_cost.data_bytes_cost,
+        }
+    }
+
+    pub fn account_data_size(&self) -> u64 {
+        match self {
+            Self::Vote { .. } => 0,
+            Self::Transaction(usage_cost) => usage_cost.account_data_size,
+        }
+    }
+
+    pub fn signature_cost(&self) -> u64 {
+        match self {
+            Self::Vote { writable_accounts } => {
+                block_cost_limits::SIGNATURE_COST.saturating_mul(writable_accounts.len() as u64)
+            }
+            Self::Transaction(usage_cost) => usage_cost.signature_cost,
+        }
+    }
+
+    pub fn write_lock_cost(&self) -> u64 {
+        match self {
+            Self::Vote { writable_accounts } => {
+                block_cost_limits::WRITE_LOCK_UNITS.saturating_mul(writable_accounts.len() as u64)
+            }
+            Self::Transaction(usage_cost) => usage_cost.signature_cost,
+        }
+    }
+
+    pub fn builtins_execution_cost(&self) -> u64 {
+        match self {
+            Self::Vote { .. } => solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS,
+            Self::Transaction(usage_cost) => usage_cost.builtins_execution_cost,
+        }
+    }
+
+    pub fn writable_accounts(&self) -> &[Pubkey] {
+        match self {
+            Self::Vote { writable_accounts } => &writable_accounts,
+            Self::Transaction(usage_cost) => &usage_cost.writable_accounts,
+        }
+    }
+}
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
 
 // costs are stored in number of 'compute unit's
 #[derive(Debug)]
-pub struct TransactionCost {
+pub struct UsageCostDetails {
     pub writable_accounts: Vec<Pubkey>,
     pub signature_cost: u64,
     pub write_lock_cost: u64,
@@ -16,7 +109,7 @@ pub struct TransactionCost {
     pub is_simple_vote: bool,
 }
 
-impl Default for TransactionCost {
+impl Default for UsageCostDetails {
     fn default() -> Self {
         Self {
             writable_accounts: Vec::with_capacity(MAX_WRITABLE_ACCOUNTS),
@@ -33,7 +126,7 @@ impl Default for TransactionCost {
 }
 
 #[cfg(test)]
-impl PartialEq for TransactionCost {
+impl PartialEq for UsageCostDetails {
     fn eq(&self, other: &Self) -> bool {
         fn to_hash_set(v: &[Pubkey]) -> std::collections::HashSet<&Pubkey> {
             v.iter().collect()
@@ -52,9 +145,9 @@ impl PartialEq for TransactionCost {
 }
 
 #[cfg(test)]
-impl Eq for TransactionCost {}
+impl Eq for UsageCostDetails {}
 
-impl TransactionCost {
+impl UsageCostDetails {
     pub fn new_with_capacity(capacity: usize) -> Self {
         Self {
             writable_accounts: Vec::with_capacity(capacity),
