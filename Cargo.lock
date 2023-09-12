@@ -7451,29 +7451,12 @@ dependencies = [
 name = "solana-wen-restart"
 version = "1.17.0"
 dependencies = [
- "bincode",
- "bv",
- "clap 2.33.3",
- "crossbeam-channel",
- "flate2",
- "indexmap 2.0.0",
- "itertools",
  "log",
- "lru",
- "num-traits",
- "num_cpus",
  "prost",
  "prost-build",
  "prost-types",
  "protobuf-src",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "rayon",
- "regex",
  "rustc_version 0.4.0",
- "serde",
- "serde_bytes",
- "serde_derive",
  "serial_test",
  "solana-gossip",
  "solana-ledger",
@@ -7482,8 +7465,6 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-vote-program",
- "static_assertions",
- "thiserror",
 ]
 
 [[package]]
