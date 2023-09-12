@@ -589,6 +589,7 @@ mod tests {
     use {
         super::*,
         itertools::Itertools,
+        solana_cost_model::transaction_cost::UsageCostDetails,
         solana_runtime::genesis_utils::{create_genesis_config, GenesisConfigInfo},
         solana_sdk::{
             hash::Hash,
@@ -734,7 +735,7 @@ mod tests {
             let commited_status: Vec<CommitTransactionDetails> = qos_cost_results
                 .iter()
                 .map(|tx_cost| CommitTransactionDetails::Committed {
-                    compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost
+                    compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
                         + execute_units_adjustment,
                 })
                 .collect();
@@ -861,7 +862,7 @@ mod tests {
                         CommitTransactionDetails::NotCommitted
                     } else {
                         CommitTransactionDetails::Committed {
-                            compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost
+                            compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
                                 + execute_units_adjustment,
                         }
                     }
@@ -904,14 +905,14 @@ mod tests {
         let tx_cost_results: Vec<_> = (0..num_txs)
             .map(|n| {
                 if n % 2 == 0 {
-                    Ok(TransactionCost {
+                    Ok(TransactionCost::Transaction(UsageCostDetails {
                         signature_cost,
                         write_lock_cost,
                         data_bytes_cost,
                         builtins_execution_cost,
                         bpf_execution_cost,
-                        ..TransactionCost::default()
-                    })
+                        ..UsageCostDetails::default()
+                    }))
                 } else {
                     Err(TransactionError::WouldExceedMaxBlockCostLimit)
                 }

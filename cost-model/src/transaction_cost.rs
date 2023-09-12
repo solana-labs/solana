@@ -5,9 +5,8 @@ use {crate::block_cost_limits, solana_sdk::pubkey::Pubkey};
 /// Resources required to process a regular transaction often include
 /// an array of variables, such as execution cost, loaded bytes, write
 /// lock and read lock etc.
-/// Vote has a simple and pre-determined format, therefore can have
-/// a constant cost, skipping transaction inspection as required for
-/// non-vote transaction.
+/// Vote has a simpler and pre-determined format, it's cost structure
+/// can be simpler, calculation quicker.
 #[derive(Debug)]
 pub enum TransactionCost {
     Vote { writable_accounts: Vec<Pubkey> },
@@ -60,6 +59,13 @@ impl TransactionCost {
         }
     }
 
+    pub fn loaded_accounts_data_size_cost(&self) -> u64 {
+        match self {
+            Self::Vote { .. } => 0,
+            Self::Transaction(usage_cost) => usage_cost.loaded_accounts_data_size_cost,
+        }
+    }
+
     pub fn signature_cost(&self) -> u64 {
         match self {
             Self::Vote { writable_accounts } => {
@@ -74,7 +80,7 @@ impl TransactionCost {
             Self::Vote { writable_accounts } => {
                 block_cost_limits::WRITE_LOCK_UNITS.saturating_mul(writable_accounts.len() as u64)
             }
-            Self::Transaction(usage_cost) => usage_cost.signature_cost,
+            Self::Transaction(usage_cost) => usage_cost.write_lock_cost,
         }
     }
 

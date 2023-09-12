@@ -520,11 +520,11 @@ mod tests {
         );
 
         let tx_cost = CostModel::calculate_cost(&tx, &FeatureSet::all_enabled());
-        assert_eq!(2 + 2, tx_cost.writable_accounts.len());
-        assert_eq!(signer1.pubkey(), tx_cost.writable_accounts[0]);
-        assert_eq!(signer2.pubkey(), tx_cost.writable_accounts[1]);
-        assert_eq!(key1, tx_cost.writable_accounts[2]);
-        assert_eq!(key2, tx_cost.writable_accounts[3]);
+        assert_eq!(2 + 2, tx_cost.writable_accounts().len());
+        assert_eq!(signer1.pubkey(), tx_cost.writable_accounts()[0]);
+        assert_eq!(signer2.pubkey(), tx_cost.writable_accounts()[1]);
+        assert_eq!(key1, tx_cost.writable_accounts()[2]);
+        assert_eq!(key2, tx_cost.writable_accounts()[3]);
     }
 
     #[test]
@@ -550,12 +550,12 @@ mod tests {
                 * DEFAULT_PAGE_COST;
 
         let tx_cost = CostModel::calculate_cost(&tx, &FeatureSet::all_enabled());
-        assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
-        assert_eq!(*expected_execution_cost, tx_cost.builtins_execution_cost);
-        assert_eq!(2, tx_cost.writable_accounts.len());
+        assert_eq!(expected_account_cost, tx_cost.write_lock_cost());
+        assert_eq!(*expected_execution_cost, tx_cost.builtins_execution_cost());
+        assert_eq!(2, tx_cost.writable_accounts().len());
         assert_eq!(
             expected_loaded_accounts_data_size_cost,
-            tx_cost.loaded_accounts_data_size_cost
+            tx_cost.loaded_accounts_data_size_cost()
         );
     }
 
@@ -579,12 +579,12 @@ mod tests {
         let expected_loaded_accounts_data_size_cost = 0;
 
         let tx_cost = CostModel::calculate_cost(&tx, &feature_set);
-        assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
-        assert_eq!(*expected_execution_cost, tx_cost.builtins_execution_cost);
-        assert_eq!(2, tx_cost.writable_accounts.len());
+        assert_eq!(expected_account_cost, tx_cost.write_lock_cost());
+        assert_eq!(*expected_execution_cost, tx_cost.builtins_execution_cost());
+        assert_eq!(2, tx_cost.writable_accounts().len());
         assert_eq!(
             expected_loaded_accounts_data_size_cost,
-            tx_cost.loaded_accounts_data_size_cost
+            tx_cost.loaded_accounts_data_size_cost()
         );
     }
 
@@ -618,12 +618,12 @@ mod tests {
         let expected_loaded_accounts_data_size_cost = (data_limit as u64) / (32 * 1024) * 8;
 
         let tx_cost = CostModel::calculate_cost(&tx, &feature_set);
-        assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
-        assert_eq!(expected_execution_cost, tx_cost.builtins_execution_cost);
-        assert_eq!(2, tx_cost.writable_accounts.len());
+        assert_eq!(expected_account_cost, tx_cost.write_lock_cost());
+        assert_eq!(expected_execution_cost, tx_cost.builtins_execution_cost());
+        assert_eq!(2, tx_cost.writable_accounts().len());
         assert_eq!(
             expected_loaded_accounts_data_size_cost,
-            tx_cost.loaded_accounts_data_size_cost
+            tx_cost.loaded_accounts_data_size_cost()
         );
     }
 
@@ -651,12 +651,12 @@ mod tests {
         let expected_loaded_accounts_data_size_cost = 0;
 
         let tx_cost = CostModel::calculate_cost(&tx, &feature_set);
-        assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
-        assert_eq!(expected_execution_cost, tx_cost.builtins_execution_cost);
-        assert_eq!(2, tx_cost.writable_accounts.len());
+        assert_eq!(expected_account_cost, tx_cost.write_lock_cost());
+        assert_eq!(expected_execution_cost, tx_cost.builtins_execution_cost());
+        assert_eq!(2, tx_cost.writable_accounts().len());
         assert_eq!(
             expected_loaded_accounts_data_size_cost,
-            tx_cost.loaded_accounts_data_size_cost
+            tx_cost.loaded_accounts_data_size_cost()
         );
     }
 

@@ -288,6 +288,7 @@ impl CostTracker {
 mod tests {
     use {
         super::*,
+        crate::transaction_cost::*,
         solana_sdk::{
             hash::Hash,
             signature::{Keypair, Signer},
@@ -332,11 +333,11 @@ mod tests {
         let simple_transaction = SanitizedTransaction::from_transaction_for_tests(
             system_transaction::transfer(mint_keypair, &keypair.pubkey(), 2, *start_hash),
         );
-        let mut tx_cost = TransactionCost::new_with_capacity(1);
+        let mut tx_cost = UsageCostDetails::new_with_capacity(1);
         tx_cost.bpf_execution_cost = 5;
         tx_cost.writable_accounts.push(mint_keypair.pubkey());
 
-        (simple_transaction, tx_cost)
+        (simple_transaction, TransactionCost::Transaction(tx_cost))
     }
 
     fn build_simple_vote_transaction(
@@ -360,12 +361,12 @@ mod tests {
             SimpleAddressLoader::Disabled,
         )
         .unwrap();
-        let mut tx_cost = TransactionCost::new_with_capacity(1);
-        tx_cost.builtins_execution_cost = 10;
-        tx_cost.writable_accounts.push(mint_keypair.pubkey());
-        tx_cost.is_simple_vote = true;
 
-        (vote_transaction, tx_cost)
+        let writable_accounts = vec![mint_keypair.pubkey()];
+        (
+            vote_transaction,
+            TransactionCost::Vote { writable_accounts },
+        )
     }
 
     #[test]
@@ -414,7 +415,11 @@ mod tests {
     fn test_cost_tracker_add_data() {
         let (mint_keypair, start_hash) = test_setup();
         let (_tx, mut tx_cost) = build_simple_transaction(&mint_keypair, &start_hash);
-        tx_cost.account_data_size = 1;
+        if let TransactionCost::Transaction(ref mut usage_cost) = tx_cost {
+            usage_cost.account_data_size = 1;
+        } else {
+            unreachable!();
+        }
         let cost = tx_cost.sum();
 
         // build testee to have capacity for one simple transaction
@@ -569,8 +574,16 @@ mod tests {
         let second_account = Keypair::new();
         let (_tx1, mut tx_cost1) = build_simple_transaction(&mint_keypair, &start_hash);
         let (_tx2, mut tx_cost2) = build_simple_transaction(&second_account, &start_hash);
-        tx_cost1.account_data_size = MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA;
-        tx_cost2.account_data_size = MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA + 1;
+        if let TransactionCost::Transaction(ref mut usage_cost) = tx_cost1 {
+            usage_cost.account_data_size = MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA;
+        } else {
+            unreachable!();
+        }
+        if let TransactionCost::Transaction(ref mut usage_cost) = tx_cost2 {
+            usage_cost.account_data_size = MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA + 1;
+        } else {
+            unreachable!();
+        }
         let cost1 = tx_cost1.sum();
         let cost2 = tx_cost2.sum();
 
@@ -597,8 +610,16 @@ mod tests {
         let (_tx1, mut tx_cost1) = build_simple_transaction(&mint_keypair, &start_hash);
         let (_tx2, mut tx_cost2) = build_simple_transaction(&second_account, &start_hash);
         let remaining_account_data_size = 1234;
-        tx_cost1.account_data_size = remaining_account_data_size;
-        tx_cost2.account_data_size = remaining_account_data_size + 1;
+        if let TransactionCost::Transaction(ref mut usage_cost) = tx_cost1 {
+            usage_cost.account_data_size = remaining_account_data_size;
+        } else {
+            unreachable!();
+        }
+        if let TransactionCost::Transaction(ref mut usage_cost) = tx_cost2 {
+            usage_cost.account_data_size = remaining_account_data_size + 1;
+        } else {
+            unreachable!();
+        }
         let cost1 = tx_cost1.sum();
         let cost2 = tx_cost2.sum();
 
@@ -662,11 +683,11 @@ mod tests {
         // | acct3 | $cost |
         // and block_cost = $cost
         {
-            let tx_cost = TransactionCost {
+            let tx_cost = TransactionCost::Transaction(UsageCostDetails {
                 writable_accounts: vec![acct1, acct2, acct3],
                 bpf_execution_cost: cost,
-                ..TransactionCost::default()
-            };
+                ..UsageCostDetails::default()
+            });
             assert!(testee.try_add(&tx_cost).is_ok());
             let (_costliest_account, costliest_account_cost) = testee.find_costliest_account();
             assert_eq!(cost, testee.block_cost);
@@ -680,11 +701,11 @@ mod tests {
         // | acct3 | $cost |
         // and block_cost = $cost * 2
         {
-            let tx_cost = TransactionCost {
+            let tx_cost = TransactionCost::Transaction(UsageCostDetails {
                 writable_accounts: vec![acct2],
                 bpf_execution_cost: cost,
-                ..TransactionCost::default()
-            };
+                ..UsageCostDetails::default()
+            });
             assert!(testee.try_add(&tx_cost).is_ok());
             let (costliest_account, costliest_account_cost) = testee.find_costliest_account();
             assert_eq!(cost * 2, testee.block_cost);
@@ -700,11 +721,11 @@ mod tests {
         // | acct3 | $cost |
         // and block_cost = $cost * 2
         {
-            let tx_cost = TransactionCost {
+            let tx_cost = TransactionCost::Transaction(UsageCostDetails {
                 writable_accounts: vec![acct1, acct2],
                 bpf_execution_cost: cost,
-                ..TransactionCost::default()
-            };
+                ..UsageCostDetails::default()
+            });
             assert!(testee.try_add(&tx_cost).is_err());
             let (costliest_account, costliest_account_cost) = testee.find_costliest_account();
             assert_eq!(cost * 2, testee.block_cost);
@@ -724,11 +745,11 @@ mod tests {
         let block_max = account_max * 3; // for three accts
 
         let mut testee = CostTracker::new(account_max, block_max, block_max, None);
-        let tx_cost = TransactionCost {
+        let tx_cost = TransactionCost::Transaction(UsageCostDetails {
             writable_accounts: vec![acct1, acct2, acct3],
             bpf_execution_cost: cost,
-            ..TransactionCost::default()
-        };
+            ..UsageCostDetails::default()
+        });
         let mut expected_block_cost = tx_cost.sum();
         let expected_tx_count = 1;
         assert!(testee.try_add(&tx_cost).is_ok());
@@ -811,11 +832,11 @@ mod tests {
         let acct3 = Pubkey::new_unique();
         let cost = 100;
 
-        let tx_cost = TransactionCost {
+        let tx_cost = TransactionCost::Transaction(UsageCostDetails {
             writable_accounts: vec![acct1, acct2, acct3],
             bpf_execution_cost: cost,
-            ..TransactionCost::default()
-        };
+            ..UsageCostDetails::default()
+        });
 
         let mut cost_tracker = CostTracker::default();
 
@@ -858,11 +879,11 @@ mod tests {
         let mut cost_tracker = CostTracker::default();
 
         let cost = 100u64;
-        let tx_cost = TransactionCost {
+        let tx_cost = TransactionCost::Transaction(UsageCostDetails {
             writable_accounts: vec![Pubkey::new_unique()],
             bpf_execution_cost: cost,
-            ..TransactionCost::default()
-        };
+            ..UsageCostDetails::default()
+        });
 
         cost_tracker.add_transaction_cost(&tx_cost);
         // assert cost_tracker is reverted to default
