@@ -254,13 +254,13 @@ async fn main() {
         }
     }
 
-    match genesis.generate_accounts("validator", setup_config.num_validators) {
-        Ok(_) => (),
-        Err(err) => {
-            error!("generate accounts error! {}", err);
-            return;
-        }
-    }
+    // match genesis.generate_accounts("validator", setup_config.num_validators) {
+    //     Ok(_) => (),
+    //     Err(err) => {
+    //         error!("generate accounts error! {}", err);
+    //         return;
+    //     }
+    // }
 
     // we need to convert the binrary to base64 before we save it to a file
     // or we create the normal genesis.bin but then we take another step
