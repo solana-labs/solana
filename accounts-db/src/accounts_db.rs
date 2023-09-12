@@ -630,7 +630,9 @@ struct GenerateIndexTimings {
 
 #[derive(Default, Debug, PartialEq, Eq)]
 struct StorageSizeAndCount {
+    /// total size stored, including both alive and dead bytes
     pub stored_size: usize,
+    /// number of accounts in the storage including both alive and dead accounts
     pub count: usize,
 }
 type StorageSizeAndCountMap = DashMap<AppendVecId, StorageSizeAndCount>;
