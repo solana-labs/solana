@@ -97,7 +97,6 @@ use {
         borrow::{Borrow, Cow},
         boxed::Box,
         collections::{hash_map, BTreeSet, HashMap, HashSet},
-        fs,
         hash::{Hash as StdHash, Hasher as StdHasher},
         io::Result as IoResult,
         ops::{Range, RangeBounds},
@@ -1397,7 +1396,6 @@ pub struct AccountsDb {
     pub(crate) paths: Vec<PathBuf>,
 
     accounts_hash_cache_path: PathBuf,
-    transient_accounts_hash_cache_path: PathBuf,
 
     // used by tests
     // holds this until we are dropped
@@ -2400,7 +2398,6 @@ impl AccountsDb {
             write_cache_limit_bytes: None,
             write_version: AtomicU64::new(0),
             paths: vec![],
-            transient_accounts_hash_cache_path: accounts_hash_cache_path.join("transient"),
             accounts_hash_cache_path,
             temp_accounts_hash_cache_path,
             shrink_paths: RwLock::new(None),
@@ -7595,6 +7592,10 @@ impl AccountsDb {
         let slot = storages.max_slot_inclusive();
         let use_bg_thread_pool = config.use_bg_thread_pool;
         let accounts_hash_cache_path = self.accounts_hash_cache_path.clone();
+        let transient_accounts_hash_cache_dir = TempDir::new_in(&accounts_hash_cache_path)
+            .expect("create transient accounts hash cache dir");
+        let transient_accounts_hash_cache_path =
+            transient_accounts_hash_cache_dir.path().to_path_buf();
         let scan_and_hash = || {
             let cache_hash_data =
                 Self::get_cache_hash_data(accounts_hash_cache_path, config, flavor, slot);
@@ -7604,8 +7605,6 @@ impl AccountsDb {
                 end: PUBKEY_BINS_FOR_CALCULATING_HASHES,
             };
 
-            fs::create_dir_all(&self.transient_accounts_hash_cache_path)
-                .expect("create transient accounts hash cache dir");
             let accounts_hasher = AccountsHasher {
                 filler_account_suffix: if self.filler_accounts_config.count > 0 {
                     self.filler_account_suffix
@@ -7613,7 +7612,7 @@ impl AccountsDb {
                     None
                 },
                 zero_lamport_accounts: flavor.zero_lamport_accounts(),
-                dir_for_temp_cache_files: self.transient_accounts_hash_cache_path.clone(),
+                dir_for_temp_cache_files: transient_accounts_hash_cache_path,
             };
 
             // get raw data by scanning
