@@ -196,7 +196,7 @@ impl CacheHashDataFile {
     }
 }
 
-pub struct CacheHashData {
+pub(crate) struct CacheHashData {
     cache_dir: PathBuf,
     pre_existing_cache_files: Arc<Mutex<HashSet<PathBuf>>>,
     should_delete_old_cache_files_on_drop: bool,
@@ -213,7 +213,10 @@ impl Drop for CacheHashData {
 }
 
 impl CacheHashData {
-    pub fn new(cache_dir: PathBuf, should_delete_old_cache_files_on_drop: bool) -> CacheHashData {
+    pub(crate) fn new(
+        cache_dir: PathBuf,
+        should_delete_old_cache_files_on_drop: bool,
+    ) -> CacheHashData {
         std::fs::create_dir_all(&cache_dir).unwrap_or_else(|err| {
             panic!("error creating cache dir {}: {err}", cache_dir.display())
         });
@@ -292,7 +295,7 @@ impl CacheHashData {
     }
 
     /// save 'data' to 'file_name'
-    pub fn save(
+    pub(crate) fn save(
         &self,
         file_name: impl AsRef<Path>,
         data: &SavedTypeSlice,
