@@ -3,9 +3,15 @@ use {
     std::time::{Duration, Instant},
 };
 
+type Sample = u64;
+
+/// The data required to build a histogram of account load times and submit those metrics
 #[derive(Debug)]
 pub struct LoadAccountsHistogram {
-    samples: Vec<Duration>,
+    /// Samples, in nanoseconds.
+    samples_ns: Vec<Sample>,
+    /// The time of the previous submission.
+    /// Used to decide when to do the next submission.
     previous_submit: Instant,
 }
 
@@ -15,7 +21,7 @@ impl LoadAccountsHistogram {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            samples: Vec::new(),
+            samples_ns: Vec::new(),
             previous_submit: Instant::now(),
         }
     }
@@ -24,7 +30,7 @@ impl LoadAccountsHistogram {
     ///
     /// Will be included in the next submission
     pub fn record(&mut self, sample: Duration) {
-        self.samples.push(sample);
+        self.samples_ns.push(sample.as_nanos().try_into().unwrap());
     }
 
     /// Submits datapoint if enough time has passed since previous submission
@@ -37,8 +43,8 @@ impl LoadAccountsHistogram {
     /// Submits datapoint
     pub fn submit(&mut self) {
         let duration = self.previous_submit.elapsed(); // do this before building the histogram
-        let samples = std::mem::take(&mut self.samples); // use `take` because we want to clear `samples`
-        let histogram = Self::build_histogram(&samples);
+        let samples_ns = std::mem::take(&mut self.samples_ns); // use `take` because we want to clear `samples_ns`
+        let histogram = Self::build_histogram(&samples_ns);
 
         datapoint_info!(
             "load_accounts_histogram",
@@ -105,12 +111,10 @@ impl LoadAccountsHistogram {
         self.previous_submit = Instant::now();
     }
 
-    fn build_histogram(samples: &[Duration]) -> Histogram<u64> {
+    fn build_histogram(samples: &[Sample]) -> Histogram<Sample> {
         let mut histogram = Histogram::new(3).expect("histogram: create");
         for sample in samples {
-            histogram
-                .record(sample.as_nanos().try_into().unwrap())
-                .expect("histogram: record sample")
+            histogram.record(*sample).expect("histogram: record sample")
         }
         histogram
     }
