@@ -1,5 +1,3 @@
-use solana_sdk::hash;
-
 pub use self::{
     cpi::{SyscallInvokeSignedC, SyscallInvokeSignedRust},
     logging::{
@@ -45,7 +43,7 @@ use {
             remaining_compute_units_syscall_enabled, stop_sibling_instruction_search_at_parent,
             stop_truncating_strings_in_syscalls, switch_to_new_elf_parser,
         },
-        hash::{Hasher, HASH_BYTES},
+        hash::{Hasher, HASH_BYTES, Hash},
         instruction::{
             AccountMeta, InstructionError, ProcessedSiblingInstruction,
             TRANSACTION_LEVEL_STACK_HEIGHT,
@@ -152,7 +150,7 @@ pub struct Keccak256Hasher(keccak::Hasher);
 
 impl HasherImpl for Sha256Hasher {
     const NAME: &'static str = "Sha256";
-    type Output = hash::Hash;
+    type Output = Hash;
 
     fn create_hasher() -> Self {
         Sha256Hasher(Hasher::default())
