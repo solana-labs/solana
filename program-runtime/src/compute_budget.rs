@@ -55,7 +55,7 @@ pub struct ComputeBudget {
     pub sha256_base_cost: u64,
     /// Incremental number of units consumed by SHA256 (based on bytes)
     pub sha256_byte_cost: u64,
-    /// Maximum number of slices hashed per syscall for sha256
+    /// Maximum number of slices hashed per syscall
     pub sha256_max_slices: u64,
     /// Maximum SBF to BPF call depth
     pub max_call_depth: usize,

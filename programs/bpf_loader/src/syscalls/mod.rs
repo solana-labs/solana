@@ -1,3 +1,5 @@
+use solana_sdk::hash;
+
 pub use self::{
     cpi::{SyscallInvokeSignedC, SyscallInvokeSignedRust},
     logging::{
@@ -133,7 +135,6 @@ pub enum SyscallError {
 type Error = Box<dyn std::error::Error>;
 
 pub trait HasherImpl {
-    const HASH_BYTES: usize;
     const NAME: &'static str;
     type Output: AsRef<[u8]>;
 
@@ -150,9 +151,8 @@ pub struct Blake3Hasher(blake3::Hasher);
 pub struct Keccak256Hasher(keccak::Hasher);
 
 impl HasherImpl for Sha256Hasher {
-    const HASH_BYTES: usize = HASH_BYTES;
     const NAME: &'static str = "Sha256";
-    type Output = [u8; Self::HASH_BYTES];
+    type Output = hash::Hash;
 
     fn create_hasher() -> Self {
         Sha256Hasher(Hasher::default())
@@ -163,7 +163,7 @@ impl HasherImpl for Sha256Hasher {
     }
 
     fn result(self) -> Self::Output {
-        self.0.result().to_bytes()
+        self.0.result()
     }
 
     fn get_base_cost(compute_budget: &ComputeBudget) -> u64 {
@@ -179,9 +179,8 @@ impl HasherImpl for Sha256Hasher {
 }
 
 impl HasherImpl for Blake3Hasher {
-    const HASH_BYTES: usize = blake3::HASH_BYTES;
     const NAME: &'static str = "Blake3";
-    type Output = [u8; Self::HASH_BYTES];
+    type Output = blake3::Hash;
 
     fn create_hasher() -> Self {
         Blake3Hasher(blake3::Hasher::default())
@@ -192,7 +191,7 @@ impl HasherImpl for Blake3Hasher {
     }
 
     fn result(self) -> Self::Output {
-        self.0.result().to_bytes()
+        self.0.result()
     }
 
     fn get_base_cost(compute_budget: &ComputeBudget) -> u64 {
@@ -208,9 +207,8 @@ impl HasherImpl for Blake3Hasher {
 }
 
 impl HasherImpl for Keccak256Hasher {
-    const HASH_BYTES: usize = keccak::HASH_BYTES;
     const NAME: &'static str = "Keccak256";
-    type Output = [u8; Self::HASH_BYTES];
+    type Output = keccak::Hash;
 
     fn create_hasher() -> Self {
         Keccak256Hasher(keccak::Hasher::default())
@@ -221,7 +219,7 @@ impl HasherImpl for Keccak256Hasher {
     }
 
     fn result(self) -> Self::Output {
-        self.0.result().to_bytes()
+        self.0.result()
     }
 
     fn get_base_cost(compute_budget: &ComputeBudget) -> u64 {
@@ -1987,7 +1985,7 @@ declare_syscallhash!(
         let hash_result = translate_slice_mut::<u8>(
             memory_mapping,
             result_addr,
-            H::HASH_BYTES as u64,
+            std::mem::size_of::<H::Output>() as u64,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
         )?;
