@@ -138,6 +138,7 @@ impl Debug for SnapshotRequest {
 pub enum SnapshotRequestKind {
     Snapshot,
     EpochAccountsHash,
+    WenRestartSnapshot,
 }
 
 pub struct SnapshotRequestHandler {
@@ -391,7 +392,8 @@ impl SnapshotRequestHandler {
         let mut snapshot_time = Measure::start("snapshot_time");
         let snapshot_storages = snapshot_bank_utils::get_snapshot_storages(&snapshot_root_bank);
         let accounts_package = match request_kind {
-            SnapshotRequestKind::Snapshot => match &accounts_package_kind {
+            SnapshotRequestKind::Snapshot
+            | SnapshotRequestKind::WenRestartSnapshot => match &accounts_package_kind {
                 AccountsPackageKind::Snapshot(_) => {
                     let bank_snapshot_info = snapshot_bank_utils::add_bank_snapshot(
                         &self.snapshot_config.bank_snapshots_dir,
@@ -431,7 +433,7 @@ impl SnapshotRequestHandler {
                     snapshot_storages,
                     accounts_hash_for_testing,
                 )
-            }
+            },
         };
         let send_result = self.accounts_package_sender.send(accounts_package);
         if let Err(err) = send_result {
@@ -766,6 +768,9 @@ fn new_accounts_package_kind(
     let block_height = snapshot_request.snapshot_root_bank.block_height();
     match snapshot_request.request_kind {
         SnapshotRequestKind::EpochAccountsHash => AccountsPackageKind::EpochAccountsHash,
+        SnapshotRequestKind::WenRestartSnapshot => AccountsPackageKind::Snapshot(
+            SnapshotKind::IncrementalSnapshot(last_full_snapshot_slot.unwrap()),
+        ),
         _ => {
             if snapshot_utils::should_take_full_snapshot(
                 block_height,
@@ -977,7 +982,7 @@ mod test {
         // Also, incremental snapshots before slot 240 (the first full snapshot handled), will
         // actually be AHV since the last full snapshot slot will be `None`.  This is expected and
         // fine; but maybe unexpected for a reader/debugger without this additional context.
-        let mut make_banks = |num_banks| {
+        let mut make_banks = |num_banks, send_wen_restart_snapshot_request| {
             for _ in 0..num_banks {
                 let slot = bank.slot() + 1;
                 bank = Arc::new(Bank::new_from_parent(
@@ -988,7 +993,12 @@ mod test {
 
                 // Since we're not using `BankForks::set_root()`, we have to handle sending the
                 // correct snapshot requests ourself.
-                if bank.slot() == epoch_accounts_hash_utils::calculation_start(&bank) {
+                if send_wen_restart_snapshot_request {
+                    send_snapshot_request(
+                        Arc::clone(&bank),
+                        SnapshotRequestKind::WenRestartSnapshot,
+                    );
+                } else if bank.slot() == epoch_accounts_hash_utils::calculation_start(&bank) {
                     send_snapshot_request(
                         Arc::clone(&bank),
                         SnapshotRequestKind::EpochAccountsHash,
@@ -998,7 +1008,7 @@ mod test {
                 }
             }
         };
-        make_banks(303);
+        make_banks(303, false);
 
         // Ensure the EAH is handled 1st
         let (snapshot_request, accounts_package_kind, ..) = snapshot_request_handler
@@ -1061,7 +1071,7 @@ mod test {
         //
         // This test differs from the one above by having an older full snapshot request that must
         // be handled before the new epoch accounts hash request.
-        make_banks(240);
+        make_banks(240, false);
 
         // Ensure the full snapshot is handled 1st
         let (snapshot_request, accounts_package_kind, ..) = snapshot_request_handler
@@ -1102,6 +1112,19 @@ mod test {
             AccountsPackageKind::AccountsHashVerifier
         );
         assert_eq!(snapshot_request.snapshot_root_bank.slot(), 543);
+
+        // Create a few more banks, send WenRestartSnapshot request, it should trigger an incremental
+        // snapshot, ignoring interval restrictions.
+        make_banks(1, true);
+        let (snapshot_request, accounts_package_kind, ..) = snapshot_request_handler
+            .get_next_snapshot_request(Some(480))
+            .unwrap();
+        // The result will be an incremental snapshot based on full snapshot slot 480.
+        assert_eq!(
+            accounts_package_kind,
+            AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(480))
+        );
+        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 544);
 
         // And now ensure the snapshot request channel is empty!
         assert!(snapshot_request_handler
