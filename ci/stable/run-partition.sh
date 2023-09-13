@@ -31,7 +31,6 @@ if [ ! "$LIMIT" -gt "$INDEX" ]; then
 fi
 
 DONT_USE_NEXTEST_PACKAGES=(
-  solana-client-test
   solana-cargo-build-sbf
   solana-core
 )

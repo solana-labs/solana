@@ -12,6 +12,7 @@ edition = { workspace = true }
 
 [dependencies]
 futures-util = { workspace = true }
+rand = { workspace = true }
 serde_json = { workspace = true }
 solana-client = { workspace = true }
 solana-ledger = { workspace = true }

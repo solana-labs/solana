@@ -5646,6 +5646,7 @@ name = "solana-client-test"
 version = "1.17.0"
 dependencies = [
  "futures-util",
+ "rand 0.8.5",
  "serde_json",
  "solana-client",
  "solana-ledger",
