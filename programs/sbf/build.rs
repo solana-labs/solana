@@ -96,6 +96,7 @@ fn main() {
             "rand",
             "realloc",
             "realloc_invoke",
+            "remaining_compute_units",
             "ro_modify",
             "ro_account_modify",
             "sanity",

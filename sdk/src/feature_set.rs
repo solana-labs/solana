@@ -691,6 +691,10 @@ pub mod timely_vote_credits {
     solana_sdk::declare_id!("2oXpeh141pPZCTCFHBsvCwG2BtaHZZAtrVhwaxSy6brS");
 }
 
+pub mod remaining_compute_units_syscall_enabled {
+    solana_sdk::declare_id!("5TuppMutoyzhUSfuYdhgzD47F92GL1g89KpCZQKqedxP");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -856,6 +860,7 @@ lazy_static! {
         (revise_turbine_epoch_stakes::id(), "revise turbine epoch stakes"),
         (enable_poseidon_syscall::id(), "Enable Poseidon syscall"),
         (timely_vote_credits::id(), "use timeliness of votes in determining credits to award"),
+        (remaining_compute_units_syscall_enabled::id(), "enable the remaining_compute_units syscall"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

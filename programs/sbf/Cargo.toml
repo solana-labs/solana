@@ -145,6 +145,7 @@ members = [
     "rust/rand",
     "rust/realloc",
     "rust/realloc_invoke",
+    "rust/remaining_compute_units",
     "rust/ro_account_modify",
     "rust/ro_modify",
     "rust/sanity",
