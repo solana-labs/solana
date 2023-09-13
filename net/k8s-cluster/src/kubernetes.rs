@@ -23,7 +23,7 @@ use {
         Client,
     },
     log::*,
-    std::{collections::BTreeMap, error::Error},
+    std::{collections::BTreeMap, error::Error, fs::File, io::Read},
 };
 
 pub struct Kubernetes<'a> {
@@ -39,20 +39,29 @@ impl<'a> Kubernetes<'a> {
             namespace: namespace,
         }
     }
-
-    pub async fn create_config_map(
+    
+    pub async fn create_genesis_config_map(
         &self,
-        base64_content: String,
     ) -> Result<ConfigMap, kube::Error> {
         let mut metadata = ObjectMeta::default();
         metadata.name = Some("genesis-config".to_string());
+        let genesis_tar_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/genesis.tar.bz2");
+        let mut genesis_tar_file = File::open(genesis_tar_path).unwrap();
+        let mut buffer = Vec::new();
+
+        match genesis_tar_file.read_to_end(&mut buffer) {
+            Ok(_) => (),
+            Err(err) => panic!("failed to read genesis.tar.bz: {}", err)
+        }
+
         // Define the data for the ConfigMap
-        let mut data = BTreeMap::<String, String>::new();
-        data.insert("genesis.bin".to_string(), base64_content);
+        let mut data = BTreeMap::<String, ByteString>::new();
+        data.insert("genesis.tar.bz2".to_string(), ByteString(buffer));
+
         // Create the ConfigMap object
         let config_map = ConfigMap {
             metadata,
-            data: Some(data),
+            binary_data: Some(data),
             ..Default::default()
         };
 
@@ -188,7 +197,7 @@ impl<'a> Kubernetes<'a> {
                 containers: vec![Container {
                     name: container_name.to_string(),
                     image: Some(image_name.to_string()),
-                    image_pull_policy: Some("IfNotPresent".to_string()), // Set the image pull policy to "Never"
+                    image_pull_policy: Some("Always".to_string()), // Set the image pull policy to "Never"
                     env: Some(env_vars),
                     command: Some(command.clone()),
                     volume_mounts: Some(vec![genesis_volume_mount, accounts_volume_mount]),
@@ -200,6 +209,7 @@ impl<'a> Kubernetes<'a> {
                     run_as_group: Some(1000),
                     ..Default::default()
                 }),
+                // restart_policy: Some("Never".to_string()),
                 // image_pull_secrets: Some(vec![LocalObjectReference {
                 //     name: Some("dockerhub-login".to_string()),
                 //     ..Default::default()
@@ -239,6 +249,10 @@ impl<'a> Kubernetes<'a> {
         &self,
         secret_name: &str,
     ) -> Result<Secret, Box<dyn Error>> {
+        let faucet_key_path = SOLANA_ROOT.join("config-k8s");
+        let faucet_keypair = std::fs::read(faucet_key_path.join("faucet.json"))
+            .expect(format!("Failed to read faucet.json file! at: {:?}", faucet_key_path).as_str());
+
         let key_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator");
 
         let identity_keypair = std::fs::read(key_path.join("identity.json"))
@@ -252,6 +266,7 @@ impl<'a> Kubernetes<'a> {
         data.insert("identity.base64".to_string(), ByteString(general_purpose::STANDARD.encode(identity_keypair).as_bytes().to_vec()));
         data.insert("vote.base64".to_string(), ByteString(general_purpose::STANDARD.encode(vote_keypair).as_bytes().to_vec()));
         data.insert("stake.base64".to_string(), ByteString(general_purpose::STANDARD.encode(stake_keypair).as_bytes().to_vec()));
+        data.insert("faucet.base64".to_string(), ByteString(general_purpose::STANDARD.encode(faucet_keypair).as_bytes().to_vec()));
 
         let secret = Secret {
             metadata: ObjectMeta {

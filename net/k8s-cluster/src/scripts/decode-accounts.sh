@@ -29,6 +29,16 @@ DECODED_FILES=(
     "/home/solana/stake.json"
 )
 
+if [ "$validator_type" == "bootstrap" ]; then
+    echo "Validator type is equal to 'bootstrap'"
+    SECRET_FILES+=(
+      "/home/solana/${validator_type}-accounts/faucet.base64"
+    )
+    DECODED_FILES+=(
+      "/home/solana/faucet.json"
+    )
+fi
+
 # Loop through the secret files
 for i in "${!SECRET_FILES[@]}"; do
     SECRET_FILE="${SECRET_FILES[i]}"
@@ -48,3 +58,8 @@ for i in "${!SECRET_FILES[@]}"; do
         echo "Secret file not found at $SECRET_FILE"
     fi
 done
+
+mkdir -p /home/solana/logs
+
+mkdir -p /home/solana/ledger
+tar -xvf /home/solana/genesis/genesis.tar.bz2 -C /home/solana/ledger

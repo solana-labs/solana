@@ -17,6 +17,7 @@ use {
         genesis_config::{ClusterType, GenesisConfig, DEFAULT_GENESIS_FILE},
         native_token::sol_to_lamports,
         poh_config::PohConfig,
+        pubkey::Pubkey,
         rent::Rent,
         signature::{
             keypair_from_seed, write_keypair, write_keypair_file, Keypair,
@@ -76,17 +77,24 @@ pub struct Genesis<'a> {
     pub validator_keypairs: Vec<ValidatorAccountKeypairs>,
     pub faucet_keypair: Option<Keypair>,
     pub genesis_config: Option<GenesisConfig>,
+    pub all_pubkeys: Vec<Pubkey>
 }
 
 impl<'a> Genesis<'a> {
     pub fn new(setup_config: SetupConfig<'a>) -> Self {
         initialize_globals();
+        let config_dir = SOLANA_ROOT.join("config-k8s");
+        if config_dir.exists() {
+            std::fs::remove_dir_all(&config_dir).unwrap();
+        }
+        std::fs::create_dir_all(&config_dir).unwrap();
         Genesis {
             config: setup_config,
-            config_dir: SOLANA_ROOT.join("config-k8s"),
+            config_dir,
             validator_keypairs: Vec::default(),
             faucet_keypair: None,
             genesis_config: None,
+            all_pubkeys: Vec::default()
         }
     }
 
@@ -123,12 +131,12 @@ impl<'a> Genesis<'a> {
             self.generate_account(validator_type, filename_prefix.as_str(), i)?;
         }
 
-
         Ok(())
     }
 
     fn generate_account(&mut self, validator_type: &str, filename_prefix: &str, i: i32) -> Result<(), Box<dyn Error>> {
         let account_types = vec!["identity", "vote-account", "stake-account"];
+
         let mut identity: Option<Keypair> = None;
         let mut vote: Option<Keypair> = None;
         let mut stake: Option<Keypair> = None;
@@ -149,6 +157,7 @@ impl<'a> Genesis<'a> {
                 Ok(keypair) => keypair,
                 Err(err) => return Err(err),
             };
+            self.all_pubkeys.push(keypair.pubkey());
 
             if let Some(outfile) = outfile.to_str() {
                 output_keypair(&keypair, outfile, "new")
@@ -166,13 +175,15 @@ impl<'a> Genesis<'a> {
             }
         }
 
-        self.validator_keypairs.push(ValidatorAccountKeypairs {
-            vote_account: vote
-                .ok_or_else(|| boxed_error!("vote-account keypair not initialized"))?,
-            identity: identity.ok_or_else(|| boxed_error!("identity keypair not initialized"))?,
-            stake_account: stake
-                .ok_or_else(|| boxed_error!("stake-account keypair not initialized"))?,
-        });
+        if validator_type == "bootstrap" {
+            self.validator_keypairs.push(ValidatorAccountKeypairs {
+                vote_account: vote
+                    .ok_or_else(|| boxed_error!("vote-account keypair not initialized"))?,
+                identity: identity.ok_or_else(|| boxed_error!("identity keypair not initialized"))?,
+                stake_account: stake
+                    .ok_or_else(|| boxed_error!("stake-account keypair not initialized"))?,
+            });
+        }
 
         Ok(())
     }
@@ -190,7 +201,7 @@ impl<'a> Genesis<'a> {
             default_bootstrap_validator_lamports.parse().unwrap(); //TODO enable command line arg
 
         // stake account
-        let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
+        let default_bootstrap_validator_stake_lamports = &sol_to_lamports(100.0)
             .max(rent.minimum_balance(StakeStateV2::size_of()))
             .to_string();
         let bootstrap_validator_stake_lamports: u64 =
@@ -317,8 +328,6 @@ impl<'a> Genesis<'a> {
         Ok(general_purpose::STANDARD.encode(input_content))
     }
 
-    pub fn load_genesis_from_config_map(&self) {}
-
     // should be run inside pod
     pub fn verify_genesis_from_file(&self) -> Result<(), Box<dyn Error>> {
         let path = self.config_dir.join("bootstrap-validator");
@@ -329,6 +338,17 @@ impl<'a> Genesis<'a> {
             None => return Err(boxed_error!("No genesis config set in Genesis struct")),
         };
         Ok(())
+    }
+
+    pub fn ensure_no_dup_pubkeys(&self) {
+        // Ensure there are no duplicated pubkeys
+        info!("len of pubkeys: {}", self.all_pubkeys.len());
+        let mut v = self.all_pubkeys.clone();
+        v.sort();
+        v.dedup();
+        if v.len() != self.all_pubkeys.len() {
+            panic!("Error: validator pubkeys have duplicates!");
+        }
     }
 }
 
