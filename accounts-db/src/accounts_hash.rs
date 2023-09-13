@@ -1078,9 +1078,15 @@ impl<'a> AccountsHasher<'a> {
         let mut overall_sum = 0;
         let filler_accounts_enabled = self.filler_accounts_enabled();
 
-        while !working_set.is_empty() {
-            // pop the lowest item from the working_set
-            let (key, (slot_group_index, offset)) = working_set.pop_first().unwrap();
+        let mut new = None;
+
+        while new.is_some() || !working_set.is_empty() {
+            let (key, (slot_group_index, offset)) = if new.is_some() {
+                std::mem::take(&mut new).unwrap()
+            } else {
+                // pop the lowest item from the working_set
+                working_set.pop_first().unwrap()
+            };
 
             // get the min item, add lamports, get hash
             let (item, mut next) = Self::get_item2(
@@ -1142,8 +1148,16 @@ impl<'a> AccountsHasher<'a> {
                         next = new_next;
                     }
                 } else {
-                    // This is a new key, insert it into working set.
-                    working_set.insert(key, (slot_group_index, offset));
+                    // if `new key` is less than the min key in the working set, continue process with `new key` directly.
+                    let current_min_in_work_set /*(key, (slot_group_index, offset))*/ = working_set.first_key_value();
+                    if current_min_in_work_set.is_some()
+                        && key < *current_min_in_work_set.unwrap().0
+                    {
+                        new = Some((key, (slot_group_index, offset)));
+                    } else {
+                        // This is a new key, insert it into working set.
+                        working_set.insert(key, (slot_group_index, offset));
+                    }
                     break;
                 }
             }
