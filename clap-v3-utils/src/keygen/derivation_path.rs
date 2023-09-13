@@ -22,10 +22,11 @@ pub fn derivation_path_arg<'a>() -> Arg<'a> {
 pub fn acquire_derivation_path(
     matches: &ArgMatches,
 ) -> Result<Option<DerivationPath>, Box<dyn error::Error>> {
-    if matches.is_present("derivation_path") {
+    if matches.try_contains_id("derivation_path")? {
         Ok(Some(DerivationPath::from_absolute_path_str(
             matches
-                .value_of("derivation_path")
+                .try_get_one::<String>("derivation_path")?
+                .map(|path| path.as_str())
                 .unwrap_or(DEFAULT_DERIVATION_PATH),
         )?))
     } else {
