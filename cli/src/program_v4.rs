@@ -1,10 +1,19 @@
 use {
     crate::{
         checks::*,
-        cli::{log_instruction_custom_error, CliConfig, ProcessResult},
+        cli::{
+            log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
+            ProcessResult,
+        },
         program::calculate_max_chunk_size,
     },
+    clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
+    solana_clap_utils::{
+        input_parsers::{pubkey_of, pubkey_of_signer, signer_of},
+        input_validators::is_valid_signer,
+        keypair::{DefaultSigner, SignerIndex},
+    },
     solana_cli_output::CliProgramId,
     solana_client::{
         connection_cache::ConnectionCache,
@@ -13,6 +22,9 @@ use {
         },
         tpu_client::{TpuClient, TpuClientConfig},
     },
+    solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
+    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier},
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::config::RpcSendTransactionConfig,
     solana_sdk::{
@@ -29,8 +41,363 @@ use {
         system_instruction::{self, SystemError},
         transaction::Transaction,
     },
-    std::{cmp::Ordering, sync::Arc},
+    std::{cmp::Ordering, fs::File, io::Read, rc::Rc, sync::Arc},
 };
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ProgramV4CliCommand {
+    Deploy {
+        program_location: String,
+        program_signer_index: SignerIndex,
+        authority_signer_index: SignerIndex,
+    },
+    Redeploy {
+        program_location: String,
+        program_address: Pubkey,
+        buffer_signer_index: Option<SignerIndex>,
+        authority_signer_index: SignerIndex,
+    },
+    Undeploy {
+        program_address: Pubkey,
+        authority_signer_index: SignerIndex,
+    },
+    Finalize {
+        program_address: Pubkey,
+        authority_signer_index: SignerIndex,
+    },
+}
+
+pub trait ProgramV4SubCommands {
+    fn program_v4_subcommands(self) -> Self;
+}
+
+impl ProgramV4SubCommands for App<'_, '_> {
+    fn program_v4_subcommands(self) -> Self {
+        self.subcommand(
+            SubCommand::with_name("program-v4")
+                .about("Program V4 management")
+                .setting(AppSettings::SubcommandRequiredElseHelp)
+                .subcommand(
+                    SubCommand::with_name("deploy")
+                        .about("Deploy a program")
+                        .arg(
+                            Arg::with_name("program_location")
+                                .index(1)
+                                .value_name("PROGRAM_FILEPATH")
+                                .takes_value(true)
+                                .help("/path/to/program.so"),
+                        )
+                        .arg(
+                            Arg::with_name("program")
+                                .long("program")
+                                .value_name("PROGRAM_SIGNER")
+                                .takes_value(true)
+                                .validator(is_valid_signer)
+                                .help("Program account signer. The program data is written to the associated account.")
+                        )
+                        .arg(
+                            Arg::with_name("authority")
+                                .long("authority")
+                                .value_name("AUTHORITY_SIGNER")
+                                .takes_value(true)
+                                .validator(is_valid_signer)
+                                .help("Program authority [default: the default configured keypair]")
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("redeploy")
+                        .about("Redeploy a previously deployed program")
+                        .arg(
+                            Arg::with_name("program_location")
+                                .index(1)
+                                .value_name("PROGRAM_FILEPATH")
+                                .takes_value(true)
+                                .help("/path/to/program.so"),
+                        )
+                        .arg(
+                            Arg::with_name("program-id")
+                                .long("program-id")
+                                .value_name("PROGRAM_ID")
+                                .takes_value(true)
+                                .help("Executable program's address")
+                        )
+                        .arg(
+                            Arg::with_name("buffer")
+                                .long("buffer")
+                                .value_name("BUFFER_SIGNER")
+                                .takes_value(true)
+                                .validator(is_valid_signer)
+                                .help("Optional intermediate buffer account to write data to, which can be used to resume a failed deploy")
+                        )
+                        .arg(
+                            Arg::with_name("authority")
+                                .long("authority")
+                                .value_name("AUTHORITY_SIGNER")
+                                .takes_value(true)
+                                .validator(is_valid_signer)
+                                .help("Program authority [default: the default configured keypair]")
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("undeploy")
+                        .about("Undeploy/close a program")
+                        .arg(
+                            Arg::with_name("program-id")
+                                .long("program-id")
+                                .value_name("PROGRAM_ID")
+                                .takes_value(true)
+                                .help("Executable program's address")
+                        )
+                        .arg(
+                            Arg::with_name("authority")
+                                .long("authority")
+                                .value_name("AUTHORITY_SIGNER")
+                                .takes_value(true)
+                                .validator(is_valid_signer)
+                                .help("Program authority [default: the default configured keypair]")
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("finalize")
+                        .about("Finalize a program to make it immutable")
+                        .arg(
+                            Arg::with_name("program-id")
+                                .long("program-id")
+                                .value_name("PROGRAM_ID")
+                                .takes_value(true)
+                                .help("Executable program's address")
+                        )
+                        .arg(
+                            Arg::with_name("authority")
+                                .long("authority")
+                                .value_name("AUTHORITY_SIGNER")
+                                .takes_value(true)
+                                .validator(is_valid_signer)
+                                .help("Program authority [default: the default configured keypair]")
+                        ),
+                )
+        )
+    }
+}
+
+pub fn parse_program_v4_subcommand(
+    matches: &ArgMatches<'_>,
+    default_signer: &DefaultSigner,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let (subcommand, sub_matches) = matches.subcommand();
+    let response = match (subcommand, sub_matches) {
+        ("deploy", Some(matches)) => {
+            let mut bulk_signers = vec![Some(
+                default_signer.signer_from_path(matches, wallet_manager)?,
+            )];
+
+            let program_location = matches
+                .value_of("program_location")
+                .map(|location| location.to_string());
+
+            let program_pubkey = if let Ok((program_signer, Some(program_pubkey))) =
+                signer_of(matches, "program", wallet_manager)
+            {
+                bulk_signers.push(program_signer);
+                Some(program_pubkey)
+            } else {
+                pubkey_of_signer(matches, "program", wallet_manager)?
+            };
+
+            let (authority, authority_pubkey) = signer_of(matches, "authority", wallet_manager)?;
+            bulk_signers.push(authority);
+
+            let signer_info =
+                default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+
+            CliCommandInfo {
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::Deploy {
+                    program_location: program_location.expect("Program location is missing"),
+                    program_signer_index: signer_info
+                        .index_of(program_pubkey)
+                        .expect("Program signer is missing"),
+                    authority_signer_index: signer_info
+                        .index_of(authority_pubkey)
+                        .expect("Authority signer is missing"),
+                }),
+                signers: signer_info.signers,
+            }
+        }
+        ("redeploy", Some(matches)) => {
+            let mut bulk_signers = vec![Some(
+                default_signer.signer_from_path(matches, wallet_manager)?,
+            )];
+
+            let program_location = matches
+                .value_of("program_location")
+                .map(|location| location.to_string());
+
+            let buffer_pubkey = if let Ok((buffer_signer, Some(buffer_pubkey))) =
+                signer_of(matches, "buffer", wallet_manager)
+            {
+                bulk_signers.push(buffer_signer);
+                Some(buffer_pubkey)
+            } else {
+                pubkey_of_signer(matches, "buffer", wallet_manager)?
+            };
+
+            let (authority, authority_pubkey) = signer_of(matches, "authority", wallet_manager)?;
+            bulk_signers.push(authority);
+
+            let signer_info =
+                default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+
+            CliCommandInfo {
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::Redeploy {
+                    program_location: program_location.expect("Program location is missing"),
+                    program_address: pubkey_of(matches, "program-id")
+                        .expect("Program address is missing"),
+                    buffer_signer_index: signer_info.index_of_or_none(buffer_pubkey),
+                    authority_signer_index: signer_info
+                        .index_of(authority_pubkey)
+                        .expect("Authority signer is missing"),
+                }),
+                signers: signer_info.signers,
+            }
+        }
+        ("undeploy", Some(matches)) => {
+            let mut bulk_signers = vec![Some(
+                default_signer.signer_from_path(matches, wallet_manager)?,
+            )];
+
+            let (authority, authority_pubkey) = signer_of(matches, "authority", wallet_manager)?;
+            bulk_signers.push(authority);
+
+            let signer_info =
+                default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+
+            CliCommandInfo {
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::Undeploy {
+                    program_address: pubkey_of(matches, "program-id")
+                        .expect("Program address is missing"),
+                    authority_signer_index: signer_info
+                        .index_of(authority_pubkey)
+                        .expect("Authority signer is missing"),
+                }),
+                signers: signer_info.signers,
+            }
+        }
+        ("finalize", Some(matches)) => {
+            let mut bulk_signers = vec![Some(
+                default_signer.signer_from_path(matches, wallet_manager)?,
+            )];
+
+            let (authority, authority_pubkey) = signer_of(matches, "authority", wallet_manager)?;
+            bulk_signers.push(authority);
+
+            let signer_info =
+                default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+
+            CliCommandInfo {
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::Finalize {
+                    program_address: pubkey_of(matches, "program-id")
+                        .expect("Program address is missing"),
+                    authority_signer_index: signer_info
+                        .index_of(authority_pubkey)
+                        .expect("Authority signer is missing"),
+                }),
+                signers: signer_info.signers,
+            }
+        }
+        _ => unreachable!(),
+    };
+    Ok(response)
+}
+
+fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let mut file = File::open(program_location)
+        .map_err(|err| format!("Unable to open program file: {err}"))?;
+    let mut program_data = Vec::new();
+    file.read_to_end(&mut program_data)
+        .map_err(|err| format!("Unable to read program file: {err}"))?;
+
+    // Verify the program
+    let program_runtime_environment =
+        solana_loader_v4_program::create_program_runtime_environment_v2(
+            &ComputeBudget::default(),
+            false,
+        );
+    let executable =
+        Executable::<InvokeContext>::from_elf(&program_data, Arc::new(program_runtime_environment))
+            .map_err(|err| format!("ELF error: {err}"))?;
+
+    executable
+        .verify::<RequisiteVerifier>()
+        .map_err(|err| format!("ELF error: {err}"))?;
+
+    Ok(program_data)
+}
+
+pub fn process_program_v4_subcommand(
+    rpc_client: Arc<RpcClient>,
+    config: &CliConfig,
+    program_subcommand: &ProgramV4CliCommand,
+) -> ProcessResult {
+    match program_subcommand {
+        ProgramV4CliCommand::Deploy {
+            program_location,
+            program_signer_index,
+            authority_signer_index,
+        } => {
+            let program_data = read_and_verify_elf(program_location)?;
+            let program_len = program_data.len() as u32;
+
+            process_deploy_program(
+                rpc_client,
+                config,
+                &program_data,
+                program_len,
+                &config.signers[*program_signer_index].pubkey(),
+                Some(config.signers[*program_signer_index]),
+                config.signers[*authority_signer_index],
+            )
+        }
+        ProgramV4CliCommand::Redeploy {
+            program_location,
+            program_address,
+            buffer_signer_index,
+            authority_signer_index,
+        } => {
+            let program_data = read_and_verify_elf(program_location)?;
+            let program_len = program_data.len() as u32;
+            let buffer_signer = buffer_signer_index.map(|index| config.signers[index]);
+
+            process_deploy_program(
+                rpc_client,
+                config,
+                &program_data,
+                program_len,
+                program_address,
+                buffer_signer,
+                config.signers[*authority_signer_index],
+            )
+        }
+        ProgramV4CliCommand::Undeploy {
+            program_address,
+            authority_signer_index,
+        } => process_undeploy_program(
+            rpc_client,
+            config,
+            program_address,
+            config.signers[*authority_signer_index],
+        ),
+        ProgramV4CliCommand::Finalize {
+            program_address,
+            authority_signer_index,
+        } => process_finalize_program(
+            rpc_client,
+            config,
+            program_address,
+            config.signers[*authority_signer_index],
+        ),
+    }
+}
 
 // This function can be used for the following use-cases
 // * Deploy a program
