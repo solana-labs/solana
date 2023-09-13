@@ -8949,7 +8949,7 @@ impl AccountsDb {
     fn generate_index_for_slot(
         &self,
         accounts_map: GenerateIndexAccountsMap<'_>,
-        slot: &Slot,
+        slot: Slot,
         store_id: AppendVecId,
         rent_collector: &RentCollector,
         storage_info: &StorageSizeAndCountMap,
@@ -9001,7 +9001,7 @@ impl AccountsDb {
 
         let (dirty_pubkeys, insert_time_us) = self
             .accounts_index
-            .insert_new_if_missing_into_primary_index(*slot, num_accounts, items);
+            .insert_new_if_missing_into_primary_index(slot, num_accounts, items);
 
         {
             // second, collect into the shared DashMap once we've figured out all the info per store_id
@@ -9014,7 +9014,7 @@ impl AccountsDb {
         // a given pubkey. If there is just a single item, there is no cleaning to
         // be done on that pubkey. Use only those pubkeys with multiple updates.
         if !dirty_pubkeys.is_empty() {
-            self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
+            self.uncleaned_pubkeys.insert(slot, dirty_pubkeys);
         }
         SlotIndexGenerationInfo {
             insert_time_us,
@@ -9196,7 +9196,7 @@ impl AccountsDb {
                                     rent_paying_accounts_by_partition_this_slot,
                             } = self.generate_index_for_slot(
                                 accounts_map,
-                                slot,
+                                *slot,
                                 store_id,
                                 &rent_collector,
                                 &storage_info,
@@ -15752,7 +15752,7 @@ pub mod tests {
         let accounts_map = accounts.process_storage_slot(&storage);
         accounts.generate_index_for_slot(
             accounts_map,
-            &slot0,
+            slot0,
             0,
             &RentCollector::default(),
             &storage_info,
@@ -15776,7 +15776,7 @@ pub mod tests {
         let accounts_map = accounts.process_storage_slot(&storage);
         accounts.generate_index_for_slot(
             accounts_map,
-            &0,
+            0,
             0,
             &RentCollector::default(),
             &storage_info,
@@ -15824,7 +15824,7 @@ pub mod tests {
         let accounts_map = accounts.process_storage_slot(&storage);
         accounts.generate_index_for_slot(
             accounts_map,
-            &0,
+            0,
             0,
             &RentCollector::default(),
             &storage_info,
