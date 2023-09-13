@@ -360,7 +360,7 @@ mod tests {
         )
         .unwrap();
         let mut tx_cost = TransactionCost::new_with_capacity(1);
-        tx_cost.bpf_execution_cost = 10;
+        tx_cost.builtins_execution_cost = 10;
         tx_cost.writable_accounts.push(mint_keypair.pubkey());
         tx_cost.is_simple_vote = true;
 
