@@ -93,7 +93,7 @@ impl TransactionCost {
 
     pub fn writable_accounts(&self) -> &[Pubkey] {
         match self {
-            Self::Vote { writable_accounts } => &writable_accounts,
+            Self::Vote { writable_accounts } => writable_accounts,
             Self::Transaction(usage_cost) => &usage_cost.writable_accounts,
         }
     }
