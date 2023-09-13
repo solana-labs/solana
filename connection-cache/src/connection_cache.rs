@@ -58,11 +58,12 @@ pub struct ConnectionCache<
     exit: Arc<AtomicBool>,
     sender: Sender<SocketAddr>,
     async_connection_thread: JoinHandle<()>,
+    async_connection_thread2: JoinHandle<()>,
 }
 
 impl<P, M, C> ConnectionCache<P, M, C>
 where
-    P: ConnectionPool<NewConnectionConfig = C> + 'static,
+    P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
     C: NewConnectionConfig,
 {
@@ -87,6 +88,7 @@ where
         connection_manager: M,
     ) -> Self {
         let (sender, receiver) = crossbeam_channel::unbounded();
+        let (async_conn_sender, async_conn_receiver) = crossbeam_channel::unbounded();
 
         let map = Arc::new(RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)));
         let config = Arc::new(connection_config);
@@ -98,14 +100,23 @@ where
             config.clone(),
             connection_manager.clone(),
             receiver,
+            async_conn_sender,
             exit.clone(),
             connection_pool_size,
         );
 
+        let stats = Arc::new(ConnectionCacheStats::default());
+
+        let async_connection_thread2 = Self::create_connection_async_thread(
+            map.clone(),
+            async_conn_receiver,
+            exit.clone(),
+            stats.clone(),
+        );
         Self {
             name,
             map,
-            stats: Arc::new(ConnectionCacheStats::default()),
+            stats,
             connection_manager: connection_manager,
             last_stats: AtomicInterval::default(),
             connection_pool_size,
@@ -113,14 +124,17 @@ where
             exit,
             sender,
             async_connection_thread,
+            async_connection_thread2,
         }
     }
 
+    /// This triggers creating the connection pool entry. Maybe we do not need this thread as it is very fast.
     fn create_connection_thread(
         map: Arc<RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ P>>>,
         config: Arc<C>,
         connection_manager: Arc<M>,
         receiver: Receiver<SocketAddr>,
+        async_conn_sender: Sender<(usize, SocketAddr)>,
         exit: Arc<AtomicBool>,
         connection_pool_size: usize,
     ) -> JoinHandle<()> {
@@ -146,7 +160,46 @@ where
                             &mut map,
                             &addr,
                             connection_pool_size,
+                            Some(async_conn_sender.clone()),
                         );
+                    }
+                }
+            })
+            .unwrap()
+    }
+
+    /// This actually triggers the connection creation by sending empty data
+    fn create_connection_async_thread(
+        map: Arc<RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ P>>>,
+        receiver: Receiver<(usize, SocketAddr)>,
+        exit: Arc<AtomicBool>,
+        stats: Arc<ConnectionCacheStats>,
+    ) -> JoinHandle<()> {
+        Builder::new()
+            .name("solStxReceive".to_string())
+            .spawn(move || loop {
+                let recv_timeout_ms = 100;
+                let recv_result = receiver.recv_timeout(Duration::from_millis(recv_timeout_ms));
+                if exit.load(Ordering::Relaxed) {
+                    break;
+                }
+                match recv_result {
+                    Err(RecvTimeoutError::Disconnected) => {
+                        exit.store(true, Ordering::Relaxed);
+                        break;
+                    }
+                    Err(RecvTimeoutError::Timeout) => {}
+                    Ok((idx, addr)) => {
+                        let map = map.read().unwrap();
+                        let pool = map.get(&addr);
+                        if let Some(pool) = pool {
+                            let conn = pool.get(idx);
+                            if let Ok(conn) = conn {
+                                drop(map);
+                                let conn = conn.new_nonblocking_connection(addr, stats.clone());
+                                let _ = conn.send_data(&[]);
+                            }
+                        }
                     }
                 }
             })
@@ -180,6 +233,7 @@ where
                 &mut map,
                 addr,
                 self.connection_pool_size,
+                None,
             )
         } else {
             (true, 0, 0)
@@ -208,6 +262,7 @@ where
         map: &mut std::sync::RwLockWriteGuard<'_, IndexMap<SocketAddr, P>>,
         addr: &SocketAddr,
         connection_pool_size: usize,
+        async_connection_sender: Option<Sender<(usize, SocketAddr)>>,
     ) -> (bool, u64, u64) {
         // evict a connection if the cache is reaching upper bounds
         let mut num_evictions = 0;
@@ -232,6 +287,9 @@ where
             .and_modify(|pool| {
                 if pool.need_new_connection(connection_pool_size).1 {
                     pool.add_connection(&config, addr);
+                    async_connection_sender.map(|sender| {
+                        sender.send((pool.num_connections() - 1, *addr)).unwrap();
+                    });
                 } else {
                     hit_cache = true;
                 }
@@ -382,7 +440,9 @@ where
 
     pub fn join(self) -> thread::Result<()> {
         self.exit.store(true, Ordering::Relaxed);
-        self.async_connection_thread.join()
+
+        self.async_connection_thread.join()?;
+        self.async_connection_thread2.join()
     }
 }
 
