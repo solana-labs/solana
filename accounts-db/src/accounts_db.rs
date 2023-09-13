@@ -614,9 +614,7 @@ struct GenerateIndexTimings {
     pub min_bin_size: usize,
     pub max_bin_size: usize,
     pub total_items: usize,
-    pub storage_size_accounts_map_us: u64,
     pub storage_size_storages_us: u64,
-    pub storage_size_accounts_map_flatten_us: u64,
     pub index_flush_us: u64,
     pub rent_paying: AtomicUsize,
     pub amount_to_top_off_rent: AtomicU64,
@@ -649,18 +647,8 @@ impl GenerateIndexTimings {
             ("min_bin_size", self.min_bin_size as i64, i64),
             ("max_bin_size", self.max_bin_size as i64, i64),
             (
-                "storage_size_accounts_map_us",
-                self.storage_size_accounts_map_us as i64,
-                i64
-            ),
-            (
                 "storage_size_storages_us",
                 self.storage_size_storages_us as i64,
-                i64
-            ),
-            (
-                "storage_size_accounts_map_flatten_us",
-                self.storage_size_accounts_map_flatten_us as i64,
                 i64
             ),
             ("index_flush_us", self.index_flush_us as i64, i64),
@@ -9173,7 +9161,6 @@ impl AccountsDb {
             let rent_paying = AtomicUsize::new(0);
             let amount_to_top_off_rent = AtomicU64::new(0);
             let total_including_duplicates = AtomicU64::new(0);
-            let storage_info_timings = Mutex::new(GenerateIndexTimings::default());
             let scan_time: u64 = slots
                 .par_chunks(chunk_size)
                 .map(|slots| {
@@ -9322,7 +9309,6 @@ impl AccountsDb {
             }
             let unique_pubkeys_by_bin = unique_pubkeys_by_bin.into_inner().unwrap();
 
-            let storage_info_timings = storage_info_timings.into_inner().unwrap();
             let mut timings = GenerateIndexTimings {
                 index_flush_us,
                 scan_time,
@@ -9336,9 +9322,6 @@ impl AccountsDb {
                 total_duplicate_slot_keys: total_duplicate_slot_keys.load(Ordering::Relaxed),
                 populate_duplicate_keys_us,
                 total_including_duplicates: total_including_duplicates.load(Ordering::Relaxed),
-                storage_size_accounts_map_us: storage_info_timings.storage_size_accounts_map_us,
-                storage_size_accounts_map_flatten_us: storage_info_timings
-                    .storage_size_accounts_map_flatten_us,
                 total_slots: slots.len() as u64,
                 ..GenerateIndexTimings::default()
             };
