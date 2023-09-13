@@ -3836,7 +3836,6 @@ fn test_program_fees() {
         &ComputeBudget::fee_budget_limits(
             sanitized_message.program_instructions_iter(),
             &feature_set,
-            None,
         ),
         true,
         false,
@@ -3864,7 +3863,6 @@ fn test_program_fees() {
         &ComputeBudget::fee_budget_limits(
             sanitized_message.program_instructions_iter(),
             &feature_set,
-            None,
         ),
         true,
         false,
