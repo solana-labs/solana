@@ -9508,6 +9508,9 @@ impl AccountsDb {
                 );
                 store.count_and_status.write().unwrap().0 = entry.count;
                 store.alive_bytes.store(entry.stored_size, Ordering::SeqCst);
+                store
+                    .approx_store_count
+                    .store(entry.count, Ordering::Relaxed);
             } else {
                 trace!("id: {} clearing count", id);
                 store.count_and_status.write().unwrap().0 = 0;
