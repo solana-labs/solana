@@ -614,9 +614,7 @@ struct GenerateIndexTimings {
     pub min_bin_size: usize,
     pub max_bin_size: usize,
     pub total_items: usize,
-    pub storage_size_accounts_map_us: u64,
     pub storage_size_storages_us: u64,
-    pub storage_size_accounts_map_flatten_us: u64,
     pub index_flush_us: u64,
     pub rent_paying: AtomicUsize,
     pub amount_to_top_off_rent: AtomicU64,
@@ -649,18 +647,8 @@ impl GenerateIndexTimings {
             ("min_bin_size", self.min_bin_size as i64, i64),
             ("max_bin_size", self.max_bin_size as i64, i64),
             (
-                "storage_size_accounts_map_us",
-                self.storage_size_accounts_map_us as i64,
-                i64
-            ),
-            (
                 "storage_size_storages_us",
                 self.storage_size_storages_us as i64,
-                i64
-            ),
-            (
-                "storage_size_accounts_map_flatten_us",
-                self.storage_size_accounts_map_flatten_us as i64,
                 i64
             ),
             ("index_flush_us", self.index_flush_us as i64, i64),
@@ -8961,7 +8949,7 @@ impl AccountsDb {
     fn generate_index_for_slot(
         &self,
         accounts_map: GenerateIndexAccountsMap<'_>,
-        slot: &Slot,
+        slot: Slot,
         store_id: AppendVecId,
         rent_collector: &RentCollector,
         storage_info: &StorageSizeAndCountMap,
@@ -9013,7 +9001,7 @@ impl AccountsDb {
 
         let (dirty_pubkeys, insert_time_us) = self
             .accounts_index
-            .insert_new_if_missing_into_primary_index(*slot, num_accounts, items);
+            .insert_new_if_missing_into_primary_index(slot, num_accounts, items);
 
         {
             // second, collect into the shared DashMap once we've figured out all the info per store_id
@@ -9026,7 +9014,7 @@ impl AccountsDb {
         // a given pubkey. If there is just a single item, there is no cleaning to
         // be done on that pubkey. Use only those pubkeys with multiple updates.
         if !dirty_pubkeys.is_empty() {
-            self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
+            self.uncleaned_pubkeys.insert(slot, dirty_pubkeys);
         }
         SlotIndexGenerationInfo {
             insert_time_us,
@@ -9173,7 +9161,6 @@ impl AccountsDb {
             let rent_paying = AtomicUsize::new(0);
             let amount_to_top_off_rent = AtomicU64::new(0);
             let total_including_duplicates = AtomicU64::new(0);
-            let storage_info_timings = Mutex::new(GenerateIndexTimings::default());
             let scan_time: u64 = slots
                 .par_chunks(chunk_size)
                 .map(|slots| {
@@ -9209,7 +9196,7 @@ impl AccountsDb {
                                     rent_paying_accounts_by_partition_this_slot,
                             } = self.generate_index_for_slot(
                                 accounts_map,
-                                slot,
+                                *slot,
                                 store_id,
                                 &rent_collector,
                                 &storage_info,
@@ -9322,7 +9309,6 @@ impl AccountsDb {
             }
             let unique_pubkeys_by_bin = unique_pubkeys_by_bin.into_inner().unwrap();
 
-            let storage_info_timings = storage_info_timings.into_inner().unwrap();
             let mut timings = GenerateIndexTimings {
                 index_flush_us,
                 scan_time,
@@ -9336,9 +9322,6 @@ impl AccountsDb {
                 total_duplicate_slot_keys: total_duplicate_slot_keys.load(Ordering::Relaxed),
                 populate_duplicate_keys_us,
                 total_including_duplicates: total_including_duplicates.load(Ordering::Relaxed),
-                storage_size_accounts_map_us: storage_info_timings.storage_size_accounts_map_us,
-                storage_size_accounts_map_flatten_us: storage_info_timings
-                    .storage_size_accounts_map_flatten_us,
                 total_slots: slots.len() as u64,
                 ..GenerateIndexTimings::default()
             };
@@ -9508,6 +9491,9 @@ impl AccountsDb {
                 );
                 store.count_and_status.write().unwrap().0 = entry.count;
                 store.alive_bytes.store(entry.stored_size, Ordering::SeqCst);
+                store
+                    .approx_store_count
+                    .store(entry.count, Ordering::Relaxed);
             } else {
                 trace!("id: {} clearing count", id);
                 store.count_and_status.write().unwrap().0 = 0;
@@ -15766,7 +15752,7 @@ pub mod tests {
         let accounts_map = accounts.process_storage_slot(&storage);
         accounts.generate_index_for_slot(
             accounts_map,
-            &slot0,
+            slot0,
             0,
             &RentCollector::default(),
             &storage_info,
@@ -15790,7 +15776,7 @@ pub mod tests {
         let accounts_map = accounts.process_storage_slot(&storage);
         accounts.generate_index_for_slot(
             accounts_map,
-            &0,
+            0,
             0,
             &RentCollector::default(),
             &storage_info,
@@ -15838,7 +15824,7 @@ pub mod tests {
         let accounts_map = accounts.process_storage_slot(&storage);
         accounts.generate_index_for_slot(
             accounts_map,
-            &0,
+            0,
             0,
             &RentCollector::default(),
             &storage_info,
