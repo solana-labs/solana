@@ -540,7 +540,7 @@ fn build_retract_and_deploy_messages(
         &[loader_v4::deploy_from_source(
             program_address,
             &authority_signer.pubkey(),
-            &buffer_address,
+            buffer_address,
         )],
         Some(&payer_pubkey),
         &blockhash,
