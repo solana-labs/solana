@@ -550,12 +550,17 @@ fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
         // transactions are built to be invalid so the the amount here is arbitrary
         let funding_key = Keypair::new();
         let funding_key = Arc::new(funding_key);
-        let res =
-            generate_and_fund_keypairs(client.unwrap().clone(), &funding_key, size, 1_000_000)
-                .unwrap_or_else(|e| {
-                    eprintln!("Error could not fund keys: {e:?}");
-                    exit(1);
-                });
+        let res = generate_and_fund_keypairs(
+            client.unwrap().clone(),
+            &funding_key,
+            size,
+            1_000_000,
+            false,
+        )
+        .unwrap_or_else(|e| {
+            eprintln!("Error could not fund keys: {e:?}");
+            exit(1);
+        });
         res.into_iter().map(Some).collect()
     } else {
         std::iter::repeat_with(|| None).take(size).collect()
