@@ -1396,9 +1396,7 @@ pub struct AccountsDb {
     /// Set of storage paths to pick from
     pub(crate) paths: Vec<PathBuf>,
 
-    /// Directories for account hash calculations, within base_working_path
-    full_accounts_hash_cache_path: PathBuf,
-    incremental_accounts_hash_cache_path: PathBuf,
+    accounts_hash_cache_path: PathBuf,
     transient_accounts_hash_cache_path: PathBuf,
 
     // used by tests
@@ -2370,7 +2368,7 @@ impl AccountsDb {
                 (accounts_hash_cache_path, None)
             } else {
                 let temp_dir = TempDir::new().expect("new tempdir");
-                let cache_path = temp_dir.path().join(Self::DEFAULT_ACCOUNTS_HASH_CACHE_DIR);
+                let cache_path = temp_dir.path().to_path_buf();
                 (cache_path, Some(temp_dir))
             };
 
@@ -2402,9 +2400,8 @@ impl AccountsDb {
             write_cache_limit_bytes: None,
             write_version: AtomicU64::new(0),
             paths: vec![],
-            full_accounts_hash_cache_path: accounts_hash_cache_path.join("full"),
-            incremental_accounts_hash_cache_path: accounts_hash_cache_path.join("incremental"),
             transient_accounts_hash_cache_path: accounts_hash_cache_path.join("transient"),
+            accounts_hash_cache_path,
             temp_accounts_hash_cache_path,
             shrink_paths: RwLock::new(None),
             temp_paths: None,
@@ -7517,18 +7514,23 @@ impl AccountsDb {
     fn get_cache_hash_data(
         accounts_hash_cache_path: PathBuf,
         config: &CalcAccountsHashConfig<'_>,
+        flavor: CalcAccountsHashFlavor,
         slot: Slot,
     ) -> CacheHashData {
-        if !config.store_detailed_debug_info_on_failure {
-            CacheHashData::new(accounts_hash_cache_path)
+        let accounts_hash_cache_path = if !config.store_detailed_debug_info_on_failure {
+            accounts_hash_cache_path
         } else {
             // this path executes when we are failing with a hash mismatch
             let failed_dir = accounts_hash_cache_path
                 .join("failed_calculate_accounts_hash_cache")
                 .join(slot.to_string());
-            let _ = std::fs::remove_dir_all(&failed_dir);
-            CacheHashData::new(failed_dir)
-        }
+            _ = std::fs::remove_dir_all(&failed_dir);
+            failed_dir
+        };
+        CacheHashData::new(
+            accounts_hash_cache_path,
+            flavor == CalcAccountsHashFlavor::Full,
+        )
     }
 
     // modeled after calculate_accounts_delta_hash
@@ -7544,7 +7546,6 @@ impl AccountsDb {
             storages,
             stats,
             CalcAccountsHashFlavor::Full,
-            self.full_accounts_hash_cache_path.clone(),
         )?;
         let AccountsHashEnum::Full(accounts_hash) = accounts_hash else {
             panic!("calculate_accounts_hash_from_storages must return a FullAccountsHash");
@@ -7572,7 +7573,6 @@ impl AccountsDb {
             storages,
             stats,
             CalcAccountsHashFlavor::Incremental,
-            self.incremental_accounts_hash_cache_path.clone(),
         )?;
         let AccountsHashEnum::Incremental(incremental_accounts_hash) = accounts_hash else {
             panic!("calculate_incremental_accounts_hash must return an IncrementalAccountsHash");
@@ -7586,7 +7586,6 @@ impl AccountsDb {
         storages: &SortedStorages<'_>,
         mut stats: HashStats,
         flavor: CalcAccountsHashFlavor,
-        accounts_hash_cache_path: PathBuf,
     ) -> Result<(AccountsHashEnum, u64), AccountsHashVerificationError> {
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         stats.oldest_root = storages.range().start;
@@ -7595,8 +7594,10 @@ impl AccountsDb {
 
         let slot = storages.max_slot_inclusive();
         let use_bg_thread_pool = config.use_bg_thread_pool;
+        let accounts_hash_cache_path = self.accounts_hash_cache_path.clone();
         let scan_and_hash = || {
-            let cache_hash_data = Self::get_cache_hash_data(accounts_hash_cache_path, config, slot);
+            let cache_hash_data =
+                Self::get_cache_hash_data(accounts_hash_cache_path, config, flavor, slot);
 
             let bounds = Range {
                 start: 0,
@@ -9592,7 +9593,7 @@ pub mod tests {
             let temp_dir = TempDir::new().unwrap();
             let accounts_hash_cache_path = temp_dir.path().to_path_buf();
             self.scan_snapshot_stores_with_cache(
-                &CacheHashData::new(accounts_hash_cache_path),
+                &CacheHashData::new(accounts_hash_cache_path, true),
                 storage,
                 stats,
                 bins,
@@ -10691,7 +10692,7 @@ pub mod tests {
         };
 
         let result = accounts_db.scan_account_storage_no_bank(
-            &CacheHashData::new(accounts_hash_cache_path),
+            &CacheHashData::new(accounts_hash_cache_path, true),
             &CalcAccountsHashConfig::default(),
             &get_storage_refs(&[storage]),
             test_scan,
