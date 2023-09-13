@@ -5,8 +5,8 @@ use {
         compute_budget::{self, ComputeBudgetInstruction},
         entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
         feature_set::{
-            add_set_tx_loaded_accounts_data_size_instruction,
-            remove_deprecated_request_unit_ix, FeatureSet,
+            add_set_tx_loaded_accounts_data_size_instruction, remove_deprecated_request_unit_ix,
+            FeatureSet,
         },
         fee::FeeBudgetLimits,
         instruction::{CompiledInstruction, InstructionError},
@@ -376,12 +376,7 @@ mod tests {
             assert_eq!(compute_budget, $expected_budget);
         };
         ( $instructions: expr, $expected_result: expr, $expected_budget: expr) => {
-            test!(
-                $instructions,
-                $expected_result,
-                $expected_budget,
-                false
-            );
+            test!($instructions, $expected_result, $expected_budget, false);
         };
     }
 
@@ -656,7 +651,7 @@ mod tests {
         );
 
         // assert normal results when not requesting heap frame when the feature is disabled
-        test!( 
+        test!(
             &[
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
@@ -678,7 +673,6 @@ mod tests {
 
     #[test]
     fn test_process_loaded_accounts_data_size_limit_instruction() {
-
         // Assert for empty instructions, change value of support_set_loaded_accounts_data_size_limit_ix
         // will not change results, which should all be default
         for support_set_loaded_accounts_data_size_limit_ix in [true, false] {

@@ -12030,13 +12030,7 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
     // assert when request_heap_frame is presented in tx, prioritization fee will be counted
     // into transaction fee
     assert_eq!(
-        calculate_test_fee(
-            &message,
-            lamports_per_signature,
-            &fee_structure,
-            true,
-            true,
-        ),
+        calculate_test_fee(&message, lamports_per_signature, &fee_structure, true, true,),
         signature_fee + request_cu * lamports_per_cu
     );
 }

@@ -1757,10 +1757,7 @@ mod tests {
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &ComputeBudget::fee_budget_limits(
-                message.program_instructions_iter(),
-                &feature_set,
-            ),
+            &ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set),
             true,
             false,
         );
@@ -4323,10 +4320,7 @@ mod tests {
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &ComputeBudget::fee_budget_limits(
-                message.program_instructions_iter(),
-                &feature_set,
-            ),
+            &ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set),
             true,
             false,
         );
