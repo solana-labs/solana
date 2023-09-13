@@ -32,7 +32,6 @@ fi
 
 DONT_USE_NEXTEST_PACKAGES=(
   solana-cargo-build-sbf
-  solana-core
 )
 
 if [ "$INDEX" -eq "$((LIMIT - 1))" ]; then
