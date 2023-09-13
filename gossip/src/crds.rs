@@ -79,8 +79,6 @@ pub struct Crds {
     duplicate_shreds: BTreeMap<u64 /*insert order*/, usize /*index*/>,
     // Indices of RestartLastVotedForkSlots keyed by insert order.
     restart_last_voted_fork_slots: BTreeMap<u64 /*insert order*/, usize /*index*/>,
-    // Indices of RestartHeaviestFork keyed by insert order.
-    restart_heaviest_fork: BTreeMap<u64 /*insert order*/, usize /*index*/>,
     // Indices of all crds values associated with a node.
     records: HashMap<Pubkey, IndexSet<usize>>,
     // Indices of all entries keyed by insert order.
@@ -107,7 +105,7 @@ pub enum GossipRoute<'a> {
     PushMessage(/*from:*/ &'a Pubkey),
 }
 
-type CrdsCountsArray = [usize; 14];
+type CrdsCountsArray = [usize; 13];
 
 pub(crate) struct CrdsDataStats {
     pub(crate) counts: CrdsCountsArray,
@@ -174,7 +172,6 @@ impl Default for Crds {
             epoch_slots: BTreeMap::default(),
             duplicate_shreds: BTreeMap::default(),
             restart_last_voted_fork_slots: BTreeMap::default(),
-            restart_heaviest_fork: BTreeMap::default(),
             records: HashMap::default(),
             entries: BTreeMap::default(),
             purged: VecDeque::default(),
@@ -252,10 +249,6 @@ impl Crds {
                         self.restart_last_voted_fork_slots
                             .insert(value.ordinal, entry_index);
                     }
-                    CrdsData::RestartHeaviestFork(_, _, _) => {
-                        self.restart_heaviest_fork
-                            .insert(value.ordinal, entry_index);
-                    }
                     _ => (),
                 };
                 self.entries.insert(value.ordinal, entry_index);
@@ -295,11 +288,6 @@ impl Crds {
                         self.restart_last_voted_fork_slots
                             .remove(&entry.get().ordinal);
                         self.restart_last_voted_fork_slots
-                            .insert(value.ordinal, entry_index);
-                    }
-                    CrdsData::RestartHeaviestFork(_, _, _) => {
-                        self.restart_heaviest_fork.remove(&entry.get().ordinal);
-                        self.restart_heaviest_fork
                             .insert(value.ordinal, entry_index);
                     }
                     _ => (),
@@ -410,21 +398,6 @@ impl Crds {
     ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
         let range = (Bound::Included(cursor.ordinal()), Bound::Unbounded);
         self.restart_last_voted_fork_slots
-            .range(range)
-            .map(move |(ordinal, index)| {
-                cursor.consume(*ordinal);
-                self.table.index(*index)
-            })
-    }
-
-    /// Returns heaviest_fork inserted since the given cursor.
-    /// Updates the cursor as the values are consumed.
-    pub(crate) fn get_restart_heaviest_fork<'a>(
-        &'a self,
-        cursor: &'a mut Cursor,
-    ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
-        let range = (Bound::Included(cursor.ordinal()), Bound::Unbounded);
-        self.restart_heaviest_fork
             .range(range)
             .map(move |(ordinal, index)| {
                 cursor.consume(*ordinal);
@@ -602,9 +575,6 @@ impl Crds {
             CrdsData::RestartLastVotedForkSlots(_, _, _, _) => {
                 self.restart_last_voted_fork_slots.remove(&value.ordinal);
             }
-            CrdsData::RestartHeaviestFork(_, _, _) => {
-                self.restart_heaviest_fork.remove(&value.ordinal);
-            }
             _ => (),
         }
         self.entries.remove(&value.ordinal);
@@ -645,9 +615,6 @@ impl Crds {
                 CrdsData::RestartLastVotedForkSlots(_, _, _, _) => {
                     self.restart_last_voted_fork_slots
                         .insert(value.ordinal, index);
-                }
-                CrdsData::RestartHeaviestFork(_, _, _) => {
-                    self.restart_heaviest_fork.insert(value.ordinal, index);
                 }
                 _ => (),
             };
@@ -790,7 +757,6 @@ impl CrdsDataStats {
             CrdsData::SnapshotHashes(_) => 10,
             CrdsData::ContactInfo(_) => 11,
             CrdsData::RestartLastVotedForkSlots(_, _, _, _) => 12,
-            CrdsData::RestartHeaviestFork(_, _, _) => 13,
             // Update CrdsCountsArray if new items are added here.
         }
     }
@@ -1189,7 +1155,6 @@ mod tests {
         usize, // number of votes
         usize, // number of epoch slots
         usize, // number of restart last voted fork slots
-        usize, // number of restart heaviest forks
     ) {
         let size = crds.table.len();
         let since = if size == 0 || rng.gen() {
@@ -1248,33 +1213,6 @@ mod tests {
             match value.value.data {
                 CrdsData::RestartLastVotedForkSlots(_, _, _, _) => (),
                 _ => panic!("not a last-voted-fork-slot!"),
-            }
-        }
-        let num_heaviest_forks = crds
-            .table
-            .values()
-            .filter(|v| v.ordinal >= since)
-            .filter(|v| matches!(v.value.data, CrdsData::RestartHeaviestFork(_, _, _)))
-            .count();
-        let mut cursor = Cursor(since);
-        assert_eq!(
-            num_heaviest_forks,
-            crds.get_restart_heaviest_fork(&mut cursor).count()
-        );
-        assert_eq!(
-            cursor.0,
-            crds.restart_heaviest_fork
-                .iter()
-                .last()
-                .map(|(k, _)| k + 1)
-                .unwrap_or_default()
-                .max(since)
-        );
-        for value in crds.get_restart_heaviest_fork(&mut Cursor(since)) {
-            assert!(value.ordinal >= since);
-            match value.value.data {
-                CrdsData::RestartHeaviestFork(_, _, _) => (),
-                _ => panic!("not a heaviest-fork!"),
             }
         }
         let num_votes = crds
@@ -1344,11 +1282,6 @@ mod tests {
                 )
             })
             .count();
-        let num_restart_heaviest_forks = crds
-            .table
-            .values()
-            .filter(|v| matches!(v.value.data, CrdsData::RestartHeaviestFork(_, _, _)))
-            .count();
         assert_eq!(
             crds.table.len(),
             crds.get_entries(&mut Cursor::default()).count()
@@ -1362,11 +1295,6 @@ mod tests {
         assert_eq!(
             num_restart_last_voted_fork_slots,
             crds.get_restart_last_voted_fork_slots(&mut Cursor::default())
-                .count()
-        );
-        assert_eq!(
-            num_restart_heaviest_forks,
-            crds.get_restart_heaviest_fork(&mut Cursor::default())
                 .count()
         );
         for vote in crds.get_votes(&mut Cursor::default()) {
@@ -1383,18 +1311,11 @@ mod tests {
                 _ => panic!("not a restart-last-voted-fork-slot!"),
             }
         }
-        for restart_heaviest_fork in crds.get_restart_heaviest_fork(&mut Cursor::default()) {
-            match restart_heaviest_fork.value.data {
-                CrdsData::RestartHeaviestFork(_, _, _) => (),
-                _ => panic!("not a restart-heaviest-fork!"),
-            }
-        }
         (
             num_nodes,
             num_votes,
             num_epoch_slots,
             num_last_voted_fork_slots,
-            num_heaviest_forks,
         )
     }
 
@@ -1421,13 +1342,8 @@ mod tests {
         assert!(crds.table.len() > 200);
         assert_eq!(crds.num_purged() + crds.table.len(), 4096);
         assert!(num_inserts > crds.table.len());
-        let (
-            num_nodes,
-            num_votes,
-            num_epoch_slots,
-            num_restart_last_voted_fork_slots,
-            num_restart_heaviest_forks,
-        ) = check_crds_value_indices(&mut rng, &crds);
+        let (num_nodes, num_votes, num_epoch_slots, num_restart_last_voted_fork_slots) =
+            check_crds_value_indices(&mut rng, &crds);
         assert!(num_nodes * 3 < crds.table.len());
         assert!(num_nodes > 100, "num nodes: {num_nodes}");
         assert!(num_votes > 100, "num votes: {num_votes}");
@@ -1435,10 +1351,6 @@ mod tests {
         assert!(
             num_restart_last_voted_fork_slots > 0,
             "num restart last voted fork slots: {num_restart_last_voted_fork_slots}"
-        );
-        assert!(
-            num_restart_heaviest_forks > 0,
-            "num restart heaviest forks: {num_restart_heaviest_forks}"
         );
         // Remove values one by one and assert that nodes indices stay valid.
         while !crds.table.is_empty() {

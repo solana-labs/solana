@@ -33,8 +33,8 @@ use {
         },
         crds_value::{
             self, AccountsHashes, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex,
-            LegacySnapshotHashes, LowestSlot, NodeInstance, Percent, SnapshotHashes, Version, Vote,
-            MAX_PERCENT, MAX_WALLCLOCK,
+            LegacySnapshotHashes, LowestSlot, NodeInstance, SnapshotHashes, Version, Vote,
+            MAX_WALLCLOCK,
         },
         duplicate_shred::DuplicateShred,
         epoch_slots::EpochSlots,
@@ -398,8 +398,7 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             CrdsData::LowestSlot(_, _)
             | CrdsData::LegacyVersion(_)
             | CrdsData::DuplicateShred(_, _)
-            | CrdsData::RestartLastVotedForkSlots(_, _, _, _)
-            | CrdsData::RestartHeaviestFork(_, _, _) => {
+            | CrdsData::RestartLastVotedForkSlots(_, _, _, _) => {
                 let stake = stakes.get(&value.pubkey()).copied();
                 stake.unwrap_or_default() >= MIN_STAKE_FOR_GOSSIP
             }
@@ -1009,28 +1008,6 @@ impl ClusterInfo {
         }
     }
 
-    pub fn push_restart_heaviest_fork(
-        &self,
-        slot: Slot,
-        hash: Hash,
-        percent: f64,
-    ) -> Result<(), String> {
-        if !(0.0..1.0).contains(&percent) {
-            return Err(format!(
-                "heaviest_fork with out of bound percent, ignored: {}",
-                percent
-            ));
-        }
-
-        let message = CrdsData::RestartHeaviestFork(
-            slot,
-            hash,
-            Percent::new(self.id(), (percent * MAX_PERCENT as f64) as u16),
-        );
-        self.push_message(CrdsValue::new_signed(message, &self.keypair()));
-        Ok(())
-    }
-
     fn time_gossip_read_lock<'a>(
         &'a self,
         label: &'static str,
@@ -1323,26 +1300,6 @@ impl ClusterInfo {
             .map(|entry| match &entry.value.data {
                 CrdsData::RestartLastVotedForkSlots(index, slots, last_vote, last_vote_hash) => {
                     (*index, slots.clone(), *last_vote, *last_vote_hash)
-                }
-                _ => panic!("this should not happen!"),
-            })
-            .collect()
-    }
-
-    /// Returns heaviest-fork inserted since the given cursor.
-    /// Excludes entries from nodes with unkown or different shred version.
-    pub fn get_restart_heaviest_fork(&self, cursor: &mut Cursor) -> Vec<(Slot, Hash, Percent)> {
-        let self_shred_version = Some(self.my_shred_version());
-        let gossip_crds = self.gossip.crds.read().unwrap();
-        gossip_crds
-            .get_restart_heaviest_fork(cursor)
-            .filter(|entry| {
-                let origin = entry.value.pubkey();
-                gossip_crds.get_shred_version(&origin) == self_shred_version
-            })
-            .map(|entry| match &entry.value.data {
-                CrdsData::RestartHeaviestFork(last_vote, last_vote_hash, percent) => {
-                    (*last_vote, *last_vote_hash, percent.clone())
                 }
                 _ => panic!("this should not happen!"),
             })
@@ -4176,89 +4133,6 @@ mod tests {
         assert_eq!(slots[0].1.from, cluster_info.id());
         assert_eq!(slots[1].1.from, cluster_info.id());
         assert_eq!(slots[2].1.from, node_pubkey);
-    }
-
-    #[test]
-    fn test_push_restart_heaviest_fork() {
-        solana_logger::setup();
-        let keypair = Arc::new(Keypair::new());
-        let pubkey = keypair.pubkey();
-        let contact_info = ContactInfo::new_localhost(&pubkey, 0);
-        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
-
-        // make sure empty crds is handled correctly
-        let mut cursor = Cursor::default();
-        let heaviest_forks = cluster_info.get_restart_heaviest_fork(&mut cursor);
-        assert_eq!(heaviest_forks, vec![]);
-
-        // add new message
-        let slot1 = 53;
-        let hash1 = Hash::new_unique();
-        let percent1 = 0.015;
-        assert!(cluster_info
-            .push_restart_heaviest_fork(slot1, hash1, percent1)
-            .is_ok());
-        cluster_info.flush_push_queue();
-
-        let heaviest_forks = cluster_info.get_restart_heaviest_fork(&mut cursor);
-        assert_eq!(heaviest_forks.len(), 1);
-        let (slot, hash, percent) = &heaviest_forks[0];
-        assert_eq!(slot, &slot1);
-        assert_eq!(hash, &hash1);
-        assert!((percent.percent as f64 - percent1 * MAX_PERCENT as f64).abs() < f64::EPSILON);
-        assert_eq!(percent.from, pubkey);
-
-        // ignore bad input
-        assert_eq!(
-            cluster_info.push_restart_heaviest_fork(slot1, hash1, 1.5),
-            Err("heaviest_fork with out of bound percent, ignored: 1.5".to_string())
-        );
-        assert_eq!(
-            cluster_info.push_restart_heaviest_fork(slot1, hash1, -0.3),
-            Err("heaviest_fork with out of bound percent, ignored: -0.3".to_string())
-        );
-
-        // Test with different shred versions.
-        let mut rng = rand::thread_rng();
-        let pubkey2 = Pubkey::new_unique();
-        let mut new_node = LegacyContactInfo::new_rand(&mut rng, Some(pubkey2));
-        new_node.set_shred_version(42);
-        let slot2 = 54;
-        let hash2 = Hash::new_unique();
-        let percent2 = 0.023;
-        let entries = vec![
-            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(new_node)),
-            CrdsValue::new_unsigned(CrdsData::RestartHeaviestFork(
-                slot2,
-                hash2,
-                Percent::new(pubkey2, (percent2 * MAX_PERCENT as f64) as u16),
-            )),
-        ];
-        {
-            let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
-            for entry in entries {
-                assert!(gossip_crds
-                    .insert(entry, /*now=*/ 0, GossipRoute::LocalMessage)
-                    .is_ok());
-            }
-        }
-        // Should exclude other node's heaviest_fork because of different
-        // shred-version.
-        let heaviest_forks = cluster_info.get_restart_heaviest_fork(&mut Cursor::default());
-        assert_eq!(heaviest_forks.len(), 1);
-        assert_eq!(heaviest_forks[0].2.from, pubkey);
-        // Match shred versions.
-        {
-            let mut node = cluster_info.my_contact_info.write().unwrap();
-            node.set_shred_version(42);
-        }
-        cluster_info.push_self();
-        cluster_info.flush_push_queue();
-        // Should now include both epoch slots.
-        let heaviest_forks = cluster_info.get_restart_heaviest_fork(&mut Cursor::default());
-        assert_eq!(heaviest_forks.len(), 2);
-        assert_eq!(heaviest_forks[0].2.from, pubkey);
-        assert_eq!(heaviest_forks[1].2.from, pubkey2);
     }
 
     #[test]
