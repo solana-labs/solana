@@ -197,7 +197,7 @@ impl<'a> Kubernetes<'a> {
                 containers: vec![Container {
                     name: container_name.to_string(),
                     image: Some(image_name.to_string()),
-                    image_pull_policy: Some("IfNotPresent".to_string()), // Set the image pull policy to "Never"
+                    image_pull_policy: Some("Always".to_string()), // Set the image pull policy to "Never"
                     env: Some(env_vars),
                     command: Some(command.clone()),
                     volume_mounts: Some(vec![genesis_volume_mount, accounts_volume_mount]),
@@ -209,6 +209,7 @@ impl<'a> Kubernetes<'a> {
                     run_as_group: Some(1000),
                     ..Default::default()
                 }),
+                // restart_policy: Some("Never".to_string()),
                 // image_pull_secrets: Some(vec![LocalObjectReference {
                 //     name: Some("dockerhub-login".to_string()),
                 //     ..Default::default()

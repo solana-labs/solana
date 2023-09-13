@@ -467,6 +467,9 @@ async fn main() {
             Err(err) => error!("Error! Failed to deploy validator service. err: {:?}", err),
         }
 
+        // thread::sleep(Duration::from_secs(2));
+
+
     }
 
 
