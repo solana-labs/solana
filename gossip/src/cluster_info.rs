@@ -4211,15 +4211,11 @@ mod tests {
         // ignore bad input
         assert_eq!(
             cluster_info.push_restart_heaviest_fork(slot1, hash1, 1.5),
-            Err(format!(
-                "heaviest_fork with out of bound percent, ignored: 1.5"
-            ))
+            Err("heaviest_fork with out of bound percent, ignored: 1.5".to_string())
         );
         assert_eq!(
             cluster_info.push_restart_heaviest_fork(slot1, hash1, -0.3),
-            Err(format!(
-                "heaviest_fork with out of bound percent, ignored: -0.3"
-            ))
+            Err("heaviest_fork with out of bound percent, ignored: -0.3".to_string())
         );
 
         // Test with different shred versions.

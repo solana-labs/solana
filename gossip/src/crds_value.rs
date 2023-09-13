@@ -1163,7 +1163,7 @@ mod test {
         let keypair = Keypair::new();
         let mut epoch_slots = EpochSlots::new(keypair.pubkey(), timestamp());
         let slot = 53;
-        epoch_slots.fill(&vec![slot], timestamp());
+        epoch_slots.fill(&[slot], timestamp());
         let ix = 1;
         let value = CrdsValue::new_signed(
             CrdsData::RestartLastVotedForkSlots(ix, epoch_slots.clone(), slot, Hash::default()),
