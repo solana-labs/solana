@@ -360,7 +360,7 @@ const TESTPLUGIN2_CONFIG_PATH: &str = "/test/plugin-2/config";
 #[cfg(test)]
 const TESTPLUGIN_CONFIG: &str = "{\"libpath\": \"/test/plugin/lib\"}";
 #[cfg(test)]
-const TESTPLUGIN2_CONFIG: &str = "{\"libpath\": \"/test/plugin-2/lib\"}";
+const TESTPLUGIN2_CONFIG: &str = "{\"libpath\": \"/test/plugin-2/lib\", \"configpath\": \"/test/plugin-2/splitconfig\"}";
 
 
 
@@ -525,5 +525,16 @@ mod tests {
         let unload_result = plugin_manager_lock.unload_plugin(TESTPLUGIN_NAME);
         assert!(unload_result.is_ok());
         assert_eq!(plugin_manager_lock.plugins.len(), 0);
+    }
+
+    #[test]
+    fn test_plugin_load_with_secondary_config() {
+        // Combined config file
+        let (_, _, config_path) = load_plugin_from_config(TESTPLUGIN_CONFIG_PATH.as_ref()).unwrap();
+        assert!(config_path.eq(TESTPLUGIN_CONFIG_PATH));
+
+        // Split config file
+        let (_, _, config_path) = load_plugin_from_config(TESTPLUGIN2_CONFIG_PATH.as_ref()).unwrap();
+        assert!(config_path.eq("/test/plugin-2/splitconfig"));
     }
 }
