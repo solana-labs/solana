@@ -255,38 +255,17 @@ pub enum GeyserPluginManagerError {
     PluginStartError(String),
 }
 
-/// # Safety
-///
+
 /// This function loads the dynamically linked library specified in the path. The library
 /// must do necessary initializations.
 ///
-/// This returns the geyser plugin, the dynamic library, and the parsed config file as a &str.
-/// (The geyser plugin interface requires a &str for the on_load method).
-#[cfg(not(test))]
+/// This returns the geyser plugin, the dynamic library, and the config file as a String.
 pub(crate) fn load_plugin_from_config(
     geyser_plugin_config_file: &Path,
 ) -> Result<(Box<dyn GeyserPlugin>, Library, String), GeyserPluginManagerError> {
-    use std::{fs::File, io::Read, path::PathBuf};
-    type PluginConstructor = unsafe fn() -> *mut dyn GeyserPlugin;
-    use libloading::Symbol;
+    use std::path::PathBuf;
 
-    let mut file = match File::open(geyser_plugin_config_file) {
-        Ok(file) => file,
-        Err(err) => {
-            return Err(GeyserPluginManagerError::CannotOpenConfigFile(format!(
-                "Failed to open the plugin config file {geyser_plugin_config_file:?}, error: {err:?}"
-            )));
-        }
-    };
-
-    let mut contents = String::new();
-    if let Err(err) = file.read_to_string(&mut contents) {
-        return Err(GeyserPluginManagerError::CannotReadConfigFile(format!(
-            "Failed to read the plugin config file {geyser_plugin_config_file:?}, error: {err:?}"
-        )));
-    }
-
-    let result: serde_json::Value = match json5::from_str(&contents) {
+    let result: serde_json::Value = match json5::from_str(&load_plugin_config_from_path(geyser_plugin_config_file)?) {
         Ok(value) => value,
         Err(err) => {
             return Err(GeyserPluginManagerError::InvalidConfigFileFormat(format!(
@@ -317,8 +296,53 @@ pub(crate) fn load_plugin_from_config(
             .to_string()
     };
 
+    match load_plugin_lib_from_path(&libpath) {
+        Ok((plugin, lib)) => Ok((plugin, lib, config_file)),
+        Err(error) => Err(error)
+    }
+}
+
+/// Read a config file from the given location, and return the contents as a string
+#[cfg(not(test))]
+pub(crate) fn load_plugin_config_from_path(
+    geyser_plugin_config_file: &Path,
+) -> Result<String, GeyserPluginManagerError> {
+    use std::{fs::File, io::Read};
+
+    let mut file = match File::open(geyser_plugin_config_file) {
+        Ok(file) => file,
+        Err(err) => {
+            return Err(GeyserPluginManagerError::CannotOpenConfigFile(format!(
+                "Failed to open the plugin config file {geyser_plugin_config_file:?}, error: {err:?}"
+            )));
+        }
+    };
+
+    let mut contents = String::new();
+    if let Err(err) = file.read_to_string(&mut contents) {
+        return Err(GeyserPluginManagerError::CannotReadConfigFile(format!(
+            "Failed to read the plugin config file {geyser_plugin_config_file:?}, error: {err:?}"
+        )));
+    }
+
+    Ok(contents)
+}
+
+/// # Safety
+///
+/// This function loads the dynamically linked library specified in the path. The library
+/// must do necessary initializations.
+///
+/// This returns the geyser plugin, and the dynamic library.
+#[cfg(not(test))]
+pub(crate) fn load_plugin_lib_from_path(
+    lib_path: &std::path::PathBuf,
+) -> Result<(Box<dyn GeyserPlugin>, Library), GeyserPluginManagerError> {
+    type PluginConstructor = unsafe fn() -> *mut dyn GeyserPlugin;
+    use libloading::Symbol;
+
     let (plugin, lib) = unsafe {
-        let lib = Library::new(libpath)
+        let lib = Library::new(lib_path)
             .map_err(|e| GeyserPluginManagerError::PluginLoadError(e.to_string()))?;
         let constructor: Symbol<PluginConstructor> = lib
             .get(b"_create_plugin")
@@ -326,13 +350,19 @@ pub(crate) fn load_plugin_from_config(
         let plugin_raw = constructor();
         (Box::from_raw(plugin_raw), lib)
     };
-    Ok((plugin, lib, config_file))
+    Ok((plugin, lib))
 }
 
 #[cfg(test)]
-const TESTPLUGIN_CONFIG: &str = "TESTPLUGIN_CONFIG";
+const TESTPLUGIN_CONFIG_PATH: &str = "/test/plugin/config";
 #[cfg(test)]
-const TESTPLUGIN2_CONFIG: &str = "TESTPLUGIN2_CONFIG";
+const TESTPLUGIN2_CONFIG_PATH: &str = "/test/plugin-2/config";
+#[cfg(test)]
+const TESTPLUGIN_CONFIG: &str = "{\"libpath\": \"/test/plugin/lib\"}";
+#[cfg(test)]
+const TESTPLUGIN2_CONFIG: &str = "{\"libpath\": \"/test/plugin-2/lib\"}";
+
+
 
 // This is mocked for tests to avoid having to do IO with a dynamically linked library
 // across different architectures at test time
@@ -340,19 +370,32 @@ const TESTPLUGIN2_CONFIG: &str = "TESTPLUGIN2_CONFIG";
 /// This returns mocked values for the geyser plugin, the dynamic library, and the parsed config file as a &str.
 /// (The geyser plugin interface requires a &str for the on_load method).
 #[cfg(test)]
-pub(crate) fn load_plugin_from_config(
-    geyser_plugin_config_file: &Path,
-) -> Result<(Box<dyn GeyserPlugin>, Library, String), GeyserPluginManagerError> {
-    if geyser_plugin_config_file.ends_with(TESTPLUGIN_CONFIG) {
+pub(crate) fn load_plugin_lib_from_path(
+    lib_path: &Path,
+) -> Result<(Box<dyn GeyserPlugin>, Library), GeyserPluginManagerError> {
+    if lib_path.ends_with("/test/plugin/lib") {
         Ok(tests::dummy_plugin_and_library(
             tests::TestPlugin,
-            TESTPLUGIN_CONFIG,
         ))
-    } else if geyser_plugin_config_file.ends_with(TESTPLUGIN2_CONFIG) {
+    } else if lib_path.ends_with("/test/plugin-2/lib") {
         Ok(tests::dummy_plugin_and_library(
             tests::TestPlugin2,
-            TESTPLUGIN2_CONFIG,
         ))
+    } else {
+        Err(GeyserPluginManagerError::CannotOpenConfigFile(
+            lib_path.to_str().unwrap().to_string(),
+        ))
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn load_plugin_config_from_path(
+    geyser_plugin_config_file: &Path,
+) -> Result<String, GeyserPluginManagerError> {
+    if geyser_plugin_config_file.ends_with(TESTPLUGIN_CONFIG_PATH) {
+        Ok(TESTPLUGIN_CONFIG.to_string())
+    } else if geyser_plugin_config_file.ends_with(TESTPLUGIN2_CONFIG_PATH) {
+        Ok(TESTPLUGIN2_CONFIG.to_string())
     } else {
         Err(GeyserPluginManagerError::CannotOpenConfigFile(
             geyser_plugin_config_file.to_str().unwrap().to_string(),
@@ -364,34 +407,32 @@ pub(crate) fn load_plugin_from_config(
 mod tests {
     use {
         crate::geyser_plugin_manager::{
-            GeyserPluginManager, TESTPLUGIN2_CONFIG, TESTPLUGIN_CONFIG,
+            GeyserPluginManager, TESTPLUGIN2_CONFIG_PATH, TESTPLUGIN_CONFIG_PATH,
         },
         libloading::Library,
         solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin,
         std::sync::{Arc, RwLock},
     };
+    use crate::geyser_plugin_manager::{load_plugin_from_config, TESTPLUGIN_CONFIG};
 
     pub(super) fn dummy_plugin_and_library<P: GeyserPlugin>(
         plugin: P,
-        config_path: &'static str,
-    ) -> (Box<dyn GeyserPlugin>, Library, String) {
+    ) -> (Box<dyn GeyserPlugin>, Library) {
         (
             Box::new(plugin),
             Library::from(libloading::os::unix::Library::this()),
-            config_path.to_string(),
         )
     }
 
-    const DUMMY_NAME: &str = "dummy";
-    pub(super) const DUMMY_CONFIG: &str = "dummy_config";
-    const ANOTHER_DUMMY_NAME: &str = "another_dummy";
+    const TESTPLUGIN_NAME: &str = "dummy";
+    const TESTPLUGIN2_NAME: &str = "another_dummy";
 
     #[derive(Clone, Copy, Debug)]
     pub(super) struct TestPlugin;
 
     impl GeyserPlugin for TestPlugin {
         fn name(&self) -> &'static str {
-            DUMMY_NAME
+            TESTPLUGIN_NAME
         }
     }
 
@@ -400,7 +441,7 @@ mod tests {
 
     impl GeyserPlugin for TestPlugin2 {
         fn name(&self) -> &'static str {
-            ANOTHER_DUMMY_NAME
+            TESTPLUGIN2_NAME
         }
     }
 
@@ -411,38 +452,38 @@ mod tests {
 
         // No plugins are loaded, this should fail
         let mut plugin_manager_lock = plugin_manager.write().unwrap();
-        let reload_result = plugin_manager_lock.reload_plugin(DUMMY_NAME, DUMMY_CONFIG);
+        let reload_result = plugin_manager_lock.reload_plugin(TESTPLUGIN_NAME, TESTPLUGIN_CONFIG);
         assert_eq!(
             reload_result.unwrap_err().message,
             "The plugin you requested to reload is not loaded"
         );
 
         // Mock having loaded plugin (TestPlugin)
-        let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin, DUMMY_CONFIG);
+        let (mut plugin, lib, config) = load_plugin_from_config(TESTPLUGIN_CONFIG_PATH.as_ref()).unwrap();
         plugin.on_load(&config).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
         // plugin_manager_lock.libs.push(lib);
-        assert_eq!(plugin_manager_lock.plugins[0].name(), DUMMY_NAME);
+        assert_eq!(plugin_manager_lock.plugins[0].name(), TESTPLUGIN_NAME);
         plugin_manager_lock.plugins[0].name();
 
         // Try wrong name (same error)
         const WRONG_NAME: &str = "wrong_name";
-        let reload_result = plugin_manager_lock.reload_plugin(WRONG_NAME, DUMMY_CONFIG);
+        let reload_result = plugin_manager_lock.reload_plugin(WRONG_NAME, TESTPLUGIN_CONFIG);
         assert_eq!(
             reload_result.unwrap_err().message,
             "The plugin you requested to reload is not loaded"
         );
 
         // Now try a (dummy) reload, replacing TestPlugin with TestPlugin2
-        let reload_result = plugin_manager_lock.reload_plugin(DUMMY_NAME, TESTPLUGIN2_CONFIG);
+        let reload_result = plugin_manager_lock.reload_plugin(TESTPLUGIN_NAME, TESTPLUGIN2_CONFIG_PATH);
         assert!(reload_result.is_ok());
 
         // The plugin is now replaced with ANOTHER_DUMMY_NAME
         let plugins = plugin_manager_lock.list_plugins().unwrap();
-        assert!(plugins.iter().any(|name| name.eq(ANOTHER_DUMMY_NAME)));
+        assert!(plugins.iter().any(|name| name.eq(TESTPLUGIN2_NAME)));
         // DUMMY_NAME should no longer be present.
-        assert!(!plugins.iter().any(|name| name.eq(DUMMY_NAME)));
+        assert!(!plugins.iter().any(|name| name.eq(TESTPLUGIN_NAME)));
     }
 
     #[test]
@@ -453,20 +494,20 @@ mod tests {
 
         // Load two plugins
         // First
-        let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin, TESTPLUGIN_CONFIG);
+        let (mut plugin, lib, config) = load_plugin_from_config(TESTPLUGIN_CONFIG_PATH.as_ref()).unwrap();
         plugin.on_load(&config).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
         // Second
-        let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin2, TESTPLUGIN2_CONFIG);
+        let (mut plugin, lib, config) = load_plugin_from_config(TESTPLUGIN2_CONFIG_PATH.as_ref()).unwrap();
         plugin.on_load(&config).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
 
         // Check that both plugins are returned in the list
         let plugins = plugin_manager_lock.list_plugins().unwrap();
-        assert!(plugins.iter().any(|name| name.eq(DUMMY_NAME)));
-        assert!(plugins.iter().any(|name| name.eq(ANOTHER_DUMMY_NAME)));
+        assert!(plugins.iter().any(|name| name.eq(TESTPLUGIN_NAME)));
+        assert!(plugins.iter().any(|name| name.eq(TESTPLUGIN2_NAME)));
     }
 
     #[test]
@@ -476,12 +517,12 @@ mod tests {
         let mut plugin_manager_lock = plugin_manager.write().unwrap();
 
         // Load rpc call
-        let load_result = plugin_manager_lock.load_plugin(TESTPLUGIN_CONFIG);
+        let load_result = plugin_manager_lock.load_plugin(TESTPLUGIN_CONFIG_PATH);
         assert!(load_result.is_ok());
         assert_eq!(plugin_manager_lock.plugins.len(), 1);
 
         // Unload rpc call
-        let unload_result = plugin_manager_lock.unload_plugin(DUMMY_NAME);
+        let unload_result = plugin_manager_lock.unload_plugin(TESTPLUGIN_NAME);
         assert!(unload_result.is_ok());
         assert_eq!(plugin_manager_lock.plugins.len(), 0);
     }
