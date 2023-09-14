@@ -1266,7 +1266,6 @@ impl Validator {
             match wen_restart(
                 &config.wen_restart,
                 &config.snapshot_config,
-                &accounts_background_request_sender,
                 &genesis_config.hash(),
                 last_vote,
                 blockstore.clone(),

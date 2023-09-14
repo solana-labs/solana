@@ -90,7 +90,6 @@ fn select_heaviest_fork(
 pub fn wen_restart(
     wen_restart_path: &Option<PathBuf>,
     snapshot_config: &SnapshotConfig,
-    accounts_background_request_sender: &AbsRequestSender,
     genesis_config_hash: &Hash,
     last_vote: VoteTransaction,
     blockstore: Arc<Blockstore>,
@@ -232,7 +231,7 @@ pub fn wen_restart(
     let new_root_bank_hash;
     let new_shred_version;
     {
-        let mut my_bank_forks = bank_forks.write().unwrap();
+        let my_bank_forks = bank_forks.write().unwrap();
         let root_bank = my_bank_forks.root_bank();
         root_bank.register_hard_fork(my_selected_slot);
         let new_root_bank = my_bank_forks.get(my_selected_slot).unwrap();
