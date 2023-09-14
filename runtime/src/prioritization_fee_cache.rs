@@ -463,7 +463,7 @@ mod tests {
 
     // update fee cache is asynchronous, this test helper blocks until update is completed.
     fn sync_update<'a>(
-        prioritization_fee_cache: &mut PrioritizationFeeCache,
+        prioritization_fee_cache: &PrioritizationFeeCache,
         bank: Arc<Bank>,
         txs: impl Iterator<Item = &'a SanitizedTransaction> + ExactSizeIterator,
     ) {
@@ -488,7 +488,7 @@ mod tests {
 
     // finalization is asynchronous, this test helper blocks until finalization is completed.
     fn sync_finalize_priority_fee_for_test(
-        prioritization_fee_cache: &mut PrioritizationFeeCache,
+        prioritization_fee_cache: &PrioritizationFeeCache,
         slot: Slot,
         bank_id: BankId,
     ) {
@@ -532,13 +532,8 @@ mod tests {
         let bank = Arc::new(Bank::default_for_tests());
         let slot = bank.slot();
 
-<<<<<<< HEAD
-        let mut prioritization_fee_cache = PrioritizationFeeCache::default();
-        sync_update(&mut prioritization_fee_cache, bank, txs.iter());
-=======
         let prioritization_fee_cache = PrioritizationFeeCache::default();
         sync_update(&prioritization_fee_cache, bank.clone(), txs.iter());
->>>>>>> 4f4ce69f5f (purge duplicated bank prioritization fee from cache (#33062))
 
         // assert block minimum fee and account a, b, c fee accordingly
         {
@@ -559,11 +554,7 @@ mod tests {
 
         // assert after prune, account a and c should be removed from cache to save space
         {
-<<<<<<< HEAD
-            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, slot);
-=======
             sync_finalize_priority_fee_for_test(&prioritization_fee_cache, slot, bank.bank_id());
->>>>>>> 4f4ce69f5f (purge duplicated bank prioritization fee from cache (#33062))
             let fee = PrioritizationFeeCache::get_prioritization_fee(
                 prioritization_fee_cache.cache.clone(),
                 &slot,
@@ -625,7 +616,7 @@ mod tests {
         let bank2 = Arc::new(Bank::new_from_parent(&bank, &collector, 2));
         let bank3 = Arc::new(Bank::new_from_parent(&bank, &collector, 3));
 
-        let mut prioritization_fee_cache = PrioritizationFeeCache::default();
+        let prioritization_fee_cache = PrioritizationFeeCache::default();
 
         // Assert no minimum fee from empty cache
         assert!(prioritization_fee_cache
@@ -657,11 +648,7 @@ mod tests {
                     &Pubkey::new_unique(),
                 ),
             ];
-<<<<<<< HEAD
-            sync_update(&mut prioritization_fee_cache, bank1, txs.iter());
-=======
             sync_update(&prioritization_fee_cache, bank1.clone(), txs.iter());
->>>>>>> 4f4ce69f5f (purge duplicated bank prioritization fee from cache (#33062))
             // before block is marked as completed
             assert!(prioritization_fee_cache
                 .get_prioritization_fees(&[])
@@ -682,11 +669,7 @@ mod tests {
                 .get_prioritization_fees(&[write_account_a, write_account_b, write_account_c])
                 .is_empty());
             // after block is completed
-<<<<<<< HEAD
-            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, 1);
-=======
             sync_finalize_priority_fee_for_test(&prioritization_fee_cache, 1, bank1.bank_id());
->>>>>>> 4f4ce69f5f (purge duplicated bank prioritization fee from cache (#33062))
             assert_eq!(
                 hashmap_of(vec![(1, 1)]),
                 prioritization_fee_cache.get_prioritization_fees(&[])
@@ -728,11 +711,7 @@ mod tests {
                     &Pubkey::new_unique(),
                 ),
             ];
-<<<<<<< HEAD
-            sync_update(&mut prioritization_fee_cache, bank2, txs.iter());
-=======
             sync_update(&prioritization_fee_cache, bank2.clone(), txs.iter());
->>>>>>> 4f4ce69f5f (purge duplicated bank prioritization fee from cache (#33062))
             // before block is marked as completed
             assert_eq!(
                 hashmap_of(vec![(1, 1)]),
@@ -764,11 +743,7 @@ mod tests {
                 ])
             );
             // after block is completed
-<<<<<<< HEAD
-            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, 2);
-=======
             sync_finalize_priority_fee_for_test(&prioritization_fee_cache, 2, bank2.bank_id());
->>>>>>> 4f4ce69f5f (purge duplicated bank prioritization fee from cache (#33062))
             assert_eq!(
                 hashmap_of(vec![(2, 3), (1, 1)]),
                 prioritization_fee_cache.get_prioritization_fees(&[]),
@@ -810,11 +785,7 @@ mod tests {
                     &Pubkey::new_unique(),
                 ),
             ];
-<<<<<<< HEAD
-            sync_update(&mut prioritization_fee_cache, bank3, txs.iter());
-=======
             sync_update(&prioritization_fee_cache, bank3.clone(), txs.iter());
->>>>>>> 4f4ce69f5f (purge duplicated bank prioritization fee from cache (#33062))
             // before block is marked as completed
             assert_eq!(
                 hashmap_of(vec![(2, 3), (1, 1)]),
@@ -846,11 +817,7 @@ mod tests {
                 ]),
             );
             // after block is completed
-<<<<<<< HEAD
-            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, 3);
-=======
             sync_finalize_priority_fee_for_test(&prioritization_fee_cache, 3, bank3.bank_id());
->>>>>>> 4f4ce69f5f (purge duplicated bank prioritization fee from cache (#33062))
             assert_eq!(
                 hashmap_of(vec![(3, 5), (2, 3), (1, 1)]),
                 prioritization_fee_cache.get_prioritization_fees(&[]),
@@ -898,8 +865,8 @@ mod tests {
         let bank = bank_forks.working_bank();
         let collector = solana_sdk::pubkey::new_rand();
         let slot: Slot = 999;
-        let bank1 = Arc::new(Bank::new_from_parent(bank.clone(), &collector, slot));
-        let bank2 = Arc::new(Bank::new_from_parent(bank, &collector, slot));
+        let bank1 = Arc::new(Bank::new_from_parent(&bank, &collector, slot));
+        let bank2 = Arc::new(Bank::new_from_parent(&bank, &collector, slot));
 
         let prioritization_fee_cache = PrioritizationFeeCache::default();
 
