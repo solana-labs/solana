@@ -1,9 +1,6 @@
 use {
     crate::{boxed_error, initialize_globals, SOLANA_ROOT},
-    base64::{
-        engine::general_purpose,
-        Engine as _,
-    },
+    base64::{engine::general_purpose, Engine as _},
     bip39::{Language, Mnemonic, MnemonicType, Seed},
     log::*,
     solana_clap_v3_utils::{input_parsers::STDOUT_OUTFILE_TOKEN, keygen},
@@ -20,10 +17,7 @@ use {
         poh_config::PohConfig,
         pubkey::Pubkey,
         rent::Rent,
-        signature::{
-            keypair_from_seed, write_keypair, write_keypair_file, Keypair,
-            Signer,
-        },
+        signature::{keypair_from_seed, write_keypair, write_keypair_file, Keypair, Signer},
         signer::keypair::read_keypair_file,
         stake::state::StakeStateV2,
         system_program, timing,
@@ -31,17 +25,13 @@ use {
     solana_stake_program::stake_state,
     solana_vote_program::vote_state::{self, VoteState},
     std::{
+        collections::HashMap,
         error::Error,
         fs::File,
-        io::{
-            Read,
-            BufRead,
-            BufReader,
-        },
+        io::{BufRead, BufReader, Read},
         path::PathBuf,
         process::{self, Command},
         time::Duration,
-        collections::HashMap,
     },
 };
 
@@ -88,11 +78,16 @@ fn fetch_spl(fetch_spl_file: &PathBuf) -> Result<(), Box<dyn Error>> {
     if output.status.success() {
         return Ok(());
     } else {
-        return Err(boxed_error!(format!("Failed to fun fetch-spl.sh script: {}", String::from_utf8_lossy(&output.stderr))))
+        return Err(boxed_error!(format!(
+            "Failed to fun fetch-spl.sh script: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )));
     }
 }
 
-fn parse_spl_genesis_file(spl_file: &PathBuf) -> Result<HashMap<String, Vec<SPLGenesisArgType>>, Box<dyn Error>> {
+fn parse_spl_genesis_file(
+    spl_file: &PathBuf,
+) -> Result<HashMap<String, Vec<SPLGenesisArgType>>, Box<dyn Error>> {
     if let Ok(file) = File::open(spl_file) {
         let reader = BufReader::new(file);
 
@@ -146,7 +141,11 @@ fn parse_spl_genesis_file(spl_file: &PathBuf) -> Result<HashMap<String, Vec<SPLG
                             .or_insert(Vec::new())
                             .push(value_tuple);
                     } else {
-                        panic!("Invalid argument passed in! flag: {}, value_parts: {}", flag, value_parts.len());
+                        panic!(
+                            "Invalid argument passed in! flag: {}, value_parts: {}",
+                            flag,
+                            value_parts.len()
+                        );
                     }
                 }
             }
@@ -168,7 +167,7 @@ pub struct Genesis<'a> {
     pub validator_keypairs: Vec<ValidatorAccountKeypairs>,
     pub faucet_keypair: Option<Keypair>,
     pub genesis_config: Option<GenesisConfig>,
-    pub all_pubkeys: Vec<Pubkey>
+    pub all_pubkeys: Vec<Pubkey>,
 }
 
 impl<'a> Genesis<'a> {
@@ -185,7 +184,7 @@ impl<'a> Genesis<'a> {
             validator_keypairs: Vec::default(),
             faucet_keypair: None,
             genesis_config: None,
-            all_pubkeys: Vec::default()
+            all_pubkeys: Vec::default(),
         }
     }
 
@@ -205,9 +204,9 @@ impl<'a> Genesis<'a> {
     }
 
     pub fn generate_accounts(
-        &mut self, 
-        validator_type: &str, 
-        number_of_accounts: i32
+        &mut self,
+        validator_type: &str,
+        number_of_accounts: i32,
     ) -> Result<(), Box<dyn Error>> {
         let mut filename_prefix = "validator".to_string();
         if validator_type == "bootstrap" {
@@ -215,7 +214,10 @@ impl<'a> Genesis<'a> {
         } else if validator_type == "validator" {
             filename_prefix = "validator".to_string();
         } else {
-            return Err(boxed_error!(format!("Invalid validator type: {}", validator_type)));
+            return Err(boxed_error!(format!(
+                "Invalid validator type: {}",
+                validator_type
+            )));
         }
 
         for i in 0..number_of_accounts {
@@ -225,7 +227,12 @@ impl<'a> Genesis<'a> {
         Ok(())
     }
 
-    fn generate_account(&mut self, validator_type: &str, filename_prefix: &str, i: i32) -> Result<(), Box<dyn Error>> {
+    fn generate_account(
+        &mut self,
+        validator_type: &str,
+        filename_prefix: &str,
+        i: i32,
+    ) -> Result<(), Box<dyn Error>> {
         let account_types = vec!["identity", "vote-account", "stake-account"];
 
         let mut identity: Option<Keypair> = None;
@@ -238,7 +245,10 @@ impl<'a> Genesis<'a> {
             } else if validator_type == "validator" {
                 filename = format!("{}-{}-{}.json", filename_prefix, account, i);
             } else {
-                return Err(boxed_error!(format!("Invalid validator type: {}", validator_type)));
+                return Err(boxed_error!(format!(
+                    "Invalid validator type: {}",
+                    validator_type
+                )));
             }
 
             let outfile = self.config_dir.join(filename);
@@ -270,7 +280,8 @@ impl<'a> Genesis<'a> {
             self.validator_keypairs.push(ValidatorAccountKeypairs {
                 vote_account: vote
                     .ok_or_else(|| boxed_error!("vote-account keypair not initialized"))?,
-                identity: identity.ok_or_else(|| boxed_error!("identity keypair not initialized"))?,
+                identity: identity
+                    .ok_or_else(|| boxed_error!("identity keypair not initialized"))?,
                 stake_account: stake
                     .ok_or_else(|| boxed_error!("stake-account keypair not initialized"))?,
             });
@@ -332,11 +343,8 @@ impl<'a> Genesis<'a> {
         };
 
         let enable_warmup_epochs = true; //  TODO: fix for flag
-        let epoch_schedule = EpochSchedule::custom(
-            slots_per_epoch,
-            slots_per_epoch,
-            enable_warmup_epochs, 
-        );
+        let epoch_schedule =
+            EpochSchedule::custom(slots_per_epoch, slots_per_epoch, enable_warmup_epochs);
 
         let mut genesis_config = GenesisConfig {
             epoch_schedule,
@@ -423,7 +431,7 @@ impl<'a> Genesis<'a> {
                 Ok(args) => args,
                 Err(err) => return Err(err),
             };
-        
+
             // Now you have a HashMap where the keys are flags and the values are vectors of values.
             // You can access them as needed.
             if let Some(values) = parsed_args.get("--bpf-program") {
@@ -440,7 +448,9 @@ impl<'a> Genesis<'a> {
                             genesis_config.add_account(
                                 address,
                                 AccountSharedData::from(Account {
-                                    lamports: genesis_config.rent.minimum_balance(program_data.len()),
+                                    lamports: genesis_config
+                                        .rent
+                                        .minimum_balance(program_data.len()),
                                     data: program_data,
                                     executable: true,
                                     owner: loader,
@@ -448,14 +458,19 @@ impl<'a> Genesis<'a> {
                                 }),
                             );
                         }
-                        _ => panic!("Incorrect number of values passed in for --bpf-program")
+                        _ => panic!("Incorrect number of values passed in for --bpf-program"),
                     }
                 }
             }
-            if let Some(values) =  parsed_args.get("upgradeable-program") {
+            if let Some(values) = parsed_args.get("upgradeable-program") {
                 for value in values {
                     match value {
-                        SPLGenesisArgType::UpgradeableProgram(address, loader, program, upgrade_authority) => {
+                        SPLGenesisArgType::UpgradeableProgram(
+                            address,
+                            loader,
+                            program,
+                            upgrade_authority,
+                        ) => {
                             debug!(
                                 "Flag: --upgradeable-program, Address: {}, Loader: {}, Program: {}, upgrade_authority: {}",
                                 address, loader, program, upgrade_authority
@@ -477,34 +492,40 @@ impl<'a> Genesis<'a> {
                                         })
                                 })
                             };
-                
+
                             let (programdata_address, _) =
                                 Pubkey::find_program_address(&[address.as_ref()], &loader);
-                            let mut program_data = bincode::serialize(&UpgradeableLoaderState::ProgramData {
-                                slot: 0,
-                                upgrade_authority_address: Some(upgrade_authority_address),
-                            })
-                            .unwrap();
+                            let mut program_data =
+                                bincode::serialize(&UpgradeableLoaderState::ProgramData {
+                                    slot: 0,
+                                    upgrade_authority_address: Some(upgrade_authority_address),
+                                })
+                                .unwrap();
                             program_data.extend_from_slice(&program_data_elf);
                             genesis_config.add_account(
                                 programdata_address,
                                 AccountSharedData::from(Account {
-                                    lamports: genesis_config.rent.minimum_balance(program_data.len()),
+                                    lamports: genesis_config
+                                        .rent
+                                        .minimum_balance(program_data.len()),
                                     data: program_data,
                                     owner: loader,
                                     executable: false,
                                     rent_epoch: 0,
                                 }),
                             );
-                
-                            let program_data = bincode::serialize(&UpgradeableLoaderState::Program {
-                                programdata_address,
-                            })
-                            .unwrap();
+
+                            let program_data =
+                                bincode::serialize(&UpgradeableLoaderState::Program {
+                                    programdata_address,
+                                })
+                                .unwrap();
                             genesis_config.add_account(
                                 address,
                                 AccountSharedData::from(Account {
-                                    lamports: genesis_config.rent.minimum_balance(program_data.len()),
+                                    lamports: genesis_config
+                                        .rent
+                                        .minimum_balance(program_data.len()),
                                     data: program_data,
                                     owner: loader,
                                     executable: true,
@@ -512,7 +533,9 @@ impl<'a> Genesis<'a> {
                                 }),
                             );
                         }
-                        _ => panic!("Incorrect number of values passed in for --upgradeable-program")
+                        _ => {
+                            panic!("Incorrect number of values passed in for --upgradeable-program")
+                        }
                     }
                 }
             }
@@ -573,8 +596,8 @@ mod tests {
     use {
         super::*,
         solana_sdk::{
-            signature::{Keypair, Signer},
             pubkey::Pubkey,
+            signature::{Keypair, Signer},
         },
         std::path::PathBuf,
     };
@@ -626,7 +649,3 @@ mod tests {
         let _ignored = std::fs::remove_file(path);
     }
 }
-
-/*
-1) Create bootstrap validator keys ->
-*/

@@ -1,18 +1,13 @@
-use k8s_openapi::api::core::v1::PodSecurityContext;
-
 use {
     crate::{boxed_error, SOLANA_ROOT},
-    base64::{
-        engine::general_purpose,
-        Engine as _,
-    },
+    base64::{engine::general_purpose, Engine as _},
     k8s_openapi::{
         api::{
             apps::v1::{ReplicaSet, ReplicaSetSpec},
             core::v1::{
-                ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource,
-                Namespace, ObjectFieldSelector, PodSpec, PodTemplateSpec,
-                Secret, Service, SecretVolumeSource, ServicePort, ServiceSpec, Volume, VolumeMount,
+                ConfigMap, ConfigMapVolumeSource, Container, EnvVar, EnvVarSource, Namespace,
+                ObjectFieldSelector, PodSecurityContext, PodSpec, PodTemplateSpec, Secret,
+                SecretVolumeSource, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
             },
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
@@ -33,16 +28,13 @@ pub struct Kubernetes<'a> {
 
 impl<'a> Kubernetes<'a> {
     pub async fn new(namespace: &'a str) -> Kubernetes<'a> {
-
         Kubernetes {
             client: Client::try_default().await.unwrap(),
             namespace: namespace,
         }
     }
-    
-    pub async fn create_genesis_config_map(
-        &self,
-    ) -> Result<ConfigMap, kube::Error> {
+
+    pub async fn create_genesis_config_map(&self) -> Result<ConfigMap, kube::Error> {
         let mut metadata = ObjectMeta::default();
         metadata.name = Some("genesis-config".to_string());
         let genesis_tar_path = SOLANA_ROOT.join("config-k8s/bootstrap-validator/genesis.tar.bz2");
@@ -51,7 +43,7 @@ impl<'a> Kubernetes<'a> {
 
         match genesis_tar_file.read_to_end(&mut buffer) {
             Ok(_) => (),
-            Err(err) => panic!("failed to read genesis.tar.bz: {}", err)
+            Err(err) => panic!("failed to read genesis.tar.bz: {}", err),
         }
 
         // Define the data for the ConfigMap
@@ -86,11 +78,7 @@ impl<'a> Kubernetes<'a> {
         Ok(false)
     }
 
-    pub fn create_selector(
-        &mut self,
-        key: &str,
-        value: &str,
-    ) -> BTreeMap<String, String> {
+    pub fn create_selector(&mut self, key: &str, value: &str) -> BTreeMap<String, String> {
         let mut btree = BTreeMap::new();
         btree.insert(key.to_string(), value.to_string());
         btree
@@ -132,10 +120,10 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         };
 
-
         // let command = vec!["/workspace/start-bootstrap-validator.sh".to_string()];
         // let command = vec!["sleep".to_string(), "3600".to_string()];
-        let command = vec!["/home/solana/k8s-cluster/src/scripts/bootstrap-startup-script.sh".to_string(), ];
+        let command =
+            vec!["/home/solana/k8s-cluster/src/scripts/bootstrap-startup-script.sh".to_string()];
         // let command = vec!["nohup"]
 
         self.create_replicas_set(
@@ -185,7 +173,6 @@ impl<'a> Kubernetes<'a> {
             mount_path: "/home/solana/genesis".to_string(),
             ..Default::default()
         };
-
 
         // Define the pod spec
         let pod_spec = PodTemplateSpec {
@@ -245,10 +232,7 @@ impl<'a> Kubernetes<'a> {
         secrets_api.create(&PostParams::default(), &secret).await
     }
 
-    pub fn create_bootstrap_secret(
-        &self,
-        secret_name: &str,
-    ) -> Result<Secret, Box<dyn Error>> {
+    pub fn create_bootstrap_secret(&self, secret_name: &str) -> Result<Secret, Box<dyn Error>> {
         let faucet_key_path = SOLANA_ROOT.join("config-k8s");
         let faucet_keypair = std::fs::read(faucet_key_path.join("faucet.json"))
             .expect(format!("Failed to read faucet.json file! at: {:?}", faucet_key_path).as_str());
@@ -263,10 +247,42 @@ impl<'a> Kubernetes<'a> {
             .expect(format!("Failed to read stake-account.json file! at: {:?}", key_path).as_str());
 
         let mut data = BTreeMap::new();
-        data.insert("identity.base64".to_string(), ByteString(general_purpose::STANDARD.encode(identity_keypair).as_bytes().to_vec()));
-        data.insert("vote.base64".to_string(), ByteString(general_purpose::STANDARD.encode(vote_keypair).as_bytes().to_vec()));
-        data.insert("stake.base64".to_string(), ByteString(general_purpose::STANDARD.encode(stake_keypair).as_bytes().to_vec()));
-        data.insert("faucet.base64".to_string(), ByteString(general_purpose::STANDARD.encode(faucet_keypair).as_bytes().to_vec()));
+        data.insert(
+            "identity.base64".to_string(),
+            ByteString(
+                general_purpose::STANDARD
+                    .encode(identity_keypair)
+                    .as_bytes()
+                    .to_vec(),
+            ),
+        );
+        data.insert(
+            "vote.base64".to_string(),
+            ByteString(
+                general_purpose::STANDARD
+                    .encode(vote_keypair)
+                    .as_bytes()
+                    .to_vec(),
+            ),
+        );
+        data.insert(
+            "stake.base64".to_string(),
+            ByteString(
+                general_purpose::STANDARD
+                    .encode(stake_keypair)
+                    .as_bytes()
+                    .to_vec(),
+            ),
+        );
+        data.insert(
+            "faucet.base64".to_string(),
+            ByteString(
+                general_purpose::STANDARD
+                    .encode(faucet_keypair)
+                    .as_bytes()
+                    .to_vec(),
+            ),
+        );
 
         let secret = Secret {
             metadata: ObjectMeta {
@@ -280,10 +296,7 @@ impl<'a> Kubernetes<'a> {
         Ok(secret)
     }
 
-    pub fn create_validator_secret(
-        &self,
-        validator_index: i32,
-    ) -> Result<Secret, Box<dyn Error>> {
+    pub fn create_validator_secret(&self, validator_index: i32) -> Result<Secret, Box<dyn Error>> {
         let secret_name = format!("validator-accounts-secret-{}", validator_index);
         let key_path = SOLANA_ROOT.join("config-k8s");
 
@@ -298,7 +311,15 @@ impl<'a> Kubernetes<'a> {
             }
             let keypair = std::fs::read(key_path.join(file_name.clone()))
                 .expect(format!("Failed to read {} file! at: {:?}", file_name, key_path).as_str());
-            data.insert(format!("{}.base64", account), ByteString(general_purpose::STANDARD.encode(keypair).as_bytes().to_vec()));
+            data.insert(
+                format!("{}.base64", account),
+                ByteString(
+                    general_purpose::STANDARD
+                        .encode(keypair)
+                        .as_bytes()
+                        .to_vec(),
+                ),
+            );
         }
         let secret = Secret {
             metadata: ObjectMeta {
@@ -310,7 +331,6 @@ impl<'a> Kubernetes<'a> {
         };
 
         Ok(secret)
-
     }
 
     pub async fn deploy_replicas_set(
@@ -449,11 +469,10 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         };
 
-
-
         // let command = vec!["/workspace/start-validator.sh".to_string()];
         // let command = vec!["sleep".to_string(), "3600".to_string()];
-        let command = vec!["/home/solana/k8s-cluster/src/scripts/validator-startup-script.sh".to_string(), ];
+        let command =
+            vec!["/home/solana/k8s-cluster/src/scripts/validator-startup-script.sh".to_string()];
 
         self.create_replicas_set(
             format!("validator-{}", validator_index).as_str(),
@@ -471,8 +490,8 @@ impl<'a> Kubernetes<'a> {
     }
 
     pub fn create_validator_service(
-        &self, 
-        service_name: &str, 
+        &self,
+        service_name: &str,
         label_selector: &BTreeMap<String, String>,
     ) -> Service {
         self.create_service(service_name, label_selector)
