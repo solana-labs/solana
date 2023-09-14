@@ -103,6 +103,19 @@ pub(crate) fn new_warmup_cooldown_rate_epoch(invoke_context: &InvokeContext) -> 
         .new_warmup_cooldown_rate_epoch(epoch_schedule.as_ref())
 }
 
+fn get_stake_status(
+    invoke_context: &InvokeContext,
+    stake: &Stake,
+    clock: &Clock,
+) -> Result<StakeActivationStatus, InstructionError> {
+    let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
+    Ok(stake.delegation.stake_activating_and_deactivating(
+        clock.epoch,
+        Some(&stake_history),
+        new_warmup_cooldown_rate_epoch(invoke_context),
+    ))
+}
+
 fn redelegate_stake(
     invoke_context: &InvokeContext,
     stake: &mut Stake,
@@ -925,12 +938,7 @@ pub fn redelegate(
 
     let (stake_meta, effective_stake) =
         if let StakeStateV2::Stake(meta, stake, _stake_flags) = stake_account.get_state()? {
-            let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
-            let status = stake.delegation.stake_activating_and_deactivating(
-                clock.epoch,
-                Some(&stake_history),
-                new_warmup_cooldown_rate_epoch(invoke_context),
-            );
+            let status = get_stake_status(invoke_context, &stake, &clock)?;
             if status.effective == 0 || status.activating != 0 || status.deactivating != 0 {
                 ic_msg!(invoke_context, "stake is not active");
                 return Err(StakeError::RedelegateTransientOrInactiveStake.into());
