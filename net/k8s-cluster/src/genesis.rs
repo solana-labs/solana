@@ -1,12 +1,10 @@
 use {
     crate::{boxed_error, initialize_globals, SOLANA_ROOT},
-    clap::{App, Arg, ArgMatches},
     base64::{
         engine::general_purpose,
         Engine as _,
     },
     bip39::{Language, Mnemonic, MnemonicType, Seed},
-    itertools::Itertools,
     log::*,
     solana_clap_v3_utils::{input_parsers::STDOUT_OUTFILE_TOKEN, keygen},
     solana_entry::poh::compute_hashes_per_tick,
@@ -41,7 +39,7 @@ use {
             BufReader,
         },
         path::PathBuf,
-        process,
+        process::{self, Command},
         time::Duration,
         collections::HashMap,
     },
@@ -78,6 +76,20 @@ fn generate_keypair() -> Result<Keypair, Box<dyn Error>> {
     let mnemonic = Mnemonic::new(mnemonic_type, Language::English);
     let seed = Seed::new(&mnemonic, &passphrase);
     keypair_from_seed(seed.as_bytes())
+}
+
+fn fetch_spl(fetch_spl_file: &PathBuf) -> Result<(), Box<dyn Error>> {
+    let output = Command::new("bash")
+        .arg(fetch_spl_file)
+        .output() // Capture the output of the script
+        .expect("Failed to run fetch-spl.sh script");
+
+    // Check if the script execution was successful
+    if output.status.success() {
+        return Ok(());
+    } else {
+        return Err(boxed_error!(format!("Failed to fun fetch-spl.sh script: {}", String::from_utf8_lossy(&output.stderr))))
+    }
 }
 
 fn parse_spl_genesis_file(spl_file: &PathBuf) -> Result<HashMap<String, Vec<SPLGenesisArgType>>, Box<dyn Error>> {
@@ -230,7 +242,7 @@ impl<'a> Genesis<'a> {
             }
 
             let outfile = self.config_dir.join(filename);
-            info!("outfile: {:?}", outfile);
+            trace!("outfile: {:?}", outfile);
 
             let keypair = match generate_keypair() {
                 Ok(keypair) => keypair,
@@ -400,6 +412,9 @@ impl<'a> Genesis<'a> {
             program_data
         };
 
+        let fetch_spl_file = SOLANA_ROOT.join("fetch-spl.sh");
+        fetch_spl(&fetch_spl_file)?;
+
         // add in spl stuff
         let spl_file = SOLANA_ROOT.join("spl-genesis-args.sh");
         // Check if the file exists before reading it
@@ -415,7 +430,7 @@ impl<'a> Genesis<'a> {
                 for value in values {
                     match value {
                         SPLGenesisArgType::BpfProgram(address, loader, program) => {
-                            info!(
+                            debug!(
                                 "Flag: --bpf-program, Address: {}, Loader: {}, Program: {}",
                                 address, loader, program
                             );
@@ -441,7 +456,7 @@ impl<'a> Genesis<'a> {
                 for value in values {
                     match value {
                         SPLGenesisArgType::UpgradeableProgram(address, loader, program, upgrade_authority) => {
-                            info!(
+                            debug!(
                                 "Flag: --upgradeable-program, Address: {}, Loader: {}, Program: {}, upgrade_authority: {}",
                                 address, loader, program, upgrade_authority
                             );
