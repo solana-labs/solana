@@ -182,6 +182,7 @@ impl OptimisticallyConfirmedBankTracker {
         last_notified_confirmed_slot: &mut Slot,
         pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
         slot_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
+        prioritization_fee_cache: &PrioritizationFeeCache,
     ) {
         if bank.is_frozen() {
             if bank.slot() > *last_notified_confirmed_slot {
@@ -195,6 +196,9 @@ impl OptimisticallyConfirmedBankTracker {
                     slot_notification_subscribers,
                     SlotNotification::OptimisticallyConfirmed(bank.slot()),
                 );
+
+                // finalize block's minimum prioritization fee cache for this bank
+                prioritization_fee_cache.finalize_priority_fee(bank.slot());
             }
         } else if bank.slot() > bank_forks.read().unwrap().root_bank().slot() {
             pending_optimistically_confirmed_banks.insert(bank.slot());
@@ -210,6 +214,7 @@ impl OptimisticallyConfirmedBankTracker {
         last_notified_confirmed_slot: &mut Slot,
         pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
         slot_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
+        prioritization_fee_cache: &PrioritizationFeeCache,
     ) {
         for confirmed_bank in bank.clone().parents_inclusive().iter().rev() {
             if confirmed_bank.slot() > slot_threshold {
@@ -224,6 +229,7 @@ impl OptimisticallyConfirmedBankTracker {
                     last_notified_confirmed_slot,
                     pending_optimistically_confirmed_banks,
                     slot_notification_subscribers,
+                    prioritization_fee_cache,
                 );
             }
         }
@@ -292,6 +298,7 @@ impl OptimisticallyConfirmedBankTracker {
                             last_notified_confirmed_slot,
                             pending_optimistically_confirmed_banks,
                             slot_notification_subscribers,
+                            prioritization_fee_cache,
                         );
 
                         *highest_confirmed_slot = slot;
@@ -308,9 +315,6 @@ impl OptimisticallyConfirmedBankTracker {
                     slot,
                     timestamp: timestamp(),
                 });
-
-                // finalize block's minimum prioritization fee cache for this bank
-                prioritization_fee_cache.finalize_priority_fee(slot);
             }
             BankNotification::Frozen(bank) => {
                 let frozen_slot = bank.slot();
@@ -349,6 +353,7 @@ impl OptimisticallyConfirmedBankTracker {
                         last_notified_confirmed_slot,
                         pending_optimistically_confirmed_banks,
                         slot_notification_subscribers,
+                        prioritization_fee_cache,
                     );
 
                     let mut w_optimistically_confirmed_bank =
