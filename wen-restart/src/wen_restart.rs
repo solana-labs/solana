@@ -238,7 +238,6 @@ pub fn wen_restart(
         let new_root_bank = my_bank_forks.get(my_selected_slot).unwrap();
         new_root_bank.rehash();
         new_root_bank_hash = new_root_bank.hash();
-        new_root_bank.rc.accounts.accounts_db.add_root(my_selected_slot);
         bank_to_incremental_snapshot_archive(
             snapshot_config.bank_snapshots_dir.clone(),
             &new_root_bank,
