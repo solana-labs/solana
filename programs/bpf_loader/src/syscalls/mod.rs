@@ -43,7 +43,7 @@ use {
             remaining_compute_units_syscall_enabled, stop_sibling_instruction_search_at_parent,
             stop_truncating_strings_in_syscalls, switch_to_new_elf_parser,
         },
-        hash::{Hasher, HASH_BYTES, Hash},
+        hash::{Hash, Hasher, HASH_BYTES},
         instruction::{
             AccountMeta, InstructionError, ProcessedSiblingInstruction,
             TRANSACTION_LEVEL_STACK_HEIGHT,
@@ -173,7 +173,6 @@ impl HasherImpl for Sha256Hasher {
     fn get_max_slices(compute_budget: &ComputeBudget) -> u64 {
         compute_budget.sha256_max_slices
     }
-
 }
 
 impl HasherImpl for Blake3Hasher {
@@ -201,7 +200,6 @@ impl HasherImpl for Blake3Hasher {
     fn get_max_slices(compute_budget: &ComputeBudget) -> u64 {
         compute_budget.sha256_max_slices
     }
-
 }
 
 impl HasherImpl for Keccak256Hasher {
@@ -229,7 +227,6 @@ impl HasherImpl for Keccak256Hasher {
     fn get_max_slices(compute_budget: &ComputeBudget) -> u64 {
         compute_budget.sha256_max_slices
     }
-    
 }
 
 fn consume_compute_meter(invoke_context: &InvokeContext, amount: u64) -> Result<(), Error> {
