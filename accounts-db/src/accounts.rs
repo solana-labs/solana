@@ -38,7 +38,7 @@ use {
             remove_congestion_multiplier_from_fee_calculation,
             simplify_writable_program_account_check, FeatureSet,
         },
-        fee::FeeStructure,
+        fee::{FeeBudgetLimits, FeeStructure},
         genesis_config::ClusterType,
         message::{
             v0::{LoadedAddresses, MessageAddressTableLookup},
@@ -246,13 +246,6 @@ impl Accounts {
         feature_set: &FeatureSet,
     ) -> Result<Option<NonZeroUsize>> {
         if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
-            //            let transaction_meta = TransactionMeta::process_compute_budget_instruction(
-            //                tx.message().program_instructions_iter(),
-            //                !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-            //                true, // don't reject txs that use request heap size ix
-            //                feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-            //            )
-            // TODO - wire in ClusterType, or have feature activated in mainnet first
             let transaction_meta = tx
                 .get_transaction_meta(feature_set, None)
                 .unwrap_or_default();
@@ -721,10 +714,17 @@ impl Accounts {
                             hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
                         });
                     let fee = if let Some(lamports_per_signature) = lamports_per_signature {
+                        let transaction_meta = tx.get_transaction_meta(feature_set, Some(self.accounts_db.expected_cluster_type())).unwrap_or_default();
+                        let fee_budget_limits = FeeBudgetLimits {
+                            loaded_accounts_data_size_limit: transaction_meta.accounts_loaded_bytes,
+                            heap_cost: ComputeBudget::default().heap_cost,
+                            compute_unit_limit: u64::from(transaction_meta.compute_unit_limit),
+                            prioritization_fee: transaction_meta.compute_unit_price,
+                        };
                         fee_structure.calculate_fee(
                             tx.message(),
                             lamports_per_signature,
-                            &ComputeBudget::fee_budget_limits(&tx.get_transaction_meta(feature_set, Some(self.accounts_db.expected_cluster_type())).unwrap_or_default()),
+                            &fee_budget_limits,
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                             feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                         )

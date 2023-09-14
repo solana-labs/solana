@@ -1,7 +1,4 @@
-use solana_sdk::{
-    fee::FeeBudgetLimits,
-    transaction_meta::{TransactionMeta, MAX_COMPUTE_UNIT_LIMIT},
-};
+use solana_sdk::transaction_meta::{TransactionMeta, MAX_COMPUTE_UNIT_LIMIT};
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
@@ -164,15 +161,6 @@ impl ComputeBudget {
         let mut compute_budget = ComputeBudget::new(u64::from(transaction_meta.compute_unit_limit));
         compute_budget.heap_size = transaction_meta.updated_heap_bytes;
         compute_budget
-    }
-
-    pub fn fee_budget_limits<'a>(transaction_meta: &TransactionMeta) -> FeeBudgetLimits {
-        FeeBudgetLimits {
-            loaded_accounts_data_size_limit: transaction_meta.accounts_loaded_bytes,
-            heap_cost: ComputeBudget::default().heap_cost,
-            compute_unit_limit: u64::from(transaction_meta.compute_unit_limit),
-            prioritization_fee: transaction_meta.compute_unit_price,
-        }
     }
 
     /// Returns cost of the Poseidon hash function for the given number of

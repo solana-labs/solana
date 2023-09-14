@@ -139,7 +139,7 @@ use {
             reduce_stake_warmup_cooldown::NewWarmupCooldownRateEpoch,
             remove_congestion_multiplier_from_fee_calculation, FeatureSet,
         },
-        fee::FeeStructure,
+        fee::{FeeBudgetLimits, FeeStructure},
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hard_forks::HardForks,
@@ -4081,14 +4081,19 @@ impl Bank {
         message: &SanitizedMessage,
         lamports_per_signature: u64,
     ) -> u64 {
+        let transaction_meta = message
+            .get_transaction_meta(&self.feature_set, Some(self.cluster_type()))
+            .unwrap_or_default();
+        let fee_budget_limits = FeeBudgetLimits {
+            loaded_accounts_data_size_limit: transaction_meta.accounts_loaded_bytes,
+            heap_cost: ComputeBudget::default().heap_cost,
+            compute_unit_limit: u64::from(transaction_meta.compute_unit_limit),
+            prioritization_fee: transaction_meta.compute_unit_price,
+        };
         self.fee_structure.calculate_fee(
             message,
             lamports_per_signature,
-            &ComputeBudget::fee_budget_limits(
-                &message
-                    .get_transaction_meta(&self.feature_set, Some(self.cluster_type()))
-                    .unwrap_or_default(),
-            ),
+            &fee_budget_limits,
             self.feature_set
                 .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
             self.feature_set
