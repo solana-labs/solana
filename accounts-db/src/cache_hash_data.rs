@@ -3,6 +3,7 @@
 use crate::pubkey_bins::PubkeyBinCalculator24;
 use {
     crate::{accounts_hash::CalculateHashIntermediate, cache_hash_data_stats::CacheHashDataStats},
+    bytemuck::{Pod, Zeroable},
     memmap2::MmapMut,
     solana_measure::measure::Measure,
     std::{
@@ -19,6 +20,7 @@ pub type SavedType = Vec<Vec<EntryType>>;
 pub type SavedTypeSlice = [Vec<EntryType>];
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Header {
     count: usize,
 }
@@ -44,6 +46,11 @@ impl CacheHashDataFileReference {
         let file_len = self.file_len;
         let mut m1 = Measure::start("read_file");
         let mmap = CacheHashDataFileReference::load_map(&self.file)?;
+        assert_eq!(
+            mmap.as_ptr() as usize % std::mem::size_of::<EntryType>(),
+            0,
+            "mmap is not aligned"
+        );
         m1.stop();
         self.stats.read_us.fetch_add(m1.as_us(), Ordering::Relaxed);
         let header_size = std::mem::size_of::<Header>() as u64;
@@ -52,13 +59,6 @@ impl CacheHashDataFileReference {
         }
 
         let cell_size = std::mem::size_of::<EntryType>() as u64;
-        unsafe {
-            assert_eq!(
-                mmap.align_to::<EntryType>().0.len(),
-                0,
-                "mmap is not aligned"
-            );
-        }
         assert_eq!((cell_size as usize) % std::mem::size_of::<u64>(), 0);
         let mut cache_file = CacheHashDataFile {
             mmap,
@@ -128,22 +128,26 @@ impl CacheHashDataFile {
 
     /// get '&mut EntryType' from cache file [ix]
     fn get_mut(&mut self, ix: u64) -> &mut EntryType {
-        let item_slice = self.get_slice_internal(ix);
-        unsafe {
-            let item = item_slice.as_ptr() as *mut EntryType;
-            &mut *item
-        }
+        let start = self.get_element_offset_byte(ix);
+        let end = start + std::mem::size_of::<EntryType>();
+        assert!(
+            end <= self.capacity as usize,
+            "end: {end}, capacity: {}, ix: {ix}, cell size: {}",
+            self.capacity,
+            self.cell_size,
+        );
+        let bytes = &mut self.mmap[start..end];
+        bytemuck::from_bytes_mut(bytes)
     }
 
     /// get '&[EntryType]' from cache file [ix..]
     fn get_slice(&self, ix: u64) -> &[EntryType] {
         let start = self.get_element_offset_byte(ix);
-        let item_slice: &[u8] = &self.mmap[start..];
-        let remaining_elements = item_slice.len() / std::mem::size_of::<EntryType>();
-        unsafe {
-            let item = item_slice.as_ptr() as *const EntryType;
-            std::slice::from_raw_parts(item, remaining_elements)
-        }
+        let bytes = &self.mmap[start..];
+        let remaining_elements = bytes.len() / std::mem::size_of::<EntryType>();
+        let len = remaining_elements * std::mem::size_of::<EntryType>();
+        let bytes = &bytes[..len];
+        bytemuck::cast_slice(bytes)
     }
 
     /// return byte offset of entry 'ix' into a slice which contains a header and at least ix elements
@@ -153,29 +157,9 @@ impl CacheHashDataFile {
         start
     }
 
-    /// get the bytes representing cache file [ix]
-    fn get_slice_internal(&self, ix: u64) -> &[u8] {
-        let start = self.get_element_offset_byte(ix);
-        let end = start + std::mem::size_of::<EntryType>();
-        assert!(
-            end <= self.capacity as usize,
-            "end: {}, capacity: {}, ix: {}, cell size: {}",
-            end,
-            self.capacity,
-            ix,
-            self.cell_size
-        );
-        &self.mmap[start..end]
-    }
-
     fn get_header_mut(&mut self) -> &mut Header {
-        let start = 0_usize;
-        let end = start + std::mem::size_of::<Header>();
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *mut Header;
-            &mut *item
-        }
+        let bytes = &mut self.mmap[..std::mem::size_of::<Header>()];
+        bytemuck::from_bytes_mut(bytes)
     }
 
     fn new_map(file: impl AsRef<Path>, capacity: u64) -> Result<MmapMut, std::io::Error> {
