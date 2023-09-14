@@ -8,6 +8,12 @@ docker login
 kubectl create ns <namespace>
 ```
 
+Clone the repo
+```
+git clone -b solana-k8s-cluster git@github.com:gregcusack/solana.git
+cd solana
+```
+
 1) Build local solana version (aka based on the current commit)
 ```
 cargo run --bin solana-k8s -- 
@@ -62,6 +68,23 @@ cargo run --bin solana-k8s --
 
 ```
 
+Verify validators have deployed:
+```
+kubectl get pods -n <namespace>
+```
+^ `STATUS` should be `Running` and `READY` should be `1/1` for all
+
+Verify validators are connected properly:
+```
+BOOTSTRAP_POD=$(kubectl get pods -n greg-test | grep bootstrap | awk '{print $1}')
+kubectl exec -it -n <namespace> $BOOTSTRAP_POD -- /bin/bash
+
+solana -ul gossip # should see `--num-validators`+1 nodes (including bootstrap)
+solana -ul validators # should see `--num-validators`+1 current validators (including bootstrap)
+```
+^ if you ran the tar deployment, you should see the Stake by Version as well read `<release-channel>` in the `solana -ul validators` output.
+
+
 Important Notes: this isn't designed the best way currently. 
 - bootstrap and validator docker images are build exactly the same although the pods they run in are not build the same
 - `--bootstrap-image` and `--validator-image` must match the format outlined above. The pods in the replicasets pull the exact `--bootstrap-image` and `--validator-image` images from dockerhub.
@@ -72,11 +95,11 @@ Important Notes: this isn't designed the best way currently.
 
 Other Notes:
 - Def some hardcoded stuff in here still 
-- genesis creation is hardcoded for the most part in terms of stakes, lamports, etc. But does include all validator accounts that are created on deployment.
+- genesis creation is hardcoded for the most part in terms of stakes, lamports, etc. 
+- genesis includes bootstrap accounts and SPL args.
 
 TODO:
 - we currently write binary to file for genesis, then read it back to verify it. and then read it again to convert into a base64 string and then converted into binrary and then converted into a GenesisConfig lol. So need to fix
-- Figure out env variables for private keys. idk how this is going to work
 
 
 # Legacy info
