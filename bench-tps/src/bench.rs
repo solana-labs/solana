@@ -50,6 +50,8 @@ const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) a
 const MAX_RANDOM_COMPUTE_UNIT_PRICE: u64 = 50;
 const COMPUTE_UNIT_PRICE_MULTIPLIER: u64 = 1_000;
 const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 600; // 1 transfer is plus 3 compute_budget ixs
+const PADDED_TRANSFER_COMPUTE_UNIT: u32 = 3_000; // padding program execution requires consumes this amount
+
 /// calculate maximum possible prioritization fee, if `use-randomized-compute-unit-price` is
 /// enabled, round to nearest lamports.
 pub fn max_lamports_for_prioritization(compute_unit_price: &Option<ComputeUnitPrice>) -> u64 {
@@ -625,6 +627,13 @@ fn transfer_with_compute_unit_price_and_padding(
         ),
         instruction,
     ];
+    if instruction_padding_config.is_some() {
+        // By default, CU budget is DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT which is much larger than needed
+        instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(
+            PADDED_TRANSFER_COMPUTE_UNIT,
+        ));
+    }
+
     if let Some(compute_unit_price) = compute_unit_price {
         instructions.extend_from_slice(&[
             ComputeBudgetInstruction::set_compute_unit_limit(TRANSFER_TRANSACTION_COMPUTE_UNIT),

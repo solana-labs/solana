@@ -19,3 +19,7 @@ threads-required = "num-cpus"
 [[profile.ci.overrides]]
 filter = "package(solana-gossip) & test(/^test_star_network_push_ring_200/)"
 threads-required = "num-cpus"
+
+[[profile.ci.overrides]]
+filter = "package(solana-gossip) & test(/^cluster_info::tests::new_with_external_ip_test_random/)"
+threads-required = "num-cpus"
