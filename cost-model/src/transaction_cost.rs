@@ -163,19 +163,12 @@ impl UsageCostDetails {
     }
 
     pub fn sum(&self) -> u64 {
-        if self.is_simple_vote {
-            self.signature_cost
-                .saturating_add(self.write_lock_cost)
-                .saturating_add(self.data_bytes_cost)
-                .saturating_add(self.builtins_execution_cost)
-        } else {
-            self.signature_cost
-                .saturating_add(self.write_lock_cost)
-                .saturating_add(self.data_bytes_cost)
-                .saturating_add(self.builtins_execution_cost)
-                .saturating_add(self.bpf_execution_cost)
-                .saturating_add(self.loaded_accounts_data_size_cost)
-        }
+        self.signature_cost
+            .saturating_add(self.write_lock_cost)
+            .saturating_add(self.data_bytes_cost)
+            .saturating_add(self.builtins_execution_cost)
+            .saturating_add(self.bpf_execution_cost)
+            .saturating_add(self.loaded_accounts_data_size_cost)
     }
 }
 
