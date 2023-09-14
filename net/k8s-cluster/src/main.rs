@@ -185,7 +185,7 @@ async fn main() {
             base_image: matches.value_of("base_image").unwrap_or_default(),
             image_name: matches.value_of("image_name").unwrap(),
             tag: matches.value_of("image_tag").unwrap_or_default(),
-            registry: matches.value_of("registry_name").unwrap()
+            registry: matches.value_of("registry_name").unwrap(),
         })
     } else {
         None
@@ -232,7 +232,7 @@ async fn main() {
                 }
             }
         }
-        _ => ()   
+        _ => (),
     }
 
     info!("Creating Genesis");
@@ -295,10 +295,7 @@ async fn main() {
     //     GenesisConfig::load_from_base64_string(base64_genesis_string.as_str()).expect("load");
     // info!("loaded_config_hash: {}", loaded_config.hash());
 
-    let config_map = match kub_controller
-        .create_genesis_config_map()
-        .await
-    {
+    let config_map = match kub_controller.create_genesis_config_map().await {
         Ok(config_map) => {
             info!("successfully deployed config map");
             config_map
@@ -322,7 +319,8 @@ async fn main() {
         .value_of("validator_image_name")
         .expect("Validator image name is required");
 
-    let bootstrap_secret = match kub_controller.create_bootstrap_secret("bootstrap-accounts-secret") {
+    let bootstrap_secret = match kub_controller.create_bootstrap_secret("bootstrap-accounts-secret")
+    {
         Ok(secret) => secret,
         Err(err) => {
             error!("Failed to create bootstrap secret! {}", err);
@@ -337,10 +335,8 @@ async fn main() {
         }
     }
 
-    let label_selector = kub_controller.create_selector(
-        "app.kubernetes.io/name",
-        "bootstrap-validator",
-    );
+    let label_selector =
+        kub_controller.create_selector("app.kubernetes.io/name", "bootstrap-validator");
     let bootstrap_replica_set = match kub_controller
         .create_bootstrap_validator_replicas_set(
             bootstrap_container_name,
@@ -348,7 +344,7 @@ async fn main() {
             BOOTSTRAP_VALIDATOR_REPLICAS,
             config_map.metadata.name.clone(),
             bootstrap_secret.metadata.name.clone(),
-            &label_selector
+            &label_selector,
         )
         .await
     {
@@ -375,10 +371,8 @@ async fn main() {
         }
     };
 
-    let bootstrap_service = kub_controller.create_validator_service(
-        "bootstrap-validator",
-        &label_selector
-    );
+    let bootstrap_service =
+        kub_controller.create_validator_service("bootstrap-validator", &label_selector);
     match kub_controller.deploy_service(&bootstrap_service).await {
         Ok(_) => info!("bootstrap validator service deployed successfully"),
         Err(err) => error!(
@@ -397,8 +391,6 @@ async fn main() {
         thread::sleep(Duration::from_secs(1));
     }
     info!("replica set: {} Ready!", rs_name);
-
-
 
     for validator_index in 0..setup_config.num_validators {
         let validator_secret = match kub_controller.create_validator_secret(validator_index) {
@@ -459,7 +451,7 @@ async fn main() {
 
         let validator_service = kub_controller.create_validator_service(
             format!("validator-{}", validator_index).as_str(),
-            &label_selector
+            &label_selector,
         );
         match kub_controller.deploy_service(&validator_service).await {
             Ok(_) => info!("validator service deployed successfully"),
@@ -467,11 +459,7 @@ async fn main() {
         }
 
         // thread::sleep(Duration::from_secs(2));
-
-
     }
-
-
 
     // //TODO: handle this return val properly, don't just unwrap
     // //TODO: not sure this checks for all replica sets

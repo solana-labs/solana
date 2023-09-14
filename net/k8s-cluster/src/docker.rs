@@ -1,7 +1,5 @@
 use {
-    crate::{
-        boxed_error, initialize_globals, SOLANA_ROOT,
-    },
+    crate::{boxed_error, initialize_globals, SOLANA_ROOT},
     log::*,
     std::{
         error::Error,
@@ -148,13 +146,13 @@ WORKDIR /home/solana
     pub async fn push_image(&self, validator_type: &str) -> Result<(), Box<dyn Error>> {
         let image = format!(
             "{}/{}-{}:{}",
-            self.image_config.registry, validator_type, self.image_config.image_name, self.image_config.tag
+            self.image_config.registry,
+            validator_type,
+            self.image_config.image_name,
+            self.image_config.tag
         );
 
-        let command = format!(
-            "docker push '{}'",
-            image
-        );
+        let command = format!("docker push '{}'", image);
         let output = Command::new("sh")
             .arg("-c")
             .arg(&command)
@@ -170,15 +168,13 @@ WORKDIR /home/solana
         }
         Ok(())
     }
-
 }
 
 // RUN apt install -y iputils-ping curl vim bzip2 psmisc \
 // iproute2 software-properties-common apt-transport-https \
 // ca-certificates openssh-client openssh-server
 
-
-// RUN groupadd -r -g 1000 solana 
+// RUN groupadd -r -g 1000 solana
 // RUN useradd -m -u 1000 -g solana -s /bin/bash solana
 // RUN useradd -ms /bin/bash solana
 // // RUN chown -R solana:solana /home/solana
