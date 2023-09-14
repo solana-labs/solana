@@ -178,6 +178,8 @@ struct ServeRepairStats {
     pong: usize,
     ancestor_hashes: usize,
     window_index_misses: usize,
+    coding_index: usize,
+    coding_index_misses: usize,
     ping_cache_check_failed: usize,
     pings_sent: usize,
     decode_time_us: u64,
@@ -217,7 +219,7 @@ pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
 #[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
-#[frozen_abi(digest = "3VzVe3kMrG6ijkVPyCGeJVA9hQjWcFEZbAQPc5Zizrjm")]
+#[frozen_abi(digest = "A7sk7GcZDvMc7WYTH2Rjgt1tT5CyxVJNdzYBeui4ZSD5")]
 pub enum RepairProtocol {
     LegacyWindowIndex(LegacyContactInfo, Slot, u64),
     LegacyHighestWindowIndex(LegacyContactInfo, Slot, u64),
@@ -244,6 +246,11 @@ pub enum RepairProtocol {
     AncestorHashes {
         header: RepairRequestHeader,
         slot: Slot,
+    },
+    CodingIndex {
+        header: RepairRequestHeader,
+        slot: Slot,
+        index: u64,
     },
 }
 
@@ -281,6 +288,7 @@ impl RepairProtocol {
             Self::HighestWindowIndex { header, .. } => &header.sender,
             Self::Orphan { header, .. } => &header.sender,
             Self::AncestorHashes { header, .. } => &header.sender,
+            Self::CodingIndex { header, .. } => &header.sender,
         }
     }
 
@@ -297,7 +305,8 @@ impl RepairProtocol {
             | Self::WindowIndex { .. }
             | Self::HighestWindowIndex { .. }
             | Self::Orphan { .. }
-            | Self::AncestorHashes { .. } => true,
+            | Self::AncestorHashes { .. }
+            | Self::CodingIndex { .. } => true,
         }
     }
 
@@ -305,7 +314,8 @@ impl RepairProtocol {
         match self {
             RepairProtocol::WindowIndex { .. }
             | RepairProtocol::HighestWindowIndex { .. }
-            | RepairProtocol::AncestorHashes { .. } => 1,
+            | RepairProtocol::AncestorHashes { .. }
+            | RepairProtocol::CodingIndex { .. } => 1,
             RepairProtocol::Orphan { .. } => MAX_ORPHAN_REPAIR_RESPONSES,
             RepairProtocol::Pong(_) => 0, // no response
             RepairProtocol::LegacyWindowIndex(_, _, _)
@@ -482,6 +492,20 @@ impl ServeRepair {
                     ping_cache.add(pong, *from_addr, Instant::now());
                     (None, "Pong")
                 }
+                RepairProtocol::CodingIndex {
+                    header: RepairRequestHeader { nonce, .. },
+                    slot,
+                    index,
+                } => {
+                    stats.coding_index += 1;
+                    let batch = Self::run_coding_index_request(
+                        recycler, from_addr, blockstore, *slot, *index, *nonce,
+                    );
+                    if batch.is_none() {
+                        stats.coding_index_misses += 1;
+                    }
+                    (batch, "CodingIndex")
+                }
                 RepairProtocol::LegacyWindowIndex(_, _, _)
                 | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
                 | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
@@ -510,16 +534,29 @@ impl ServeRepair {
         }
     }
 
+    fn support_coding_repair(cluster_type: ClusterType) -> bool {
+        match cluster_type {
+            ClusterType::Development | ClusterType::Testnet => true,
+            ClusterType::Devnet | ClusterType::MainnetBeta => false,
+        }
+    }
+
     fn decode_request(
         remote_request: RemoteRequest,
         epoch_staked_nodes: &Option<Arc<HashMap<Pubkey, u64>>>,
         whitelist: &HashSet<Pubkey>,
         my_id: &Pubkey,
         socket_addr_space: &SocketAddrSpace,
+        cluster_type: ClusterType,
     ) -> Result<RepairRequestWithMeta> {
         let Ok(request) = deserialize_request::<RepairProtocol>(&remote_request) else {
             return Err(Error::from(RepairVerifyError::Malformed));
         };
+        if !Self::support_coding_repair(cluster_type)
+            && matches!(request, RepairProtocol::CodingIndex { .. })
+        {
+            return Err(Error::from(RepairVerifyError::Malformed));
+        }
         let from_addr = remote_request.remote_address;
         if !ContactInfo::is_valid_address(&from_addr, socket_addr_space) {
             return Err(Error::from(RepairVerifyError::Malformed));
@@ -586,6 +623,7 @@ impl ServeRepair {
         my_id: &Pubkey,
         socket_addr_space: &SocketAddrSpace,
         stats: &mut ServeRepairStats,
+        cluster_type: ClusterType,
     ) -> Vec<RepairRequestWithMeta> {
         let decode_request = |request| {
             let result = Self::decode_request(
@@ -594,6 +632,7 @@ impl ServeRepair {
                 whitelist,
                 my_id,
                 socket_addr_space,
+                cluster_type,
             );
             match &result {
                 Ok(req) => {
@@ -633,6 +672,7 @@ impl ServeRepair {
         let epoch_staked_nodes = root_bank.epoch_staked_nodes(root_bank.epoch());
         let identity_keypair = self.cluster_info.keypair().clone();
         let my_id = identity_keypair.pubkey();
+        let cluster_type = root_bank.cluster_type();
 
         let max_buffered_packets = if self.repair_whitelist.read().unwrap().len() > 0 {
             4 * MAX_REQUESTS_PER_ITERATION
@@ -675,6 +715,7 @@ impl ServeRepair {
                 &my_id,
                 &socket_addr_space,
                 stats,
+                cluster_type,
             )
         };
         let whitelisted_request_count = decoded_requests.iter().filter(|r| r.whitelisted).count();
@@ -785,6 +826,8 @@ impl ServeRepair {
             ("err_sig_verify", stats.err_sig_verify, i64),
             ("err_unsigned", stats.err_unsigned, i64),
             ("err_id_mismatch", stats.err_id_mismatch, i64),
+            ("coding_index", stats.coding_index, i64),
+            ("coding_index_misses", stats.coding_index_misses, i64),
         );
 
         *stats = ServeRepairStats::default();
@@ -863,7 +906,8 @@ impl ServeRepair {
             RepairProtocol::WindowIndex { header, .. }
             | RepairProtocol::HighestWindowIndex { header, .. }
             | RepairProtocol::Orphan { header, .. }
-            | RepairProtocol::AncestorHashes { header, .. } => {
+            | RepairProtocol::AncestorHashes { header, .. }
+            | RepairProtocol::CodingIndex { header, .. } => {
                 if &header.recipient != my_id {
                     return Err(Error::from(RepairVerifyError::IdMismatch));
                 }
@@ -909,7 +953,8 @@ impl ServeRepair {
             match request {
                 RepairProtocol::WindowIndex { .. }
                 | RepairProtocol::HighestWindowIndex { .. }
-                | RepairProtocol::Orphan { .. } => {
+                | RepairProtocol::Orphan { .. }
+                | RepairProtocol::CodingIndex { .. } => {
                     let ping = RepairResponse::Ping(ping);
                     Packet::from_data(Some(from_addr), ping).ok()
                 }
@@ -1283,6 +1328,25 @@ impl ServeRepair {
         Some(PacketBatch::new_unpinned_with_recycler_data(
             recycler,
             "run_window_request",
+            vec![packet],
+        ))
+    }
+
+    fn run_coding_index_request(
+        recycler: &PacketBatchRecycler,
+        from_addr: &SocketAddr,
+        blockstore: &Blockstore,
+        slot: Slot,
+        index: u64,
+        nonce: Nonce,
+    ) -> Option<PacketBatch> {
+        // Try to find the requested index in one of the slots
+        let packet = repair_response::repair_coding_response_packet(
+            blockstore, slot, index, from_addr, nonce,
+        )?;
+        Some(PacketBatch::new_unpinned_with_recycler_data(
+            recycler,
+            "run_coding_index_request",
             vec![packet],
         ))
     }
