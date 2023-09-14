@@ -843,7 +843,7 @@ impl<'a> AccountsHasher<'a> {
         key: &Pubkey,
     ) -> (
         &'b CalculateHashIntermediate,
-        Option<(Pubkey, usize, usize)>,
+        Option<(&'b Pubkey, usize, usize)>,
     ) {
         let division_data = &sorted_data_by_pubkey[division_index];
         let mut index = offset;
@@ -867,7 +867,7 @@ impl<'a> AccountsHasher<'a> {
             }
 
             // point to the next pubkey > key
-            next = Some((*next_key, division_index, index));
+            next = Some((next_key, division_index, index));
             break;
         }
 
@@ -1046,7 +1046,7 @@ impl<'a> AccountsHasher<'a> {
                     Self::find_first_pubkey_in_bin(hash_data, pubkey_bin, bins, &binner, stats);
 
                 if let Some(first_pubkey_in_bin) = first_pubkey_in_bin {
-                    let mut key = Some(hash_data[first_pubkey_in_bin].pubkey);
+                    let mut key = Some(&hash_data[first_pubkey_in_bin].pubkey);
                     let mut offset = first_pubkey_in_bin;
 
                     while let Some(k) = key {
