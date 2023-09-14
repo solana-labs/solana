@@ -6,6 +6,7 @@ use {
         pubkey_bins::PubkeyBinCalculator24,
         rent_collector::RentCollector,
     },
+    bytemuck::{Pod, Zeroable},
     log::*,
     memmap2::MmapMut,
     rayon::prelude::*,
@@ -276,7 +277,7 @@ impl HashStats {
 /// Note this can be saved/loaded during hash calculation to a memory mapped file whose contents are
 /// [CalculateHashIntermediate]
 #[repr(C)]
-#[derive(Default, Debug, PartialEq, Eq, Clone)]
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Pod, Zeroable)]
 pub struct CalculateHashIntermediate {
     pub hash: Hash,
     pub lamports: u64,
