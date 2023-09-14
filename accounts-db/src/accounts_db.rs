@@ -8965,11 +8965,10 @@ impl AccountsDb {
         let mut num_accounts_rent_paying = 0;
         let num_accounts = accounts_map.len();
         let mut amount_to_top_off_rent = 0;
-        // first collect into a local HashMap with no lock contention
-        let mut storage_info_local = StorageSizeAndCount::default();
+        let mut stored_size_alive = 0;
 
         let items = accounts_map.into_iter().map(|(pubkey, stored_account)| {
-            storage_info_local.stored_size += stored_account.stored_size();
+            stored_size_alive += stored_account.stored_size();
             if secondary {
                 self.accounts_index.update_secondary_indexes(
                     &pubkey,
@@ -8999,15 +8998,15 @@ impl AccountsDb {
             )
         });
 
-        let (dirty_pubkeys, insert_time_us) = self
+        let (dirty_pubkeys, insert_time_us, generate_index_count) = self
             .accounts_index
             .insert_new_if_missing_into_primary_index(slot, num_accounts, items);
 
         {
             // second, collect into the shared DashMap once we've figured out all the info per store_id
             let mut info = storage_info.entry(store_id).or_default();
-            info.stored_size += storage_info_local.stored_size;
-            info.count += num_accounts;
+            info.stored_size += stored_size_alive;
+            info.count += generate_index_count.count;
         }
 
         // dirty_pubkeys will contain a pubkey if an item has multiple rooted entries for
@@ -9489,7 +9488,11 @@ impl AccountsDb {
                     entry.count,
                     store.count(),
                 );
-                store.count_and_status.write().unwrap().0 = entry.count;
+                {
+                    let mut count_and_status = store.count_and_status.write().unwrap();
+                    assert_eq!(count_and_status.0, 0);
+                    count_and_status.0 = entry.count;
+                }
                 store.alive_bytes.store(entry.stored_size, Ordering::SeqCst);
                 store
                     .approx_store_count
@@ -15853,6 +15856,8 @@ pub mod tests {
         // fake out the store count to avoid the assert
         for (_, store) in accounts.storage.iter() {
             store.alive_bytes.store(0, Ordering::Release);
+            let mut count_and_status = store.count_and_status.write().unwrap();
+            count_and_status.0 = 0;
         }
 
         // populate based on made up hash data
@@ -15864,6 +15869,7 @@ pub mod tests {
                 count: 3,
             },
         );
+
         accounts.set_storage_count_and_alive_bytes(dashmap, &mut GenerateIndexTimings::default());
         assert_eq!(accounts.storage.len(), 1);
         for (_, store) in accounts.storage.iter() {
