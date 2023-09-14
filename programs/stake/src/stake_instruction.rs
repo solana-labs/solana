@@ -472,9 +472,7 @@ mod tests {
         },
         assert_matches::assert_matches,
         bincode::serialize,
-        solana_program_runtime::{
-            invoke_context::mock_process_instruction, sysvar_cache::SysvarCache,
-        },
+        solana_program_runtime::invoke_context::mock_process_instruction,
         solana_sdk::{
             account::{
                 create_account_shared_data_for_test, AccountSharedData, ReadableAccount,
@@ -6855,14 +6853,6 @@ mod tests {
         let rent_exempt_reserve = rent.minimum_balance(StakeStateV2::size_of());
         let stake_history = StakeHistory::default();
         let current_epoch = 100;
-
-        let mut sysvar_cache_override = SysvarCache::default();
-        sysvar_cache_override.set_stake_history(stake_history.clone());
-        sysvar_cache_override.set_rent(rent);
-        sysvar_cache_override.set_clock(Clock {
-            epoch: current_epoch,
-            ..Clock::default()
-        });
 
         let authorized_staker = Pubkey::new_unique();
         let vote_address = Pubkey::new_unique();
