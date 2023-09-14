@@ -1,6 +1,6 @@
 //! The `wen-restart` module handles automatically repair in cluster restart
 
-use solana_runtime::accounts_background_service::AbsRequestSender;
+use solana_runtime::{accounts_background_service::AbsRequestSender, snapshot_config::SnapshotConfig};
 use {
     crate::{
         epoch_stakes_map::EpochStakesMap,
@@ -14,7 +14,11 @@ use {
     solana_ledger::blockstore::Blockstore,
     solana_runtime::{
         bank_forks::BankForks,
-        snapshot_utils::get_incremental_snapshot_archives,
+        snapshot_bank_utils::bank_to_incremental_snapshot_archive,
+        snapshot_utils::{
+            get_highest_full_snapshot_archive_slot,
+            get_incremental_snapshot_archives,
+        },
     },
     solana_sdk::{clock::Slot, hash::Hash, shred_version::compute_shred_version},
     solana_vote_program::vote_state::VoteTransaction,
@@ -85,7 +89,7 @@ fn select_heaviest_fork(
 
 pub fn wen_restart(
     wen_restart_path: &Option<PathBuf>,
-    incremental_snapshot_archives_dir: &PathBuf,
+    snapshot_config: &SnapshotConfig,
     accounts_background_request_sender: &AbsRequestSender,
     genesis_config_hash: &Hash,
     last_vote: VoteTransaction,
@@ -234,13 +238,19 @@ pub fn wen_restart(
         let new_root_bank = my_bank_forks.get(my_selected_slot).unwrap();
         new_root_bank.rehash();
         new_root_bank_hash = new_root_bank.hash();
+        new_root_bank.rc.accounts.accounts_db.add_root(my_selected_slot);
+        bank_to_incremental_snapshot_archive(
+            snapshot_config.bank_snapshots_dir.clone(),
+            &new_root_bank,
+            get_highest_full_snapshot_archive_slot(snapshot_config.full_snapshot_archives_dir.clone()).unwrap(),
+            Some(snapshot_config.snapshot_version),
+            snapshot_config.full_snapshot_archives_dir.clone(),
+            snapshot_config.incremental_snapshot_archives_dir.clone(),
+            snapshot_config.archive_format,
+            snapshot_config.maximum_full_snapshot_archives_to_retain,
+            snapshot_config.maximum_incremental_snapshot_archives_to_retain,
+        )?;
         info!("wen_restart: new hash for slot {} after adding hard fork {}", my_selected_slot, &new_root_bank_hash);
-        my_bank_forks.set_root(
-            my_selected_slot,
-            accounts_background_request_sender,
-            None,
-            true,
-        );
         new_shred_version = compute_shred_version(
             genesis_config_hash,
             Some(&new_root_bank.hard_forks()),
@@ -248,7 +258,7 @@ pub fn wen_restart(
     }
     info!("wen_restart waiting for new snapshot to be generated on {}", my_selected_slot);
     loop {
-        if get_incremental_snapshot_archives(incremental_snapshot_archives_dir)
+        if get_incremental_snapshot_archives(snapshot_config.incremental_snapshot_archives_dir.clone())
             .iter()
             .any(|archive_info| archive_info.slot() == my_selected_slot)
         {
