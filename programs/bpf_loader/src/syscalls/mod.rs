@@ -43,7 +43,7 @@ use {
             remaining_compute_units_syscall_enabled, stop_sibling_instruction_search_at_parent,
             stop_truncating_strings_in_syscalls, switch_to_new_elf_parser,
         },
-        hash::{Hash, Hasher, HASH_BYTES},
+        hash::{Hash, Hasher},
         instruction::{
             AccountMeta, InstructionError, ProcessedSiblingInstruction,
             TRANSACTION_LEVEL_STACK_HEIGHT,
@@ -2012,7 +2012,7 @@ declare_syscallhash!(
                 hasher.hash(bytes);
             }
         }
-        hash_result.copy_from_slice(&hasher.result().as_ref());
+        hash_result.copy_from_slice(hasher.result().as_ref());
         Ok(0)
     }
 );
@@ -2039,7 +2039,7 @@ mod tests {
             account::{create_account_shared_data_for_test, AccountSharedData},
             bpf_loader,
             fee_calculator::FeeCalculator,
-            hash::hashv,
+            hash::{hashv, HASH_BYTES},
             instruction::Instruction,
             program::check_type_assumptions,
             stable_layout::stable_instruction::StableInstruction,
