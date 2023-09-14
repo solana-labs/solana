@@ -42,12 +42,8 @@ impl MmapAccountHashesFile {
     /// return a slice of account hashes starting at 'index'
     fn read(&self, index: usize) -> &[Hash] {
         let start = std::mem::size_of::<Hash>() * index;
-        let item_slice: &[u8] = &self.mmap[start..self.count * std::mem::size_of::<Hash>()];
-        let remaining_elements = item_slice.len() / std::mem::size_of::<Hash>();
-        unsafe {
-            let item = item_slice.as_ptr() as *const Hash;
-            std::slice::from_raw_parts(item, remaining_elements)
-        }
+        let bytes = &self.mmap[start..self.count * std::mem::size_of::<Hash>()];
+        bytemuck::cast_slice(bytes)
     }
 
     /// write a hash to the end of mmap file.
