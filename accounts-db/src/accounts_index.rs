@@ -72,9 +72,11 @@ pub type RefCount = u64;
 pub type AccountMap<T, U> = Arc<InMemAccountsIndex<T, U>>;
 
 #[derive(Default, Debug, PartialEq, Eq)]
-pub(crate) struct GenerateIndexCount {
+pub(crate) struct GenerateIndexResult<T: IndexValue> {
     /// number of accounts inserted in the index
     pub count: usize,
+    /// pubkeys which were present multiple times in the insertion request.
+    pub duplicates: Option<Vec<(Pubkey, (Slot, T))>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1586,24 +1588,55 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         self.account_maps.len()
     }
 
+    /// remove the earlier instances of each pubkey when the pubkey exists later in the `Vec`.
+    /// Could also be done with HashSet.
+    /// Returns `HashSet` of duplicate pubkeys.
+    fn remove_older_duplicate_pubkeys(
+        items: &mut Vec<(Pubkey, (Slot, T))>,
+    ) -> Option<Vec<(Pubkey, (Slot, T))>> {
+        if items.len() < 2 {
+            return None;
+        }
+        // stable sort by pubkey.
+        // Earlier entries are overwritten by later entries
+        items.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut duplicates = None::<Vec<(Pubkey, (Slot, T))>>;
+        let mut i = 0;
+        while i < items.len().saturating_sub(1) {
+            let this_key = &items[i].0;
+            // look at next entry. If it is same pubkey as this one, then remove this one.
+            if this_key == &items[i + 1].0 {
+                let mut duplicates_insert = duplicates.unwrap_or_default();
+                // i+1 is same pubkey as i, so remove i
+                duplicates_insert.push(items.remove(i));
+                duplicates = Some(duplicates_insert);
+                // `items` got smaller, so `i` remains the same.
+                // There could also be several duplicate pubkeys.
+            } else {
+                i += 1;
+            }
+        }
+        duplicates
+    }
+
     // Same functionally to upsert, but:
     // 1. operates on a batch of items
     // 2. holds the write lock for the duration of adding the items
     // Can save time when inserting lots of new keys.
     // But, does NOT update secondary index
     // This is designed to be called at startup time.
-    // returns (dirty_pubkeys, insertion_time_us, GenerateIndexCount)
+    // returns (dirty_pubkeys, insertion_time_us, GenerateIndexResult)
     #[allow(clippy::needless_collect)]
     pub(crate) fn insert_new_if_missing_into_primary_index(
         &self,
         slot: Slot,
-        item_len: usize,
+        approx_items_len: usize,
         items: impl Iterator<Item = (Pubkey, T)>,
-    ) -> (Vec<Pubkey>, u64, GenerateIndexCount) {
+    ) -> (Vec<Pubkey>, u64, GenerateIndexResult<T>) {
         // big enough so not likely to re-allocate, small enough to not over-allocate by too much
         // this assumes the largest bin contains twice the expected amount of the average size per bin
         let bins = self.bins();
-        let expected_items_per_bin = item_len * 2 / bins;
+        let expected_items_per_bin = approx_items_len * 2 / bins;
         let use_disk = self.storage.storage.disk.is_some();
         let mut binned = (0..bins)
             .map(|_| Vec::with_capacity(expected_items_per_bin))
@@ -1627,14 +1660,22 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         // This results in calls to insert_new_entry_if_missing_with_lock from different threads starting at different bins to avoid
         // lock contention.
         let random_offset = thread_rng().gen_range(0..bins);
+        let mut duplicates = Vec::default();
         (0..bins).for_each(|pubkey_bin| {
             let pubkey_bin = (pubkey_bin + random_offset) % bins;
-            let items = std::mem::take(&mut binned[pubkey_bin]);
+            let mut items = std::mem::take(&mut binned[pubkey_bin]);
             if items.is_empty() {
                 return;
             }
+
+            let these_duplicates = Self::remove_older_duplicate_pubkeys(&mut items);
+            if let Some(mut these_duplicates) = these_duplicates {
+                duplicates.append(&mut these_duplicates);
+            }
+
             let r_account_maps = &self.account_maps[pubkey_bin];
             let mut insert_time = Measure::start("insert_into_primary_index");
+            // count only considers non-duplicate accounts
             count += items.len();
             if use_disk {
                 r_account_maps.startup_insert_only(items.into_iter());
@@ -1668,7 +1709,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         (
             dirty_pubkeys,
             insertion_time.load(Ordering::Relaxed),
-            GenerateIndexCount { count },
+            GenerateIndexResult {
+                count,
+                duplicates: (!duplicates.is_empty()).then_some(duplicates),
+            },
         )
     }
 
@@ -2102,6 +2146,56 @@ pub mod tests {
     }
 
     #[test]
+    fn test_remove_older_duplicate_pubkeys() {
+        let pk1 = Pubkey::new_from_array([0; 32]);
+        let pk2 = Pubkey::new_from_array([1; 32]);
+        let slot0 = 0;
+        let info2 = 55;
+        let mut items = vec![];
+        let removed = AccountsIndex::<u64, u64>::remove_older_duplicate_pubkeys(&mut items);
+        assert!(items.is_empty());
+        assert!(removed.is_none());
+        let mut items = vec![(pk1, (slot0, 1u64)), (pk2, (slot0, 2))];
+        let expected = items.clone();
+        let removed = AccountsIndex::<u64, u64>::remove_older_duplicate_pubkeys(&mut items);
+        assert_eq!(items, expected);
+        assert!(removed.is_none());
+
+        for dup in 0..3 {
+            for other in 0..dup + 2 {
+                let first_info = 10u64;
+                let mut items = vec![(pk1, (slot0, first_info))];
+                let mut expected_dups = items.clone();
+                for i in 0..dup {
+                    let this_dup = (pk1, (slot0, i + 10u64 + 1));
+                    if i < dup.saturating_sub(1) {
+                        expected_dups.push(this_dup);
+                    }
+                    items.push(this_dup);
+                }
+                let mut expected = vec![*items.last().unwrap()];
+                let other_item = (pk2, (slot0, info2));
+                if other == dup + 1 {
+                    // don't insert
+                } else if other == dup {
+                    expected.push(other_item);
+                    items.push(other_item);
+                } else {
+                    expected.push(other_item);
+                    items.insert(other as usize, other_item);
+                }
+                let result = AccountsIndex::<u64, u64>::remove_older_duplicate_pubkeys(&mut items);
+                assert_eq!(items, expected);
+                if dup != 0 {
+                    assert_eq!(result.unwrap(), expected_dups);
+                } else {
+                    assert!(result.is_none());
+                }
+            }
+        }
+    }
+
+    #[test]
     fn test_secondary_index_include_exclude() {
         let pk1 = Pubkey::new_unique();
         let pk2 = Pubkey::new_unique();
@@ -2194,6 +2288,44 @@ pub mod tests {
             true
         }
     }
+
+    #[test]
+    fn test_insert_duplicates() {
+        let key = solana_sdk::pubkey::new_rand();
+        let pubkey = &key;
+        let slot = 0;
+        let mut ancestors = Ancestors::default();
+        ancestors.insert(slot, 0);
+
+        let account_info = true;
+        let index = AccountsIndex::<bool, bool>::default_for_tests();
+        let account_info2: bool = !account_info;
+        let items = vec![(*pubkey, account_info), (*pubkey, account_info2)];
+        index.set_startup(Startup::Startup);
+        let (_, _, result) =
+            index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
+        assert_eq!(result.count, 1);
+        index.set_startup(Startup::Normal);
+        if let AccountIndexGetResult::Found(entry, index) =
+            // the entry for
+            index.get_for_tests(pubkey, Some(&ancestors), None)
+        {
+            // make sure the one with the correct info is added
+            assert_eq!(entry.slot_list()[index], (slot, account_info2));
+            // make sure it wasn't inserted twice
+            assert_eq!(
+                entry
+                    .slot_list()
+                    .iter()
+                    .filter_map(|(entry_slot, _)| (entry_slot == &slot).then_some(true))
+                    .count(),
+                1
+            );
+        } else {
+            panic!("failed");
+        }
+    }
+
     #[test]
     fn test_insert_new_with_lock_no_ancestors() {
         let key = solana_sdk::pubkey::new_rand();
