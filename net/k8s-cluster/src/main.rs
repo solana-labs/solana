@@ -8,7 +8,6 @@ use {
         kubernetes::Kubernetes,
         release::{BuildConfig, Deploy},
     },
-    solana_sdk::genesis_config::GenesisConfig,
     std::{thread, time::Duration},
 };
 
