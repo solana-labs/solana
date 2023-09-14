@@ -56,7 +56,7 @@ use {
         },
         stake_history::{Epoch, StakeHistory},
         system_instruction::{self, SystemError},
-        sysvar::{clock, rent::Rent, stake_history},
+        sysvar::{clock, stake_history},
         transaction::Transaction,
     },
     std::{ops::Deref, rc::Rc},
@@ -119,6 +119,13 @@ pub struct StakeAuthorizationIndexed {
     pub new_authority_pubkey: Pubkey,
     pub authority: SignerIndex,
     pub new_authority_signer: Option<SignerIndex>,
+}
+
+struct SignOnlySplitNeedsRent {}
+impl ArgsConfig for SignOnlySplitNeedsRent {
+    fn sign_only_arg<'a, 'b>(&self, arg: Arg<'a, 'b>) -> Arg<'a, 'b> {
+        arg.requires("rent_exempt_reserve_sol")
+    }
 }
 
 pub trait StakeSubCommands {
@@ -493,7 +500,7 @@ impl StakeSubCommands for App<'_, '_> {
                                will be at a derived address of SPLIT_STAKE_ACCOUNT")
                 )
                 .arg(stake_authority_arg())
-                .offline_args()
+                .offline_args_config(&SignOnlySplitNeedsRent{})
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
@@ -504,9 +511,9 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("AMOUNT")
                         .takes_value(true)
                         .validator(is_amount)
+                        .requires("sign_only")
                         .help("Offline signing only: the rent-exempt amount to move into the new \
-                                stake account, in SOL. \
-                                [default: current software Rent::default]")
+                                stake account, in SOL")
                 )
         )
         .subcommand(
@@ -1921,10 +1928,9 @@ pub fn process_split_stake(
         }
         minimum_balance
     } else {
-        rent_exempt_reserve.cloned().unwrap_or_else(|| {
-            let rent = Rent::default();
-            rent.minimum_balance(StakeStateV2::size_of())
-        })
+        rent_exempt_reserve
+            .cloned()
+            .expect("rent_exempt_reserve_sol is required with sign_only")
     };
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
@@ -4902,7 +4908,6 @@ mod tests {
         let stake_signer = format!("{stake_auth_pubkey}={stake_sig}");
         let nonce_hash = Hash::new(&[4u8; 32]);
         let nonce_hash_string = nonce_hash.to_string();
-        let rent = "0.00228288";
 
         let test_split_stake_account = test_commands.clone().get_matches_from(vec![
             "test",
@@ -4924,8 +4929,6 @@ mod tests {
             &nonce_signer,
             "--signer",
             &stake_signer,
-            "--rent-exempt-reserve-sol",
-            rent,
         ]);
         assert_eq!(
             parse_command(&test_split_stake_account, &default_signer, &mut None).unwrap(),
@@ -4947,7 +4950,7 @@ mod tests {
                     lamports: 50_000_000_000,
                     fee_payer: 1,
                     compute_unit_price: None,
-                    rent_exempt_reserve: Some(2_282_880),
+                    rent_exempt_reserve: None,
                 },
                 signers: vec![
                     Presigner::new(&stake_auth_pubkey, &stake_sig).into(),
