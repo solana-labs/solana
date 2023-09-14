@@ -80,6 +80,70 @@ fn generate_keypair() -> Result<Keypair, Box<dyn Error>> {
     keypair_from_seed(seed.as_bytes())
 }
 
+fn parse_spl_genesis_file(spl_file: &PathBuf) -> Result<HashMap<String, Vec<SPLGenesisArgType>>, Box<dyn Error>> {
+    if let Ok(file) = File::open(spl_file) {
+        let reader = BufReader::new(file);
+
+        // Read the first line of the file
+        if let Some(line) = reader.lines().next() {
+            let line_contents = line?;
+
+            // Split the line into individual parts using "--" as the delimiter
+            let parts: Vec<&str> = line_contents.split("--").collect();
+
+            // Initialize a HashMap to store parsed arguments
+            let mut parsed_args = HashMap::new();
+
+            // The first part is usually empty, so start from index 1
+            for part in &parts[1..] {
+                // Trim leading and trailing whitespaces
+                let trimmed_part = part.trim();
+
+                // Split each part into flag and value using the first space
+                let split_parts: Vec<&str> = trimmed_part.splitn(2, ' ').collect();
+
+                if split_parts.len() == 2 {
+                    let flag = format!("--{}", split_parts[0].trim());
+                    // Split the "value" into three parts using spaces
+                    let value_parts: Vec<&str> = split_parts[1].split_whitespace().collect();
+                    if flag == "--bpf-program" && value_parts.len() == 3 {
+                        // Handle "--bpf-program" with 3 arguments
+                        let value_tuple = SPLGenesisArgType::BpfProgram(
+                            value_parts[0].to_string(),
+                            value_parts[1].to_string(),
+                            value_parts[2].to_string(),
+                        );
+
+                        // Add the flag and value tuple to the parsed_args HashMap
+                        parsed_args
+                            .entry(flag)
+                            .or_insert(Vec::new())
+                            .push(value_tuple);
+                    } else if flag == "--upgradeable-program" && value_parts.len() == 4 {
+                        // Handle "--upgradable-program" with 4 arguments
+                        let value_tuple = SPLGenesisArgType::UpgradeableProgram(
+                            value_parts[0].to_string(),
+                            value_parts[1].to_string(),
+                            value_parts[2].to_string(),
+                            value_parts[3].to_string(),
+                        );
+
+                        // Add the flag and value tuple to the parsed_args HashMap
+                        parsed_args
+                            .entry(flag)
+                            .or_insert(Vec::new())
+                            .push(value_tuple);
+                    } else {
+                        panic!("Invalid argument passed in! flag: {}, value_parts: {}", flag, value_parts.len());
+                    }
+                }
+            }
+            return Ok(parsed_args);
+        }
+    }
+    Err(boxed_error!("Can't open spl file even though it exists"))
+}
+
 pub struct ValidatorAccountKeypairs {
     pub vote_account: Keypair,
     pub identity: Keypair,
@@ -339,156 +403,101 @@ impl<'a> Genesis<'a> {
         // add in spl stuff
         let spl_file = SOLANA_ROOT.join("spl-genesis-args.sh");
         // Check if the file exists before reading it
-        if let Ok(metadata) = std::fs::metadata(&spl_file) {
-            if let Ok(file) = File::open(spl_file) {
-                let reader = BufReader::new(file);
+        if let Ok(_) = std::fs::metadata(&spl_file) {
+            let parsed_args = match parse_spl_genesis_file(&spl_file) {
+                Ok(args) => args,
+                Err(err) => return Err(err),
+            };
         
-                // Read the first line of the file
-                if let Some(line) = reader.lines().next() {
-                    let line_contents = line?;
-        
-                    // Split the line into individual parts using "--" as the delimiter
-                    let parts: Vec<&str> = line_contents.split("--").collect();
-        
-                    // Initialize a HashMap to store parsed arguments
-                    let mut parsed_args = HashMap::new();
-        
-                    // The first part is usually empty, so start from index 1
-                    for part in &parts[1..] {
-                        // Trim leading and trailing whitespaces
-                        let trimmed_part = part.trim();
-        
-                        // Split each part into flag and value using the first space
-                        let split_parts: Vec<&str> = trimmed_part.splitn(2, ' ').collect();
-        
-                        if split_parts.len() == 2 {
-                            let flag = format!("--{}", split_parts[0].trim());
-                            // Split the "value" into three parts using spaces
-                            let value_parts: Vec<&str> = split_parts[1].split_whitespace().collect();
-                            if flag == "--bpf-program" && value_parts.len() == 3 {
-                                // Handle "--bpf-program" with 3 arguments
-                                let value_tuple = SPLGenesisArgType::BpfProgram(
-                                    value_parts[0].to_string(),
-                                    value_parts[1].to_string(),
-                                    value_parts[2].to_string(),
-                                );
-        
-                                // Add the flag and value tuple to the parsed_args HashMap
-                                parsed_args
-                                    .entry(flag)
-                                    .or_insert(Vec::new())
-                                    .push(value_tuple);
-                            } else if flag == "--upgradeable-program" && value_parts.len() == 4 {
-                                // Handle "--upgradable-program" with 4 arguments
-                                let value_tuple = SPLGenesisArgType::UpgradeableProgram(
-                                    value_parts[0].to_string(),
-                                    value_parts[1].to_string(),
-                                    value_parts[2].to_string(),
-                                    value_parts[3].to_string(),
-                                );
-        
-                                // Add the flag and value tuple to the parsed_args HashMap
-                                parsed_args
-                                    .entry(flag)
-                                    .or_insert(Vec::new())
-                                    .push(value_tuple);
+            // Now you have a HashMap where the keys are flags and the values are vectors of values.
+            // You can access them as needed.
+            if let Some(values) = parsed_args.get("--bpf-program") {
+                for value in values {
+                    match value {
+                        SPLGenesisArgType::BpfProgram(address, loader, program) => {
+                            info!(
+                                "Flag: --bpf-program, Address: {}, Loader: {}, Program: {}",
+                                address, loader, program
+                            );
+                            let address = parse_address(address, "address");
+                            let loader = parse_address(loader, "loader");
+                            let program_data = parse_program_data(program);
+                            genesis_config.add_account(
+                                address,
+                                AccountSharedData::from(Account {
+                                    lamports: genesis_config.rent.minimum_balance(program_data.len()),
+                                    data: program_data,
+                                    executable: true,
+                                    owner: loader,
+                                    rent_epoch: 0,
+                                }),
+                            );
+                        }
+                        _ => panic!("Incorrect number of values passed in for --bpf-program")
+                    }
+                }
+            }
+            if let Some(values) =  parsed_args.get("upgradeable-program") {
+                for value in values {
+                    match value {
+                        SPLGenesisArgType::UpgradeableProgram(address, loader, program, upgrade_authority) => {
+                            info!(
+                                "Flag: --upgradeable-program, Address: {}, Loader: {}, Program: {}, upgrade_authority: {}",
+                                address, loader, program, upgrade_authority
+                            );
+                            let address = parse_address(address, "address");
+                            let loader = parse_address(loader, "loader");
+                            let program_data_elf = parse_program_data(program);
+                            let upgrade_authority_address = if upgrade_authority == "none" {
+                                Pubkey::default()
                             } else {
-                                panic!("Invalid argument passed in! flag: {}, value_parts: {}", flag, value_parts.len());
-                            }
-                        }
-                    }
-        
-                    // Now you have a HashMap where the keys are flags and the values are vectors of values.
-                    // You can access them as needed.
-                    if let Some(values) = parsed_args.get("--bpf-program") {
-                        for value in values {
-                            match value {
-                                SPLGenesisArgType::BpfProgram(address, loader, program) => {
-                                    info!(
-                                        "Flag: --bpf-program, Address: {}, Loader: {}, Program: {}",
-                                        address, loader, program
-                                    );
-                                    let address = parse_address(address, "address");
-                                    let loader = parse_address(loader, "loader");
-                                    let program_data = parse_program_data(program);
-                                    genesis_config.add_account(
-                                        address,
-                                        AccountSharedData::from(Account {
-                                            lamports: genesis_config.rent.minimum_balance(program_data.len()),
-                                            data: program_data,
-                                            executable: true,
-                                            owner: loader,
-                                            rent_epoch: 0,
-                                        }),
-                                    );
-                                }
-                                _ => panic!("Incorrect number of values passed in for --bpf-program")
-                            }
-                        }
-                    }
-                    if let Some(values) =  parsed_args.get("upgradeable-program") {
-                        for value in values {
-                            match value {
-                                SPLGenesisArgType::UpgradeableProgram(address, loader, program, upgrade_authority) => {
-                                    info!(
-                                        "Flag: --upgradeable-program, Address: {}, Loader: {}, Program: {}, upgrade_authority: {}",
-                                        address, loader, program, upgrade_authority
-                                    );
-                                    let address = parse_address(address, "address");
-                                    let loader = parse_address(loader, "loader");
-                                    let program_data_elf = parse_program_data(program);
-                                    let upgrade_authority_address = if upgrade_authority == "none" {
-                                        Pubkey::default()
-                                    } else {
-                                        upgrade_authority.parse::<Pubkey>().unwrap_or_else(|_| {
-                                            read_keypair_file(upgrade_authority)
-                                                .map(|keypair| keypair.pubkey())
-                                                .unwrap_or_else(|err| {
-                                                    eprintln!(
-                                                        "Error: invalid upgrade_authority {upgrade_authority}: {err}"
-                                                    );
-                                                    process::exit(1);
-                                                })
+                                upgrade_authority.parse::<Pubkey>().unwrap_or_else(|_| {
+                                    read_keypair_file(upgrade_authority)
+                                        .map(|keypair| keypair.pubkey())
+                                        .unwrap_or_else(|err| {
+                                            eprintln!(
+                                                "Error: invalid upgrade_authority {upgrade_authority}: {err}"
+                                            );
+                                            process::exit(1);
                                         })
-                                    };
-                        
-                                    let (programdata_address, _) =
-                                        Pubkey::find_program_address(&[address.as_ref()], &loader);
-                                    let mut program_data = bincode::serialize(&UpgradeableLoaderState::ProgramData {
-                                        slot: 0,
-                                        upgrade_authority_address: Some(upgrade_authority_address),
-                                    })
-                                    .unwrap();
-                                    program_data.extend_from_slice(&program_data_elf);
-                                    genesis_config.add_account(
-                                        programdata_address,
-                                        AccountSharedData::from(Account {
-                                            lamports: genesis_config.rent.minimum_balance(program_data.len()),
-                                            data: program_data,
-                                            owner: loader,
-                                            executable: false,
-                                            rent_epoch: 0,
-                                        }),
-                                    );
-                        
-                                    let program_data = bincode::serialize(&UpgradeableLoaderState::Program {
-                                        programdata_address,
-                                    })
-                                    .unwrap();
-                                    genesis_config.add_account(
-                                        address,
-                                        AccountSharedData::from(Account {
-                                            lamports: genesis_config.rent.minimum_balance(program_data.len()),
-                                            data: program_data,
-                                            owner: loader,
-                                            executable: true,
-                                            rent_epoch: 0,
-                                        }),
-                                    );
-                                }
-                                _ => panic!("Incorrect number of values passed in for --upgradeable-program")
-                            }
+                                })
+                            };
+                
+                            let (programdata_address, _) =
+                                Pubkey::find_program_address(&[address.as_ref()], &loader);
+                            let mut program_data = bincode::serialize(&UpgradeableLoaderState::ProgramData {
+                                slot: 0,
+                                upgrade_authority_address: Some(upgrade_authority_address),
+                            })
+                            .unwrap();
+                            program_data.extend_from_slice(&program_data_elf);
+                            genesis_config.add_account(
+                                programdata_address,
+                                AccountSharedData::from(Account {
+                                    lamports: genesis_config.rent.minimum_balance(program_data.len()),
+                                    data: program_data,
+                                    owner: loader,
+                                    executable: false,
+                                    rent_epoch: 0,
+                                }),
+                            );
+                
+                            let program_data = bincode::serialize(&UpgradeableLoaderState::Program {
+                                programdata_address,
+                            })
+                            .unwrap();
+                            genesis_config.add_account(
+                                address,
+                                AccountSharedData::from(Account {
+                                    lamports: genesis_config.rent.minimum_balance(program_data.len()),
+                                    data: program_data,
+                                    owner: loader,
+                                    executable: true,
+                                    rent_epoch: 0,
+                                }),
+                            );
                         }
+                        _ => panic!("Incorrect number of values passed in for --upgradeable-program")
                     }
                 }
             }
