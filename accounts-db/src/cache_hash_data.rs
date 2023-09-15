@@ -3,6 +3,7 @@
 use crate::pubkey_bins::PubkeyBinCalculator24;
 use {
     crate::{accounts_hash::CalculateHashIntermediate, cache_hash_data_stats::CacheHashDataStats},
+    bytemuck::{Pod, Zeroable},
     memmap2::MmapMut,
     solana_measure::measure::Measure,
     std::{
@@ -19,9 +20,18 @@ pub type SavedType = Vec<Vec<EntryType>>;
 pub type SavedTypeSlice = [Vec<EntryType>];
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Header {
     count: usize,
 }
+
+// In order to safely guarantee Header is Pod, it cannot have any padding
+// This is obvious by inspection, but this will also catch any inadvertent
+// changes in the future (i.e. it is a test).
+const _: () = assert!(
+    std::mem::size_of::<Header>() == std::mem::size_of::<usize>(),
+    "Header cannot have any padding"
+);
 
 /// cache hash data file to be mmapped later
 pub(crate) struct CacheHashDataFileReference {
@@ -169,13 +179,8 @@ impl CacheHashDataFile {
     }
 
     fn get_header_mut(&mut self) -> &mut Header {
-        let start = 0_usize;
-        let end = start + std::mem::size_of::<Header>();
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *mut Header;
-            &mut *item
-        }
+        let bytes = &mut self.mmap[..std::mem::size_of::<Header>()];
+        bytemuck::from_bytes_mut(bytes)
     }
 
     fn new_map(file: impl AsRef<Path>, capacity: u64) -> Result<MmapMut, std::io::Error> {
