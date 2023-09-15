@@ -963,7 +963,7 @@ impl<'a> AccountsHasher<'a> {
         let mut first_item_to_pubkey_division = Vec::with_capacity(len);
 
         // initialize 'first_items', which holds the current lowest item in each slot group
-        let max_inclusive_num_pubkeys = sorted_data_by_pubkey
+        let (max_inclusive_num_pubkeys, duplicated_within_bin) = sorted_data_by_pubkey
             .iter()
             .enumerate()
             .map(|(i, hash_data)| {
@@ -978,6 +978,7 @@ impl<'a> AccountsHasher<'a> {
                     let mut first_pubkey_in_next_bin = first_pubkey_in_bin + 1;
                     let mut count = 1;
                     let mut prev_key = &k;
+                    let mut duplicated = 0;
 
                     while first_pubkey_in_next_bin < hash_data.len() {
                         let curr_key = &hash_data[first_pubkey_in_next_bin].pubkey;
@@ -985,6 +986,7 @@ impl<'a> AccountsHasher<'a> {
                         if curr_key == prev_key {
                             // skip same key
                             first_pubkey_in_next_bin += 1;
+                            duplicated += 1;
                             continue;
                         }
 
@@ -998,12 +1000,18 @@ impl<'a> AccountsHasher<'a> {
                         first_pubkey_in_next_bin += 1;
                         prev_key = curr_key;
                     }
-                    count
+
+                    (count, duplicated)
                 } else {
-                    0
+                    (0, 0)
                 }
             })
-            .sum::<usize>();
+            .fold((0, 0), |acc, x| (acc.0 + x.0, acc.1 + x.1));
+
+        info!(
+            "hash_bin_count {} {}",
+            max_inclusive_num_pubkeys, duplicated_within_bin
+        );
         let mut hashes = AccountHashesFile {
             writer: None,
             dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
