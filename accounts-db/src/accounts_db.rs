@@ -10667,10 +10667,10 @@ pub mod tests {
             )
             .unwrap();
         let mut expected = vec![Vec::new(); bins];
-        expected[0].push(raw_expected[0].clone());
-        expected[0].push(raw_expected[1].clone());
-        expected[bins - 1].push(raw_expected[2].clone());
-        expected[bins - 1].push(raw_expected[3].clone());
+        expected[0].push(raw_expected[0]);
+        expected[0].push(raw_expected[1]);
+        expected[bins - 1].push(raw_expected[2]);
+        expected[bins - 1].push(raw_expected[3]);
         assert_scan(result, vec![expected], bins, 0, bins);
 
         let bins = 4;
@@ -10689,10 +10689,10 @@ pub mod tests {
             )
             .unwrap();
         let mut expected = vec![Vec::new(); bins];
-        expected[0].push(raw_expected[0].clone());
-        expected[1].push(raw_expected[1].clone());
-        expected[2].push(raw_expected[2].clone());
-        expected[bins - 1].push(raw_expected[3].clone());
+        expected[0].push(raw_expected[0]);
+        expected[1].push(raw_expected[1]);
+        expected[2].push(raw_expected[2]);
+        expected[bins - 1].push(raw_expected[3]);
         assert_scan(result, vec![expected], bins, 0, bins);
 
         let bins = 256;
@@ -10711,10 +10711,10 @@ pub mod tests {
             )
             .unwrap();
         let mut expected = vec![Vec::new(); bins];
-        expected[0].push(raw_expected[0].clone());
-        expected[127].push(raw_expected[1].clone());
-        expected[128].push(raw_expected[2].clone());
-        expected[bins - 1].push(raw_expected.last().unwrap().clone());
+        expected[0].push(raw_expected[0]);
+        expected[127].push(raw_expected[1]);
+        expected[128].push(raw_expected[2]);
+        expected[bins - 1].push(*raw_expected.last().unwrap());
         assert_scan(result, vec![expected], bins, 0, bins);
     }
 
@@ -10773,8 +10773,8 @@ pub mod tests {
             )
             .unwrap();
         let mut expected = vec![Vec::new(); half_bins];
-        expected[0].push(raw_expected[0].clone());
-        expected[0].push(raw_expected[1].clone());
+        expected[0].push(raw_expected[0]);
+        expected[0].push(raw_expected[1]);
         assert_scan(result, vec![expected], bins, 0, half_bins);
 
         // just the second bin of 2
@@ -10795,8 +10795,8 @@ pub mod tests {
 
         let mut expected = vec![Vec::new(); half_bins];
         let starting_bin_index = 0;
-        expected[starting_bin_index].push(raw_expected[2].clone());
-        expected[starting_bin_index].push(raw_expected[3].clone());
+        expected[starting_bin_index].push(raw_expected[2]);
+        expected[starting_bin_index].push(raw_expected[3]);
         assert_scan(result, vec![expected], bins, 1, bins - 1);
 
         // 1 bin at a time of 4
@@ -10818,7 +10818,7 @@ pub mod tests {
                 )
                 .unwrap();
             let mut expected = vec![Vec::new(); 1];
-            expected[0].push(expected_item.clone());
+            expected[0].push(*expected_item);
             assert_scan(result, vec![expected], bins, bin, 1);
         }
 
@@ -10843,7 +10843,7 @@ pub mod tests {
             let mut expected = vec![];
             if let Some(index) = bin_locations.iter().position(|&r| r == bin) {
                 expected = vec![Vec::new(); range];
-                expected[0].push(raw_expected[index].clone());
+                expected[0].push(raw_expected[index]);
             }
             let mut result2 = (0..range).map(|_| Vec::default()).collect::<Vec<_>>();
             if let Some(m) = result.get(0) {
@@ -10888,7 +10888,7 @@ pub mod tests {
             .unwrap();
         assert_eq!(result.len(), 1); // 2 chunks, but 1 is empty so not included
         let mut expected = vec![Vec::new(); range];
-        expected[0].push(raw_expected[1].clone());
+        expected[0].push(raw_expected[1]);
         let mut result2 = (0..range).map(|_| Vec::default()).collect::<Vec<_>>();
         result[0].load_all(&mut result2, 0, &PubkeyBinCalculator24::new(range));
         assert_eq!(result2.len(), 1);

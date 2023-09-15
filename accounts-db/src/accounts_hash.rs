@@ -6,6 +6,7 @@ use {
         pubkey_bins::PubkeyBinCalculator24,
         rent_collector::RentCollector,
     },
+    bytemuck::{Pod, Zeroable},
     log::*,
     memmap2::MmapMut,
     rayon::prelude::*,
@@ -277,12 +278,19 @@ impl HashStats {
 /// Note this can be saved/loaded during hash calculation to a memory mapped file whose contents are
 /// [CalculateHashIntermediate]
 #[repr(C)]
-#[derive(Default, Debug, PartialEq, Eq, Clone)]
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Pod, Zeroable)]
 pub struct CalculateHashIntermediate {
     pub hash: Hash,
     pub lamports: u64,
     pub pubkey: Pubkey,
 }
+
+// In order to safely guarantee CalculateHashIntermediate is Pod, it cannot have any padding
+const _: () = assert!(
+    std::mem::size_of::<CalculateHashIntermediate>()
+        == std::mem::size_of::<Hash>() + std::mem::size_of::<u64>() + std::mem::size_of::<Pubkey>(),
+    "CalculateHashIntermediate cannot have any padding"
+);
 
 #[derive(Default, Debug, PartialEq, Eq)]
 pub struct CumulativeOffset {
@@ -1808,7 +1816,7 @@ mod tests {
             lamports: 1,
             pubkey,
         };
-        account_maps.push(val.clone());
+        account_maps.push(val);
 
         let vecs = vec![account_maps.to_vec()];
         let slice = convert_to_slice(&vecs);
@@ -1846,19 +1854,19 @@ mod tests {
                 lamports: 1,
                 pubkey: key,
             };
-            account_maps.push(val.clone());
+            account_maps.push(val);
             let val2 = CalculateHashIntermediate {
                 hash,
                 lamports: 2,
                 pubkey: key2,
             };
-            account_maps.push(val2.clone());
+            account_maps.push(val2);
             let val3 = CalculateHashIntermediate {
                 hash,
                 lamports: 3,
                 pubkey: key2,
             };
-            account_maps2.push(val3.clone());
+            account_maps2.push(val3);
 
             let mut vecs = vec![account_maps.to_vec(), account_maps2.to_vec()];
             if reverse {
@@ -1896,19 +1904,19 @@ mod tests {
                 lamports: 2,
                 pubkey: key2,
             };
-            account_maps.push(val2.clone());
+            account_maps.push(val2);
             let val = CalculateHashIntermediate {
                 hash,
                 lamports: 1,
                 pubkey: key,
             };
-            account_maps.push(val.clone());
+            account_maps.push(val);
             let val3 = CalculateHashIntermediate {
                 hash,
                 lamports: 3,
                 pubkey: key2,
             };
-            account_maps2.push(val3.clone());
+            account_maps2.push(val3);
 
             let mut vecs = vec![account_maps.to_vec(), account_maps2.to_vec()];
             if reverse {

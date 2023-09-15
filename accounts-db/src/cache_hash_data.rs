@@ -120,7 +120,7 @@ impl CacheHashDataFile {
                 "{pubkey_to_bin_index}, {start_bin_index}"
             ); // this would indicate we put a pubkey in too high of a bin
             pubkey_to_bin_index -= start_bin_index;
-            accumulator[pubkey_to_bin_index].push(d.clone()); // may want to avoid clone here
+            accumulator[pubkey_to_bin_index].push(*d); // may want to avoid copy here
         }
 
         m2.stop();
@@ -348,7 +348,7 @@ impl CacheHashData {
             x.iter().for_each(|item| {
                 let d = cache_file.get_mut(i as u64);
                 i += 1;
-                *d = item.clone();
+                *d = *item;
             })
         });
         assert_eq!(i, entries);
