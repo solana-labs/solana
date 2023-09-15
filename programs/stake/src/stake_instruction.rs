@@ -511,7 +511,7 @@ mod tests {
             account_utils::StateMut,
             clock::{Epoch, UnixTimestamp},
             epoch_schedule::EpochSchedule,
-            feature_set::{reduce_stake_warmup_cooldown::NewWarmupCooldownRateEpoch, FeatureSet},
+            feature_set::FeatureSet,
             instruction::{AccountMeta, Instruction},
             pubkey::Pubkey,
             rent::Rent,

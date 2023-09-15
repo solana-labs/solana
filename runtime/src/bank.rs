@@ -127,7 +127,6 @@ use {
             self, add_set_tx_loaded_accounts_data_size_instruction,
             enable_early_verification_of_account_modifications, enable_request_heap_frame_ix,
             include_loaded_accounts_data_size_in_fee_calculation,
-            reduce_stake_warmup_cooldown::NewWarmupCooldownRateEpoch,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
             use_default_units_in_fee_calculation, FeatureSet,
         },
@@ -2702,6 +2701,71 @@ impl Bank {
         vote_with_stake_delegations_map
     }
 
+<<<<<<< HEAD
+=======
+    /// Calculates epoch reward points from stake/vote accounts.
+    /// Returns reward lamports and points for the epoch or none if points == 0.
+    fn calculate_reward_points_partitioned(
+        &self,
+        reward_calculate_params: &EpochRewardCalculateParamInfo,
+        rewards: u64,
+        thread_pool: &ThreadPool,
+        metrics: &RewardsMetrics,
+    ) -> Option<PointValue> {
+        let EpochRewardCalculateParamInfo {
+            stake_history,
+            stake_delegations,
+            cached_vote_accounts,
+        } = reward_calculate_params;
+
+        let solana_vote_program: Pubkey = solana_vote_program::id();
+
+        let get_vote_account = |vote_pubkey: &Pubkey| -> Option<VoteAccount> {
+            if let Some(vote_account) = cached_vote_accounts.get(vote_pubkey) {
+                return Some(vote_account.clone());
+            }
+            // If accounts-db contains a valid vote account, then it should
+            // already have been cached in cached_vote_accounts; so the code
+            // below is only for sanity checking, and can be removed once
+            // the cache is deemed to be reliable.
+            let account = self.get_account_with_fixed_root(vote_pubkey)?;
+            VoteAccount::try_from(account).ok()
+        };
+
+        let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
+        let (points, measure_us) = measure_us!(thread_pool.install(|| {
+            stake_delegations
+                .par_iter()
+                .map(|(_stake_pubkey, stake_account)| {
+                    let delegation = stake_account.delegation();
+                    let vote_pubkey = delegation.voter_pubkey;
+
+                    let Some(vote_account) = get_vote_account(&vote_pubkey) else {
+                        return 0;
+                    };
+                    if vote_account.owner() != &solana_vote_program {
+                        return 0;
+                    }
+                    let Ok(vote_state) = vote_account.vote_state() else {
+                        return 0;
+                    };
+
+                    stake_state::calculate_points(
+                        stake_account.stake_state(),
+                        vote_state,
+                        Some(stake_history),
+                        new_warmup_cooldown_rate_epoch,
+                    )
+                    .unwrap_or(0)
+                })
+                .sum::<u128>()
+        }));
+        metrics.calculate_points_us.fetch_add(measure_us, Relaxed);
+
+        (points > 0).then_some(PointValue { rewards, points })
+    }
+
+>>>>>>> c1090d3959 (moves new_warmup_cooldown_rate_epoch outside iterators and for loops (#33259))
     fn calculate_reward_points(
         &self,
         vote_with_stake_delegations_map: &VoteWithStakeDelegationsMap,
@@ -2710,6 +2774,7 @@ impl Bank {
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) -> Option<PointValue> {
+        let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
         let (points, measure) = measure!(thread_pool.install(|| {
             vote_with_stake_delegations_map
                 .par_iter()
@@ -2727,7 +2792,7 @@ impl Bank {
                                 stake_account.stake_state(),
                                 vote_state,
                                 Some(stake_history),
-                                self.new_warmup_cooldown_rate_epoch(),
+                                new_warmup_cooldown_rate_epoch,
                             )
                             .unwrap_or(0)
                         })
@@ -2742,6 +2807,144 @@ impl Bank {
         (points > 0).then_some(PointValue { rewards, points })
     }
 
+<<<<<<< HEAD
+=======
+    /// Calculates epoch rewards for stake/vote accounts
+    /// Returns vote rewards, stake rewards, and the sum of all stake rewards in lamports
+    fn calculate_stake_vote_rewards(
+        &self,
+        reward_calculate_params: &EpochRewardCalculateParamInfo,
+        rewarded_epoch: Epoch,
+        point_value: PointValue,
+        thread_pool: &ThreadPool,
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
+        metrics: &mut RewardsMetrics,
+    ) -> (VoteRewardsAccounts, StakeRewardCalculation) {
+        let EpochRewardCalculateParamInfo {
+            stake_history,
+            stake_delegations,
+            cached_vote_accounts,
+        } = reward_calculate_params;
+
+        let solana_vote_program: Pubkey = solana_vote_program::id();
+
+        let get_vote_account = |vote_pubkey: &Pubkey| -> Option<VoteAccount> {
+            if let Some(vote_account) = cached_vote_accounts.get(vote_pubkey) {
+                return Some(vote_account.clone());
+            }
+            // If accounts-db contains a valid vote account, then it should
+            // already have been cached in cached_vote_accounts; so the code
+            // below is only for sanity checking, and can be removed once
+            // the cache is deemed to be reliable.
+            let account = self.get_account_with_fixed_root(vote_pubkey)?;
+            VoteAccount::try_from(account).ok()
+        };
+
+        let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
+        let vote_account_rewards: VoteRewards = DashMap::new();
+        let total_stake_rewards = AtomicU64::default();
+        let (stake_rewards, measure_stake_rewards_us) = measure_us!(thread_pool.install(|| {
+            stake_delegations
+                .par_iter()
+                .filter_map(|(stake_pubkey, stake_account)| {
+                    // curry closure to add the contextual stake_pubkey
+                    let reward_calc_tracer = reward_calc_tracer.as_ref().map(|outer| {
+                        // inner
+                        move |inner_event: &_| {
+                            outer(&RewardCalculationEvent::Staking(stake_pubkey, inner_event))
+                        }
+                    });
+
+                    let stake_pubkey = **stake_pubkey;
+                    let stake_account = (*stake_account).to_owned();
+
+                    let delegation = stake_account.delegation();
+                    let (mut stake_account, stake_state) =
+                        <(AccountSharedData, StakeStateV2)>::from(stake_account);
+                    let vote_pubkey = delegation.voter_pubkey;
+                    let Some(vote_account) = get_vote_account(&vote_pubkey) else {
+                        return None;
+                    };
+                    if vote_account.owner() != &solana_vote_program {
+                        return None;
+                    }
+                    let Ok(vote_state) = vote_account.vote_state().cloned() else {
+                        return None;
+                    };
+
+                    let pre_lamport = stake_account.lamports();
+
+                    let redeemed = stake_state::redeem_rewards(
+                        rewarded_epoch,
+                        stake_state,
+                        &mut stake_account,
+                        &vote_state,
+                        &point_value,
+                        Some(stake_history),
+                        reward_calc_tracer.as_ref(),
+                        new_warmup_cooldown_rate_epoch,
+                    );
+
+                    let post_lamport = stake_account.lamports();
+
+                    if let Ok((stakers_reward, voters_reward)) = redeemed {
+                        debug!(
+                            "calculated reward: {} {} {} {}",
+                            stake_pubkey, pre_lamport, post_lamport, stakers_reward
+                        );
+
+                        // track voter rewards
+                        let mut voters_reward_entry = vote_account_rewards
+                            .entry(vote_pubkey)
+                            .or_insert(VoteReward {
+                                vote_account: vote_account.into(),
+                                commission: vote_state.commission,
+                                vote_rewards: 0,
+                                vote_needs_store: false,
+                            });
+
+                        voters_reward_entry.vote_needs_store = true;
+                        voters_reward_entry.vote_rewards = voters_reward_entry
+                            .vote_rewards
+                            .saturating_add(voters_reward);
+
+                        let post_balance = stake_account.lamports();
+                        total_stake_rewards.fetch_add(stakers_reward, Relaxed);
+                        return Some(StakeReward {
+                            stake_pubkey,
+                            stake_reward_info: RewardInfo {
+                                reward_type: RewardType::Staking,
+                                lamports: i64::try_from(stakers_reward).unwrap(),
+                                post_balance,
+                                commission: Some(vote_state.commission),
+                            },
+                            stake_account,
+                        });
+                    } else {
+                        debug!(
+                            "stake_state::redeem_rewards() failed for {}: {:?}",
+                            stake_pubkey, redeemed
+                        );
+                    }
+                    None
+                })
+                .collect()
+        }));
+        let (vote_rewards, measure_vote_rewards_us) =
+            measure_us!(Self::calc_vote_accounts_to_store(vote_account_rewards));
+
+        metrics.redeem_rewards_us += measure_stake_rewards_us + measure_vote_rewards_us;
+
+        (
+            vote_rewards,
+            StakeRewardCalculation {
+                stake_rewards,
+                total_stake_rewards_lamports: total_stake_rewards.load(Relaxed),
+            },
+        )
+    }
+
+>>>>>>> c1090d3959 (moves new_warmup_cooldown_rate_epoch outside iterators and for loops (#33259))
     fn redeem_rewards(
         &self,
         vote_with_stake_delegations_map: DashMap<Pubkey, VoteWithStakeDelegations>,
@@ -2753,6 +2956,7 @@ impl Bank {
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
     ) -> (VoteRewards, StakeRewards) {
+        let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
         let vote_account_rewards: VoteRewards =
             DashMap::with_capacity(vote_with_stake_delegations_map.len());
         let stake_delegation_iterator = vote_with_stake_delegations_map.into_par_iter().flat_map(
@@ -2799,8 +3003,12 @@ impl Bank {
                         &point_value,
                         Some(stake_history),
                         reward_calc_tracer.as_ref(),
+<<<<<<< HEAD
                         credits_auto_rewind,
                         self.new_warmup_cooldown_rate_epoch(),
+=======
+                        new_warmup_cooldown_rate_epoch,
+>>>>>>> c1090d3959 (moves new_warmup_cooldown_rate_epoch outside iterators and for loops (#33259))
                     );
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
                         // track voter rewards
@@ -6004,11 +6212,12 @@ impl Bank {
     ) {
         assert!(!self.freeze_started());
         let mut m = Measure::start("stakes_cache.check_and_store");
+        let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
         (0..accounts.len()).for_each(|i| {
             self.stakes_cache.check_and_store(
                 accounts.pubkey(i),
                 accounts.account(i),
-                self.new_warmup_cooldown_rate_epoch(),
+                new_warmup_cooldown_rate_epoch,
             )
         });
         self.rc.accounts.store_accounts_cached(accounts);
@@ -7068,6 +7277,7 @@ impl Bank {
         execution_results: &[TransactionExecutionResult],
         loaded_txs: &[TransactionLoadResult],
     ) {
+<<<<<<< HEAD
         for (i, ((load_result, _load_nonce), tx)) in loaded_txs.iter().zip(txs).enumerate() {
             if let (Ok(loaded_transaction), true) = (
                 load_result,
@@ -7087,6 +7297,25 @@ impl Bank {
                 }
             }
         }
+=======
+        debug_assert_eq!(txs.len(), execution_results.len());
+        debug_assert_eq!(txs.len(), loaded_txs.len());
+        let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
+        izip!(txs, execution_results, loaded_txs)
+            .filter(|(_, execution_result, _)| execution_result.was_executed_successfully())
+            .flat_map(|(tx, _, (load_result, _))| {
+                load_result.iter().flat_map(|loaded_transaction| {
+                    let num_account_keys = tx.message().account_keys().len();
+                    loaded_transaction.accounts.iter().take(num_account_keys)
+                })
+            })
+            .for_each(|(pubkey, account)| {
+                // note that this could get timed to: self.rc.accounts.accounts_db.stats.stakes_cache_check_and_store_us,
+                //  but this code path is captured separately in ExecuteTimingType::UpdateStakesCacheUs
+                self.stakes_cache
+                    .check_and_store(pubkey, account, new_warmup_cooldown_rate_epoch);
+            });
+>>>>>>> c1090d3959 (moves new_warmup_cooldown_rate_epoch outside iterators and for loops (#33259))
     }
 
     pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
