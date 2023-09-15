@@ -723,8 +723,9 @@ impl ClusterInfo {
         self.my_contact_info.read().unwrap().shred_version()
     }
 
-    fn lookup_epoch_slots(&self, label: CrdsValueLabel) -> EpochSlots {
+    fn lookup_epoch_slots(&self, ix: EpochSlotsIndex) -> EpochSlots {
         let self_pubkey = self.id();
+        let label = CrdsValueLabel::EpochSlots(ix, self_pubkey);
         let gossip_crds = self.gossip.crds.read().unwrap();
         gossip_crds
             .get::<&CrdsValue>(&label)
@@ -899,42 +900,16 @@ impl ClusterInfo {
         }
     }
 
-    pub fn push_epoch_slots(&self, update: &[Slot]) {
-        self.push_epoch_slots_or_restart_last_voted_fork_slots(update, None)
-    }
-
-    pub fn push_restart_last_voted_fork_slots(&self, update: &[Slot], last_vote_bankhash: Hash) {
-        self.push_epoch_slots_or_restart_last_voted_fork_slots(update, Some(last_vote_bankhash))
-    }
-
     // TODO: If two threads call into this function then epoch_slot_index has a
     // race condition and the threads will overwrite each other in crds table.
-    fn push_epoch_slots_or_restart_last_voted_fork_slots(
-        &self,
-        mut update: &[Slot],
-        last_vote_bankhash: Option<Hash>,
-    ) {
-        let is_epoch_slot = last_vote_bankhash.is_none();
+    pub fn push_epoch_slots(&self, mut update: &[Slot]) {
         let self_pubkey = self.id();
-        let create_label = |ix| {
-            if is_epoch_slot {
-                CrdsValueLabel::EpochSlots(ix, self_pubkey)
-            } else {
-                CrdsValueLabel::RestartLastVotedForkSlots(ix, self_pubkey)
-            }
-        };
-        let max_entries = if is_epoch_slot {
-            crds_value::MAX_EPOCH_SLOTS
-        } else {
-            crds_value::MAX_RESTART_LAST_VOTED_FORK_SLOTS
-        };
-        let last_vote_slot = last_vote_bankhash.map(|_| *update.last().unwrap());
         let current_slots: Vec<_> = {
             let gossip_crds =
                 self.time_gossip_read_lock("lookup_epoch_slots", &self.stats.epoch_slots_lookup);
-            (0..max_entries)
+            (0..crds_value::MAX_EPOCH_SLOTS)
                 .filter_map(|ix| {
-                    let label = create_label(ix);
+                    let label = CrdsValueLabel::EpochSlots(ix, self_pubkey);
                     let crds_value = gossip_crds.get::<&CrdsValue>(&label)?;
                     let epoch_slots = crds_value.epoch_slots()?;
                     let first_slot = epoch_slots.first_slot()?;
@@ -948,19 +923,17 @@ impl ClusterInfo {
             .min()
             .unwrap_or_default();
         let max_slot: Slot = update.iter().max().cloned().unwrap_or(0);
-        if is_epoch_slot {
-            let total_slots = max_slot as isize - min_slot as isize;
-            // WARN if CRDS is not storing at least a full epoch worth of slots
-            if DEFAULT_SLOTS_PER_EPOCH as isize > total_slots
-                && crds_value::MAX_EPOCH_SLOTS as usize <= current_slots.len()
-            {
-                self.stats.epoch_slots_filled.add_relaxed(1);
-                warn!(
-                    "EPOCH_SLOTS are filling up FAST {}/{}",
-                    total_slots,
-                    current_slots.len()
-                );
-            }
+        let total_slots = max_slot as isize - min_slot as isize;
+        // WARN if CRDS is not storing at least a full epoch worth of slots
+        if DEFAULT_SLOTS_PER_EPOCH as isize > total_slots
+            && crds_value::MAX_EPOCH_SLOTS as usize <= current_slots.len()
+        {
+            self.stats.epoch_slots_filled.add_relaxed(1);
+            warn!(
+                "EPOCH_SLOTS are filling up FAST {}/{}",
+                total_slots,
+                current_slots.len()
+            );
         }
         let mut reset = false;
         let mut epoch_slot_index = match current_slots.iter().max() {
@@ -970,27 +943,18 @@ impl ClusterInfo {
         let mut entries = Vec::default();
         let keypair = self.keypair();
         while !update.is_empty() {
-            let ix = epoch_slot_index % max_entries;
+            let ix = epoch_slot_index % crds_value::MAX_EPOCH_SLOTS;
             let now = timestamp();
             let mut slots = if !reset {
-                self.lookup_epoch_slots(create_label(ix))
+                self.lookup_epoch_slots(ix)
             } else {
                 EpochSlots::new(self_pubkey, now)
             };
             let n = slots.fill(update, now);
             update = &update[n..];
             if n > 0 {
-                let data = if is_epoch_slot {
-                    CrdsData::EpochSlots(ix, slots)
-                } else {
-                    CrdsData::RestartLastVotedForkSlots(
-                        ix,
-                        slots,
-                        last_vote_slot.unwrap(),
-                        last_vote_bankhash.unwrap(),
-                    )
-                };
-                let entry = CrdsValue::new_signed(data, &keypair);
+                let epoch_slots = CrdsData::EpochSlots(ix, slots);
+                let entry = CrdsValue::new_signed(epoch_slots, &keypair);
                 entries.push(entry);
             }
             epoch_slot_index += 1;
@@ -1000,8 +964,42 @@ impl ClusterInfo {
         let now = timestamp();
         for entry in entries {
             if let Err(err) = gossip_crds.insert(entry, now, GossipRoute::LocalMessage) {
+                error!("push_epoch_slots failed: {:?}", err);
+            }
+        }
+    }
+
+    // This is currently only called from one thread during startup, so no race conditions.
+    // The data format is similar to EpochSlots, but we overwrite previous results each time,
+    // so here we always start from 0. All pieces of the same push use the same timestamp.
+    pub fn push_restart_last_voted_fork_slots(&self, mut update: &[Slot], last_vote_bankhash: Hash) {
+        let self_pubkey = self.id();
+        let last_vote_slot = *update.last().unwrap();
+        let mut epoch_slot_index = 0;
+        let mut entries = Vec::default();
+        let keypair = self.keypair();
+        let now = timestamp();
+        while !update.is_empty() {
+            let mut slots = EpochSlots::new(self_pubkey, now);
+            let n = slots.fill(update, now);
+            update = &update[n..];
+            if n > 0 {
+                let data = CrdsData::RestartLastVotedForkSlots(
+                        epoch_slot_index,
+                        slots,
+                        last_vote_slot,
+                        last_vote_bankhash,
+                    );
+                let entry = CrdsValue::new_signed(data, &keypair);
+                entries.push(entry);
+            }
+            epoch_slot_index += 1;
+        }
+        let mut gossip_crds = self.gossip.crds.write().unwrap();
+        for entry in entries {
+            if let Err(err) = gossip_crds.insert(entry, now, GossipRoute::LocalMessage) {
                 error!(
-                    "push_epoch_slots_or_restart_last_voted_fork_slots failed: {:?}",
+                    "push_restart_last_voted_fork_slots failed: {:?}",
                     err
                 );
             }
