@@ -2953,7 +2953,8 @@ impl Blockstore {
                 return;
             };
 
-            let Ok(lookup_table) = AddressLookupTable::deserialize(lookup_table_account.data()) else {
+            let Ok(lookup_table) = AddressLookupTable::deserialize(lookup_table_account.data())
+            else {
                 return;
             };
 
