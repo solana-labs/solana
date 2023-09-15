@@ -138,22 +138,25 @@ impl CacheHashDataFile {
 
     /// get '&mut EntryType' from cache file [ix]
     fn get_mut(&mut self, ix: u64) -> &mut EntryType {
-        let item_slice = self.get_slice_internal(ix);
-        unsafe {
-            let item = item_slice.as_ptr() as *mut EntryType;
-            &mut *item
-        }
+        let start = self.get_element_offset_byte(ix);
+        let end = start + std::mem::size_of::<EntryType>();
+        assert!(
+            end <= self.capacity as usize,
+            "end: {end}, capacity: {}, ix: {ix}, cell size: {}",
+            self.capacity,
+            self.cell_size,
+        );
+        let bytes = &mut self.mmap[start..end];
+        bytemuck::from_bytes_mut(bytes)
     }
 
     /// get '&[EntryType]' from cache file [ix..]
     fn get_slice(&self, ix: u64) -> &[EntryType] {
         let start = self.get_element_offset_byte(ix);
-        let item_slice: &[u8] = &self.mmap[start..];
-        let remaining_elements = item_slice.len() / std::mem::size_of::<EntryType>();
-        unsafe {
-            let item = item_slice.as_ptr() as *const EntryType;
-            std::slice::from_raw_parts(item, remaining_elements)
-        }
+        let bytes = &self.mmap[start..];
+        // the `bytes` slice *must* contain whole `EntryType`s
+        debug_assert_eq!(bytes.len() % std::mem::size_of::<EntryType>(), 0);
+        bytemuck::cast_slice(bytes)
     }
 
     /// return byte offset of entry 'ix' into a slice which contains a header and at least ix elements
@@ -161,21 +164,6 @@ impl CacheHashDataFile {
         let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
         debug_assert_eq!(start % std::mem::align_of::<EntryType>(), 0);
         start
-    }
-
-    /// get the bytes representing cache file [ix]
-    fn get_slice_internal(&self, ix: u64) -> &[u8] {
-        let start = self.get_element_offset_byte(ix);
-        let end = start + std::mem::size_of::<EntryType>();
-        assert!(
-            end <= self.capacity as usize,
-            "end: {}, capacity: {}, ix: {}, cell size: {}",
-            end,
-            self.capacity,
-            ix,
-            self.cell_size
-        );
-        &self.mmap[start..end]
     }
 
     fn get_header_mut(&mut self) -> &mut Header {
