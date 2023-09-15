@@ -12,6 +12,7 @@ use {
         bpf_loader_upgradeable::UpgradeableLoaderState,
         clock,
         epoch_schedule::EpochSchedule,
+        fee_calculator::{DEFAULT_TARGET_SIGNATURES_PER_SLOT, DEFAULT_BURN_PERCENT, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig, DEFAULT_GENESIS_FILE},
         native_token::sol_to_lamports,
         poh_config::PohConfig,
@@ -36,18 +37,7 @@ use {
 };
 
 pub const DEFAULT_WORD_COUNT: usize = 12;
-
-enum SPLGenesisArgType {
-    BpfProgram(String, String, String),
-    UpgradeableProgram(String, String, String, String),
-}
-
-#[derive(Clone, Debug)]
-pub struct SetupConfig<'a> {
-    pub namespace: &'a str,
-    pub num_validators: i32,
-    pub prebuild_genesis: bool,
-}
+pub const DEFAULT_FAUCET_LAMPORTS: u64 = 500000000000000000;
 
 fn output_keypair(keypair: &Keypair, outfile: &str, source: &str) -> Result<(), Box<dyn Error>> {
     if outfile == STDOUT_OUTFILE_TOKEN {
@@ -155,14 +145,33 @@ fn parse_spl_genesis_file(
     Err(boxed_error!("Can't open spl file even though it exists"))
 }
 
+enum SPLGenesisArgType {
+    BpfProgram(String, String, String),
+    UpgradeableProgram(String, String, String, String),
+}
+
+pub struct GenesisFlags {
+    pub hashes_per_tick: Option<u64>,
+    pub slots_per_epoch: Option<u64>,
+    pub target_lamports_per_signature: Option<u64>,
+    pub faucet_lamports: Option<u64>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SetupConfig<'a> {
+    pub namespace: &'a str,
+    pub num_validators: i32,
+    pub prebuild_genesis: bool,
+}
+
 pub struct ValidatorAccountKeypairs {
     pub vote_account: Keypair,
     pub identity: Keypair,
     pub stake_account: Keypair,
 }
 
-pub struct Genesis<'a> {
-    pub config: SetupConfig<'a>,
+pub struct Genesis {
+    pub flags: GenesisFlags,
     pub config_dir: PathBuf,
     pub validator_keypairs: Vec<ValidatorAccountKeypairs>,
     pub faucet_keypair: Option<Keypair>,
@@ -170,8 +179,8 @@ pub struct Genesis<'a> {
     pub all_pubkeys: Vec<Pubkey>,
 }
 
-impl<'a> Genesis<'a> {
-    pub fn new(setup_config: SetupConfig<'a>) -> Self {
+impl Genesis {
+    pub fn new(flags: GenesisFlags) -> Self {
         initialize_globals();
         let config_dir = SOLANA_ROOT.join("config-k8s");
         if config_dir.exists() {
@@ -179,7 +188,7 @@ impl<'a> Genesis<'a> {
         }
         std::fs::create_dir_all(&config_dir).unwrap();
         Genesis {
-            config: setup_config,
+            flags,
             config_dir,
             validator_keypairs: Vec::default(),
             faucet_keypair: None,
@@ -311,7 +320,10 @@ impl<'a> Genesis<'a> {
 
         let commission: u8 = 100; // Default
 
-        let faucet_lamports: u64 = 500000000000000000;
+        let faucet_lamports = match self.flags.faucet_lamports {
+            Some(faucet_lamports) => faucet_lamports,
+            None => DEFAULT_FAUCET_LAMPORTS,
+        };
 
         let mut poh_config = PohConfig {
             target_tick_duration: Duration::from_micros(timing::duration_as_us(
@@ -322,23 +334,47 @@ impl<'a> Genesis<'a> {
 
         let cluster_type = ClusterType::Development; //Default
 
-        match cluster_type {
-            ClusterType::Development => {
-                let hashes_per_tick =
-                    compute_hashes_per_tick(poh_config.target_tick_duration, 1_000_000);
-                poh_config.hashes_per_tick = Some(hashes_per_tick / 2); // use 50% of peak ability
-            }
-            ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
-                poh_config.hashes_per_tick = Some(clock::DEFAULT_HASHES_PER_TICK);
+        match self.flags.hashes_per_tick {
+            Some(hashes_per_tick) => poh_config.hashes_per_tick = Some(hashes_per_tick),
+            None => {
+                match cluster_type {
+                    ClusterType::Development => {
+                        let hashes_per_tick =
+                            compute_hashes_per_tick(poh_config.target_tick_duration, 1_000_000);
+                        poh_config.hashes_per_tick = Some(hashes_per_tick / 2); // use 50% of peak ability
+                    }
+                    ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
+                        poh_config.hashes_per_tick = Some(clock::DEFAULT_HASHES_PER_TICK);
+                    }
+                }
             }
         }
 
         let max_genesis_archive_unpacked_size = 1073741824; // set in setup.sh
 
-        let slots_per_epoch = match cluster_type {
-            ClusterType::Development => clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
-            ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
-                clock::DEFAULT_SLOTS_PER_EPOCH
+        let slots_per_epoch = match self.flags.slots_per_epoch {
+            Some(slots_per_epoch) => slots_per_epoch,
+            None => {
+                match cluster_type {
+                    ClusterType::Development => clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
+                    ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
+                        clock::DEFAULT_SLOTS_PER_EPOCH
+                    }
+                }
+            }
+        };
+
+        let fee_rate_governor = match self.flags.target_lamports_per_signature {
+            Some(target_lamports_per_signature) => {
+                let mut fee_rate_gov = FeeRateGovernor::new(
+                    target_lamports_per_signature,
+                    DEFAULT_TARGET_SIGNATURES_PER_SLOT,
+                );
+                fee_rate_gov.burn_percent = DEFAULT_BURN_PERCENT;
+                fee_rate_gov
+            },
+            None => {
+                FeeRateGovernor::default()
             }
         };
 
@@ -348,6 +384,7 @@ impl<'a> Genesis<'a> {
 
         let mut genesis_config = GenesisConfig {
             epoch_schedule,
+            fee_rate_governor,
             ..GenesisConfig::default()
         };
 
