@@ -226,6 +226,20 @@ where
     }
 }
 
+#[deprecated(since = "1.17.0", note = "please use `parse_url` instead")]
+pub fn parse_url(arg: &str) -> Result<String, String> {
+    match url::Url::parse(arg) {
+        Ok(url) => {
+            if url.has_host() {
+                Ok(arg.to_string())
+            } else {
+                Err("no host provided".to_string())
+            }
+        }
+        Err(err) => Err(format!("{err}")),
+    }
+}
+
 pub fn is_url_or_moniker<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -234,6 +248,20 @@ where
         Ok(url) => {
             if url.has_host() {
                 Ok(())
+            } else {
+                Err("no host provided".to_string())
+            }
+        }
+        Err(err) => Err(format!("{err}")),
+    }
+}
+
+#[deprecated(since = "1.17.0", note = "please use `parse_url_or_moniker` instead")]
+pub fn parse_url_or_moniker(arg: &str) -> Result<String, String> {
+    match url::Url::parse(&normalize_to_url_if_moniker(arg)) {
+        Ok(url) => {
+            if url.has_host() {
+                Ok(arg.to_string())
             } else {
                 Err("no host provided".to_string())
             }
@@ -253,6 +281,10 @@ pub fn normalize_to_url_if_moniker<T: AsRef<str>>(url_or_moniker: T) -> String {
     .to_string()
 }
 
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `clap::value_parser!(Epoch)` instead"
+)]
 pub fn is_epoch<T>(epoch: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -260,6 +292,10 @@ where
     is_parsable_generic::<Epoch, _>(epoch)
 }
 
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `clap::value_parser!(Slot)` instead"
+)]
 pub fn is_slot<T>(slot: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -267,6 +303,7 @@ where
     is_parsable_generic::<Slot, _>(slot)
 }
 
+#[deprecated(since = "1.17.0", note = "please use `parse_pow2` instead")]
 pub fn is_pow2<T>(bins: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -283,6 +320,22 @@ where
         })
 }
 
+pub fn parse_pow2(arg: &str) -> Result<usize, String> {
+    arg.parse::<usize>()
+        .map_err(|e| format!("Unable to parse, provided: {arg}, err: {e}"))
+        .and_then(|v| {
+            if !v.is_power_of_two() {
+                Err(format!("Must be a power of 2: {v}"))
+            } else {
+                Ok(v)
+            }
+        })
+}
+
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `clap_value_parser!(u16)` instead"
+)]
 pub fn is_port<T>(port: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -290,6 +343,7 @@ where
     is_parsable_generic::<u16, _>(port)
 }
 
+#[deprecated(since = "1.17.0", note = "please use `parse_percentage` instead")]
 pub fn is_valid_percentage<T>(percentage: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -309,6 +363,24 @@ where
         })
 }
 
+pub fn parse_percentage(arg: &str) -> Result<u8, String> {
+    arg.parse::<u8>()
+        .map_err(|e| format!("Unable to parse input percentage, provided: {arg}, err: {e}"))
+        .and_then(|v| {
+            if v > 100 {
+                Err(format!(
+                    "Percentage must be in range of 0 to 100, provided: {v}"
+                ))
+            } else {
+                Ok(v)
+            }
+        })
+}
+
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `TokenAmount::parse_amount` instead"
+)]
 pub fn is_amount<T>(amount: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
