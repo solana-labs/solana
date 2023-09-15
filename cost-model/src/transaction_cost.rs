@@ -220,8 +220,8 @@ mod tests {
         )
         .unwrap();
 
-        // expected vote tx cost: 2 write locks, 2 sig, 1 vite ix, and 11 CU tx data cost
-        let expected_vote_cost = 4151;
+        // expected vote tx cost: 2 write locks, 2 sig, 1 vite ix,
+        let expected_vote_cost = 4140;
         // expected non-vote tx cost would include default loaded accounts size cost (16384) additionally
         let expected_none_vote_cost = 20535;
 
