@@ -3,7 +3,7 @@ use {
     log::*,
     solana_k8s_cluster::{
         docker::{DockerConfig, DockerImageConfig},
-        genesis::{Genesis, SetupConfig},
+        genesis::{Genesis, SetupConfig, GenesisFlags},
         initialize_globals,
         kubernetes::Kubernetes,
         release::{BuildConfig, Deploy},
@@ -130,11 +130,34 @@ fn parse_matches() -> ArgMatches<'static> {
                 .default_value_if("docker_build", None, "latest")
                 .help("Docker image tag."),
         )
+        // Genesis config
         .arg(
             Arg::with_name("prebuild_genesis")
                 .long("prebuild-genesis")
                 .help("Prebuild gensis. Generates keys for validators and writes to file"),
         )
+        .arg(
+            Arg::with_name("hashes_per_tick")
+                .long("hashes-per-tick")
+                .takes_value(true)
+                .help("Genesis config. hashes per tick"),
+        ).arg(
+            Arg::with_name("slots_per_epoch")
+                .long("slots-per-epoch")
+                .takes_value(true)
+                .help("Genesis config. slots per epoch"),
+        ).arg(
+            Arg::with_name("target_lamports_per_signature")
+                .long("target-lamports-per-signature")
+                .takes_value(true)
+                .help("Genesis config. target lamports per signature"),
+        ).arg(
+            Arg::with_name("faucet_lamports")
+                .long("faucet-lamports")
+                .takes_value(true)
+                .help("Genesis config. faucet lamports"),
+        )
+
         .get_matches()
 }
 
@@ -159,6 +182,25 @@ async fn main() {
         debug_build: matches.is_present("debug_build"),
         profile_build: matches.is_present("profile_build"),
         docker_build: matches.is_present("docker_build"),
+    };
+
+    let genesis_flags = GenesisFlags {
+        hashes_per_tick: match matches.value_of("hashes_per_tick") {
+            Some(value_str) => Some(value_str.parse().expect("Invalid value for hashes_per_tick")),
+            None => None,
+        }, 
+        slots_per_epoch: match matches.value_of("slots_per_epoch") {
+            Some(value_str) => Some(value_str.parse().expect("Invalid value for slots_per_epoch")),
+            None => None,
+        }, 
+        target_lamports_per_signature: match matches.value_of("target_lamports_per_signature") {
+            Some(value_str) => Some(value_str.parse().expect("Invalid value for target_lamports_per_signature")),
+            None => None,
+        }, 
+        faucet_lamports: match matches.value_of("faucet_lamports") {
+            Some(value_str) => Some(value_str.parse().expect("Invalid value for faucet_lamports")),
+            None => None,
+        }, 
     };
 
     // Check if namespace exists
@@ -211,7 +253,7 @@ async fn main() {
                         error!("Exiting........ {}", err);
                         return;
                     }
-                }
+                } 
             }
 
             // Need to push image to registry so Monogon nodes can pull image from registry to local
@@ -236,7 +278,7 @@ async fn main() {
     }
 
     info!("Creating Genesis");
-    let mut genesis = Genesis::new(setup_config.clone());
+    let mut genesis = Genesis::new(genesis_flags);
     // genesis.generate();
     match genesis.generate_faucet() {
         Ok(_) => (),
