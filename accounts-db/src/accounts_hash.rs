@@ -1008,10 +1008,6 @@ impl<'a> AccountsHasher<'a> {
             })
             .fold((0, 0), |acc, x| (acc.0 + x.0, acc.1 + x.1));
 
-        info!(
-            "hash_bin_count {} {}",
-            max_inclusive_num_pubkeys, duplicated_within_bin
-        );
         let mut hashes = AccountHashesFile {
             writer: None,
             dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
@@ -1019,6 +1015,7 @@ impl<'a> AccountsHasher<'a> {
         };
 
         let mut overall_sum = 0;
+        let mut hash_write_count = 0;
         let mut duplicate_pubkey_indexes = Vec::with_capacity(len);
         let filler_accounts_enabled = self.filler_accounts_enabled();
 
@@ -1069,6 +1066,7 @@ impl<'a> AccountsHasher<'a> {
                     overall_sum = Self::checked_cast_for_capitalization(
                         item.lamports as u128 + overall_sum as u128,
                     );
+                    hash_write_count += 1;
                     hashes.write(&item.hash);
                 }
             } else {
@@ -1078,6 +1076,7 @@ impl<'a> AccountsHasher<'a> {
                     // the hash of its pubkey
                     let hash = blake3::hash(bytemuck::bytes_of(&item.pubkey));
                     let hash = Hash::new_from_array(hash.into());
+                    hash_write_count += 1;
                     hashes.write(&hash);
                 }
             }
@@ -1100,6 +1099,11 @@ impl<'a> AccountsHasher<'a> {
                 duplicate_pubkey_indexes.clear();
             }
         }
+
+        info!(
+            "hash_count {} {} {}",
+            max_inclusive_num_pubkeys, duplicated_within_bin, hash_write_count
+        );
 
         (hashes, overall_sum)
     }
