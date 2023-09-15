@@ -12,7 +12,9 @@ use {
         bpf_loader_upgradeable::UpgradeableLoaderState,
         clock,
         epoch_schedule::EpochSchedule,
-        fee_calculator::{DEFAULT_TARGET_SIGNATURES_PER_SLOT, DEFAULT_BURN_PERCENT, FeeRateGovernor},
+        fee_calculator::{
+            FeeRateGovernor, DEFAULT_BURN_PERCENT, DEFAULT_TARGET_SIGNATURES_PER_SLOT,
+        },
         genesis_config::{ClusterType, GenesisConfig, DEFAULT_GENESIS_FILE},
         native_token::sol_to_lamports,
         poh_config::PohConfig,
@@ -38,6 +40,9 @@ use {
 
 pub const DEFAULT_WORD_COUNT: usize = 12;
 pub const DEFAULT_FAUCET_LAMPORTS: u64 = 500000000000000000;
+pub const DEFAULT_MAX_GENESIS_ARCHIVE_UNPACKED_SIZE: u64 = 1073741824;
+pub const DEFAULT_CLUSTER_TYPE: ClusterType = ClusterType::Development;
+pub const DEFAULT_COMMISSION: u8 = 100;
 
 fn output_keypair(keypair: &Keypair, outfile: &str, source: &str) -> Result<(), Box<dyn Error>> {
     if outfile == STDOUT_OUTFILE_TOKEN {
@@ -155,6 +160,34 @@ pub struct GenesisFlags {
     pub slots_per_epoch: Option<u64>,
     pub target_lamports_per_signature: Option<u64>,
     pub faucet_lamports: Option<u64>,
+    pub enable_warmup_epochs: bool,
+    pub max_genesis_archive_unpacked_size: Option<u64>,
+    pub cluster_type: Option<ClusterType>,
+}
+
+impl std::fmt::Display for GenesisFlags {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // You can customize the formatting here based on your preferences
+        write!(
+            f,
+            "GenesisFlags {{\n\
+             hashes_per_tick: {:?},\n\
+             slots_per_epoch: {:?},\n\
+             target_lamports_per_signature: {:?},\n\
+             faucet_lamports: {:?},\n\
+             enable_warmup_epochs: {},\n\
+             max_genesis_archive_unpacked_size: {:?},\n\
+             cluster_type: {:?}\n\
+             }}",
+            self.hashes_per_tick,
+            self.slots_per_epoch,
+            self.target_lamports_per_signature,
+            self.faucet_lamports,
+            self.enable_warmup_epochs,
+            self.max_genesis_archive_unpacked_size,
+            self.cluster_type
+        )
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -318,8 +351,6 @@ impl Genesis {
         let bootstrap_validator_stake_lamports: u64 =
             default_bootstrap_validator_stake_lamports.parse().unwrap(); // TODO enable command line arg
 
-        let commission: u8 = 100; // Default
-
         let faucet_lamports = match self.flags.faucet_lamports {
             Some(faucet_lamports) => faucet_lamports,
             None => DEFAULT_FAUCET_LAMPORTS,
@@ -332,7 +363,10 @@ impl Genesis {
             ..PohConfig::default()
         };
 
-        let cluster_type = ClusterType::Development; //Default
+        let cluster_type = match self.flags.cluster_type {
+            Some(cluster_type) => cluster_type,
+            None => DEFAULT_CLUSTER_TYPE,
+        };
 
         match self.flags.hashes_per_tick {
             Some(hashes_per_tick) => poh_config.hashes_per_tick = Some(hashes_per_tick),
@@ -350,18 +384,19 @@ impl Genesis {
             }
         }
 
-        let max_genesis_archive_unpacked_size = 1073741824; // set in setup.sh
+        let max_genesis_archive_unpacked_size = match self.flags.max_genesis_archive_unpacked_size {
+            Some(max_genesis_archive_unpacked_size) => max_genesis_archive_unpacked_size,
+            None => DEFAULT_MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+        };
 
         let slots_per_epoch = match self.flags.slots_per_epoch {
             Some(slots_per_epoch) => slots_per_epoch,
-            None => {
-                match cluster_type {
-                    ClusterType::Development => clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
-                    ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
-                        clock::DEFAULT_SLOTS_PER_EPOCH
-                    }
+            None => match cluster_type {
+                ClusterType::Development => clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
+                ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
+                    clock::DEFAULT_SLOTS_PER_EPOCH
                 }
-            }
+            },
         };
 
         let fee_rate_governor = match self.flags.target_lamports_per_signature {
@@ -372,21 +407,34 @@ impl Genesis {
                 );
                 fee_rate_gov.burn_percent = DEFAULT_BURN_PERCENT;
                 fee_rate_gov
-            },
-            None => {
-                FeeRateGovernor::default()
             }
+            None => FeeRateGovernor::default(),
         };
 
-        let enable_warmup_epochs = true; //  TODO: fix for flag
-        let epoch_schedule =
-            EpochSchedule::custom(slots_per_epoch, slots_per_epoch, enable_warmup_epochs);
+        let epoch_schedule = EpochSchedule::custom(
+            slots_per_epoch,
+            slots_per_epoch,
+            self.flags.enable_warmup_epochs,
+        );
 
         let mut genesis_config = GenesisConfig {
             epoch_schedule,
             fee_rate_governor,
+            poh_config,
             ..GenesisConfig::default()
         };
+
+        if let Some(faucet_keypair) = &self.faucet_keypair {
+            genesis_config.add_account(
+                faucet_keypair.pubkey(),
+                AccountSharedData::new(faucet_lamports, 0, &system_program::id()),
+            );
+        }
+
+        solana_stake_program::add_genesis_accounts(&mut genesis_config);
+        if genesis_config.cluster_type == ClusterType::Development {
+            solana_runtime::genesis_utils::activate_all_features(&mut genesis_config);
+        }
 
         // Based off of genesis/src/main.rs
         // loop through this. we only excpect to loop through once for bootstrap.
@@ -401,7 +449,7 @@ impl Genesis {
                 &account.identity.pubkey(),
                 &account.identity.pubkey(),
                 &account.identity.pubkey(),
-                commission,
+                DEFAULT_COMMISSION,
                 VoteState::get_rent_exempt_reserve(&rent).max(1),
             );
 
@@ -419,18 +467,6 @@ impl Genesis {
             genesis_config.add_account(account.vote_account.pubkey(), vote_account);
         }
 
-        if let Some(faucet_keypair) = &self.faucet_keypair {
-            genesis_config.add_account(
-                faucet_keypair.pubkey(),
-                AccountSharedData::new(faucet_lamports, 0, &system_program::id()),
-            );
-        }
-
-        solana_stake_program::add_genesis_accounts(&mut genesis_config);
-        if genesis_config.cluster_type == ClusterType::Development {
-            solana_runtime::genesis_utils::activate_all_features(&mut genesis_config);
-        }
-
         let issued_lamports = genesis_config
             .accounts
             .values()
@@ -438,6 +474,8 @@ impl Genesis {
             .sum::<u64>();
 
         add_genesis_accounts(&mut genesis_config, issued_lamports - faucet_lamports);
+
+        info!("genesis_config: {}", genesis_config);
 
         let parse_address = |address: &str, input_type: &str| {
             address.parse::<Pubkey>().unwrap_or_else(|err| {

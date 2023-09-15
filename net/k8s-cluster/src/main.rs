@@ -3,11 +3,12 @@ use {
     log::*,
     solana_k8s_cluster::{
         docker::{DockerConfig, DockerImageConfig},
-        genesis::{Genesis, SetupConfig, GenesisFlags},
+        genesis::{Genesis, GenesisFlags, SetupConfig},
         initialize_globals,
         kubernetes::Kubernetes,
         release::{BuildConfig, Deploy},
     },
+    solana_sdk::genesis_config::ClusterType,
     std::{thread, time::Duration},
 };
 
@@ -141,21 +142,47 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("hashes-per-tick")
                 .takes_value(true)
                 .help("Genesis config. hashes per tick"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("slots_per_epoch")
                 .long("slots-per-epoch")
                 .takes_value(true)
                 .help("Genesis config. slots per epoch"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("target_lamports_per_signature")
                 .long("target-lamports-per-signature")
                 .takes_value(true)
                 .help("Genesis config. target lamports per signature"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("faucet_lamports")
                 .long("faucet-lamports")
                 .takes_value(true)
                 .help("Genesis config. faucet lamports"),
+        )
+        .arg(
+            Arg::with_name("enable_warmup_epochs")
+                .long("enable-warmup-epochs")
+                .takes_value(true)
+                .possible_values(&["true", "false"])
+                .default_value("true")
+                .help("Genesis config. enable warmup epoch. defaults to true"),
+        )
+        .arg(
+            Arg::with_name("max_genesis_archive_unpacked_size")
+                .long("max-genesis-archive-unpacked-size")
+                .takes_value(true)
+                .help("Genesis config. max_genesis_archive_unpacked_size"),
+        )
+        .arg(
+            Arg::with_name("cluster_type")
+                .long("cluster-type")
+                .possible_values(&ClusterType::STRINGS)
+                .takes_value(true)
+                .help(
+                    "Selects the features that will be enabled for the cluster"
+                ),
         )
 
         .get_matches()
@@ -186,21 +213,52 @@ async fn main() {
 
     let genesis_flags = GenesisFlags {
         hashes_per_tick: match matches.value_of("hashes_per_tick") {
-            Some(value_str) => Some(value_str.parse().expect("Invalid value for hashes_per_tick")),
+            Some(value_str) => Some(
+                value_str
+                    .parse()
+                    .expect("Invalid value for hashes_per_tick"),
+            ),
             None => None,
-        }, 
+        },
         slots_per_epoch: match matches.value_of("slots_per_epoch") {
-            Some(value_str) => Some(value_str.parse().expect("Invalid value for slots_per_epoch")),
+            Some(value_str) => Some(
+                value_str
+                    .parse()
+                    .expect("Invalid value for slots_per_epoch"),
+            ),
             None => None,
-        }, 
+        },
         target_lamports_per_signature: match matches.value_of("target_lamports_per_signature") {
-            Some(value_str) => Some(value_str.parse().expect("Invalid value for target_lamports_per_signature")),
+            Some(value_str) => Some(
+                value_str
+                    .parse()
+                    .expect("Invalid value for target_lamports_per_signature"),
+            ),
             None => None,
-        }, 
+        },
         faucet_lamports: match matches.value_of("faucet_lamports") {
-            Some(value_str) => Some(value_str.parse().expect("Invalid value for faucet_lamports")),
+            Some(value_str) => Some(
+                value_str
+                    .parse()
+                    .expect("Invalid value for faucet_lamports"),
+            ),
             None => None,
-        }, 
+        },
+        enable_warmup_epochs: matches.value_of("enable_warmup_epochs").unwrap() == "true",
+        max_genesis_archive_unpacked_size: match matches
+            .value_of("max_genesis_archive_unpacked_size")
+        {
+            Some(value_str) => Some(
+                value_str
+                    .parse()
+                    .expect("Invalid value for max_genesis_archive_unpacked_size"),
+            ),
+            None => None,
+        },
+        cluster_type: match matches.value_of("cluster_type") {
+            Some(value_str) => Some(value_str.parse().expect("Invalid value for cluster_type")),
+            None => None,
+        },
     };
 
     // Check if namespace exists
@@ -253,7 +311,7 @@ async fn main() {
                         error!("Exiting........ {}", err);
                         return;
                     }
-                } 
+                }
             }
 
             // Need to push image to registry so Monogon nodes can pull image from registry to local
