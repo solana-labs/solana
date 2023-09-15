@@ -157,6 +157,10 @@ where
 }
 
 // Return an error if string cannot be parsed as pubkey=signature string
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `clap::value_parser!(PubkeySignature)` instead"
+)]
 pub fn is_pubkey_sig<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -178,6 +182,30 @@ where
             }
         }
         Err(err) => Err(format!("{err}")),
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PubkeySignature {
+    pubkey: Pubkey,
+    signature: Signature,
+}
+impl FromStr for PubkeySignature {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut signer = s.split('=');
+        let pubkey = signer
+            .next()
+            .ok_or_else(|| String::from("Malformed signer string"))?;
+        let pubkey = Pubkey::from_str(pubkey).map_err(|err| format!("{err}"))?;
+
+        let signature = signer
+            .next()
+            .ok_or_else(|| String::from("Malformed signer string"))?;
+        let signature = Signature::from_str(signature).map_err(|err| format!("{err}"))?;
+
+        Ok(Self { pubkey, signature })
     }
 }
 
@@ -470,6 +498,44 @@ mod tests {
         let matches_error = command
             .clone()
             .try_get_matches_from(vec!["test", "--hash", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_parse_pubkey_signature() {
+        let command = Command::new("test").arg(
+            Arg::new("pubkeysig")
+                .long("pubkeysig")
+                .takes_value(true)
+                .value_parser(clap::value_parser!(PubkeySignature)),
+        );
+
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec![
+                "test", 
+                "--pubkeysig", 
+                "11111111111111111111111111111111=4TpFuec1u4BZfxgHg2VQXwvBHANZuNSJHmgrU34GViLAM5uYZ8t7uuhWMHN4k9r41B2p9mwnHjPGwTmTxyvCZw63"
+                ]
+            )
+            .unwrap();
+
+        let expected = PubkeySignature {
+            pubkey: Pubkey::from_str("11111111111111111111111111111111").unwrap(),
+            signature: Signature::from_str("4TpFuec1u4BZfxgHg2VQXwvBHANZuNSJHmgrU34GViLAM5uYZ8t7uuhWMHN4k9r41B2p9mwnHjPGwTmTxyvCZw63").unwrap(),
+        };
+
+        assert_eq!(
+            *matches.get_one::<PubkeySignature>("pubkeysig").unwrap(),
+            expected,
+        );
+
+        // validation fails
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--pubkeysig", "this_is_an_invalid_arg"])
             .unwrap_err();
         assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
