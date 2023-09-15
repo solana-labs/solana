@@ -25,6 +25,7 @@ where
 
 // Return an error if string cannot be parsed as type T.
 // Takes a String to avoid second type parameter when used as a clap validator
+#[deprecated(since = "1.17.0", note = "please use `clap::value_parser!` instead")]
 pub fn is_parsable<T>(string: &str) -> Result<(), String>
 where
     T: FromStr,
@@ -35,6 +36,10 @@ where
 
 // Return an error if string cannot be parsed as numeric type T, and value not within specified
 // range
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `clap::builder::RangedI64ValueParser` instead"
+)]
 pub fn is_within_range<T, R>(string: String, range: R) -> Result<(), String>
 where
     T: FromStr + Copy + std::fmt::Debug + PartialOrd + std::ops::Add<Output = T> + From<usize>,
@@ -54,11 +59,19 @@ where
 }
 
 // Return an error if a pubkey cannot be parsed.
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `clap::value_parser!(Pubkey)` instead"
+)]
 pub fn is_pubkey(string: &str) -> Result<(), String> {
     is_parsable_generic::<Pubkey, _>(string)
 }
 
 // Return an error if a hash cannot be parsed.
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `clap::value_parser!(Hash)` instead"
+)]
 pub fn is_hash<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -389,7 +402,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {
+        super::*,
+        clap::{Arg, Command},
+    };
 
     #[test]
     fn test_is_derivation() {
@@ -402,5 +418,59 @@ mod tests {
         assert!(is_derivation("4294967296").is_err());
         assert!(is_derivation("a/b").is_err());
         assert!(is_derivation("0/4294967296").is_err());
+    }
+
+    #[test]
+    fn test_parse_pubkey() {
+        let command = Command::new("test").arg(
+            Arg::new("pubkey")
+                .long("pubkey")
+                .takes_value(true)
+                .value_parser(clap::value_parser!(Pubkey)),
+        );
+
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--pubkey", "11111111111111111111111111111111"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<Pubkey>("pubkey").unwrap(),
+            Pubkey::from_str("11111111111111111111111111111111").unwrap(),
+        );
+
+        // validation fails
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--pubkey", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_parse_hash() {
+        let command = Command::new("test").arg(
+            Arg::new("hash")
+                .long("hash")
+                .takes_value(true)
+                .value_parser(clap::value_parser!(Hash)),
+        );
+
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--hash", "11111111111111111111111111111111"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<Hash>("hash").unwrap(),
+            Hash::from_str("11111111111111111111111111111111").unwrap(),
+        );
+
+        // validation fails
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--hash", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
 }
