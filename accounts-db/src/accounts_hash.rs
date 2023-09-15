@@ -974,16 +974,31 @@ impl<'a> AccountsHasher<'a> {
                     first_items.push(k);
                     first_item_to_pubkey_division.push(i);
                     indexes.push(first_pubkey_in_bin);
+
                     let mut first_pubkey_in_next_bin = first_pubkey_in_bin + 1;
+                    let mut count = 1;
+                    let mut prev_key = &k;
+
                     while first_pubkey_in_next_bin < hash_data.len() {
-                        if binner.bin_from_pubkey(&hash_data[first_pubkey_in_next_bin].pubkey)
-                            != pubkey_bin
-                        {
+                        let curr_key = &hash_data[first_pubkey_in_next_bin].pubkey;
+
+                        if curr_key == prev_key {
+                            // skip same key
+                            first_pubkey_in_next_bin += 1;
+                            continue;
+                        }
+
+                        if binner.bin_from_pubkey(curr_key) != pubkey_bin {
+                            // this key is not in target bin, stop.
                             break;
                         }
+
+                        // found another key in target bin
+                        count += 1;
                         first_pubkey_in_next_bin += 1;
+                        prev_key = curr_key;
                     }
-                    first_pubkey_in_next_bin - first_pubkey_in_bin
+                    count
                 } else {
                     0
                 }
