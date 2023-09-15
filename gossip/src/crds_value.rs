@@ -39,7 +39,7 @@ pub const MAX_VOTES: VoteIndex = 32;
 pub type EpochSlotsIndex = u8;
 pub const MAX_EPOCH_SLOTS: EpochSlotsIndex = 255;
 // We now keep 81000 slots, 81000/MAX_SLOTS_PER_ENTRY = 5.
-pub const MAX_RESTART_LAST_VOTED_FORK_SLOTS: EpochSlotsIndex = 5;
+pub(crate) const MAX_RESTART_LAST_VOTED_FORK_SLOTS: EpochSlotsIndex = 5;
 
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
@@ -167,13 +167,13 @@ impl CrdsData {
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
             5 => CrdsData::Vote(rng.gen_range(0..MAX_VOTES), Vote::new_rand(rng, pubkey)),
             6 => CrdsData::RestartLastVotedForkSlots(
-                rng.gen_range(0..MAX_EPOCH_SLOTS),
+                rng.gen_range(0..MAX_RESTART_LAST_VOTED_FORK_SLOTS),
                 EpochSlots::new_rand(rng, pubkey),
                 rng.gen_range(0..512),
                 Hash::new_unique(),
             ),
             _ => CrdsData::EpochSlots(
-                rng.gen_range(0..MAX_RESTART_LAST_VOTED_FORK_SLOTS),
+                rng.gen_range(0..MAX_EPOCH_SLOTS),
                 EpochSlots::new_rand(rng, pubkey),
             ),
         }
