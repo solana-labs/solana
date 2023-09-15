@@ -1819,7 +1819,7 @@ mod tests {
             lamports: 1,
             pubkey,
         };
-        account_maps.push(val.clone());
+        account_maps.push(val);
 
         let vecs = vec![account_maps.to_vec()];
         let slice = convert_to_slice(&vecs);
@@ -1857,19 +1857,19 @@ mod tests {
                 lamports: 1,
                 pubkey: key,
             };
-            account_maps.push(val.clone());
+            account_maps.push(val);
             let val2 = CalculateHashIntermediate {
                 hash,
                 lamports: 2,
                 pubkey: key2,
             };
-            account_maps.push(val2.clone());
+            account_maps.push(val2);
             let val3 = CalculateHashIntermediate {
                 hash,
                 lamports: 3,
                 pubkey: key2,
             };
-            account_maps2.push(val3.clone());
+            account_maps2.push(val3);
 
             let mut vecs = vec![account_maps.to_vec(), account_maps2.to_vec()];
             if reverse {
@@ -1907,19 +1907,19 @@ mod tests {
                 lamports: 2,
                 pubkey: key2,
             };
-            account_maps.push(val2.clone());
+            account_maps.push(val2);
             let val = CalculateHashIntermediate {
                 hash,
                 lamports: 1,
                 pubkey: key,
             };
-            account_maps.push(val.clone());
+            account_maps.push(val);
             let val3 = CalculateHashIntermediate {
                 hash,
                 lamports: 3,
                 pubkey: key2,
             };
-            account_maps2.push(val3.clone());
+            account_maps2.push(val3);
 
             let mut vecs = vec![account_maps.to_vec(), account_maps2.to_vec()];
             if reverse {
