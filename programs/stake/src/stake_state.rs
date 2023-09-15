@@ -15,10 +15,8 @@ use {
         account_utils::StateMut,
         clock::{Clock, Epoch},
         feature_set::{
-            self, clean_up_delegation_errors,
-            reduce_stake_warmup_cooldown::NewWarmupCooldownRateEpoch,
-            stake_allow_zero_undelegated_amount, stake_merge_with_unmatched_credits_observed,
-            stake_split_uses_rent_sysvar, FeatureSet,
+            self, clean_up_delegation_errors, stake_allow_zero_undelegated_amount,
+            stake_merge_with_unmatched_credits_observed, stake_split_uses_rent_sysvar, FeatureSet,
         },
         instruction::{checked_add, InstructionError},
         pubkey::Pubkey,
