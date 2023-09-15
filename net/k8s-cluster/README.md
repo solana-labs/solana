@@ -97,6 +97,7 @@ Other Notes:
 - Def some hardcoded stuff in here still 
 - genesis creation is hardcoded for the most part in terms of stakes, lamports, etc. 
 - genesis includes bootstrap accounts and SPL args.
+- Registry needs to be remotely accessible by all monogon nodes
 
 TODO:
 - we currently write binary to file for genesis, then read it back to verify it. and then read it again to convert into a base64 string and then converted into binrary and then converted into a GenesisConfig lol. So need to fix
