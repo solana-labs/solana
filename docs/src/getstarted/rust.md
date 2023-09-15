@@ -120,12 +120,12 @@ This program above will simply [log a message](../developing/on-chain-programs/d
 Inside a terminal window, you can build your Solana Rust program by running in the root of your project (i.e. the directory with your `Cargo.toml` file):
 
 ```bash
-cargo build-bpf
+cargo-build-bpf
 ```
 
 > **NOTE:**
 > After each time you build your Solana program, the above command will output the build path of your compiled program's `.so` file and the default keyfile that will be used for the program's address.
-> `cargo build-bpf` installs the toolchain from the currently installed solana CLI tools. You may need to upgrade those tools if you encounter any version incompatibilities.
+> `cargo-build-bpf` installs the toolchain from the currently installed solana CLI tools. You may need to upgrade those tools if you encounter any version incompatibilities.
 
 ## Deploy your Solana program
 

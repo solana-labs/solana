@@ -73,7 +73,7 @@ can be deployed to the cluster:
 
 ```bash
 $ cd <the program directory>
-$ cargo build-bpf
+$ cargo-build-bpf
 ```
 
 ## How to Test
@@ -380,7 +380,7 @@ To create a dump file:
 
 ```bash
 $ cd <program directory>
-$ cargo build-bpf --dump
+$ cargo-build-bpf --dump
 ```
 
 ## Examples
