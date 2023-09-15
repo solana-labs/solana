@@ -8056,7 +8056,7 @@ fn test_replace_non_upgradeable_program_account() {
 
     let original_capitalization = bank.capitalization();
 
-    bank.replace_non_upgradeable_program_account(&dst, &src, "bank-apply_program_replacement");
+    bank.replace_non_upgradeable_program_account(&src, &dst, "bank-apply_program_replacement");
 
     // Destination program account balance is now the source program account's balance
     assert_eq!(bank.get_balance(&dst), src_lamports);
@@ -8167,8 +8167,8 @@ fn test_replace_empty_account_with_upgradeable_program_success(
 
     // Do the replacement
     bank.replace_empty_account_with_upgradeable_program(
-        &dst,
         &src,
+        &dst,
         "bank-apply_empty_account_replacement_for_program",
     );
 
@@ -8294,8 +8294,8 @@ fn test_replace_empty_account_with_upgradeable_program_fail_when_account_exists(
 
     // Attempt the replacement
     bank.replace_empty_account_with_upgradeable_program(
-        &dst,
         &src,
+        &dst,
         "bank-apply_empty_account_replacement_for_program",
     );
 

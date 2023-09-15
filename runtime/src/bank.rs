@@ -8210,10 +8210,10 @@ impl Bank {
     /// `dst`: the program to be replaced
     fn move_account<U, V>(
         &mut self,
-        dst_address: &Pubkey,
         src_address: &Pubkey,
-        dst_account: Option<&U>,
         src_account: &V,
+        dst_address: &Pubkey,
+        dst_account: Option<&U>,
     ) where
         U: ReadableAccount + Sync + ZeroLamport,
         V: ReadableAccount + Sync + ZeroLamport,
@@ -8244,15 +8244,15 @@ impl Bank {
     #[allow(dead_code)]
     fn replace_non_upgradeable_program_account(
         &mut self,
-        dst_address: &Pubkey,
         src_address: &Pubkey,
+        dst_address: &Pubkey,
         datapoint_name: &'static str,
     ) {
         if let Some(dst_account) = self.get_account_with_fixed_root(dst_address) {
             if let Some(src_account) = self.get_account_with_fixed_root(src_address) {
                 datapoint_info!(datapoint_name, ("slot", self.slot, i64));
 
-                self.move_account(dst_address, src_address, Some(&dst_account), &src_account);
+                self.move_account(src_address, &src_account, dst_address, Some(&dst_account));
 
                 // Unload a program from the bank's cache
                 self.loaded_programs_cache
@@ -8266,8 +8266,8 @@ impl Bank {
     /// Use to replace an empty account with a program by feature activation
     fn replace_empty_account_with_upgradeable_program(
         &mut self,
-        dst_address: &Pubkey,
         src_address: &Pubkey,
+        dst_address: &Pubkey,
         datapoint_name: &'static str,
     ) {
         // Must be attempting to replace an empty account with a program
@@ -8314,18 +8314,18 @@ impl Bank {
                             // If the destination data account does not exist, it will be created
                             // If it does exist, it will be overwritten
                             self.move_account(
-                                &dst_data_address,
                                 &src_data_address,
-                                self.get_account_with_fixed_root(&dst_data_address).as_ref(),
                                 &src_data_account,
+                                &dst_data_address,
+                                self.get_account_with_fixed_root(&dst_data_address).as_ref(),
                             );
 
                             // Write the source data account's PDA into the destination program account
                             self.move_account(
-                                dst_address,
                                 src_address,
-                                None::<&AccountSharedData>,
                                 &created_program_account,
+                                dst_address,
+                                None::<&AccountSharedData>,
                             );
 
                             // Any remaining lamports in the source program account are burnt
