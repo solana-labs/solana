@@ -20,6 +20,7 @@
 
 use {
     lazy_static::lazy_static,
+    solana_program::{epoch_schedule::EpochSchedule, stake_history::Epoch},
     solana_sdk::{
         clock::Slot,
         hash::{Hash, Hasher},
@@ -665,18 +666,7 @@ pub mod last_restart_slot_sysvar {
 }
 
 pub mod reduce_stake_warmup_cooldown {
-    use solana_program::{epoch_schedule::EpochSchedule, stake_history::Epoch};
     solana_sdk::declare_id!("GwtDQBghCTBgmX2cpEGNPxTEBUTQRaDMGTr5qychdGMj");
-
-    pub trait NewWarmupCooldownRateEpoch {
-        fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch>;
-    }
-    impl NewWarmupCooldownRateEpoch for super::FeatureSet {
-        fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch> {
-            self.activated_slot(&id())
-                .map(|slot| epoch_schedule.get_epoch(slot))
-        }
-    }
 }
 
 pub mod revise_turbine_epoch_stakes {
@@ -959,6 +949,11 @@ impl FeatureSet {
     pub fn deactivate(&mut self, feature_id: &Pubkey) {
         self.active.remove(feature_id);
         self.inactive.insert(*feature_id);
+    }
+
+    pub fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch> {
+        self.activated_slot(&reduce_stake_warmup_cooldown::id())
+            .map(|slot| epoch_schedule.get_epoch(slot))
     }
 }
 
