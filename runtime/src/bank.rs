@@ -8303,7 +8303,7 @@ impl Bank {
                         // state
                         if new_account.lamports() >= lamports {
                             datapoint_info!(datapoint_name, ("slot", self.slot, i64));
-                            let change_in_cap = new_account.lamports().saturating_sub(lamports);
+                            let change_in_capitalization = new_account.lamports().saturating_sub(lamports);
 
                             // Replace the old data account with the new one
                             // If the old data account does not exist, it will be created
@@ -8324,7 +8324,7 @@ impl Bank {
                             );
 
                             // Any remaining lamports in the new program account are burnt
-                            self.capitalization.fetch_sub(change_in_cap, Relaxed);
+                            self.capitalization.fetch_sub(change_in_capitalization, Relaxed);
                         }
                     }
                 }
