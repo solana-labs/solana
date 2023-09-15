@@ -27,3 +27,7 @@ threads-required = "num-cpus"
 [[profile.ci.overrides]]
 filter = "package(solana-cargo-build-sbf)"
 threads-required = "num-cpus"
+
+[[profile.ci.overrides]]
+filter = "package(solana-local-cluster)"
+threads-required = "num-cpus"
