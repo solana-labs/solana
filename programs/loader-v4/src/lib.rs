@@ -429,8 +429,8 @@ pub fn process_instruction_deploy(
     load_program_metrics.submit_datapoint(&mut invoke_context.timings);
     if let Some(mut source_program) = source_program {
         let rent = invoke_context.get_sysvar_cache().get_rent()?;
-        let required_lamports = rent.minimum_balance(program.get_data().len());
-        let transfer_lamports = program.get_lamports().saturating_sub(required_lamports);
+        let required_lamports = rent.minimum_balance(source_program.get_data().len());
+        let transfer_lamports = required_lamports.saturating_sub(program.get_lamports());
         program.set_data_from_slice(source_program.get_data())?;
         source_program.set_data_length(0)?;
         source_program.checked_sub_lamports(transfer_lamports)?;
