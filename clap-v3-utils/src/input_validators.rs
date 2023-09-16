@@ -206,6 +206,7 @@ impl FromStr for PubkeySignature {
 }
 
 // Return an error if a url cannot be parsed.
+#[deprecated(since = "1.17.0", note = "please use `parse_url` instead")]
 pub fn is_url<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -222,7 +223,6 @@ where
     }
 }
 
-#[deprecated(since = "1.17.0", note = "please use `parse_url` instead")]
 pub fn parse_url(arg: &str) -> Result<String, String> {
     match url::Url::parse(arg) {
         Ok(url) => {
@@ -236,6 +236,7 @@ pub fn parse_url(arg: &str) -> Result<String, String> {
     }
 }
 
+#[deprecated(since = "1.17.0", note = "please use `parse_url_or_moniker` instead")]
 pub fn is_url_or_moniker<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -252,7 +253,6 @@ where
     }
 }
 
-#[deprecated(since = "1.17.0", note = "please use `parse_url_or_moniker` instead")]
 pub fn parse_url_or_moniker(arg: &str) -> Result<String, String> {
     match url::Url::parse(&normalize_to_url_if_moniker(arg)) {
         Ok(url) => {
