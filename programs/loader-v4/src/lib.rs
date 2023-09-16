@@ -341,7 +341,7 @@ pub fn process_instruction_truncate(
         )?;
         if is_initialization {
             let state = get_state_mut(program.get_data_mut()?)?;
-            state.slot = invoke_context.get_sysvar_cache().get_clock()?.slot;
+            state.slot = 0;
             state.status = LoaderV4Status::Retracted;
             state.authority_address = *authority_address;
         }
