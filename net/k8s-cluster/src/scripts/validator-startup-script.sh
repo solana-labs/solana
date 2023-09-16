@@ -1,4 +1,13 @@
 #!/bin/bash
+
+echo "about to show args: "
+mkdir logs
+touch logs/tmp.log
+args=("$@")
+for arg in "${args[@]}"; do
+  echo "Validator Argument: $arg" >> logs/tmp.log
+done
+
 /home/solana/k8s-cluster/src/scripts/decode-accounts.sh -t "validator"
 
 # Maximum number of retries
@@ -62,10 +71,10 @@ nohup solana-validator \
   --gossip-port 8001 \
   --rpc-port 8899 \
   --ledger ledger \
-  --log logs/solana-validator.log \
+  --log - \
   --full-rpc-api \
   --allow-private-addr \
-  >logs/init-validator.log 2>&1 &
+  "$@" &
 
 
 # # Sleep for an hour (3600 seconds)

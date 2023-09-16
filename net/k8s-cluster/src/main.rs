@@ -5,7 +5,7 @@ use {
         docker::{DockerConfig, DockerImageConfig},
         genesis::{Genesis, GenesisFlags, SetupConfig},
         initialize_globals,
-        kubernetes::Kubernetes,
+        kubernetes::{Kubernetes, RuntimeConfig},
         release::{BuildConfig, Deploy},
     },
     solana_sdk::genesis_config::ClusterType,
@@ -184,7 +184,24 @@ fn parse_matches() -> ArgMatches<'static> {
                     "Selects the features that will be enabled for the cluster"
                 ),
         )
-
+        .arg(
+            Arg::with_name("tpu_enable_udp")
+                .long("tpu-enable-udp")
+                .help("Runtime config. Enable UDP for tpu transactions."),
+        )
+        .arg(
+            Arg::with_name("tpu_disable_quic")
+                .long("tpu-disable-quic")
+                .help("Genesis config. Disable quic for tpu packet forwarding"),
+        )
+        .arg(
+            Arg::with_name("gpu_mode")
+                .long("gpu-mode")
+                .takes_value(true)
+                .possible_values(&["on", "off", "auto", "cuda"])
+                .default_value("auto")
+                .help("Not supported yet. Specify GPU mode to launch validators with (default: auto)."),
+        )
         .get_matches()
 }
 
@@ -261,8 +278,14 @@ async fn main() {
         },
     };
 
+    let runtime_config = RuntimeConfig {
+        enable_udp: matches.is_present("tpu_enable_udp"),
+        disable_quic: matches.is_present("tpu_disable_quic"),
+        gpu_mode: matches.value_of("gpu_mode").unwrap(),
+    };
+
     // Check if namespace exists
-    let mut kub_controller = Kubernetes::new(setup_config.namespace).await;
+    let mut kub_controller = Kubernetes::new(setup_config.namespace, &runtime_config).await;
     match kub_controller.namespace_exists().await {
         Ok(res) => {
             if !res {
