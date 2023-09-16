@@ -461,6 +461,7 @@ where
     }
 }
 
+#[deprecated(since = "1.17.0", note = "please use `parse_rfc3339_datetime` instead")]
 pub fn is_rfc3339_datetime<T>(value: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -470,6 +471,13 @@ where
         .map_err(|e| format!("{e}"))
 }
 
+pub fn parse_rfc3339_datetime(arg: &str) -> Result<String, String> {
+    DateTime::parse_from_rfc3339(arg)
+        .map(|_| arg.to_string())
+        .map_err(|e| format!("{e}"))
+}
+
+#[deprecated(since = "1.17.0", note = "please use `parse_derivation` instead")]
 pub fn is_derivation<T>(value: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -492,6 +500,26 @@ where
         .map(|_| ())
 }
 
+pub fn parse_derivation(arg: &str) -> Result<String, String> {
+    let value = arg.replace('\'', "");
+    let mut parts = value.split('/');
+    let account = parts.next().unwrap();
+    account
+        .parse::<u32>()
+        .map_err(|e| format!("Unable to parse derivation, provided: {account}, err: {e}"))
+        .and_then(|_| {
+            if let Some(change) = parts.next() {
+                change.parse::<u32>().map_err(|e| {
+                    format!("Unable to parse derivation, provided: {change}, err: {e}")
+                })
+            } else {
+                Ok(0)
+            }
+        })?;
+    Ok(arg.to_string())
+}
+
+#[deprecated(since = "1.17.0", note = "please use `parse_structured_seed` instead")]
 pub fn is_structured_seed<T>(value: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -537,6 +565,51 @@ where
     }
 }
 
+pub fn parse_structured_seed(arg: &str) -> Result<String, String> {
+    let (prefix, value) = arg
+        .split_once(':')
+        .ok_or("Seed must contain ':' as delimiter")
+        .unwrap();
+    if prefix.is_empty() || value.is_empty() {
+        Err(String::from("Seed prefix or value is empty"))
+    } else {
+        match prefix {
+            "string" | "pubkey" | "hex" | "u8" => Ok(arg.to_string()),
+            _ => {
+                let len = prefix.len();
+                if len != 5 && len != 6 {
+                    Err(format!("Wrong prefix length {len} {prefix}:{value}"))
+                } else {
+                    let sign = &prefix[0..1];
+                    let type_size = &prefix[1..len.saturating_sub(2)];
+                    let byte_order = &prefix[len.saturating_sub(2)..len];
+                    if sign != "u" && sign != "i" {
+                        Err(format!("Wrong prefix sign {sign} {prefix}:{value}"))
+                    } else if type_size != "16"
+                        && type_size != "32"
+                        && type_size != "64"
+                        && type_size != "128"
+                    {
+                        Err(format!(
+                            "Wrong prefix type size {type_size} {prefix}:{value}"
+                        ))
+                    } else if byte_order != "le" && byte_order != "be" {
+                        Err(format!(
+                            "Wrong prefix byte order {byte_order} {prefix}:{value}"
+                        ))
+                    } else {
+                        Ok(arg.to_string())
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `parse_derived_address_seed` instead"
+)]
 pub fn is_derived_address_seed<T>(value: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -551,25 +624,22 @@ where
     }
 }
 
+pub fn parse_derived_address_seed(arg: &str) -> Result<String, String> {
+    if arg.len() > MAX_SEED_LEN {
+        Err(format!(
+            "Address seed must not be longer than {MAX_SEED_LEN} bytes"
+        ))
+    } else {
+        Ok(arg.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {
         super::*,
         clap::{Arg, Command},
     };
-
-    #[test]
-    fn test_is_derivation() {
-        assert_eq!(is_derivation("2"), Ok(()));
-        assert_eq!(is_derivation("0"), Ok(()));
-        assert_eq!(is_derivation("65537"), Ok(()));
-        assert_eq!(is_derivation("0/2"), Ok(()));
-        assert_eq!(is_derivation("0'/2'"), Ok(()));
-        assert!(is_derivation("a").is_err());
-        assert!(is_derivation("4294967296").is_err());
-        assert!(is_derivation("a/b").is_err());
-        assert!(is_derivation("0/4294967296").is_err());
-    }
 
     #[test]
     fn test_parse_pubkey() {
@@ -777,6 +847,37 @@ mod tests {
                     .sol_to_lamport(),
                 RawTokenAmount::Amount(expected_lamport),
             );
+        }
+    }
+
+    #[test]
+    fn test_derivation() {
+        let command = Command::new("test").arg(
+            Arg::new("derivation")
+                .long("derivation")
+                .takes_value(true)
+                .value_parser(parse_derivation),
+        );
+
+        let test_arguments = vec![
+            ("2", true),
+            ("0", true),
+            ("65537", true),
+            ("0/2", true),
+            ("a", false),
+            ("4294967296", false),
+            ("a/b", false),
+            ("0/4294967296", false),
+        ];
+
+        for (arg, should_accept) in test_arguments {
+            if should_accept {
+                let matches = command
+                    .clone()
+                    .try_get_matches_from(vec!["test", "--derivation", arg])
+                    .unwrap();
+                assert_eq!(matches.get_one::<String>("derivation").unwrap(), arg);
+            }
         }
     }
 }
