@@ -21,17 +21,38 @@ use {
     std::{collections::BTreeMap, error::Error, fs::File, io::Read},
 };
 
+pub struct RuntimeConfig<'a> {
+    pub enable_udp: bool,
+    pub disable_quic: bool,
+    pub gpu_mode: &'a str, // TODO: this is not implemented yet
+}
+
 pub struct Kubernetes<'a> {
     client: Client,
     namespace: &'a str,
+    runtime_config: &'a RuntimeConfig<'a>,
 }
 
 impl<'a> Kubernetes<'a> {
-    pub async fn new(namespace: &'a str) -> Kubernetes<'a> {
+    pub async fn new(namespace: &'a str, runtime_config: &'a RuntimeConfig<'a>) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
-            namespace: namespace,
+            namespace,
+            runtime_config,
         }
+    }
+
+    fn generate_command_flags(
+        &mut self,
+    ) -> Vec<String> {
+        let mut flags = Vec::new();
+        if self.runtime_config.enable_udp {
+            flags.push("--tpu-enable-udp".to_string());
+        }
+        if self.runtime_config.disable_quic {
+            flags.push("--tpu-disable-quic".to_string());
+        }
+        flags
     }
 
     pub async fn create_genesis_config_map(&self) -> Result<ConfigMap, kube::Error> {
@@ -85,7 +106,7 @@ impl<'a> Kubernetes<'a> {
     }
 
     pub async fn create_bootstrap_validator_replicas_set(
-        &self,
+        &mut self,
         container_name: &str,
         image_name: &str,
         num_bootstrap_validators: i32,
@@ -120,11 +141,13 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         };
 
-        // let command = vec!["/workspace/start-bootstrap-validator.sh".to_string()];
-        // let command = vec!["sleep".to_string(), "3600".to_string()];
-        let command =
+        let mut command =
             vec!["/home/solana/k8s-cluster/src/scripts/bootstrap-startup-script.sh".to_string()];
-        // let command = vec!["nohup"]
+        command.extend(self.generate_command_flags());
+
+        for c in command.iter() {
+            info!("bootstrap command: {}", c);
+        }
 
         self.create_replicas_set(
             "bootstrap-validator",
@@ -184,7 +207,7 @@ impl<'a> Kubernetes<'a> {
                 containers: vec![Container {
                     name: container_name.to_string(),
                     image: Some(image_name.to_string()),
-                    image_pull_policy: Some("Always".to_string()), // Set the image pull policy to "Never"
+                    image_pull_policy: Some("Always".to_string()),
                     env: Some(env_vars),
                     command: Some(command.clone()),
                     volume_mounts: Some(vec![genesis_volume_mount, accounts_volume_mount]),
@@ -196,11 +219,6 @@ impl<'a> Kubernetes<'a> {
                     run_as_group: Some(1000),
                     ..Default::default()
                 }),
-                // restart_policy: Some("Never".to_string()),
-                // image_pull_secrets: Some(vec![LocalObjectReference {
-                //     name: Some("dockerhub-login".to_string()),
-                //     ..Default::default()
-                // }]),
                 ..Default::default()
             }),
             ..Default::default()
@@ -410,7 +428,7 @@ impl<'a> Kubernetes<'a> {
     }
 
     pub async fn create_validator_replicas_set(
-        &self,
+        &mut self,
         container_name: &str,
         validator_index: i32,
         image_name: &str,
@@ -471,8 +489,13 @@ impl<'a> Kubernetes<'a> {
 
         // let command = vec!["/workspace/start-validator.sh".to_string()];
         // let command = vec!["sleep".to_string(), "3600".to_string()];
-        let command =
+        let mut command =
             vec!["/home/solana/k8s-cluster/src/scripts/validator-startup-script.sh".to_string()];
+        command.extend(self.generate_command_flags());
+        
+        for c in command.iter() {
+            info!("validator command: {}", c);
+        }
 
         self.create_replicas_set(
             format!("validator-{}", validator_index).as_str(),
