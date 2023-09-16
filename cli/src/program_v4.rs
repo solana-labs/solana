@@ -60,6 +60,7 @@ fn process_deploy_program(
             let (create_buffer_message, required_lamports) = build_create_buffer_message(
                 rpc_client.clone(),
                 config,
+                program_address,
                 &buffer_address,
                 &payer_pubkey,
                 &authority_signer.pubkey(),
@@ -397,6 +398,7 @@ fn send_messages(
 fn build_create_buffer_message(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
+    program_address: &Pubkey,
     buffer_address: &Pubkey,
     payer_address: &Pubkey,
     authority: &Pubkey,
@@ -416,21 +418,34 @@ fn build_create_buffer_message(
             return Err("Buffer account passed is already in use by another program".into());
         }
 
-        if !account.data.is_empty() && account.data.len() < expected_account_data_len {
-            return Err(
-                "Buffer account passed is not large enough, may have been for a different deploy?"
-                    .into(),
-            );
-        }
+        if account.lamports < lamports_required || account.data.len() != expected_account_data_len {
+            if program_address == buffer_address {
+                return Err("Buffer account passed could be for a different deploy? It has different size/lamports".into());
+            }
 
-        if account.lamports < lamports_required {
-            return Err(
-                "Buffer account passed does not have enough lamports, may have been for a different deploy?"
-                    .into(),
-            );
+            let (truncate_instructions, balance_needed) = build_truncate_instructions(
+                rpc_client.clone(),
+                payer_address,
+                &account,
+                buffer_address,
+                authority,
+                program_data_length,
+            )?;
+            if !truncate_instructions.is_empty() {
+                Ok((
+                    Some(Message::new_with_blockhash(
+                        &truncate_instructions,
+                        Some(payer_address),
+                        blockhash,
+                    )),
+                    balance_needed,
+                ))
+            } else {
+                Ok((None, 0))
+            }
+        } else {
+            Ok((None, 0))
         }
-
-        Ok((None, 0))
     } else {
         Ok((
             Some(Message::new_with_blockhash(
@@ -593,33 +608,36 @@ fn build_truncate_instructions(
         return Err("Buffer account passed is already in use by another program".into());
     }
 
-    if let Ok(LoaderV4State {
-        slot: _,
-        authority_address,
-        status,
-    }) = solana_loader_v4_program::get_state(&account.data)
-    {
-        if authority != authority_address {
-            return Err(
-                "Program authority does not match with the provided authority address".into(),
-            );
+    let truncate_instruction = if account.data.is_empty() {
+        loader_v4::truncate_uninitialized(buffer_address, authority, program_data_length, payer)
+    } else {
+        if let Ok(LoaderV4State {
+            slot: _,
+            authority_address,
+            status,
+        }) = solana_loader_v4_program::get_state(&account.data)
+        {
+            if authority != authority_address {
+                return Err(
+                    "Program authority does not match with the provided authority address".into(),
+                );
+            }
+
+            if matches!(status, LoaderV4Status::Finalized) {
+                return Err("Program is immutable and it cannot be truncated".into());
+            }
+        } else {
+            return Err("Program account's state could not be deserialized".into());
         }
 
-        if matches!(status, LoaderV4Status::Finalized) {
-            return Err("Program is immutable and cannot be truncated".into());
-        }
-    } else {
-        return Err("Program account's state could not be deserialized".into());
-    }
+        loader_v4::truncate(buffer_address, authority, program_data_length, payer)
+    };
 
     let expected_account_data_len =
         LoaderV4State::program_data_offset().saturating_add(program_data_length as usize);
 
     let lamports_required =
         rpc_client.get_minimum_balance_for_rent_exemption(expected_account_data_len)?;
-
-    let truncate_instruction =
-        loader_v4::truncate(buffer_address, authority, program_data_length, payer);
 
     match account.data.len().cmp(&expected_account_data_len) {
         Ordering::Less => {
