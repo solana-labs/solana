@@ -340,16 +340,18 @@ impl QuicClient {
                             Ok(conn) => {
                                 *conn_guard = Some(conn.clone());
                                 info!(
-                                    "Made connection to {} id {} try_count {}",
+                                    "Made connection to {} id {} try_count {}, from connection cache warming?: {}",
                                     self.addr,
                                     conn.connection.stable_id(),
-                                    connection_try_count
+                                    connection_try_count,
+                                    data.is_empty(),
                                 );
                                 connection_try_count += 1;
                                 conn.connection.clone()
                             }
                             Err(err) => {
-                                info!("Cannot make connection to {}, error {:}", self.addr, err);
+                                info!("Cannot make connection to {}, error {:}, from connection cache warming?: {}",
+                                    self.addr, err, data.is_empty());
                                 return Err(err);
                             }
                         }
