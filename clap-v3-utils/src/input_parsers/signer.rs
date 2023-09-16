@@ -187,3 +187,170 @@ pub fn resolve_signer(
         wallet_manager,
     )
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PubkeySignature {
+    pubkey: Pubkey,
+    signature: Signature,
+}
+impl FromStr for PubkeySignature {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut signer = s.split('=');
+        let pubkey = signer
+            .next()
+            .ok_or_else(|| String::from("Malformed signer string"))?;
+        let pubkey = Pubkey::from_str(pubkey).map_err(|err| format!("{err}"))?;
+
+        let signature = signer
+            .next()
+            .ok_or_else(|| String::from("Malformed signer string"))?;
+        let signature = Signature::from_str(signature).map_err(|err| format!("{err}"))?;
+
+        Ok(Self { pubkey, signature })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        clap::{Arg, Command},
+        solana_sdk::signature::write_keypair_file,
+        std::fs,
+    };
+
+    fn app<'ab>() -> Command<'ab> {
+        Command::new("test")
+            .arg(
+                Arg::new("multiple")
+                    .long("multiple")
+                    .takes_value(true)
+                    .multiple_occurrences(true)
+                    .multiple_values(true),
+            )
+            .arg(Arg::new("single").takes_value(true).long("single"))
+            .arg(Arg::new("unit").takes_value(true).long("unit"))
+    }
+
+    fn tmp_file_path(name: &str, pubkey: &Pubkey) -> String {
+        use std::env;
+        let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
+
+        format!("{out_dir}/tmp/{name}-{pubkey}")
+    }
+
+    #[test]
+    fn test_keypair_of() {
+        let keypair = Keypair::new();
+        let outfile = tmp_file_path("test_keypair_of.json", &keypair.pubkey());
+        let _ = write_keypair_file(&keypair, &outfile).unwrap();
+
+        let matches = app().get_matches_from(vec!["test", "--single", &outfile]);
+        assert_eq!(
+            keypair_of(&matches, "single").unwrap().pubkey(),
+            keypair.pubkey()
+        );
+        assert!(keypair_of(&matches, "multiple").is_none());
+
+        let matches = app().get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
+        assert!(keypair_of(&matches, "single").is_none());
+
+        fs::remove_file(&outfile).unwrap();
+    }
+
+    #[test]
+    fn test_pubkey_of() {
+        let keypair = Keypair::new();
+        let outfile = tmp_file_path("test_pubkey_of.json", &keypair.pubkey());
+        let _ = write_keypair_file(&keypair, &outfile).unwrap();
+
+        let matches = app().get_matches_from(vec!["test", "--single", &outfile]);
+        assert_eq!(pubkey_of(&matches, "single"), Some(keypair.pubkey()));
+        assert_eq!(pubkey_of(&matches, "multiple"), None);
+
+        let matches =
+            app().get_matches_from(vec!["test", "--single", &keypair.pubkey().to_string()]);
+        assert_eq!(pubkey_of(&matches, "single"), Some(keypair.pubkey()));
+
+        let matches = app().get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
+        assert_eq!(pubkey_of(&matches, "single"), None);
+
+        fs::remove_file(&outfile).unwrap();
+    }
+
+    #[test]
+    fn test_pubkeys_of() {
+        let keypair = Keypair::new();
+        let outfile = tmp_file_path("test_pubkeys_of.json", &keypair.pubkey());
+        let _ = write_keypair_file(&keypair, &outfile).unwrap();
+
+        let matches = app().get_matches_from(vec![
+            "test",
+            "--multiple",
+            &keypair.pubkey().to_string(),
+            "--multiple",
+            &outfile,
+        ]);
+        assert_eq!(
+            pubkeys_of(&matches, "multiple"),
+            Some(vec![keypair.pubkey(), keypair.pubkey()])
+        );
+        fs::remove_file(&outfile).unwrap();
+    }
+
+    #[test]
+    fn test_pubkeys_sigs_of() {
+        let key1 = solana_sdk::pubkey::new_rand();
+        let key2 = solana_sdk::pubkey::new_rand();
+        let sig1 = Keypair::new().sign_message(&[0u8]);
+        let sig2 = Keypair::new().sign_message(&[1u8]);
+        let signer1 = format!("{key1}={sig1}");
+        let signer2 = format!("{key2}={sig2}");
+        let matches =
+            app().get_matches_from(vec!["test", "--multiple", &signer1, "--multiple", &signer2]);
+        assert_eq!(
+            pubkeys_sigs_of(&matches, "multiple"),
+            Some(vec![(key1, sig1), (key2, sig2)])
+        );
+    }
+
+    #[test]
+    fn test_parse_pubkey_signature() {
+        let command = Command::new("test").arg(
+            Arg::new("pubkeysig")
+                .long("pubkeysig")
+                .takes_value(true)
+                .value_parser(clap::value_parser!(PubkeySignature)),
+        );
+
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec![
+                "test", 
+                "--pubkeysig", 
+                "11111111111111111111111111111111=4TpFuec1u4BZfxgHg2VQXwvBHANZuNSJHmgrU34GViLAM5uYZ8t7uuhWMHN4k9r41B2p9mwnHjPGwTmTxyvCZw63"
+                ]
+            )
+            .unwrap();
+
+        let expected = PubkeySignature {
+            pubkey: Pubkey::from_str("11111111111111111111111111111111").unwrap(),
+            signature: Signature::from_str("4TpFuec1u4BZfxgHg2VQXwvBHANZuNSJHmgrU34GViLAM5uYZ8t7uuhWMHN4k9r41B2p9mwnHjPGwTmTxyvCZw63").unwrap(),
+        };
+
+        assert_eq!(
+            *matches.get_one::<PubkeySignature>("pubkeysig").unwrap(),
+            expected,
+        );
+
+        // validation fails
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--pubkeysig", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+}

@@ -1,9 +1,10 @@
 use {
+    crate::input_validators::normalize_to_url_if_moniker,
     chrono::DateTime,
     clap::ArgMatches,
     solana_sdk::{
         clock::UnixTimestamp, commitment_config::CommitmentConfig, genesis_config::ClusterType,
-        native_token::sol_to_lamports,
+        native_token::sol_to_lamports, pubkey::MAX_SEED_LEN,
     },
     std::str::FromStr,
 };
@@ -64,13 +65,186 @@ pub fn commitment_of(matches: &ArgMatches, name: &str) -> Option<CommitmentConfi
         .map(|value| CommitmentConfig::from_str(value).unwrap_or_default())
 }
 
+pub fn parse_url(arg: &str) -> Result<String, String> {
+    match url::Url::parse(arg) {
+        Ok(url) => {
+            if url.has_host() {
+                Ok(arg.to_string())
+            } else {
+                Err("no host provided".to_string())
+            }
+        }
+        Err(err) => Err(format!("{err}")),
+    }
+}
+
+pub fn parse_url_or_moniker(arg: &str) -> Result<String, String> {
+    match url::Url::parse(&normalize_to_url_if_moniker(arg)) {
+        Ok(url) => {
+            if url.has_host() {
+                Ok(arg.to_string())
+            } else {
+                Err("no host provided".to_string())
+            }
+        }
+        Err(err) => Err(format!("{err}")),
+    }
+}
+
+pub fn parse_pow2(arg: &str) -> Result<usize, String> {
+    arg.parse::<usize>()
+        .map_err(|e| format!("Unable to parse, provided: {arg}, err: {e}"))
+        .and_then(|v| {
+            if !v.is_power_of_two() {
+                Err(format!("Must be a power of 2: {v}"))
+            } else {
+                Ok(v)
+            }
+        })
+}
+
+pub fn parse_percentage(arg: &str) -> Result<u8, String> {
+    arg.parse::<u8>()
+        .map_err(|e| format!("Unable to parse input percentage, provided: {arg}, err: {e}"))
+        .and_then(|v| {
+            if v > 100 {
+                Err(format!(
+                    "Percentage must be in range of 0 to 100, provided: {v}"
+                ))
+            } else {
+                Ok(v)
+            }
+        })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum UiTokenAmount {
+    Amount(f64),
+    All,
+}
+impl UiTokenAmount {
+    pub fn parse_amount(arg: &str) -> Result<UiTokenAmount, String> {
+        if let Ok(amount) = arg.parse::<f64>() {
+            Ok(UiTokenAmount::Amount(amount))
+        } else {
+            Err(format!("Unable to parse input amount, provided: {arg}"))
+        }
+    }
+
+    pub fn parse_amount_or_all(arg: &str) -> Result<UiTokenAmount, String> {
+        if let Ok(amount) = arg.parse::<f64>() {
+            Ok(UiTokenAmount::Amount(amount))
+        } else if arg == "ALL" {
+            Ok(UiTokenAmount::All)
+        } else {
+            Err(format!(
+                "Unable to parse input amount as float or 'ALL' keyword, provided: {arg}"
+            ))
+        }
+    }
+
+    pub fn to_raw_amount(&self, decimals: u8) -> RawTokenAmount {
+        match self {
+            UiTokenAmount::Amount(amount) => {
+                RawTokenAmount::Amount((amount * 10_usize.pow(decimals as u32) as f64) as u64)
+            }
+            UiTokenAmount::All => RawTokenAmount::All,
+        }
+    }
+
+    pub fn sol_to_lamport(&self) -> RawTokenAmount {
+        const NATIVE_SOL_DECIMALS: u8 = 9;
+        self.to_raw_amount(NATIVE_SOL_DECIMALS)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum RawTokenAmount {
+    Amount(u64),
+    All,
+}
+
+pub fn parse_rfc3339_datetime(arg: &str) -> Result<String, String> {
+    DateTime::parse_from_rfc3339(arg)
+        .map(|_| arg.to_string())
+        .map_err(|e| format!("{e}"))
+}
+
+pub fn parse_derivation(arg: &str) -> Result<String, String> {
+    let value = arg.replace('\'', "");
+    let mut parts = value.split('/');
+    let account = parts.next().unwrap();
+    account
+        .parse::<u32>()
+        .map_err(|e| format!("Unable to parse derivation, provided: {account}, err: {e}"))
+        .and_then(|_| {
+            if let Some(change) = parts.next() {
+                change.parse::<u32>().map_err(|e| {
+                    format!("Unable to parse derivation, provided: {change}, err: {e}")
+                })
+            } else {
+                Ok(0)
+            }
+        })?;
+    Ok(arg.to_string())
+}
+
+pub fn parse_structured_seed(arg: &str) -> Result<String, String> {
+    let (prefix, value) = arg
+        .split_once(':')
+        .ok_or("Seed must contain ':' as delimiter")
+        .unwrap();
+    if prefix.is_empty() || value.is_empty() {
+        Err(String::from("Seed prefix or value is empty"))
+    } else {
+        match prefix {
+            "string" | "pubkey" | "hex" | "u8" => Ok(arg.to_string()),
+            _ => {
+                let len = prefix.len();
+                if len != 5 && len != 6 {
+                    Err(format!("Wrong prefix length {len} {prefix}:{value}"))
+                } else {
+                    let sign = &prefix[0..1];
+                    let type_size = &prefix[1..len.saturating_sub(2)];
+                    let byte_order = &prefix[len.saturating_sub(2)..len];
+                    if sign != "u" && sign != "i" {
+                        Err(format!("Wrong prefix sign {sign} {prefix}:{value}"))
+                    } else if type_size != "16"
+                        && type_size != "32"
+                        && type_size != "64"
+                        && type_size != "128"
+                    {
+                        Err(format!(
+                            "Wrong prefix type size {type_size} {prefix}:{value}"
+                        ))
+                    } else if byte_order != "le" && byte_order != "be" {
+                        Err(format!(
+                            "Wrong prefix byte order {byte_order} {prefix}:{value}"
+                        ))
+                    } else {
+                        Ok(arg.to_string())
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub fn parse_derived_address_seed(arg: &str) -> Result<String, String> {
+    if arg.len() > MAX_SEED_LEN {
+        Err(format!(
+            "Address seed must not be longer than {MAX_SEED_LEN} bytes"
+        ))
+    } else {
+        Ok(arg.to_string())
+    }
+}
 #[cfg(test)]
 mod tests {
     use {
         super::*,
         clap::{Arg, Command},
-        solana_sdk::signature::write_keypair_file,
-        std::fs,
+        solana_sdk::{hash::Hash, pubkey::Pubkey},
     };
 
     fn app<'ab>() -> Command<'ab> {
@@ -84,13 +258,6 @@ mod tests {
             )
             .arg(Arg::new("single").takes_value(true).long("single"))
             .arg(Arg::new("unit").takes_value(true).long("unit"))
-    }
-
-    fn tmp_file_path(name: &str, pubkey: &Pubkey) -> String {
-        use std::env;
-        let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-
-        format!("{out_dir}/tmp/{name}-{pubkey}")
     }
 
     #[test]
@@ -126,77 +293,204 @@ mod tests {
     }
 
     #[test]
-    fn test_keypair_of() {
-        let keypair = Keypair::new();
-        let outfile = tmp_file_path("test_keypair_of.json", &keypair.pubkey());
-        let _ = write_keypair_file(&keypair, &outfile).unwrap();
-
-        let matches = app().get_matches_from(vec!["test", "--single", &outfile]);
-        assert_eq!(
-            keypair_of(&matches, "single").unwrap().pubkey(),
-            keypair.pubkey()
+    fn test_parse_pubkey() {
+        let command = Command::new("test").arg(
+            Arg::new("pubkey")
+                .long("pubkey")
+                .takes_value(true)
+                .value_parser(clap::value_parser!(Pubkey)),
         );
-        assert!(keypair_of(&matches, "multiple").is_none());
 
-        let matches = app().get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
-        assert!(keypair_of(&matches, "single").is_none());
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--pubkey", "11111111111111111111111111111111"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<Pubkey>("pubkey").unwrap(),
+            Pubkey::from_str("11111111111111111111111111111111").unwrap(),
+        );
 
-        fs::remove_file(&outfile).unwrap();
+        // validation fails
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--pubkey", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
 
     #[test]
-    fn test_pubkey_of() {
-        let keypair = Keypair::new();
-        let outfile = tmp_file_path("test_pubkey_of.json", &keypair.pubkey());
-        let _ = write_keypair_file(&keypair, &outfile).unwrap();
+    fn test_parse_hash() {
+        let command = Command::new("test").arg(
+            Arg::new("hash")
+                .long("hash")
+                .takes_value(true)
+                .value_parser(clap::value_parser!(Hash)),
+        );
 
-        let matches = app().get_matches_from(vec!["test", "--single", &outfile]);
-        assert_eq!(pubkey_of(&matches, "single"), Some(keypair.pubkey()));
-        assert_eq!(pubkey_of(&matches, "multiple"), None);
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--hash", "11111111111111111111111111111111"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<Hash>("hash").unwrap(),
+            Hash::from_str("11111111111111111111111111111111").unwrap(),
+        );
 
-        let matches =
-            app().get_matches_from(vec!["test", "--single", &keypair.pubkey().to_string()]);
-        assert_eq!(pubkey_of(&matches, "single"), Some(keypair.pubkey()));
-
-        let matches = app().get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
-        assert_eq!(pubkey_of(&matches, "single"), None);
-
-        fs::remove_file(&outfile).unwrap();
+        // validation fails
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--hash", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
 
     #[test]
-    fn test_pubkeys_of() {
-        let keypair = Keypair::new();
-        let outfile = tmp_file_path("test_pubkeys_of.json", &keypair.pubkey());
-        let _ = write_keypair_file(&keypair, &outfile).unwrap();
-
-        let matches = app().get_matches_from(vec![
-            "test",
-            "--multiple",
-            &keypair.pubkey().to_string(),
-            "--multiple",
-            &outfile,
-        ]);
-        assert_eq!(
-            pubkeys_of(&matches, "multiple"),
-            Some(vec![keypair.pubkey(), keypair.pubkey()])
+    fn test_parse_token_amount() {
+        let command = Command::new("test").arg(
+            Arg::new("amount")
+                .long("amount")
+                .takes_value(true)
+                .value_parser(UiTokenAmount::parse_amount),
         );
-        fs::remove_file(&outfile).unwrap();
+
+        // success cases
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "11223344"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
+            UiTokenAmount::Amount(11223344_f64),
+        );
+
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "0.11223344"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
+            UiTokenAmount::Amount(0.11223344),
+        );
+
+        // validation fail cases
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "all"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
 
     #[test]
-    fn test_pubkeys_sigs_of() {
-        let key1 = solana_sdk::pubkey::new_rand();
-        let key2 = solana_sdk::pubkey::new_rand();
-        let sig1 = Keypair::new().sign_message(&[0u8]);
-        let sig2 = Keypair::new().sign_message(&[1u8]);
-        let signer1 = format!("{key1}={sig1}");
-        let signer2 = format!("{key2}={sig2}");
-        let matches =
-            app().get_matches_from(vec!["test", "--multiple", &signer1, "--multiple", &signer2]);
-        assert_eq!(
-            pubkeys_sigs_of(&matches, "multiple"),
-            Some(vec![(key1, sig1), (key2, sig2)])
+    fn test_parse_token_amount_or_all() {
+        let command = Command::new("test").arg(
+            Arg::new("amount")
+                .long("amount")
+                .takes_value(true)
+                .value_parser(UiTokenAmount::parse_amount_or_all),
         );
+
+        // success cases
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "11223344"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
+            UiTokenAmount::Amount(11223344_f64),
+        );
+
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "0.11223344"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
+            UiTokenAmount::Amount(0.11223344),
+        );
+
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "ALL"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
+            UiTokenAmount::All,
+        );
+
+        // validation fail cases
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_sol_to_lamports() {
+        let command = Command::new("test").arg(
+            Arg::new("amount")
+                .long("amount")
+                .takes_value(true)
+                .value_parser(UiTokenAmount::parse_amount_or_all),
+        );
+
+        let test_cases = vec![
+            ("50", 50_000_000_000),
+            ("1.5", 1_500_000_000),
+            ("0.03", 30_000_000),
+        ];
+
+        for (arg, expected_lamport) in test_cases {
+            let matches = command
+                .clone()
+                .try_get_matches_from(vec!["test", "--amount", arg])
+                .unwrap();
+            assert_eq!(
+                matches
+                    .get_one::<UiTokenAmount>("amount")
+                    .unwrap()
+                    .sol_to_lamport(),
+                RawTokenAmount::Amount(expected_lamport),
+            );
+        }
+    }
+
+    #[test]
+    fn test_derivation() {
+        let command = Command::new("test").arg(
+            Arg::new("derivation")
+                .long("derivation")
+                .takes_value(true)
+                .value_parser(parse_derivation),
+        );
+
+        let test_arguments = vec![
+            ("2", true),
+            ("0", true),
+            ("65537", true),
+            ("0/2", true),
+            ("a", false),
+            ("4294967296", false),
+            ("a/b", false),
+            ("0/4294967296", false),
+        ];
+
+        for (arg, should_accept) in test_arguments {
+            if should_accept {
+                let matches = command
+                    .clone()
+                    .try_get_matches_from(vec!["test", "--derivation", arg])
+                    .unwrap();
+                assert_eq!(matches.get_one::<String>("derivation").unwrap(), arg);
+            }
+        }
     }
 }
