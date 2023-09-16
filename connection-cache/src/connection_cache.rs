@@ -6,6 +6,7 @@ use {
     },
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     indexmap::map::IndexMap,
+    log::*,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
     solana_sdk::timing::AtomicInterval,
@@ -196,8 +197,9 @@ where
                             let conn = pool.get(idx);
                             if let Ok(conn) = conn {
                                 drop(map);
-                                let conn = conn.new_nonblocking_connection(addr, stats.clone());
-                                let _ = conn.send_data(&[]);
+                                let conn = conn.new_blocking_connection(addr, stats.clone());
+                                let rslt = conn.send_data(&[]);
+                                info!("Create async connection result {rslt:?}");
                             }
                         }
                     }
