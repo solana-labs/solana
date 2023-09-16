@@ -329,8 +329,8 @@ mod tests {
         let matches = command
             .clone()
             .try_get_matches_from(vec![
-                "test", 
-                "--pubkeysig", 
+                "test",
+                "--pubkeysig",
                 "11111111111111111111111111111111=4TpFuec1u4BZfxgHg2VQXwvBHANZuNSJHmgrU34GViLAM5uYZ8t7uuhWMHN4k9r41B2p9mwnHjPGwTmTxyvCZw63"
                 ]
             )
