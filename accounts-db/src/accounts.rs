@@ -648,7 +648,7 @@ impl Accounts {
         ancestors: &Ancestors,
         txs: &[SanitizedTransaction],
         lock_results: &mut [TransactionCheckResult],
-        program_owners: &[&'a Pubkey],
+        program_owners: &'a [Pubkey],
         hash_queue: &BlockhashQueue,
     ) -> HashMap<Pubkey, (&'a Pubkey, u64)> {
         let mut result: HashMap<Pubkey, (&'a Pubkey, u64)> = HashMap::new();
@@ -678,7 +678,7 @@ impl Accounts {
                                 ) {
                                     program_owners
                                         .get(index)
-                                        .map(|owner| entry.insert((*owner, 1)));
+                                        .map(|owner| entry.insert((owner, 1)));
                                 }
                             }
                         });
@@ -2090,11 +2090,12 @@ mod tests {
         let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
+        let owners = &[program1_pubkey, program2_pubkey];
         let programs = accounts.filter_executable_program_accounts(
             &ancestors,
             &[sanitized_tx1, sanitized_tx2],
             &mut [(Ok(()), None), (Ok(()), None)],
-            &[&program1_pubkey, &program2_pubkey],
+            owners,
             &hash_queue,
         );
 
@@ -2198,12 +2199,13 @@ mod tests {
         let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
+        let owners = &[program1_pubkey, program2_pubkey];
         let mut lock_results = vec![(Ok(()), None), (Ok(()), None)];
         let programs = accounts.filter_executable_program_accounts(
             &ancestors,
             &[sanitized_tx1, sanitized_tx2],
             &mut lock_results,
-            &[&program1_pubkey, &program2_pubkey],
+            owners,
             &hash_queue,
         );
 

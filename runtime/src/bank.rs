@@ -5116,11 +5116,11 @@ impl Bank {
         );
         check_time.stop();
 
-        const PROGRAM_OWNERS: &[&Pubkey] = &[
-            &bpf_loader_upgradeable::id(),
-            &bpf_loader::id(),
-            &bpf_loader_deprecated::id(),
-            &loader_v4::id(),
+        const PROGRAM_OWNERS: &[Pubkey] = &[
+            bpf_loader_upgradeable::id(),
+            bpf_loader::id(),
+            bpf_loader_deprecated::id(),
+            loader_v4::id(),
         ];
         let mut program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
             &self.ancestors,
