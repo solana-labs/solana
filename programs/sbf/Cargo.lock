@@ -5235,7 +5235,6 @@ dependencies = [
  "ark-ec",
  "ark-ff",
  "ark-serialize",
- "array-bytes",
  "base64 0.21.4",
  "bincode",
  "bitflags 2.3.3",
