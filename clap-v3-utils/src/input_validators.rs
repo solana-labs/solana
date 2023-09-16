@@ -379,7 +379,7 @@ pub fn parse_percentage(arg: &str) -> Result<u8, String> {
 
 #[deprecated(
     since = "1.17.0",
-    note = "please use `TokenAmount::parse_amount` instead"
+    note = "please use `UiTokenAmount::parse_amount` instead"
 )]
 pub fn is_amount<T>(amount: T) -> Result<(), String>
 where
@@ -394,6 +394,57 @@ where
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum UiTokenAmount {
+    Amount(f64),
+    All,
+}
+impl UiTokenAmount {
+    pub fn parse_amount(arg: &str) -> Result<UiTokenAmount, String> {
+        if let Ok(amount) = arg.parse::<f64>() {
+            Ok(UiTokenAmount::Amount(amount))
+        } else {
+            Err(format!("Unable to parse input amount, provided: {arg}"))
+        }
+    }
+
+    pub fn parse_amount_or_all(arg: &str) -> Result<UiTokenAmount, String> {
+        if let Ok(amount) = arg.parse::<f64>() {
+            Ok(UiTokenAmount::Amount(amount))
+        } else if arg == "ALL" {
+            Ok(UiTokenAmount::All)
+        } else {
+            Err(format!(
+                "Unable to parse input amount as float or 'ALL' keyword, provided: {arg}"
+            ))
+        }
+    }
+
+    pub fn to_raw_amount(&self, decimals: u8) -> RawTokenAmount {
+        match self {
+            UiTokenAmount::Amount(amount) => {
+                RawTokenAmount::Amount((amount * 10_usize.pow(decimals as u32) as f64) as u64)
+            }
+            UiTokenAmount::All => RawTokenAmount::All,
+        }
+    }
+
+    pub fn sol_to_lamport(&self) -> RawTokenAmount {
+        const NATIVE_SOL_DECIMALS: u8 = 9;
+        self.to_raw_amount(NATIVE_SOL_DECIMALS)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum RawTokenAmount {
+    Amount(u64),
+    All,
+}
+
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `TokenAmount::parse_amount` instead"
+)]
 pub fn is_amount_or_all<T>(amount: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
@@ -610,5 +661,122 @@ mod tests {
             .try_get_matches_from(vec!["test", "--pubkeysig", "this_is_an_invalid_arg"])
             .unwrap_err();
         assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_parse_token_amount() {
+        let command = Command::new("test").arg(
+            Arg::new("amount")
+                .long("amount")
+                .takes_value(true)
+                .value_parser(UiTokenAmount::parse_amount),
+        );
+
+        // success cases
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "11223344"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
+            UiTokenAmount::Amount(11223344_f64),
+        );
+
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "0.11223344"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
+            UiTokenAmount::Amount(0.11223344),
+        );
+
+        // validation fail cases
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "all"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_parse_token_amount_or_all() {
+        let command = Command::new("test").arg(
+            Arg::new("amount")
+                .long("amount")
+                .takes_value(true)
+                .value_parser(UiTokenAmount::parse_amount_or_all),
+        );
+
+        // success cases
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "11223344"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
+            UiTokenAmount::Amount(11223344_f64),
+        );
+
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "0.11223344"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
+            UiTokenAmount::Amount(0.11223344),
+        );
+
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "ALL"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<UiTokenAmount>("amount").unwrap(),
+            UiTokenAmount::All,
+        );
+
+        // validation fail cases
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--amount", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_sol_to_lamports() {
+        let command = Command::new("test").arg(
+            Arg::new("amount")
+                .long("amount")
+                .takes_value(true)
+                .value_parser(UiTokenAmount::parse_amount_or_all),
+        );
+
+        let test_cases = vec![
+            ("50", 50_000_000_000),
+            ("1.5", 1_500_000_000),
+            ("0.03", 30_000_000),
+        ];
+
+        for (arg, expected_lamport) in test_cases {
+            let matches = command
+                .clone()
+                .try_get_matches_from(vec!["test", "--amount", arg])
+                .unwrap();
+            assert_eq!(
+                matches
+                    .get_one::<UiTokenAmount>("amount")
+                    .unwrap()
+                    .sol_to_lamport(),
+                RawTokenAmount::Amount(expected_lamport),
+            );
+        }
     }
 }

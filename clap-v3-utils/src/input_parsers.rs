@@ -225,6 +225,10 @@ pub fn resolve_signer(
     )
 }
 
+#[deprecated(
+    since = "1.17.0",
+    note = "please use `UiTokenAmount::parse_amount` and `UiTokenAmount::sol_to_lamport` instead"
+)]
 pub fn lamports_of_sol(matches: &ArgMatches, name: &str) -> Option<u64> {
     value_of(matches, name).map(sol_to_lamports)
 }
@@ -373,17 +377,5 @@ mod tests {
             pubkeys_sigs_of(&matches, "multiple"),
             Some(vec![(key1, sig1), (key2, sig2)])
         );
-    }
-
-    #[test]
-    fn test_lamports_of_sol() {
-        let matches = app().get_matches_from(vec!["test", "--single", "50"]);
-        assert_eq!(lamports_of_sol(&matches, "single"), Some(50_000_000_000));
-        assert_eq!(lamports_of_sol(&matches, "multiple"), None);
-        let matches = app().get_matches_from(vec!["test", "--single", "1.5"]);
-        assert_eq!(lamports_of_sol(&matches, "single"), Some(1_500_000_000));
-        assert_eq!(lamports_of_sol(&matches, "multiple"), None);
-        let matches = app().get_matches_from(vec!["test", "--single", "0.03"]);
-        assert_eq!(lamports_of_sol(&matches, "single"), Some(30_000_000));
     }
 }
