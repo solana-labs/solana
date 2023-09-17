@@ -246,6 +246,7 @@ where
 
         if need_new_connection && !should_create_connection {
             // trigger an async connection create
+            info!("Triggering async connection for {addr:?}");
             self.sender.send(addr.clone()).unwrap();
         }
 
@@ -290,6 +291,7 @@ where
                 if pool.need_new_connection(connection_pool_size).1 {
                     pool.add_connection(&config, addr);
                     async_connection_sender.map(|sender| {
+                        info!("Sending async connection creation {} for {addr}", pool.num_connections() - 1);
                         sender.send((pool.num_connections() - 1, *addr)).unwrap();
                     });
                 } else {
@@ -340,6 +342,7 @@ where
                 } else {
                     let connection = pool.borrow_connection();
                     if need_connection {
+                        info!("Creating connection async for {addr}");
                         self.sender.send(addr.clone()).unwrap();
                     }
                     CreateConnectionResult {
