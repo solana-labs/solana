@@ -245,7 +245,7 @@ impl Crds {
                     CrdsData::DuplicateShred(_, _) => {
                         self.duplicate_shreds.insert(value.ordinal, entry_index);
                     }
-                    CrdsData::RestartLastVotedForkSlots(_, _, _, _) => {
+                    CrdsData::RestartLastVotedForkSlots(_, _) => {
                         self.restart_last_voted_fork_slots
                             .insert(value.ordinal, entry_index);
                     }
@@ -284,7 +284,7 @@ impl Crds {
                         self.duplicate_shreds.remove(&entry.get().ordinal);
                         self.duplicate_shreds.insert(value.ordinal, entry_index);
                     }
-                    CrdsData::RestartLastVotedForkSlots(_, _, _, _) => {
+                    CrdsData::RestartLastVotedForkSlots(_, _) => {
                         self.restart_last_voted_fork_slots
                             .remove(&entry.get().ordinal);
                         self.restart_last_voted_fork_slots
@@ -572,7 +572,7 @@ impl Crds {
             CrdsData::DuplicateShred(_, _) => {
                 self.duplicate_shreds.remove(&value.ordinal);
             }
-            CrdsData::RestartLastVotedForkSlots(_, _, _, _) => {
+            CrdsData::RestartLastVotedForkSlots(_, _) => {
                 self.restart_last_voted_fork_slots.remove(&value.ordinal);
             }
             _ => (),
@@ -612,7 +612,7 @@ impl Crds {
                 CrdsData::DuplicateShred(_, _) => {
                     self.duplicate_shreds.insert(value.ordinal, index);
                 }
-                CrdsData::RestartLastVotedForkSlots(_, _, _, _) => {
+                CrdsData::RestartLastVotedForkSlots(_, _) => {
                     self.restart_last_voted_fork_slots
                         .insert(value.ordinal, index);
                 }
@@ -756,7 +756,7 @@ impl CrdsDataStats {
             CrdsData::DuplicateShred(_, _) => 9,
             CrdsData::SnapshotHashes(_) => 10,
             CrdsData::ContactInfo(_) => 11,
-            CrdsData::RestartLastVotedForkSlots(_, _, _, _) => 12,
+            CrdsData::RestartLastVotedForkSlots(_, _) => 12,
             // Update CrdsCountsArray if new items are added here.
         }
     }
@@ -1187,12 +1187,7 @@ mod tests {
             .table
             .values()
             .filter(|v| v.ordinal >= since)
-            .filter(|v| {
-                matches!(
-                    v.value.data,
-                    CrdsData::RestartLastVotedForkSlots(_, _, _, _)
-                )
-            })
+            .filter(|v| matches!(v.value.data, CrdsData::RestartLastVotedForkSlots(_, _)))
             .count();
         let mut cursor = Cursor(since);
         assert_eq!(
@@ -1211,7 +1206,7 @@ mod tests {
         for value in crds.get_restart_last_voted_fork_slots(&mut Cursor(since)) {
             assert!(value.ordinal >= since);
             match value.value.data {
-                CrdsData::RestartLastVotedForkSlots(_, _, _, _) => (),
+                CrdsData::RestartLastVotedForkSlots(_, _) => (),
                 _ => panic!("not a last-voted-fork-slot!"),
             }
         }
@@ -1275,12 +1270,7 @@ mod tests {
         let num_restart_last_voted_fork_slots = crds
             .table
             .values()
-            .filter(|v| {
-                matches!(
-                    v.value.data,
-                    CrdsData::RestartLastVotedForkSlots(_, _, _, _)
-                )
-            })
+            .filter(|v| matches!(v.value.data, CrdsData::RestartLastVotedForkSlots(_, _)))
             .count();
         assert_eq!(
             crds.table.len(),
@@ -1307,7 +1297,7 @@ mod tests {
             crds.get_restart_last_voted_fork_slots(&mut Cursor::default())
         {
             match restart_last_voted_fork_slots.value.data {
-                CrdsData::RestartLastVotedForkSlots(_, _, _, _) => (),
+                CrdsData::RestartLastVotedForkSlots(_, _) => (),
                 _ => panic!("not a restart-last-voted-fork-slot!"),
             }
         }

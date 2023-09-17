@@ -96,7 +96,7 @@ pub enum CrdsData {
     DuplicateShred(DuplicateShredIndex, DuplicateShred),
     SnapshotHashes(SnapshotHashes),
     ContactInfo(ContactInfo),
-    RestartLastVotedForkSlots(EpochSlotsIndex, EpochSlots, Slot, Hash),
+    RestartLastVotedForkSlots(EpochSlotsIndex, RestartLastVotedForkSlots),
 }
 
 impl Sanitize for CrdsData {
@@ -135,11 +135,11 @@ impl Sanitize for CrdsData {
             }
             CrdsData::SnapshotHashes(val) => val.sanitize(),
             CrdsData::ContactInfo(node) => node.sanitize(),
-            CrdsData::RestartLastVotedForkSlots(ix, slots, _last_vote_slot, last_vote_hash) => {
+            CrdsData::RestartLastVotedForkSlots(ix, slots) => {
                 if *ix as usize >= MAX_RESTART_LAST_VOTED_FORK_SLOTS as usize {
                     return Err(SanitizeError::ValueOutOfBounds);
                 }
-                slots.sanitize().and(last_vote_hash.sanitize())
+                slots.sanitize()
             }
         }
     }
@@ -167,10 +167,8 @@ impl CrdsData {
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
             5 => CrdsData::Vote(rng.gen_range(0..MAX_VOTES), Vote::new_rand(rng, pubkey)),
             6 => CrdsData::RestartLastVotedForkSlots(
-                rng.gen_range(0..MAX_RESTART_LAST_VOTED_FORK_SLOTS),
-                EpochSlots::new_rand(rng, pubkey),
-                rng.gen_range(0..512),
-                Hash::new_unique(),
+                0,
+                RestartLastVotedForkSlots::new_rand(rng, pubkey),
             ),
             _ => CrdsData::EpochSlots(
                 rng.gen_range(0..MAX_EPOCH_SLOTS),
@@ -500,6 +498,69 @@ impl Sanitize for NodeInstance {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Default, PartialEq, Eq, AbiExample)]
+pub struct RestartLastVotedForkSlots {
+    pub slots: EpochSlots,
+    pub last_voted_slot: Slot,
+    pub last_voted_hash: Hash,
+}
+
+impl Sanitize for RestartLastVotedForkSlots {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        self.slots.sanitize()?;
+        self.last_voted_hash.sanitize()
+    }
+}
+impl fmt::Debug for RestartLastVotedForkSlots {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "RestartLastVotedForkSlots {{ slots: {:?} last_voted: {}({}) }}",
+            self.slots, self.last_voted_slot, self.last_voted_hash
+        )
+    }
+}
+
+impl RestartLastVotedForkSlots {
+    pub fn new(from: Pubkey, now: u64, last_voted_slot: Slot, last_voted_hash: Hash) -> Self {
+        Self {
+            slots: EpochSlots {
+                from,
+                slots: vec![],
+                wallclock: now,
+            },
+            last_voted_slot,
+            last_voted_hash,
+        }
+    }
+
+    pub fn new_from_fields(
+        slots: EpochSlots,
+        last_voted_slot: Slot,
+        last_voted_hash: Hash,
+    ) -> Self {
+        Self {
+            slots,
+            last_voted_slot,
+            last_voted_hash,
+        }
+    }
+
+    /// New random Version for tests and benchmarks.
+    pub fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
+        let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);
+        Self {
+            slots: EpochSlots::new_rand(rng, Some(pubkey)),
+            last_voted_slot: rng.gen_range(0..512),
+            last_voted_hash: Hash::new_unique(),
+        }
+    }
+
+    pub fn fill(&mut self, update: &[Slot]) -> usize {
+        self.slots.fill(update, timestamp())
+    }
+}
+
 /// Type of the replicated value
 /// These are labels for values in a record that is associated with `Pubkey`
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]
@@ -613,7 +674,7 @@ impl CrdsValue {
             CrdsData::DuplicateShred(_, shred) => shred.wallclock,
             CrdsData::SnapshotHashes(hash) => hash.wallclock,
             CrdsData::ContactInfo(node) => node.wallclock(),
-            CrdsData::RestartLastVotedForkSlots(_, slots, _, _) => slots.wallclock,
+            CrdsData::RestartLastVotedForkSlots(_, slots) => slots.slots.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -630,7 +691,7 @@ impl CrdsValue {
             CrdsData::DuplicateShred(_, shred) => shred.from,
             CrdsData::SnapshotHashes(hash) => hash.from,
             CrdsData::ContactInfo(node) => *node.pubkey(),
-            CrdsData::RestartLastVotedForkSlots(_, slots, _, _) => slots.from,
+            CrdsData::RestartLastVotedForkSlots(_, slots) => slots.slots.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -649,7 +710,7 @@ impl CrdsValue {
             CrdsData::DuplicateShred(ix, shred) => CrdsValueLabel::DuplicateShred(*ix, shred.from),
             CrdsData::SnapshotHashes(_) => CrdsValueLabel::SnapshotHashes(self.pubkey()),
             CrdsData::ContactInfo(node) => CrdsValueLabel::ContactInfo(*node.pubkey()),
-            CrdsData::RestartLastVotedForkSlots(ix, _, _, _) => {
+            CrdsData::RestartLastVotedForkSlots(ix, _) => {
                 CrdsValueLabel::RestartLastVotedForkSlots(*ix, self.pubkey())
             }
         }
@@ -671,7 +732,7 @@ impl CrdsValue {
     pub(crate) fn epoch_slots(&self) -> Option<&EpochSlots> {
         match &self.data {
             CrdsData::EpochSlots(_, slots) => Some(slots),
-            CrdsData::RestartLastVotedForkSlots(_, slots, _, _) => Some(slots),
+            CrdsData::RestartLastVotedForkSlots(_, slots) => Some(&slots.slots),
             _ => None,
         }
     }
@@ -1103,12 +1164,13 @@ mod test {
     #[test]
     fn test_restart_last_voted_fork_slots() {
         let keypair = Keypair::new();
-        let mut epoch_slots = EpochSlots::new(keypair.pubkey(), timestamp());
         let slot = 53;
-        epoch_slots.fill(&[slot], timestamp());
+        let mut slots =
+            RestartLastVotedForkSlots::new(keypair.pubkey(), timestamp(), slot, Hash::default());
+        slots.fill(&[slot]);
         let ix = 1;
         let value = CrdsValue::new_signed(
-            CrdsData::RestartLastVotedForkSlots(ix, epoch_slots.clone(), slot, Hash::default()),
+            CrdsData::RestartLastVotedForkSlots(ix, slots.clone()),
             &keypair,
         );
         assert_eq!(value.sanitize(), Ok(()));
@@ -1119,16 +1181,11 @@ mod test {
         );
         assert_eq!(label.pubkey(), keypair.pubkey());
         let retrieved_epoch_slots = value.epoch_slots().unwrap();
-        assert_eq!(value.wallclock(), epoch_slots.wallclock);
-        assert_eq!(retrieved_epoch_slots, &epoch_slots);
+        assert_eq!(value.wallclock(), slots.slots.wallclock);
+        assert_eq!(retrieved_epoch_slots, &slots.slots);
 
         let bad_value = CrdsValue::new_signed(
-            CrdsData::RestartLastVotedForkSlots(
-                MAX_RESTART_LAST_VOTED_FORK_SLOTS,
-                epoch_slots,
-                slot,
-                Hash::default(),
-            ),
+            CrdsData::RestartLastVotedForkSlots(MAX_RESTART_LAST_VOTED_FORK_SLOTS, slots),
             &keypair,
         );
         assert_eq!(bad_value.sanitize(), Err(SanitizeError::ValueOutOfBounds))
