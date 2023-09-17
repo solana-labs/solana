@@ -288,7 +288,7 @@ where
         let mut hit_cache = false;
         map.entry(*addr)
             .and_modify(|pool| {
-                if pool.need_new_connection(connection_pool_size).1 {
+                if pool.need_new_connection(connection_pool_size).0 {
                     pool.add_connection(&config, addr);
                     async_connection_sender.map(|sender| {
                         info!("Sending async connection creation {} for {addr}", pool.num_connections() - 1);
