@@ -20,6 +20,8 @@
 
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::qualifiers;
+
+use crate::in_mem_accounts_index::DuplicateInsertedItem;
 use {
     crate::{
         account_info::{AccountInfo, StorageLocation},
@@ -9288,8 +9290,15 @@ impl AccountsDb {
                             total_duplicate_slot_keys
                                 .fetch_add(slot_keys.len() as u64, Ordering::Relaxed);
                             let unique_keys =
-                                HashSet::<Pubkey>::from_iter(slot_keys.iter().map(|(_, key)| *key));
-                            for (slot, key) in slot_keys {
+                                HashSet::<Pubkey>::from_iter(slot_keys.iter().map(|DuplicateInsertedItem {slot: _slot, pubkey: key, older_duplicate_info_same_slot: _}| *key));
+                            for DuplicateInsertedItem {slot, pubkey: key, older_duplicate_info_same_slot} in slot_keys {
+                                if let Some(older_duplicate_info_same_slot) = older_duplicate_info_same_slot {
+                                    // there was a duplicate pubkey from the same slot
+                                    // we need to update data len and slot info.
+                                    // For this particular item, we don't want to handle this duplicate the same.
+                                    // It never should have attempted to be inserted.
+                                    
+                                }
                                 match self.uncleaned_pubkeys.entry(slot) {
                                     Occupied(mut occupied) => occupied.get_mut().push(key),
                                     Vacant(vacant) => {

@@ -1,3 +1,5 @@
+use crate::in_mem_accounts_index::DuplicateInsertedItem;
+
 use {
     crate::{
         accounts_index_storage::{AccountsIndexStorage, Startup},
@@ -1719,7 +1721,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     /// use Vec<> because the internal vecs are already allocated per bin
     pub(crate) fn populate_and_retrieve_duplicate_keys_from_startup(
         &self,
-        f: impl Fn(Vec<(Slot, Pubkey)>) + Sync + Send,
+        f: impl Fn(Vec<DuplicateInsertedItem<T>>) + Sync + Send,
     ) {
         (0..self.bins())
             .into_par_iter()

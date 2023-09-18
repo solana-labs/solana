@@ -32,6 +32,17 @@ pub struct StartupStats {
     pub copy_data_us: AtomicU64,
 }
 
+pub(crate) struct DuplicateInsertedItem<T: IndexValue> {
+    pub slot: Slot,
+    pub pubkey: Pubkey,
+    /// true if there were multiple entries of this pubkey in the same slot.
+    /// In order to correctly account for there being 1 less slot and less account data, this has to be
+    /// called out separately. The slot's append vec has to be scanned to find the duplicate.
+    /// Note this should not occur ever in practice. But, the file format of append vecs allows it.
+    /// And, to make the 100% common case much faster, we assume no pubkey is in the same append vec twice.
+    pub older_duplicate_info_same_slot: Option<T>,
+}
+
 #[derive(Debug)]
 pub struct PossibleEvictions<T: IndexValue> {
     /// vec per age in the future, up to size 'ages_to_stay_in_cache'
@@ -1100,7 +1111,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
     /// duplicate pubkeys have a slot list with len > 1
     /// These were collected for this bin when we did batch inserts in the bg flush threads.
     /// Insert these into the in-mem index, then return the duplicate (Slot, Pubkey)
-    pub fn populate_and_retrieve_duplicate_keys_from_startup(&self) -> Vec<(Slot, Pubkey)> {
+    pub(crate) fn populate_and_retrieve_duplicate_keys_from_startup(&self) -> Vec<DuplicateInsertedItem<T>> {
         // in order to return accurate and complete duplicates, we must have nothing left remaining to insert
         assert!(self.startup_info.insert.lock().unwrap().is_empty());
 
@@ -1109,14 +1120,43 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         let duplicates_put_on_disk = std::mem::take(&mut duplicate_items.duplicates_put_on_disk);
         drop(duplicate_items);
 
-        duplicates_put_on_disk
-            .into_iter()
-            .chain(duplicates.into_iter().map(|(slot, key, info)| {
-                let entry = PreAllocatedAccountMapEntry::new(slot, info, &self.storage, true);
+        let mut result = Vec::with_capacity(duplicates.len() + duplicates_put_on_disk.len());
+
+        (0..duplicates.len())
+            .for_each(|i| {
+                let (slot, key, info) = duplicates[i];
+                let entry = PreAllocatedAccountMapEntry::new(slot, info, &self.storage, true);    
+                // each entry in `duplicates` was inserted AFTER `duplicates_put_on_disk[key]`.
+                // Since we do batches at a time and each batch includes an entire slot, then if there are 2 entries from the same slot, they will
+                // always be in the same batch and always be inserted in order (stable sort in bucket map insert batch will enforce that).
+                // So, if there are 2 entries of the same pubkey from the same slot, we need to distinguish that correctly. The answer is NOT to just add the second duplicate instance also.
+                // This would still only result in a single entry in the index, but the counts would all be off.
+                // So, if there are 2 entries of the same pubkey from the same slot, there will be two possible manifestations:
+                // 1. the first one (that we want to overwrite) will be in `duplicates_put_on_disk`. The second will be in `duplicates`.
+                // 2. both will be in `duplicates` and the one in `duplicates_put_on_disk` may be from a slot earlier or later than the entries
+                // from the same slot.
+                // #1 means the 2 entries of the same pubkey from the same slot were the first two (and maybe only) 2 instances of this pubkey.
+                // #2 means there is at least 1 more slot that contains this pubkey and that the entries of the same pubkey from the same slot
+                //  were inserted AFTER the same pubkey from a different slot.
+                // This is a race condition as to whether we hit #1 or #2.
+                if duplicates_put_on_disk.contains(&(slot, key)) {
+                    // we are in case 1
+                    // THIS duplicate entry is the one that should be in the index and the one in the index needs to be marked as a duplicate.
+                    let mut reclaims = Vec::default();
+                    self.upsert(&key, entry, None, &mut reclaims, UpsertReclaim::PopulateReclaims);
+                    assert_eq!(reclaims.len(), 1);
+                    // the one we removed from the index is the one we need to return. It must be accounted for to be correct.
+                    result.push(DuplicateInsertedItem {slot, pubkey: key, older_duplicate_info_same_slot: reclaims.pop().map(|(_slot, info)| info)});
+                    return;
+                }
                 self.insert_new_entry_if_missing_with_lock(key, entry);
-                (slot, key)
-            }))
-            .collect()
+                result.push(DuplicateInsertedItem{ slot, pubkey: key, older_duplicate_info_same_slot: None});
+            });
+
+            result.extend(duplicates_put_on_disk.into_iter().map(|(slot, pubkey)| 
+            DuplicateInsertedItem { slot, pubkey, older_duplicate_info_same_slot: None}
+            ));
+            result
     }
 
     /// synchronize the in-mem index with the disk index
