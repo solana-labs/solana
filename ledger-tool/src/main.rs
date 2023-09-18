@@ -2492,7 +2492,7 @@ fn main() {
                             vec![]
                         };
                     if accounts_index_paths.is_empty() {
-                        accounts_index_paths = vec![ledger_path.join("accounts_index")];
+                        accounts_index_paths = vec![ledger_path.join("accounts_index.ledger-tool")];
                     }
                     accounts_index_config.drives = Some(accounts_index_paths);
                 }
@@ -2504,7 +2504,9 @@ fn main() {
 
                 let accounts_db_config = Some(AccountsDbConfig {
                     index: Some(accounts_index_config),
-                    accounts_hash_cache_path: Some(ledger_path.clone()),
+                    accounts_hash_cache_path: Some(
+                        ledger_path.join("accounts_hash_cache.ledger-tool"),
+                    ),
                     filler_accounts_config,
                     skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
                     ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
@@ -2587,10 +2589,22 @@ fn main() {
                     ),
                 };
 
+                let accounts_db_config = Some(AccountsDbConfig {
+                    index: Some(AccountsIndexConfig {
+                        drives: Some(vec![ledger_path.join("accounts_index.ledger-tool")]),
+                        ..AccountsIndexConfig::default()
+                    }),
+                    accounts_hash_cache_path: Some(
+                        ledger_path.join("accounts_hash_cache.ledger-tool"),
+                    ),
+                    ..AccountsDbConfig::default()
+                });
+
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     poh_verify: false,
+                    accounts_db_config,
                     ..ProcessOptions::default()
                 };
 
@@ -2773,6 +2787,7 @@ fn main() {
                         }
                         IndexLimitMb::InMemOnly
                     },
+                    drives: Some(vec![ledger_path.join("accounts_index.ledger-tool")]),
                     ..AccountsIndexConfig::default()
                 };
 
@@ -2780,6 +2795,9 @@ fn main() {
                     index: Some(accounts_index_config),
                     skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
                     ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
+                    accounts_hash_cache_path: Some(
+                        ledger_path.join("accounts_hash_cache.ledger-tool"),
+                    ),
                     skip_initial_hash_calc: arg_matches
                         .is_present("accounts_db_skip_initial_hash_calculation"),
                     ..AccountsDbConfig::default()
@@ -3110,10 +3128,21 @@ fn main() {
             }
             ("accounts", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
+                let accounts_db_config = Some(AccountsDbConfig {
+                    index: Some(AccountsIndexConfig {
+                        drives: Some(vec![ledger_path.join("accounts_index.ledger-tool")]),
+                        ..AccountsIndexConfig::default()
+                    }),
+                    accounts_hash_cache_path: Some(
+                        ledger_path.join("accounts_hash_cache.ledger-tool"),
+                    ),
+                    ..AccountsDbConfig::default()
+                });
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
                     poh_verify: false,
+                    accounts_db_config,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
