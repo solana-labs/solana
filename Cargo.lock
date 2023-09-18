@@ -5547,6 +5547,7 @@ dependencies = [
  "solana-client",
  "solana-config-program",
  "solana-faucet",
+ "solana-loader-v4-program",
  "solana-logger",
  "solana-program-runtime",
  "solana-pubsub-client",
