@@ -701,7 +701,7 @@ impl RepairService {
                 );
                 result.extend(new_repairs);
             } else {
-                result.push(ShredRepairType::Shred(*slot, 0));
+                result.push(ShredRepairType::HighestShred(*slot, 0));
             }
             if result.len() >= max_repairs {
                 break;
@@ -1443,7 +1443,7 @@ mod test {
             result,
             vec![
                 ShredRepairType::HighestShred(2, 1),
-                ShredRepairType::Shred(81, 0),
+                ShredRepairType::HighestShred(81, 0),
             ],
         );
 
@@ -1468,7 +1468,7 @@ mod test {
             result,
             vec![
                 ShredRepairType::HighestShred(3, 1),
-                ShredRepairType::Shred(82, 0),
+                ShredRepairType::HighestShred(82, 0),
                 ShredRepairType::HighestShred(5, 1),
             ],
         );
