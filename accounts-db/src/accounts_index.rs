@@ -76,7 +76,7 @@ pub(crate) struct GenerateIndexResult<T: IndexValue> {
     /// number of accounts inserted in the index
     pub count: usize,
     /// pubkeys which were present multiple times in the insertion request.
-    pub duplicates: Option<Vec<(Pubkey, (Slot, T))>>,
+    pub duplicates: Option<Vec<(Pubkey, (Slot, T), u64)>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1592,15 +1592,15 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     /// Could also be done with HashSet.
     /// Returns `HashSet` of duplicate pubkeys.
     fn remove_older_duplicate_pubkeys(
-        items: &mut Vec<(Pubkey, (Slot, T))>,
-    ) -> Option<Vec<(Pubkey, (Slot, T))>> {
+        items: &mut Vec<(Pubkey, (Slot, T), u64)>,
+    ) -> Option<Vec<(Pubkey, (Slot, T), u64)>> {
         if items.len() < 2 {
             return None;
         }
         // stable sort by pubkey.
         // Earlier entries are overwritten by later entries
         items.sort_by(|a, b| a.0.cmp(&b.0));
-        let mut duplicates = None::<Vec<(Pubkey, (Slot, T))>>;
+        let mut duplicates = None::<Vec<(Pubkey, (Slot, T), u64)>>;
         let mut i = 0;
         while i < items.len().saturating_sub(1) {
             let this_key = &items[i].0;
@@ -1631,7 +1631,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         &self,
         slot: Slot,
         approx_items_len: usize,
-        items: impl Iterator<Item = (Pubkey, T)>,
+        items: impl Iterator<Item = (Pubkey, T, u64)>,
     ) -> (Vec<Pubkey>, u64, GenerateIndexResult<T>) {
         // big enough so not likely to re-allocate, small enough to not over-allocate by too much
         // this assumes the largest bin contains twice the expected amount of the average size per bin
@@ -1643,13 +1643,13 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             .collect::<Vec<_>>();
         let mut count = 0;
         let mut dirty_pubkeys = items
-            .filter_map(|(pubkey, account_info)| {
+            .filter_map(|(pubkey, account_info, data_len)| {
                 let pubkey_bin = self.bin_calculator.bin_from_pubkey(&pubkey);
                 // this value is equivalent to what update() below would have created if we inserted a new item
                 let is_zero_lamport = account_info.is_zero_lamport();
                 let result = if is_zero_lamport { Some(pubkey) } else { None };
 
-                binned[pubkey_bin].push((pubkey, (slot, account_info)));
+                binned[pubkey_bin].push((pubkey, (slot, account_info), data_len));
                 result
             })
             .collect::<Vec<_>>();
@@ -1684,7 +1684,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                 // this is no longer the default case
                 items
                     .into_iter()
-                    .for_each(|(pubkey, (slot, account_info))| {
+                    .for_each(|(pubkey, (slot, account_info), _data_len)| {
                         let new_entry = PreAllocatedAccountMapEntry::new(
                             slot,
                             account_info,
@@ -2149,32 +2149,34 @@ pub mod tests {
     fn test_remove_older_duplicate_pubkeys() {
         let pk1 = Pubkey::new_from_array([0; 32]);
         let pk2 = Pubkey::new_from_array([1; 32]);
+        let data_len = 0;
         let slot0 = 0;
         let info2 = 55;
         let mut items = vec![];
         let removed = AccountsIndex::<u64, u64>::remove_older_duplicate_pubkeys(&mut items);
         assert!(items.is_empty());
         assert!(removed.is_none());
-        let mut items = vec![(pk1, (slot0, 1u64)), (pk2, (slot0, 2))];
+        let mut items = vec![(pk1, (slot0, 1u64), data_len), (pk2, (slot0, 2), data_len)];
         let expected = items.clone();
         let removed = AccountsIndex::<u64, u64>::remove_older_duplicate_pubkeys(&mut items);
         assert_eq!(items, expected);
         assert!(removed.is_none());
+        let data_len = 0;
 
         for dup in 0..3 {
             for other in 0..dup + 2 {
                 let first_info = 10u64;
-                let mut items = vec![(pk1, (slot0, first_info))];
+                let mut items = vec![(pk1, (slot0, first_info), data_len)];
                 let mut expected_dups = items.clone();
                 for i in 0..dup {
-                    let this_dup = (pk1, (slot0, i + 10u64 + 1));
+                    let this_dup = (pk1, (slot0, i + 10u64 + 1), data_len);
                     if i < dup.saturating_sub(1) {
                         expected_dups.push(this_dup);
                     }
                     items.push(this_dup);
                 }
                 let mut expected = vec![*items.last().unwrap()];
-                let other_item = (pk2, (slot0, info2));
+                let other_item = (pk2, (slot0, info2), data_len);
                 if other == dup + 1 {
                     // don't insert
                 } else if other == dup {
@@ -2300,7 +2302,11 @@ pub mod tests {
         let account_info = true;
         let index = AccountsIndex::<bool, bool>::default_for_tests();
         let account_info2: bool = !account_info;
-        let items = vec![(*pubkey, account_info), (*pubkey, account_info2)];
+        let data_len = 0;
+        let items = vec![
+            (*pubkey, account_info, data_len),
+            (*pubkey, account_info2, data_len),
+        ];
         index.set_startup(Startup::Startup);
         let (_, _, result) =
             index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
@@ -2334,7 +2340,8 @@ pub mod tests {
 
         let index = AccountsIndex::<bool, bool>::default_for_tests();
         let account_info = true;
-        let items = vec![(*pubkey, account_info)];
+        let data_len = 0;
+        let items = vec![(*pubkey, account_info, data_len)];
         index.set_startup(Startup::Startup);
         let expected_len = items.len();
         let (_, _, result) =
@@ -2372,7 +2379,7 @@ pub mod tests {
         // not zero lamports
         let index = AccountsIndex::<bool, bool>::default_for_tests();
         let account_info = false;
-        let items = vec![(*pubkey, account_info)];
+        let items = vec![(*pubkey, account_info, data_len)];
         index.set_startup(Startup::Startup);
         let expected_len = items.len();
         let (_, _, result) =
@@ -2481,9 +2488,13 @@ pub mod tests {
 
         let index = AccountsIndex::<bool, bool>::default_for_tests();
         let account_infos = [true, false];
+        let data_len = 0;
 
         index.set_startup(Startup::Startup);
-        let items = vec![(key0, account_infos[0]), (key1, account_infos[1])];
+        let items = vec![
+            (key0, account_infos[0], data_len),
+            (key1, account_infos[1], data_len),
+        ];
         let expected_len = items.len();
         let (_, _, result) =
             index.insert_new_if_missing_into_primary_index(slot0, items.len(), items.into_iter());
@@ -2513,6 +2524,7 @@ pub mod tests {
         let slot0 = 0;
         let slot1 = 1;
         let key = solana_sdk::pubkey::new_rand();
+        let data_len = 0;
 
         let mut config = ACCOUNTS_INDEX_CONFIG_FOR_TESTING;
         config.index_limit_mb = if use_disk {
@@ -2536,7 +2548,7 @@ pub mod tests {
                 UPSERT_POPULATE_RECLAIMS,
             );
         } else {
-            let items = vec![(key, account_infos[0])];
+            let items = vec![(key, account_infos[0], data_len)];
             index.set_startup(Startup::Startup);
             let expected_len = items.len();
             let (_, _, result) = index.insert_new_if_missing_into_primary_index(
@@ -2587,7 +2599,7 @@ pub mod tests {
                 index.set_startup(Startup::Normal);
             }
 
-            let items = vec![(key, account_infos[1])];
+            let items = vec![(key, account_infos[1], data_len)];
             index.set_startup(Startup::Startup);
             let expected_len = items.len();
             let (_, _, result) = index.insert_new_if_missing_into_primary_index(

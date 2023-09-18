@@ -8981,6 +8981,7 @@ impl AccountsDb {
                     StorageLocation::AppendVec(store_id, stored_account.offset()), // will never be cached
                     stored_account.lamports(),
                 ),
+                stored_account.data_len(),
             )
         });
 
@@ -8993,7 +8994,7 @@ impl AccountsDb {
             // Some were not inserted. This means some info like stored data is off.
             duplicates_this_slot
                 .into_iter()
-                .for_each(|(pubkey, (_slot, info))| {
+                .for_each(|(pubkey, (_slot, info), _data_len)| {
                     let duplicate = storage.accounts.get_account(info.offset()).unwrap().0;
                     assert_eq!(&pubkey, duplicate.pubkey());
                     stored_size_alive = stored_size_alive.saturating_sub(duplicate.stored_size());

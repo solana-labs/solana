@@ -441,6 +441,7 @@ mod tests {
                 initial *= 3;
             }
 
+            let data_len = 0;
             // do random operations: insert, update, delete, add/unref in random order
             // verify consistency between hashmap and all bucket maps
             for i in 0..10000 {
@@ -473,11 +474,11 @@ mod tests {
                                     }
                                 }
                             }
-                            (k, v)
+                            (k, v, data_len)
                         })
                         .collect::<Vec<_>>();
 
-                    additions.clone().into_iter().for_each(|(k, v)| {
+                    additions.clone().into_iter().for_each(|(k, v, _data_len)| {
                         hash_map.write().unwrap().insert(k, v);
                         return_key(k);
                     });
@@ -492,7 +493,7 @@ mod tests {
                             let mut batch_additions = additions
                                 .clone()
                                 .into_iter()
-                                .map(|(k, mut v)| (k, v.0.pop().unwrap()))
+                                .map(|(k, mut v, data_len)| (k, v.0.pop().unwrap(), data_len))
                                 .collect::<Vec<_>>();
                             let mut duplicates = 0;
                             if batch_additions.len() > 1 && thread_rng().gen_range(0..2) == 0 {
@@ -514,7 +515,7 @@ mod tests {
                                 duplicates
                             );
                         } else {
-                            additions.clone().into_iter().for_each(|(k, v)| {
+                            additions.clone().into_iter().for_each(|(k, v, _data_len)| {
                                 if insert {
                                     map.insert(&k, (&v.0, v.1))
                                 } else {

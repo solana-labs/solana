@@ -282,18 +282,24 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
     /// for each item in `items`, get the hash value when hashed with `random`.
     /// Return a vec of tuples:
     /// (hash_value, index in `items`)
-    fn index_entries(items: &[(Pubkey, T)], random: u64) -> Vec<(u64, usize)> {
+    fn index_entries(items: &[(Pubkey, T, u64)], random: u64) -> Vec<(u64, usize)> {
         let mut inserts = Vec::with_capacity(items.len());
-        items.iter().enumerate().for_each(|(i, (key, _v))| {
-            let ix = Self::bucket_index_ix(key, random);
-            inserts.push((ix, i));
-        });
+        items
+            .iter()
+            .enumerate()
+            .for_each(|(i, (key, _v, _data_len))| {
+                let ix = Self::bucket_index_ix(key, random);
+                inserts.push((ix, i));
+            });
         inserts
     }
 
     /// batch insert of `items`. Assumption is a single slot list element and ref_count == 1.
     /// For any pubkeys that already exist, the index in `items` of the failed insertion and the existing data (previously put in the index) are returned.
-    pub(crate) fn batch_insert_non_duplicates(&mut self, items: &[(Pubkey, T)]) -> Vec<(usize, T)> {
+    pub(crate) fn batch_insert_non_duplicates(
+        &mut self,
+        items: &[(Pubkey, T, u64)],
+    ) -> Vec<(usize, T)> {
         assert!(
             !self.at_least_one_entry_deleted,
             "efficient batch insertion can only occur prior to any deletes"
@@ -345,7 +351,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
     pub fn batch_insert_non_duplicates_internal(
         index: &mut BucketStorage<IndexBucket<T>>,
         data_buckets: &[BucketStorage<DataBucket>],
-        items: &[(Pubkey, T)],
+        items: &[(Pubkey, T, u64)],
         reverse_sorted_entries: &mut Vec<(u64, usize)>,
         duplicates: &mut Vec<(usize, T)>,
     ) -> Result<(), BucketMapError> {
@@ -355,7 +361,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
 
         // pop one entry at a time to insert
         'outer: while let Some((ix_entry_raw, i)) = reverse_sorted_entries.pop() {
-            let (k, v) = &items[i];
+            let (k, v, _data_len) = &items[i];
             let ix_entry = ix_entry_raw % cap;
             // search for an empty spot starting at `ix_entry`
             for search in 0..search_end {
@@ -760,13 +766,14 @@ mod tests {
 
     #[test]
     fn test_index_entries() {
+        let data_len = 0;
         for v in 10..12u64 {
             for random in 1..3 {
                 for len in 1..3 {
                     let raw = (0..len)
                         .map(|l| {
                             let k = Pubkey::from([l as u8; 32]);
-                            (k, v + (l as u64))
+                            (k, v + (l as u64), data_len)
                         })
                         .collect::<Vec<_>>();
                     let hashed = Bucket::index_entries(&raw, random);
@@ -806,9 +813,12 @@ mod tests {
         let random = 1;
         let data_buckets = Vec::default();
         let k = Pubkey::from([1u8; 32]);
+        let data_len = 0;
         for v in 10..12u64 {
             for len in 1..4 {
-                let raw = (0..len).map(|l| (k, v + (l as u64))).collect::<Vec<_>>();
+                let raw = (0..len)
+                    .map(|l| (k, v + (l as u64), data_len))
+                    .collect::<Vec<_>>();
                 let mut hashed = Bucket::index_entries(&raw, random);
                 let hashed_raw = hashed.clone();
 
@@ -849,12 +859,13 @@ mod tests {
         // add 2 entries, make sure they are added in the buckets we expect
         let random = 1;
         let data_buckets = Vec::default();
+        let data_len = 0;
         for v in 10..12u64 {
             for len in 1..3 {
                 let raw = (0..len)
                     .map(|l| {
                         let k = Pubkey::from([l as u8; 32]);
-                        (k, v + (l as u64))
+                        (k, v + (l as u64), data_len)
                     })
                     .collect::<Vec<_>>();
                 let mut hashed = Bucket::index_entries(&raw, random);
@@ -892,13 +903,14 @@ mod tests {
         // the colliding item remains in `entries`
         let random = 1;
         let data_buckets = Vec::default();
+        let data_len = 0;
         for max_search in [2usize, 3] {
             for v in 10..12u64 {
                 for len in 1..(max_search + 1) {
                     let raw = (0..len)
                         .map(|l| {
                             let k = Pubkey::from([l as u8; 32]);
-                            (k, v + (l as u64))
+                            (k, v + (l as u64), data_len)
                         })
                         .collect::<Vec<_>>();
                     let mut hashed = Bucket::index_entries(&raw, random);
