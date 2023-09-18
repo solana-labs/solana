@@ -147,7 +147,7 @@ where
                                 drop(map);
                                 let conn = conn.new_blocking_connection(addr, stats.clone());
                                 let rslt = conn.send_data(&[]);
-                                info!("Create async connection result {rslt:?}");
+                                debug!("Create async connection result {rslt:?} for {addr}");
                             }
                         }
                     }
@@ -191,7 +191,7 @@ where
 
         if need_new_connection && !should_create_connection {
             // trigger an async connection create
-            info!("Triggering async connection for {addr:?}");
+            debug!("Triggering async connection for {addr:?}");
             Self::create_connection_internal(
                 self.connection_config.clone(),
                 self.connection_manager.clone(),
@@ -246,7 +246,7 @@ where
                 if pool.need_new_connection(connection_pool_size).0 {
                     pool.add_connection(&config, addr);
                     async_connection_sender.map(|sender| {
-                        info!(
+                        debug!(
                             "Sending async connection creation {} for {addr}",
                             pool.num_connections() - 1
                         );
@@ -300,7 +300,7 @@ where
                 } else {
                     let connection = pool.borrow_connection();
                     if need_connection {
-                        info!("Creating connection async for {addr}");
+                        debug!("Creating connection async for {addr}");
                         drop(map);
                         let mut map = self.map.write().unwrap();
                         Self::create_connection_internal(
