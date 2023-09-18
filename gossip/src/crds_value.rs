@@ -136,7 +136,7 @@ impl Sanitize for CrdsData {
             CrdsData::SnapshotHashes(val) => val.sanitize(),
             CrdsData::ContactInfo(node) => node.sanitize(),
             CrdsData::RestartLastVotedForkSlots(ix, slots) => {
-                if *ix as usize >= MAX_RESTART_LAST_VOTED_FORK_SLOTS as usize {
+                if *ix >= MAX_RESTART_LAST_VOTED_FORK_SLOTS {
                     return Err(SanitizeError::ValueOutOfBounds);
                 }
                 slots.sanitize()
@@ -167,7 +167,7 @@ impl CrdsData {
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
             5 => CrdsData::Vote(rng.gen_range(0..MAX_VOTES), Vote::new_rand(rng, pubkey)),
             6 => CrdsData::RestartLastVotedForkSlots(
-                0,
+                rng.gen_range(0..MAX_RESTART_LAST_VOTED_FORK_SLOTS),
                 RestartLastVotedForkSlots::new_rand(rng, pubkey),
             ),
             _ => CrdsData::EpochSlots(
@@ -498,7 +498,7 @@ impl Sanitize for NodeInstance {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Default, PartialEq, Eq, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, Default, PartialEq, Eq, AbiExample, Debug)]
 pub struct RestartLastVotedForkSlots {
     pub slots: EpochSlots,
     pub last_voted_slot: Slot,
@@ -511,15 +511,6 @@ impl Sanitize for RestartLastVotedForkSlots {
         self.last_voted_hash.sanitize()
     }
 }
-impl fmt::Debug for RestartLastVotedForkSlots {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "RestartLastVotedForkSlots {{ slots: {:?} last_voted: {}({}) }}",
-            self.slots, self.last_voted_slot, self.last_voted_hash
-        )
-    }
-}
 
 impl RestartLastVotedForkSlots {
     pub fn new(from: Pubkey, now: u64, last_voted_slot: Slot, last_voted_hash: Hash) -> Self {
@@ -529,18 +520,6 @@ impl RestartLastVotedForkSlots {
                 slots: vec![],
                 wallclock: now,
             },
-            last_voted_slot,
-            last_voted_hash,
-        }
-    }
-
-    pub fn new_from_fields(
-        slots: EpochSlots,
-        last_voted_slot: Slot,
-        last_voted_hash: Hash,
-    ) -> Self {
-        Self {
-            slots,
             last_voted_slot,
             last_voted_hash,
         }

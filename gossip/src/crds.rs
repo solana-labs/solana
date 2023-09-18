@@ -77,8 +77,6 @@ pub struct Crds {
     epoch_slots: BTreeMap<u64 /*insert order*/, usize /*index*/>,
     // Indices of DuplicateShred keyed by insert order.
     duplicate_shreds: BTreeMap<u64 /*insert order*/, usize /*index*/>,
-    // Indices of RestartLastVotedForkSlots keyed by insert order.
-    restart_last_voted_fork_slots: BTreeMap<u64 /*insert order*/, usize /*index*/>,
     // Indices of all crds values associated with a node.
     records: HashMap<Pubkey, IndexSet<usize>>,
     // Indices of all entries keyed by insert order.
@@ -171,7 +169,6 @@ impl Default for Crds {
             votes: BTreeMap::default(),
             epoch_slots: BTreeMap::default(),
             duplicate_shreds: BTreeMap::default(),
-            restart_last_voted_fork_slots: BTreeMap::default(),
             records: HashMap::default(),
             entries: BTreeMap::default(),
             purged: VecDeque::default(),
@@ -245,10 +242,6 @@ impl Crds {
                     CrdsData::DuplicateShred(_, _) => {
                         self.duplicate_shreds.insert(value.ordinal, entry_index);
                     }
-                    CrdsData::RestartLastVotedForkSlots(_, _) => {
-                        self.restart_last_voted_fork_slots
-                            .insert(value.ordinal, entry_index);
-                    }
                     _ => (),
                 };
                 self.entries.insert(value.ordinal, entry_index);
@@ -283,12 +276,6 @@ impl Crds {
                     CrdsData::DuplicateShred(_, _) => {
                         self.duplicate_shreds.remove(&entry.get().ordinal);
                         self.duplicate_shreds.insert(value.ordinal, entry_index);
-                    }
-                    CrdsData::RestartLastVotedForkSlots(_, _) => {
-                        self.restart_last_voted_fork_slots
-                            .remove(&entry.get().ordinal);
-                        self.restart_last_voted_fork_slots
-                            .insert(value.ordinal, entry_index);
                     }
                     _ => (),
                 }
@@ -383,21 +370,6 @@ impl Crds {
     ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
         let range = (Bound::Included(cursor.ordinal()), Bound::Unbounded);
         self.duplicate_shreds
-            .range(range)
-            .map(move |(ordinal, index)| {
-                cursor.consume(*ordinal);
-                self.table.index(*index)
-            })
-    }
-
-    /// Returns last_voted_fork_slots inserted since the given cursor.
-    /// Updates the cursor as the values are consumed.
-    pub(crate) fn get_restart_last_voted_fork_slots<'a>(
-        &'a self,
-        cursor: &'a mut Cursor,
-    ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
-        let range = (Bound::Included(cursor.ordinal()), Bound::Unbounded);
-        self.restart_last_voted_fork_slots
             .range(range)
             .map(move |(ordinal, index)| {
                 cursor.consume(*ordinal);
@@ -572,9 +544,6 @@ impl Crds {
             CrdsData::DuplicateShred(_, _) => {
                 self.duplicate_shreds.remove(&value.ordinal);
             }
-            CrdsData::RestartLastVotedForkSlots(_, _) => {
-                self.restart_last_voted_fork_slots.remove(&value.ordinal);
-            }
             _ => (),
         }
         self.entries.remove(&value.ordinal);
@@ -611,10 +580,6 @@ impl Crds {
                 }
                 CrdsData::DuplicateShred(_, _) => {
                     self.duplicate_shreds.insert(value.ordinal, index);
-                }
-                CrdsData::RestartLastVotedForkSlots(_, _) => {
-                    self.restart_last_voted_fork_slots
-                        .insert(value.ordinal, index);
                 }
                 _ => (),
             };
@@ -1154,7 +1119,6 @@ mod tests {
         usize, // number of nodes
         usize, // number of votes
         usize, // number of epoch slots
-        usize, // number of restart last voted fork slots
     ) {
         let size = crds.table.len();
         let since = if size == 0 || rng.gen() {
@@ -1182,33 +1146,6 @@ mod tests {
         for value in crds.get_epoch_slots(&mut Cursor(since)) {
             assert!(value.ordinal >= since);
             assert_matches!(value.value.data, CrdsData::EpochSlots(_, _));
-        }
-        let num_last_voted_fork_slots = crds
-            .table
-            .values()
-            .filter(|v| v.ordinal >= since)
-            .filter(|v| matches!(v.value.data, CrdsData::RestartLastVotedForkSlots(_, _)))
-            .count();
-        let mut cursor = Cursor(since);
-        assert_eq!(
-            num_last_voted_fork_slots,
-            crds.get_restart_last_voted_fork_slots(&mut cursor).count()
-        );
-        assert_eq!(
-            cursor.0,
-            crds.restart_last_voted_fork_slots
-                .iter()
-                .last()
-                .map(|(k, _)| k + 1)
-                .unwrap_or_default()
-                .max(since)
-        );
-        for value in crds.get_restart_last_voted_fork_slots(&mut Cursor(since)) {
-            assert!(value.ordinal >= since);
-            match value.value.data {
-                CrdsData::RestartLastVotedForkSlots(_, _) => (),
-                _ => panic!("not a last-voted-fork-slot!"),
-            }
         }
         let num_votes = crds
             .table
@@ -1267,11 +1204,6 @@ mod tests {
             .values()
             .filter(|v| matches!(v.value.data, CrdsData::EpochSlots(_, _)))
             .count();
-        let num_restart_last_voted_fork_slots = crds
-            .table
-            .values()
-            .filter(|v| matches!(v.value.data, CrdsData::RestartLastVotedForkSlots(_, _)))
-            .count();
         assert_eq!(
             crds.table.len(),
             crds.get_entries(&mut Cursor::default()).count()
@@ -1282,31 +1214,13 @@ mod tests {
             num_epoch_slots,
             crds.get_epoch_slots(&mut Cursor::default()).count()
         );
-        assert_eq!(
-            num_restart_last_voted_fork_slots,
-            crds.get_restart_last_voted_fork_slots(&mut Cursor::default())
-                .count()
-        );
         for vote in crds.get_votes(&mut Cursor::default()) {
             assert_matches!(vote.value.data, CrdsData::Vote(_, _));
         }
         for epoch_slots in crds.get_epoch_slots(&mut Cursor::default()) {
             assert_matches!(epoch_slots.value.data, CrdsData::EpochSlots(_, _));
         }
-        for restart_last_voted_fork_slots in
-            crds.get_restart_last_voted_fork_slots(&mut Cursor::default())
-        {
-            match restart_last_voted_fork_slots.value.data {
-                CrdsData::RestartLastVotedForkSlots(_, _) => (),
-                _ => panic!("not a restart-last-voted-fork-slot!"),
-            }
-        }
-        (
-            num_nodes,
-            num_votes,
-            num_epoch_slots,
-            num_last_voted_fork_slots,
-        )
+        (num_nodes, num_votes, num_epoch_slots)
     }
 
     #[test]
@@ -1332,16 +1246,11 @@ mod tests {
         assert!(crds.table.len() > 200);
         assert_eq!(crds.num_purged() + crds.table.len(), 4096);
         assert!(num_inserts > crds.table.len());
-        let (num_nodes, num_votes, num_epoch_slots, num_restart_last_voted_fork_slots) =
-            check_crds_value_indices(&mut rng, &crds);
+        let (num_nodes, num_votes, num_epoch_slots) = check_crds_value_indices(&mut rng, &crds);
         assert!(num_nodes * 3 < crds.table.len());
         assert!(num_nodes > 100, "num nodes: {num_nodes}");
         assert!(num_votes > 100, "num votes: {num_votes}");
         assert!(num_epoch_slots > 100, "num epoch slots: {num_epoch_slots}");
-        assert!(
-            num_restart_last_voted_fork_slots > 0,
-            "num restart last voted fork slots: {num_restart_last_voted_fork_slots}"
-        );
         // Remove values one by one and assert that nodes indices stay valid.
         while !crds.table.is_empty() {
             let index = rng.gen_range(0..crds.table.len());

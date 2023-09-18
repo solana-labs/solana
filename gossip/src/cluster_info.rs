@@ -33,8 +33,8 @@ use {
         },
         crds_value::{
             self, AccountsHashes, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex,
-            LegacySnapshotHashes, LowestSlot, NodeInstance, RestartLastVotedForkSlots,
-            SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
+            LegacySnapshotHashes, LowestSlot, NodeInstance, SnapshotHashes, Version, Vote,
+            MAX_WALLCLOCK,
         },
         duplicate_shred::DuplicateShred,
         epoch_slots::EpochSlots,
@@ -969,44 +969,6 @@ impl ClusterInfo {
         }
     }
 
-    // This is currently only called from one thread during startup, so no race conditions.
-    // The data format is similar to EpochSlots, but we overwrite previous results each time,
-    // so here we always start from 0. All pieces of the same push use the same timestamp.
-    pub fn push_restart_last_voted_fork_slots(
-        &self,
-        mut update: &[Slot],
-        last_vote_bankhash: Hash,
-    ) {
-        let self_pubkey = self.id();
-        let last_vote_slot = *update.last().unwrap();
-        let mut epoch_slot_index = 0;
-        let mut entries = Vec::default();
-        let keypair = self.keypair();
-        let now = timestamp();
-        while !update.is_empty() {
-            let mut slots = RestartLastVotedForkSlots::new(
-                self_pubkey,
-                now,
-                last_vote_slot,
-                last_vote_bankhash,
-            );
-            let n = slots.fill(update);
-            update = &update[n..];
-            if n > 0 {
-                let data = CrdsData::RestartLastVotedForkSlots(epoch_slot_index, slots);
-                let entry = CrdsValue::new_signed(data, &keypair);
-                entries.push(entry);
-            }
-            epoch_slot_index += 1;
-        }
-        let mut gossip_crds = self.gossip.crds.write().unwrap();
-        for entry in entries {
-            if let Err(err) = gossip_crds.insert(entry, now, GossipRoute::LocalMessage) {
-                error!("push_restart_last_voted_fork_slots failed: {:?}", err);
-            }
-        }
-    }
-
     fn time_gossip_read_lock<'a>(
         &'a self,
         label: &'static str,
@@ -1277,27 +1239,6 @@ impl ClusterInfo {
             })
             .map(|entry| match &entry.value.data {
                 CrdsData::EpochSlots(_, slots) => slots.clone(),
-                _ => panic!("this should not happen!"),
-            })
-            .collect()
-    }
-
-    /// Returns last-voted-fork-slots inserted since the given cursor.
-    /// Excludes entries from nodes with unkown or different shred version.
-    pub fn get_restart_last_voted_fork_slots(
-        &self,
-        cursor: &mut Cursor,
-    ) -> Vec<RestartLastVotedForkSlots> {
-        let self_shred_version = Some(self.my_shred_version());
-        let gossip_crds = self.gossip.crds.read().unwrap();
-        gossip_crds
-            .get_restart_last_voted_fork_slots(cursor)
-            .filter(|entry| {
-                let origin = entry.value.pubkey();
-                gossip_crds.get_shred_version(&origin) == self_shred_version
-            })
-            .map(|entry| match &entry.value.data {
-                CrdsData::RestartLastVotedForkSlots(_index, slots) => slots.clone(),
                 _ => panic!("this should not happen!"),
             })
             .collect()
@@ -4061,70 +4002,6 @@ mod tests {
         assert_eq!(slots.len(), 2);
         assert_eq!(slots[0].from, cluster_info.id());
         assert_eq!(slots[1].from, node_pubkey);
-    }
-
-    #[test]
-    fn test_push_restart_last_voted_fork_slots() {
-        solana_logger::setup();
-        let keypair = Arc::new(Keypair::new());
-        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
-        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
-        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut Cursor::default());
-        assert!(slots.is_empty());
-        let mut update: Vec<Slot> = vec![0];
-        for i in 0..81 {
-            for j in 0..1000 {
-                update.push(i * 1050 + j);
-            }
-        }
-        cluster_info.push_restart_last_voted_fork_slots(&update, Hash::default());
-
-        let mut cursor = Cursor::default();
-        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut cursor);
-        assert_eq!(slots.len(), 2);
-        assert_eq!(slots[0].slots.to_slots(0).len(), 42468);
-        assert_eq!(slots[1].slots.to_slots(0).len(), 38532);
-
-        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut cursor);
-        assert!(slots.is_empty());
-
-        // Test with different shred versions.
-        let mut rng = rand::thread_rng();
-        let node_pubkey = Pubkey::new_unique();
-        let mut node = LegacyContactInfo::new_rand(&mut rng, Some(node_pubkey));
-        node.set_shred_version(42);
-        let slots = RestartLastVotedForkSlots::new_rand(&mut rng, Some(node_pubkey));
-        let entries = vec![
-            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(node)),
-            CrdsValue::new_unsigned(CrdsData::RestartLastVotedForkSlots(0, slots)),
-        ];
-        {
-            let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
-            for entry in entries {
-                assert!(gossip_crds
-                    .insert(entry, /*now=*/ 0, GossipRoute::LocalMessage)
-                    .is_ok());
-            }
-        }
-        // Should exclude other node's last-voted-fork-slot because of different
-        // shred-version.
-        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut Cursor::default());
-        assert_eq!(slots.len(), 2);
-        assert_eq!(slots[0].slots.from, cluster_info.id());
-        assert_eq!(slots[1].slots.from, cluster_info.id());
-        // Match shred versions.
-        {
-            let mut node = cluster_info.my_contact_info.write().unwrap();
-            node.set_shred_version(42);
-        }
-        cluster_info.push_self();
-        cluster_info.flush_push_queue();
-        // Should now include both epoch slots.
-        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut Cursor::default());
-        assert_eq!(slots.len(), 3);
-        assert_eq!(slots[0].slots.from, cluster_info.id());
-        assert_eq!(slots[1].slots.from, cluster_info.id());
-        assert_eq!(slots[2].slots.from, node_pubkey);
     }
 
     #[test]
