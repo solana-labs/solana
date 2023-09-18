@@ -57,9 +57,8 @@ pub struct ConnectionCache<
     connection_pool_size: usize,
     connection_config: Arc<T>,
     exit: Arc<AtomicBool>,
-    sender: Sender<SocketAddr>,
+    sender: Sender<(usize, SocketAddr)>,
     async_connection_thread: JoinHandle<()>,
-    async_connection_thread2: JoinHandle<()>,
 }
 
 impl<P, M, C> ConnectionCache<P, M, C>
@@ -89,28 +88,18 @@ where
         connection_manager: M,
     ) -> Self {
         let (sender, receiver) = crossbeam_channel::unbounded();
-        let (async_conn_sender, async_conn_receiver) = crossbeam_channel::unbounded();
 
         let map = Arc::new(RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)));
         let config = Arc::new(connection_config);
         let connection_manager = Arc::new(connection_manager);
         let exit: Arc<AtomicBool> = Arc::default();
         let connection_pool_size = 1.max(connection_pool_size); // The minimum pool size is 1.
-        let async_connection_thread = Self::create_connection_thread(
-            map.clone(),
-            config.clone(),
-            connection_manager.clone(),
-            receiver,
-            async_conn_sender,
-            exit.clone(),
-            connection_pool_size,
-        );
 
         let stats = Arc::new(ConnectionCacheStats::default());
 
-        let async_connection_thread2 = Self::create_connection_async_thread(
+        let async_connection_thread = Self::create_connection_async_thread(
             map.clone(),
-            async_conn_receiver,
+            receiver,
             exit.clone(),
             stats.clone(),
         );
@@ -125,48 +114,7 @@ where
             exit,
             sender,
             async_connection_thread,
-            async_connection_thread2,
         }
-    }
-
-    /// This triggers creating the connection pool entry. Maybe we do not need this thread as it is very fast.
-    fn create_connection_thread(
-        map: Arc<RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ P>>>,
-        config: Arc<C>,
-        connection_manager: Arc<M>,
-        receiver: Receiver<SocketAddr>,
-        async_conn_sender: Sender<(usize, SocketAddr)>,
-        exit: Arc<AtomicBool>,
-        connection_pool_size: usize,
-    ) -> JoinHandle<()> {
-        Builder::new()
-            .name("solStxReceive".to_string())
-            .spawn(move || loop {
-                let recv_timeout_ms = 100;
-                let recv_result = receiver.recv_timeout(Duration::from_millis(recv_timeout_ms));
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
-                match recv_result {
-                    Err(RecvTimeoutError::Disconnected) => {
-                        exit.store(true, Ordering::Relaxed);
-                        break;
-                    }
-                    Err(RecvTimeoutError::Timeout) => {}
-                    Ok(addr) => {
-                        let mut map = map.write().unwrap();
-                        Self::create_connection_internal(
-                            config.clone(),
-                            connection_manager.clone(),
-                            &mut map,
-                            &addr,
-                            connection_pool_size,
-                            Some(async_conn_sender.clone()),
-                        );
-                    }
-                }
-            })
-            .unwrap()
     }
 
     /// This actually triggers the connection creation by sending empty data
@@ -177,7 +125,7 @@ where
         stats: Arc<ConnectionCacheStats>,
     ) -> JoinHandle<()> {
         Builder::new()
-            .name("solStxReceive".to_string())
+            .name("solQAsynCon".to_string())
             .spawn(move || loop {
                 let recv_timeout_ms = 100;
                 let recv_result = receiver.recv_timeout(Duration::from_millis(recv_timeout_ms));
@@ -241,14 +189,21 @@ where
             (true, 0, 0)
         };
 
-        let pool = map.get(addr).unwrap();
-        let connection = pool.borrow_connection();
-
         if need_new_connection && !should_create_connection {
             // trigger an async connection create
             info!("Triggering async connection for {addr:?}");
-            self.sender.send(addr.clone()).unwrap();
+            Self::create_connection_internal(
+                self.connection_config.clone(),
+                self.connection_manager.clone(),
+                &mut map,
+                &addr,
+                self.connection_pool_size,
+                Some(self.sender.clone()),
+            );
         }
+
+        let pool = map.get(addr).unwrap();
+        let connection = pool.borrow_connection();
 
         CreateConnectionResult {
             connection,
@@ -291,7 +246,10 @@ where
                 if pool.need_new_connection(connection_pool_size).0 {
                     pool.add_connection(&config, addr);
                     async_connection_sender.map(|sender| {
-                        info!("Sending async connection creation {} for {addr}", pool.num_connections() - 1);
+                        info!(
+                            "Sending async connection creation {} for {addr}",
+                            pool.num_connections() - 1
+                        );
                         sender.send((pool.num_connections() - 1, *addr)).unwrap();
                     });
                 } else {
@@ -343,7 +301,16 @@ where
                     let connection = pool.borrow_connection();
                     if need_connection {
                         info!("Creating connection async for {addr}");
-                        self.sender.send(addr.clone()).unwrap();
+                        drop(map);
+                        let mut map = self.map.write().unwrap();
+                        Self::create_connection_internal(
+                            self.connection_config.clone(),
+                            self.connection_manager.clone(),
+                            &mut map,
+                            &addr,
+                            self.connection_pool_size,
+                            Some(self.sender.clone()),
+                        );
                     }
                     CreateConnectionResult {
                         connection,
@@ -445,9 +412,7 @@ where
 
     pub fn join(self) -> thread::Result<()> {
         self.exit.store(true, Ordering::Relaxed);
-
-        self.async_connection_thread.join()?;
-        self.async_connection_thread2.join()
+        self.async_connection_thread.join()
     }
 }
 
