@@ -16,7 +16,6 @@ use {
     fs_err,
     lazy_static::lazy_static,
     log::*,
-    rayon::prelude::*,
     regex::Regex,
     solana_accounts_db::{
         account_storage::AccountStorageMap,
@@ -25,10 +24,7 @@ use {
         },
         accounts_file::AccountsFileError,
         append_vec::AppendVec,
-        hardened_unpack::{
-            streaming_unpack_snapshot, unpack_snapshot, ParallelSelector, UnpackError,
-            UnpackedAppendVecMap,
-        },
+        hardened_unpack::{self, ParallelSelector, UnpackError},
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
     },
     solana_measure::{measure, measure::Measure},
@@ -49,6 +45,8 @@ use {
     tempfile::TempDir,
     thiserror::Error,
 };
+#[cfg(feature = "dev-context-only-utils")]
+use {hardened_unpack::UnpackedAppendVecMap, rayon::prelude::*};
 
 mod archive_format;
 pub mod snapshot_storage_rebuilder;
@@ -1293,7 +1291,7 @@ fn spawn_unpack_snapshot_thread(
     Builder::new()
         .name(format!("solUnpkSnpsht{thread_index:02}"))
         .spawn(move || {
-            streaming_unpack_snapshot(
+            hardened_unpack::streaming_unpack_snapshot(
                 &mut archive,
                 ledger_dir.as_path(),
                 &account_paths,
@@ -1896,7 +1894,12 @@ fn unpack_snapshot_local(
                 divisions: parallel_divisions,
             });
             let mut archive = Archive::new(reader);
-            unpack_snapshot(&mut archive, ledger_dir, account_paths, parallel_selector)
+            hardened_unpack::unpack_snapshot(
+                &mut archive,
+                ledger_dir,
+                account_paths,
+                parallel_selector,
+            )
         })
         .collect::<Vec<_>>();
 
