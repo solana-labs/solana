@@ -178,7 +178,7 @@ We must use a `maxDepth` of `14` to ensure we can store all of our data.
 
 The `maxDepth` value will be one of the primary drivers of cost when creating a
 tree since you will pay this cost upfront at tree creation. The higher the max
-tree depth depth, the more data fingerprints (aka hashes) you can store, the
+tree depth , the more data fingerprints (aka hashes) you can store, the
 higher the cost.
 
 ### Max buffer size
