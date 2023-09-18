@@ -1983,6 +1983,7 @@ pub enum VerifyBank {
     NonDeterministic,
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 pub fn verify_snapshot_archive(
     snapshot_archive: impl AsRef<Path>,
     snapshots_to_verify: impl AsRef<Path>,
