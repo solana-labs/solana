@@ -6,7 +6,6 @@ use {
     solana_measure::measure,
     solana_sdk::{
         clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::SanitizedTransaction,
-        transaction_meta_util::GetTransactionMeta,
     },
     std::{
         collections::HashMap,
@@ -210,16 +209,12 @@ impl PrioritizationFeeCache {
                         continue;
                     }
 
-                    let transaction_meta = sanitized_transaction
-                        .get_transaction_meta(&bank.feature_set, Some(bank.cluster_type()))
-                        .ok();
+                    let transaction_meta = sanitized_transaction.get_transaction_meta();
                     let account_locks = sanitized_transaction
                         .get_account_locks(bank.get_transaction_account_lock_limit());
-
-                    if transaction_meta.is_none() || account_locks.is_err() {
+                    if account_locks.is_err() {
                         continue;
                     }
-                    let transaction_meta = transaction_meta.unwrap();
 
                     // filter out any transaction that requests zero compute_unit_limit
                     // since its priority fee amount is not instructive

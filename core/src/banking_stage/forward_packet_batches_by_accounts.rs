@@ -6,10 +6,7 @@ use {
         cost_tracker::{CostTracker, CostTrackerError},
     },
     solana_perf::packet::Packet,
-    solana_sdk::{
-        feature_set::FeatureSet, transaction::SanitizedTransaction,
-        transaction_meta_util::GetTransactionMeta,
-    },
+    solana_sdk::{feature_set::FeatureSet, transaction::SanitizedTransaction},
     std::sync::Arc,
 };
 
@@ -67,7 +64,7 @@ impl ForwardBatch {
     ) -> Result<u64, CostTrackerError> {
         let tx_cost = CostModel::calculate_cost(
             sanitized_transaction,
-            &sanitized_transaction.get_transaction_meta(feature_set, None),
+            sanitized_transaction.get_transaction_meta(),
             feature_set,
         );
         let res = self.cost_tracker.try_add(&tx_cost);

@@ -19,7 +19,7 @@ use {
         pubkey::Pubkey,
         system_instruction::SystemInstruction,
         system_program,
-        transaction::{Result, SanitizedTransaction},
+        transaction::SanitizedTransaction,
         transaction_meta::{
             TransactionMeta, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
         },
@@ -31,7 +31,7 @@ pub struct CostModel;
 impl CostModel {
     pub fn calculate_cost(
         transaction: &SanitizedTransaction,
-        transaction_meta: &Result<TransactionMeta>,
+        transaction_meta: &TransactionMeta,
         feature_set: &FeatureSet,
     ) -> TransactionCost {
         let mut tx_cost = TransactionCost::new_with_default_capacity();
@@ -69,7 +69,7 @@ impl CostModel {
     fn get_transaction_cost(
         tx_cost: &mut TransactionCost,
         transaction: &SanitizedTransaction,
-        transaction_meta: &Result<TransactionMeta>,
+        transaction_meta: &TransactionMeta,
         feature_set: &FeatureSet,
     ) {
         let mut builtin_costs = 0u64;
@@ -99,32 +99,22 @@ impl CostModel {
             }
         }
 
-        // if failed to process compute_budget instructions, the transaction will not be executed
-        // by `bank`, therefore it should be considered as no execution cost by cost model.
-        match transaction_meta {
-            Ok(transaction_meta) => {
-                // if tx contained user-space instructions and a more accurate estimate available correct it,
-                // where "user-space instructions" must be specifically checked by
-                // 'compute_unit_limit_is_set' flag, because compute_budget does not distinguish
-                // builtin and bpf instructions when calculating default compute-unit-limit. (see
-                // compute_budget.rs test `test_process_mixed_instructions_without_compute_budget`)
-                if bpf_costs > 0 && compute_unit_limit_is_set {
-                    bpf_costs = u64::from(transaction_meta.compute_unit_limit);
-                }
+        // if failed to process compute_budget instructions, the transaction will not
+        // pass sanitization, so be dropped early.
+        // if tx contained user-space instructions and a more accurate estimate available correct it,
+        // where "user-space instructions" must be specifically checked by
+        // 'compute_unit_limit_is_set' flag, because compute_budget does not distinguish
+        // builtin and bpf instructions when calculating default compute-unit-limit. (see
+        // compute_budget.rs test `test_process_mixed_instructions_without_compute_budget`)
+        if bpf_costs > 0 && compute_unit_limit_is_set {
+            bpf_costs = u64::from(transaction_meta.compute_unit_limit);
+        }
 
-                if feature_set
-                    .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id())
-                {
-                    loaded_accounts_data_size_cost = FeeStructure::calculate_memory_usage_cost(
-                        transaction_meta.accounts_loaded_bytes,
-                        ComputeBudget::default().heap_cost,
-                    );
-                }
-            }
-            Err(_) => {
-                builtin_costs = 0;
-                bpf_costs = 0;
-            }
+        if feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()) {
+            loaded_accounts_data_size_cost = FeeStructure::calculate_memory_usage_cost(
+                transaction_meta.accounts_loaded_bytes,
+                ComputeBudget::default().heap_cost,
+            );
         }
 
         tx_cost.builtins_execution_cost = builtin_costs;

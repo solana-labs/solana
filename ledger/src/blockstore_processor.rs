@@ -59,7 +59,6 @@ use {
             Result, SanitizedTransaction, TransactionError, TransactionVerificationMode,
             VersionedTransaction,
         },
-        transaction_meta_util::GetTransactionMeta,
     },
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     std::{
@@ -347,11 +346,8 @@ fn execute_batches(
     let tx_costs = sanitized_txs
         .iter()
         .map(|tx| {
-            let tx_cost = CostModel::calculate_cost(
-                tx,
-                &tx.get_transaction_meta(&bank.feature_set, Some(bank.cluster_type())),
-                &bank.feature_set,
-            );
+            let tx_cost =
+                CostModel::calculate_cost(tx, tx.get_transaction_meta(), &bank.feature_set);
             let cost = tx_cost.sum();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
             total_cost = total_cost.saturating_add(cost);

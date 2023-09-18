@@ -11,7 +11,6 @@ use {
             AddressLoader, SanitizedTransaction, SanitizedVersionedTransaction,
             VersionedTransaction,
         },
-        transaction_meta_util::GetTransactionMeta,
     },
     std::{cmp::Ordering, mem::size_of, sync::Arc},
     thiserror::Error,
@@ -47,17 +46,19 @@ pub struct ImmutableDeserializedPacket {
 impl ImmutableDeserializedPacket {
     pub fn new(packet: Packet) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction = packet.deserialize_slice(..)?;
-        let sanitized_transaction = SanitizedVersionedTransaction::try_from(versioned_transaction)?;
+        // drop transaction if prioritization fails.
+        //
+        // TODO - wire up feature_set from recent bank. For now, mimic current implementation of
+        // hardcoded `true`s for all feature gates needed.
+        let feature_set = &FeatureSet::all_enabled();
+        let sanitized_transaction =
+            SanitizedVersionedTransaction::try_new(versioned_transaction, feature_set)?;
         let message_bytes = packet_message(&packet)?;
         let message_hash = Message::hash_raw_message(message_bytes);
         let is_simple_vote = packet.meta().is_simple_vote_tx();
 
-        // drop transaction if prioritization fails.
-        //
-        // TODO - wire up the featrue set ands cluster type
-        let transaction_meta = sanitized_transaction
-            .get_transaction_meta(&FeatureSet::default(), None)
-            .map_err(|_| DeserializedPacketError::PrioritizationFailure)?;
+        // NOTE - successfully sanitized transaction always has transaction_meta
+        let transaction_meta = sanitized_transaction.get_transaction_meta();
 
         // set priority to zero for vote transactions
         let priority = if is_simple_vote {
@@ -65,6 +66,7 @@ impl ImmutableDeserializedPacket {
         } else {
             transaction_meta.compute_unit_price
         };
+        let compute_unit_limit = u64::from(transaction_meta.compute_unit_limit);
 
         Ok(Self {
             original_packet: packet,
@@ -72,7 +74,7 @@ impl ImmutableDeserializedPacket {
             message_hash,
             is_simple_vote,
             priority,
-            compute_unit_limit: u64::from(transaction_meta.compute_unit_limit),
+            compute_unit_limit,
         })
     }
 

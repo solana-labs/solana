@@ -179,6 +179,7 @@ fn simulate_transaction(
         MessageHash::Compute,
         Some(false), // is_simple_vote_tx
         bank,
+        &bank.feature_set,
     ) {
         Err(err) => {
             return BanksTransactionResultWithSimulation {
@@ -330,6 +331,7 @@ impl Banks for BanksServer {
             MessageHash::Compute,
             Some(false), // is_simple_vote_tx
             bank.as_ref(),
+            &bank.feature_set,
         ) {
             Ok(tx) => tx,
             Err(err) => return Some(Err(err)),

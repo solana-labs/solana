@@ -13,7 +13,6 @@ use {
         feature_set::FeatureSet,
         saturating_add_assign,
         transaction::{self, SanitizedTransaction, TransactionError},
-        transaction_meta_util::GetTransactionMeta,
     },
     std::sync::atomic::{AtomicU64, Ordering},
 };
@@ -75,13 +74,8 @@ impl QosService {
         let txs_costs: Vec<_> = transactions
             .zip(pre_results)
             .map(|(tx, pre_result)| {
-                pre_result.map(|()| {
-                    CostModel::calculate_cost(
-                        tx,
-                        &tx.get_transaction_meta(feature_set, None),
-                        feature_set,
-                    )
-                })
+                pre_result
+                    .map(|()| CostModel::calculate_cost(tx, tx.get_transaction_meta(), feature_set))
             })
             .collect();
         compute_cost_time.stop();

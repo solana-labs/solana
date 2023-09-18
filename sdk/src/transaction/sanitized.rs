@@ -4,6 +4,8 @@ pub use crate::message::{AddressLoader, SimpleAddressLoader};
 use {
     super::SanitizedVersionedTransaction,
     crate::{
+        compute_budget_processor::process_compute_budget_instruction,
+        feature_set::FeatureSet,
         hash::Hash,
         message::{
             legacy,
@@ -12,10 +14,10 @@ use {
         },
         precompiles::verify_if_precompile,
         pubkey::Pubkey,
-        sanitize::Sanitize,
         signature::Signature,
         solana_sdk::feature_set,
-        transaction::{Result, Transaction, TransactionError, VersionedTransaction},
+        transaction::{Result, TransactionError, VersionedTransaction},
+        transaction_meta::TransactionMeta,
     },
     solana_program::message::SanitizedVersionedMessage,
 };
@@ -30,8 +32,11 @@ pub const MAX_TX_ACCOUNT_LOCKS: usize = 128;
 pub struct SanitizedTransaction {
     message: SanitizedMessage,
     message_hash: Hash,
+    // TODO - can move is_simple_vote into `meta`, make it avaiable to svt as well.
     is_simple_vote_tx: bool,
     signatures: Vec<Signature>,
+    /// Meta data
+    transaction_meta: TransactionMeta,
 }
 
 /// Set of accounts that must be locked for safe transaction processing
@@ -67,6 +72,7 @@ impl SanitizedTransaction {
         address_loader: impl AddressLoader,
     ) -> Result<Self> {
         let signatures = tx.signatures;
+        let transaction_meta = tx.transaction_meta;
         let SanitizedVersionedMessage { message } = tx.message;
         let message = match message {
             VersionedMessage::Legacy(message) => {
@@ -84,10 +90,11 @@ impl SanitizedTransaction {
             message_hash,
             is_simple_vote_tx,
             signatures,
+            transaction_meta,
         })
     }
 
-    /// Create a sanitized transaction from an un-sanitized versioned
+    /// Creatt] a sanitized transaction from an un-sanitized versioned
     /// transaction.  If the input transaction uses address tables, attempt to
     /// lookup the address for each table index.
     pub fn try_create(
@@ -95,6 +102,7 @@ impl SanitizedTransaction {
         message_hash: impl Into<MessageHash>,
         is_simple_vote_tx: Option<bool>,
         address_loader: impl AddressLoader,
+        feature_set: &FeatureSet,
     ) -> Result<Self> {
         tx.sanitize()?;
 
@@ -128,14 +136,23 @@ impl SanitizedTransaction {
             }
         });
 
+        // extract transaction meta
+        let transaction_meta = process_compute_budget_instruction(
+            message.program_instructions_iter(),
+            feature_set,
+            None, // cluster info
+        )?;
+
         Ok(Self {
             message,
             message_hash,
             is_simple_vote_tx,
             signatures,
+            transaction_meta,
         })
     }
 
+    #[test]
     pub fn try_from_legacy_transaction(tx: Transaction) -> Result<Self> {
         tx.sanitize()?;
 
@@ -144,9 +161,11 @@ impl SanitizedTransaction {
             message: SanitizedMessage::Legacy(LegacyMessage::new(tx.message)),
             is_simple_vote_tx: false,
             signatures: tx.signatures,
+            transaction_meta: TransactinoMeta::default(),
         })
     }
 
+    #[test]
     /// Create a sanitized transaction from a legacy transaction. Used for tests only.
     pub fn from_transaction_for_tests(tx: Transaction) -> Self {
         Self::try_from_legacy_transaction(tx).unwrap()
@@ -294,6 +313,11 @@ impl SanitizedTransaction {
         } else {
             Ok(())
         }
+    }
+
+    /// Get transaction meta data
+    pub fn get_transaction_meta(&self) -> &TransactionMeta {
+        &self.transaction_meta
     }
 }
 

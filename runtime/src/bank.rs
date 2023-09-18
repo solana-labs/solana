@@ -4235,6 +4235,7 @@ impl Bank {
     }
 
     /// Prepare a transaction batch from a list of legacy transactions. Used for tests only.
+    #[test]
     pub fn prepare_batch_for_tests(&self, txs: Vec<Transaction>) -> TransactionBatch {
         let transaction_account_lock_limit = self.get_transaction_account_lock_limit();
         let sanitized_txs = txs
@@ -4253,7 +4254,15 @@ impl Bank {
     pub fn prepare_entry_batch(&self, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch> {
         let sanitized_txs = txs
             .into_iter()
-            .map(|tx| SanitizedTransaction::try_create(tx, MessageHash::Compute, None, self))
+            .map(|tx| {
+                SanitizedTransaction::try_create(
+                    tx,
+                    MessageHash::Compute,
+                    None,
+                    self,
+                    &self.feature_set,
+                )
+            })
             .collect::<Result<Vec<_>>>()?;
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_results = self
@@ -5133,8 +5142,7 @@ impl Bank {
                         } else {
                             let mut compute_budget_process_transaction_time =
                                 Measure::start("compute_budget_process_transaction_time");
-                            let transaction_meta =
-                                tx.get_transaction_meta(&self.feature_set, self.cluster_type);
+                            let transaction_meta = tx.get_transaction_meta();
                             compute_budget_process_transaction_time.stop();
                             saturating_add_assign!(
                                 timings
@@ -5142,10 +5150,7 @@ impl Bank {
                                     .compute_budget_process_transaction_us,
                                 compute_budget_process_transaction_time.as_us()
                             );
-                            if let Err(err) = transaction_meta {
-                                return TransactionExecutionResult::NotExecuted(err.into());
-                            }
-                            ComputeBudget::new_from_transaction_meta(&transaction_meta.unwrap())
+                            ComputeBudget::new_from_transaction_meta(&transaction_meta)
                         };
 
                     let result = self.execute_loaded_transaction(
@@ -7311,7 +7316,7 @@ impl Bank {
                 tx.message.hash()
             };
 
-            SanitizedTransaction::try_create(tx, message_hash, None, self)
+            SanitizedTransaction::try_create(tx, message_hash, None, self, &self.feature_set)
         }?;
 
         if verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles

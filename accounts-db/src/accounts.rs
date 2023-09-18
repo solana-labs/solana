@@ -55,7 +55,6 @@ use {
         sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
-        transaction_meta_util::GetTransactionMeta,
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
     std::{
@@ -246,9 +245,8 @@ impl Accounts {
         feature_set: &FeatureSet,
     ) -> Result<Option<NonZeroUsize>> {
         if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
-            let transaction_meta = tx
-                .get_transaction_meta(feature_set, None)
-                .unwrap_or_default();
+            // NOTE - sanitized transaction comes with meta
+            let transaction_meta = tx.get_transaction_meta();
             // sanitize against setting size limit to zero
             NonZeroUsize::new(transaction_meta.accounts_loaded_bytes).map_or(
                 Err(TransactionError::InvalidLoadedAccountsDataSizeLimit),
@@ -714,7 +712,7 @@ impl Accounts {
                             hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
                         });
                     let fee = if let Some(lamports_per_signature) = lamports_per_signature {
-                        let transaction_meta = tx.get_transaction_meta(feature_set, Some(self.accounts_db.expected_cluster_type())).unwrap_or_default();
+                        let transaction_meta = tx.get_transaction_meta();
                         let fee_budget_limits = FeeBudgetLimits {
                             loaded_accounts_data_size_limit: transaction_meta.accounts_loaded_bytes,
                             heap_cost: ComputeBudget::default().heap_cost,
