@@ -1208,7 +1208,7 @@ impl<'a> AccountsHasher<'a> {
                         head = Some(current);
                         break;
                     }
-                    if h_pubkey == &key {
+                    if h_pubkey == key {
                         // replace the current head with current, then skip over the prior head's entry
                         if h.slot_group_index < current.slot_group_index {
                             std::mem::swap(&mut h.slot_group_index, &mut current.slot_group_index);
