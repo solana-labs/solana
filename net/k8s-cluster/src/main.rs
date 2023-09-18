@@ -3,7 +3,7 @@ use {
     log::*,
     solana_k8s_cluster::{
         docker::{DockerConfig, DockerImageConfig},
-        genesis::{Genesis, GenesisFlags, SetupConfig},
+        genesis::{Genesis, GenesisFlags, SetupConfig, DEFAULT_INTERNAL_NODE_STAKE_SOL, DEFAULT_INTERNAL_NODE_SOL},
         initialize_globals,
         kubernetes::{Kubernetes, RuntimeConfig},
         release::{BuildConfig, Deploy},
@@ -159,7 +159,31 @@ fn parse_matches() -> ArgMatches<'static> {
             Arg::with_name("faucet_lamports")
                 .long("faucet-lamports")
                 .takes_value(true)
-                .help("Genesis config. faucet lamports"),
+                .help("Override the default 500000000000000000 lamports minted in genesis"),
+        )
+        .arg(
+            Arg::with_name("bootstrap_validator_sol")
+                .long("bootstrap-validator-sol")
+                .takes_value(true)
+                .help("Genesis config. bootstrap validator sol"),
+        )
+        .arg(
+            Arg::with_name("bootstrap_validator_stake_sol")
+                .long("bootstrap-validator-stake-sol")
+                .takes_value(true)
+                .help("Genesis config. bootstrap validator stake sol"),
+        )
+        .arg(
+            Arg::with_name("internal_node_sol")
+                .long("internal-node-sol")
+                .takes_value(true)
+                .help("Amount to fund internal nodes in genesis config."),
+        )
+        .arg(
+            Arg::with_name("internal_node_stake_sol")
+                .long("internal-node-stake-sol")
+                .takes_value(true)
+                .help(" Amount to stake internal nodes (Sol)."),
         )
         .arg(
             Arg::with_name("enable_warmup_epochs")
@@ -276,12 +300,40 @@ async fn main() {
             Some(value_str) => Some(value_str.parse().expect("Invalid value for cluster_type")),
             None => None,
         },
+        bootstrap_validator_sol: match matches.value_of("bootstrap_validator_sol") {
+            Some(value_str) => Some(
+                value_str
+                    .parse()
+                    .expect("Invalid value for bootstrap_validator_sol"),
+            ),
+            None => None,
+        },
+        bootstrap_validator_stake_sol: match matches
+            .value_of("bootstrap_validator_stake_sol")
+        {
+            Some(value_str) => Some(
+                value_str
+                    .parse()
+                    .expect("Invalid value for bootstrap_validator_stake_sol"),
+            ),
+            None => None,
+        },
     };
 
     let runtime_config = RuntimeConfig {
         enable_udp: matches.is_present("tpu_enable_udp"),
         disable_quic: matches.is_present("tpu_disable_quic"),
         gpu_mode: matches.value_of("gpu_mode").unwrap(),
+        internal_node_sol: matches
+            .value_of("internal_node_sol")
+            .unwrap_or(DEFAULT_INTERNAL_NODE_SOL.to_string().as_str())
+            .parse::<f64>()
+            .expect("Invalid value for internal_node_stake_sol") as f64,
+        internal_node_stake_sol: matches
+            .value_of("internal_node_stake_sol")
+            .unwrap_or(DEFAULT_INTERNAL_NODE_STAKE_SOL.to_string().as_str())
+            .parse::<f64>()
+            .expect("Invalid value for internal_node_stake_sol") as f64
     };
 
     // Check if namespace exists

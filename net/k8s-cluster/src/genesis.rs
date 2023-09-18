@@ -43,6 +43,10 @@ pub const DEFAULT_FAUCET_LAMPORTS: u64 = 500000000000000000;
 pub const DEFAULT_MAX_GENESIS_ARCHIVE_UNPACKED_SIZE: u64 = 1073741824;
 pub const DEFAULT_CLUSTER_TYPE: ClusterType = ClusterType::Development;
 pub const DEFAULT_COMMISSION: u8 = 100;
+pub const DEFAULT_INTERNAL_NODE_STAKE_SOL: f64 = 10.0; // 10000000000 lamports
+pub const DEFAULT_INTERNAL_NODE_SOL: f64 = 500.0; // 500000000000 lamports
+pub const DEFAULT_BOOTSTRAP_NODE_STAKE_SOL: f64 = 1.0;
+pub const DEFAULT_BOOTSTRAP_NODE_SOL: f64 = 500.0;
 
 fn output_keypair(keypair: &Keypair, outfile: &str, source: &str) -> Result<(), Box<dyn Error>> {
     if outfile == STDOUT_OUTFILE_TOKEN {
@@ -163,6 +167,8 @@ pub struct GenesisFlags {
     pub enable_warmup_epochs: bool,
     pub max_genesis_archive_unpacked_size: Option<u64>,
     pub cluster_type: Option<ClusterType>,
+    pub bootstrap_validator_sol: Option<f64>,
+    pub bootstrap_validator_stake_sol: Option<f64>,
 }
 
 impl std::fmt::Display for GenesisFlags {
@@ -178,6 +184,8 @@ impl std::fmt::Display for GenesisFlags {
              enable_warmup_epochs: {},\n\
              max_genesis_archive_unpacked_size: {:?},\n\
              cluster_type: {:?}\n\
+             bootstrap_validator_sol: {:?},\n\
+             bootstrap_validator_stake_sol: {:?},\n\
              }}",
             self.hashes_per_tick,
             self.slots_per_epoch,
@@ -185,7 +193,9 @@ impl std::fmt::Display for GenesisFlags {
             self.faucet_lamports,
             self.enable_warmup_epochs,
             self.max_genesis_archive_unpacked_size,
-            self.cluster_type
+            self.cluster_type,
+            self.bootstrap_validator_sol,
+            self.bootstrap_validator_stake_sol,
         )
     }
 }
@@ -338,18 +348,16 @@ impl Genesis {
 
         // vote account
         // lamports set a default 500
-        let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
-            .max(VoteState::get_rent_exempt_reserve(&rent))
-            .to_string();
-        let bootstrap_validator_lamports: u64 =
-            default_bootstrap_validator_lamports.parse().unwrap(); //TODO enable command line arg
+        let bootstrap_validator_lamports = match self.flags.bootstrap_validator_sol {
+            Some(sol) => sol_to_lamports(sol),
+            None => sol_to_lamports(DEFAULT_BOOTSTRAP_NODE_SOL).max(VoteState::get_rent_exempt_reserve(&rent)),
+        };
 
-        // stake account
-        let default_bootstrap_validator_stake_lamports = &sol_to_lamports(100.0)
-            .max(rent.minimum_balance(StakeStateV2::size_of()))
-            .to_string();
-        let bootstrap_validator_stake_lamports: u64 =
-            default_bootstrap_validator_stake_lamports.parse().unwrap(); // TODO enable command line arg
+        let bootstrap_validator_stake_lamports = match self.flags.bootstrap_validator_stake_sol
+        {
+            Some(sol) => sol_to_lamports(sol),
+            None => sol_to_lamports(DEFAULT_BOOTSTRAP_NODE_STAKE_SOL).max(rent.minimum_balance(StakeStateV2::size_of())),
+        };
 
         let faucet_lamports = match self.flags.faucet_lamports {
             Some(faucet_lamports) => faucet_lamports,
