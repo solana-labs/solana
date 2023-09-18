@@ -1233,7 +1233,7 @@ mod tests {
             let keypair = &keypairs[rng.gen_range(0..keypairs.len())];
             let value = CrdsValue::new_rand(&mut rng, Some(keypair));
             let local_timestamp = new_rand_timestamp(&mut rng);
-            if let Ok(()) = crds.insert(value.clone(), local_timestamp, GossipRoute::LocalMessage) {
+            if let Ok(()) = crds.insert(value, local_timestamp, GossipRoute::LocalMessage) {
                 num_inserts += 1;
             }
             if k % 16 == 0 {
