@@ -206,6 +206,8 @@ impl Tvu {
                 repair_whitelist: tvu_config.repair_whitelist,
                 cluster_info: cluster_info.clone(),
                 cluster_slots: cluster_slots.clone(),
+                // TODO(wen): set correctly during wen_restart.
+                slots_to_repair_for_wen_restart: None,
             };
             WindowService::new(
                 blockstore.clone(),
