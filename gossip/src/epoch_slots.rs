@@ -11,6 +11,7 @@ use {
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
     },
+    std::fmt,
 };
 
 const MAX_SLOTS_PER_ENTRY: usize = 2048 * 8;
@@ -225,24 +226,17 @@ impl CompressedSlots {
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, PartialEq, Eq, AbiExample)]
-pub struct EpochSlots {
-    pub from: Pubkey,
-    pub slots: Vec<CompressedSlots>,
-    pub wallclock: u64,
+pub struct CompressedSlotsVec {
+    slots: Vec<CompressedSlots>,
 }
 
-impl Sanitize for EpochSlots {
+impl Sanitize for CompressedSlotsVec {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
-        if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::ValueOutOfBounds);
-        }
-        self.from.sanitize()?;
         self.slots.sanitize()
     }
 }
 
-use std::fmt;
-impl fmt::Debug for EpochSlots {
+impl fmt::Debug for CompressedSlotsVec {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let num_slots: usize = self.slots.iter().map(|s| s.num_slots()).sum();
         let lowest_slot = self
@@ -250,25 +244,17 @@ impl fmt::Debug for EpochSlots {
             .iter()
             .map(|s| s.first_slot())
             .fold(0, std::cmp::min);
-        write!(
-            f,
-            "EpochSlots {{ from: {} num_slots: {} lowest_slot: {} wallclock: {} }}",
-            self.from, num_slots, lowest_slot, self.wallclock
-        )
+        write!(f, "num_slots: {} lowest_slot: {}", num_slots, lowest_slot,)
     }
 }
 
-impl EpochSlots {
-    pub fn new(from: Pubkey, now: u64) -> Self {
-        Self {
-            from,
-            wallclock: now,
-            slots: vec![],
-        }
+impl CompressedSlotsVec {
+    pub fn new() -> Self {
+        Self { slots: vec![] }
     }
-    pub fn fill(&mut self, slots: &[Slot], now: u64) -> usize {
+
+    pub fn fill(&mut self, slots: &[Slot]) -> usize {
         let mut num = 0;
-        self.wallclock = std::cmp::max(now, self.wallclock + 1);
         while num < slots.len() {
             num += self.add(&slots[num..]);
             if num < slots.len() {
@@ -321,17 +307,73 @@ impl EpochSlots {
             .collect()
     }
 
-    /// New random EpochSlots for tests and simulations.
-    pub(crate) fn new_rand<R: rand::Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
-        let now = crds_value::new_rand_timestamp(rng);
-        let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);
-        let mut epoch_slots = Self::new(pubkey, now);
+    /// New random CompressedSlotsVec for tests and simulations.
+    pub(crate) fn new_rand<R: rand::Rng>(rng: &mut R) -> Self {
+        let mut result = Self::new();
         let num_slots = rng.gen_range(0..20);
         let slots: Vec<_> = std::iter::repeat_with(|| 47825632 + rng.gen_range(0..512))
             .take(num_slots)
             .collect();
-        epoch_slots.add(&slots);
-        epoch_slots
+        result.add(&slots);
+        result
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Default, PartialEq, Eq, AbiExample, Debug)]
+pub struct EpochSlots {
+    pub from: Pubkey,
+    slots_vec: CompressedSlotsVec,
+    pub wallclock: u64,
+}
+
+impl Sanitize for EpochSlots {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::ValueOutOfBounds);
+        }
+        self.from.sanitize()?;
+        self.slots_vec.slots.sanitize()
+    }
+}
+
+impl EpochSlots {
+    pub fn new(from: Pubkey, now: u64) -> Self {
+        Self {
+            from,
+            wallclock: now,
+            slots_vec: CompressedSlotsVec::new(),
+        }
+    }
+    pub fn fill(&mut self, slots: &[Slot], now: u64) -> usize {
+        self.wallclock = std::cmp::max(now, self.wallclock + 1);
+        self.slots_vec.fill(slots)
+    }
+
+    pub fn add(&mut self, slots: &[Slot]) -> usize {
+        self.slots_vec.add(slots)
+    }
+    pub fn deflate(&mut self) -> Result<()> {
+        self.slots_vec.deflate()
+    }
+    pub fn max_compressed_slot_size(&self) -> isize {
+        self.slots_vec.max_compressed_slot_size()
+    }
+
+    pub fn first_slot(&self) -> Option<Slot> {
+        self.slots_vec.first_slot()
+    }
+
+    pub fn to_slots(&self, min_slot: Slot) -> Vec<Slot> {
+        self.slots_vec.to_slots(min_slot)
+    }
+
+    /// New random EpochSlots for tests and simulations.
+    pub(crate) fn new_rand<R: rand::Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
+        Self {
+            from: pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand),
+            wallclock: crds_value::new_rand_timestamp(rng),
+            slots_vec: CompressedSlotsVec::new_rand(rng),
+        }
     }
 }
 
@@ -466,15 +508,16 @@ mod tests {
         let mut slots = EpochSlots::default();
         assert_eq!(slots.fill(&range, 2), 5000);
         assert_eq!(slots.wallclock, 2);
-        assert_eq!(slots.slots.len(), 3);
-        assert_eq!(slots.slots[0].first_slot(), 0);
-        assert_ne!(slots.slots[0].num_slots(), 0);
-        let next = slots.slots[0].num_slots() as u64 + slots.slots[0].first_slot();
-        assert!(slots.slots[1].first_slot() >= next);
-        assert_ne!(slots.slots[1].num_slots(), 0);
-        assert_ne!(slots.slots[2].num_slots(), 0);
-        assert_eq!(slots.to_slots(0), range);
-        assert_eq!(slots.to_slots(4999 * 3), vec![4999 * 3]);
+        assert_eq!(slots.slots_vec.slots.len(), 3);
+        assert_eq!(slots.slots_vec.slots[0].first_slot(), 0);
+        assert_ne!(slots.slots_vec.slots[0].num_slots(), 0);
+        let next =
+            slots.slots_vec.slots[0].num_slots() as u64 + slots.slots_vec.slots[0].first_slot();
+        assert!(slots.slots_vec.slots[1].first_slot() >= next);
+        assert_ne!(slots.slots_vec.slots[1].num_slots(), 0);
+        assert_ne!(slots.slots_vec.slots[2].num_slots(), 0);
+        assert_eq!(slots.slots_vec.to_slots(0), range);
+        assert_eq!(slots.slots_vec.to_slots(4999 * 3), vec![4999 * 3]);
     }
 
     #[test]
@@ -532,11 +575,11 @@ mod tests {
             let last = range[sz - 1];
             assert_eq!(
                 last,
-                slots.slots.last().unwrap().first_slot()
-                    + slots.slots.last().unwrap().num_slots() as u64
+                slots.slots_vec.slots.last().unwrap().first_slot()
+                    + slots.slots_vec.slots.last().unwrap().num_slots() as u64
                     - 1
             );
-            for s in &slots.slots {
+            for s in &slots.slots_vec.slots {
                 assert!(s.to_slots(0).is_ok());
             }
             let slots = slots.to_slots(0);
