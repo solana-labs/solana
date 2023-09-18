@@ -1601,21 +1601,34 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         // Earlier entries are overwritten by later entries
         items.sort_by(|a, b| a.0.cmp(&b.0));
         let mut duplicates = None::<Vec<(Pubkey, (Slot, T))>>;
-        let mut i = 0;
-        while i < items.len().saturating_sub(1) {
-            let this_key = &items[i].0;
-            // look at next entry. If it is same pubkey as this one, then remove this one.
-            if this_key == &items[i + 1].0 {
+
+        // Iterate the items vec from the end to the beginning. Adjacent duplicated items will be
+        // written to the front of the vec.
+        let n = items.len();
+        let mut last_key = items[n - 1].0;
+        let mut write = n - 1;
+        let mut curr = write;
+
+        while curr > 0 {
+            let curr_item = items[curr - 1];
+
+            if curr_item.0 == last_key {
                 let mut duplicates_insert = duplicates.unwrap_or_default();
-                // i+1 is same pubkey as i, so remove i
-                duplicates_insert.push(items.remove(i));
+                duplicates_insert.push(curr_item);
                 duplicates = Some(duplicates_insert);
-                // `items` got smaller, so `i` remains the same.
-                // There could also be several duplicate pubkeys.
+                curr -= 1;
             } else {
-                i += 1;
+                if curr < write {
+                    items[write - 1] = curr_item;
+                }
+                curr -= 1;
+                write -= 1;
+                last_key = curr_item.0;
             }
         }
+
+        items.drain(..(write - curr));
+
         duplicates
     }
 
@@ -2187,6 +2200,7 @@ pub mod tests {
                 let result = AccountsIndex::<u64, u64>::remove_older_duplicate_pubkeys(&mut items);
                 assert_eq!(items, expected);
                 if dup != 0 {
+                    expected_dups.reverse();
                     assert_eq!(result.unwrap(), expected_dups);
                 } else {
                     assert!(result.is_none());
