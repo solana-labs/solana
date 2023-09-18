@@ -1,12 +1,51 @@
 #!/bin/bash
 
 echo "about to show args: "
-mkdir logs
-touch logs/tmp.log
-args=("$@")
-for arg in "${args[@]}"; do
-  echo "Validator Argument: $arg" >> logs/tmp.log
+
+args=()
+stake_sol=
+node_sol=
+
+# Iterate through the command-line arguments
+while [ $# -gt 0 ]; do
+  if [[ ${1:0:2} = -- ]]; then
+    echo "first arg: $1"
+    if [[ $1 = --internal-node-stake-sol ]]; then
+      stake_sol=$2
+      shift 2
+    elif [[ $1 == --internal-node-sol ]]; then
+      node_sol=$2
+      shift 2
+    elif [[ $1 == --tpu-enable-udp ]]; then
+      args+=($1)
+      shift 1
+    elif [[ $1 == --tpu-disable-quic ]]; then
+      args+=($1)
+      shift 1
+    else
+      echo "Unknown argument: $1"
+      exit 1
+    fi
+  fi
 done
+
+for arg in "${args[@]}"; do
+  echo "Argument: $arg"
+done
+
+
+
+# Check if the --internal-node-stake-sol flag was provided
+if [ -z "$stake_sol" ]; then
+  echo "Usage: $0 --internal-node-stake-sol <sol>"
+  exit 1
+fi
+if [ -z "$node_sol" ]; then
+  echo "Usage: $0 --internal-node-sol <sol>"
+  exit 1
+fi
+
+echo "Sol stake: $stake_sol"
 
 /home/solana/k8s-cluster/src/scripts/decode-accounts.sh -t "validator"
 
@@ -49,9 +88,9 @@ run_solana_command() {
 }
 
 # Run Solana commands with retries
-run_solana_command "solana -u $SOLANA_RPC_URL airdrop 500 $IDENTITY_FILE" "Airdrop"
+run_solana_command "solana -u $SOLANA_RPC_URL airdrop "$node_sol" $IDENTITY_FILE" "Airdrop"
 run_solana_command "solana -u $SOLANA_RPC_URL create-vote-account --allow-unsafe-authorized-withdrawer vote.json $IDENTITY_FILE $IDENTITY_FILE -k $IDENTITY_FILE" "Create Vote Account"
-run_solana_command "solana -u $SOLANA_RPC_URL create-stake-account stake.json 3.00228288 -k $IDENTITY_FILE" "Create Stake Account"
+run_solana_command "solana -u $SOLANA_RPC_URL create-stake-account stake.json "$stake_sol" -k $IDENTITY_FILE" "Create Stake Account"
 run_solana_command "solana -u $SOLANA_RPC_URL delegate-stake stake.json vote.json --force -k $IDENTITY_FILE" "Delegate Stake"
 
 # Check if any of the commands failed
@@ -71,10 +110,11 @@ nohup solana-validator \
   --gossip-port 8001 \
   --rpc-port 8899 \
   --ledger ledger \
-  --log - \
+  --log logs/solana-validator.log \
   --full-rpc-api \
   --allow-private-addr \
-  "$@" &
+  "${args[@]}" \
+  >logs/init-validator.log 2>&1 &
 
 
 # # Sleep for an hour (3600 seconds)

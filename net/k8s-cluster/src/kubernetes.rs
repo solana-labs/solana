@@ -25,6 +25,8 @@ pub struct RuntimeConfig<'a> {
     pub enable_udp: bool,
     pub disable_quic: bool,
     pub gpu_mode: &'a str, // TODO: this is not implemented yet
+    pub internal_node_sol: f64,
+    pub internal_node_stake_sol: f64,
 }
 
 pub struct Kubernetes<'a> {
@@ -42,9 +44,7 @@ impl<'a> Kubernetes<'a> {
         }
     }
 
-    fn generate_command_flags(
-        &mut self,
-    ) -> Vec<String> {
+    fn generate_command_flags(&mut self) -> Vec<String> {
         let mut flags = Vec::new();
         if self.runtime_config.enable_udp {
             flags.push("--tpu-enable-udp".to_string());
@@ -52,6 +52,19 @@ impl<'a> Kubernetes<'a> {
         if self.runtime_config.disable_quic {
             flags.push("--tpu-disable-quic".to_string());
         }
+        flags
+    }
+
+    fn generate_bootstrap_command_flags(&mut self) -> Vec<String> {
+        self.generate_command_flags()
+    }
+
+    fn generate_validator_command_flags(&mut self) -> Vec<String> {
+        let mut flags = self.generate_command_flags();
+        flags.push("--internal-node-stake-sol".to_string());
+        flags.push(self.runtime_config.internal_node_stake_sol.to_string());
+        flags.push("--internal-node-sol".to_string());
+        flags.push(self.runtime_config.internal_node_sol.to_string());
         flags
     }
 
@@ -143,7 +156,7 @@ impl<'a> Kubernetes<'a> {
 
         let mut command =
             vec!["/home/solana/k8s-cluster/src/scripts/bootstrap-startup-script.sh".to_string()];
-        command.extend(self.generate_command_flags());
+        command.extend(self.generate_bootstrap_command_flags());
 
         for c in command.iter() {
             info!("bootstrap command: {}", c);
@@ -487,12 +500,10 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         };
 
-        // let command = vec!["/workspace/start-validator.sh".to_string()];
-        // let command = vec!["sleep".to_string(), "3600".to_string()];
         let mut command =
             vec!["/home/solana/k8s-cluster/src/scripts/validator-startup-script.sh".to_string()];
-        command.extend(self.generate_command_flags());
-        
+        command.extend(self.generate_validator_command_flags());
+
         for c in command.iter() {
             info!("validator command: {}", c);
         }
