@@ -4092,7 +4092,6 @@ impl Bank {
             &ComputeBudget::fee_budget_limits(
                 message.program_instructions_iter(),
                 &self.feature_set,
-                Some(self.cluster_type()),
             ),
             self.feature_set
                 .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
@@ -5179,7 +5178,6 @@ impl Bank {
                             !self
                                 .feature_set
                                 .is_active(&remove_deprecated_request_unit_ix::id()),
-                            true, // don't reject txs that use request heap size ix
                             self.feature_set
                                 .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
                         );

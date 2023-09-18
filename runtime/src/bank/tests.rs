@@ -63,7 +63,7 @@ use {
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
         epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
         feature::{self, Feature},
-        feature_set::{self, enable_request_heap_frame_ix, FeatureSet},
+        feature_set::{self, FeatureSet},
         fee::FeeStructure,
         fee_calculator::FeeRateGovernor,
         genesis_config::{create_genesis_config, ClusterType, GenesisConfig},
@@ -2829,7 +2829,6 @@ fn test_bank_tx_compute_unit_fee() {
         &FeeStructure::default(),
         false,
         true,
-        true,
     );
 
     let (expected_fee_collected, expected_fee_burned) =
@@ -3011,7 +3010,6 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         &FeeStructure::default(),
         false,
         true,
-        true,
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -3029,7 +3027,6 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         expensive_lamports_per_signature,
         &FeeStructure::default(),
         false,
-        true,
         true,
     );
     assert_eq!(
@@ -3143,7 +3140,6 @@ fn test_filter_program_errors_and_collect_compute_unit_fee() {
                             .lamports_per_signature,
                         &FeeStructure::default(),
                         false,
-                        true,
                         true,
                     ) * 2
                 )
@@ -10074,7 +10070,6 @@ fn calculate_test_fee(
     lamports_per_signature: u64,
     fee_structure: &FeeStructure,
     support_set_accounts_data_size_limit_ix: bool,
-    enable_request_heap_frame_ix: bool,
     remove_congestion_multiplier: bool,
 ) -> u64 {
     let mut feature_set = FeatureSet::all_enabled();
@@ -10084,12 +10079,8 @@ fn calculate_test_fee(
         feature_set.deactivate(&include_loaded_accounts_data_size_in_fee_calculation::id());
     }
 
-    if !enable_request_heap_frame_ix {
-        feature_set.deactivate(&enable_request_heap_frame_ix::id());
-    }
-
     let budget_limits =
-        ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set, None);
+        ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set);
     fee_structure.calculate_fee(
         message,
         lamports_per_signature,
@@ -10115,7 +10106,6 @@ fn test_calculate_fee() {
                 },
                 support_set_accounts_data_size_limit_ix,
                 true,
-                true,
             ),
             0
         );
@@ -10132,7 +10122,6 @@ fn test_calculate_fee() {
                     ..FeeStructure::default()
                 },
                 support_set_accounts_data_size_limit_ix,
-                true,
                 true,
             ),
             1
@@ -10155,7 +10144,6 @@ fn test_calculate_fee() {
                     ..FeeStructure::default()
                 },
                 support_set_accounts_data_size_limit_ix,
-                true,
                 true,
             ),
             4
@@ -10184,7 +10172,6 @@ fn test_calculate_fee_compute_units() {
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
                 true,
-                true,
             ),
             max_fee + lamports_per_signature
         );
@@ -10203,7 +10190,6 @@ fn test_calculate_fee_compute_units() {
                 1,
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
-                true,
                 true,
             ),
             max_fee + 3 * lamports_per_signature
@@ -10246,7 +10232,6 @@ fn test_calculate_fee_compute_units() {
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
                 true,
-                true,
             );
             assert_eq!(
                 fee,
@@ -10284,7 +10269,6 @@ fn test_calculate_prioritization_fee() {
         &message,
         fee_structure.lamports_per_signature,
         &fee_structure,
-        true,
         true,
         true,
     );
@@ -10332,7 +10316,6 @@ fn test_calculate_fee_secp256k1() {
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
                 true,
-                true,
             ),
             2
         );
@@ -10352,7 +10335,6 @@ fn test_calculate_fee_secp256k1() {
                 1,
                 &fee_structure,
                 support_set_accounts_data_size_limit_ix,
-                true,
                 true,
             ),
             11
@@ -11994,7 +11976,6 @@ fn test_calculate_fee_with_congestion_multiplier() {
                 cheap_lamports_per_signature,
                 &fee_structure,
                 true,
-                true,
                 remove_congestion_multiplier,
             ),
             signature_fee * signature_count
@@ -12015,7 +11996,6 @@ fn test_calculate_fee_with_congestion_multiplier() {
                 &message,
                 expensive_lamports_per_signature,
                 &fee_structure,
-                true,
                 true,
                 remove_congestion_multiplier,
             ),
@@ -12047,34 +12027,11 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
     ))
     .unwrap();
 
-    // assert when enable_request_heap_frame_ix is enabled, prioritization fee will be counted
+    // assert when request_heap_frame is presented in tx, prioritization fee will be counted
     // into transaction fee
-    let mut enable_request_heap_frame_ix = true;
     assert_eq!(
-        calculate_test_fee(
-            &message,
-            lamports_per_signature,
-            &fee_structure,
-            true,
-            enable_request_heap_frame_ix,
-            true,
-        ),
+        calculate_test_fee(&message, lamports_per_signature, &fee_structure, true, true,),
         signature_fee + request_cu * lamports_per_cu
-    );
-
-    // assert when enable_request_heap_frame_ix is disabled (an v1.13 behavior), prioritization fee will not be counted
-    // into transaction fee
-    enable_request_heap_frame_ix = false;
-    assert_eq!(
-        calculate_test_fee(
-            &message,
-            lamports_per_signature,
-            &fee_structure,
-            true,
-            enable_request_heap_frame_ix,
-            true,
-        ),
-        signature_fee
     );
 }
 

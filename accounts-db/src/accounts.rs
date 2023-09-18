@@ -252,7 +252,6 @@ impl Accounts {
             let _process_transaction_result = compute_budget.process_instructions(
                 tx.message().program_instructions_iter(),
                 !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-                true, // don't reject txs that use request heap size ix
                 feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
             );
             // sanitize against setting size limit to zero
@@ -723,7 +722,7 @@ impl Accounts {
                         fee_structure.calculate_fee(
                             tx.message(),
                             lamports_per_signature,
-                            &ComputeBudget::fee_budget_limits(tx.message().program_instructions_iter(), feature_set, Some(self.accounts_db.expected_cluster_type())),
+                            &ComputeBudget::fee_budget_limits(tx.message().program_instructions_iter(), feature_set),
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                             feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                         )
@@ -1758,11 +1757,7 @@ mod tests {
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &ComputeBudget::fee_budget_limits(
-                message.program_instructions_iter(),
-                &feature_set,
-                None,
-            ),
+            &ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set),
             true,
             false,
         );
@@ -4327,11 +4322,7 @@ mod tests {
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &ComputeBudget::fee_budget_limits(
-                message.program_instructions_iter(),
-                &feature_set,
-                None,
-            ),
+            &ComputeBudget::fee_budget_limits(message.program_instructions_iter(), &feature_set),
             true,
             false,
         );
