@@ -293,9 +293,6 @@ impl ComputeBudget {
     ) -> FeeBudgetLimits {
         let mut compute_budget = Self::default();
 
-        // A cluster specific feature gate, when not activated it keeps v1.13 behavior in mainnet-beta;
-        // once activated for v1.14+, it allows compute_budget::request_heap_frame and
-        // compute_budget::set_compute_unit_price co-exist in same transaction.
         let prioritization_fee_details = compute_budget
             .process_instructions(
                 instructions,
@@ -634,40 +631,6 @@ mod tests {
                 InstructionError::InvalidInstructionData,
             )),
             ComputeBudget::default()
-        );
-    }
-
-    #[test]
-    fn test_process_instructions_disable_request_heap_frame() {
-        // assert empty message results default compute budget and fee
-        test!(
-            &[],
-            Ok(PrioritizationFeeDetails::default()),
-            ComputeBudget {
-                compute_unit_limit: 0,
-                ..ComputeBudget::default()
-            },
-            false
-        );
-
-        // assert normal results when not requesting heap frame when the feature is disabled
-        test!(
-            &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-            ],
-            Ok(PrioritizationFeeDetails::default()),
-            ComputeBudget {
-                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64 * 7,
-                ..ComputeBudget::default()
-            },
-            false
         );
     }
 
