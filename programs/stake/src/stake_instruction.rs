@@ -644,7 +644,7 @@ mod tests {
         )
     }
 
-    fn get_active_stake(
+    fn get_active_stake_for_tests(
         stake_accounts: &[AccountSharedData],
         clock: &Clock,
         stake_history: &StakeHistory,
@@ -2792,7 +2792,7 @@ mod tests {
                 &id(),
             )
             .unwrap();
-            let expected_active_stake = get_active_stake(
+            let expected_active_stake = get_active_stake_for_tests(
                 &[stake_account.clone(), split_to_account.clone()],
                 &clock,
                 &stake_history,
@@ -2825,7 +2825,7 @@ mod tests {
             // no deactivated stake
             assert_eq!(
                 expected_active_stake,
-                get_active_stake(&accounts[0..2], &clock, &stake_history)
+                get_active_stake_for_tests(&accounts[0..2], &clock, &stake_history)
             );
 
             assert_eq!(from(&accounts[0]).unwrap(), from(&accounts[1]).unwrap());
@@ -4153,7 +4153,7 @@ mod tests {
                 &id(),
             )
             .unwrap();
-            let expected_active_stake = get_active_stake(
+            let expected_active_stake = get_active_stake_for_tests(
                 &[source_account.clone(), dest_account.clone()],
                 &clock,
                 &stake_history,
@@ -4180,7 +4180,7 @@ mod tests {
             );
             assert_eq!(
                 expected_active_stake,
-                get_active_stake(&accounts[0..2], &clock, &stake_history)
+                get_active_stake_for_tests(&accounts[0..2], &clock, &stake_history)
             );
         }
     }
@@ -4251,7 +4251,7 @@ mod tests {
                     &id(),
                 )
                 .unwrap();
-                let expected_active_stake = get_active_stake(
+                let expected_active_stake = get_active_stake_for_tests(
                     &[source_account.clone(), dest_account.clone()],
                     &clock,
                     &stake_history,
@@ -4278,7 +4278,7 @@ mod tests {
                 );
                 assert_eq!(
                     expected_active_stake,
-                    get_active_stake(&accounts[0..2], &clock, &stake_history)
+                    get_active_stake_for_tests(&accounts[0..2], &clock, &stake_history)
                 );
             }
         }
@@ -4513,7 +4513,7 @@ mod tests {
                 &id(),
             )
             .unwrap();
-            let expected_active_stake = get_active_stake(
+            let expected_active_stake = get_active_stake_for_tests(
                 &[source_account.clone(), destination_account.clone()],
                 &clock,
                 &stake_history,
@@ -4540,7 +4540,7 @@ mod tests {
             );
             assert_eq!(
                 expected_active_stake,
-                get_active_stake(&accounts[0..2], &clock, &stake_history)
+                get_active_stake_for_tests(&accounts[0..2], &clock, &stake_history)
             );
             // For the expected OK cases, when the source's StakeStateV2 is Stake, then the
             // destination's StakeStateV2 *must* also end up as Stake as well.  Additionally,
@@ -5137,7 +5137,7 @@ mod tests {
                 &id(),
             )
             .unwrap();
-            let expected_active_stake = get_active_stake(
+            let expected_active_stake = get_active_stake_for_tests(
                 &[stake_account.clone(), split_to_account.clone()],
                 &clock,
                 &stake_history,
@@ -5189,7 +5189,7 @@ mod tests {
             );
             assert_eq!(
                 expected_active_stake,
-                get_active_stake(&accounts[0..2], &clock, &stake_history)
+                get_active_stake_for_tests(&accounts[0..2], &clock, &stake_history)
             );
 
             // verify no stake leakage in the case of a stake
@@ -5313,7 +5313,7 @@ mod tests {
         ];
         for initial_balance in split_lamport_balances {
             let transaction_accounts = transaction_accounts(initial_balance);
-            let expected_active_stake = get_active_stake(
+            let expected_active_stake = get_active_stake_for_tests(
                 &[
                     transaction_accounts[0].1.clone(),
                     transaction_accounts[1].1.clone(),
@@ -5347,7 +5347,7 @@ mod tests {
             // no deactivated stake
             assert_eq!(
                 expected_active_stake,
-                get_active_stake(&accounts[0..2], &clock, &stake_history)
+                get_active_stake_for_tests(&accounts[0..2], &clock, &stake_history)
             );
 
             if let StakeStateV2::Stake(meta, stake, stake_flags) = state {
@@ -5481,7 +5481,7 @@ mod tests {
         ];
         for initial_balance in split_lamport_balances {
             let transaction_accounts = transaction_accounts(initial_balance);
-            let expected_active_stake = get_active_stake(
+            let expected_active_stake = get_active_stake_for_tests(
                 &[
                     transaction_accounts[0].1.clone(),
                     transaction_accounts[1].1.clone(),
@@ -5515,7 +5515,7 @@ mod tests {
             // no deactivated stake
             assert_eq!(
                 expected_active_stake,
-                get_active_stake(&accounts[0..2], &clock, &stake_history)
+                get_active_stake_for_tests(&accounts[0..2], &clock, &stake_history)
             );
 
             if let StakeStateV2::Stake(meta, stake, stake_flags) = state {
@@ -5712,7 +5712,7 @@ mod tests {
                 &id(),
             )
             .unwrap();
-            let expected_active_stake = get_active_stake(
+            let expected_active_stake = get_active_stake_for_tests(
                 &[stake_account.clone(), split_to_account.clone()],
                 &clock,
                 &stake_history,
@@ -5749,7 +5749,7 @@ mod tests {
             // no deactivated stake
             assert_eq!(
                 expected_active_stake,
-                get_active_stake(&accounts[0..2], &clock, &stake_history)
+                get_active_stake_for_tests(&accounts[0..2], &clock, &stake_history)
             );
 
             match state {
@@ -5839,7 +5839,7 @@ mod tests {
                 &id(),
             )
             .unwrap();
-            let expected_active_stake = get_active_stake(
+            let expected_active_stake = get_active_stake_for_tests(
                 &[stake_account.clone(), split_to_account.clone()],
                 &clock,
                 &stake_history,
@@ -5876,7 +5876,7 @@ mod tests {
             // no deactivated stake
             assert_eq!(
                 expected_active_stake,
-                get_active_stake(&accounts[0..2], &clock, &stake_history)
+                get_active_stake_for_tests(&accounts[0..2], &clock, &stake_history)
             );
 
             if let StakeStateV2::Stake(meta, stake, stake_flags) = state {
@@ -5991,7 +5991,7 @@ mod tests {
                 &id(),
             )
             .unwrap();
-            let expected_active_stake = get_active_stake(
+            let expected_active_stake = get_active_stake_for_tests(
                 &[stake_account.clone(), split_to_account.clone()],
                 &clock,
                 &stake_history,
@@ -6026,7 +6026,7 @@ mod tests {
             assert_eq!(accounts[1].lamports(), stake_lamports);
             assert_eq!(
                 expected_active_stake,
-                get_active_stake(&accounts[0..2], &clock, &stake_history)
+                get_active_stake_for_tests(&accounts[0..2], &clock, &stake_history)
             );
 
             let expected_split_meta = Meta {
@@ -6089,8 +6089,8 @@ mod tests {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let delegation_amount = 3 * minimum_delegation;
         let source_lamports = rent_exempt_reserve + delegation_amount;
-        let source_address = solana_sdk::pubkey::new_rand();
-        let destination_address = solana_sdk::pubkey::new_rand();
+        let source_address = Pubkey::new_unique();
+        let destination_address = Pubkey::new_unique();
         let meta = Meta {
             authorized: Authorized::auto(&source_address),
             rent_exempt_reserve,
@@ -6154,7 +6154,7 @@ mod tests {
                 let split_lamport_balances = vec![0, rent_exempt_reserve - 1];
                 for initial_balance in split_lamport_balances {
                     let transaction_accounts = transaction_accounts(initial_balance);
-                    let expected_active_stake = get_active_stake(
+                    let expected_active_stake = get_active_stake_for_tests(
                         &[source_account.clone(), transaction_accounts[1].1.clone()],
                         &clock,
                         &stake_history,
@@ -6167,7 +6167,7 @@ mod tests {
                         expected_result.clone(),
                     );
                     let result_active_stake =
-                        get_active_stake(&result_accounts[0..2], &clock, &stake_history);
+                        get_active_stake_for_tests(&result_accounts[0..2], &clock, &stake_history);
                     if expected_active_stake > 0 // starting stake was delegated
                         // partial split
                         && result_accounts[0].lamports() > 0
@@ -6185,7 +6185,7 @@ mod tests {
                 let split_lamport_balances = vec![rent_exempt_reserve, rent_exempt_reserve + 1];
                 for initial_balance in split_lamport_balances {
                     let transaction_accounts = transaction_accounts(initial_balance);
-                    let expected_active_stake = get_active_stake(
+                    let expected_active_stake = get_active_stake_for_tests(
                         &[source_account.clone(), transaction_accounts[1].1.clone()],
                         &clock,
                         &stake_history,
@@ -6207,7 +6207,7 @@ mod tests {
                     // no deactivated stake
                     assert_eq!(
                         expected_active_stake,
-                        get_active_stake(&accounts[0..2], &clock, &stake_history)
+                        get_active_stake_for_tests(&accounts[0..2], &clock, &stake_history)
                     );
 
                     if let StakeStateV2::Stake(meta, stake, stake_flags) = state {
