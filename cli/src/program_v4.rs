@@ -408,7 +408,6 @@ pub fn process_program_v4_subcommand(
 // * Redeploy a program using a buffer account
 //   - buffer_signer argument must contain the temporary buffer account information
 //     (program_address must contain program ID and must NOT be same as buffer_signer.pubkey())
-#[allow(dead_code)]
 fn process_deploy_program(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
@@ -509,7 +508,6 @@ fn process_deploy_program(
     Ok(config.output_format.formatted_string(&program_id))
 }
 
-#[allow(dead_code)]
 fn process_undeploy_program(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
@@ -573,7 +571,6 @@ fn process_undeploy_program(
     Ok(config.output_format.formatted_string(&program_id))
 }
 
-#[allow(dead_code)]
 fn process_finalize_program(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
@@ -610,7 +607,6 @@ fn process_finalize_program(
     Ok(config.output_format.formatted_string(&program_id))
 }
 
-#[allow(dead_code)]
 fn check_payer(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -642,7 +638,6 @@ fn check_payer(
     Ok(())
 }
 
-#[allow(dead_code)]
 fn send_messages(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
@@ -761,7 +756,6 @@ fn send_messages(
     Ok(())
 }
 
-#[allow(dead_code)]
 fn build_create_buffer_message(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
@@ -930,7 +924,6 @@ fn build_retract_and_deploy_messages(
     Ok(messages)
 }
 
-#[allow(dead_code)]
 fn build_retract_instruction(
     account: &Account,
     buffer_address: &Pubkey,
@@ -962,7 +955,6 @@ fn build_retract_instruction(
     }
 }
 
-#[allow(dead_code)]
 fn build_truncate_instructions(
     rpc_client: Arc<RpcClient>,
     payer: &Pubkey,
