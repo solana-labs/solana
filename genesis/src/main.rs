@@ -547,7 +547,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             identity_pubkey,
             identity_pubkey,
             commission,
-            VoteState::get_rent_exempt_reserve(&rent).max(1),
+            VoteState::get_rent_exempt_reserve(&genesis_config.rent).max(1),
         );
 
         genesis_config.add_account(
@@ -558,7 +558,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     .unwrap_or(identity_pubkey),
                 vote_pubkey,
                 &vote_account,
-                &rent,
+                &genesis_config.rent,
                 bootstrap_validator_stake_lamports,
             ),
         );

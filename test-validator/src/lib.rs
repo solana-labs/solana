@@ -777,7 +777,7 @@ impl TestValidator {
             validator_stake_lamports,
             validator_identity_lamports,
             config.fee_rate_governor.clone(),
-            config.rent,
+            config.rent.clone(),
             solana_sdk::genesis_config::ClusterType::Development,
             accounts.into_iter().collect(),
         );

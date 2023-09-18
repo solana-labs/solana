@@ -3205,7 +3205,7 @@ mod tests {
         sysvar_cache.set_clock(src_clock.clone());
         sysvar_cache.set_epoch_schedule(src_epochschedule.clone());
         sysvar_cache.set_fees(src_fees.clone());
-        sysvar_cache.set_rent(src_rent);
+        sysvar_cache.set_rent(src_rent.clone());
         sysvar_cache.set_epoch_rewards(src_rewards);
 
         let transaction_accounts = vec![

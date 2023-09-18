@@ -8995,7 +8995,7 @@ impl AccountsDb {
             schedule.get_epoch(max_slot),
             schedule.clone(),
             genesis_config.slots_per_year(),
-            genesis_config.rent,
+            genesis_config.rent.clone(),
         );
         let accounts_data_len = AtomicU64::new(0);
 
