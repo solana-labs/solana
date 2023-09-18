@@ -8937,7 +8937,6 @@ impl AccountsDb {
         store_id: AppendVecId,
         rent_collector: &RentCollector,
         storage_info: &StorageSizeAndCountMap,
-        approx_stored_count: usize,
     ) -> SlotIndexGenerationInfo {
         let mut accounts = storage.accounts.account_iter();
         if accounts.next().is_none() {
@@ -8987,7 +8986,7 @@ impl AccountsDb {
 
         let (dirty_pubkeys, insert_time_us, mut generate_index_results) = self
             .accounts_index
-            .insert_new_if_missing_into_primary_index(slot, approx_stored_count, items);
+            .insert_new_if_missing_into_primary_index(slot, storage.approx_stored_count(), items);
 
         if let Some(duplicates_this_slot) = std::mem::take(&mut generate_index_results.duplicates) {
             // there were duplicate pubkeys in this same slot
@@ -9201,7 +9200,6 @@ impl AccountsDb {
                                 store_id,
                                 &rent_collector,
                                 &storage_info,
-                                storage.approx_stored_count(),
                             );
 
                             rent_paying.fetch_add(rent_paying_this_slot, Ordering::Relaxed);
@@ -15832,7 +15830,6 @@ pub mod tests {
             0,
             &RentCollector::default(),
             &storage_info,
-            storage.approx_stored_count(),
         );
         assert_eq!(storage_info.len(), 1);
         for entry in storage_info.iter() {
@@ -15850,14 +15847,7 @@ pub mod tests {
         // empty store
         let storage = accounts.create_and_insert_store(0, 1, "test");
         let storage_info = StorageSizeAndCountMap::default();
-        accounts.generate_index_for_slot(
-            &storage,
-            0,
-            0,
-            &RentCollector::default(),
-            &storage_info,
-            storage.approx_stored_count(),
-        );
+        accounts.generate_index_for_slot(&storage, 0, 0, &RentCollector::default(), &storage_info);
         assert!(storage_info.is_empty());
     }
 
@@ -15898,14 +15888,7 @@ pub mod tests {
         );
 
         let storage_info = StorageSizeAndCountMap::default();
-        accounts.generate_index_for_slot(
-            &storage,
-            0,
-            0,
-            &RentCollector::default(),
-            &storage_info,
-            storage.approx_stored_count(),
-        );
+        accounts.generate_index_for_slot(&storage, 0, 0, &RentCollector::default(), &storage_info);
         assert_eq!(storage_info.len(), 1);
         for entry in storage_info.iter() {
             assert_eq!(
