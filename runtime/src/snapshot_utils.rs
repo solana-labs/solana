@@ -1872,6 +1872,7 @@ pub fn purge_old_snapshot_archives(
     }
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 fn unpack_snapshot_local(
     shared_buffer: SharedBuffer,
     ledger_dir: &Path,
@@ -1925,6 +1926,7 @@ fn untar_snapshot_create_shared_buffer(
     }
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 fn untar_snapshot_in(
     snapshot_tar: impl AsRef<Path>,
     unpack_dir: &Path,
