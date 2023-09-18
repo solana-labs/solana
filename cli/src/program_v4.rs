@@ -1036,12 +1036,15 @@ fn build_truncate_instructions(
 mod tests {
     use {
         super::*,
+        crate::{clap_app::get_clap_app, cli::parse_command},
         serde_json::json,
         solana_rpc_client_api::{
             request::RpcRequest,
             response::{Response, RpcResponseContext},
         },
-        solana_sdk::signature::keypair_from_seed,
+        solana_sdk::signature::{
+            keypair_from_seed, read_keypair_file, write_keypair_file, Keypair,
+        },
         std::collections::HashMap,
     };
 
@@ -1359,5 +1362,226 @@ mod tests {
             &authority_signer,
         )
         .is_ok());
+    }
+
+    fn make_tmp_path(name: &str) -> String {
+        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
+        let keypair = Keypair::new();
+
+        let path = format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey());
+
+        // whack any possible collision
+        let _ignored = std::fs::remove_dir_all(&path);
+        // whack any possible collision
+        let _ignored = std::fs::remove_file(&path);
+
+        path
+    }
+
+    #[test]
+    #[allow(clippy::cognitive_complexity)]
+    fn test_cli_parse_deploy() {
+        let test_commands = get_clap_app("test", "desc", "version");
+
+        let default_keypair = Keypair::new();
+        let keypair_file = make_tmp_path("keypair_file");
+        write_keypair_file(&default_keypair, &keypair_file).unwrap();
+        let default_signer = DefaultSigner::new("", &keypair_file);
+
+        let program_keypair = Keypair::new();
+        let program_keypair_file = make_tmp_path("program_keypair_file");
+        write_keypair_file(&program_keypair, &program_keypair_file).unwrap();
+
+        let authority_keypair = Keypair::new();
+        let authority_keypair_file = make_tmp_path("authority_keypair_file");
+        write_keypair_file(&authority_keypair, &authority_keypair_file).unwrap();
+
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program-v4",
+            "deploy",
+            "/Users/test/program.so",
+            "--program",
+            &program_keypair_file,
+            "--authority",
+            &authority_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::Deploy {
+                    program_location: "/Users/test/program.so".to_string(),
+                    program_signer_index: 1,
+                    authority_signer_index: 2,
+                }),
+                signers: vec![
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&program_keypair_file).unwrap().into(),
+                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                ],
+            }
+        );
+    }
+
+    #[test]
+    #[allow(clippy::cognitive_complexity)]
+    fn test_cli_parse_redeploy() {
+        let test_commands = get_clap_app("test", "desc", "version");
+
+        let default_keypair = Keypair::new();
+        let keypair_file = make_tmp_path("keypair_file");
+        write_keypair_file(&default_keypair, &keypair_file).unwrap();
+        let default_signer = DefaultSigner::new("", &keypair_file);
+
+        let program_keypair = Keypair::new();
+        let program_keypair_file = make_tmp_path("program_keypair_file");
+        write_keypair_file(&program_keypair, &program_keypair_file).unwrap();
+
+        let authority_keypair = Keypair::new();
+        let authority_keypair_file = make_tmp_path("authority_keypair_file");
+        write_keypair_file(&authority_keypair, &authority_keypair_file).unwrap();
+
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program-v4",
+            "redeploy",
+            "/Users/test/program.so",
+            "--program-id",
+            &program_keypair_file,
+            "--authority",
+            &authority_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::Redeploy {
+                    program_location: "/Users/test/program.so".to_string(),
+                    program_address: program_keypair.pubkey(),
+                    authority_signer_index: 1,
+                    buffer_signer_index: None,
+                }),
+                signers: vec![
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                ],
+            }
+        );
+
+        let buffer_keypair = Keypair::new();
+        let buffer_keypair_file = make_tmp_path("buffer_keypair_file");
+        write_keypair_file(&buffer_keypair, &buffer_keypair_file).unwrap();
+
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program-v4",
+            "redeploy",
+            "/Users/test/program.so",
+            "--program-id",
+            &program_keypair_file,
+            "--buffer",
+            &buffer_keypair_file,
+            "--authority",
+            &authority_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::Redeploy {
+                    program_location: "/Users/test/program.so".to_string(),
+                    program_address: program_keypair.pubkey(),
+                    buffer_signer_index: Some(1),
+                    authority_signer_index: 2,
+                }),
+                signers: vec![
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&buffer_keypair_file).unwrap().into(),
+                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                ],
+            }
+        );
+    }
+
+    #[test]
+    #[allow(clippy::cognitive_complexity)]
+    fn test_cli_parse_undeploy() {
+        let test_commands = get_clap_app("test", "desc", "version");
+
+        let default_keypair = Keypair::new();
+        let keypair_file = make_tmp_path("keypair_file");
+        write_keypair_file(&default_keypair, &keypair_file).unwrap();
+        let default_signer = DefaultSigner::new("", &keypair_file);
+
+        let program_keypair = Keypair::new();
+        let program_keypair_file = make_tmp_path("program_keypair_file");
+        write_keypair_file(&program_keypair, &program_keypair_file).unwrap();
+
+        let authority_keypair = Keypair::new();
+        let authority_keypair_file = make_tmp_path("authority_keypair_file");
+        write_keypair_file(&authority_keypair, &authority_keypair_file).unwrap();
+
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program-v4",
+            "undeploy",
+            "--program-id",
+            &program_keypair_file,
+            "--authority",
+            &authority_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::Undeploy {
+                    program_address: program_keypair.pubkey(),
+                    authority_signer_index: 1,
+                }),
+                signers: vec![
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                ],
+            }
+        );
+    }
+
+    #[test]
+    #[allow(clippy::cognitive_complexity)]
+    fn test_cli_parse_finalize() {
+        let test_commands = get_clap_app("test", "desc", "version");
+
+        let default_keypair = Keypair::new();
+        let keypair_file = make_tmp_path("keypair_file");
+        write_keypair_file(&default_keypair, &keypair_file).unwrap();
+        let default_signer = DefaultSigner::new("", &keypair_file);
+
+        let program_keypair = Keypair::new();
+        let program_keypair_file = make_tmp_path("program_keypair_file");
+        write_keypair_file(&program_keypair, &program_keypair_file).unwrap();
+
+        let authority_keypair = Keypair::new();
+        let authority_keypair_file = make_tmp_path("authority_keypair_file");
+        write_keypair_file(&authority_keypair, &authority_keypair_file).unwrap();
+
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program-v4",
+            "finalize",
+            "--program-id",
+            &program_keypair_file,
+            "--authority",
+            &authority_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::Finalize {
+                    program_address: program_keypair.pubkey(),
+                    authority_signer_index: 1,
+                }),
+                signers: vec![
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                ],
+            }
+        );
     }
 }
