@@ -865,7 +865,7 @@ impl<'a> LoadedAccountAccessor<'a> {
         }
     }
 
-    fn account_matches_owners(&self, owners: &[&Pubkey]) -> Result<usize, MatchAccountOwnerError> {
+    fn account_matches_owners(&self, owners: &[Pubkey]) -> Result<usize, MatchAccountOwnerError> {
         match self {
             LoadedAccountAccessor::Cached(cached_account) => cached_account
                 .as_ref()
@@ -875,7 +875,7 @@ impl<'a> LoadedAccountAccessor<'a> {
                     } else {
                         owners
                             .iter()
-                            .position(|entry| &cached_account.account.owner() == entry)
+                            .position(|entry| cached_account.account.owner() == entry)
                     }
                 })
                 .ok_or(MatchAccountOwnerError::NoMatch),
@@ -5074,7 +5074,7 @@ impl AccountsDb {
         &self,
         ancestors: &Ancestors,
         account: &Pubkey,
-        owners: &[&Pubkey],
+        owners: &[Pubkey],
     ) -> Result<usize, MatchAccountOwnerError> {
         let (slot, storage_location, _maybe_account_accesor) = self
             .read_index_for_accessor_or_load_slow(ancestors, account, None, false)
@@ -5088,7 +5088,7 @@ impl AccountsDb {
                 } else {
                     owners
                         .iter()
-                        .position(|entry| &account.owner() == entry)
+                        .position(|entry| account.owner() == entry)
                         .ok_or(MatchAccountOwnerError::NoMatch)
                 };
             }
@@ -14092,7 +14092,6 @@ pub mod tests {
         ));
 
         let owners: Vec<Pubkey> = (0..2).map(|_| Pubkey::new_unique()).collect();
-        let owners_refs: Vec<&Pubkey> = owners.iter().collect();
 
         let account1_key = Pubkey::new_unique();
         let account1 = AccountSharedData::new(321, 10, &owners[0]);
@@ -14122,23 +14121,23 @@ pub mod tests {
         db.clean_accounts_for_tests();
 
         assert_eq!(
-            db.account_matches_owners(&Ancestors::default(), &account1_key, &owners_refs),
+            db.account_matches_owners(&Ancestors::default(), &account1_key, &owners),
             Ok(0)
         );
         assert_eq!(
-            db.account_matches_owners(&Ancestors::default(), &account2_key, &owners_refs),
+            db.account_matches_owners(&Ancestors::default(), &account2_key, &owners),
             Ok(1)
         );
         assert_eq!(
-            db.account_matches_owners(&Ancestors::default(), &account3_key, &owners_refs),
+            db.account_matches_owners(&Ancestors::default(), &account3_key, &owners),
             Err(MatchAccountOwnerError::NoMatch)
         );
         assert_eq!(
-            db.account_matches_owners(&Ancestors::default(), &account4_key, &owners_refs),
+            db.account_matches_owners(&Ancestors::default(), &account4_key, &owners),
             Err(MatchAccountOwnerError::NoMatch)
         );
         assert_eq!(
-            db.account_matches_owners(&Ancestors::default(), &Pubkey::new_unique(), &owners_refs),
+            db.account_matches_owners(&Ancestors::default(), &Pubkey::new_unique(), &owners),
             Err(MatchAccountOwnerError::UnableToLoad)
         );
 
@@ -14156,23 +14155,23 @@ pub mod tests {
             .unwrap();
 
         assert_eq!(
-            db.account_matches_owners(&Ancestors::default(), &account1_key, &owners_refs),
+            db.account_matches_owners(&Ancestors::default(), &account1_key, &owners),
             Ok(0)
         );
         assert_eq!(
-            db.account_matches_owners(&Ancestors::default(), &account2_key, &owners_refs),
+            db.account_matches_owners(&Ancestors::default(), &account2_key, &owners),
             Ok(1)
         );
         assert_eq!(
-            db.account_matches_owners(&Ancestors::default(), &account3_key, &owners_refs),
+            db.account_matches_owners(&Ancestors::default(), &account3_key, &owners),
             Err(MatchAccountOwnerError::NoMatch)
         );
         assert_eq!(
-            db.account_matches_owners(&Ancestors::default(), &account4_key, &owners_refs),
+            db.account_matches_owners(&Ancestors::default(), &account4_key, &owners),
             Err(MatchAccountOwnerError::NoMatch)
         );
         assert_eq!(
-            db.account_matches_owners(&Ancestors::default(), &Pubkey::new_unique(), &owners_refs),
+            db.account_matches_owners(&Ancestors::default(), &Pubkey::new_unique(), &owners),
             Err(MatchAccountOwnerError::UnableToLoad)
         );
     }

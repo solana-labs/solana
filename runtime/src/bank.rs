@@ -5116,18 +5116,17 @@ impl Bank {
         );
         check_time.stop();
 
-        let program_owners: Vec<Pubkey> = vec![
+        const PROGRAM_OWNERS: &[Pubkey] = &[
             bpf_loader_upgradeable::id(),
             bpf_loader::id(),
             bpf_loader_deprecated::id(),
             loader_v4::id(),
         ];
-        let program_owners_refs: Vec<&Pubkey> = program_owners.iter().collect();
         let mut program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
             &self.ancestors,
             sanitized_txs,
             &mut check_results,
-            &program_owners_refs,
+            PROGRAM_OWNERS,
             &self.blockhash_queue.read().unwrap(),
         );
         let native_loader = native_loader::id();
