@@ -36,6 +36,7 @@ solana-cli-output = { workspace = true }
 solana-client = { workspace = true }
 solana-config-program = { workspace = true }
 solana-faucet = { workspace = true }
+solana-loader-v4-program = { workspace = true }
 solana-logger = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-pubsub-client = { workspace = true }

@@ -20,45 +20,20 @@ INDEX=${1:-"$BUILDKITE_PARALLEL_JOB"} # BUILDKITE_PARALLEL_JOB from 0 to (BUILDK
 LIMIT=${2:-"$BUILDKITE_PARALLEL_JOB_COUNT"}
 : "${LIMIT:?}"
 
-if [ "$LIMIT" -lt 2 ]; then
-  echo "LIMIT(\$2) should >= 2"
-  exit 1
-fi
-
 if [ ! "$LIMIT" -gt "$INDEX" ]; then
   echo "LIMIT(\$2) should greater than INDEX(\$1)"
   exit 1
 fi
 
-DONT_USE_NEXTEST_PACKAGES=(
-  solana-cargo-build-sbf
+ARGS=(
+  --profile ci
+  --config-file ./nextest.toml
+  --workspace
+  --tests
+  --jobs "$JOBS"
+  --partition hash:"$((INDEX + 1))/$LIMIT"
+  --verbose
+  --exclude solana-local-cluster
 )
 
-if [ "$INDEX" -eq "$((LIMIT - 1))" ]; then
-  ARGS=(
-    --jobs "$JOBS"
-    --tests
-    --verbose
-  )
-  for package in "${DONT_USE_NEXTEST_PACKAGES[@]}"; do
-    ARGS+=(-p "$package")
-  done
-
-  _ cargo test "${ARGS[@]}"
-else
-  ARGS=(
-    --profile ci
-    --config-file ./nextest.toml
-    --workspace
-    --tests
-    --jobs "$JOBS"
-    --partition hash:"$((INDEX + 1))/$((LIMIT - 1))"
-    --verbose
-    --exclude solana-local-cluster
-  )
-  for package in "${DONT_USE_NEXTEST_PACKAGES[@]}"; do
-    ARGS+=(--exclude "$package")
-  done
-
-  _ cargo nextest run "${ARGS[@]}"
-fi
+_ cargo nextest run "${ARGS[@]}"

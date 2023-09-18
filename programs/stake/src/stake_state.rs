@@ -14,10 +14,7 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         clock::{Clock, Epoch},
-        feature_set::{
-            self, reduce_stake_warmup_cooldown::NewWarmupCooldownRateEpoch,
-            stake_merge_with_unmatched_credits_observed, FeatureSet,
-        },
+        feature_set::{self, stake_merge_with_unmatched_credits_observed, FeatureSet},
         instruction::{checked_add, InstructionError},
         pubkey::Pubkey,
         rent::Rent,

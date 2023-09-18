@@ -3,6 +3,7 @@
 use crate::pubkey_bins::PubkeyBinCalculator24;
 use {
     crate::{accounts_hash::CalculateHashIntermediate, cache_hash_data_stats::CacheHashDataStats},
+    bytemuck::{Pod, Zeroable},
     memmap2::MmapMut,
     solana_measure::measure::Measure,
     std::{
@@ -19,9 +20,18 @@ pub type SavedType = Vec<Vec<EntryType>>;
 pub type SavedTypeSlice = [Vec<EntryType>];
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Header {
     count: usize,
 }
+
+// In order to safely guarantee Header is Pod, it cannot have any padding
+// This is obvious by inspection, but this will also catch any inadvertent
+// changes in the future (i.e. it is a test).
+const _: () = assert!(
+    std::mem::size_of::<Header>() == std::mem::size_of::<usize>(),
+    "Header cannot have any padding"
+);
 
 /// cache hash data file to be mmapped later
 pub(crate) struct CacheHashDataFileReference {
@@ -120,7 +130,7 @@ impl CacheHashDataFile {
                 "{pubkey_to_bin_index}, {start_bin_index}"
             ); // this would indicate we put a pubkey in too high of a bin
             pubkey_to_bin_index -= start_bin_index;
-            accumulator[pubkey_to_bin_index].push(d.clone()); // may want to avoid clone here
+            accumulator[pubkey_to_bin_index].push(*d); // may want to avoid copy here
         }
 
         m2.stop();
@@ -128,22 +138,25 @@ impl CacheHashDataFile {
 
     /// get '&mut EntryType' from cache file [ix]
     fn get_mut(&mut self, ix: u64) -> &mut EntryType {
-        let item_slice = self.get_slice_internal(ix);
-        unsafe {
-            let item = item_slice.as_ptr() as *mut EntryType;
-            &mut *item
-        }
+        let start = self.get_element_offset_byte(ix);
+        let end = start + std::mem::size_of::<EntryType>();
+        assert!(
+            end <= self.capacity as usize,
+            "end: {end}, capacity: {}, ix: {ix}, cell size: {}",
+            self.capacity,
+            self.cell_size,
+        );
+        let bytes = &mut self.mmap[start..end];
+        bytemuck::from_bytes_mut(bytes)
     }
 
     /// get '&[EntryType]' from cache file [ix..]
     fn get_slice(&self, ix: u64) -> &[EntryType] {
         let start = self.get_element_offset_byte(ix);
-        let item_slice: &[u8] = &self.mmap[start..];
-        let remaining_elements = item_slice.len() / std::mem::size_of::<EntryType>();
-        unsafe {
-            let item = item_slice.as_ptr() as *const EntryType;
-            std::slice::from_raw_parts(item, remaining_elements)
-        }
+        let bytes = &self.mmap[start..];
+        // the `bytes` slice *must* contain whole `EntryType`s
+        debug_assert_eq!(bytes.len() % std::mem::size_of::<EntryType>(), 0);
+        bytemuck::cast_slice(bytes)
     }
 
     /// return byte offset of entry 'ix' into a slice which contains a header and at least ix elements
@@ -153,29 +166,9 @@ impl CacheHashDataFile {
         start
     }
 
-    /// get the bytes representing cache file [ix]
-    fn get_slice_internal(&self, ix: u64) -> &[u8] {
-        let start = self.get_element_offset_byte(ix);
-        let end = start + std::mem::size_of::<EntryType>();
-        assert!(
-            end <= self.capacity as usize,
-            "end: {}, capacity: {}, ix: {}, cell size: {}",
-            end,
-            self.capacity,
-            ix,
-            self.cell_size
-        );
-        &self.mmap[start..end]
-    }
-
     fn get_header_mut(&mut self) -> &mut Header {
-        let start = 0_usize;
-        let end = start + std::mem::size_of::<Header>();
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *mut Header;
-            &mut *item
-        }
+        let bytes = &mut self.mmap[..std::mem::size_of::<Header>()];
+        bytemuck::from_bytes_mut(bytes)
     }
 
     fn new_map(file: impl AsRef<Path>, capacity: u64) -> Result<MmapMut, std::io::Error> {
@@ -348,7 +341,7 @@ impl CacheHashData {
             x.iter().for_each(|item| {
                 let d = cache_file.get_mut(i as u64);
                 i += 1;
-                *d = item.clone();
+                *d = *item;
             })
         });
         assert_eq!(i, entries);

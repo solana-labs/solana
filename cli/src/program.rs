@@ -1719,7 +1719,7 @@ fn process_close(
     }
 }
 
-fn calculate_max_chunk_size<F>(create_msg: &F) -> usize
+pub fn calculate_max_chunk_size<F>(create_msg: &F) -> usize
 where
     F: Fn(u32, Vec<u8>) -> Message,
 {

@@ -1296,6 +1296,7 @@ impl Validator {
             tracer_thread,
             tpu_enable_udp,
             &prioritization_fee_cache,
+            config.block_production_method.clone(),
             config.generator_config.clone(),
         );
 
