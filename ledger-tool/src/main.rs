@@ -3982,21 +3982,10 @@ fn main() {
                     force_update_to_open,
                     enforce_ulimit_nofile,
                 );
-                let max_height = if let Some(height) = arg_matches.value_of("max_height") {
-                    usize::from_str(height).expect("Maximum height must be a number")
-                } else {
-                    usize::MAX
-                };
-                let start_root = if let Some(height) = arg_matches.value_of("start_root") {
-                    Slot::from_str(height).expect("Starting root must be a number")
-                } else {
-                    0
-                };
-                let num_roots = if let Some(roots) = arg_matches.value_of("num_roots") {
-                    usize::from_str(roots).expect("Number of roots must be a number")
-                } else {
-                    usize::from_str(DEFAULT_ROOT_COUNT).unwrap()
-                };
+
+                let max_height = value_t!(arg_matches, "max_height", usize).unwrap_or(usize::MAX);
+                let start_root = value_t!(arg_matches, "start_root", Slot).unwrap_or(0);
+                let num_roots = value_t_or_exit!(arg_matches, "num_roots", usize);
 
                 let iter = blockstore
                     .rooted_slot_iterator(start_root)
@@ -4072,17 +4061,12 @@ fn main() {
                     force_update_to_open,
                     enforce_ulimit_nofile,
                 );
-                let start_root = if let Some(root) = arg_matches.value_of("start_root") {
-                    Slot::from_str(root).expect("Before root must be a number")
-                } else {
-                    blockstore.max_root()
-                };
+
+                let start_root = value_t!(arg_matches, "start_root", Slot)
+                    .unwrap_or_else(|_| blockstore.max_root());
                 let max_slots = value_t_or_exit!(arg_matches, "max_slots", u64);
-                let end_root = if let Some(root) = arg_matches.value_of("end_root") {
-                    Slot::from_str(root).expect("Until root must be a number")
-                } else {
-                    start_root.saturating_sub(max_slots)
-                };
+                let end_root = value_t!(arg_matches, "end_root", Slot)
+                    .unwrap_or_else(|_| start_root.saturating_sub(max_slots));
                 assert!(start_root > end_root);
                 let num_slots = start_root - end_root - 1; // Adjust by one since start_root need not be checked
                 if arg_matches.is_present("end_root") && num_slots > max_slots {
