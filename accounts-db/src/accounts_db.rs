@@ -8998,6 +8998,10 @@ impl AccountsDb {
                     let duplicate = storage.accounts.get_account(info.offset()).unwrap().0;
                     assert_eq!(&pubkey, duplicate.pubkey());
                     stored_size_alive = stored_size_alive.saturating_sub(duplicate.stored_size());
+                    if !duplicate.is_zero_lamport() {
+                        accounts_data_len =
+                            accounts_data_len.saturating_sub(duplicate.data().len() as u64);
+                    }
                 });
         }
 
