@@ -86,12 +86,11 @@ impl AccountsHashVerifier {
                     info!("handling accounts package: {accounts_package:?}");
                     let enqueued_time = accounts_package.enqueued.elapsed();
 
-                    // If this accounts package is for a snapshot, then clone the storages to
-                    // save for fastboot.
-                    let snapshot_storages_for_fastboot = accounts_package
-                        .snapshot_info
-                        .is_some()
-                        .then(|| accounts_package.snapshot_storages.clone());
+                    // If fastboot is enabled, and this accounts package is for a snapshot,
+                    // then clone the storages to save for fastboot.
+                    let snapshot_storages_for_fastboot = (is_fastboot_enabled
+                        && accounts_package.snapshot_info.is_some())
+                    .then(|| accounts_package.snapshot_storages.clone());
 
                     let slot = accounts_package.slot;
                     let (_, handling_time_us) = measure_us!(Self::process_accounts_package(
@@ -104,17 +103,14 @@ impl AccountsHashVerifier {
                         &exit,
                     ));
 
-                    if is_fastboot_enabled {
-                        if let Some(snapshot_storages_for_fastboot) = snapshot_storages_for_fastboot
-                        {
-                            let num_storages = snapshot_storages_for_fastboot.len();
-                            fastboot_storages = Some(snapshot_storages_for_fastboot);
-                            datapoint_info!(
-                                "fastboot",
-                                ("slot", slot, i64),
-                                ("num_storages", num_storages, i64),
-                            );
-                        }
+                    if let Some(snapshot_storages_for_fastboot) = snapshot_storages_for_fastboot {
+                        let num_storages = snapshot_storages_for_fastboot.len();
+                        fastboot_storages = Some(snapshot_storages_for_fastboot);
+                        datapoint_info!(
+                            "fastboot",
+                            ("slot", slot, i64),
+                            ("num_storages", num_storages, i64),
+                        );
                     }
 
                     datapoint_info!(
