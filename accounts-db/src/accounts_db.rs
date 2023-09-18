@@ -10083,12 +10083,8 @@ pub mod tests {
             if reverse {
                 data = data.into_iter().rev().collect();
             }
-            let expected_alive_bytes = if reverse {
-                aligned_stored_size(account_big.data().len())
-            } else {
-                aligned_stored_size(account_small.data().len())
-            };
             let expected_accounts_data_len = data.last().unwrap().1.data().len();
+            let expected_alive_bytes = aligned_stored_size(expected_accounts_data_len);
             let storable = (slot0, &data[..], INCLUDE_SLOT_IN_HASH_TESTS);
             let hashes = data.iter().map(|_| Hash::default()).collect::<Vec<_>>();
             let write_versions = data.iter().map(|_| 0).collect::<Vec<_>>();
