@@ -4,7 +4,7 @@
 
 use {bv::BitVec, solana_sdk::clock::Slot, std::collections::HashSet};
 
-#[derive(Debug, Default, AbiExample, Clone)]
+#[derive(Debug, AbiExample, Clone)]
 pub struct RollingBitField {
     max_width: u64,
     min: u64,
@@ -53,6 +53,10 @@ impl RollingBitField {
 
     // find the array index
     fn get_address(&self, key: &u64) -> u64 {
+        if self.max_width == 0 {
+            log::error!("max width 0");
+            panic!("");
+        }
         key % self.max_width
     }
 
