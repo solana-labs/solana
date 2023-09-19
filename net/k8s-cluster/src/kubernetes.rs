@@ -27,6 +27,46 @@ pub struct RuntimeConfig<'a> {
     pub gpu_mode: &'a str, // TODO: this is not implemented yet
     pub internal_node_sol: f64,
     pub internal_node_stake_sol: f64,
+    pub limit_ledger_size: Option<u64>,
+    pub full_rpc: bool,
+    pub skip_poh_verify: bool,
+    pub tmpfs_accounts: bool,
+    pub no_snapshot_fetch: bool,
+    pub accounts_db_skip_shrink: bool,
+    pub skip_require_tower: bool,
+}
+
+impl<'a> std::fmt::Display for RuntimeConfig<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Runtime Config\n\
+             enable_udp: {}\n\
+             disable_quic: {}\n\
+             gpu_mode: {}\n\
+             internal_node_sol: {}\n\
+             internal_node_stake_sol: {}\n\
+             limit_ledger_size: {:?}\n\
+             full_rpc: {}\n\
+             skip_poh_verify: {}\n\
+             tmpfs_accounts: {}\n\
+             no_snapshot_fetch: {}\n\
+             accounts_db_skip_shrink: {}\n\
+             skip_require_tower: {}",
+            self.enable_udp,
+            self.disable_quic,
+            self.gpu_mode,
+            self.internal_node_sol,
+            self.internal_node_stake_sol,
+            self.limit_ledger_size,
+            self.full_rpc,
+            self.skip_poh_verify,
+            self.tmpfs_accounts,
+            self.no_snapshot_fetch,
+            self.accounts_db_skip_shrink,
+            self.skip_require_tower,
+        )
+    }
 }
 
 pub struct Kubernetes<'a> {
@@ -51,6 +91,30 @@ impl<'a> Kubernetes<'a> {
         }
         if self.runtime_config.disable_quic {
             flags.push("--tpu-disable-quic".to_string());
+        }
+        flags.extend(vec!["--init-complete-file".to_string(), "logs/init-complete-node.log".to_string()]);
+        match self.runtime_config.limit_ledger_size {
+            Some(size) => flags.extend(vec!["--limit-ledger-size".to_string(), size.to_string()]),
+            None => (),
+        }
+        if self.runtime_config.full_rpc {
+            flags.push("--enable-rpc-transaction-history".to_string());
+            flags.push("--enable-extended-tx-metadata-storage".to_string());
+        }
+        if self.runtime_config.skip_poh_verify {
+            flags.push("--skip-poh-verify".to_string());
+        }
+        if self.runtime_config.tmpfs_accounts {
+            flags.extend(vec!["--accounts".to_string(), "/mnt/solana-accounts".to_string()]);
+        }
+        if self.runtime_config.no_snapshot_fetch {
+            flags.push("--no-snapshot-fetch".to_string());
+        }
+        if self.runtime_config.accounts_db_skip_shrink {
+            flags.push("--accounts-db-skip-shrink".to_string());
+        }
+        if self.runtime_config.skip_require_tower {
+            flags.push("--skip_require_tower".to_string());
         }
         flags
     }
@@ -463,21 +527,21 @@ impl<'a> Kubernetes<'a> {
                 ..Default::default()
             },
             EnvVar {
-                name: "BOOTSTRAP_RPC_PORT".to_string(),
+                name: "BOOTSTRAP_RPC_ADDRESS".to_string(),
                 value: Some(format!(
                     "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899"
                 )),
                 ..Default::default()
             },
             EnvVar {
-                name: "BOOTSTRAP_GOSSIP_PORT".to_string(),
+                name: "BOOTSTRAP_GOSSIP_ADDRESS".to_string(),
                 value: Some(format!(
                     "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001"
                 )),
                 ..Default::default()
             },
             EnvVar {
-                name: "BOOTSTRAP_FAUCET_PORT".to_string(),
+                name: "BOOTSTRAP_FAUCET_ADDRESS".to_string(),
                 value: Some(format!(
                     "bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900"
                 )),

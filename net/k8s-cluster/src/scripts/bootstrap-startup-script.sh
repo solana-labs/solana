@@ -34,25 +34,25 @@ echo "PROGRAM: $program"
 args=()
 while [[ -n $1 ]]; do
   if [[ ${1:0:1} = - ]]; then
-    if [[ $1 = --init-complete-file ]]; then
+    if [[ $1 = --init-complete-file ]]; then # Done
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --gossip-host ]]; then
+    elif [[ $1 = --gossip-host ]]; then # set with env variables
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --gossip-port ]]; then
+    elif [[ $1 = --gossip-port ]]; then # set with env variables
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --dev-halt-at-slot ]]; then
+    elif [[ $1 = --dev-halt-at-slot ]]; then # not enabled in net.sh
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --dynamic-port-range ]]; then
+    elif [[ $1 = --dynamic-port-range ]]; then # not enabled in net.sh
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --limit-ledger-size ]]; then
+    elif [[ $1 = --limit-ledger-size ]]; then # Done
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --no-rocksdb-compaction ]]; then
+    elif [[ $1 = --no-rocksdb-compaction ]]; then 
       args+=("$1")
       shift
     elif [[ $1 = --enable-rpc-transaction-history ]]; then

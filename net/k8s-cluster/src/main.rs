@@ -226,6 +226,45 @@ fn parse_matches() -> ArgMatches<'static> {
                 .default_value("auto")
                 .help("Not supported yet. Specify GPU mode to launch validators with (default: auto)."),
         )
+        .arg(
+            Arg::with_name("limit_ledger_size")
+                .long("limit-ledger-size")
+                .takes_value(true)
+                .help("Keep this amount of shreds in root slots"),
+        )
+        .arg(
+            Arg::with_name("full_rpc")
+                .long("full-rpc")
+                .help("Support full RPC services on all nodes"),
+        )
+        .arg(
+            Arg::with_name("skip_poh_verify")
+                .long("skip-poh-verify")
+                .help("If set, validators will skip verifying \
+                    the ledger they already have saved to disk at \
+                    boot (results in a much faster boot)"),
+        )
+        .arg(
+            Arg::with_name("tmpfs_accounts")
+                .long("tmpfs-accounts")
+                .help("Put accounts directory on a swap-backed tmpfs volume. from gce.sh \
+                tbh i have no idea if this is going to be supported out of box. TODO"),
+        )
+        .arg(
+            Arg::with_name("no_snapshot_fetch")
+                .long("no-snapshot-fetch")
+                .help("If set, disables booting validators from a snapshot"),
+        )
+        .arg(
+            Arg::with_name("accounts_db_skip_shrink")
+                .long("accounts-db-skip-shrink")
+                .help("not full sure what this does. TODO"),
+        )
+        .arg(
+            Arg::with_name("skip_require_tower")
+                .long("skip-require-tower")
+                .help("Skips require tower"),
+        )
         .get_matches()
 }
 
@@ -333,8 +372,24 @@ async fn main() {
             .value_of("internal_node_stake_sol")
             .unwrap_or(DEFAULT_INTERNAL_NODE_STAKE_SOL.to_string().as_str())
             .parse::<f64>()
-            .expect("Invalid value for internal_node_stake_sol") as f64
+            .expect("Invalid value for internal_node_stake_sol") as f64,
+        limit_ledger_size: match matches.value_of("limit_ledger_size") {
+                Some(value_str) => Some(
+                    value_str
+                        .parse()
+                        .expect("Invalid value for limit_ledger_size"),
+                ),
+                None => None,
+            },
+        full_rpc: matches.is_present("full_rpc"),
+        skip_poh_verify: matches.is_present("skip_poh_verify"),
+        tmpfs_accounts: matches.is_present("tmps_accounts"),
+        no_snapshot_fetch: matches.is_present("no_snapshot_fetch"),
+        accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
+        skip_require_tower: matches.is_present("skip_require_tower"),
     };
+
+    info!("Runtime Config: {}", runtime_config);
 
     // Check if namespace exists
     let mut kub_controller = Kubernetes::new(setup_config.namespace, &runtime_config).await;

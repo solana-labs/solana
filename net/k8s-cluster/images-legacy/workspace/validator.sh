@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
-echo "info in validator.sh: $BOOTSTRAP_GOSSIP_PORT, $BOOTSTRAP_FAUCET_PORT" > /workspace/logs-info/bruh.log
+echo "info in validator.sh: $BOOTSTRAP_GOSSIP_ADDRESS, $BOOTSTRAP_FAUCET_ADDRESS" > /workspace/logs-info/bruh.log
 
 nohup solana-validator \
   --no-os-network-limits-test \
   --identity id.json \
   --vote-account vote.json \
-  --entrypoint $BOOTSTRAP_GOSSIP_PORT \
-  --rpc-faucet-address $BOOTSTRAP_FAUCET_PORT \
+  --entrypoint $BOOTSTRAP_GOSSIP_ADDRESS \
+  --rpc-faucet-address $BOOTSTRAP_FAUCET_ADDRESS \
   --gossip-port 8001 \
   --rpc-port 8899 \
   --ledger ledger \

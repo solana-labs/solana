@@ -38,11 +38,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            - name: BOOTSTRAP_RPC_PORT
+            - name: BOOTSTRAP_RPC_ADDRESS
               value: "solana-bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8899"
-            - name: BOOTSTRAP_GOSSIP_PORT
+            - name: BOOTSTRAP_GOSSIP_ADDRESS
               value: "solana-bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:8001"
-            - name: BOOTSTRAP_FAUCET_PORT
+            - name: BOOTSTRAP_FAUCET_ADDRESS
               value: "solana-bootstrap-validator-service.$(NAMESPACE).svc.cluster.local:9900"
           command: ["/workspace/start-validator.sh"]
       restartPolicy: Always

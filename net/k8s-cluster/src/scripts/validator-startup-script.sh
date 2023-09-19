@@ -19,9 +19,9 @@ label=
 identity=identity.json
 vote_account=vote.json
 no_restart=0
-gossip_entrypoint=$BOOTSTRAP_GOSSIP_PORT
+gossip_entrypoint=$BOOTSTRAP_GOSSIP_ADDRESS
 ledger_dir=/home/solana/ledger
-faucet_address=$BOOTSTRAP_FAUCET_PORT
+faucet_address=$BOOTSTRAP_FAUCET_ADDRESS
 
 usage() {
   if [[ -n $1 ]]; then
@@ -298,7 +298,7 @@ MAX_RETRIES=5
 RETRY_DELAY=1
 
 # Solana RPC URL
-SOLANA_RPC_URL="http://$BOOTSTRAP_RPC_PORT"
+SOLANA_RPC_URL="http://$BOOTSTRAP_RPC_ADDRESS"
 
 # Identity file
 IDENTITY_FILE=$identity
