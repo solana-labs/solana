@@ -130,6 +130,7 @@ use {
             MAX_TRANSACTION_FORWARDING_DELAY, MAX_TRANSACTION_FORWARDING_DELAY_GPU,
             SECONDS_PER_DAY,
         },
+        compute_budget_processor::process_compute_budget_instruction,
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
         feature,
@@ -172,7 +173,6 @@ use {
         transaction_context::{
             ExecutionRecord, TransactionAccount, TransactionContext, TransactionReturnData,
         },
-        transaction_meta_util::GetTransactionMeta,
     },
     solana_stake_program::stake_state::{
         self, InflationPointCalculationEvent, PointValue, StakeStateV2,
@@ -4081,9 +4081,13 @@ impl Bank {
         message: &SanitizedMessage,
         lamports_per_signature: u64,
     ) -> u64 {
-        let transaction_meta = message
-            .get_transaction_meta(&self.feature_set, Some(self.cluster_type()))
-            .unwrap_or_default();
+        let transaction_meta = process_compute_budget_instruction(
+            message.program_instructions_iter(),
+            &self.feature_set,
+            Some(self.cluster_type()),
+        )
+        .unwrap_or_default();
+
         let fee_budget_limits = FeeBudgetLimits {
             loaded_accounts_data_size_limit: transaction_meta.accounts_loaded_bytes,
             heap_cost: ComputeBudget::default().heap_cost,
