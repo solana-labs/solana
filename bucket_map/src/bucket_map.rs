@@ -31,11 +31,14 @@ pub struct BucketMap<T: Clone + Copy + Debug + PartialEq + 'static> {
     max_buckets_pow2: u8,
     pub stats: Arc<BucketMapStats>,
     pub temp_dir: Option<TempDir>,
+    /// true if dropping self removes all folders.
+    /// This is primarily for test environments.
+    pub erase_drives_on_drop: bool,
 }
 
 impl<T: Clone + Copy + Debug + PartialEq> Drop for BucketMap<T> {
     fn drop(&mut self) {
-        if self.temp_dir.is_none() {
+        if self.temp_dir.is_none() && self.erase_drives_on_drop {
             BucketMap::<T>::erase_previous_drives(&self.drives);
         }
     }
@@ -103,6 +106,7 @@ impl<T: Clone + Copy + Debug + PartialEq> BucketMap<T> {
             max_buckets_pow2: log2(config.max_buckets) as u8,
             stats,
             temp_dir,
+            erase_drives_on_drop: true,
         }
     }
 
