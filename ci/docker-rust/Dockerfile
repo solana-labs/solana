@@ -43,3 +43,5 @@ RUN set -x \
  && cargo install sccache \
  && rustc --version \
  && cargo --version
+
+# test
