@@ -425,7 +425,7 @@ pub fn frozen_abi(attrs: TokenStream, item: TokenStream) -> TokenStream {
             "the required \"digest\" = ... attribute is missing.",
         )
         .to_compile_error()
-        .into()
+        .into();
     };
 
     let item = parse_macro_input!(item as Item);

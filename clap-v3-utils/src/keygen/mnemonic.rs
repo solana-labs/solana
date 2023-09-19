@@ -62,7 +62,11 @@ pub fn no_passphrase_arg<'a>() -> Arg<'a> {
 }
 
 pub fn acquire_language(matches: &ArgMatches) -> Language {
-    match matches.value_of(LANGUAGE_ARG.name).unwrap() {
+    match matches
+        .get_one::<String>(LANGUAGE_ARG.name)
+        .unwrap()
+        .as_str()
+    {
         "english" => Language::English,
         "chinese-simplified" => Language::ChineseSimplified,
         "chinese-traditional" => Language::ChineseTraditional,
@@ -82,7 +86,7 @@ pub fn no_passphrase_and_message() -> (String, String) {
 pub fn acquire_passphrase_and_message(
     matches: &ArgMatches,
 ) -> Result<(String, String), Box<dyn error::Error>> {
-    if matches.is_present(NO_PASSPHRASE_ARG.name) {
+    if matches.try_contains_id(NO_PASSPHRASE_ARG.name)? {
         Ok(no_passphrase_and_message())
     } else {
         match prompt_passphrase(

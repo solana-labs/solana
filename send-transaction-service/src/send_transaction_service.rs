@@ -10,8 +10,8 @@ use {
     solana_metrics::datapoint_warn,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
-        hash::Hash, nonce_account, pubkey::Pubkey, saturating_add_assign, signature::Signature,
-        timing::AtomicInterval, transport::TransportError,
+        clock::Slot, hash::Hash, nonce_account, pubkey::Pubkey, saturating_add_assign,
+        signature::Signature, timing::AtomicInterval, transport::TransportError,
     },
     std::{
         collections::{
@@ -461,7 +461,7 @@ impl SendTransactionService {
                         .fetch_add(transactions.len() as u64, Ordering::Relaxed);
                     Self::send_transactions_in_batch(
                         &tpu_address,
-                        &mut transactions,
+                        &transactions,
                         leader_info_provider.lock().unwrap().get_leader_info(),
                         &connection_cache,
                         &config,
@@ -558,14 +558,14 @@ impl SendTransactionService {
     /// Process transactions in batch.
     fn send_transactions_in_batch<T: TpuInfo>(
         tpu_address: &SocketAddr,
-        transactions: &mut HashMap<Signature, TransactionInfo>,
+        transactions: &HashMap<Signature, TransactionInfo>,
         leader_info: Option<&T>,
         connection_cache: &Arc<ConnectionCache>,
         config: &Config,
         stats: &SendTransactionServiceStats,
     ) {
         // Processing the transactions in batch
-        let addresses = Self::get_tpu_addresses(
+        let addresses = Self::get_tpu_addresses_with_slots(
             tpu_address,
             leader_info,
             config,
@@ -574,18 +574,24 @@ impl SendTransactionService {
 
         let wire_transactions = transactions
             .iter()
-            .map(|(_, transaction_info)| transaction_info.wire_transaction.as_ref())
+            .map(|(_, transaction_info)| {
+                debug!(
+                    "Sending transacation {} to (address, slot): {:?}",
+                    transaction_info.signature, addresses,
+                );
+                transaction_info.wire_transaction.as_ref()
+            })
             .collect::<Vec<&[u8]>>();
 
         for address in &addresses {
-            Self::send_transactions(address, &wire_transactions, connection_cache, stats);
+            Self::send_transactions(address.0, &wire_transactions, connection_cache, stats);
         }
     }
 
     /// Retry transactions sent before.
     fn process_transactions<T: TpuInfo + std::marker::Send + 'static>(
-        working_bank: &Arc<Bank>,
-        root_bank: &Arc<Bank>,
+        working_bank: &Bank,
+        root_bank: &Bank,
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
         leader_info_provider: &Arc<Mutex<CurrentLeaderInfo<T>>>,
@@ -598,7 +604,7 @@ impl SendTransactionService {
         let mut batched_transactions = HashSet::new();
         let retry_rate = Duration::from_millis(config.retry_rate_ms);
 
-        transactions.retain(|signature, mut transaction_info| {
+        transactions.retain(|signature, transaction_info| {
             if transaction_info.durable_nonce_info.is_some() {
                 stats.nonced_transactions.fetch_add(1, Ordering::Relaxed);
             }
@@ -777,6 +783,21 @@ impl SendTransactionService {
             .unwrap_or_else(|| vec![tpu_address])
     }
 
+    fn get_tpu_addresses_with_slots<'a, T: TpuInfo>(
+        tpu_address: &'a SocketAddr,
+        leader_info: Option<&'a T>,
+        config: &'a Config,
+        protocol: Protocol,
+    ) -> Vec<(&'a SocketAddr, Slot)> {
+        leader_info
+            .as_ref()
+            .map(|leader_info| {
+                leader_info.get_leader_tpus_with_slots(config.leader_forward_count, protocol)
+            })
+            .filter(|addresses| !addresses.is_empty())
+            .unwrap_or_else(|| vec![(tpu_address, 0)])
+    }
+
     pub fn join(self) -> thread::Result<()> {
         self.receive_txn_thread.join()?;
         self.exit.store(true, Ordering::Relaxed);
@@ -880,7 +901,7 @@ mod test {
         };
 
         let root_bank = Arc::new(Bank::new_from_parent(
-            &bank_forks.read().unwrap().working_bank(),
+            bank_forks.read().unwrap().working_bank(),
             &Pubkey::default(),
             1,
         ));
@@ -888,7 +909,11 @@ mod test {
             .transfer(1, &mint_keypair, &mint_keypair.pubkey())
             .unwrap();
 
-        let working_bank = Arc::new(Bank::new_from_parent(&root_bank, &Pubkey::default(), 2));
+        let working_bank = Arc::new(Bank::new_from_parent(
+            root_bank.clone(),
+            &Pubkey::default(),
+            2,
+        ));
 
         let non_rooted_signature = working_bank
             .transfer(2, &mint_keypair, &mint_keypair.pubkey())
@@ -1068,7 +1093,7 @@ mod test {
 
         info!("Transactions are only retried until max_retries");
         transactions.insert(
-            Signature::new(&[1; 64]),
+            Signature::from([1; 64]),
             TransactionInfo::new(
                 Signature::default(),
                 vec![],
@@ -1079,7 +1104,7 @@ mod test {
             ),
         );
         transactions.insert(
-            Signature::new(&[2; 64]),
+            Signature::from([2; 64]),
             TransactionInfo::new(
                 Signature::default(),
                 vec![],
@@ -1142,7 +1167,7 @@ mod test {
         };
 
         let root_bank = Arc::new(Bank::new_from_parent(
-            &bank_forks.read().unwrap().working_bank(),
+            bank_forks.read().unwrap().working_bank(),
             &Pubkey::default(),
             1,
         ));
@@ -1159,7 +1184,11 @@ mod test {
             AccountSharedData::new_data(43, &nonce_state, &system_program::id()).unwrap();
         root_bank.store_account(&nonce_address, &nonce_account);
 
-        let working_bank = Arc::new(Bank::new_from_parent(&root_bank, &Pubkey::default(), 2));
+        let working_bank = Arc::new(Bank::new_from_parent(
+            root_bank.clone(),
+            &Pubkey::default(),
+            2,
+        ));
         let non_rooted_signature = working_bank
             .transfer(2, &mint_keypair, &mint_keypair.pubkey())
             .unwrap();
@@ -1399,7 +1428,7 @@ mod test {
         );
         // Advance nonce, simulate the transaction was again last sent 4 seconds ago.
         // This time the transaction should have been dropped.
-        for mut transaction in transactions.values_mut() {
+        for transaction in transactions.values_mut() {
             transaction.last_sent_time = Some(Instant::now().sub(Duration::from_millis(4000)));
         }
         let new_durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());

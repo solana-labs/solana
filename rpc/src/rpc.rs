@@ -1,5 +1,4 @@
 //! The `rpc` module implements the Solana RPC interface.
-
 use {
     crate::{
         max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -13,6 +12,12 @@ use {
     solana_account_decoder::{
         parse_token::{is_known_spl_token_id, token_amount_to_ui_amount, UiTokenAmount},
         UiAccount, UiAccountEncoding, UiDataSliceConfig, MAX_BASE58_BYTES,
+    },
+    solana_accounts_db::{
+        accounts::AccountAddressFilter,
+        accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig},
+        inline_spl_token::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
+        inline_spl_token_2022::{self, ACCOUNTTYPE_ACCOUNT},
     },
     solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_entry::entry::Entry,
@@ -42,13 +47,9 @@ use {
         response::{Response as RpcResponse, *},
     },
     solana_runtime::{
-        accounts::AccountAddressFilter,
-        accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig},
         bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
-        inline_spl_token::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
-        inline_spl_token_2022::{self, ACCOUNTTYPE_ACCOUNT},
         non_circulating_supply::calculate_non_circulating_supply,
         prioritization_fee_cache::PrioritizationFeeCache,
         snapshot_config::SnapshotConfig,
@@ -68,7 +69,7 @@ use {
         message::SanitizedMessage,
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Keypair, Signature, Signer},
-        stake::state::{StakeActivationStatus, StakeState},
+        stake::state::{StakeActivationStatus, StakeStateV2},
         stake_history::StakeHistory,
         system_instruction,
         sysvar::stake_history,
@@ -337,7 +338,7 @@ impl JsonRpcRequestProcessor {
 
     // Useful for unit testing
     pub fn new_from_bank(
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         socket_addr_space: SocketAddrSpace,
         connection_cache: Arc<ConnectionCache>,
     ) -> Self {
@@ -372,6 +373,7 @@ impl JsonRpcRequestProcessor {
             exit.clone(),
         );
 
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         Self {
             config: JsonRpcConfig::default(),
             snapshot_config: None,
@@ -395,11 +397,11 @@ impl JsonRpcRequestProcessor {
             transaction_sender: Arc::new(Mutex::new(sender)),
             bigtable_ledger_storage: None,
             optimistically_confirmed_bank: Arc::new(RwLock::new(OptimisticallyConfirmedBank {
-                bank: bank.clone(),
+                bank,
             })),
             largest_accounts_cache: Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             max_slots: Arc::new(MaxSlots::default()),
-            leader_schedule_cache: Arc::new(LeaderScheduleCache::new_from_bank(bank)),
+            leader_schedule_cache,
             max_complete_transaction_status_slot: Arc::new(AtomicU64::default()),
             max_complete_rewards_slot: Arc::new(AtomicU64::default()),
             prioritization_fee_cache: Arc::new(PrioritizationFeeCache::default()),
@@ -552,15 +554,13 @@ impl JsonRpcRequestProcessor {
                 slot: first_slot_in_epoch,
             })?;
 
-        let first_confirmed_block = if let Ok(Some(first_confirmed_block)) = self
+        let Ok(Some(first_confirmed_block)) = self
             .get_block(
                 first_confirmed_block_in_epoch,
                 Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
             )
             .await
-        {
-            first_confirmed_block
-        } else {
+        else {
             return Err(RpcCustomError::BlockNotAvailable {
                 slot: first_confirmed_block_in_epoch,
             }
@@ -1434,7 +1434,7 @@ impl JsonRpcRequestProcessor {
     fn get_transaction_status(
         &self,
         signature: Signature,
-        bank: &Arc<Bank>,
+        bank: &Bank,
     ) -> Option<TransactionStatus> {
         let (slot, status) = bank.get_signature_status_slot(&signature)?;
 
@@ -1719,21 +1719,17 @@ impl JsonRpcRequestProcessor {
             min_context_slot: config.min_context_slot,
         })?;
         let epoch = config.epoch.unwrap_or_else(|| bank.epoch());
-        if bank.epoch().saturating_sub(epoch) > solana_sdk::stake_history::MAX_ENTRIES as u64 {
+        if epoch != bank.epoch() {
             return Err(Error::invalid_params(format!(
-                "Invalid param: epoch {epoch:?} is too far in the past"
-            )));
-        }
-        if epoch > bank.epoch() {
-            return Err(Error::invalid_params(format!(
-                "Invalid param: epoch {epoch:?} has not yet started"
+                "Invalid param: epoch {epoch:?}. Only the current epoch ({:?}) is supported",
+                bank.epoch()
             )));
         }
 
         let stake_account = bank
             .get_account(pubkey)
             .ok_or_else(|| Error::invalid_params("Invalid param: account not found".to_string()))?;
-        let stake_state: StakeState = stake_account
+        let stake_state: StakeStateV2 = stake_account
             .state()
             .map_err(|_| Error::invalid_params("Invalid param: not a stake account".to_string()))?;
         let delegation = stake_state.delegation();
@@ -1762,12 +1758,17 @@ impl JsonRpcRequestProcessor {
         let stake_history =
             solana_sdk::account::from_account::<StakeHistory, _>(&stake_history_account)
                 .ok_or_else(Error::internal_error)?;
+        let new_rate_activation_epoch = bank.new_warmup_cooldown_rate_epoch();
 
         let StakeActivationStatus {
             effective,
             activating,
             deactivating,
-        } = delegation.stake_activating_and_deactivating(epoch, Some(&stake_history));
+        } = delegation.stake_activating_and_deactivating(
+            epoch,
+            Some(&stake_history),
+            new_rate_activation_epoch,
+        );
         let stake_activation_state = if deactivating > 0 {
             StakeActivationState::Deactivating
         } else if activating > 0 {
@@ -1983,7 +1984,7 @@ impl JsonRpcRequestProcessor {
     /// Use a set of filters to get an iterator of keyed program accounts from a bank
     fn get_filtered_program_accounts(
         &self,
-        bank: &Arc<Bank>,
+        bank: &Bank,
         program_id: &Pubkey,
         mut filters: Vec<RpcFilterType>,
     ) -> RpcCustomResult<Vec<(Pubkey, AccountSharedData)>> {
@@ -2033,7 +2034,7 @@ impl JsonRpcRequestProcessor {
     /// Get an iterator of spl-token accounts by owner address
     fn get_filtered_spl_token_accounts_by_owner(
         &self,
-        bank: &Arc<Bank>,
+        bank: &Bank,
         program_id: &Pubkey,
         owner_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
@@ -2084,7 +2085,7 @@ impl JsonRpcRequestProcessor {
     /// Get an iterator of spl-token accounts by mint address
     fn get_filtered_spl_token_accounts_by_mint(
         &self,
-        bank: &Arc<Bank>,
+        bank: &Bank,
         program_id: &Pubkey,
         mint_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
@@ -2276,7 +2277,7 @@ pub(crate) fn check_is_at_least_confirmed(commitment: CommitmentConfig) -> Resul
 }
 
 fn get_encoded_account(
-    bank: &Arc<Bank>,
+    bank: &Bank,
     pubkey: &Pubkey,
     encoding: UiAccountEncoding,
     data_slice: Option<UiDataSliceConfig>,
@@ -2286,7 +2287,7 @@ fn get_encoded_account(
             let response = if is_known_spl_token_id(account.owner())
                 && encoding == UiAccountEncoding::JsonParsed
             {
-                get_parsed_token_account(bank.clone(), pubkey, account)
+                get_parsed_token_account(bank, pubkey, account)
             } else {
                 encode_account(&account, pubkey, encoding, data_slice)?
             };
@@ -2437,7 +2438,7 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
 /// Analyze a passed Pubkey that may be a Token program id or Mint address to determine the program
 /// id and optional Mint
 fn get_token_program_id_and_mint(
-    bank: &Arc<Bank>,
+    bank: &Bank,
     token_account_filter: TokenAccountsFilter,
 ) -> Result<(Pubkey, Option<Pubkey>)> {
     match token_account_filter {
@@ -2915,7 +2916,7 @@ pub mod rpc_bank {
                     }
                 }
 
-                let mut entry = block_production.entry(identity).or_default();
+                let entry = block_production.entry(identity).or_default();
                 if slot_history.check(slot) == solana_sdk::slot_history::Check::Found {
                     entry.1 += 1; // Increment blocks_produced
                 }
@@ -4629,7 +4630,7 @@ pub mod tests {
         jsonrpc_core::{futures, ErrorCode, MetaIoHandler, Output, Response, Value},
         jsonrpc_core_client::transports::local,
         serde::de::DeserializeOwned,
-        solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
+        solana_accounts_db::{inline_spl_token, inline_spl_token_2022},
         solana_entry::entry::next_versioned_entry,
         solana_gossip::socketaddr,
         solana_ledger::{
@@ -4647,11 +4648,14 @@ pub mod tests {
         },
         solana_runtime::{
             accounts_background_service::AbsRequestSender, bank::BankTestConfig,
-            commitment::BlockCommitment, inline_spl_token,
-            non_circulating_supply::non_circulating_accounts,
+            commitment::BlockCommitment, non_circulating_supply::non_circulating_accounts,
         },
         solana_sdk::{
             account::{Account, WritableAccount},
+            address_lookup_table::{
+                self,
+                state::{AddressLookupTable, LookupTableMeta},
+            },
             clock::MAX_RECENT_BLOCKHASHES,
             compute_budget::ComputeBudgetInstruction,
             fee_calculator::{FeeRateGovernor, DEFAULT_BURN_PERCENT},
@@ -4933,7 +4937,7 @@ pub mod tests {
                 AccountSharedData::create(
                     min_balance_lamports,
                     address_table_data,
-                    solana_address_lookup_table_program::id(),
+                    address_lookup_table::program::id(),
                     false,
                     0,
                 )
@@ -4951,7 +4955,7 @@ pub mod tests {
             let mut parent_bank = self.bank_forks.read().unwrap().working_bank();
             for (i, root) in roots.iter().enumerate() {
                 let new_bank =
-                    Bank::new_from_parent(&parent_bank, parent_bank.collector_id(), *root);
+                    Bank::new_from_parent(parent_bank.clone(), parent_bank.collector_id(), *root);
                 parent_bank = self.bank_forks.write().unwrap().insert(new_bank);
                 let parent = if i > 0 { roots[i - 1] } else { 0 };
                 fill_blockstore_slot_with_ticks(
@@ -4964,7 +4968,7 @@ pub mod tests {
             }
             self.blockstore.set_roots(roots.iter()).unwrap();
             let new_bank = Bank::new_from_parent(
-                &parent_bank,
+                parent_bank.clone(),
                 parent_bank.collector_id(),
                 roots.iter().max().unwrap() + 1,
             );
@@ -4994,11 +4998,7 @@ pub mod tests {
                 .bank_forks
                 .write()
                 .unwrap()
-                .insert(Bank::new_from_parent(
-                    &parent_bank,
-                    &Pubkey::default(),
-                    slot,
-                ));
+                .insert(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot));
 
             let new_block_commitment = BlockCommitmentCache::new(
                 HashMap::new(),
@@ -5052,7 +5052,7 @@ pub mod tests {
             .unwrap();
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let request_processor = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -5071,7 +5071,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -5103,7 +5103,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -5230,7 +5230,7 @@ pub mod tests {
 
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -6376,7 +6376,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
+            bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
@@ -7274,12 +7274,16 @@ pub mod tests {
             .unwrap();
         assert_ne!(leader_info.activated_stake, 0);
         // Subtract one because the last vote always carries over to the next epoch
-        let expected_credits = TEST_SLOTS_PER_EPOCH - MAX_LOCKOUT_HISTORY as u64 - 1;
+        // Each slot earned maximum credits
+        let credits_per_slot =
+            solana_vote_program::vote_state::VOTE_CREDITS_MAXIMUM_PER_SLOT as u64;
+        let expected_credits =
+            (TEST_SLOTS_PER_EPOCH - MAX_LOCKOUT_HISTORY as u64 - 1) * credits_per_slot;
         assert_eq!(
             leader_info.epoch_credits,
             vec![
                 (0, expected_credits, 0),
-                (1, expected_credits + 1, expected_credits) // one vote in current epoch
+                (1, expected_credits + credits_per_slot, expected_credits) // one vote in current epoch
             ]
         );
 
@@ -7371,7 +7375,7 @@ pub mod tests {
         let bank = Arc::new(Bank::default_for_tests());
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        blockstore.set_roots(vec![0, 1].iter()).unwrap();
+        blockstore.set_roots([0, 1].iter()).unwrap();
         // Build BlockCommitmentCache with rooted slots
         let mut cache0 = BlockCommitment::default();
         cache0.increase_rooted_stake(50);
@@ -7450,7 +7454,7 @@ pub mod tests {
                 account_state
                     .init_extension::<ImmutableOwner>(true)
                     .unwrap();
-                let mut memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
+                let memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
                 memo_transfer.require_incoming_transfer_memos = true.into();
 
                 let token_account = AccountSharedData::from(Account {
@@ -7478,7 +7482,7 @@ pub mod tests {
                 mint_state.base = mint_base;
                 mint_state.pack_base();
                 mint_state.init_account_type().unwrap();
-                let mut mint_close_authority = mint_state
+                let mint_close_authority = mint_state
                     .init_extension::<MintCloseAuthority>(true)
                     .unwrap();
                 mint_close_authority.close_authority =
@@ -7942,7 +7946,7 @@ pub mod tests {
                 account_state
                     .init_extension::<ImmutableOwner>(true)
                     .unwrap();
-                let mut memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
+                let memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
                 memo_transfer.require_incoming_transfer_memos = true.into();
 
                 let token_account = AccountSharedData::from(Account {
@@ -7969,7 +7973,7 @@ pub mod tests {
                 mint_state.base = mint_base;
                 mint_state.pack_base();
                 mint_state.init_account_type().unwrap();
-                let mut mint_close_authority = mint_state
+                let mint_close_authority = mint_state
                     .init_extension::<MintCloseAuthority>(true)
                     .unwrap();
                 mint_close_authority.close_authority =
@@ -8290,13 +8294,13 @@ pub mod tests {
 
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let bank1 = bank_forks.read().unwrap().get(1).unwrap();
-        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
+        let bank2 = Bank::new_from_parent(bank1, &Pubkey::default(), 2);
         bank_forks.write().unwrap().insert(bank2);
         let bank2 = bank_forks.read().unwrap().get(2).unwrap();
-        let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), 3);
+        let bank3 = Bank::new_from_parent(bank2, &Pubkey::default(), 3);
         bank_forks.write().unwrap().insert(bank3);
 
         let optimistically_confirmed_bank =
@@ -8357,6 +8361,7 @@ pub mod tests {
             &mut highest_confirmed_slot,
             &mut highest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
         let req =
             r#"{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[{"commitment": "confirmed"}]}"#;
@@ -8376,6 +8381,7 @@ pub mod tests {
             &mut highest_confirmed_slot,
             &mut highest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
         let req =
             r#"{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[{"commitment": "confirmed"}]}"#;
@@ -8395,6 +8401,7 @@ pub mod tests {
             &mut highest_confirmed_slot,
             &mut highest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
         let req =
             r#"{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[{"commitment": "confirmed"}]}"#;
@@ -8415,6 +8422,7 @@ pub mod tests {
             &mut highest_confirmed_slot,
             &mut highest_root_slot,
             &None,
+            &PrioritizationFeeCache::default(),
         );
         let req =
             r#"{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[{"commitment": "confirmed"}]}"#;
@@ -8657,6 +8665,7 @@ pub mod tests {
             0
         );
         let slot0 = rpc.working_bank().slot();
+        let bank0_id = rpc.working_bank().bank_id();
         let account0 = Pubkey::new_unique();
         let account1 = Pubkey::new_unique();
         let account2 = Pubkey::new_unique();
@@ -8676,7 +8685,7 @@ pub mod tests {
         ];
         rpc.update_prioritization_fee_cache(transactions);
         let cache = rpc.get_prioritization_fee_cache();
-        cache.finalize_priority_fee(slot0);
+        cache.finalize_priority_fee(slot0, bank0_id);
         wait_for_cache_blocks(cache, 1);
 
         let request = create_test_request("getRecentPrioritizationFees", None);
@@ -8720,6 +8729,7 @@ pub mod tests {
 
         rpc.advance_bank_to_confirmed_slot(1);
         let slot1 = rpc.working_bank().slot();
+        let bank1_id = rpc.working_bank().bank_id();
         let price1 = 11;
         let transactions = vec![
             Transaction::new_unsigned(Message::new(
@@ -8736,7 +8746,7 @@ pub mod tests {
         ];
         rpc.update_prioritization_fee_cache(transactions);
         let cache = rpc.get_prioritization_fee_cache();
-        cache.finalize_priority_fee(slot1);
+        cache.finalize_priority_fee(slot1, bank1_id);
         wait_for_cache_blocks(cache, 2);
 
         let request = create_test_request("getRecentPrioritizationFees", None);

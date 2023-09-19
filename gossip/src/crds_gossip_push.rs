@@ -144,7 +144,7 @@ impl CrdsGossipPush {
                     continue;
                 }
                 let origin = value.pubkey();
-                match crds.insert(value, now, GossipRoute::PushMessage) {
+                match crds.insert(value, now, GossipRoute::PushMessage(&from)) {
                     Ok(()) => {
                         received_cache.record(origin, from, /*num_dups:*/ 0);
                         origins.insert(origin);

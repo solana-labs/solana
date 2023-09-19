@@ -1,6 +1,5 @@
 use {
     assert_matches::assert_matches,
-    rand::thread_rng,
     solana_program_test::*,
     solana_sdk::{
         ed25519_instruction::new_ed25519_instruction,
@@ -8,6 +7,20 @@ use {
         transaction::{Transaction, TransactionError},
     },
 };
+
+// Since ed25519_dalek is still using the old version of rand, this test
+// copies the `generate` implementation at:
+// https://docs.rs/ed25519-dalek/1.0.1/src/ed25519_dalek/secret.rs.html#167
+fn generate_keypair() -> ed25519_dalek::Keypair {
+    use rand::RngCore;
+    let mut rng = rand::thread_rng();
+    let mut seed = [0u8; ed25519_dalek::SECRET_KEY_LENGTH];
+    rng.fill_bytes(&mut seed);
+    let secret =
+        ed25519_dalek::SecretKey::from_bytes(&seed[..ed25519_dalek::SECRET_KEY_LENGTH]).unwrap();
+    let public = ed25519_dalek::PublicKey::from(&secret);
+    ed25519_dalek::Keypair { secret, public }
+}
 
 #[tokio::test]
 async fn test_success() {
@@ -17,7 +30,7 @@ async fn test_success() {
     let payer = &context.payer;
     let recent_blockhash = context.last_blockhash;
 
-    let privkey = ed25519_dalek::Keypair::generate(&mut thread_rng());
+    let privkey = generate_keypair();
     let message_arr = b"hello";
     let instruction = new_ed25519_instruction(&privkey, message_arr);
 
@@ -39,7 +52,7 @@ async fn test_failure() {
     let payer = &context.payer;
     let recent_blockhash = context.last_blockhash;
 
-    let privkey = ed25519_dalek::Keypair::generate(&mut thread_rng());
+    let privkey = generate_keypair();
     let message_arr = b"hello";
     let mut instruction = new_ed25519_instruction(&privkey, message_arr);
 

@@ -1,5 +1,5 @@
 use {
-    crate::inline_spl_token,
+    solana_accounts_db::inline_spl_token,
     solana_sdk::{
         account::{Account, AccountSharedData},
         feature::{self, Feature},
@@ -10,7 +10,7 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
-        stake::state::StakeState,
+        stake::state::StakeStateV2,
         system_program,
     },
     solana_stake_program::stake_state,
@@ -23,7 +23,7 @@ const VALIDATOR_LAMPORTS: u64 = 42;
 
 // fun fact: rustc is very close to make this const fn.
 pub fn bootstrap_validator_stake_lamports() -> u64 {
-    Rent::default().minimum_balance(StakeState::size_of())
+    Rent::default().minimum_balance(StakeStateV2::size_of())
 }
 
 // Number of lamports automatically used for genesis accounts

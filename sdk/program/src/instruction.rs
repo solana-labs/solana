@@ -11,7 +11,7 @@
 //! [`AccountMeta`] values. The runtime uses this information to efficiently
 //! schedule execution of transactions.
 
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {
     crate::{pubkey::Pubkey, sanitize::Sanitize, short_vec, wasm_bindgen},
@@ -743,43 +743,4 @@ pub fn get_stack_height() -> usize {
     {
         crate::program_stubs::sol_get_stack_height() as usize
     }
-}
-
-#[test]
-fn test_account_meta_layout() {
-    #[derive(Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize)]
-    struct AccountMetaRust {
-        pub pubkey: Pubkey,
-        pub is_signer: bool,
-        pub is_writable: bool,
-    }
-
-    let account_meta_rust = AccountMetaRust::default();
-    let base_rust_addr = &account_meta_rust as *const _ as u64;
-    let pubkey_rust_addr = &account_meta_rust.pubkey as *const _ as u64;
-    let is_signer_rust_addr = &account_meta_rust.is_signer as *const _ as u64;
-    let is_writable_rust_addr = &account_meta_rust.is_writable as *const _ as u64;
-
-    let account_meta_c = AccountMeta::default();
-    let base_c_addr = &account_meta_c as *const _ as u64;
-    let pubkey_c_addr = &account_meta_c.pubkey as *const _ as u64;
-    let is_signer_c_addr = &account_meta_c.is_signer as *const _ as u64;
-    let is_writable_c_addr = &account_meta_c.is_writable as *const _ as u64;
-
-    assert_eq!(
-        std::mem::size_of::<AccountMetaRust>(),
-        std::mem::size_of::<AccountMeta>()
-    );
-    assert_eq!(
-        pubkey_rust_addr - base_rust_addr,
-        pubkey_c_addr - base_c_addr
-    );
-    assert_eq!(
-        is_signer_rust_addr - base_rust_addr,
-        is_signer_c_addr - base_c_addr
-    );
-    assert_eq!(
-        is_writable_rust_addr - base_rust_addr,
-        is_writable_c_addr - base_c_addr
-    );
 }

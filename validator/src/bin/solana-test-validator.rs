@@ -3,6 +3,7 @@ use {
     crossbeam_channel::unbounded,
     itertools::Itertools,
     log::*,
+    solana_accounts_db::accounts_index::{AccountIndex, AccountSecondaryIndexes},
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of, value_of},
         input_validators::normalize_to_url_if_moniker,
@@ -14,11 +15,11 @@ use {
         rpc_pubsub_service::PubSubConfig,
     },
     solana_rpc_client::rpc_client::RpcClient,
-    solana_runtime::accounts_index::{AccountIndex, AccountSecondaryIndexes},
     solana_sdk::{
         account::AccountSharedData,
         clock::Slot,
         epoch_schedule::EpochSchedule,
+        feature_set,
         native_token::sol_to_lamports,
         pubkey::Pubkey,
         rent::Rent,
@@ -348,7 +349,9 @@ fn main() {
         exit(1);
     });
 
-    let features_to_deactivate = pubkeys_of(&matches, "deactivate_feature").unwrap_or_default();
+    let mut features_to_deactivate = pubkeys_of(&matches, "deactivate_feature").unwrap_or_default();
+    // Remove this when client support is ready for the enable_partitioned_epoch_reward feature
+    features_to_deactivate.push(feature_set::enable_partitioned_epoch_reward::id());
 
     if TestValidatorGenesis::ledger_exists(&ledger_path) {
         for (name, long) in &[

@@ -61,7 +61,7 @@ fn test_build() {
 fn test_dump() {
     // This test requires rustfilt.
     assert_cmd::Command::new("cargo")
-        .args(["install", "-f", "rustfilt"])
+        .args(["install", "rustfilt"])
         .assert()
         .success();
     run_cargo_build("noop", &["--dump"], false);

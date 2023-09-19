@@ -16,7 +16,7 @@ use {
     solana_metrics::datapoint_info,
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
-        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::SnapshotType,
+        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::SnapshotKind,
         snapshot_utils,
     },
     solana_sdk::{
@@ -81,7 +81,7 @@ fn verify_reachable_ports(
     };
     let mut udp_sockets = vec![&node.sockets.gossip, &node.sockets.repair];
 
-    if verify_address(&node.info.serve_repair().ok()) {
+    if verify_address(&node.info.serve_repair(Protocol::UDP).ok()) {
         udp_sockets.push(&node.sockets.serve_repair);
     }
     if verify_address(&node.info.tpu(Protocol::UDP).ok()) {
@@ -744,7 +744,7 @@ fn get_rpc_nodes(
         blacklist_timeout = Instant::now();
         get_rpc_peers_timout = Instant::now();
         if bootstrap_config.no_snapshot_fetch {
-            let random_peer = &rpc_peers[thread_rng().gen_range(0, rpc_peers.len())];
+            let random_peer = &rpc_peers[thread_rng().gen_range(0..rpc_peers.len())];
             return Ok(vec![GetRpcNodeResult {
                 rpc_contact_info: random_peer.clone(),
                 snapshot_hash: None,
@@ -967,7 +967,11 @@ fn build_known_snapshot_hashes<'a>(
     }
 
     'to_next_node: for node in nodes {
-        let Some(SnapshotHash {full: full_snapshot_hash, incr: incremental_snapshot_hash}) = get_snapshot_hashes_for_node(node) else {
+        let Some(SnapshotHash {
+            full: full_snapshot_hash,
+            incr: incremental_snapshot_hash,
+        }) = get_snapshot_hashes_for_node(node)
+        else {
             continue 'to_next_node;
         };
 
@@ -1172,7 +1176,7 @@ fn download_snapshots(
             download_abort_count,
             rpc_contact_info,
             full_snapshot_hash,
-            SnapshotType::FullSnapshot,
+            SnapshotKind::FullSnapshot,
         )?;
     }
 
@@ -1204,7 +1208,7 @@ fn download_snapshots(
                     download_abort_count,
                     rpc_contact_info,
                     incremental_snapshot_hash,
-                    SnapshotType::IncrementalSnapshot(full_snapshot_hash.0),
+                    SnapshotKind::IncrementalSnapshot(full_snapshot_hash.0),
                 )?;
             }
         }
@@ -1227,7 +1231,7 @@ fn download_snapshot(
     download_abort_count: &mut u64,
     rpc_contact_info: &ContactInfo,
     desired_snapshot_hash: (Slot, Hash),
-    snapshot_type: SnapshotType,
+    snapshot_kind: SnapshotKind,
 ) -> Result<(), String> {
     let maximum_full_snapshot_archives_to_retain = validator_config
         .snapshot_config
@@ -1249,7 +1253,7 @@ fn download_snapshot(
         full_snapshot_archives_dir,
         incremental_snapshot_archives_dir,
         desired_snapshot_hash,
-        snapshot_type,
+        snapshot_kind,
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
         use_progress_bar,

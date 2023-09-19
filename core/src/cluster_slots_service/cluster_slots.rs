@@ -186,9 +186,8 @@ impl ClusterSlots {
                 })
                 .collect()
         };
-        let slot_peers = match self.lookup(slot) {
-            None => return stakes,
-            Some(slot_peers) => slot_peers,
+        let Some(slot_peers) = self.lookup(slot) else {
+            return stakes;
         };
         let slot_peers = slot_peers.read().unwrap();
         repair_peers

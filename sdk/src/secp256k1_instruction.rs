@@ -733,7 +733,7 @@
 //!     // Sign some messages.
 //!     let mut signatures = vec![];
 //!     for idx in 0..2 {
-//!         let secret_key = libsecp256k1::SecretKey::random(&mut rand::thread_rng());
+//!         let secret_key = libsecp256k1::SecretKey::random(&mut rand0_7::thread_rng());
 //!         let message = format!("hello world {}", idx).into_bytes();
 //!         let message_hash = {
 //!             let mut hasher = keccak::Hasher::default();
@@ -860,15 +860,13 @@ pub fn new_secp256k1_instruction(
     let signature_arr = signature.serialize();
     assert_eq!(signature_arr.len(), SIGNATURE_SERIALIZED_SIZE);
 
-    let mut instruction_data = vec![];
-    instruction_data.resize(
-        DATA_START
-            .saturating_add(eth_pubkey.len())
-            .saturating_add(signature_arr.len())
-            .saturating_add(message_arr.len())
-            .saturating_add(1),
-        0,
-    );
+    let instruction_data_len = DATA_START
+        .saturating_add(eth_pubkey.len())
+        .saturating_add(signature_arr.len())
+        .saturating_add(message_arr.len())
+        .saturating_add(1);
+    let mut instruction_data = vec![0; instruction_data_len];
+
     let eth_address_offset = DATA_START;
     instruction_data[eth_address_offset..eth_address_offset.saturating_add(eth_pubkey.len())]
         .copy_from_slice(&eth_pubkey);
@@ -1059,7 +1057,7 @@ pub mod test {
             signature::{Keypair, Signer},
             transaction::Transaction,
         },
-        rand::{thread_rng, Rng},
+        rand0_7::{thread_rng, Rng},
     };
 
     fn test_case(

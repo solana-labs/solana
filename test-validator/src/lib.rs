@@ -1,8 +1,13 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     base64::{prelude::BASE64_STANDARD, Engine},
     crossbeam_channel::Receiver,
     log::*,
+    solana_accounts_db::{
+        accounts_db::{create_accounts_run_and_snapshot_dirs, AccountsDbConfig},
+        accounts_index::AccountsIndexConfig,
+        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+    },
     solana_cli_output::CliAccount,
     solana_client::rpc_request::MAX_MULTIPLE_ACCOUNTS,
     solana_core::{
@@ -28,10 +33,8 @@ use {
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_rpc_client::{nonblocking, rpc_client::RpcClient},
     solana_runtime::{
-        accounts_db::AccountsDbConfig, accounts_index::AccountsIndexConfig, bank_forks::BankForks,
-        genesis_utils::create_genesis_config_with_leader_ex,
-        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE, runtime_config::RuntimeConfig,
-        snapshot_config::SnapshotConfig, snapshot_utils::create_accounts_run_and_snapshot_dirs,
+        bank_forks::BankForks, genesis_utils::create_genesis_config_with_leader_ex,
+        runtime_config::RuntimeConfig, snapshot_config::SnapshotConfig,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -367,9 +370,8 @@ impl TestValidatorGenesis {
         accounts: &[AccountInfo],
     ) -> Result<&mut Self, String> {
         for account in accounts {
-            let account_path = match solana_program_test::find_file(account.filename) {
-                Some(path) => path,
-                None => return Err(format!("Unable to locate {}", account.filename)),
+            let Some(account_path) = solana_program_test::find_file(account.filename) else {
+                return Err(format!("Unable to locate {}", account.filename));
             };
             let mut file = File::open(&account_path).unwrap();
             let mut account_info_raw = String::new();
@@ -834,6 +836,14 @@ impl TestValidator {
         write_keypair_file(
             &validator_identity,
             ledger_path.join("validator-keypair.json").to_str().unwrap(),
+        )?;
+
+        write_keypair_file(
+            &validator_stake_account,
+            ledger_path
+                .join("stake-account-keypair.json")
+                .to_str()
+                .unwrap(),
         )?;
 
         // `ledger_exists` should fail until the vote account keypair is written

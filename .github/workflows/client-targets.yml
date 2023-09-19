@@ -12,6 +12,8 @@ on:
       - "sdk/**"
       - ".github/workflows/client-targets.yml"
       - "ci/rust-version.sh"
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
 
 env:
   CARGO_TERM_COLOR: always

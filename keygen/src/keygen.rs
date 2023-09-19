@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     bip39::{Mnemonic, MnemonicType, Seed},
     clap::{crate_description, crate_name, Arg, ArgMatches, Command},
@@ -34,6 +34,7 @@ use {
     std::{
         collections::HashSet,
         error,
+        rc::Rc,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
             Arc,
@@ -64,7 +65,7 @@ struct GrindMatch {
 fn get_keypair_from_matches(
     matches: &ArgMatches,
     config: Config,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
     let mut path = dirs_next::home_dir().expect("home directory");
     let path = if matches.is_present("keypair") {
@@ -629,7 +630,6 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                     let passphrase = passphrase.clone();
                     let passphrase_message = passphrase_message.clone();
                     let derivation_path = derivation_path.clone();
-                    let skip_len_44_pubkeys = skip_len_44_pubkeys;
 
                     thread::spawn(move || loop {
                         if done.load(Ordering::Relaxed) {

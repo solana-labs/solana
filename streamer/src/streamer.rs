@@ -113,7 +113,7 @@ fn recv_loop(
 ) -> Result<()> {
     loop {
         let mut packet_batch = if use_pinned_memory {
-            PacketBatch::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, stats.name)
+            PacketBatch::new_with_recycler(recycler, PACKETS_PER_BATCH, stats.name)
         } else {
             PacketBatch::with_capacity(PACKETS_PER_BATCH)
         };

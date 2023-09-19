@@ -6,7 +6,7 @@ use {
     dialoguer::{theme::ColorfulTheme, Select},
     semver::Version as FirmwareVersion,
     solana_sdk::derivation_path::DerivationPath,
-    std::{fmt, sync::Arc},
+    std::{fmt, rc::Rc},
 };
 #[cfg(feature = "hidapi")]
 use {
@@ -516,12 +516,8 @@ impl RemoteWallet<hidapi::DeviceInfo> for LedgerWallet {
             }
         }
 
-        if result.len() != 64 {
-            return Err(RemoteWalletError::Protocol(
-                "Signature packet size mismatch",
-            ));
-        }
-        Ok(Signature::new(&result))
+        Signature::try_from(result)
+            .map_err(|_| RemoteWalletError::Protocol("Signature packet size mismatch"))
     }
 
     fn sign_offchain_message(
@@ -552,12 +548,8 @@ impl RemoteWallet<hidapi::DeviceInfo> for LedgerWallet {
         }
 
         let result = self.send_apdu(commands::SIGN_OFFCHAIN_MESSAGE, p1, p2, payload)?;
-        if result.len() != 64 {
-            return Err(RemoteWalletError::Protocol(
-                "Signature packet size mismatch",
-            ));
-        }
-        Ok(Signature::new(&result))
+        Signature::try_from(result)
+            .map_err(|_| RemoteWalletError::Protocol("Signature packet size mismatch"))
     }
 }
 
@@ -600,7 +592,7 @@ pub fn get_ledger_from_info(
     info: RemoteWalletInfo,
     keypair_name: &str,
     wallet_manager: &RemoteWalletManager,
-) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
+) -> Result<Rc<LedgerWallet>, RemoteWalletError> {
     let devices = wallet_manager.list_devices();
     let mut matches = devices
         .iter()

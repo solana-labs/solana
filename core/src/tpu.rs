@@ -15,8 +15,9 @@ use {
         sigverify_stage::SigVerifyStage,
         staked_nodes_updater_service::StakedNodesUpdaterService,
         tpu_entry_notifier::TpuEntryNotifier,
-        validator::GeneratorConfig,
+        validator::{BlockProductionMethod, GeneratorConfig},
     },
+    bytes::Bytes,
     crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_gossip::cluster_info::ClusterInfo,
@@ -25,7 +26,6 @@ use {
         entry_notifier_service::EntryNotifierSender,
     },
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
-    solana_quic_client::QuicConnectionCache,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::BankNotificationSender,
         rpc_subscriptions::RpcSubscriptions,
@@ -44,11 +44,12 @@ use {
     solana_turbine::broadcast_stage::{BroadcastStage, BroadcastStageType},
     std::{
         collections::HashMap,
-        net::UdpSocket,
+        net::{SocketAddr, UdpSocket},
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread,
         time::Duration,
     },
+    tokio::sync::mpsc::Sender as AsyncSender,
 };
 
 // allow multiple connections for NAT and any open/close overlap
@@ -88,7 +89,7 @@ impl Tpu {
         subscriptions: &Arc<RpcSubscriptions>,
         transaction_status_sender: Option<TransactionStatusSender>,
         entry_notification_sender: Option<EntryNotifierSender>,
-        blockstore: &Arc<Blockstore>,
+        blockstore: Arc<Blockstore>,
         broadcast_type: &BroadcastStageType,
         exit: Arc<AtomicBool>,
         shred_version: u16,
@@ -102,7 +103,7 @@ impl Tpu {
         tpu_coalesce: Duration,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         connection_cache: &Arc<ConnectionCache>,
-        turbine_quic_connection_cache: Arc<QuicConnectionCache>,
+        turbine_quic_endpoint_sender: AsyncSender<(SocketAddr, Bytes)>,
         keypair: &Keypair,
         log_messages_bytes_limit: Option<usize>,
         staked_nodes: &Arc<RwLock<StakedNodes>>,
@@ -111,6 +112,7 @@ impl Tpu {
         tracer_thread_hdl: TracerThread,
         tpu_enable_udp: bool,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        block_production_method: BlockProductionMethod,
         _generator_config: Option<GeneratorConfig>, /* vestigial code for replay invalidator */
     ) -> Self {
         let TpuSockets {
@@ -220,6 +222,7 @@ impl Tpu {
         );
 
         let banking_stage = BankingStage::new(
+            block_production_method,
             cluster_info,
             poh_recorder,
             non_vote_receiver,
@@ -253,10 +256,10 @@ impl Tpu {
             entry_receiver,
             retransmit_slots_receiver,
             exit,
-            blockstore.clone(),
+            blockstore,
             bank_forks,
             shred_version,
-            turbine_quic_connection_cache,
+            turbine_quic_endpoint_sender,
         );
 
         Self {

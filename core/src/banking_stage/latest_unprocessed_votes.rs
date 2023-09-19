@@ -116,7 +116,7 @@ impl LatestValidatorVotePacket {
 // This requires updating dependencies of ed25519-dalek as rand_core is not compatible cross
 // version https://github.com/dalek-cryptography/ed25519-dalek/pull/214
 pub(crate) fn weighted_random_order_by_stake<'a>(
-    bank: &Arc<Bank>,
+    bank: &Bank,
     pubkeys: impl Iterator<Item = &'a Pubkey>,
 ) -> impl Iterator<Item = Pubkey> {
     // Efraimidis and Spirakis algo for weighted random sample without replacement
@@ -697,7 +697,7 @@ mod tests {
                     let vote = from_slots(
                         vec![(i, 1)],
                         VoteSource::Gossip,
-                        &keypairs[rng.gen_range(0, 10)],
+                        &keypairs[rng.gen_range(0..10)],
                         None,
                     );
                     latest_unprocessed_votes.update_latest_vote(vote);
@@ -712,7 +712,7 @@ mod tests {
                     let vote = from_slots(
                         vec![(i, 1)],
                         VoteSource::Tpu,
-                        &keypairs_tpu[rng.gen_range(0, 10)],
+                        &keypairs_tpu[rng.gen_range(0..10)],
                         None,
                     );
                     latest_unprocessed_votes_tpu.update_latest_vote(vote);

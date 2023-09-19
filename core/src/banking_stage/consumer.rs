@@ -9,6 +9,10 @@ use {
         BankingStageStats,
     },
     itertools::Itertools,
+    solana_accounts_db::{
+        transaction_error_metrics::TransactionErrorMetrics,
+        transaction_results::TransactionCheckResult,
+    },
     solana_ledger::token_balances::collect_token_balances,
     solana_measure::{measure::Measure, measure_us},
     solana_poh::poh_recorder::{
@@ -17,9 +21,8 @@ use {
     },
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
-        bank::{Bank, LoadAndExecuteTransactionsOutput, TransactionCheckResult},
+        bank::{Bank, LoadAndExecuteTransactionsOutput},
         transaction_batch::TransactionBatch,
-        transaction_error_metrics::TransactionErrorMetrics,
     },
     solana_sdk::{
         clock::{Slot, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
@@ -685,7 +688,7 @@ impl Consumer {
     /// * `transactions` - a batch of transactions deserialized from packets
     /// * `pending_indexes` - identifies which indexes in the `transactions` list are still pending
     fn filter_pending_packets_from_pending_txs(
-        bank: &Arc<Bank>,
+        bank: &Bank,
         transactions: &[SanitizedTransaction],
         pending_indexes: &[usize],
     ) -> Vec<usize> {
@@ -734,7 +737,7 @@ mod tests {
             unprocessed_transaction_storage::ThreadType,
         },
         crossbeam_channel::{unbounded, Receiver},
-        solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
+        solana_cost_model::cost_model::CostModel,
         solana_entry::entry::{next_entry, next_versioned_entry},
         solana_ledger::{
             blockstore::{entries_to_test_shreds, Blockstore},
@@ -747,9 +750,13 @@ mod tests {
         solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
         solana_program_runtime::timings::ProgramTiming,
         solana_rpc::transaction_status_service::TransactionStatusService,
-        solana_runtime::{cost_model::CostModel, prioritization_fee_cache::PrioritizationFeeCache},
+        solana_runtime::prioritization_fee_cache::PrioritizationFeeCache,
         solana_sdk::{
             account::AccountSharedData,
+            address_lookup_table::{
+                self,
+                state::{AddressLookupTable, LookupTableMeta},
+            },
             instruction::InstructionError,
             message::{v0, v0::MessageAddressTableLookup, MessageHeader, VersionedMessage},
             poh_config::PohConfig,
@@ -840,7 +847,7 @@ mod tests {
     ) -> AccountSharedData {
         let data = address_lookup_table.serialize_for_tests().unwrap();
         let mut account =
-            AccountSharedData::new(1, data.len(), &solana_address_lookup_table_program::id());
+            AccountSharedData::new(1, data.len(), &address_lookup_table::program::id());
         account.set_data(data);
         bank.store_account(&account_address, &account);
 
@@ -1238,14 +1245,14 @@ mod tests {
             // account locking
             let commit_transactions_result = commit_transactions_result.unwrap();
             assert_eq!(commit_transactions_result.len(), 2);
-            assert!(matches!(
-                commit_transactions_result.get(0).unwrap(),
-                CommitTransactionDetails::Committed { .. }
-            ));
-            assert!(matches!(
-                commit_transactions_result.get(1).unwrap(),
-                CommitTransactionDetails::NotCommitted
-            ));
+            assert_matches!(
+                commit_transactions_result.get(0),
+                Some(CommitTransactionDetails::Committed { .. })
+            );
+            assert_matches!(
+                commit_transactions_result.get(1),
+                Some(CommitTransactionDetails::NotCommitted)
+            );
             assert_eq!(retryable_transaction_indexes, vec![1]);
 
             let expected_block_cost = if !apply_cost_tracker_during_replay_enabled {
@@ -1697,7 +1704,7 @@ mod tests {
         let address_table_state = generate_new_address_lookup_table(None, 2);
         store_address_lookup_table(&bank, address_table_key, address_table_state);
 
-        let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::new_unique(), 1));
+        let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), 1));
         let message = VersionedMessage::V0(v0::Message {
             header: MessageHeader {
                 num_required_signatures: 1,
@@ -1830,7 +1837,7 @@ mod tests {
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
                     UnprocessedPacketBatches::from_iter(
-                        deserialized_packets.into_iter(),
+                        deserialized_packets,
                         num_conflicting_transactions,
                     ),
                     ThreadType::Transactions,
@@ -1908,7 +1915,7 @@ mod tests {
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
                     UnprocessedPacketBatches::from_iter(
-                        deserialized_packets.into_iter(),
+                        deserialized_packets,
                         num_conflicting_transactions,
                     ),
                     ThreadType::Transactions,
@@ -1960,7 +1967,7 @@ mod tests {
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
                     UnprocessedPacketBatches::from_iter(
-                        deserialized_packets.into_iter(),
+                        deserialized_packets,
                         num_conflicting_transactions,
                     ),
                     ThreadType::Transactions,

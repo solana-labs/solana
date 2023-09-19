@@ -17,11 +17,13 @@ codecov = { repository = "solana-labs/solana", branch = "master", service = "git
 base64 = { workspace = true }
 bincode = { workspace = true }
 bs58 = { workspace = true }
+bytes = { workspace = true }
 chrono = { workspace = true, features = ["default", "serde"] }
 crossbeam-channel = { workspace = true }
 dashmap = { workspace = true, features = ["rayon", "raw-api"] }
 eager = { workspace = true }
 etcd-client = { workspace = true, features = ["tls"] }
+futures = { workspace = true }
 histogram = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
@@ -29,15 +31,20 @@ log = { workspace = true }
 lru = { workspace = true }
 min-max-heap = { workspace = true }
 num_enum = { workspace = true }
+quinn = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
+rcgen = { workspace = true }
 rolling-file = { workspace = true }
+rustls = { workspace = true }
 serde = { workspace = true }
+serde_bytes = { workspace = true }
 serde_derive = { workspace = true }
-solana-address-lookup-table-program = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-bloom = { workspace = true }
 solana-client = { workspace = true }
+solana-cost-model = { workspace = true }
 solana-entry = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
@@ -72,13 +79,17 @@ tokio = { workspace = true, features = ["full"] }
 trees = { workspace = true }
 
 [dev-dependencies]
+assert_matches = { workspace = true }
 fs_extra = { workspace = true }
-matches = { workspace = true }
 raptorq = { workspace = true }
 serde_json = { workspace = true }
 serial_test = { workspace = true }
+# See order-crates-for-publishing.py for using this unusual `path = "."`
+solana-core = { path = ".", features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }
 solana-program-runtime = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
+solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 solana-stake-program = { workspace = true }
 static_assertions = { workspace = true }
 systemstat = { workspace = true }
@@ -89,6 +100,9 @@ sysctl = { workspace = true }
 
 [build-dependencies]
 rustc_version = { workspace = true }
+
+[features]
+dev-context-only-utils = []
 
 [[bench]]
 name = "banking_stage"

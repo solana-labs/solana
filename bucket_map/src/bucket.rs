@@ -88,7 +88,7 @@ struct DataFileEntryToFree {
 }
 
 // >= 2 instances of BucketStorage per 'bucket' in the bucket map. 1 for index, >= 1 for data
-pub struct Bucket<T: Copy + 'static> {
+pub struct Bucket<T: Copy + PartialEq + 'static> {
     drives: Arc<Vec<PathBuf>>,
     /// index
     pub index: BucketStorage<IndexBucket<T>>,
@@ -109,14 +109,14 @@ pub struct Bucket<T: Copy + 'static> {
     at_least_one_entry_deleted: bool,
 }
 
-impl<'b, T: Clone + Copy + 'static> Bucket<T> {
+impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
     pub fn new(
         drives: Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
         stats: Arc<BucketMapStats>,
         count: Arc<AtomicU64>,
     ) -> Self {
-        let index = BucketStorage::new(
+        let (index, _file_name) = BucketStorage::new(
             Arc::clone(&drives),
             1,
             std::mem::size_of::<IndexEntry<T>>() as u64,
@@ -183,7 +183,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     /// if entry does not exist, return just the index of an empty entry appropriate for this key
     /// returns (existing entry, index of the found or empty entry)
     fn find_index_entry_mut(
-        index: &mut BucketStorage<IndexBucket<T>>,
+        index: &BucketStorage<IndexBucket<T>>,
         key: &Pubkey,
         random: u64,
     ) -> Result<(Option<IndexEntryPlaceInBucket<T>>, u64), BucketMapError> {
@@ -281,35 +281,27 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
 
     /// for each item in `items`, get the hash value when hashed with `random`.
     /// Return a vec of tuples:
-    /// (hash_value, key, value)
-    fn index_entries(
-        items: impl Iterator<Item = (Pubkey, T)>,
-        count: usize,
-        random: u64,
-    ) -> Vec<(u64, Pubkey, T)> {
-        let mut inserts = Vec::with_capacity(count);
-        items.for_each(|(key, v)| {
-            let ix = Self::bucket_index_ix(&key, random);
-            inserts.push((ix, key, v));
+    /// (hash_value, index in `items`)
+    fn index_entries(items: &[(Pubkey, T)], random: u64) -> Vec<(u64, usize)> {
+        let mut inserts = Vec::with_capacity(items.len());
+        items.iter().enumerate().for_each(|(i, (key, _v))| {
+            let ix = Self::bucket_index_ix(key, random);
+            inserts.push((ix, i));
         });
         inserts
     }
 
-    /// insert all of `items` into the index.
-    /// return duplicates
-    pub(crate) fn batch_insert_non_duplicates(
-        &mut self,
-        items: impl Iterator<Item = (Pubkey, T)>,
-        count: usize,
-    ) -> Vec<(Pubkey, T, T)> {
+    /// batch insert of `items`. Assumption is a single slot list element and ref_count == 1.
+    /// For any pubkeys that already exist, the index in `items` of the failed insertion and the existing data (previously put in the index) are returned.
+    pub(crate) fn batch_insert_non_duplicates(&mut self, items: &[(Pubkey, T)]) -> Vec<(usize, T)> {
         assert!(
             !self.at_least_one_entry_deleted,
             "efficient batch insertion can only occur prior to any deletes"
         );
         let current_len = self.index.count.load(Ordering::Relaxed);
-        let anticipated = count as u64;
+        let anticipated = items.len() as u64;
         self.set_anticipated_count((anticipated).saturating_add(current_len));
-        let mut entries = Self::index_entries(items, count, self.random);
+        let mut entries = Self::index_entries(items, self.random);
         let mut duplicates = Vec::default();
         // insert, but resizes may be necessary
         loop {
@@ -322,6 +314,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             let result = Self::batch_insert_non_duplicates_internal(
                 &mut self.index,
                 &self.data,
+                items,
                 &mut entries,
                 &mut duplicates,
             );
@@ -330,7 +323,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                     // everything added
                     self.set_anticipated_count(0);
                     self.index.count.fetch_add(
-                        count.saturating_sub(duplicates.len()) as u64,
+                        items.len().saturating_sub(duplicates.len()) as u64,
                         Ordering::Relaxed,
                     );
                     return duplicates;
@@ -352,15 +345,17 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     pub fn batch_insert_non_duplicates_internal(
         index: &mut BucketStorage<IndexBucket<T>>,
         data_buckets: &[BucketStorage<DataBucket>],
-        reverse_sorted_entries: &mut Vec<(u64, Pubkey, T)>,
-        duplicates: &mut Vec<(Pubkey, T, T)>,
+        items: &[(Pubkey, T)],
+        reverse_sorted_entries: &mut Vec<(u64, usize)>,
+        duplicates: &mut Vec<(usize, T)>,
     ) -> Result<(), BucketMapError> {
         let max_search = index.max_search();
         let cap = index.capacity();
         let search_end = max_search.min(cap);
 
         // pop one entry at a time to insert
-        'outer: while let Some((ix_entry_raw, k, v)) = reverse_sorted_entries.pop() {
+        'outer: while let Some((ix_entry_raw, i)) = reverse_sorted_entries.pop() {
+            let (k, v) = &items[i];
             let ix_entry = ix_entry_raw % cap;
             // search for an empty spot starting at `ix_entry`
             for search in 0..search_end {
@@ -370,25 +365,25 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                     // found free element and occupied it
                     // These fields will be overwritten after allocation by callers.
                     // Since this part of the mmapped file could have previously been used by someone else, there can be garbage here.
-                    elem.init(index, &k);
+                    elem.init(index, k);
 
                     // new data stored should be stored in IndexEntry and NOT in data file
                     // new data len is 1
-                    elem.set_slot_count_enum_value(index, OccupiedEnum::OneSlotInIndex(&v));
+                    elem.set_slot_count_enum_value(index, OccupiedEnum::OneSlotInIndex(v));
                     continue 'outer; // this 'insertion' is completed: inserted successfully
                 } else {
                     // occupied, see if the key already exists here
-                    if elem.key(index) == &k {
+                    if elem.key(index) == k {
                         let (v_existing, _ref_count_existing) =
                             elem.read_value(index, data_buckets);
-                        duplicates.push((k, v, *v_existing.first().unwrap()));
+                        duplicates.push((i, *v_existing.first().unwrap()));
                         continue 'outer; // this 'insertion' is completed: found a duplicate entry
                     }
                 }
             }
             // search loop ended without finding a spot to insert this key
             // so, remember the item we were trying to insert for next time after resizing
-            reverse_sorted_entries.push((ix_entry_raw, k, v));
+            reverse_sorted_entries.push((ix_entry_raw, i));
             return Err(BucketMapError::IndexNoSpace(cap));
         }
 
@@ -410,7 +405,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
         }
         let max_search = self.index.max_search();
-        let (elem, elem_ix) = Self::find_index_entry_mut(&mut self.index, key, self.random)?;
+        let (elem, elem_ix) = Self::find_index_entry_mut(&self.index, key, self.random)?;
         let elem = if let Some(elem) = elem {
             elem
         } else {
@@ -483,7 +478,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         let best_bucket = &mut self.data[best_fit_bucket as usize];
         let cap_power = best_bucket.contents.capacity_pow2();
         let cap = best_bucket.capacity();
-        let pos = thread_rng().gen_range(0, cap);
+        let pos = thread_rng().gen_range(0..cap);
         let mut success = false;
         // max search is increased here by a lot for this search. The idea is that we just have to find an empty bucket somewhere.
         // We don't mind waiting on a new write (by searching longer). Writing is done in the background only.
@@ -569,7 +564,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 count += 1;
                 // grow relative to the current capacity
                 let new_capacity = (current_capacity * 110 / 100).max(anticipated_size);
-                let mut index = BucketStorage::new_with_capacity(
+                let (mut index, _file_name) = BucketStorage::new_with_capacity(
                     Arc::clone(&self.drives),
                     1,
                     std::mem::size_of::<IndexEntry<T>>() as u64,
@@ -649,14 +644,17 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         if self.data.get(ix).is_none() {
             for i in self.data.len()..ix {
                 // insert empty data buckets
-                self.add_data_bucket(BucketStorage::new(
-                    Arc::clone(&self.drives),
-                    1 << i,
-                    Self::elem_size(),
-                    self.index.max_search,
-                    Arc::clone(&self.stats.data),
-                    Arc::default(),
-                ));
+                self.add_data_bucket(
+                    BucketStorage::new(
+                        Arc::clone(&self.drives),
+                        1 << i,
+                        Self::elem_size(),
+                        self.index.max_search,
+                        Arc::clone(&self.stats.data),
+                        Arc::default(),
+                    )
+                    .0,
+                );
             }
             self.add_data_bucket(bucket);
         } else {
@@ -671,7 +669,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     /// grow a data bucket
     /// The application of the new bucket is deferred until the next write lock.
     pub fn grow_data(&self, data_index: u64, current_capacity_pow2: u8) {
-        let new_bucket = BucketStorage::new_resized(
+        let (new_bucket, _file_name) = BucketStorage::new_resized(
             &self.drives,
             self.index.max_search,
             self.data.get(data_index as usize),
@@ -733,14 +731,11 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     pub fn insert(&mut self, key: &Pubkey, value: (&[T], RefCount)) {
         let (new, refct) = value;
         loop {
-            let rv = self.try_write(key, new.iter(), new.len(), refct);
-            match rv {
-                Ok(_) => return,
-                Err(err) => {
-                    self.grow(err);
-                    self.handle_delayed_grows();
-                }
-            }
+            let Err(err) = self.try_write(key, new.iter(), new.len(), refct) else {
+                return;
+            };
+            self.grow(err);
+            self.handle_delayed_grows();
         }
     }
 
@@ -774,14 +769,13 @@ mod tests {
                             (k, v + (l as u64))
                         })
                         .collect::<Vec<_>>();
-                    let hashed = Bucket::index_entries(raw.clone().into_iter(), len, random);
+                    let hashed = Bucket::index_entries(&raw, random);
                     assert_eq!(hashed.len(), len);
                     (0..len).for_each(|i| {
                         let raw = raw[i];
                         let hashed = hashed[i];
                         assert_eq!(Bucket::<u64>::bucket_index_ix(&raw.0, random), hashed.0);
-                        assert_eq!(raw.0, hashed.1);
-                        assert_eq!(raw.1, hashed.2);
+                        assert_eq!(i, hashed.1);
                     });
                 }
             }
@@ -801,6 +795,7 @@ mod tests {
             Arc::default(),
             Arc::default(),
         )
+        .0
     }
 
     #[test]
@@ -814,7 +809,7 @@ mod tests {
         for v in 10..12u64 {
             for len in 1..4 {
                 let raw = (0..len).map(|l| (k, v + (l as u64))).collect::<Vec<_>>();
-                let mut hashed = Bucket::index_entries(raw.clone().into_iter(), len, random);
+                let mut hashed = Bucket::index_entries(&raw, random);
                 let hashed_raw = hashed.clone();
 
                 let mut index = create_test_index(None);
@@ -823,24 +818,25 @@ mod tests {
                 assert!(Bucket::<u64>::batch_insert_non_duplicates_internal(
                     &mut index,
                     &Vec::default(),
+                    &raw,
                     &mut hashed,
                     &mut duplicates,
                 )
                 .is_ok());
 
-                assert_eq!(duplicates.len(), len - 1);
+                assert_eq!(duplicates.len(), len as usize - 1);
                 assert_eq!(hashed.len(), 0);
                 let single_hashed_raw_inserted = hashed_raw.last().unwrap();
                 let elem =
                     IndexEntryPlaceInBucket::new(single_hashed_raw_inserted.0 % index.capacity());
                 let (value, ref_count) = elem.read_value(&index, &data_buckets);
                 assert_eq!(ref_count, 1);
-                assert_eq!(value, &[single_hashed_raw_inserted.2]);
+                assert_eq!(value, &[raw[single_hashed_raw_inserted.1].1]);
                 let expected_duplicates = hashed_raw
                     .iter()
                     .rev()
                     .skip(1)
-                    .map(|(_hash, k, v)| (*k, *v, single_hashed_raw_inserted.2))
+                    .map(|(_hash, i)| (*i, raw[single_hashed_raw_inserted.1].1))
                     .collect::<Vec<_>>();
                 assert_eq!(expected_duplicates, duplicates);
             }
@@ -861,7 +857,7 @@ mod tests {
                         (k, v + (l as u64))
                     })
                     .collect::<Vec<_>>();
-                let mut hashed = Bucket::index_entries(raw.clone().into_iter(), len, random);
+                let mut hashed = Bucket::index_entries(&raw, random);
                 let hashed_raw = hashed.clone();
 
                 let mut index = create_test_index(None);
@@ -870,6 +866,7 @@ mod tests {
                 assert!(Bucket::<u64>::batch_insert_non_duplicates_internal(
                     &mut index,
                     &Vec::default(),
+                    &raw,
                     &mut hashed,
                     &mut duplicates,
                 )
@@ -877,11 +874,11 @@ mod tests {
 
                 assert_eq!(hashed.len(), 0);
                 (0..len).for_each(|i| {
-                    let raw = hashed_raw[i];
-                    let elem = IndexEntryPlaceInBucket::new(raw.0 % index.capacity());
+                    let raw2 = hashed_raw[i];
+                    let elem = IndexEntryPlaceInBucket::new(raw2.0 % index.capacity());
                     let (value, ref_count) = elem.read_value(&index, &data_buckets);
                     assert_eq!(ref_count, 1);
-                    assert_eq!(value, &[hashed_raw[i].2]);
+                    assert_eq!(value, &[raw[hashed_raw[i].1].1]);
                 });
             }
         }
@@ -904,7 +901,7 @@ mod tests {
                             (k, v + (l as u64))
                         })
                         .collect::<Vec<_>>();
-                    let mut hashed = Bucket::index_entries(raw.clone().into_iter(), len, random);
+                    let mut hashed = Bucket::index_entries(&raw, random);
                     let common_ix = 2; // both are put at same ix
                     hashed.iter_mut().for_each(|v| {
                         v.0 = common_ix;
@@ -917,6 +914,7 @@ mod tests {
                     let result = Bucket::<u64>::batch_insert_non_duplicates_internal(
                         &mut index,
                         &Vec::default(),
+                        &raw,
                         &mut hashed,
                         &mut duplicates,
                     );
@@ -932,7 +930,7 @@ mod tests {
                         } else {
                             result.is_ok()
                         });
-                        let raw = hashed_raw[i];
+                        let raw2 = hashed_raw[i];
                         if i == 0 && len > max_search {
                             // max search was exceeded and the first entry was unable to be inserted, so it remained in `hashed`
                             assert_eq!(hashed[0], hashed_raw[0]);
@@ -940,11 +938,11 @@ mod tests {
                             // we insert in reverse order when ix values are equal, so we expect to find item[1] in item[1]'s expected ix and item[0] will be 1 search distance away from expected ix
                             let search_required = (len - i - 1) as u64;
                             let elem = IndexEntryPlaceInBucket::new(
-                                (raw.0 + search_required) % index.capacity(),
+                                (raw2.0 + search_required) % index.capacity(),
                             );
                             let (value, ref_count) = elem.read_value(&index, &data_buckets);
                             assert_eq!(ref_count, 1);
-                            assert_eq!(value, &[hashed_raw[i].2]);
+                            assert_eq!(value, &[raw[hashed_raw[i].1].1]);
                         }
                     });
                 }
@@ -969,6 +967,6 @@ mod tests {
         bucket.update(&key, |_| Some((vec![0], 0)));
         bucket.delete_key(&key);
 
-        bucket.batch_insert_non_duplicates(std::iter::empty(), 0);
+        bucket.batch_insert_non_duplicates(&[]);
     }
 }

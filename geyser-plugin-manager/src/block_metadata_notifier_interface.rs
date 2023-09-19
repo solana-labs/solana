@@ -1,5 +1,5 @@
 use {
-    solana_runtime::bank::RewardInfo,
+    solana_accounts_db::stake_rewards::RewardInfo,
     solana_sdk::{clock::UnixTimestamp, pubkey::Pubkey},
     std::sync::{Arc, RwLock},
 };

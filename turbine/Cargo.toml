@@ -23,7 +23,6 @@ rand_chacha = { workspace = true }
 rayon = { workspace = true }
 rcgen = { workspace = true }
 rustls = { workspace = true }
-solana-client = { workspace = true }
 solana-entry = { workspace = true }
 solana-gossip = { workspace = true }
 solana-ledger = { workspace = true }
@@ -42,7 +41,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
-matches = { workspace = true }
+assert_matches = { workspace = true }
 solana-logger = { workspace = true }
 
 [[bench]]

@@ -2,7 +2,7 @@
 //!
 //! [rent]: https://docs.solana.com/implemented-proposals/rent
 
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {crate::clock::DEFAULT_SLOTS_PER_EPOCH, solana_sdk_macro::CloneZeroed};
 
@@ -70,11 +70,6 @@ impl Rent {
     }
 
     /// Minimum balance due for rent-exemption of a given account data size.
-    ///
-    /// Note: a stripped-down version of this calculation is used in
-    /// `calculate_split_rent_exempt_reserve` in the stake program. When this
-    /// function is updated, eg. when making rent variable, the stake program
-    /// will need to be refactored.
     pub fn minimum_balance(&self, data_len: usize) -> u64 {
         let bytes = data_len as u64;
         (((ACCOUNT_STORAGE_OVERHEAD + bytes) * self.lamports_per_byte_year) as f64

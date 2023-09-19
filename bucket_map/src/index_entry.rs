@@ -71,7 +71,7 @@ impl BucketOccupied for BucketWithHeader {
 
 /// allocated in `contents` in a BucketStorage
 #[derive(Debug)]
-pub struct IndexBucketUsingBitVecBits<T: 'static> {
+pub struct IndexBucketUsingBitVecBits<T: PartialEq + 'static> {
     /// 2 bits per entry that represent a 4 state enum tag
     pub enum_tag: BitVec,
     /// number of elements allocated
@@ -79,7 +79,7 @@ pub struct IndexBucketUsingBitVecBits<T: 'static> {
     _phantom: PhantomData<&'static T>,
 }
 
-impl<T: Copy + 'static> IndexBucketUsingBitVecBits<T> {
+impl<T: Copy + PartialEq + 'static> IndexBucketUsingBitVecBits<T> {
     /// set the 2 bits (first and second) in `enum_tag`
     fn set_bits(&mut self, ix: u64, first: bool, second: bool) {
         self.enum_tag.set(ix * 2, first);
@@ -102,7 +102,7 @@ impl<T: Copy + 'static> IndexBucketUsingBitVecBits<T> {
     }
 }
 
-impl<T: Copy + 'static> BucketOccupied for IndexBucketUsingBitVecBits<T> {
+impl<T: Copy + PartialEq + 'static> BucketOccupied for IndexBucketUsingBitVecBits<T> {
     fn occupy(&mut self, element: &mut [u8], ix: usize) {
         assert!(self.is_free(element, ix));
         self.set_enum_tag(ix as u64, OccupiedEnumTag::ZeroSlots);
@@ -140,7 +140,7 @@ impl<T: Copy + 'static> BucketOccupied for IndexBucketUsingBitVecBits<T> {
     }
 }
 
-impl<T> BucketCapacity for IndexBucketUsingBitVecBits<T> {
+impl<T: PartialEq> BucketCapacity for IndexBucketUsingBitVecBits<T> {
     fn capacity(&self) -> u64 {
         self.capacity
     }
@@ -312,7 +312,7 @@ struct PackedStorage {
     offset: B56,
 }
 
-impl<T: Copy + 'static> IndexEntryPlaceInBucket<T> {
+impl<T: Copy + PartialEq + 'static> IndexEntryPlaceInBucket<T> {
     pub(crate) fn get_slot_count_enum<'a>(
         &self,
         index_bucket: &'a BucketStorage<IndexBucket<T>>,

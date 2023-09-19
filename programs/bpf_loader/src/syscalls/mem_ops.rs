@@ -7,9 +7,10 @@ use {
 
 fn mem_op_consume(invoke_context: &mut InvokeContext, n: u64) -> Result<(), Error> {
     let compute_budget = invoke_context.get_compute_budget();
-    let cost = compute_budget
-        .mem_op_base_cost
-        .max(n.saturating_div(compute_budget.cpi_bytes_per_unit));
+    let cost = compute_budget.mem_op_base_cost.max(
+        n.checked_div(compute_budget.cpi_bytes_per_unit)
+            .unwrap_or(u64::MAX),
+    );
     consume_compute_meter(invoke_context, cost)
 }
 
@@ -196,13 +197,7 @@ fn memmove_non_contiguous(
         memory_mapping,
         reverse,
         |src_host_addr, dst_host_addr, chunk_len| {
-            unsafe {
-                std::ptr::copy(
-                    src_host_addr as *const u8,
-                    dst_host_addr as *mut u8,
-                    chunk_len,
-                )
-            };
+            unsafe { std::ptr::copy(src_host_addr, dst_host_addr as *mut u8, chunk_len) };
             Ok(0)
         },
     )
@@ -237,8 +232,8 @@ fn memcmp_non_contiguous(
         false,
         |s1_addr, s2_addr, chunk_len| {
             let res = unsafe {
-                let s1 = slice::from_raw_parts(s1_addr as *const u8, chunk_len);
-                let s2 = slice::from_raw_parts(s2_addr as *const u8, chunk_len);
+                let s1 = slice::from_raw_parts(s1_addr, chunk_len);
+                let s2 = slice::from_raw_parts(s2_addr, chunk_len);
                 // Safety:
                 // memcmp is marked unsafe since it assumes that s1 and s2 are exactly chunk_len
                 // long. The whole point of iter_memory_pair_chunks is to find same length chunks
@@ -491,7 +486,11 @@ impl<'a> DoubleEndedIterator for MemoryChunkIterator<'a> {
 #[cfg(test)]
 #[allow(clippy::indexing_slicing)]
 mod tests {
-    use {super::*, solana_rbpf::ebpf::MM_PROGRAM_START};
+    use {
+        super::*,
+        assert_matches::assert_matches,
+        solana_rbpf::{ebpf::MM_PROGRAM_START, elf::SBPFVersion},
+    };
 
     fn to_chunk_vec<'a>(
         iter: impl Iterator<Item = Result<(&'a MemoryRegion, u64, usize), Error>>,
@@ -507,7 +506,7 @@ mod tests {
             aligned_memory_mapping: false,
             ..Config::default()
         };
-        let memory_mapping = MemoryMapping::new(vec![], &config).unwrap();
+        let memory_mapping = MemoryMapping::new(vec![], &config, &SBPFVersion::V2).unwrap();
 
         let mut src_chunk_iter =
             MemoryChunkIterator::new(&memory_mapping, AccessType::Load, 0, 1).unwrap();
@@ -521,7 +520,7 @@ mod tests {
             aligned_memory_mapping: false,
             ..Config::default()
         };
-        let memory_mapping = MemoryMapping::new(vec![], &config).unwrap();
+        let memory_mapping = MemoryMapping::new(vec![], &config, &SBPFVersion::V2).unwrap();
 
         let mut src_chunk_iter =
             MemoryChunkIterator::new(&memory_mapping, AccessType::Load, u64::MAX, 1).unwrap();
@@ -538,6 +537,7 @@ mod tests {
         let memory_mapping = MemoryMapping::new(
             vec![MemoryRegion::new_readonly(&mem1, MM_PROGRAM_START)],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -545,10 +545,10 @@ mod tests {
         let mut src_chunk_iter =
             MemoryChunkIterator::new(&memory_mapping, AccessType::Load, MM_PROGRAM_START - 1, 42)
                 .unwrap();
-        assert!(matches!(
+        assert_matches!(
             src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
             EbpfError::AccessViolation(0, AccessType::Load, addr, 42, "unknown") if *addr == MM_PROGRAM_START - 1
-        ));
+        );
 
         // check oob at the upper bound. Since the memory mapping isn't empty,
         // this always happens on the second next().
@@ -556,20 +556,20 @@ mod tests {
             MemoryChunkIterator::new(&memory_mapping, AccessType::Load, MM_PROGRAM_START, 43)
                 .unwrap();
         assert!(src_chunk_iter.next().unwrap().is_ok());
-        assert!(matches!(
+        assert_matches!(
             src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
             EbpfError::AccessViolation(0, AccessType::Load, addr, 43, "program") if *addr == MM_PROGRAM_START
-        ));
+        );
 
         // check oob at the upper bound on the first next_back()
         let mut src_chunk_iter =
             MemoryChunkIterator::new(&memory_mapping, AccessType::Load, MM_PROGRAM_START, 43)
                 .unwrap()
                 .rev();
-        assert!(matches!(
+        assert_matches!(
             src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
             EbpfError::AccessViolation(0, AccessType::Load, addr, 43, "program") if *addr == MM_PROGRAM_START
-        ));
+        );
 
         // check oob at the upper bound on the 2nd next_back()
         let mut src_chunk_iter =
@@ -577,10 +577,10 @@ mod tests {
                 .unwrap()
                 .rev();
         assert!(src_chunk_iter.next().unwrap().is_ok());
-        assert!(matches!(
+        assert_matches!(
             src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
             EbpfError::AccessViolation(0, AccessType::Load, addr, 43, "unknown") if *addr == MM_PROGRAM_START - 1
-        ));
+        );
     }
 
     #[test]
@@ -593,6 +593,7 @@ mod tests {
         let memory_mapping = MemoryMapping::new(
             vec![MemoryRegion::new_readonly(&mem1, MM_PROGRAM_START)],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -647,6 +648,7 @@ mod tests {
                 MemoryRegion::new_readonly(&mem2, MM_PROGRAM_START + 8),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -689,11 +691,12 @@ mod tests {
                 MemoryRegion::new_readonly(&mem2, MM_PROGRAM_START + 8),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
         // dst is shorter than src
-        assert!(matches!(
+        assert_matches!(
             iter_memory_pair_chunks(
                 AccessType::Load,
                 MM_PROGRAM_START,
@@ -705,10 +708,10 @@ mod tests {
                 |_src, _dst, _len| Ok::<_, Error>(0),
             ).unwrap_err().downcast_ref().unwrap(),
             EbpfError::AccessViolation(0, AccessType::Load, addr, 8, "program") if *addr == MM_PROGRAM_START + 8
-        ));
+        );
 
         // src is shorter than dst
-        assert!(matches!(
+        assert_matches!(
             iter_memory_pair_chunks(
                 AccessType::Load,
                 MM_PROGRAM_START + 10,
@@ -720,7 +723,7 @@ mod tests {
                 |_src, _dst, _len| Ok::<_, Error>(0),
             ).unwrap_err().downcast_ref().unwrap(),
             EbpfError::AccessViolation(0, AccessType::Load, addr, 3, "program") if *addr == MM_PROGRAM_START + 10
-        ));
+        );
     }
 
     #[test]
@@ -738,6 +741,7 @@ mod tests {
                 MemoryRegion::new_readonly(&mem2, MM_PROGRAM_START + 8),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -762,6 +766,7 @@ mod tests {
                 MemoryRegion::new_writable(&mut mem4, MM_PROGRAM_START + 6),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -795,6 +800,7 @@ mod tests {
                 MemoryRegion::new_writable(&mut mem4, MM_PROGRAM_START + 6),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -825,6 +831,7 @@ mod tests {
                 MemoryRegion::new_readonly(&mem2, MM_PROGRAM_START + 8),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -852,6 +859,7 @@ mod tests {
                 MemoryRegion::new_writable(&mut mem4, MM_PROGRAM_START + 6),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 
@@ -881,6 +889,7 @@ mod tests {
                 MemoryRegion::new_readonly(&mem3, MM_PROGRAM_START + 9),
             ],
             &config,
+            &SBPFVersion::V2,
         )
         .unwrap();
 

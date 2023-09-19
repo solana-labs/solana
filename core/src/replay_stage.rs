@@ -2,13 +2,11 @@
 
 use {
     crate::{
-        ancestor_hashes_service::AncestorHashesReplayUpdateSender,
         banking_trace::BankingTracer,
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
             GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
         },
-        cluster_slot_state_verifier::*,
         cluster_slots_service::{cluster_slots::ClusterSlots, ClusterSlotsUpdateSender},
         commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
         consensus::{
@@ -21,9 +19,13 @@ use {
             SWITCH_FORK_THRESHOLD,
         },
         cost_update_service::CostUpdate,
-        duplicate_repair_status::AncestorDuplicateSlotsToRepair,
-        repair_service::{
-            AncestorDuplicateSlotsReceiver, DumpedSlotsSender, PopularPrunedForksReceiver,
+        repair::{
+            ancestor_hashes_service::AncestorHashesReplayUpdateSender,
+            cluster_slot_state_verifier::*,
+            duplicate_repair_status::AncestorDuplicateSlotToRepair,
+            repair_service::{
+                AncestorDuplicateSlotsReceiver, DumpedSlotsSender, PopularPrunedForksReceiver,
+            },
         },
         rewards_recorder_service::{RewardsMessage, RewardsRecorderSender},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
@@ -57,7 +59,7 @@ use {
     solana_rpc_client_api::response::SlotUpdate,
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
-        bank::{Bank, NewBankOptions},
+        bank::{bank_hash_details, Bank, NewBankOptions},
         bank_forks::{BankForks, MAX_ROOT_DISTANCE_FOR_VOTE_ONLY},
         commitment::BlockCommitmentCache,
         prioritization_fee_cache::PrioritizationFeeCache,
@@ -65,7 +67,6 @@ use {
     },
     solana_sdk::{
         clock::{BankId, Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
-        feature_set,
         genesis_config::ClusterType,
         hash::Hash,
         pubkey::Pubkey,
@@ -548,6 +549,7 @@ impl ReplayStage {
                     &bank_forks,
                     &my_pubkey,
                     &vote_account,
+                    &blockstore,
                 );
             let mut current_leader = None;
             let mut last_reset = Hash::default();
@@ -657,7 +659,7 @@ impl ReplayStage {
                     &mut duplicate_slots_tracker,
                     &gossip_duplicate_confirmed_slots,
                     &mut epoch_slots_frozen_slots,
-                    &mut progress,
+                    &progress,
                     &mut heaviest_subtree_fork_choice,
                     &bank_forks,
                     &mut duplicate_slots_to_repair,
@@ -676,7 +678,7 @@ impl ReplayStage {
                     &mut gossip_duplicate_confirmed_slots,
                     &mut epoch_slots_frozen_slots,
                     &bank_forks,
-                    &mut progress,
+                    &progress,
                     &mut heaviest_subtree_fork_choice,
                     &mut duplicate_slots_to_repair,
                     &ancestor_hashes_replay_update_sender,
@@ -727,7 +729,7 @@ impl ReplayStage {
                         &gossip_duplicate_confirmed_slots,
                         &mut epoch_slots_frozen_slots,
                         &bank_forks,
-                        &mut progress,
+                        &progress,
                         &mut heaviest_subtree_fork_choice,
                         &mut duplicate_slots_to_repair,
                         &ancestor_hashes_replay_update_sender,
@@ -1229,16 +1231,29 @@ impl ReplayStage {
         bank_forks: &RwLock<BankForks>,
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
+        blockstore: &Blockstore,
     ) -> (ProgressMap, HeaviestSubtreeForkChoice) {
-        let (root_bank, frozen_banks) = {
+        let (root_bank, frozen_banks, duplicate_slot_hashes) = {
             let bank_forks = bank_forks.read().unwrap();
+            let duplicate_slots = blockstore
+                .duplicate_slots_iterator(bank_forks.root_bank().slot())
+                .unwrap();
+            let duplicate_slot_hashes = duplicate_slots
+                .filter_map(|slot| bank_forks.bank_hash(slot).map(|hash| (slot, hash)));
             (
                 bank_forks.root_bank(),
                 bank_forks.frozen_banks().values().cloned().collect(),
+                duplicate_slot_hashes.collect::<Vec<(Slot, Hash)>>(),
             )
         };
 
-        Self::initialize_progress_and_fork_choice(&root_bank, frozen_banks, my_pubkey, vote_account)
+        Self::initialize_progress_and_fork_choice(
+            &root_bank,
+            frozen_banks,
+            my_pubkey,
+            vote_account,
+            duplicate_slot_hashes,
+        )
     }
 
     pub fn initialize_progress_and_fork_choice(
@@ -1246,6 +1261,7 @@ impl ReplayStage {
         mut frozen_banks: Vec<Arc<Bank>>,
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
+        duplicate_slot_hashes: Vec<(Slot, Hash)>,
     ) -> (ProgressMap, HeaviestSubtreeForkChoice) {
         let mut progress = ProgressMap::default();
 
@@ -1260,10 +1276,14 @@ impl ReplayStage {
             );
         }
         let root = root_bank.slot();
-        let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_frozen_banks(
+        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_frozen_banks(
             (root, root_bank.hash()),
             &frozen_banks,
         );
+
+        for slot_hash in duplicate_slot_hashes {
+            heaviest_subtree_fork_choice.mark_fork_invalid_candidate(&slot_hash);
+        }
 
         (progress, heaviest_subtree_fork_choice)
     }
@@ -1406,7 +1426,7 @@ impl ReplayStage {
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
         epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
-        progress: &mut ProgressMap,
+        progress: &ProgressMap,
         fork_choice: &mut HeaviestSubtreeForkChoice,
         bank_forks: &RwLock<BankForks>,
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
@@ -1414,46 +1434,42 @@ impl ReplayStage {
         purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
     ) {
         let root = bank_forks.read().unwrap().root();
-        for AncestorDuplicateSlotsToRepair {
-            slots_to_repair: maybe_repairable_duplicate_slots,
+        for AncestorDuplicateSlotToRepair {
+            slot_to_repair: (epoch_slots_frozen_slot, epoch_slots_frozen_hash),
             request_type,
         } in ancestor_duplicate_slots_receiver.try_iter()
         {
             warn!(
-                "{} ReplayStage notified of duplicate slots from ancestor hashes service but we observed as {}: {:?}",
-                pubkey, if request_type.is_pruned() {"pruned"} else {"dead"}, maybe_repairable_duplicate_slots,
+                "{} ReplayStage notified of duplicate slot from ancestor hashes service but we observed as {}: {:?}",
+                pubkey, if request_type.is_pruned() {"pruned"} else {"dead"}, (epoch_slots_frozen_slot, epoch_slots_frozen_hash),
             );
-            for (epoch_slots_frozen_slot, epoch_slots_frozen_hash) in
-                maybe_repairable_duplicate_slots.into_iter()
-            {
-                let epoch_slots_frozen_state = EpochSlotsFrozenState::new_from_state(
-                    epoch_slots_frozen_slot,
-                    epoch_slots_frozen_hash,
-                    gossip_duplicate_confirmed_slots,
-                    fork_choice,
-                    || progress.is_dead(epoch_slots_frozen_slot).unwrap_or(false),
-                    || {
-                        bank_forks
-                            .read()
-                            .unwrap()
-                            .get(epoch_slots_frozen_slot)
-                            .map(|b| b.hash())
-                    },
-                    request_type.is_pruned(),
-                );
-                check_slot_agrees_with_cluster(
-                    epoch_slots_frozen_slot,
-                    root,
-                    blockstore,
-                    duplicate_slots_tracker,
-                    epoch_slots_frozen_slots,
-                    fork_choice,
-                    duplicate_slots_to_repair,
-                    ancestor_hashes_replay_update_sender,
-                    purge_repair_slot_counter,
-                    SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
-                );
-            }
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new_from_state(
+                epoch_slots_frozen_slot,
+                epoch_slots_frozen_hash,
+                gossip_duplicate_confirmed_slots,
+                fork_choice,
+                || progress.is_dead(epoch_slots_frozen_slot).unwrap_or(false),
+                || {
+                    bank_forks
+                        .read()
+                        .unwrap()
+                        .get(epoch_slots_frozen_slot)
+                        .map(|b| b.hash())
+                },
+                request_type.is_pruned(),
+            );
+            check_slot_agrees_with_cluster(
+                epoch_slots_frozen_slot,
+                root,
+                blockstore,
+                duplicate_slots_tracker,
+                epoch_slots_frozen_slots,
+                fork_choice,
+                duplicate_slots_to_repair,
+                ancestor_hashes_replay_update_sender,
+                purge_repair_slot_counter,
+                SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
+            );
         }
     }
 
@@ -1502,6 +1518,7 @@ impl ReplayStage {
                     let bank = w_bank_forks
                         .remove(*slot)
                         .expect("BankForks should not have been purged yet");
+                    let _ = bank_hash_details::write_bank_hash_details_file(&bank);
                     ((*slot, bank.bank_id()), bank)
                 })
                 .unzip()
@@ -1522,6 +1539,13 @@ impl ReplayStage {
             // TODO: What about RPC queries that had already cloned the Bank for this slot
             // and are looking up the signature for this slot?
             root_bank.clear_slot_signatures(slot);
+
+            // Remove cached entries of the programs that were deployed in this slot.
+            root_bank
+                .loaded_programs_cache
+                .write()
+                .unwrap()
+                .prune_by_deployment_slot(slot);
 
             if let Some(bank_hash) = blockstore.get_bank_hash(slot) {
                 // If a descendant was successfully replayed and chained from a duplicate it must
@@ -1642,7 +1666,7 @@ impl ReplayStage {
         gossip_duplicate_confirmed_slots: &mut GossipDuplicateConfirmedSlots,
         epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
         bank_forks: &RwLock<BankForks>,
-        progress: &mut ProgressMap,
+        progress: &ProgressMap,
         fork_choice: &mut HeaviestSubtreeForkChoice,
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
@@ -1710,7 +1734,7 @@ impl ReplayStage {
         gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
         epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
         bank_forks: &RwLock<BankForks>,
-        progress: &mut ProgressMap,
+        progress: &ProgressMap,
         fork_choice: &mut HeaviestSubtreeForkChoice,
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
@@ -1951,7 +1975,7 @@ impl ReplayStage {
             };
 
             let tpu_bank = Self::new_bank_from_parent_with_notify(
-                &parent,
+                parent.clone(),
                 poh_slot,
                 root_slot,
                 my_pubkey,
@@ -2081,6 +2105,30 @@ impl ReplayStage {
             purge_repair_slot_counter,
             SlotStateUpdate::Dead(dead_state),
         );
+
+        // If we previously marked this slot as duplicate in blockstore, let the state machine know
+        if !duplicate_slots_tracker.contains(&slot) && blockstore.get_duplicate_slot(slot).is_some()
+        {
+            let duplicate_state = DuplicateState::new_from_state(
+                slot,
+                gossip_duplicate_confirmed_slots,
+                heaviest_subtree_fork_choice,
+                || true,
+                || None,
+            );
+            check_slot_agrees_with_cluster(
+                slot,
+                root,
+                blockstore,
+                duplicate_slots_tracker,
+                epoch_slots_frozen_slots,
+                heaviest_subtree_fork_choice,
+                duplicate_slots_to_repair,
+                ancestor_hashes_replay_update_sender,
+                purge_repair_slot_counter,
+                SlotStateUpdate::Duplicate(duplicate_state),
+            );
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2093,7 +2141,7 @@ impl ReplayStage {
         vote_account_pubkey: &Pubkey,
         identity_keypair: &Keypair,
         authorized_voter_keypairs: &[Arc<Keypair>],
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         lockouts_sender: &Sender<CommitmentAggregationData>,
         accounts_background_request_sender: &AbsRequestSender,
@@ -2117,7 +2165,7 @@ impl ReplayStage {
             datapoint_info!("replay_stage-voted_empty_bank", ("slot", bank.slot(), i64));
         }
         trace!("handle votable bank {}", bank.slot());
-        let new_root = tower.record_bank_vote(bank, vote_account_pubkey);
+        let new_root = tower.record_bank_vote(bank);
 
         if let Some(new_root) = new_root {
             // get the root bank before squash
@@ -2274,17 +2322,14 @@ impl ReplayStage {
             return None;
         }
 
-        let authorized_voter_pubkey =
-            if let Some(authorized_voter_pubkey) = vote_state.get_authorized_voter(bank.epoch()) {
-                authorized_voter_pubkey
-            } else {
-                warn!(
-                    "Vote account {} has no authorized voter for epoch {}.  Unable to vote",
-                    vote_account_pubkey,
-                    bank.epoch()
-                );
-                return None;
-            };
+        let Some(authorized_voter_pubkey) = vote_state.get_authorized_voter(bank.epoch()) else {
+            warn!(
+                "Vote account {} has no authorized voter for epoch {}.  Unable to vote",
+                vote_account_pubkey,
+                bank.epoch()
+            );
+            return None;
+        };
 
         let authorized_voter_keypair = match authorized_voter_keypairs
             .iter()
@@ -2300,14 +2345,11 @@ impl ReplayStage {
 
         // Send our last few votes along with the new one
         // Compact the vote state update before sending
-        let should_compact = bank
-            .feature_set
-            .is_active(&feature_set::compact_vote_state_updates::id());
-        let vote = match (should_compact, vote) {
-            (true, VoteTransaction::VoteStateUpdate(vote_state_update)) => {
+        let vote = match vote {
+            VoteTransaction::VoteStateUpdate(vote_state_update) => {
                 VoteTransaction::CompactVoteStateUpdate(vote_state_update)
             }
-            (_, vote) => vote,
+            vote => vote,
         };
         let vote_ix = switch_fork_decision
             .to_vote_instruction(
@@ -2371,7 +2413,9 @@ impl ReplayStage {
 
         // If we are a non voting validator or have an incorrect setup preventing us from
         // generating vote txs, no need to refresh
-        let Some(last_vote_tx_blockhash) = tower.last_vote_tx_blockhash() else { return };
+        let Some(last_vote_tx_blockhash) = tower.last_vote_tx_blockhash() else {
+            return;
+        };
 
         if my_latest_landed_vote >= last_voted_slot
             || heaviest_bank_on_same_fork
@@ -2565,7 +2609,7 @@ impl ReplayStage {
                         return replay_result;
                     }
 
-                    let bank = &bank_forks.read().unwrap().get(bank_slot).unwrap();
+                    let bank = bank_forks.read().unwrap().get(bank_slot).unwrap();
                     let parent_slot = bank.parent_slot();
                     let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
                         let stats = progress_lock
@@ -2577,11 +2621,11 @@ impl ReplayStage {
                             stats.num_dropped_blocks_on_fork + new_dropped_blocks;
                         (num_blocks_on_fork, num_dropped_blocks_on_fork)
                     };
-                    let prev_leader_slot = progress_lock.get_bank_prev_leader_slot(bank);
+                    let prev_leader_slot = progress_lock.get_bank_prev_leader_slot(&bank);
 
                     let bank_progress = progress_lock.entry(bank.slot()).or_insert_with(|| {
                         ForkProgress::new_from_bank(
-                            bank,
+                            &bank,
                             my_pubkey,
                             &vote_account.clone(),
                             prev_leader_slot,
@@ -2598,7 +2642,7 @@ impl ReplayStage {
                         let mut replay_blockstore_time =
                             Measure::start("replay_blockstore_into_bank");
                         let blockstore_result = Self::replay_blockstore_into_bank(
-                            bank,
+                            &bank,
                             blockstore,
                             &replay_stats,
                             &replay_progress,
@@ -2653,9 +2697,9 @@ impl ReplayStage {
             debug!("bank_slot {:?} is marked dead", bank_slot);
             replay_result.is_slot_dead = true;
         } else {
-            let bank = &bank_forks.read().unwrap().get(bank_slot).unwrap();
+            let bank = bank_forks.read().unwrap().get(bank_slot).unwrap();
             let parent_slot = bank.parent_slot();
-            let prev_leader_slot = progress.get_bank_prev_leader_slot(bank);
+            let prev_leader_slot = progress.get_bank_prev_leader_slot(&bank);
             let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
                 let stats = progress
                     .get(&parent_slot)
@@ -2669,7 +2713,7 @@ impl ReplayStage {
 
             let bank_progress = progress.entry(bank.slot()).or_insert_with(|| {
                 ForkProgress::new_from_bank(
-                    bank,
+                    &bank,
                     my_pubkey,
                     &vote_account.clone(),
                     prev_leader_slot,
@@ -2681,7 +2725,7 @@ impl ReplayStage {
             if bank.collector_id() != my_pubkey {
                 let mut replay_blockstore_time = Measure::start("replay_blockstore_into_bank");
                 let blockstore_result = Self::replay_blockstore_into_bank(
-                    bank,
+                    &bank,
                     blockstore,
                     &bank_progress.replay_stats,
                     &bank_progress.replay_progress,
@@ -2722,7 +2766,6 @@ impl ReplayStage {
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         replay_result_vec: &[ReplaySlotFromBlockstore],
-        prioritization_fee_cache: &PrioritizationFeeCache,
         purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
     ) -> bool {
         // TODO: See if processing of blockstore replay results and bank completion can be made thread safe.
@@ -2798,9 +2841,6 @@ impl ReplayStage {
                         warn!("cost_update_sender failed sending bank stats: {:?}", err)
                     });
 
-                // finalize block's minimum prioritization fee cache for this bank
-                prioritization_fee_cache.finalize_priority_fee(bank.slot());
-
                 assert_ne!(bank.hash(), Hash::default());
                 // Needs to be updated before `check_slot_agrees_with_cluster()` so that
                 // any updates in `check_slot_agrees_with_cluster()` on fork choice take
@@ -2830,6 +2870,30 @@ impl ReplayStage {
                     purge_repair_slot_counter,
                     SlotStateUpdate::BankFrozen(bank_frozen_state),
                 );
+                // If we previously marked this slot as duplicate in blockstore, let the state machine know
+                if !duplicate_slots_tracker.contains(&bank.slot())
+                    && blockstore.get_duplicate_slot(bank.slot()).is_some()
+                {
+                    let duplicate_state = DuplicateState::new_from_state(
+                        bank.slot(),
+                        gossip_duplicate_confirmed_slots,
+                        heaviest_subtree_fork_choice,
+                        || false,
+                        || Some(bank.hash()),
+                    );
+                    check_slot_agrees_with_cluster(
+                        bank.slot(),
+                        bank_forks.read().unwrap().root(),
+                        blockstore,
+                        duplicate_slots_tracker,
+                        epoch_slots_frozen_slots,
+                        heaviest_subtree_fork_choice,
+                        duplicate_slots_to_repair,
+                        ancestor_hashes_replay_update_sender,
+                        purge_repair_slot_counter,
+                        SlotStateUpdate::Duplicate(duplicate_state),
+                    );
+                }
                 if let Some(sender) = bank_notification_sender {
                     sender
                         .sender
@@ -2988,7 +3052,6 @@ impl ReplayStage {
                 ancestor_hashes_replay_update_sender,
                 block_metadata_notifier,
                 &replay_result_vec,
-                prioritization_fee_cache,
                 purge_repair_slot_counter,
             )
         } else {
@@ -3024,10 +3087,7 @@ impl ReplayStage {
                 if !is_computed {
                     // Check if our tower is behind, if so (and the feature migration flag is in use)
                     // overwrite with the newer bank.
-                    if let (true, Some(vote_account)) = (
-                        Tower::is_direct_vote_state_update_enabled(bank),
-                        bank.get_vote_account(my_vote_pubkey),
-                    ) {
+                    if let Some(vote_account) = bank.get_vote_account(my_vote_pubkey) {
                         if let Ok(mut bank_vote_state) = vote_account.vote_state().cloned() {
                             if bank_vote_state.last_voted_slot()
                                 > tower.vote_state.last_voted_slot()
@@ -3081,6 +3141,37 @@ impl ReplayStage {
 
                                 tower.vote_state.root_slot = bank_vote_state.root_slot;
                                 tower.vote_state.votes = bank_vote_state.votes;
+
+                                let last_voted_slot = tower.vote_state.last_voted_slot().unwrap_or(
+                                    // If our local root is higher than the highest slot in `bank_vote_state` due to
+                                    // supermajority roots, then it's expected that the vote state will be empty.
+                                    // In this case we use the root as our last vote. This root cannot be None, because
+                                    // `tower.vote_state.last_voted_slot()` is None only if `tower.vote_state.root_slot`
+                                    // is Some.
+                                    tower
+                                        .vote_state
+                                        .root_slot
+                                        .expect("root_slot cannot be None here"),
+                                );
+                                // This is safe because `last_voted_slot` is now equal to
+                                // `bank_vote_state.last_voted_slot()` or `local_root`.
+                                // Since this vote state is contained in `bank`, which we have frozen,
+                                // we must have frozen all slots contained in `bank_vote_state`,
+                                // and by definition we must have frozen `local_root`.
+                                //
+                                // If `bank` is a duplicate, since we are able to replay it successfully, any slots
+                                // in its vote state must also be part of the duplicate fork, and thus present in our
+                                // progress map.
+                                //
+                                // Finally if both `bank` and `bank_vote_state.last_voted_slot()` are duplicate,
+                                // we must have the compatible versions of both duplicates in order to replay `bank`
+                                // successfully, so we are once again guaranteed that `bank_vote_state.last_voted_slot()`
+                                // is present in progress map.
+                                tower.update_last_vote_from_vote_state(
+                                    progress
+                                        .get_hash(last_voted_slot)
+                                        .expect("Must exist for us to have frozen descendant"),
+                                );
                             }
                         }
                     }
@@ -3172,7 +3263,7 @@ impl ReplayStage {
         }
 
         // Otherwise we have to check the votes for confirmation
-        let mut propagated_stats = progress
+        let propagated_stats = progress
             .get_propagated_stats_mut(slot)
             .unwrap_or_else(|| panic!("slot={slot} must exist in ProgressMap"));
 
@@ -3207,9 +3298,9 @@ impl ReplayStage {
     }
 
     fn select_forks_failed_switch_threshold(
-        reset_bank: Option<&Arc<Bank>>,
+        reset_bank: Option<&Bank>,
         progress: &ProgressMap,
-        tower: &mut Tower,
+        tower: &Tower,
         heaviest_bank_slot: Slot,
         failure_reasons: &mut Vec<HeaviestForkFailures>,
         switch_proof_stake: u64,
@@ -3352,7 +3443,7 @@ impl ReplayStage {
                 SwitchForkDecision::FailedSwitchThreshold(switch_proof_stake, total_stake) => {
                     let reset_bank = heaviest_bank_on_same_voted_fork;
                     let final_switch_fork_decision = Self::select_forks_failed_switch_threshold(
-                        reset_bank,
+                        reset_bank.map(|bank| bank.as_ref()),
                         progress,
                         tower,
                         heaviest_bank.slot(),
@@ -3792,15 +3883,14 @@ impl ReplayStage {
         for (parent_slot, children) in next_slots {
             let parent_bank = frozen_banks
                 .get(&parent_slot)
-                .expect("missing parent in bank forks")
-                .clone();
+                .expect("missing parent in bank forks");
             for child_slot in children {
                 if forks.get(child_slot).is_some() || new_banks.get(&child_slot).is_some() {
                     trace!("child already active or frozen {}", child_slot);
                     continue;
                 }
                 let leader = leader_schedule_cache
-                    .slot_leader_at(child_slot, Some(&parent_bank))
+                    .slot_leader_at(child_slot, Some(parent_bank))
                     .unwrap();
                 info!(
                     "new fork:{} parent:{} root:{}",
@@ -3809,7 +3899,7 @@ impl ReplayStage {
                     forks.root()
                 );
                 let child_bank = Self::new_bank_from_parent_with_notify(
-                    &parent_bank,
+                    parent_bank.clone(),
                     child_slot,
                     forks.root(),
                     &leader,
@@ -3856,7 +3946,7 @@ impl ReplayStage {
     }
 
     fn new_bank_from_parent_with_notify(
-        parent: &Arc<Bank>,
+        parent: Arc<Bank>,
         slot: u64,
         root_slot: u64,
         leader: &Pubkey,
@@ -4101,7 +4191,7 @@ pub(crate) mod tests {
         // Insert a non-root bank so that the propagation logic will update this
         // bank
         let bank1 = Bank::new_from_parent(
-            &bank_forks.read().unwrap().get(0).unwrap(),
+            bank_forks.read().unwrap().get(0).unwrap(),
             &leader_schedule_cache.slot_leader_at(1, None).unwrap(),
             1,
         );
@@ -4211,7 +4301,7 @@ pub(crate) mod tests {
 
         let root = 3;
         let root_bank = Bank::new_from_parent(
-            &bank_forks.read().unwrap().get(0).unwrap(),
+            bank_forks.read().unwrap().get(0).unwrap(),
             &Pubkey::default(),
             root,
         );
@@ -4297,20 +4387,20 @@ pub(crate) mod tests {
         let confirmed_root = 1;
         let fork = 2;
         let bank1 = Bank::new_from_parent(
-            &bank_forks.read().unwrap().get(0).unwrap(),
+            bank_forks.read().unwrap().get(0).unwrap(),
             &Pubkey::default(),
             confirmed_root,
         );
         bank_forks.write().unwrap().insert(bank1);
         let bank2 = Bank::new_from_parent(
-            &bank_forks.read().unwrap().get(confirmed_root).unwrap(),
+            bank_forks.read().unwrap().get(confirmed_root).unwrap(),
             &Pubkey::default(),
             fork,
         );
         bank_forks.write().unwrap().insert(bank2);
         let root = 3;
         let root_bank = Bank::new_from_parent(
-            &bank_forks.read().unwrap().get(confirmed_root).unwrap(),
+            bank_forks.read().unwrap().get(confirmed_root).unwrap(),
             &Pubkey::default(),
             root,
         );
@@ -4602,7 +4692,7 @@ pub(crate) mod tests {
             let bank0 = bank_forks.read().unwrap().get(0).unwrap();
             assert!(bank0.is_frozen());
             assert_eq!(bank0.tick_height(), bank0.max_tick_height());
-            let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+            let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
             bank_forks.write().unwrap().insert(bank1);
             let bank1 = bank_forks.read().unwrap().get(1).unwrap();
             let bank1_progress = progress
@@ -4673,7 +4763,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_replay_commitment_cache() {
-        fn leader_vote(vote_slot: Slot, bank: &Arc<Bank>, pubkey: &Pubkey) {
+        fn leader_vote(vote_slot: Slot, bank: &Bank, pubkey: &Pubkey) {
             let mut leader_vote_account = bank.get_account(pubkey).unwrap();
             let mut vote_state = vote_state::from(&leader_vote_account).unwrap();
             vote_state::process_slot_vote_unchecked(&mut vote_state, vote_slot);
@@ -4729,7 +4819,8 @@ pub(crate) mod tests {
 
         for i in 1..=3 {
             let prev_bank = bank_forks.read().unwrap().get(i - 1).unwrap();
-            let bank = Bank::new_from_parent(&prev_bank, &Pubkey::default(), prev_bank.slot() + 1);
+            let slot = prev_bank.slot() + 1;
+            let bank = Bank::new_from_parent(prev_bank, &Pubkey::default(), slot);
             let _res = bank.transfer(
                 10,
                 &genesis_config_info.mint_keypair,
@@ -4824,7 +4915,7 @@ pub(crate) mod tests {
                 )
                 .unwrap();
 
-            let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+            let bank1 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
             let slot = bank1.slot();
 
             let (entries, test_signatures) = create_test_transaction_entries(
@@ -4887,7 +4978,7 @@ pub(crate) mod tests {
         );
 
         let bank_forks = RwLock::new(bank_forks);
-        let bank1 = Bank::new_from_parent(&bank0, &my_node_pubkey, 1);
+        let bank1 = Bank::new_from_parent(bank0.clone(), &my_node_pubkey, 1);
         bank1.process_transaction(&vote_tx).unwrap();
         bank1.freeze();
 
@@ -5337,9 +5428,9 @@ pub(crate) mod tests {
             vote_simulator::initialize_state(&keypairs, stake);
 
         let bank0 = bank_forks.get(0).unwrap();
-        bank_forks.insert(Bank::new_from_parent(&bank0, &Pubkey::default(), 9));
+        bank_forks.insert(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 9));
         let bank9 = bank_forks.get(9).unwrap();
-        bank_forks.insert(Bank::new_from_parent(&bank9, &Pubkey::default(), 10));
+        bank_forks.insert(Bank::new_from_parent(bank9, &Pubkey::default(), 10));
         bank_forks.set_root(9, &AbsRequestSender::default(), None);
         let total_epoch_stake = bank0.total_epoch_stake();
 
@@ -5439,7 +5530,7 @@ pub(crate) mod tests {
         for i in 1..=10 {
             let parent_bank = bank_forks.get(i - 1).unwrap().clone();
             let prev_leader_slot = ((i - 1) / 2) * 2;
-            bank_forks.insert(Bank::new_from_parent(&parent_bank, &Pubkey::default(), i));
+            bank_forks.insert(Bank::new_from_parent(parent_bank, &Pubkey::default(), i));
             progress_map.insert(
                 i,
                 ForkProgress::new(
@@ -5520,7 +5611,7 @@ pub(crate) mod tests {
         for i in 1..=10 {
             let parent_bank = bank_forks.get(i - 1).unwrap().clone();
             let prev_leader_slot = i - 1;
-            bank_forks.insert(Bank::new_from_parent(&parent_bank, &Pubkey::default(), i));
+            bank_forks.insert(Bank::new_from_parent(parent_bank, &Pubkey::default(), i));
             let mut fork_progress = ForkProgress::new(
                 Hash::default(),
                 Some(prev_leader_slot),
@@ -5662,10 +5753,10 @@ pub(crate) mod tests {
         // which implies confirmation
         let bank0 = Bank::new_for_tests(&genesis_config::create_genesis_config(10000).0);
         let parent_slot_bank =
-            Bank::new_from_parent(&Arc::new(bank0), &Pubkey::default(), parent_slot);
+            Bank::new_from_parent(Arc::new(bank0), &Pubkey::default(), parent_slot);
         let mut bank_forks = BankForks::new(parent_slot_bank);
         let bank5 =
-            Bank::new_from_parent(&bank_forks.get(parent_slot).unwrap(), &Pubkey::default(), 5);
+            Bank::new_from_parent(bank_forks.get(parent_slot).unwrap(), &Pubkey::default(), 5);
         bank_forks.insert(bank5);
 
         // Should purge only `previous_leader_slot` from the progress map
@@ -5776,7 +5867,7 @@ pub(crate) mod tests {
         // Create bank 7
         let root_bank = bank_forks.read().unwrap().root_bank();
         let bank7 = Bank::new_from_parent(
-            &bank_forks.read().unwrap().get(6).unwrap(),
+            bank_forks.read().unwrap().get(6).unwrap(),
             &Pubkey::default(),
             7,
         );
@@ -5939,7 +6030,7 @@ pub(crate) mod tests {
         // Create bank 7 and insert to blockstore and bank forks
         let root_bank = bank_forks.read().unwrap().root_bank();
         let bank7 = Bank::new_from_parent(
-            &bank_forks.read().unwrap().get(6).unwrap(),
+            bank_forks.read().unwrap().get(6).unwrap(),
             &Pubkey::default(),
             7,
         );
@@ -6260,15 +6351,13 @@ pub(crate) mod tests {
             &mut tower,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            None,
         );
         assert_eq!(vote_fork.unwrap(), 4);
         assert_eq!(reset_fork.unwrap(), 4);
 
         // Record the vote for 5 which is not on the heaviest fork.
-        tower.record_bank_vote(
-            &bank_forks.read().unwrap().get(5).unwrap(),
-            &Pubkey::default(),
-        );
+        tower.record_bank_vote(&bank_forks.read().unwrap().get(5).unwrap());
 
         // 4 should be the heaviest slot, but should not be votable
         // because of lockout. 5 is the heaviest slot on the same fork as the last vote.
@@ -6278,6 +6367,7 @@ pub(crate) mod tests {
             &mut tower,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            None,
         );
         assert!(vote_fork.is_none());
         assert_eq!(reset_fork, Some(5));
@@ -6293,7 +6383,7 @@ pub(crate) mod tests {
         let duplicate_state = DuplicateState::new_from_state(
             5,
             &gossip_duplicate_confirmed_slots,
-            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &vote_simulator.heaviest_subtree_fork_choice,
             || progress.is_dead(5).unwrap_or(false),
             || Some(bank5_hash),
         );
@@ -6320,6 +6410,7 @@ pub(crate) mod tests {
             &mut tower,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            None,
         );
         assert!(vote_fork.is_none());
         assert!(reset_fork.is_none());
@@ -6355,6 +6446,7 @@ pub(crate) mod tests {
             &mut tower,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            None,
         );
         // Should now pick 5 as the heaviest fork from last vote again.
         assert!(vote_fork.is_none());
@@ -6406,15 +6498,13 @@ pub(crate) mod tests {
             &mut tower,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            None,
         );
         assert_eq!(vote_fork.unwrap(), 4);
         assert_eq!(reset_fork.unwrap(), 4);
 
         // Record the vote for 4
-        tower.record_bank_vote(
-            &bank_forks.read().unwrap().get(4).unwrap(),
-            &Pubkey::default(),
-        );
+        tower.record_bank_vote(&bank_forks.read().unwrap().get(4).unwrap());
 
         // Mark 4 as duplicate, 3 should be the heaviest slot, but should not be votable
         // because of lockout
@@ -6427,7 +6517,7 @@ pub(crate) mod tests {
         let duplicate_state = DuplicateState::new_from_state(
             4,
             &gossip_duplicate_confirmed_slots,
-            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &vote_simulator.heaviest_subtree_fork_choice,
             || progress.is_dead(4).unwrap_or(false),
             || Some(bank4_hash),
         );
@@ -6452,6 +6542,7 @@ pub(crate) mod tests {
             &mut tower,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            None,
         );
         assert!(vote_fork.is_none());
         assert_eq!(reset_fork, Some(3));
@@ -6463,7 +6554,7 @@ pub(crate) mod tests {
         let duplicate_state = DuplicateState::new_from_state(
             2,
             &gossip_duplicate_confirmed_slots,
-            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &vote_simulator.heaviest_subtree_fork_choice,
             || progress.is_dead(2).unwrap_or(false),
             || Some(bank2_hash),
         );
@@ -6486,6 +6577,7 @@ pub(crate) mod tests {
             &mut tower,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            None,
         );
 
         // Should now pick the next heaviest fork that is not a descendant of 2, which is 6.
@@ -6525,6 +6617,7 @@ pub(crate) mod tests {
             &mut tower,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            None,
         );
         // Should now pick the heaviest fork 4 again, but lockouts apply so fork 4
         // is not votable, which avoids voting for 4 again.
@@ -6645,10 +6738,7 @@ pub(crate) mod tests {
             ..
         } = vote_simulator;
 
-        tower.record_bank_vote(
-            &bank_forks.read().unwrap().get(first_vote).unwrap(),
-            &Pubkey::default(),
-        );
+        tower.record_bank_vote(&bank_forks.read().unwrap().get(first_vote).unwrap());
 
         // Simulate another version of slot 2 was duplicate confirmed
         let our_bank2_hash = bank_forks.read().unwrap().bank_hash(2).unwrap();
@@ -7038,9 +7128,9 @@ pub(crate) mod tests {
         let (voting_sender, voting_receiver) = unbounded();
 
         // Simulate landing a vote for slot 0 landing in slot 1
-        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+        let bank1 = Arc::new(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1));
         bank1.fill_bank_with_ticks_for_tests();
-        tower.record_bank_vote(&bank0, &my_vote_pubkey);
+        tower.record_bank_vote(&bank0);
         ReplayStage::push_vote(
             &bank0,
             &my_vote_pubkey,
@@ -7079,7 +7169,7 @@ pub(crate) mod tests {
 
         // Trying to refresh the vote for bank 0 in bank 1 or bank 2 won't succeed because
         // the last vote has landed already
-        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 2));
+        let bank2 = Arc::new(Bank::new_from_parent(bank1.clone(), &Pubkey::default(), 2));
         bank2.fill_bank_with_ticks_for_tests();
         bank2.freeze();
         for refresh_bank in &[&bank1, &bank2] {
@@ -7110,7 +7200,7 @@ pub(crate) mod tests {
 
         // Simulate submitting a new vote for bank 1 to the network, but the vote
         // not landing
-        tower.record_bank_vote(&bank1, &my_vote_pubkey);
+        tower.record_bank_vote(&bank1);
         ReplayStage::push_vote(
             &bank1,
             &my_vote_pubkey,
@@ -7172,11 +7262,9 @@ pub(crate) mod tests {
         let expired_bank = {
             let mut parent_bank = bank2.clone();
             for _ in 0..MAX_PROCESSING_AGE {
-                parent_bank = Arc::new(Bank::new_from_parent(
-                    &parent_bank,
-                    &Pubkey::default(),
-                    parent_bank.slot() + 1,
-                ));
+                let slot = parent_bank.slot() + 1;
+                parent_bank =
+                    Arc::new(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot));
                 parent_bank.fill_bank_with_ticks_for_tests();
                 parent_bank.freeze();
             }
@@ -7230,10 +7318,11 @@ pub(crate) mod tests {
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
 
         // Processing the vote transaction should be valid
+        let expired_bank_child_slot = expired_bank.slot() + 1;
         let expired_bank_child = Arc::new(Bank::new_from_parent(
-            &expired_bank,
+            expired_bank.clone(),
             &Pubkey::default(),
-            expired_bank.slot() + 1,
+            expired_bank_child_slot,
         ));
         expired_bank_child.process_transaction(vote_tx).unwrap();
         let vote_account = expired_bank_child
@@ -7251,7 +7340,7 @@ pub(crate) mod tests {
         // 2) The latest refresh vote transaction's recent blockhash (the sibling's hash) doesn't exist
         // This will still not refresh because `MAX_VOTE_REFRESH_INTERVAL_MILLIS` has not expired yet
         let expired_bank_sibling = Arc::new(Bank::new_from_parent(
-            &bank2,
+            bank2,
             &Pubkey::default(),
             expired_bank_child.slot() + 1,
         ));
@@ -7288,7 +7377,7 @@ pub(crate) mod tests {
 
     #[allow(clippy::too_many_arguments)]
     fn send_vote_in_new_bank(
-        parent_bank: &Arc<Bank>,
+        parent_bank: Arc<Bank>,
         my_slot: Slot,
         my_vote_keypair: &[Arc<Keypair>],
         tower: &mut Tower,
@@ -7306,9 +7395,9 @@ pub(crate) mod tests {
         progress: &mut ProgressMap,
     ) -> Arc<Bank> {
         let my_vote_pubkey = &my_vote_keypair[0].pubkey();
-        tower.record_bank_vote(parent_bank, my_vote_pubkey);
+        tower.record_bank_vote(&parent_bank);
         ReplayStage::push_vote(
-            parent_bank,
+            &parent_bank,
             my_vote_pubkey,
             identity_keypair,
             my_vote_keypair,
@@ -7399,7 +7488,8 @@ pub(crate) mod tests {
         // Add a new fork starting from 0 with bigger slot number, we assume it has a bigger
         // weight, but we cannot switch because of lockout.
         let other_fork_slot = 1;
-        let other_fork_bank = Bank::new_from_parent(&bank0, &Pubkey::default(), other_fork_slot);
+        let other_fork_bank =
+            Bank::new_from_parent(bank0.clone(), &Pubkey::default(), other_fork_slot);
         other_fork_bank.fill_bank_with_ticks_for_tests();
         other_fork_bank.freeze();
         progress.entry(other_fork_slot).or_insert_with(|| {
@@ -7418,7 +7508,7 @@ pub(crate) mod tests {
         let mut cursor = Cursor::default();
 
         let mut new_bank = send_vote_in_new_bank(
-            &bank0,
+            bank0,
             2,
             &my_vote_keypair,
             &mut tower,
@@ -7436,7 +7526,7 @@ pub(crate) mod tests {
             &mut progress,
         );
         new_bank = send_vote_in_new_bank(
-            &new_bank,
+            new_bank.clone(),
             new_bank.slot() + 1,
             &my_vote_keypair,
             &mut tower,
@@ -7458,7 +7548,7 @@ pub(crate) mod tests {
         let last_voted_slot = tower.last_voted_slot().unwrap();
         while new_bank.is_in_slot_hashes_history(&last_voted_slot) {
             let new_slot = new_bank.slot() + 1;
-            let bank = Bank::new_from_parent(&new_bank, &Pubkey::default(), new_slot);
+            let bank = Bank::new_from_parent(new_bank, &Pubkey::default(), new_slot);
             bank.fill_bank_with_ticks_for_tests();
             bank.freeze();
             progress.entry(new_slot).or_insert_with(|| {
@@ -7583,7 +7673,7 @@ pub(crate) mod tests {
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
 
         let bank1 = Bank::new_from_parent(
-            &bank_forks.read().unwrap().get(0).unwrap(),
+            bank_forks.read().unwrap().get(0).unwrap(),
             &leader_schedule_cache.slot_leader_at(1, None).unwrap(),
             1,
         );
@@ -7764,7 +7854,7 @@ pub(crate) mod tests {
         let mut prev_index = 0;
         for i in (1..10).chain(11..15) {
             let bank = Bank::new_from_parent(
-                &bank_forks.read().unwrap().get(prev_index).unwrap(),
+                bank_forks.read().unwrap().get(prev_index).unwrap(),
                 &leader_schedule_cache.slot_leader_at(i, None).unwrap(),
                 i,
             );
@@ -7876,6 +7966,7 @@ pub(crate) mod tests {
         tower: &mut Tower,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
+        my_vote_pubkey: Option<Pubkey>,
     ) -> (Option<Slot>, Option<Slot>) {
         let mut frozen_banks: Vec<_> = bank_forks
             .read()
@@ -7887,7 +7978,7 @@ pub(crate) mod tests {
         let ancestors = &bank_forks.read().unwrap().ancestors();
         let descendants = &bank_forks.read().unwrap().descendants();
         ReplayStage::compute_bank_stats(
-            &Pubkey::default(),
+            &my_vote_pubkey.unwrap_or_default(),
             &bank_forks.read().unwrap().ancestors(),
             &mut frozen_banks,
             tower,
@@ -7983,5 +8074,71 @@ pub(crate) mod tests {
         assert!(in_vote_only_mode.load(Ordering::Relaxed));
         ReplayStage::check_for_vote_only_mode(10, 0, &in_vote_only_mode, &bank_forks);
         assert!(!in_vote_only_mode.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn test_tower_sync_from_bank() {
+        solana_logger::setup_with_default(
+            "error,solana_core::replay_stage=info,solana_core::consensus=info",
+        );
+        /*
+            Fork structure:
+
+                 slot 0
+                   |
+                 slot 1
+                 /    \
+            slot 2    |
+               |    slot 3
+            slot 4    |
+                    slot 5
+                      |
+                    slot 6
+
+            We had some point voted 0 - 6, while the rest of the network voted 0 - 4.
+            We are sitting with an oudated tower that has voted until 1. We see that 2 is the heaviest slot,
+            however in the past we have voted up to 6. We must acknowledge the vote state present at 6,
+            adopt it as our own and *not* vote on 2 or 4, to respect slashing rules.
+        */
+
+        let generate_votes = |pubkeys: Vec<Pubkey>| {
+            pubkeys
+                .into_iter()
+                .zip(iter::once(vec![0, 1, 3, 5, 6]).chain(iter::repeat(vec![0, 1, 2, 4]).take(2)))
+                .collect()
+        };
+        let (mut vote_simulator, _blockstore) =
+            setup_default_forks(3, Some(Box::new(generate_votes)));
+        let (bank_forks, mut progress) = (vote_simulator.bank_forks, vote_simulator.progress);
+        let bank_hash = |slot| bank_forks.read().unwrap().bank_hash(slot).unwrap();
+        let my_vote_pubkey = vote_simulator.vote_pubkeys[0];
+        let mut tower = Tower::default();
+        tower.node_pubkey = vote_simulator.node_pubkeys[0];
+        tower.record_vote(0, bank_hash(0));
+        tower.record_vote(1, bank_hash(1));
+
+        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+            &bank_forks,
+            &mut progress,
+            &mut tower,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            Some(my_vote_pubkey),
+        );
+
+        assert_eq!(vote_fork, None);
+        assert_eq!(reset_fork, Some(6));
+
+        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+            &bank_forks,
+            &mut progress,
+            &mut tower,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            Some(my_vote_pubkey),
+        );
+
+        assert_eq!(vote_fork, None);
+        assert_eq!(reset_fork, Some(6));
     }
 }

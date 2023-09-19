@@ -3,8 +3,8 @@ use {
         leader_slot_timing_metrics::{LeaderExecuteAndCommitTimings, LeaderSlotTimingMetrics},
         unprocessed_transaction_storage::InsertPacketBatchSummary,
     },
+    solana_accounts_db::transaction_error_metrics::*,
     solana_poh::poh_recorder::BankStart,
-    solana_runtime::transaction_error_metrics::*,
     solana_sdk::{clock::Slot, saturating_add_assign},
     std::time::Instant,
 };
@@ -868,7 +868,7 @@ mod tests {
 
         // Create a child descended from the first bank
         let next_bank = Arc::new(Bank::new_from_parent(
-            &first_bank,
+            first_bank.clone(),
             &Pubkey::new_unique(),
             first_bank.slot() + 1,
         ));

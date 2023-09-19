@@ -318,7 +318,7 @@ impl<T: AbiExample> AbiExample for Box<[T]> {
 impl<T: AbiExample> AbiExample for std::marker::PhantomData<T> {
     fn example() -> Self {
         info!("AbiExample for (PhantomData<T>): {}", type_name::<Self>());
-        <std::marker::PhantomData<T>>::default()
+        std::marker::PhantomData::<T>
     }
 }
 
@@ -553,11 +553,5 @@ impl<O: AbiEnumVisitor, E: AbiEnumVisitor> AbiEnumVisitor for Result<O, E> {
         variant.serialize(digester.create_enum_child()?)?;
 
         digester.create_child()
-    }
-}
-
-impl<T: AbiExample> AbiExample for once_cell::sync::OnceCell<T> {
-    fn example() -> Self {
-        Self::with_value(T::example())
     }
 }

@@ -134,10 +134,6 @@ pub type ProcessInstruction =
     fn(program_id: &Pubkey, accounts: &[AccountInfo], instruction_data: &[u8]) -> ProgramResult;
 ```
 
-Refer to [helloworld's use of the
-entrypoint](https://github.com/solana-labs/example-helloworld/blob/1e049076e10be8712b1a725d2d886ce0cd036b2e/src/program-rust/src/lib.rs#L19)
-as an example of how things fit together.
-
 ### Parameter Deserialization
 
 Each loader provides a helper function that deserializes the program's input
@@ -358,6 +354,9 @@ fn custom_panic(info: &core::panic::PanicInfo<'_>) {
 ```
 
 ## Compute Budget
+
+Use the system call `sol_remaining_compute_units()` to return a `u64` indicating
+the number of compute units remaining for this transaction.
 
 Use the system call
 [`sol_log_compute_units()`](https://github.com/solana-labs/solana/blob/d9b0fc0e3eec67dfe4a97d9298b15969b2804fab/sdk/program/src/log.rs#L141)

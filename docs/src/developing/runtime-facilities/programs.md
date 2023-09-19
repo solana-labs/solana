@@ -50,6 +50,11 @@ Create and manage accounts that track validator voting state and rewards.
 - Program id: `Vote111111111111111111111111111111111111111`
 - Instructions: [VoteInstruction](https://docs.rs/solana-vote-program/VERSION_FOR_DOCS_RS/solana_vote_program/vote_instruction/enum.VoteInstruction.html)
 
+## Address Lookup Table Program
+
+- Program id: `AddressLookupTab1e1111111111111111111111111`
+- Instructions: [AddressLookupTableInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/address_lookup_table/instruction/enum.ProgramInstruction.html)
+
 ## BPF Loader
 
 Deploys, upgrades, and executes programs on the chain.

@@ -131,21 +131,17 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) -> bool {
 
     for _ in 0..packet_offsets.sig_len {
         let pubkey_end = pubkey_start.saturating_add(size_of::<Pubkey>());
-        let sig_end = match sig_start.checked_add(size_of::<Signature>()) {
-            Some(sig_end) => sig_end,
-            None => return false,
+        let Some(sig_end) = sig_start.checked_add(size_of::<Signature>()) else {
+            return false;
         };
-        let signature = match packet.data(sig_start..sig_end) {
-            Some(signature) => Signature::new(signature),
-            None => return false,
+        let Some(Ok(signature)) = packet.data(sig_start..sig_end).map(Signature::try_from) else {
+            return false;
         };
-        let pubkey = match packet.data(pubkey_start..pubkey_end) {
-            Some(pubkey) => pubkey,
-            None => return false,
+        let Some(pubkey) = packet.data(pubkey_start..pubkey_end) else {
+            return false;
         };
-        let message = match packet.data(msg_start..) {
-            Some(message) => message,
-            None => return false,
+        let Some(message) = packet.data(msg_start..) else {
+            return false;
         };
         if !signature.verify(pubkey, message) {
             return false;
@@ -317,9 +313,8 @@ fn do_get_packet_offsets(
 
 pub fn check_for_tracer_packet(packet: &mut Packet) -> bool {
     let first_pubkey_start: usize = TRACER_KEY_OFFSET_IN_TRANSACTION;
-    let first_pubkey_end = match first_pubkey_start.checked_add(size_of::<Pubkey>()) {
-        Some(offset) => offset,
-        None => return false,
+    let Some(first_pubkey_end) = first_pubkey_start.checked_add(size_of::<Pubkey>()) else {
+        return false;
     };
     // Check for tracer pubkey
     match packet.data(first_pubkey_start..first_pubkey_end) {
@@ -610,9 +605,8 @@ pub fn ed25519_verify(
     reject_non_vote: bool,
     valid_packet_count: usize,
 ) {
-    let api = match perf_libs::api() {
-        None => return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count),
-        Some(api) => api,
+    let Some(api) = perf_libs::api() else {
+        return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
     };
     let total_packet_count = count_packets_in_batches(batches);
     // micro-benchmarks show GPU time for smallest batch around 15-20ms
@@ -620,13 +614,15 @@ pub fn ed25519_verify(
     // power-of-two number around that accounting for the fact that the CPU
     // may be busy doing other things while being a real validator
     // TODO: dynamically adjust this crossover
-    if valid_packet_count < 64
-        || 100usize
-            .wrapping_mul(valid_packet_count)
-            .wrapping_div(total_packet_count)
-            < 90
-    {
-        return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
+    let maybe_valid_percentage = 100usize
+        .wrapping_mul(valid_packet_count)
+        .checked_div(total_packet_count);
+    let Some(valid_percentage) = maybe_valid_percentage else {
+        return;
+    };
+    if valid_percentage < 90 || valid_packet_count < 64 {
+        ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
+        return;
     }
 
     let (signature_offsets, pubkey_offsets, msg_start_offsets, msg_sizes, sig_lens) =
@@ -680,7 +676,7 @@ pub fn ed25519_verify(
 }
 
 #[cfg(test)]
-#[allow(clippy::integer_arithmetic)]
+#[allow(clippy::arithmetic_side_effects)]
 mod tests {
     use {
         super::*,
@@ -716,10 +712,10 @@ mod tests {
     fn test_copy_return_values() {
         let mut rng = rand::thread_rng();
         let sig_lens: Vec<Vec<u32>> = {
-            let size = rng.gen_range(0, 64);
+            let size = rng.gen_range(0..64);
             repeat_with(|| {
-                let size = rng.gen_range(0, 16);
-                repeat_with(|| rng.gen_range(0, 5)).take(size).collect()
+                let size = rng.gen_range(0..16);
+                repeat_with(|| rng.gen_range(0..5)).take(size).collect()
             })
             .take(size)
             .collect()
@@ -1066,7 +1062,7 @@ mod tests {
         // generate packet vector
         let batches: Vec<_> = (0..num_batches)
             .map(|_| {
-                let num_packets_per_batch = thread_rng().gen_range(1, max_packets_per_batch);
+                let num_packets_per_batch = thread_rng().gen_range(1..max_packets_per_batch);
                 let mut packet_batch = PacketBatch::with_capacity(num_packets_per_batch);
                 for _ in 0..num_packets_per_batch {
                     packet_batch.push(packet.clone());
@@ -1227,22 +1223,22 @@ mod tests {
         let recycler = Recycler::default();
         let recycler_out = Recycler::default();
         for _ in 0..50 {
-            let num_batches = thread_rng().gen_range(2, 30);
+            let num_batches = thread_rng().gen_range(2..30);
             let mut batches = generate_packet_batches_random_size(&packet, 128, num_batches);
 
-            let num_modifications = thread_rng().gen_range(0, 5);
+            let num_modifications = thread_rng().gen_range(0..5);
             for _ in 0..num_modifications {
-                let batch = thread_rng().gen_range(0, batches.len());
-                let packet = thread_rng().gen_range(0, batches[batch].len());
-                let offset = thread_rng().gen_range(0, batches[batch][packet].meta().size);
-                let add = thread_rng().gen_range(0, 255);
+                let batch = thread_rng().gen_range(0..batches.len());
+                let packet = thread_rng().gen_range(0..batches[batch].len());
+                let offset = thread_rng().gen_range(0..batches[batch][packet].meta().size);
+                let add = thread_rng().gen_range(0..255);
                 batches[batch][packet].buffer_mut()[offset] = batches[batch][packet]
                     .data(offset)
                     .unwrap()
                     .wrapping_add(add);
             }
 
-            let batch_to_disable = thread_rng().gen_range(0, batches.len());
+            let batch_to_disable = thread_rng().gen_range(0..batches.len());
             for p in batches[batch_to_disable].iter_mut() {
                 p.meta_mut().set_discard(true);
             }

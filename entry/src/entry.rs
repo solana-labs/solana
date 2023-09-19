@@ -5,8 +5,7 @@
 use {
     crate::poh::Poh,
     crossbeam_channel::{Receiver, Sender},
-    dlopen::symbor::{Container, SymBorApi, Symbol},
-    dlopen_derive::SymBorApi,
+    dlopen2::symbor::{Container, SymBorApi, Symbol},
     lazy_static::lazy_static,
     log::*,
     rand::{thread_rng, Rng},
@@ -539,7 +538,7 @@ fn start_verify_transactions_gpu(
         .map(|slice| {
             let vec_size = slice.len();
             let mut packet_batch = PacketBatch::new_with_recycler(
-                verify_recyclers.packet_recycler.clone(),
+                &verify_recyclers.packet_recycler,
                 vec_size,
                 "entry-sig-verify",
             );
@@ -782,9 +781,8 @@ impl EntrySlice for [Entry] {
         recyclers: VerifyRecyclers,
     ) -> EntryVerificationState {
         let start = Instant::now();
-        let api = match perf_libs::api() {
-            None => return self.verify_cpu(start_hash),
-            Some(api) => api,
+        let Some(api) = perf_libs::api() else {
+            return self.verify_cpu(start_hash);
         };
         inc_new_counter_info!("entry_verify-num_entries", self.len());
 
@@ -913,7 +911,7 @@ pub fn create_ticks(num_ticks: u64, hashes_per_tick: u64, mut hash: Hash) -> Vec
 
 pub fn create_random_ticks(num_ticks: u64, max_hashes_per_tick: u64, mut hash: Hash) -> Vec<Entry> {
     repeat_with(|| {
-        let hashes_per_tick = thread_rng().gen_range(1, max_hashes_per_tick);
+        let hashes_per_tick = thread_rng().gen_range(1..max_hashes_per_tick);
         next_entry_mut(&mut hash, hashes_per_tick, vec![])
     })
     .take(num_ticks as usize)
@@ -1342,7 +1340,7 @@ mod tests {
         solana_logger::setup();
         for _ in 0..100 {
             let mut time = Measure::start("ticks");
-            let num_ticks = thread_rng().gen_range(1, 100);
+            let num_ticks = thread_rng().gen_range(1..100);
             info!("create {} ticks:", num_ticks);
             let mut entries = create_random_ticks(num_ticks, 100, Hash::default());
             time.stop();
@@ -1350,7 +1348,7 @@ mod tests {
             let mut modified = false;
             if thread_rng().gen_ratio(1, 2) {
                 modified = true;
-                let modify_idx = thread_rng().gen_range(0, num_ticks) as usize;
+                let modify_idx = thread_rng().gen_range(0..num_ticks) as usize;
                 entries[modify_idx].hash = hash(&[1, 2, 3]);
             }
 

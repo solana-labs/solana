@@ -21,10 +21,9 @@ pub struct SamplePerformanceService {
 impl SamplePerformanceService {
     pub fn new(
         bank_forks: &Arc<RwLock<BankForks>>,
-        blockstore: &Arc<Blockstore>,
+        blockstore: Arc<Blockstore>,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        let blockstore = blockstore.clone();
         let bank_forks = bank_forks.clone();
 
         info!("Starting SamplePerformance service");

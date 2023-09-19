@@ -105,11 +105,14 @@ impl ReadWriteAccountSet {
 mod tests {
     use {
         super::ReadWriteAccountSet,
-        solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_ledger::genesis_utils::GenesisConfigInfo,
         solana_runtime::{bank::Bank, genesis_utils::create_genesis_config},
         solana_sdk::{
             account::AccountSharedData,
+            address_lookup_table::{
+                self,
+                state::{AddressLookupTable, LookupTableMeta},
+            },
             hash::Hash,
             message::{
                 v0::{self, MessageAddressTableLookup},
@@ -178,16 +181,13 @@ mod tests {
         let address_table_key = Pubkey::new_unique();
         let data = address_lookup_table.serialize_for_tests().unwrap();
         let mut account =
-            AccountSharedData::new(1, data.len(), &solana_address_lookup_table_program::id());
+            AccountSharedData::new(1, data.len(), &address_lookup_table::program::id());
         account.set_data(data);
         bank.store_account(&address_table_key, &account);
 
+        let slot = bank.slot() + 1;
         (
-            Arc::new(Bank::new_from_parent(
-                &bank,
-                &Pubkey::new_unique(),
-                bank.slot() + 1,
-            )),
+            Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), slot)),
             address_table_key,
         )
     }

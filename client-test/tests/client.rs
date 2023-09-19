@@ -1,5 +1,6 @@
 use {
     futures_util::StreamExt,
+    rand::Rng,
     serde_json::{json, Value},
     solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
     solana_pubsub_client::{nonblocking, pubsub_client::PubsubClient},
@@ -28,7 +29,6 @@ use {
         commitment_config::{CommitmentConfig, CommitmentLevel},
         native_token::sol_to_lamports,
         pubkey::Pubkey,
-        rpc_port,
         signature::{Keypair, Signer},
         system_program, system_transaction,
     },
@@ -41,7 +41,7 @@ use {
         collections::HashSet,
         net::{IpAddr, SocketAddr},
         sync::{
-            atomic::{AtomicBool, AtomicU16, AtomicU64, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, RwLock,
         },
         thread::sleep,
@@ -51,12 +51,10 @@ use {
     tungstenite::connect,
 };
 
-static NEXT_RPC_PUBSUB_PORT: AtomicU16 = AtomicU16::new(rpc_port::DEFAULT_RPC_PUBSUB_PORT);
-
 fn pubsub_addr() -> SocketAddr {
     SocketAddr::new(
         IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-        NEXT_RPC_PUBSUB_PORT.fetch_add(1, Ordering::Relaxed),
+        rand::thread_rng().gen_range(1024..65535),
     )
 }
 
@@ -136,7 +134,7 @@ fn test_account_subscription() {
     let blockhash = bank.last_blockhash();
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
     let bank0 = bank_forks.read().unwrap().get(0).unwrap();
-    let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+    let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
     bank_forks.write().unwrap().insert(bank1);
     let bob = Keypair::new();
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
@@ -342,7 +340,7 @@ fn test_program_subscription() {
     let blockhash = bank.last_blockhash();
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
     let bank0 = bank_forks.read().unwrap().get(0).unwrap();
-    let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+    let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
     bank_forks.write().unwrap().insert(bank1);
     let bob = Keypair::new();
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
@@ -429,7 +427,7 @@ fn test_root_subscription() {
     let bank = Bank::new_for_tests(&genesis_config);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
     let bank0 = bank_forks.read().unwrap().get(0).unwrap();
-    let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+    let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
     bank_forks.write().unwrap().insert(bank1);
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
     let max_complete_rewards_slot = Arc::new(AtomicU64::default());

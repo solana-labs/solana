@@ -2,7 +2,9 @@
 mod tests {
     use {
         crate::bank::*,
-        solana_sdk::{feature_set::FeatureSet, genesis_config::create_genesis_config},
+        solana_sdk::{
+            ed25519_program, feature_set::FeatureSet, genesis_config::create_genesis_config,
+        },
     };
 
     #[test]

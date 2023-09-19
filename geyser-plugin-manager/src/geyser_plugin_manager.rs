@@ -127,15 +127,17 @@ impl GeyserPluginManager {
 
     pub(crate) fn unload_plugin(&mut self, name: &str) -> JsonRpcResult<()> {
         // Check if any plugin names match this one
-        let Some(idx) = self.plugins.iter().position(|plugin| plugin.name().eq(name)) else {
+        let Some(idx) = self
+            .plugins
+            .iter()
+            .position(|plugin| plugin.name().eq(name))
+        else {
             // If we don't find one return an error
-            return Err(
-                jsonrpc_core::error::Error {
-                    code: ErrorCode::InvalidRequest,
-                    message: String::from("The plugin you requested to unload is not loaded"),
-                    data: None,
-                }
-            )
+            return Err(jsonrpc_core::error::Error {
+                code: ErrorCode::InvalidRequest,
+                message: String::from("The plugin you requested to unload is not loaded"),
+                data: None,
+            });
         };
 
         // Unload and drop plugin and lib
@@ -149,15 +151,17 @@ impl GeyserPluginManager {
     /// Then, attempt to load a new plugin
     pub(crate) fn reload_plugin(&mut self, name: &str, config_file: &str) -> JsonRpcResult<()> {
         // Check if any plugin names match this one
-        let Some(idx) = self.plugins.iter().position(|plugin| plugin.name().eq(name)) else {
+        let Some(idx) = self
+            .plugins
+            .iter()
+            .position(|plugin| plugin.name().eq(name))
+        else {
             // If we don't find one return an error
-            return Err(
-                jsonrpc_core::error::Error {
-                    code: ErrorCode::InvalidRequest,
-                    message: String::from("The plugin you requested to reload is not loaded"),
-                    data: None,
-                }
-            )
+            return Err(jsonrpc_core::error::Error {
+                code: ErrorCode::InvalidRequest,
+                message: String::from("The plugin you requested to reload is not loaded"),
+                data: None,
+            });
         };
 
         // Unload and drop current plugin first in case plugin requires exclusive access to resource,
@@ -320,6 +324,11 @@ pub(crate) fn load_plugin_from_config(
     Ok((plugin, lib, config_file))
 }
 
+#[cfg(test)]
+const TESTPLUGIN_CONFIG: &str = "TESTPLUGIN_CONFIG";
+#[cfg(test)]
+const TESTPLUGIN2_CONFIG: &str = "TESTPLUGIN2_CONFIG";
+
 // This is mocked for tests to avoid having to do IO with a dynamically linked library
 // across different architectures at test time
 //
@@ -327,47 +336,52 @@ pub(crate) fn load_plugin_from_config(
 /// (The geyser plugin interface requires a &str for the on_load method).
 #[cfg(test)]
 pub(crate) fn load_plugin_from_config(
-    _geyser_plugin_config_file: &Path,
+    geyser_plugin_config_file: &Path,
 ) -> Result<(Box<dyn GeyserPlugin>, Library, &str), GeyserPluginManagerError> {
-    Ok(tests::dummy_plugin_and_library())
+    if geyser_plugin_config_file.ends_with(TESTPLUGIN_CONFIG) {
+        Ok(tests::dummy_plugin_and_library(
+            tests::TestPlugin,
+            TESTPLUGIN_CONFIG,
+        ))
+    } else if geyser_plugin_config_file.ends_with(TESTPLUGIN2_CONFIG) {
+        Ok(tests::dummy_plugin_and_library(
+            tests::TestPlugin2,
+            TESTPLUGIN2_CONFIG,
+        ))
+    } else {
+        Err(GeyserPluginManagerError::CannotOpenConfigFile(
+            geyser_plugin_config_file.to_str().unwrap().to_string(),
+        ))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use {
-        crate::geyser_plugin_manager::GeyserPluginManager,
+        crate::geyser_plugin_manager::{
+            GeyserPluginManager, TESTPLUGIN2_CONFIG, TESTPLUGIN_CONFIG,
+        },
         libloading::Library,
         solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin,
         std::sync::{Arc, RwLock},
     };
 
-    pub(super) fn dummy_plugin_and_library() -> (Box<dyn GeyserPlugin>, Library, &'static str) {
-        let plugin = Box::new(TestPlugin);
-        let lib = {
-            let handle: *mut std::os::raw::c_void = &mut () as *mut _ as *mut std::os::raw::c_void;
-            // SAFETY: all calls to get Symbols should fail, so this is actually safe
-            let inner_lib = unsafe { libloading::os::unix::Library::from_raw(handle) };
-            Library::from(inner_lib)
-        };
-        (plugin, lib, DUMMY_CONFIG)
-    }
-
-    pub(super) fn dummy_plugin_and_library2() -> (Box<dyn GeyserPlugin>, Library, &'static str) {
-        let plugin = Box::new(TestPlugin2);
-        let lib = {
-            let handle: *mut std::os::raw::c_void = &mut () as *mut _ as *mut std::os::raw::c_void;
-            // SAFETY: all calls to get Symbols should fail, so this is actually safe
-            let inner_lib = unsafe { libloading::os::unix::Library::from_raw(handle) };
-            Library::from(inner_lib)
-        };
-        (plugin, lib, DUMMY_CONFIG)
+    pub(super) fn dummy_plugin_and_library<P: GeyserPlugin>(
+        plugin: P,
+        config_path: &'static str,
+    ) -> (Box<dyn GeyserPlugin>, Library, &'static str) {
+        (
+            Box::new(plugin),
+            Library::from(libloading::os::unix::Library::this()),
+            config_path,
+        )
     }
 
     const DUMMY_NAME: &str = "dummy";
     pub(super) const DUMMY_CONFIG: &str = "dummy_config";
     const ANOTHER_DUMMY_NAME: &str = "another_dummy";
 
-    #[derive(Debug)]
+    #[derive(Clone, Copy, Debug)]
     pub(super) struct TestPlugin;
 
     impl GeyserPlugin for TestPlugin {
@@ -376,7 +390,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Clone, Copy, Debug)]
     pub(super) struct TestPlugin2;
 
     impl GeyserPlugin for TestPlugin2 {
@@ -399,7 +413,7 @@ mod tests {
         );
 
         // Mock having loaded plugin (TestPlugin)
-        let (mut plugin, lib, config) = dummy_plugin_and_library();
+        let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin, DUMMY_CONFIG);
         plugin.on_load(config).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
@@ -416,8 +430,14 @@ mod tests {
         );
 
         // Now try a (dummy) reload, replacing TestPlugin with TestPlugin2
-        let reload_result = plugin_manager_lock.reload_plugin(DUMMY_NAME, DUMMY_CONFIG);
+        let reload_result = plugin_manager_lock.reload_plugin(DUMMY_NAME, TESTPLUGIN2_CONFIG);
         assert!(reload_result.is_ok());
+
+        // The plugin is now replaced with ANOTHER_DUMMY_NAME
+        let plugins = plugin_manager_lock.list_plugins().unwrap();
+        assert!(plugins.iter().any(|name| name.eq(ANOTHER_DUMMY_NAME)));
+        // DUMMY_NAME should no longer be present.
+        assert!(!plugins.iter().any(|name| name.eq(DUMMY_NAME)));
     }
 
     #[test]
@@ -428,12 +448,12 @@ mod tests {
 
         // Load two plugins
         // First
-        let (mut plugin, lib, config) = dummy_plugin_and_library();
+        let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin, TESTPLUGIN_CONFIG);
         plugin.on_load(config).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
         // Second
-        let (mut plugin, lib, config) = dummy_plugin_and_library2();
+        let (mut plugin, lib, config) = dummy_plugin_and_library(TestPlugin2, TESTPLUGIN2_CONFIG);
         plugin.on_load(config).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         plugin_manager_lock.libs.push(lib);
@@ -451,7 +471,7 @@ mod tests {
         let mut plugin_manager_lock = plugin_manager.write().unwrap();
 
         // Load rpc call
-        let load_result = plugin_manager_lock.load_plugin(DUMMY_CONFIG);
+        let load_result = plugin_manager_lock.load_plugin(TESTPLUGIN_CONFIG);
         assert!(load_result.is_ok());
         assert_eq!(plugin_manager_lock.plugins.len(), 1);
 

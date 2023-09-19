@@ -125,6 +125,7 @@ mod tests {
 
     #[test]
     fn test_is_niceness_adjustment_valid() {
+        use super::is_niceness_adjustment_valid;
         assert_eq!(is_niceness_adjustment_valid("0"), Ok(()));
         assert!(is_niceness_adjustment_valid("128").is_err());
         assert!(is_niceness_adjustment_valid("-129").is_err());

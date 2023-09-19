@@ -711,7 +711,7 @@ impl ThreadLocalUnprocessedPackets {
     fn sanitize_unforwarded_packets(
         &mut self,
         packets_to_process: &[Arc<ImmutableDeserializedPacket>],
-        bank: &Arc<Bank>,
+        bank: &Bank,
         total_dropped_packets: &mut usize,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
         // Get ref of ImmutableDeserializedPacket
@@ -721,11 +721,7 @@ impl ThreadLocalUnprocessedPackets {
                 .enumerate()
                 .filter_map(|(packet_index, deserialized_packet)| {
                     deserialized_packet
-                        .build_sanitized_transaction(
-                            &bank.feature_set,
-                            bank.vote_only_bank(),
-                            bank.as_ref(),
-                        )
+                        .build_sanitized_transaction(&bank.feature_set, bank.vote_only_bank(), bank)
                         .map(|transaction| (transaction, packet_index))
                 })
                 .unzip();
@@ -740,7 +736,7 @@ impl ThreadLocalUnprocessedPackets {
     /// Checks sanitized transactions against bank, returns valid transaction indexes
     fn filter_invalid_transactions(
         transactions: &[SanitizedTransaction],
-        bank: &Arc<Bank>,
+        bank: &Bank,
         total_dropped_packets: &mut usize,
     ) -> Vec<usize> {
         let filter = vec![Ok(()); transactions.len()];
@@ -1050,7 +1046,7 @@ mod tests {
         // all packets are forwarded
         {
             let buffered_packet_batches: UnprocessedPacketBatches =
-                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+                UnprocessedPacketBatches::from_iter(packets.clone(), packets.len());
             let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
                 buffered_packet_batches,
                 ThreadType::Transactions,
@@ -1089,7 +1085,7 @@ mod tests {
                 packet.forwarded = true;
             }
             let buffered_packet_batches: UnprocessedPacketBatches =
-                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+                UnprocessedPacketBatches::from_iter(packets.clone(), packets.len());
             let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
                 buffered_packet_batches,
                 ThreadType::Transactions,
@@ -1123,7 +1119,7 @@ mod tests {
                 assert_eq!(current_bank.process_transaction(tx), Ok(()));
             }
             let buffered_packet_batches: UnprocessedPacketBatches =
-                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+                UnprocessedPacketBatches::from_iter(packets.clone(), packets.len());
             let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
                 buffered_packet_batches,
                 ThreadType::Transactions,
@@ -1289,7 +1285,7 @@ mod tests {
         // all tracer packets are forwardable
         {
             let buffered_packet_batches: UnprocessedPacketBatches =
-                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+                UnprocessedPacketBatches::from_iter(packets.clone(), packets.len());
             let (
                 total_tracer_packets_in_buffer,
                 total_packets_to_forward,
@@ -1307,7 +1303,7 @@ mod tests {
                 packet.forwarded = true;
             }
             let buffered_packet_batches: UnprocessedPacketBatches =
-                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+                UnprocessedPacketBatches::from_iter(packets.clone(), packets.len());
             let (
                 total_tracer_packets_in_buffer,
                 total_packets_to_forward,
@@ -1324,7 +1320,7 @@ mod tests {
                 packet.forwarded = true;
             }
             let buffered_packet_batches: UnprocessedPacketBatches =
-                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+                UnprocessedPacketBatches::from_iter(packets.clone(), packets.len());
             let (
                 total_tracer_packets_in_buffer,
                 total_packets_to_forward,

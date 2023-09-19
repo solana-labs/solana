@@ -8,8 +8,14 @@ indent() {
 }
 
 group() {
+  # shellcheck disable=SC2016 # don't want these expressions expanded
+  local name="${1:?'buildkite `group` generator requires a `name`'}"
+  if [[ $# -lt 2 ]]; then
+    echo "no steps provided for buildkite group \`$name\`, omitting from pipeline" 1>&2
+    return
+  fi
   cat <<EOF | indent
-- group: "$1"
+- group: "$name"
   steps:
 EOF
   shift

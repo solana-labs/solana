@@ -1,21 +1,8 @@
 use {
     crate::{
-        account_storage::meta::StoredMetaWriteVersion,
-        accounts::Accounts,
-        accounts_db::{
-            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
-            AtomicAppendVecId, BankHashStats, IndexGenerationInfo,
-        },
-        accounts_file::AccountsFile,
-        accounts_hash::AccountsHash,
-        accounts_index::AccountSecondaryIndexes,
-        accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{Bank, BankFieldsToDeserialize, BankRc},
-        blockhash_queue::BlockhashQueue,
         builtins::BuiltinPrototype,
-        epoch_accounts_hash::EpochAccountsHash,
         epoch_stakes::EpochStakes,
-        rent_collector::RentCollector,
         runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
         snapshot_utils::{
@@ -26,6 +13,21 @@ use {
     bincode::{self, config::Options, Error},
     log::*,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
+    solana_accounts_db::{
+        account_storage::meta::StoredMetaWriteVersion,
+        accounts::Accounts,
+        accounts_db::{
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
+            AtomicAppendVecId, BankHashStats, IndexGenerationInfo,
+        },
+        accounts_file::AccountsFile,
+        accounts_hash::AccountsHash,
+        accounts_index::AccountSecondaryIndexes,
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
+        blockhash_queue::BlockhashQueue,
+        epoch_accounts_hash::EpochAccountsHash,
+        rent_collector::RentCollector,
+    },
     solana_measure::measure::Measure,
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
@@ -55,15 +57,13 @@ use {
 mod newer;
 mod storage;
 mod tests;
-mod types;
 mod utils;
 
-// a number of test cases in accounts_db use this
-#[cfg(test)]
-pub(crate) use tests::reconstruct_accounts_db_via_serialization;
 pub(crate) use {
+    solana_accounts_db::accounts_hash::{
+        SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash,
+    },
     storage::SerializedAppendVecId,
-    types::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
 };
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -176,7 +176,7 @@ impl<T> SnapshotAccountsDbFields<T> {
                     })?;
 
                 let mut combined_storages = full_snapshot_storages;
-                combined_storages.extend(incremental_snapshot_storages.into_iter());
+                combined_storages.extend(incremental_snapshot_storages);
 
                 Ok(AccountsDbFields(
                     combined_storages,
@@ -266,6 +266,7 @@ where
 
 /// used by tests to compare contents of serialized bank fields
 /// serialized format is not deterministic - likely due to randomness in structs like hashmaps
+#[cfg(feature = "dev-context-only-utils")]
 pub(crate) fn compare_two_serialized_banks(
     path1: impl AsRef<Path>,
     path2: impl AsRef<Path>,
@@ -402,7 +403,7 @@ where
             &SerializableBankAndStorage::<newer::Context> {
                 bank,
                 snapshot_storages,
-                phantom: std::marker::PhantomData::default(),
+                phantom: std::marker::PhantomData,
             },
         ),
     }
@@ -424,7 +425,7 @@ where
             &SerializableBankAndStorageNoExtra::<newer::Context> {
                 bank,
                 snapshot_storages,
-                phantom: std::marker::PhantomData::default(),
+                phantom: std::marker::PhantomData,
             },
         ),
     }
@@ -502,6 +503,23 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableBankAndStorage<'a, C> {
     {
         C::serialize_bank_and_storage(serializer, self)
     }
+}
+
+#[cfg(test)]
+pub fn serialize_test_bank_and_storage<S>(
+    bank: &Bank,
+    storage: &[Vec<Arc<AccountStorageEntry>>],
+    s: S,
+) -> std::result::Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    (SerializableBankAndStorage::<newer::Context> {
+        bank,
+        snapshot_storages: storage,
+        phantom: std::marker::PhantomData,
+    })
+    .serialize(s)
 }
 
 #[cfg(test)]

@@ -11,9 +11,9 @@ edition = { workspace = true }
 
 [dependencies]
 log = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-download-utils = { workspace = true }
 solana-rpc-client = { workspace = true }
-solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 
 [lib]

@@ -551,7 +551,7 @@ mod test {
         account_state
             .init_extension::<ImmutableOwner>(true)
             .unwrap();
-        let mut memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
+        let memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
         memo_transfer.require_incoming_transfer_memos = true.into();
 
         assert!(parse_token(&account_data, None).is_err());
@@ -618,7 +618,7 @@ mod test {
         let mut mint_state =
             StateWithExtensionsMut::<Mint>::unpack_uninitialized(&mut mint_data).unwrap();
 
-        let mut mint_close_authority = mint_state
+        let mint_close_authority = mint_state
             .init_extension::<MintCloseAuthority>(true)
             .unwrap();
         mint_close_authority.close_authority =

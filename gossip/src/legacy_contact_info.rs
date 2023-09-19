@@ -25,10 +25,10 @@ pub struct LegacyContactInfo {
     gossip: SocketAddr,
     /// address to connect to for replication
     tvu: SocketAddr,
-    /// address to forward shreds to
-    tvu_forwards: SocketAddr,
-    /// address to send repair responses to
-    repair: SocketAddr,
+    /// TVU over QUIC protocol.
+    tvu_quic: SocketAddr,
+    /// repair service over QUIC protocol.
+    serve_repair_quic: SocketAddr,
     /// transactions address
     tpu: SocketAddr,
     /// address to forward unprocessed transactions to
@@ -60,6 +60,16 @@ macro_rules! get_socket {
     ($name:ident) => {
         pub fn $name(&self) -> Result<SocketAddr, Error> {
             let socket = &self.$name;
+            sanitize_socket(socket)?;
+            Ok(socket).copied()
+        }
+    };
+    ($name:ident, $quic:ident) => {
+        pub fn $name(&self, protocol: Protocol) -> Result<SocketAddr, Error> {
+            let socket = match protocol {
+                Protocol::QUIC => &self.$quic,
+                Protocol::UDP => &self.$name,
+            };
             sanitize_socket(socket)?;
             Ok(socket).copied()
         }
@@ -113,8 +123,8 @@ impl Default for LegacyContactInfo {
             id: Pubkey::default(),
             gossip: socketaddr_any!(),
             tvu: socketaddr_any!(),
-            tvu_forwards: socketaddr_any!(),
-            repair: socketaddr_any!(),
+            tvu_quic: socketaddr_any!(),
+            serve_repair_quic: socketaddr_any!(),
             tpu: socketaddr_any!(),
             tpu_forwards: socketaddr_any!(),
             tpu_vote: socketaddr_any!(),
@@ -133,8 +143,8 @@ impl LegacyContactInfo {
             id: *id,
             gossip: socketaddr!(Ipv4Addr::LOCALHOST, 1234),
             tvu: socketaddr!(Ipv4Addr::LOCALHOST, 1235),
-            tvu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1236),
-            repair: socketaddr!(Ipv4Addr::LOCALHOST, 1237),
+            tvu_quic: socketaddr!(Ipv4Addr::LOCALHOST, 1236),
+            serve_repair_quic: socketaddr!(Ipv4Addr::LOCALHOST, 1237),
             tpu: socketaddr!(Ipv4Addr::LOCALHOST, 1238),
             tpu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1239),
             tpu_vote: socketaddr!(Ipv4Addr::LOCALHOST, 1240),
@@ -149,10 +159,10 @@ impl LegacyContactInfo {
     /// New random LegacyContactInfo for tests and simulations.
     pub fn new_rand<R: rand::Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
         let delay = 10 * 60 * 1000; // 10 minutes
-        let now = timestamp() - delay + rng.gen_range(0, 2 * delay);
+        let now = timestamp() - delay + rng.gen_range(0..2 * delay);
         let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);
         let mut node = LegacyContactInfo::new_localhost(&pubkey, now);
-        node.gossip.set_port(rng.gen_range(1024, u16::MAX));
+        node.gossip.set_port(rng.gen_range(1024..u16::MAX));
         node
     }
 
@@ -195,14 +205,13 @@ impl LegacyContactInfo {
     }
 
     get_socket!(gossip);
-    get_socket!(@quic tvu);
-    get_socket!(repair);
+    get_socket!(tvu, tvu_quic);
     get_socket!(@quic tpu);
     get_socket!(@quic tpu_forwards);
     get_socket!(tpu_vote);
     get_socket!(rpc);
     get_socket!(rpc_pubsub);
-    get_socket!(serve_repair);
+    get_socket!(serve_repair, serve_repair_quic);
 
     set_socket!(set_gossip, gossip);
     set_socket!(set_rpc, rpc);
@@ -263,14 +272,14 @@ impl TryFrom<&ContactInfo> for LegacyContactInfo {
             id: *node.pubkey(),
             gossip: unwrap_socket!(gossip),
             tvu: unwrap_socket!(tvu, Protocol::UDP),
-            tvu_forwards: SOCKET_ADDR_UNSPECIFIED,
-            repair: unwrap_socket!(repair),
+            tvu_quic: unwrap_socket!(tvu, Protocol::QUIC),
+            serve_repair_quic: unwrap_socket!(serve_repair, Protocol::QUIC),
             tpu: unwrap_socket!(tpu, Protocol::UDP),
             tpu_forwards: unwrap_socket!(tpu_forwards, Protocol::UDP),
             tpu_vote: unwrap_socket!(tpu_vote),
             rpc: unwrap_socket!(rpc),
             rpc_pubsub: unwrap_socket!(rpc_pubsub),
-            serve_repair: unwrap_socket!(serve_repair),
+            serve_repair: unwrap_socket!(serve_repair, Protocol::UDP),
             wallclock: node.wallclock(),
             shred_version: node.shred_version(),
         })

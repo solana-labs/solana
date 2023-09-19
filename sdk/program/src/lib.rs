@@ -471,16 +471,19 @@
 extern crate self as solana_program;
 
 pub mod account_info;
-pub mod address_lookup_table_account;
+pub mod address_lookup_table;
 pub mod alt_bn128;
 pub(crate) mod atomic_u64;
 pub mod big_mod_exp;
 pub mod blake3;
 pub mod borsh;
+pub mod borsh0_10;
+pub mod borsh0_9;
 pub mod bpf_loader;
 pub mod bpf_loader_deprecated;
 pub mod bpf_loader_upgradeable;
 pub mod clock;
+pub mod compute_units;
 pub mod debug_account_data;
 pub mod decode_error;
 pub mod ed25519_program;
@@ -504,6 +507,7 @@ pub mod log;
 pub mod message;
 pub mod native_token;
 pub mod nonce;
+pub mod poseidon;
 pub mod program;
 pub mod program_error;
 pub mod program_memory;
@@ -530,6 +534,14 @@ pub mod system_program;
 pub mod sysvar;
 pub mod vote;
 pub mod wasm;
+
+#[deprecated(
+    since = "1.17.0",
+    note = "Please use `solana_sdk::address_lookup_table::AddressLookupTableAccount` instead"
+)]
+pub mod address_lookup_table_account {
+    pub use crate::address_lookup_table::AddressLookupTableAccount;
+}
 
 #[cfg(target_os = "solana")]
 pub use solana_sdk_macro::wasm_bindgen_stub as wasm_bindgen;
@@ -573,6 +585,7 @@ pub mod sdk_ids {
                 vote::program::id(),
                 feature::id(),
                 bpf_loader_deprecated::id(),
+                #[allow(deprecated)]
                 stake::config::id(),
             ];
             sdk_ids.extend(sysvar::ALL_IDS.iter());
@@ -739,7 +752,7 @@ macro_rules! unchecked_div_by_const {
         // ugly error messages!
         // https://users.rust-lang.org/t/unexpected-behavior-of-compile-time-integer-div-by-zero-check-in-declarative-macro/56718
         let _ = [(); ($den as usize) - 1];
-        #[allow(clippy::integer_arithmetic)]
+        #[allow(clippy::arithmetic_side_effects)]
         let quotient = $num / $den;
         quotient
     }};

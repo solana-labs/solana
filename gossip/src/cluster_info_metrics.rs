@@ -143,7 +143,6 @@ pub struct GossipStats {
     pub(crate) packets_sent_pull_requests_count: Counter,
     pub(crate) packets_sent_pull_responses_count: Counter,
     pub(crate) packets_sent_push_messages_count: Counter,
-    pub(crate) process_gossip_packets_iterations_since_last_report: Counter,
     pub(crate) process_gossip_packets_time: Counter,
     pub(crate) process_prune: Counter,
     pub(crate) process_pull_requests: Counter,
@@ -408,13 +407,6 @@ pub(crate) fn submit_gossip_stats(
             "gossip_listen_loop_iterations_since_last_report",
             stats
                 .gossip_listen_loop_iterations_since_last_report
-                .clear(),
-            i64
-        ),
-        (
-            "process_gossip_packets_iterations_since_last_report",
-            stats
-                .process_gossip_packets_iterations_since_last_report
                 .clear(),
             i64
         ),
@@ -684,7 +676,7 @@ pub(crate) fn submit_gossip_stats(
         .pull
         .votes
         .into_iter()
-        .chain(crds_stats.push.votes.into_iter())
+        .chain(crds_stats.push.votes)
         .into_grouping_map()
         .aggregate(|acc, _slot, num_votes| Some(acc.unwrap_or_default() + num_votes));
     submit_vote_stats("cluster_info_crds_stats_votes", &votes);

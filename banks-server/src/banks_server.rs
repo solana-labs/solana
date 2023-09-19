@@ -2,6 +2,7 @@ use {
     bincode::{deserialize, serialize},
     crossbeam_channel::{unbounded, Receiver, Sender},
     futures::{future, prelude::stream::StreamExt},
+    solana_accounts_db::transaction_results::TransactionExecutionResult,
     solana_banks_interface::{
         Banks, BanksRequest, BanksResponse, BanksTransactionResultWithMetadata,
         BanksTransactionResultWithSimulation, TransactionConfirmationStatus, TransactionMetadata,
@@ -9,7 +10,7 @@ use {
     },
     solana_client::connection_cache::ConnectionCache,
     solana_runtime::{
-        bank::{Bank, TransactionExecutionResult, TransactionSimulationResult},
+        bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
     },
@@ -92,7 +93,7 @@ impl BanksServer {
                 // has been processed
                 let lock = bank.freeze_lock();
                 if *lock == Hash::default() {
-                    let _ = bank.try_process_transactions(transactions.iter());
+                    let _ = bank.try_process_entry_transactions(transactions);
                     // break out of inner loop and release bank freeze lock
                     break;
                 }

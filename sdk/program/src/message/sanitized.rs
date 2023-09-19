@@ -1,5 +1,6 @@
 use {
     crate::{
+        ed25519_program,
         hash::Hash,
         instruction::CompiledInstruction,
         message::{
@@ -12,6 +13,7 @@ use {
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
+        secp256k1_program,
         solana_program::{system_instruction::SystemInstruction, system_program},
         sysvar::instructions::{BorrowedAccountMeta, BorrowedInstruction},
     },
@@ -342,6 +344,26 @@ impl SanitizedMessage {
                     }
                 })
             })
+    }
+
+    pub fn num_signatures(&self) -> u64 {
+        let mut num_signatures = u64::from(self.header().num_required_signatures);
+        // This next part is really calculating the number of pre-processor
+        // operations being done and treating them like a signature
+        for (program_id, instruction) in self.program_instructions_iter() {
+            if secp256k1_program::check_id(program_id) || ed25519_program::check_id(program_id) {
+                if let Some(num_verifies) = instruction.data.first() {
+                    num_signatures = num_signatures.saturating_add(u64::from(*num_verifies));
+                }
+            }
+        }
+        num_signatures
+    }
+
+    pub fn num_write_locks(&self) -> u64 {
+        self.account_keys()
+            .len()
+            .saturating_sub(self.num_readonly_accounts()) as u64
     }
 }
 

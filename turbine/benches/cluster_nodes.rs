@@ -44,11 +44,8 @@ fn get_retransmit_peers_deterministic(
             0,
             0,
         );
-        let _retransmit_peers = cluster_nodes.get_retransmit_peers(
-            slot_leader,
-            &shred.id(),
-            solana_gossip::cluster_info::DATA_PLANE_FANOUT,
-        );
+        let _retransmit_peers =
+            cluster_nodes.get_retransmit_peers(slot_leader, &shred.id(), /*fanout:*/ 200);
     }
 }
 

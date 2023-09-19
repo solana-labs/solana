@@ -180,48 +180,31 @@ declare_process_instruction!(
             }
             VoteInstruction::UpdateVoteState(vote_state_update)
             | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _) => {
-                if invoke_context
-                    .feature_set
-                    .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
-                {
-                    let sysvar_cache = invoke_context.get_sysvar_cache();
-                    let slot_hashes = sysvar_cache.get_slot_hashes()?;
-                    let clock = sysvar_cache.get_clock()?;
-                    vote_state::process_vote_state_update(
-                        &mut me,
-                        slot_hashes.slot_hashes(),
-                        &clock,
-                        vote_state_update,
-                        &signers,
-                        &invoke_context.feature_set,
-                    )
-                } else {
-                    Err(InstructionError::InvalidInstructionData)
-                }
+                let sysvar_cache = invoke_context.get_sysvar_cache();
+                let slot_hashes = sysvar_cache.get_slot_hashes()?;
+                let clock = sysvar_cache.get_clock()?;
+                vote_state::process_vote_state_update(
+                    &mut me,
+                    slot_hashes.slot_hashes(),
+                    &clock,
+                    vote_state_update,
+                    &signers,
+                    &invoke_context.feature_set,
+                )
             }
             VoteInstruction::CompactUpdateVoteState(vote_state_update)
             | VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, _) => {
-                if invoke_context
-                    .feature_set
-                    .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
-                    && invoke_context
-                        .feature_set
-                        .is_active(&feature_set::compact_vote_state_updates::id())
-                {
-                    let sysvar_cache = invoke_context.get_sysvar_cache();
-                    let slot_hashes = sysvar_cache.get_slot_hashes()?;
-                    let clock = sysvar_cache.get_clock()?;
-                    vote_state::process_vote_state_update(
-                        &mut me,
-                        slot_hashes.slot_hashes(),
-                        &clock,
-                        vote_state_update,
-                        &signers,
-                        &invoke_context.feature_set,
-                    )
-                } else {
-                    Err(InstructionError::InvalidInstructionData)
-                }
+                let sysvar_cache = invoke_context.get_sysvar_cache();
+                let slot_hashes = sysvar_cache.get_slot_hashes()?;
+                let clock = sysvar_cache.get_clock()?;
+                vote_state::process_vote_state_update(
+                    &mut me,
+                    slot_hashes.slot_hashes(),
+                    &clock,
+                    vote_state_update,
+                    &signers,
+                    &invoke_context.feature_set,
+                )
             }
 
             VoteInstruction::Withdraw(lamports) => {

@@ -16,7 +16,7 @@ EXPOSE 9900/tcp
 EXPOSE 8000/udp
 # gossip
 EXPOSE 8001/udp
-# tvu_forwards
+# tvu_quic
 EXPOSE 8002/udp
 # tpu
 EXPOSE 8003/udp

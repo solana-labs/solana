@@ -1,5 +1,5 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #![recursion_limit = "2048"]
 //! The `solana` library implements the Solana high-performance blockchain architecture.
 //! It includes a full Rust implementation of the architecture (see
@@ -10,41 +10,29 @@
 
 pub mod accounts_hash_verifier;
 pub mod admin_rpc_post_init;
-pub mod ancestor_hashes_service;
 pub mod banking_stage;
 pub mod banking_trace;
 pub mod cache_block_meta_service;
 pub mod cluster_info_vote_listener;
-pub mod cluster_slot_state_verifier;
 pub mod cluster_slots_service;
 pub mod commitment_service;
 pub mod completed_data_sets_service;
 pub mod consensus;
 pub mod cost_update_service;
 pub mod drop_bank_service;
-pub mod duplicate_repair_status;
 pub mod fetch_stage;
 pub mod gen_keys;
 pub mod ledger_cleanup_service;
 pub mod ledger_metric_report_service;
 pub mod next_leader;
 pub mod optimistic_confirmation_verifier;
-pub mod outstanding_requests;
-pub mod packet_threshold;
 pub mod poh_timing_report_service;
 pub mod poh_timing_reporter;
-pub mod repair_generic_traversal;
-pub mod repair_response;
-pub mod repair_service;
-pub mod repair_weight;
-pub mod repair_weighted_traversal;
+pub mod repair;
 pub mod replay_stage;
-pub mod request_response;
 mod result;
 pub mod rewards_recorder_service;
 pub mod sample_performance_service;
-pub mod serve_repair;
-pub mod serve_repair_service;
 mod shred_fetch_stage;
 pub mod sigverify;
 pub mod sigverify_stage;
@@ -81,4 +69,4 @@ extern crate solana_frozen_abi_macro;
 
 #[cfg(test)]
 #[macro_use]
-extern crate matches;
+extern crate assert_matches;

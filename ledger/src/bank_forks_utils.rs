@@ -10,13 +10,14 @@ use {
         use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
     },
     log::*,
+    solana_accounts_db::accounts_update_notifier_interface::AccountsUpdateNotifier,
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
-        accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank_forks::BankForks,
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
+        snapshot_bank_utils,
         snapshot_config::SnapshotConfig,
         snapshot_hash::{FullSnapshotHash, IncrementalSnapshotHash, StartingSnapshotHashes},
         snapshot_utils,
@@ -112,7 +113,7 @@ pub fn load_bank_forks(
 
         let Some(full_snapshot_archive_info) =
             snapshot_utils::get_highest_full_snapshot_archive_info(
-                &snapshot_config.full_snapshot_archives_dir
+                &snapshot_config.full_snapshot_archives_dir,
             )
         else {
             warn!(
@@ -249,7 +250,7 @@ fn bank_forks_from_snapshot(
         // the archives, causing the out-of-memory problem.  So, purge the snapshot dirs upfront before loading from the archive.
         snapshot_utils::purge_old_bank_snapshots(&snapshot_config.bank_snapshots_dir, 0, None);
 
-        let (bank, _) = snapshot_utils::bank_from_snapshot_archives(
+        let (bank, _) = snapshot_bank_utils::bank_from_snapshot_archives(
             &account_paths,
             &snapshot_config.bank_snapshots_dir,
             &full_snapshot_archive_info,
@@ -268,7 +269,19 @@ fn bank_forks_from_snapshot(
             accounts_update_notifier,
             exit,
         )
-        .expect("load bank from snapshot archives");
+        .unwrap_or_else(|err| {
+            error!(
+                "Failed to load bank: {err} \
+                \nfull snapshot archive: {} \
+                \nincremental snapshot archive: {}",
+                full_snapshot_archive_info.path().display(),
+                incremental_snapshot_archive_info
+                    .as_ref()
+                    .map(|archive| archive.path().display().to_string())
+                    .unwrap_or("none".to_string()),
+            );
+            process::exit(1);
+        });
         bank
     } else {
         let Some(bank_snapshot) = latest_bank_snapshot else {
@@ -298,7 +311,7 @@ fn bank_forks_from_snapshot(
             );
         }
 
-        let (bank, _) = snapshot_utils::bank_from_snapshot_dir(
+        let (bank, _) = snapshot_bank_utils::bank_from_snapshot_dir(
             &account_paths,
             &bank_snapshot,
             genesis_config,
@@ -313,7 +326,14 @@ fn bank_forks_from_snapshot(
             accounts_update_notifier,
             exit,
         )
-        .expect("load bank from local state");
+        .unwrap_or_else(|err| {
+            error!(
+                "Failed to load bank: {err} \
+                \nsnapshot: {}",
+                bank_snapshot.snapshot_path().display(),
+            );
+            process::exit(1);
+        });
         bank
     };
 

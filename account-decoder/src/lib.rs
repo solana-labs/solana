@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
@@ -7,6 +7,7 @@ extern crate serde_derive;
 pub mod parse_account_data;
 pub mod parse_address_lookup_table;
 pub mod parse_bpf_loader;
+#[allow(deprecated)]
 pub mod parse_config;
 pub mod parse_nonce;
 pub mod parse_stake;
@@ -213,6 +214,7 @@ fn slice_data(data: &[u8], data_slice_config: Option<UiDataSliceConfig>) -> &[u8
 mod test {
     use {
         super::*,
+        assert_matches::assert_matches,
         solana_sdk::account::{Account, AccountSharedData},
     };
 
@@ -256,10 +258,10 @@ mod test {
             None,
             None,
         );
-        assert!(matches!(
+        assert_matches!(
             encoded_account.data,
             UiAccountData::Binary(_, UiAccountEncoding::Base64Zstd)
-        ));
+        );
 
         let decoded_account = encoded_account.decode::<Account>().unwrap();
         assert_eq!(decoded_account.data(), &vec![0; 1024]);

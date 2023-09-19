@@ -1,12 +1,12 @@
 use {
-    crate::{args::*, ledger_utils::*},
+    crate::{args::*, canonicalize_ledger_path, ledger_utils::*},
     clap::{value_t, App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
     serde::{Deserialize, Serialize},
     serde_json::Result,
     solana_bpf_loader_program::{
         create_vm, load_program_from_bytes, serialization::serialize_parameters,
-        syscalls::create_program_runtime_environment,
+        syscalls::create_program_runtime_environment_v1,
     },
     solana_clap_utils::input_parsers::pubkeys_of,
     solana_ledger::{
@@ -77,6 +77,7 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
     let debug_keys = pubkeys_of(arg_matches, "debug_key")
         .map(|pubkeys| Arc::new(pubkeys.into_iter().collect::<HashSet<_>>()));
     let force_update_to_open = arg_matches.is_present("force_update_to_open");
+    let enforce_ulimit_nofile = !arg_matches.is_present("ignore_ulimit_nofile_error");
     let process_options = ProcessOptions {
         new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
         run_verification: false,
@@ -116,6 +117,7 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
         AccessType::Secondary,
         wal_recovery_mode,
         force_update_to_open,
+        enforce_ulimit_nofile,
     );
     let (bank_forks, ..) = load_and_process_ledger(
         arg_matches,
@@ -160,13 +162,11 @@ impl ProgramSubCommand for App<'_, '_> {
         .subcommand(
             SubCommand::with_name("cfg")
                 .about("generates Control Flow Graph of the program.")
-                .arg(&max_genesis_arg)
                 .arg(&program_arg)
         )
         .subcommand(
             SubCommand::with_name("disassemble")
                 .about("dumps disassembled code of the program.")
-                .arg(&max_genesis_arg)
                 .arg(&program_arg)
         )
         .subcommand(
@@ -177,7 +177,7 @@ impl ProgramSubCommand for App<'_, '_> {
                 .arg(
                     Arg::with_name("input")
                         .help(
-                            r##"Input for the program to run on, where FILE is a name of a JSON file
+                            r#"Input for the program to run on, where FILE is a name of a JSON file
 with input data, or BYTES is the number of 0-valued bytes to allocate for program parameters"
 
 The input data for a program execution have to be in JSON format
@@ -196,7 +196,7 @@ and the following fields are required
     ],
     "instruction_data": [31, 32, 23, 24]
 }
-"##,
+"#,
                         )
                         .short("i")
                         .long("input")
@@ -283,11 +283,11 @@ impl Debug for Output {
 // https://github.com/rust-lang/rust/issues/74465
 struct LazyAnalysis<'a, 'b> {
     analysis: Option<Analysis<'a>>,
-    executable: &'a Executable<RequisiteVerifier, InvokeContext<'b>>,
+    executable: &'a Executable<InvokeContext<'b>>,
 }
 
 impl<'a, 'b> LazyAnalysis<'a, 'b> {
-    fn new(executable: &'a Executable<RequisiteVerifier, InvokeContext<'b>>) -> Self {
+    fn new(executable: &'a Executable<InvokeContext<'b>>) -> Self {
         Self {
             analysis: None,
             executable,
@@ -330,7 +330,7 @@ fn load_program<'a>(
     filename: &Path,
     program_id: Pubkey,
     invoke_context: &InvokeContext<'a>,
-) -> Executable<RequisiteVerifier, InvokeContext<'a>> {
+) -> Executable<InvokeContext<'a>> {
     let mut file = File::open(filename).unwrap();
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic).unwrap();
@@ -346,7 +346,7 @@ fn load_program<'a>(
         ..LoadProgramMetrics::default()
     };
     let account_size = contents.len();
-    let program_runtime_environment = create_program_runtime_environment(
+    let program_runtime_environment = create_program_runtime_environment_v1(
         &invoke_context.feature_set,
         invoke_context.get_compute_budget(),
         false, /* deployment */
@@ -365,6 +365,7 @@ fn load_program<'a>(
             account_size,
             slot,
             Arc::new(program_runtime_environment),
+            false,
         );
         match result {
             Ok(loaded_program) => match loaded_program.program {
@@ -374,22 +375,25 @@ fn load_program<'a>(
             Err(err) => Err(format!("Loading executable failed: {err:?}")),
         }
     } else {
-        let executable = assemble::<InvokeContext>(
+        assemble::<InvokeContext>(
             std::str::from_utf8(contents.as_slice()).unwrap(),
             Arc::new(program_runtime_environment),
         )
-        .unwrap();
-        Executable::<RequisiteVerifier, InvokeContext>::verified(executable)
-            .map_err(|err| format!("Assembling executable failed: {err:?}"))
+        .map_err(|err| format!("Assembling executable failed: {err:?}"))
+        .and_then(|executable| {
+            executable
+                .verify::<RequisiteVerifier>()
+                .map_err(|err| format!("Verifying executable failed: {err:?}"))?;
+            Ok(executable)
+        })
     }
     .unwrap();
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     verified_executable.jit_compile().unwrap();
     unsafe {
-        std::mem::transmute::<
-            Executable<RequisiteVerifier, InvokeContext<'static>>,
-            Executable<RequisiteVerifier, InvokeContext<'a>>,
-        >(verified_executable)
+        std::mem::transmute::<Executable<InvokeContext<'static>>, Executable<InvokeContext<'a>>>(
+            verified_executable,
+        )
     }
 }
 
@@ -433,7 +437,8 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
         ("run", Some(arg_matches)) => arg_matches,
         _ => unreachable!(),
     };
-    let bank = load_blockstore(ledger_path, matches);
+    let ledger_path = canonicalize_ledger_path(ledger_path);
+    let bank = load_blockstore(&ledger_path, matches);
     let loader_id = bpf_loader_upgradeable::id();
     let mut transaction_accounts = Vec::new();
     let mut instruction_accounts = Vec::new();
@@ -492,7 +497,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
                     if space > 0 {
                         let lamports = account_info.lamports.unwrap_or(account.lamports());
                         let mut account = AccountSharedData::new(lamports, space, &owner);
-                        account.set_data(data);
+                        account.set_data_from_slice(&data);
                         account
                     } else {
                         account
@@ -507,7 +512,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
                     });
                     let lamports = account_info.lamports.unwrap_or(0);
                     let mut account = AccountSharedData::new(lamports, space, &owner);
-                    account.set_data(data);
+                    account.set_data_from_slice(&data);
                     account
                 };
                 transaction_accounts.push((pubkey, account));
@@ -535,10 +540,16 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
 
     // Adding `DELAY_VISIBILITY_SLOT_OFFSET` to slots to accommodate for delay visibility of the program
-    let mut loaded_programs =
-        LoadedProgramsForTxBatch::new(bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET);
+    let mut loaded_programs = LoadedProgramsForTxBatch::new(
+        bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET,
+        bank.loaded_programs_cache
+            .read()
+            .unwrap()
+            .environments
+            .clone(),
+    );
     for key in cached_account_keys {
-        loaded_programs.replenish(key, bank.load_program(&key));
+        loaded_programs.replenish(key, bank.load_program(&key, false));
         debug!("Loaded program {}", key);
     }
     invoke_context.programs_loaded_for_tx_batch = &loaded_programs;
@@ -579,17 +590,17 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
     if matches.value_of("mode").unwrap() == "debugger" {
         vm.debug_port = Some(matches.value_of("port").unwrap().parse::<u16>().unwrap());
     }
-    let (instruction_count, result) = vm.execute_program(interpreted);
+    let (instruction_count, result) = vm.execute_program(&verified_executable, interpreted);
     let duration = Instant::now() - start_time;
     if matches.occurrences_of("trace") > 0 {
         // top level trace is stored in syscall_context
-        if let Some(Some(syscall_context)) = vm.env.context_object_pointer.syscall_context.last() {
+        if let Some(Some(syscall_context)) = vm.context_object_pointer.syscall_context.last() {
             let trace = syscall_context.trace_log.as_slice();
             output_trace(matches, trace, 0, &mut analysis);
         }
         // the remaining traces are saved in InvokeContext when
         // corresponding syscall_contexts are popped
-        let traces = vm.env.context_object_pointer.get_traces();
+        let traces = vm.context_object_pointer.get_traces();
         for (frame, trace) in traces.iter().filter(|t| !t.is_empty()).enumerate() {
             output_trace(matches, trace, frame + 1, &mut analysis);
         }

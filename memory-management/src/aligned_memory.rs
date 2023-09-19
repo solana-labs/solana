@@ -208,7 +208,7 @@ impl<const ALIGN: usize, T: AsRef<[u8]>> From<T> for AlignedMemory<ALIGN> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::integer_arithmetic)]
+    #![allow(clippy::arithmetic_side_effects)]
     use {super::*, std::io::Write};
 
     fn do_test<const ALIGN: usize>() {

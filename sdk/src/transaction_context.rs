@@ -25,7 +25,7 @@ use {
         cell::{Ref, RefCell, RefMut},
         collections::HashSet,
         pin::Pin,
-        sync::Arc,
+        rc::Rc,
     },
 };
 
@@ -142,7 +142,7 @@ impl TransactionAccounts {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransactionContext {
     account_keys: Pin<Box<[Pubkey]>>,
-    accounts: Arc<TransactionAccounts>,
+    accounts: Rc<TransactionAccounts>,
     instruction_stack_capacity: usize,
     instruction_trace_capacity: usize,
     instruction_stack: Vec<usize>,
@@ -173,7 +173,7 @@ impl TransactionContext {
             .unzip();
         Self {
             account_keys: Pin::new(account_keys.into_boxed_slice()),
-            accounts: Arc::new(TransactionAccounts::new(accounts, rent.is_some())),
+            accounts: Rc::new(TransactionAccounts::new(accounts, rent.is_some())),
             instruction_stack_capacity,
             instruction_trace_capacity,
             instruction_stack: Vec::with_capacity(instruction_stack_capacity),
@@ -194,13 +194,13 @@ impl TransactionContext {
             return Err(InstructionError::CallDepth);
         }
 
-        Ok(Arc::try_unwrap(self.accounts)
+        Ok(Rc::try_unwrap(self.accounts)
             .expect("transaction_context.accounts has unexpected outstanding refs")
             .into_accounts())
     }
 
     #[cfg(not(target_os = "solana"))]
-    pub fn accounts(&self) -> &Arc<TransactionAccounts> {
+    pub fn accounts(&self) -> &Rc<TransactionAccounts> {
         &self.accounts
     }
 
@@ -357,7 +357,7 @@ impl TransactionContext {
             }
         }
         {
-            let mut instruction_context = self.get_next_instruction_context()?;
+            let instruction_context = self.get_next_instruction_context()?;
             instruction_context.nesting_level = nesting_level;
             instruction_context.instruction_accounts_lamport_sum =
                 callee_instruction_accounts_lamport_sum;
@@ -886,9 +886,10 @@ impl<'a> BorrowedAccount<'a> {
     /// You should always prefer set_data_from_slice(). Calling this method is
     /// currently safe but requires some special casing during CPI when direct
     /// account mapping is enabled.
-    ///
-    /// Currently only used by tests and the program-test crate.
-    #[cfg(not(target_os = "solana"))]
+    #[cfg(all(
+        not(target_os = "solana"),
+        any(test, feature = "dev-context-only-utils")
+    ))]
     pub fn set_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
         self.can_data_be_changed()?;
@@ -963,7 +964,10 @@ impl<'a> BorrowedAccount<'a> {
     /// in the given account. Does nothing if capacity is already sufficient.
     #[cfg(not(target_os = "solana"))]
     pub fn reserve(&mut self, additional: usize) -> Result<(), InstructionError> {
-        self.can_data_be_changed()?;
+        // Note that we don't need to call can_data_be_changed() here nor
+        // touch() the account. reserve() only changes the capacity of the
+        // memory that holds the account but it doesn't actually change content
+        // nor length of the account.
         self.make_data_mut();
         self.account.reserve(additional);
 
@@ -996,8 +1000,8 @@ impl<'a> BorrowedAccount<'a> {
         // transaction reallocs, we don't have to copy the whole account data a
         // second time to fullfill the realloc.
         //
-        // NOTE: The account memory region CoW code in Serializer::push_account_region() implements
-        // the same logic and must be kept in sync.
+        // NOTE: The account memory region CoW code in bpf_loader::create_vm() implements the same
+        // logic and must be kept in sync.
         if self.account.is_shared() {
             self.account.reserve(MAX_PERMITTED_DATA_INCREASE);
         }
@@ -1204,7 +1208,7 @@ pub struct ExecutionRecord {
 #[cfg(not(target_os = "solana"))]
 impl From<TransactionContext> for ExecutionRecord {
     fn from(context: TransactionContext) -> Self {
-        let accounts = Arc::try_unwrap(context.accounts)
+        let accounts = Rc::try_unwrap(context.accounts)
             .expect("transaction_context.accounts has unexpectd outstanding refs");
         let touched_account_count = accounts.touched_count() as u64;
         let accounts = accounts.into_accounts();

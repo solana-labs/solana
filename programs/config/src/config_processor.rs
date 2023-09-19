@@ -206,13 +206,13 @@ mod tests {
         let instructions =
             config_instruction::create_account::<MyConfig>(&from_pubkey, &config_pubkey, 1, keys);
         let system_instruction = limited_deserialize(&instructions[0].data).unwrap();
-        let space = match system_instruction {
-            SystemInstruction::CreateAccount {
-                lamports: _,
-                space,
-                owner: _,
-            } => space,
-            _ => panic!("Not a CreateAccount system instruction"),
+        let SystemInstruction::CreateAccount {
+            lamports: _,
+            space,
+            owner: _,
+        } = system_instruction
+        else {
+            panic!("Not a CreateAccount system instruction")
         };
         let config_account = AccountSharedData::new(0, space as usize, &id());
         let accounts = process_instruction(

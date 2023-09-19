@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 use {
@@ -7,6 +7,17 @@ use {
     crossbeam_channel::unbounded,
     log::*,
     rand::{seq::SliceRandom, thread_rng},
+    solana_accounts_db::{
+        accounts_db::{
+            AccountShrinkThreshold, AccountsDb, AccountsDbConfig, CreateAncientStorage,
+            FillerAccountsConfig,
+        },
+        accounts_index::{
+            AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
+            AccountsIndexConfig, IndexLimitMb,
+        },
+        partitioned_rewards::TestPartitionedEpochRewards,
+    },
     solana_clap_utils::input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
     solana_core::{
         banking_trace::DISABLED_BAKING_TRACE_DIR,
@@ -36,20 +47,12 @@ use {
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::config::RpcLeaderScheduleConfig,
     solana_runtime::{
-        accounts_db::{
-            AccountShrinkThreshold, AccountsDb, AccountsDbConfig, CreateAncientStorage,
-            FillerAccountsConfig,
-        },
-        accounts_index::{
-            AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
-            AccountsIndexConfig, IndexLimitMb,
-        },
-        partitioned_rewards::TestPartitionedEpochRewards,
         runtime_config::RuntimeConfig,
+        snapshot_bank_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
             self, create_all_accounts_run_and_snapshot_dirs, create_and_canonicalize_directories,
-            ArchiveFormat, SnapshotVersion, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
+            ArchiveFormat, SnapshotVersion,
         },
     },
     solana_sdk::{
@@ -125,9 +128,8 @@ fn wait_for_restart_window(
         .block_on(async move { admin_client.await?.rpc_addr().await })
         .map_err(|err| format!("Unable to get validator RPC address: {err}"))?;
 
-    let rpc_client = match rpc_addr {
-        None => return Err("RPC not available".into()),
-        Some(rpc_addr) => RpcClient::new_socket(rpc_addr),
+    let Some(rpc_client) = rpc_addr.map(RpcClient::new_socket) else {
+        return Err("RPC not available".into());
     };
 
     let my_identity = rpc_client.get_identity()?;
@@ -976,6 +978,18 @@ pub fn main() {
         .pop()
         .unwrap();
 
+    let accounts_hash_cache_path = matches
+        .value_of("accounts_hash_cache_path")
+        .map(Into::into)
+        .unwrap_or_else(|| ledger_path.join(AccountsDb::DEFAULT_ACCOUNTS_HASH_CACHE_DIR));
+    let accounts_hash_cache_path = create_and_canonicalize_directories(&[accounts_hash_cache_path])
+        .unwrap_or_else(|err| {
+            eprintln!("Unable to access accounts hash cache path: {err}");
+            exit(1);
+        })
+        .pop()
+        .unwrap();
+
     let debug_keys: Option<Arc<HashSet<_>>> = if matches.is_present("debug_key") {
         Some(Arc::new(
             values_t_or_exit!(matches, "debug_key", Pubkey)
@@ -1173,7 +1187,8 @@ pub fn main() {
 
     let accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
-        accounts_hash_cache_path: Some(ledger_path.join(AccountsDb::ACCOUNTS_HASH_CACHE_DIR)),
+        base_working_path: Some(ledger_path.clone()),
+        accounts_hash_cache_path: Some(accounts_hash_cache_path),
         filler_accounts_config,
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
@@ -1449,7 +1464,7 @@ pub fn main() {
         if let Some(account_shrink_snapshot_paths) = account_shrink_snapshot_paths {
             account_snapshot_paths
                 .into_iter()
-                .chain(account_shrink_snapshot_paths.into_iter())
+                .chain(account_shrink_snapshot_paths)
                 .collect()
         } else {
             account_snapshot_paths

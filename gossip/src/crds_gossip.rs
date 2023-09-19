@@ -149,7 +149,7 @@ impl CrdsGossip {
         let now = timestamp();
         for entry in entries {
             if let Err(err) = crds.insert(entry, now, GossipRoute::LocalMessage) {
-                error!("push_duplicate_shred faild: {:?}", err);
+                error!("push_duplicate_shred failed: {:?}", err);
             }
         }
         Ok(())
@@ -405,9 +405,8 @@ pub(crate) fn maybe_ping_gossip_addresses<R: Rng + CryptoRng>(
     nodes
         .into_iter()
         .filter(|node| {
-            let node_gossip = match node.gossip() {
-                Err(_) => return false,
-                Ok(addr) => addr,
+            let Ok(node_gossip) = node.gossip() else {
+                return false;
             };
             let (check, ping) = {
                 let node = (*node.pubkey(), node_gossip);

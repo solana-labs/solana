@@ -3,6 +3,12 @@ use {
         crate_description, crate_name, App, AppSettings, Arg, ArgGroup, ArgMatches, SubCommand,
     },
     log::warn,
+    solana_accounts_db::{
+        accounts_db::{
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE, DEFAULT_ACCOUNTS_SHRINK_RATIO,
+        },
+        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+    },
     solana_clap_utils::{
         hidden_unless_forced,
         input_validators::{
@@ -23,14 +29,12 @@ use {
     solana_rpc::{rpc::MAX_REQUEST_BODY_SIZE, rpc_pubsub_service::PubSubConfig},
     solana_rpc_client_api::request::MAX_MULTIPLE_ACCOUNTS,
     solana_runtime::{
-        accounts_db::{
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE, DEFAULT_ACCOUNTS_SHRINK_RATIO,
-        },
-        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-        snapshot_utils::{
-            SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
+        snapshot_bank_utils::{
             DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+        },
+        snapshot_utils::{
+            SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
         },
@@ -283,6 +287,13 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .multiple(true)
                 .help("Path to accounts shrink path which can hold a compacted account set."),
+        )
+        .arg(
+            Arg::with_name("accounts_hash_cache_path")
+                .long("accounts-hash-cache-path")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("Use PATH as accounts hash cache location"),
         )
         .arg(
             Arg::with_name("snapshots")

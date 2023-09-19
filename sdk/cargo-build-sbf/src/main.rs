@@ -1,6 +1,7 @@
 use {
     bzip2::bufread::BzDecoder,
     clap::{crate_description, crate_name, crate_version, Arg},
+    itertools::Itertools,
     log::*,
     regex::Regex,
     solana_download_utils::download_file,
@@ -73,15 +74,15 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let args = args.into_iter().collect::<Vec<_>>();
-    let mut msg = format!("spawn: {}", program.display());
-    for arg in args.iter() {
-        msg = msg + &format!(" {}", arg.as_ref().to_str().unwrap_or("?")).to_string();
-    }
-    info!("{}", msg);
+    let args = Vec::from_iter(args);
+    let msg = args
+        .iter()
+        .map(|arg| arg.as_ref().to_str().unwrap_or("?"))
+        .join(" ");
+    info!("spawn: {}", msg);
 
     let child = Command::new(program)
-        .args(&args)
+        .args(args)
         .stdout(Stdio::piped())
         .spawn()
         .unwrap_or_else(|err| {
@@ -105,10 +106,7 @@ where
             writeln!(out, "{key}=\"{value}\" \\").unwrap();
         }
         write!(out, "{}", program.display()).unwrap();
-        for arg in args.iter() {
-            write!(out, " {}", arg.as_ref().to_str().unwrap_or("?")).unwrap();
-        }
-        writeln!(out).unwrap();
+        writeln!(out, "{}", msg).unwrap();
         out.flush().unwrap();
         error!(
             "To rerun the failed command for debugging use {}",
@@ -249,8 +247,10 @@ fn install_if_missing(
         let source_base = config.sbf_sdk.join("dependencies");
         if source_base.exists() {
             let source_path = source_base.join(package);
-            debug!("Remove file {:?}", source_path);
-            fs::remove_file(source_path).map_err(|err| err.to_string())?;
+            if source_path.exists() {
+                debug!("Remove file {:?}", source_path);
+                fs::remove_file(source_path).map_err(|err| err.to_string())?;
+            }
         }
     }
     // Check whether the target path is an empty directory. This can
@@ -339,9 +339,8 @@ fn postprocess_dump(program_dump: &Path) {
     let mut rel: HashMap<u64, String> = HashMap::new();
     let mut name = String::from("");
     let mut state = 0;
-    let file = match File::open(program_dump) {
-        Ok(x) => x,
-        _ => return,
+    let Ok(file) = File::open(program_dump) else {
+        return;
     };
     for line_result in BufReader::new(file).lines() {
         let line = line_result.unwrap();
@@ -371,14 +370,12 @@ fn postprocess_dump(program_dump: &Path) {
             }
         }
     }
-    let file = match File::create(&postprocessed_dump) {
-        Ok(x) => x,
-        _ => return,
+    let Ok(file) = File::create(&postprocessed_dump) else {
+        return;
     };
     let mut out = BufWriter::new(file);
-    let file = match File::open(program_dump) {
-        Ok(x) => x,
-        _ => return,
+    let Ok(file) = File::open(program_dump) else {
+        return;
     };
     let mut pc = 0u64;
     let mut step = 0u64;
@@ -426,9 +423,8 @@ fn postprocess_dump(program_dump: &Path) {
 // not known to the runtime and warn about them if any.
 fn check_undefined_symbols(config: &Config, program: &Path) {
     let syscalls_txt = config.sbf_sdk.join("syscalls.txt");
-    let file = match File::open(syscalls_txt) {
-        Ok(x) => x,
-        _ => return,
+    let Ok(file) = File::open(syscalls_txt) else {
+        return;
     };
     let mut syscalls = HashSet::new();
     for line_result in BufReader::new(file).lines() {

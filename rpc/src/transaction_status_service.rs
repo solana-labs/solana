@@ -2,11 +2,11 @@ use {
     crate::transaction_notifier_interface::TransactionNotifierLock,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     itertools::izip,
+    solana_accounts_db::transaction_results::{DurableNonceFee, TransactionExecutionDetails},
     solana_ledger::{
         blockstore::Blockstore,
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
-    solana_runtime::bank::{DurableNonceFee, TransactionExecutionDetails},
     solana_transaction_status::{
         extract_and_fmt_memos, InnerInstruction, InnerInstructions, Reward, TransactionStatusMeta,
     },
@@ -61,7 +61,7 @@ impl TransactionStatusService {
         max_complete_transaction_status_slot: &Arc<AtomicU64>,
         enable_rpc_transaction_history: bool,
         transaction_notifier: Option<TransactionNotifierLock>,
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         enable_extended_tx_metadata_storage: bool,
     ) -> Result<(), RecvTimeoutError> {
         match write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))? {
@@ -225,11 +225,12 @@ pub(crate) mod tests {
         crossbeam_channel::unbounded,
         dashmap::DashMap,
         solana_account_decoder::parse_token::token_amount_to_ui_amount,
-        solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path},
-        solana_runtime::{
-            bank::{Bank, NonceFull, NoncePartial, TransactionBalancesSet},
+        solana_accounts_db::{
+            nonce_info::{NonceFull, NoncePartial},
             rent_debits::RentDebits,
         },
+        solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path},
+        solana_runtime::bank::{Bank, TransactionBalancesSet},
         solana_sdk::{
             account_utils::StateMut,
             clock::Slot,
