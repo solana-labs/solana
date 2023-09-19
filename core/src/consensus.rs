@@ -19,10 +19,7 @@ use {
     },
     chrono::prelude::*,
     solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_db},
-    solana_runtime::{
-        bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE,
-        vote_account::VoteAccountsHashMap,
-    },
+    solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE},
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         hash::Hash,
@@ -31,6 +28,7 @@ use {
         signature::Keypair,
         slot_history::{Check, SlotHistory},
     },
+    solana_vote::vote_account::VoteAccountsHashMap,
     solana_vote_program::{
         vote_instruction,
         vote_state::{
@@ -1521,7 +1519,7 @@ pub mod test {
         },
         itertools::Itertools,
         solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path},
-        solana_runtime::{bank::Bank, vote_account::VoteAccount},
+        solana_runtime::bank::Bank,
         solana_sdk::{
             account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
             clock::Slot,
@@ -1530,6 +1528,7 @@ pub mod test {
             signature::Signer,
             slot_history::SlotHistory,
         },
+        solana_vote::vote_account::VoteAccount,
         solana_vote_program::vote_state::{Vote, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         std::{
             collections::{HashMap, VecDeque},

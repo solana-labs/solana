@@ -43,8 +43,6 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
-        vote_account::VoteAccountsHashMap,
-        vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
@@ -61,6 +59,7 @@ use {
         },
     },
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
+    solana_vote::{vote_account::VoteAccountsHashMap, vote_sender_types::ReplayVoteSender},
     std::{
         borrow::Cow,
         collections::{HashMap, HashSet},
@@ -1863,11 +1862,8 @@ pub mod tests {
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
         solana_program_runtime::declare_process_instruction,
-        solana_runtime::{
-            genesis_utils::{
-                self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
-            },
-            vote_account::VoteAccount,
+        solana_runtime::genesis_utils::{
+            self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
@@ -1881,6 +1877,7 @@ pub mod tests {
             system_transaction,
             transaction::{Transaction, TransactionError},
         },
+        solana_vote::vote_account::VoteAccount,
         solana_vote_program::{
             self,
             vote_state::{VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY},

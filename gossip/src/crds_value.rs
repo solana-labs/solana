@@ -10,7 +10,6 @@ use {
     bincode::{serialize, serialized_size},
     rand::{CryptoRng, Rng},
     serde::de::{Deserialize, Deserializer},
-    solana_runtime::vote_parser,
     solana_sdk::{
         clock::Slot,
         hash::Hash,
@@ -20,6 +19,7 @@ use {
         timing::timestamp,
         transaction::Transaction,
     },
+    solana_vote::vote_parser,
     std::{
         borrow::{Borrow, Cow},
         cmp::Ordering,

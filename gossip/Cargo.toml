@@ -47,6 +47,7 @@ solana-streamer = { workspace = true }
 solana-thin-client = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-version = { workspace = true }
+solana-vote = { workspace = true }
 solana-vote-program = { workspace = true }
 static_assertions = { workspace = true }
 thiserror = { workspace = true }

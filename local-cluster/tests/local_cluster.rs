@@ -61,7 +61,6 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_package::SnapshotKind,
         snapshot_utils::{self},
-        vote_parser,
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -83,6 +82,7 @@ use {
         broadcast_duplicates_run::{BroadcastDuplicatesConfig, ClusterPartition},
         BroadcastStageType,
     },
+    solana_vote::vote_parser,
     solana_vote_program::{vote_state::MAX_LOCKOUT_HISTORY, vote_transaction},
     std::{
         collections::{BTreeSet, HashMap, HashSet},
