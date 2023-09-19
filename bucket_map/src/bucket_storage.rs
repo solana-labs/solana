@@ -88,7 +88,7 @@ pub enum BucketStorageError {
 
 impl<O: BucketOccupied> Drop for BucketStorage<O> {
     fn drop(&mut self) {
-        _ = remove_file(&self.path);
+        self.delete();
     }
 }
 
@@ -179,6 +179,11 @@ impl<O: BucketOccupied> BucketStorage<O> {
         bytes
     }
 
+    /// delete the backing file on disk
+    fn delete(&self) {
+         _ = remove_file(&self.path);
+    }
+
     pub fn max_search(&self) -> u64 {
         self.max_search as u64
     }
@@ -236,7 +241,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
     /// 'is_resizing' true if caller is resizing the index (so don't increment count)
     /// 'is_resizing' false if caller is adding an item to the index (so increment count)
     pub fn occupy(&mut self, ix: u64, is_resizing: bool) -> Result<(), BucketStorageError> {
-        assert!(ix < self.capacity(), "occupy: bad index size");
+        debug_assert!(ix < self.capacity(), "occupy: bad index size");
         let mut e = Err(BucketStorageError::AlreadyOccupied);
         //debug!("ALLOC {} {}", ix, uid);
         if self.try_lock(ix) {
@@ -249,14 +254,14 @@ impl<O: BucketOccupied> BucketStorage<O> {
     }
 
     pub fn free(&mut self, ix: u64) {
-        assert!(ix < self.capacity(), "bad index size");
+        debug_assert!(ix < self.capacity(), "bad index size");
         let start = self.get_start_offset_with_header(ix);
         self.contents.free(&mut self.mmap[start..], ix as usize);
         self.count.fetch_sub(1, Ordering::Relaxed);
     }
 
     fn get_start_offset_with_header(&self, ix: u64) -> usize {
-        assert!(ix < self.capacity(), "bad index size");
+        debug_assert!(ix < self.capacity(), "bad index size");
         (self.cell_size * ix) as usize
     }
 
