@@ -12,11 +12,8 @@ use {
     solana_sdk::timing::AtomicInterval,
     std::{
         net::SocketAddr,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
-        },
-        thread::{self, Builder, JoinHandle},
+        sync::{atomic::Ordering, Arc, RwLock},
+        thread::{Builder, JoinHandle},
         time::Duration,
     },
     thiserror::Error,
@@ -56,9 +53,7 @@ pub struct ConnectionCache<
     last_stats: AtomicInterval,
     connection_pool_size: usize,
     connection_config: Arc<T>,
-    exit: Arc<AtomicBool>,
     sender: Sender<(usize, SocketAddr)>,
-    async_connection_thread: JoinHandle<()>,
 }
 
 impl<P, M, C> ConnectionCache<P, M, C>
@@ -92,17 +87,12 @@ where
         let map = Arc::new(RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)));
         let config = Arc::new(connection_config);
         let connection_manager = Arc::new(connection_manager);
-        let exit: Arc<AtomicBool> = Arc::default();
         let connection_pool_size = 1.max(connection_pool_size); // The minimum pool size is 1.
 
         let stats = Arc::new(ConnectionCacheStats::default());
 
-        let async_connection_thread = Self::create_connection_async_thread(
-            map.clone(),
-            receiver,
-            exit.clone(),
-            stats.clone(),
-        );
+        let _async_connection_thread =
+            Self::create_connection_async_thread(map.clone(), receiver, stats.clone());
         Self {
             name,
             map,
@@ -111,9 +101,7 @@ where
             last_stats: AtomicInterval::default(),
             connection_pool_size,
             connection_config: config,
-            exit,
             sender,
-            async_connection_thread,
         }
     }
 
@@ -121,7 +109,6 @@ where
     fn create_connection_async_thread(
         map: Arc<RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ P>>>,
         receiver: Receiver<(usize, SocketAddr)>,
-        exit: Arc<AtomicBool>,
         stats: Arc<ConnectionCacheStats>,
     ) -> JoinHandle<()> {
         Builder::new()
@@ -129,12 +116,8 @@ where
             .spawn(move || loop {
                 let recv_timeout_ms = 100;
                 let recv_result = receiver.recv_timeout(Duration::from_millis(recv_timeout_ms));
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
                 match recv_result {
                     Err(RecvTimeoutError::Disconnected) => {
-                        exit.store(true, Ordering::Relaxed);
                         break;
                     }
                     Err(RecvTimeoutError::Timeout) => {}
@@ -408,11 +391,6 @@ where
     ) -> Arc<<<P as ConnectionPool>::BaseClientConnection as BaseClientConnection>::NonblockingClientConnection>{
         let (connection, connection_cache_stats) = self.get_connection_and_log_stats(addr);
         connection.new_nonblocking_connection(*addr, connection_cache_stats)
-    }
-
-    pub fn join(self) -> thread::Result<()> {
-        self.exit.store(true, Ordering::Relaxed);
-        self.async_connection_thread.join()
     }
 }
 
