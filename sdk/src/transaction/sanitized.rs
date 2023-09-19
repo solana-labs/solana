@@ -94,7 +94,7 @@ impl SanitizedTransaction {
         })
     }
 
-    /// Creatt] a sanitized transaction from an un-sanitized versioned
+    /// Create a sanitized transaction from an un-sanitized versioned
     /// transaction.  If the input transaction uses address tables, attempt to
     /// lookup the address for each table index.
     pub fn try_create(
