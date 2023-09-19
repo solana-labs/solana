@@ -371,10 +371,54 @@ impl<T: Copy + PartialEq + 'static> IndexEntryPlaceInBucket<T> {
         index_bucket.contents.set_enum_tag(self.ix, tag);
     }
 
+    pub fn init_one_slot_in_index(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>) {
+        index_bucket
+            .contents
+            .set_enum_tag(self.ix, OccupiedEnumTag::OneSlotInIndex);
+    }
+
     pub fn init(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, pubkey: &Pubkey) {
         self.set_slot_count_enum_value(index_bucket, OccupiedEnum::ZeroSlots);
         let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
         index_entry.key = *pubkey;
+    }
+
+    pub(crate) fn init_if_matches<'a>(
+        &self,
+        index_bucket: &'a mut BucketStorage<IndexBucket<T>>,
+        data: &T,
+        k: &Pubkey,
+    ) -> Option<bool> {
+        let enum_tag = index_bucket.contents.get_enum_tag(self.ix);
+        let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
+        if &index_entry.key == k {
+            if unsafe { &index_entry.contents.single_element } == data {
+                index_bucket
+                    .contents
+                    .set_enum_tag(self.ix, OccupiedEnumTag::OneSlotInIndex);
+                Some(true)
+            } else if enum_tag == OccupiedEnumTag::Free {
+                // pubkey is same, but value is different, so update value
+                self.set_slot_count_enum_value(index_bucket, OccupiedEnum::OneSlotInIndex(data));
+                Some(true)
+            } else {
+                // found duplicate of this pubkey
+                Some(false)
+            }
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn read_value_assume_one<'a>(
+        &self,
+        index_bucket: &'a BucketStorage<IndexBucket<T>>,
+    ) -> Option<&'a T> {
+        let enum_tag = index_bucket.contents.get_enum_tag(self.ix);
+        (enum_tag == OccupiedEnumTag::Free).then(|| {
+            let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
+            unsafe { &index_entry.contents.single_element }
+        })
     }
 
     pub(crate) fn read_value<'a>(
@@ -420,6 +464,15 @@ impl<T: Copy + PartialEq + 'static> IndexEntryPlaceInBucket<T> {
     pub fn key<'a>(&self, index_bucket: &'a BucketStorage<IndexBucket<T>>) -> &'a Pubkey {
         let entry: &IndexEntry<T> = index_bucket.get(self.ix);
         &entry.key
+    }
+
+    pub fn is_key<'a>(
+        &self,
+        index_bucket: &'a BucketStorage<IndexBucket<T>>,
+        key: &Pubkey,
+    ) -> bool {
+        let entry: &IndexEntry<T> = index_bucket.get(self.ix);
+        &entry.key == key
     }
 }
 

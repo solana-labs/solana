@@ -207,6 +207,67 @@ impl<O: BucketOccupied> BucketStorage<O> {
         )
     }
 
+    pub fn load(
+        drives: Arc<Vec<PathBuf>>,
+        elem_size: u64,
+        max_search: MaxSearch,
+        stats: Arc<BucketStats>,
+        count: Arc<AtomicU64>,
+        file_name: u128,
+    ) -> Option<Self> {
+        let offset = O::offset_to_first_data() as u64;
+        let size_of_u64 = std::mem::size_of::<u64>() as u64;
+        assert_eq!(
+            offset / size_of_u64 * size_of_u64,
+            offset,
+            "header size must be a multiple of u64"
+        );
+        let measure_new_file = Measure::start("measure_new_file");
+        let (path, num_elems) = drives
+            .iter()
+            .filter_map(|drive| {
+                let pos = format!("{}", file_name,);
+                let file = drive.join(pos);
+                std::fs::metadata(&file)
+                    .ok()
+                    .map(|metadata| (file, (metadata.len() - offset) / elem_size))
+            })
+            .next()?;
+        let data = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(false)
+            .open(path.clone())
+            .map_err(|e| {
+                panic!(
+                    "Unable to load data file {} in current dir({:?}): {:?}",
+                    path.display(),
+                    std::env::current_dir(),
+                    e
+                );
+            })
+            .unwrap();
+
+        let measure_mmap = Measure::start("measure_mmap");
+        let mmap = unsafe { MmapMut::map_mut(&data).unwrap() };
+        // log::error!("loaded: elems: {}, offset: {}, slice size: {}", num_elems, offset, mmap.len());
+        stats
+            .mmap_us
+            .fetch_add(measure_mmap.end_as_us(), Ordering::Relaxed);
+        stats
+            .new_file_us
+            .fetch_add(measure_new_file.as_us(), Ordering::Relaxed);
+        Some(Self {
+            path,
+            mmap,
+            cell_size: elem_size,
+            count,
+            stats,
+            max_search,
+            contents: O::new(Capacity::Actual(num_elems)),
+        })
+    }
+
     pub(crate) fn copying_entry(&mut self, ix_new: u64, other: &Self, ix_old: u64) {
         let start = self.get_start_offset_with_header(ix_new);
         let start_old = other.get_start_offset_with_header(ix_old);

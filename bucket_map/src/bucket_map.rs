@@ -1,9 +1,20 @@
 //! BucketMap is a mostly contention free concurrent map backed by MmapMut
 
 use {
-    crate::{bucket_api::BucketApi, bucket_stats::BucketMapStats, MaxSearch, RefCount},
+    crate::{
+        bucket_api::BucketApi,
+        bucket_stats::BucketMapStats,
+        restart::{Restart, RestartableBucket},
+        MaxSearch, RefCount,
+    },
     solana_sdk::pubkey::Pubkey,
-    std::{convert::TryInto, fmt::Debug, fs, path::PathBuf, sync::Arc},
+    std::{
+        convert::TryInto,
+        fmt::Debug,
+        fs::{self},
+        path::PathBuf,
+        sync::{Arc, Mutex},
+    },
     tempfile::TempDir,
 };
 
@@ -12,6 +23,9 @@ pub struct BucketMapConfig {
     pub max_buckets: usize,
     pub drives: Option<Vec<PathBuf>>,
     pub max_search: Option<MaxSearch>,
+    /// A file with a known path where the current state of the bucket files on disk is saved as the index is running.
+    /// This file can be used to restore the index files as they existed prior to the process crashing.
+    pub restart_config_file: Option<PathBuf>,
 }
 
 impl BucketMapConfig {
@@ -63,7 +77,7 @@ pub enum BucketMapError {
 }
 
 impl<T: Clone + Copy + Debug + PartialEq> BucketMap<T> {
-    pub fn new(config: BucketMapConfig) -> Self {
+    pub fn new(mut config: BucketMapConfig) -> Self {
         assert_ne!(
             config.max_buckets, 0,
             "Max number of buckets must be non-zero"
@@ -76,23 +90,37 @@ impl<T: Clone + Copy + Debug + PartialEq> BucketMap<T> {
         const MAX_SEARCH: MaxSearch = 32;
         let max_search = config.max_search.unwrap_or(MAX_SEARCH);
 
-        if let Some(drives) = config.drives.as_ref() {
-            Self::erase_previous_drives(drives);
+        let mut restart = Restart::get_restart_file(&config, max_search);
+
+        if restart.is_none() {
+            if let Some(drives) = config.drives.as_ref() {
+                Self::erase_previous_drives(drives);
+            }
         }
         let mut temp_dir = None;
-        let drives = config.drives.unwrap_or_else(|| {
+        let drives = std::mem::take(&mut config.drives).unwrap_or_else(|| {
             temp_dir = Some(TempDir::new().unwrap());
             vec![temp_dir.as_ref().unwrap().path().to_path_buf()]
         });
         let drives = Arc::new(drives);
 
         let stats = Arc::default();
+
+        if restart.is_none() {
+            restart = Restart::new(&config, max_search);
+        }
+        let restart = restart.map(|restart| Arc::new(Mutex::new(restart)));
+
         let buckets = (0..config.max_buckets)
-            .map(|_| {
+            .map(|index| {
                 Arc::new(BucketApi::new(
                     Arc::clone(&drives),
                     max_search,
                     Arc::clone(&stats),
+                    RestartableBucket {
+                        restart: restart.clone(),
+                        index,
+                    },
                 ))
             })
             .collect();
