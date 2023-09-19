@@ -73,10 +73,7 @@ impl QosService {
         let mut compute_cost_time = Measure::start("compute_cost_time");
         let txs_costs: Vec<_> = transactions
             .zip(pre_results)
-            .map(|(tx, pre_result)| {
-                pre_result
-                    .map(|()| CostModel::calculate_cost(tx, tx.get_transaction_meta(), feature_set))
-            })
+            .map(|(tx, pre_result)| pre_result.map(|()| CostModel::calculate_cost(tx, feature_set)))
             .collect();
         compute_cost_time.stop();
         self.metrics

@@ -935,7 +935,6 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
 
                 let tx_cost = CostModel::calculate_cost(
                     &transaction,
-                    transaction.get_transaction_meta(),
                     &FeatureSet::all_enabled()
                 );
                 let result = cost_tracker.try_add(&tx_cost);

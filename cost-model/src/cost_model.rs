@@ -20,9 +20,7 @@ use {
         system_instruction::SystemInstruction,
         system_program,
         transaction::SanitizedTransaction,
-        transaction_meta::{
-            TransactionMeta, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
-        },
+        transaction_meta::{DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT},
     },
 };
 
@@ -31,14 +29,13 @@ pub struct CostModel;
 impl CostModel {
     pub fn calculate_cost(
         transaction: &SanitizedTransaction,
-        transaction_meta: &TransactionMeta,
         feature_set: &FeatureSet,
     ) -> TransactionCost {
         let mut tx_cost = TransactionCost::new_with_default_capacity();
 
         tx_cost.signature_cost = Self::get_signature_cost(transaction);
         Self::get_write_lock_cost(&mut tx_cost, transaction);
-        Self::get_transaction_cost(&mut tx_cost, transaction, transaction_meta, feature_set);
+        Self::get_transaction_cost(&mut tx_cost, transaction, feature_set);
         tx_cost.account_data_size = Self::calculate_account_data_size(transaction);
         tx_cost.is_simple_vote = transaction.is_simple_vote_transaction();
 
@@ -69,7 +66,6 @@ impl CostModel {
     fn get_transaction_cost(
         tx_cost: &mut TransactionCost,
         transaction: &SanitizedTransaction,
-        transaction_meta: &TransactionMeta,
         feature_set: &FeatureSet,
     ) {
         let mut builtin_costs = 0u64;
@@ -107,12 +103,12 @@ impl CostModel {
         // builtin and bpf instructions when calculating default compute-unit-limit. (see
         // compute_budget.rs test `test_process_mixed_instructions_without_compute_budget`)
         if bpf_costs > 0 && compute_unit_limit_is_set {
-            bpf_costs = u64::from(transaction_meta.compute_unit_limit);
+            bpf_costs = u64::from(transaction.get_transaction_meta().compute_unit_limit);
         }
 
         if feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()) {
             loaded_accounts_data_size_cost = FeeStructure::calculate_memory_usage_cost(
-                transaction_meta.accounts_loaded_bytes,
+                transaction.get_transaction_meta().accounts_loaded_bytes,
                 ComputeBudget::default().heap_cost,
             );
         }
