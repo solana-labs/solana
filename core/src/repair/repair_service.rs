@@ -391,7 +391,7 @@ impl RepairService {
                     Some(slots_to_repair) => Self::generate_repairs_for_wen_restart(
                         blockstore,
                         MAX_REPAIR_LENGTH,
-                        slots_to_repair.clone(),
+                        &slots_to_repair.read().unwrap().clone(),
                     ),
                     None => repair_weight.get_best_weighted_repairs(
                         blockstore,
@@ -688,10 +688,10 @@ impl RepairService {
     pub(crate) fn generate_repairs_for_wen_restart(
         blockstore: &Blockstore,
         max_repairs: usize,
-        slots: Arc<RwLock<Vec<Slot>>>,
+        slots: &Vec<Slot>,
     ) -> Vec<ShredRepairType> {
         let mut result: Vec<ShredRepairType> = Vec::new();
-        for slot in slots.read().unwrap().iter() {
+        for slot in slots {
             if let Some(slot_meta) = blockstore.meta(*slot).unwrap() {
                 let new_repairs = Self::generate_repairs_for_slot(
                     blockstore,
@@ -1418,26 +1418,22 @@ mod test {
         }
         sleep_shred_deferment_period();
 
-        let slots_to_repair = Arc::new(RwLock::new(vec![]));
+        let mut slots_to_repair: Vec<Slot> = vec![];
 
         // When slots_to_repair is empty, ignore all and return empty result.
         let result = RepairService::generate_repairs_for_wen_restart(
             &blockstore,
             max_repairs,
-            slots_to_repair.clone(),
+            &slots_to_repair,
         );
         assert!(result.is_empty());
 
         // When asked to repair dead_slot and some unknown slot, return correct results.
-        {
-            let mut slots_to_repair_write = slots_to_repair.write().unwrap();
-            slots_to_repair_write.push(2);
-            slots_to_repair_write.push(81);
-        }
+        slots_to_repair = vec![2, 81];
         let result = RepairService::generate_repairs_for_wen_restart(
             &blockstore,
             max_repairs,
-            slots_to_repair.clone(),
+            &slots_to_repair,
         );
         assert_eq!(
             result,
@@ -1447,21 +1443,12 @@ mod test {
             ],
         );
 
-        // Test that it will not generate more than max_repairs.
-        {
-            let mut slots_to_repair_write = slots_to_repair.write().unwrap();
-            slots_to_repair_write.clear();
-            slots_to_repair_write.push(3);
-            slots_to_repair_write.push(82);
-            slots_to_repair_write.push(5);
-            slots_to_repair_write.push(83);
-            slots_to_repair_write.push(7);
-            slots_to_repair_write.push(84);
-        }
+        // Test that it will not generate more than max_repairs.e().unwrap();
+        slots_to_repair = vec![3, 82, 5, 83, 7, 84];
         let result = RepairService::generate_repairs_for_wen_restart(
             &blockstore,
             max_repairs,
-            slots_to_repair.clone(),
+            &slots_to_repair,
         );
         assert_eq!(result.len(), max_repairs);
         assert_eq!(
