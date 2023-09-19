@@ -498,10 +498,6 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                 multiple_slots.set_num_slots(num_slots);
                 MultipleSlots::set_ref_count(best_bucket, ix, ref_count);
 
-                elem.set_slot_count_enum_value(
-                    &mut self.index,
-                    OccupiedEnum::MultipleSlots(&multiple_slots),
-                );
                 //debug!(                        "DATA ALLOC {:?} {} {} {}",                        key, elem.data_location, best_bucket.capacity, elem_uid                    );
                 let best_bucket = &mut self.data[best_fit_bucket as usize];
                 best_bucket.occupy(ix, false).unwrap();
@@ -512,6 +508,12 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                         *dest = *src;
                     });
                 }
+
+                // update index bucket after data bucket has been updated.
+                elem.set_slot_count_enum_value(
+                    &mut self.index,
+                    OccupiedEnum::MultipleSlots(&multiple_slots),
+                );
                 success = true;
                 break;
             }
