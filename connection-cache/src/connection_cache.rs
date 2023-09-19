@@ -576,7 +576,7 @@ mod tests {
         }
     }
 
-    impl MockUdpConfig {
+    impl NewConnectionConfig for MockUdpConfig {
         fn new() -> Result<Self, ClientError> {
             Ok(Self {
                 udp_socket: Arc::new(
