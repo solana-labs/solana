@@ -1438,6 +1438,23 @@ where
     pub fn get_int_property(&self, name: &'static std::ffi::CStr) -> Result<i64> {
         self.backend.get_int_property_cf(self.handle(), name)
     }
+
+    pub fn delete(&self, key: C::Index) -> Result<()> {
+        let is_perf_enabled = maybe_enable_rocksdb_perf(
+            self.column_options.rocks_perf_sample_interval,
+            &self.write_perf_status,
+        );
+        let result = self.backend.delete_cf(self.handle(), &C::key(key));
+        if let Some(op_start_instant) = is_perf_enabled {
+            report_rocksdb_write_perf(
+                C::NAME,
+                "delete",
+                &op_start_instant.elapsed(),
+                &self.column_options,
+            );
+        }
+        result
+    }
 }
 
 impl<C> LedgerColumn<C>
@@ -1515,23 +1532,6 @@ where
             report_rocksdb_write_perf(
                 C::NAME,
                 PERF_METRIC_OP_NAME_PUT,
-                &op_start_instant.elapsed(),
-                &self.column_options,
-            );
-        }
-        result
-    }
-
-    pub fn delete(&self, key: C::Index) -> Result<()> {
-        let is_perf_enabled = maybe_enable_rocksdb_perf(
-            self.column_options.rocks_perf_sample_interval,
-            &self.write_perf_status,
-        );
-        let result = self.backend.delete_cf(self.handle(), &C::key(key));
-        if let Some(op_start_instant) = is_perf_enabled {
-            report_rocksdb_write_perf(
-                C::NAME,
-                "delete",
                 &op_start_instant.elapsed(),
                 &self.column_options,
             );
