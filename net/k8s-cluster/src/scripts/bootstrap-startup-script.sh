@@ -1,15 +1,11 @@
 #!/bin/bash
 set -e
 
-echo "about to show args: "
-
 /home/solana/k8s-cluster/src/scripts/decode-accounts.sh -t "bootstrap"
 
 # start faucet
 nohup solana-faucet --keypair faucet.json >logs/faucet.log 2>&1 &
 
-#!/usr/bin/env bash
-#
 # Start the bootstrap validator node
 #
 here=$(dirname "$0")
@@ -135,14 +131,6 @@ done
 identity=identity.json
 vote_account=vote.json
 
-# ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-validator
-# [[ -d "$ledger_dir" ]] || {
-#   echo "$ledger_dir does not exist"
-#   echo
-#   echo "Please run: $here/setup.sh"
-#   exit 1
-# }
-
 ledger_dir=/home/solana/ledger
 [[ -d "$ledger_dir" ]] || {
   echo "$ledger_dir does not exist"
@@ -155,31 +143,10 @@ if [[ $maybeRequireTower = true ]]; then
   args+=(--require-tower)
 fi
 
-# args+=(
-  # --ledger "$ledger_dir"
-  # --rpc-port 8899
-  # --snapshot-interval-slots 200
-  # --no-incremental-snapshots
-  # --identity "$identity"
-  # --vote-account "$vote_account"
-  # --rpc-faucet-address "$MY_POD_IP":9900
-  # --no-poh-speed-test
-  # --no-os-network-limits-test
-  # --no-wait-for-vote-to-start-leader
-  # --full-rpc-api
-  # --allow-private-addr
-  # --gossip-port 8001
-  # --gossip-host "$MY_POD_IP"
-  # --log logs/solana-validator.log
-# )
-# default_arg --gossip-port 8001
-# default_arg --log logs/solana-validator.log
-
 args+=(
   --no-os-network-limits-test \
   --no-wait-for-vote-to-start-leader \
   --snapshot-interval-slots 200 \
-  # --full-snapshot-interval-slots 200 \
   --identity identity.json \
   --vote-account vote.json \
   --ledger ledger \
@@ -236,29 +203,3 @@ while true; do
 
   kill_node
 done
-
-
-# # see multinode-demo/boostrap-validator.sh for these default commands
-# nohup solana-validator \
-#   --no-os-network-limits-test \
-#   --no-wait-for-vote-to-start-leader \
-#   --full-snapshot-interval-slots 200 \
-#   --identity identity.json \
-#   --vote-account vote.json \
-#   --ledger ledger \
-#   --log logs/solana-validator.log \
-#   --gossip-host $MY_POD_IP \
-#   --gossip-port 8001 \
-#   --rpc-port 8899 \
-#   --rpc-faucet-address $MY_POD_IP:9900 \
-#   --no-poh-speed-test \
-#   --no-incremental-snapshots \
-#   --full-rpc-api \
-#   --allow-private-addr \
-#   "${args[@]}" \
-#    >logs/init-validator.log 2>&1 &
-
-# nohup solana-faucet --keypair faucet.json >logs/faucet.log 2>&1 &
-
-# # # Sleep for an hour (3600 seconds)
-# sleep 3600

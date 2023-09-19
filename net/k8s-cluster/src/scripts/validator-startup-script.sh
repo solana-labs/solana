@@ -1,18 +1,11 @@
 #!/bin/bash
 
-echo "about to show args: "
-
 /home/solana/k8s-cluster/src/scripts/decode-accounts.sh -t "validator"
 
-
-#!/usr/bin/env bash
-#
 # Start a validator
-#
-here=$(dirname "$0")
-# shellcheck source=multinode-demo/common.sh
-# source "$here"/common.sh
+
 source /home/solana/k8s-cluster/src/scripts/common.sh
+echo "post source common.sh"
 
 args=(
   --max-genesis-archive-unpacked-size 1073741824
@@ -21,6 +14,7 @@ args=(
 )
 airdrops_enabled=1
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
+stake_sol=10
 label=
 identity=identity.json
 vote_account=vote.json
@@ -56,7 +50,7 @@ EOF
 }
 
 maybeRequireTower=true
-
+echo "pre positional args"
 positional_args=()
 while [[ -n $1 ]]; do
   if [[ ${1:0:1} = - ]]; then
@@ -67,12 +61,15 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --no-restart ]]; then
       no_restart=1
       shift
-    elif [[ $1 = --node-sol ]]; then
-      node_sol="$2"
-      shift 2
     elif [[ $1 = --no-airdrop ]]; then
       airdrops_enabled=0
       shift
+    elif [[ $1 == --internal-node-stake-sol ]]; then
+      stake_sol=$2
+      shift 2
+    elif [[ $1 == --internal-node-sol ]]; then
+      node_sol=$2
+      shift 2
     # solana-validator options
     elif [[ $1 = --expected-genesis-hash ]]; then
       args+=("$1" "$2")
@@ -202,7 +199,7 @@ while [[ -n $1 ]]; do
     shift
   fi
 done
-
+echo "post positional args"
 if [[ "$SOLANA_GPU_MISSING" -eq 1 ]]; then
   echo "Testnet requires GPUs, but none were found!  Aborting..."
   exit 1
@@ -211,13 +208,6 @@ fi
 if [[ ${#positional_args[@]} -gt 1 ]]; then
   usage "$@"
 fi
-
-# if [[ -n $REQUIRE_LEDGER_DIR ]]; then
-#   if [[ -z $ledger_dir ]]; then
-#     usage "Error: --ledger not specified"
-#   fi
-#   SOLANA_CONFIG_DIR="$ledger_dir"
-# fi
 
 if [[ -n $REQUIRE_KEYPAIRS ]]; then
   if [[ -z $identity ]]; then
@@ -230,11 +220,6 @@ if [[ -n $REQUIRE_KEYPAIRS ]]; then
     usage "Error: --authorized_withdrawer not specified"
   fi
 fi
-
-# if [[ -z "$ledger_dir" ]]; then
-#   ledger_dir="$SOLANA_CONFIG_DIR/validator$label"
-# fi
-# mkdir -p "$ledger_dir"
 
 if [[ -n $gossip_entrypoint ]]; then
   # Prefer the --entrypoint argument if supplied...
@@ -252,37 +237,40 @@ else
   fi
 fi
 
-# faucet_address="${gossip_entrypoint%:*}":9900
-
-: "${identity:=$ledger_dir/identity.json}"
-: "${vote_account:=$ledger_dir/vote-account.json}"
-: "${authorized_withdrawer:=$ledger_dir/authorized-withdrawer.json}"
-
+echo "pre default args"
 default_arg --entrypoint "$gossip_entrypoint"
 if ((airdrops_enabled)); then
   default_arg --rpc-faucet-address "$faucet_address"
 fi
+echo "post entrypoint arg"
 
 default_arg --identity "$identity"
 default_arg --vote-account "$vote_account"
 default_arg --ledger "$ledger_dir"
-default_arg --log logs/solana-validator
+default_arg --log logs/solana-validator.log
 default_arg --full-rpc-api
 default_arg --no-incremental-snapshots
 default_arg --allow-private-addr
+default_arg --gossip-port 8001
+default_arg --rpc-port 8899
 
 if [[ $maybeRequireTower = true ]]; then
   default_arg --require-tower
 fi
+echo "post default args"
 
+program=
 if [[ -n $SOLANA_CUDA ]]; then
-  program=$solana_validator_cuda
+  program="solana-validator --cuda"
 else
-  program=$solana_validator
+  program="solana-validator"
 fi
 
-set -e
+echo "program: $program"
+
+# set -e
 PS4="$(basename "$0"): "
+echo "PS4: $PS4"
 
 pid=
 kill_node() {
@@ -304,51 +292,6 @@ kill_node_and_exit() {
 
 trap 'kill_node_and_exit' INT TERM ERR
 
-# wallet() {
-#   (
-#     set -x
-#     $solana_cli --keypair "$identity" --url "$rpc_url" "$@"
-#   )
-# }
-
-# setup_validator_accounts() {
-#   declare node_sol=$1
-
-#   if [[ -n "$SKIP_ACCOUNTS_CREATION" ]]; then
-#     return 0
-#   fi
-
-#   if ! wallet vote-account "$vote_account"; then
-#     if ((airdrops_enabled)); then
-#       echo "Adding $node_sol to validator identity account:"
-#       (
-#         set -x
-#         $solana_cli \
-#           --keypair "$SOLANA_CONFIG_DIR/faucet.json" --url "$rpc_url" \
-#           transfer --allow-unfunded-recipient "$identity" "$node_sol"
-#       ) || return $?
-#     fi
-
-#     echo "Creating validator vote account"
-#     wallet create-vote-account "$vote_account" "$identity" "$authorized_withdrawer" || return $?
-#   fi
-#   echo "Validator vote account configured"
-
-#   echo "Validator identity account balance:"
-#   wallet balance || return $?
-
-#   return 0
-# }
-
-# shellcheck disable=SC2086
-# rpc_url=$($solana_gossip --allow-private-addr rpc-url --timeout 180 --entrypoint "$gossip_entrypoint")
-
-# [[ -r "$identity" ]] || $solana_keygen new --no-passphrase -so "$identity"
-# [[ -r "$vote_account" ]] || $solana_keygen new --no-passphrase -so "$vote_account"
-# [[ -r "$authorized_withdrawer" ]] || $solana_keygen new --no-passphrase -so "$authorized_withdrawer"
-
-# setup_validator_accounts "$node_sol"
-
 MAX_RETRIES=5
 
 # Delay between retries (in seconds)
@@ -362,7 +305,7 @@ IDENTITY_FILE=$identity
 
 # Function to run a Solana command with retries. need reties because sometimes dns resolver fails
 # if pod dies and starts up again it may try to create a vote account or something that already exists
-run_solana_command() {
+setup_accounts() {
     local command="$1"
     local description="$2"
 
@@ -387,10 +330,10 @@ run_solana_command() {
 }
 
 # Run Solana commands with retries
-run_solana_command "solana -u $SOLANA_RPC_URL airdrop "$node_sol" $IDENTITY_FILE" "Airdrop"
-run_solana_command "solana -u $SOLANA_RPC_URL create-vote-account --allow-unsafe-authorized-withdrawer vote.json $IDENTITY_FILE $IDENTITY_FILE -k $IDENTITY_FILE" "Create Vote Account"
-run_solana_command "solana -u $SOLANA_RPC_URL create-stake-account stake.json "$stake_sol" -k $IDENTITY_FILE" "Create Stake Account"
-run_solana_command "solana -u $SOLANA_RPC_URL delegate-stake stake.json vote.json --force -k $IDENTITY_FILE" "Delegate Stake"
+setup_accounts "solana -u $SOLANA_RPC_URL airdrop "$node_sol" $IDENTITY_FILE" "Airdrop"
+setup_accounts "solana -u $SOLANA_RPC_URL create-vote-account --allow-unsafe-authorized-withdrawer vote.json $IDENTITY_FILE $IDENTITY_FILE -k $IDENTITY_FILE" "Create Vote Account"
+setup_accounts "solana -u $SOLANA_RPC_URL create-stake-account stake.json "$stake_sol" -k $IDENTITY_FILE" "Create Stake Account"
+setup_accounts "solana -u $SOLANA_RPC_URL delegate-stake stake.json vote.json --force -k $IDENTITY_FILE" "Delegate Stake"
 
 # Check if any of the commands failed
 if [ $? -ne 0 ]; then
@@ -422,123 +365,3 @@ while true; do
 
   kill_node
 done
-
-
-
-# args=()
-# stake_sol=
-# node_sol=
-
-# # Iterate through the command-line arguments
-# while [ $# -gt 0 ]; do
-#   if [[ ${1:0:2} = -- ]]; then
-#     echo "first arg: $1"
-#     if [[ $1 = --internal-node-stake-sol ]]; then
-#       stake_sol=$2
-#       shift 2
-#     elif [[ $1 == --internal-node-sol ]]; then
-#       node_sol=$2
-#       shift 2
-#     elif [[ $1 == --tpu-enable-udp ]]; then
-#       args+=($1)
-#       shift 1
-#     elif [[ $1 == --tpu-disable-quic ]]; then
-#       args+=($1)
-#       shift 1
-#     else
-#       echo "Unknown argument: $1"
-#       exit 1
-#     fi
-#   fi
-# done
-
-# for arg in "${args[@]}"; do
-#   echo "Argument: $arg"
-# done
-
-
-
-# # Check if the --internal-node-stake-sol flag was provided
-# if [ -z "$stake_sol" ]; then
-#   echo "Usage: $0 --internal-node-stake-sol <sol>"
-#   exit 1
-# fi
-# if [ -z "$node_sol" ]; then
-#   echo "Usage: $0 --internal-node-sol <sol>"
-#   exit 1
-# fi
-
-# echo "Sol stake: $stake_sol"
-
-# /home/solana/k8s-cluster/src/scripts/decode-accounts.sh -t "validator"
-
-# Maximum number of retries
-# MAX_RETRIES=5
-
-# # Delay between retries (in seconds)
-# RETRY_DELAY=1
-
-# # Solana RPC URL
-# SOLANA_RPC_URL="http://$BOOTSTRAP_RPC_PORT"
-
-# # Identity file
-# IDENTITY_FILE=$identity
-
-# # Function to run a Solana command with retries. need reties because sometimes dns resolver fails
-# # if pod dies and starts up again it may try to create a vote account or something that already exists
-# run_solana_command() {
-#     local command="$1"
-#     local description="$2"
-
-#     for ((retry_count=1; retry_count<=$MAX_RETRIES; retry_count++)); do
-#         echo "Attempt $retry_count for: $description"
-#         $command
-
-#         if [ $? -eq 0 ]; then
-#             echo "Command succeeded: $description"
-#             return 0
-#         else
-#             echo "Command failed for: $description (Exit status $?)"
-#             if [ $retry_count -lt $MAX_RETRIES ]; then
-#                 echo "Retrying in $RETRY_DELAY seconds..."
-#                 sleep $RETRY_DELAY
-#             fi
-#         fi
-#     done
-
-#     echo "Max retry limit reached. Command still failed for: $description"
-#     return 1
-# }
-
-# # Run Solana commands with retries
-# run_solana_command "solana -u $SOLANA_RPC_URL airdrop "$node_sol" $IDENTITY_FILE" "Airdrop"
-# run_solana_command "solana -u $SOLANA_RPC_URL create-vote-account --allow-unsafe-authorized-withdrawer vote.json $IDENTITY_FILE $IDENTITY_FILE -k $IDENTITY_FILE" "Create Vote Account"
-# run_solana_command "solana -u $SOLANA_RPC_URL create-stake-account stake.json "$stake_sol" -k $IDENTITY_FILE" "Create Stake Account"
-# run_solana_command "solana -u $SOLANA_RPC_URL delegate-stake stake.json vote.json --force -k $IDENTITY_FILE" "Delegate Stake"
-
-# # Check if any of the commands failed
-# if [ $? -ne 0 ]; then
-#     echo "One or more commands failed."
-#     exit 1
-# fi
-
-# echo "All commands succeeded. Running solana-validator next..."
-
-# nohup solana-validator \
-#   --no-os-network-limits-test \
-#   --identity identity.json \
-#   --vote-account vote.json \
-#   --entrypoint $BOOTSTRAP_GOSSIP_PORT \
-#   --rpc-faucet-address $BOOTSTRAP_FAUCET_PORT \
-#   --gossip-port 8001 \
-#   --rpc-port 8899 \
-#   --ledger ledger \
-#   --log logs/solana-validator.log \
-#   --full-rpc-api \
-#   --allow-private-addr \
-#   "${args[@]}" \
-#   >logs/init-validator.log 2>&1 &
-
-
-# # Sleep for an hour (3600 seconds)
-sleep 3600
