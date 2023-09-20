@@ -8083,22 +8083,22 @@ fn test_replace_non_upgradeable_program_account() {
 #[test_case(
     Pubkey::new_unique(),
     None;
-    "Empty account _without_ corresponding data account"
+    "Empty destination account _without_ corresponding data account"
 )]
 #[test_case(
     Pubkey::new_unique(),
     Some(vec![4; 40]);
-    "Empty account _with_ corresponding data account"
+    "Empty destination account _with_ corresponding data account"
 )]
 #[test_case(
     feature::id(), // `Feature11111111`
     None;
-    "Native account _without_ corresponding data account"
+    "Native destination account _without_ corresponding data account"
 )]
 #[test_case(
     feature::id(), // `Feature11111111`
     Some(vec![4; 40]);
-    "Native account _with_ corresponding data account"
+    "Native destination account _with_ corresponding data account"
 )]
 fn test_replace_empty_account_with_upgradeable_program_success(
     dst: Pubkey,
@@ -8218,11 +8218,11 @@ fn test_replace_empty_account_with_upgradeable_program_success(
 
 #[test_case(
     None;
-    "Existing account _without_ corresponding data account"
+    "Existing destination account _without_ corresponding data account"
 )]
 #[test_case(
     Some(vec![4; 40]);
-    "Existing account _with_ corresponding data account"
+    "Existing destination account _with_ corresponding data account"
 )]
 fn test_replace_empty_account_with_upgradeable_program_fail_when_account_exists(
     maybe_dst_data_state: Option<Vec<u8>>, // Inner data of the destination program _data_ account
