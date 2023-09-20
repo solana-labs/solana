@@ -674,29 +674,10 @@ pub mod revise_turbine_epoch_stakes {
     solana_sdk::declare_id!("BTWmtJC8U5ZLMbBUUA1k6As62sYjPEjAiNAT55xYGdJU");
 }
 
-<<<<<<< HEAD
-=======
-pub mod enable_poseidon_syscall {
-    solana_sdk::declare_id!("FL9RsQA6TVUoh5xJQ9d936RHSebA1NLQqe3Zv9sXZRpr");
-}
-
-pub mod timely_vote_credits {
-    solana_sdk::declare_id!("2oXpeh141pPZCTCFHBsvCwG2BtaHZZAtrVhwaxSy6brS");
-}
-
-pub mod remaining_compute_units_syscall_enabled {
-    solana_sdk::declare_id!("5TuppMutoyzhUSfuYdhgzD47F92GL1g89KpCZQKqedxP");
-}
-
-pub mod enable_program_runtime_v2_and_loader_v4 {
-    solana_sdk::declare_id!("8oBxsYqnCvUTGzgEpxPcnVf7MLbWWPYddE33PftFeBBd");
-}
-
 pub mod require_rent_exempt_split_destination {
     solana_sdk::declare_id!("D2aip4BBr8NPWtU9vLrwrBvbuaQ8w1zV38zFLxx4pfBV");
 }
 
->>>>>>> bca41edf20 (Make active stake consistent in split (#33295))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -860,14 +841,7 @@ lazy_static! {
         (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
         (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
         (revise_turbine_epoch_stakes::id(), "revise turbine epoch stakes"),
-<<<<<<< HEAD
-=======
-        (enable_poseidon_syscall::id(), "Enable Poseidon syscall"),
-        (timely_vote_credits::id(), "use timeliness of votes in determining credits to award"),
-        (remaining_compute_units_syscall_enabled::id(), "enable the remaining_compute_units syscall"),
-        (enable_program_runtime_v2_and_loader_v4::id(), "Enable Program-Runtime-v2 and Loader-v4 #33293"),
         (require_rent_exempt_split_destination::id(), "Require stake split destination account to be rent exempt"),
->>>>>>> bca41edf20 (Make active stake consistent in split (#33295))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

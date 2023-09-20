@@ -426,18 +426,14 @@ fn test_stake_account_lifetime() {
     let split_stake_keypair = Keypair::new();
     let split_stake_pubkey = split_stake_keypair.pubkey();
 
-<<<<<<< HEAD
-    let bank_client = BankClient::new_shared(&bank);
-=======
     bank.transfer(
         stake_rent_exempt_reserve,
         &mint_keypair,
         &split_stake_pubkey,
     )
     .unwrap();
-    let bank_client = BankClient::new_shared(bank.clone());
+    let bank_client = BankClient::new_shared(&bank);
 
->>>>>>> bca41edf20 (Make active stake consistent in split (#33295))
     // Test split
     let split_starting_delegation = stake_minimum_delegation + bonus_delegation;
     let message = Message::new(

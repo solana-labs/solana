@@ -31,7 +31,7 @@ use {
         signature::{unique_signers, Signature, Signer},
         stake::{
             instruction::{self as stake_instruction, LockupArgs},
-            state::{Authorized, Lockup, StakeAuthorize, StakeStateV2},
+            state::{Authorized, Lockup, StakeAuthorize, StakeState},
         },
         system_instruction,
         transaction::Transaction,
@@ -1187,7 +1187,7 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
     let output_path = output_file.path().to_str().unwrap().to_string();
 
     let rent_exempt_reserve = client
-        .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())
+        .get_minimum_balance_for_rent_exemption(StakeState::size_of())
         .unwrap();
     let sender_stake_args = SenderStakeArgs {
         stake_account_address,

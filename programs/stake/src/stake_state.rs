@@ -824,13 +824,9 @@ pub fn split(
                 split_index,
                 lamports,
                 &meta,
-<<<<<<< HEAD
                 None,
                 additional_required_lamports,
-=======
-                0, // additional_required_lamports
                 false,
->>>>>>> bca41edf20 (Make active stake consistent in split (#33295))
             )?;
             let mut split_meta = meta;
             split_meta.rent_exempt_reserve = validated_split_info.destination_rent_exempt_reserve;
@@ -992,18 +988,8 @@ pub fn redelegate(
     let vote_state = vote_account.get_state::<VoteStateVersions>()?;
 
     let (stake_meta, effective_stake) =
-<<<<<<< HEAD
         if let StakeState::Stake(meta, stake) = stake_account.get_state()? {
-            let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
-            let status = stake.delegation.stake_activating_and_deactivating(
-                clock.epoch,
-                Some(&stake_history),
-                new_warmup_cooldown_rate_epoch(invoke_context),
-            );
-=======
-        if let StakeStateV2::Stake(meta, stake, _stake_flags) = stake_account.get_state()? {
             let status = get_stake_status(invoke_context, &stake, &clock)?;
->>>>>>> bca41edf20 (Make active stake consistent in split (#33295))
             if status.effective == 0 || status.activating != 0 || status.deactivating != 0 {
                 ic_msg!(invoke_context, "stake is not active");
                 return Err(StakeError::RedelegateTransientOrInactiveStake.into());
@@ -1268,6 +1254,7 @@ struct ValidatedSplitInfo {
 /// minimum balance requirements, which is the rent exempt reserve plus the minimum stake
 /// delegation, and that the source account has enough lamports for the request split amount.  If
 /// not, return an error.
+#[allow(clippy::too_many_arguments)]
 fn validate_split_amount(
     invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
@@ -1320,8 +1307,19 @@ fn validate_split_amount(
         // nothing to do here
     }
 
-    let rent = invoke_context.get_sysvar_cache().get_rent()?;
-    let destination_rent_exempt_reserve = rent.minimum_balance(destination_data_len);
+    let destination_rent_exempt_reserve = if invoke_context
+        .feature_set
+        .is_active(&stake_split_uses_rent_sysvar::ID)
+    {
+        let rent = invoke_context.get_sysvar_cache().get_rent()?;
+        rent.minimum_balance(destination_data_len)
+    } else {
+        calculate_split_rent_exempt_reserve(
+            source_meta.rent_exempt_reserve,
+            source_data_len as u64,
+            destination_data_len as u64,
+        )
+    };
 
     // As of feature `require_rent_exempt_split_destination`, if the source is active stake, one of
     // these criteria must be met:
@@ -1341,22 +1339,6 @@ fn validate_split_amount(
     // This must handle:
     // 1. The destination account having a different rent exempt reserve due to data size changes
     // 2. The destination account being prefunded, which would lower the minimum split amount
-<<<<<<< HEAD
-    let destination_rent_exempt_reserve = if invoke_context
-        .feature_set
-        .is_active(&stake_split_uses_rent_sysvar::ID)
-    {
-        let rent = invoke_context.get_sysvar_cache().get_rent()?;
-        rent.minimum_balance(destination_data_len)
-    } else {
-        calculate_split_rent_exempt_reserve(
-            source_meta.rent_exempt_reserve,
-            source_data_len as u64,
-            destination_data_len as u64,
-        )
-    };
-=======
->>>>>>> bca41edf20 (Make active stake consistent in split (#33295))
     let destination_minimum_balance =
         destination_rent_exempt_reserve.saturating_add(additional_required_lamports);
     let destination_balance_deficit =
