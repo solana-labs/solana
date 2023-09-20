@@ -12,6 +12,8 @@ edition = { workspace = true }
 [dependencies]
 fast-math = { workspace = true }
 solana-program = { workspace = true }
+rand = { workspace = true }
+solana-logger = { workspace = true }
 
 [dev-dependencies]
 hex = { workspace = true }

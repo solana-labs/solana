@@ -258,7 +258,7 @@ impl MerkleTree {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, rand::{Rng, thread_rng}};
 
     const TEST: &[&[u8]] = &[
         b"my", b"very", b"eager", b"mother", b"just", b"served", b"us", b"nine", b"pizzas",
@@ -277,6 +277,29 @@ mod tests {
         let mt = MerkleTree::new(TEST);
         let hash2 = *mt.get_root().unwrap();
         assert_eq!(hash1, hash2);
+    }
+
+    fn gen_bytes(num: usize) -> Vec<Vec<u8>> {
+        (0..num).map(|_| {
+            let num_bytes = thread_rng().gen_range(1..1024);
+            (0..num_bytes).map(|_| thread_rng().gen()).collect::<Vec<u8>>()
+        }).collect()
+    }
+
+    #[test]
+    fn fuzz_merkle_root() {
+        solana_logger::setup();
+        for num_data in 1..1024 {
+            let data = gen_bytes(num_data);
+
+            let hash1 = MerkleTree::merkle_root(&data).unwrap();
+            let mt = MerkleTree::new(&data);
+            let hash2 = *mt.get_root().unwrap();
+
+            if hash1 != hash2 {
+                panic!("Mismatched hashes, data: {:?}", data);
+            }
+        }
     }
 
     #[test]
