@@ -29,11 +29,8 @@ where
     T: std::str::FromStr,
     <T as std::str::FromStr>::Err: std::fmt::Debug,
 {
-    if let Some(value) = matches.value_of(name) {
-        value.parse::<T>().ok()
-    } else {
-        None
-    }
+    matches.value_of(name)
+        .map(|value| value.parse::<T>().ok())
 }
 
 pub fn unix_timestamp_from_rfc3339_datetime(
@@ -66,16 +63,13 @@ pub fn commitment_of(matches: &ArgMatches, name: &str) -> Option<CommitmentConfi
 }
 
 pub fn parse_url(arg: &str) -> Result<String, String> {
-    match url::Url::parse(arg) {
-        Ok(url) => {
-            if url.has_host() {
-                Ok(arg.to_string())
-            } else {
-                Err("no host provided".to_string())
-            }
-        }
-        Err(err) => Err(format!("{err}")),
-    }
+    url::Url::parse(arg)
+        .map_err(|err| err.to_string())
+        .and_then(|url| {
+            url.has_host()
+                .then_some(|| arg.to_string())
+                .ok_or("no host provided".to_string())
+        })
 }
 
 pub fn parse_url_or_moniker(arg: &str) -> Result<String, String> {
@@ -95,11 +89,9 @@ pub fn parse_pow2(arg: &str) -> Result<usize, String> {
     arg.parse::<usize>()
         .map_err(|e| format!("Unable to parse, provided: {arg}, err: {e}"))
         .and_then(|v| {
-            if !v.is_power_of_two() {
-                Err(format!("Must be a power of 2: {v}"))
-            } else {
-                Ok(v)
-            }
+            v.is_power_of_two()
+                .then_some(v)
+                .ok_or(format!("Must be a power of 2: {v}"))
         })
 }
 
@@ -107,13 +99,11 @@ pub fn parse_percentage(arg: &str) -> Result<u8, String> {
     arg.parse::<u8>()
         .map_err(|e| format!("Unable to parse input percentage, provided: {arg}, err: {e}"))
         .and_then(|v| {
-            if v > 100 {
-                Err(format!(
+            (v <= 100)
+                .then_some(v)
+                .ok_or(format!(
                     "Percentage must be in range of 0 to 100, provided: {v}"
                 ))
-            } else {
-                Ok(v)
-            }
         })
 }
 
@@ -124,22 +114,21 @@ pub enum UiTokenAmount {
 }
 impl UiTokenAmount {
     pub fn parse_amount(arg: &str) -> Result<UiTokenAmount, String> {
-        if let Ok(amount) = arg.parse::<f64>() {
-            Ok(UiTokenAmount::Amount(amount))
-        } else {
-            Err(format!("Unable to parse input amount, provided: {arg}"))
-        }
+        arg.parse::<f64>()
+            .map(UiTokenAmount::Amount)
+            .map_err(|_| {
+                format!("Unable to parse input amount, provided: {arg}")
+            })
     }
 
     pub fn parse_amount_or_all(arg: &str) -> Result<UiTokenAmount, String> {
-        if let Ok(amount) = arg.parse::<f64>() {
-            Ok(UiTokenAmount::Amount(amount))
-        } else if arg == "ALL" {
+        if arg == "ALL" {
             Ok(UiTokenAmount::All)
         } else {
-            Err(format!(
-                "Unable to parse input amount as float or 'ALL' keyword, provided: {arg}"
-            ))
+            parse_amount(arg).map_err(|_| {
+                format!(
+                    "Unable to parse input amount as float or 'ALL' keyword, provided: {arg}"
+            })
         }
     }
 
@@ -231,13 +220,11 @@ pub fn parse_structured_seed(arg: &str) -> Result<String, String> {
 }
 
 pub fn parse_derived_address_seed(arg: &str) -> Result<String, String> {
-    if arg.len() > MAX_SEED_LEN {
-        Err(format!(
+    (arg.len() <= MAX_SEED_LEN)
+        .then_some(arg.to_string())
+        .ok_or(|| format!(
             "Address seed must not be longer than {MAX_SEED_LEN} bytes"
         ))
-    } else {
-        Ok(arg.to_string())
-    }
 }
 #[cfg(test)]
 mod tests {
