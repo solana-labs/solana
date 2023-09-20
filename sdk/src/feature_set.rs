@@ -689,6 +689,10 @@ pub mod enable_program_runtime_v2_and_loader_v4 {
     solana_sdk::declare_id!("8oBxsYqnCvUTGzgEpxPcnVf7MLbWWPYddE33PftFeBBd");
 }
 
+pub mod require_rent_exempt_split_destination {
+    solana_sdk::declare_id!("D2aip4BBr8NPWtU9vLrwrBvbuaQ8w1zV38zFLxx4pfBV");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -856,6 +860,7 @@ lazy_static! {
         (timely_vote_credits::id(), "use timeliness of votes in determining credits to award"),
         (remaining_compute_units_syscall_enabled::id(), "enable the remaining_compute_units syscall"),
         (enable_program_runtime_v2_and_loader_v4::id(), "Enable Program-Runtime-v2 and Loader-v4 #33293"),
+        (require_rent_exempt_split_destination::id(), "Require stake split destination account to be rent exempt"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
