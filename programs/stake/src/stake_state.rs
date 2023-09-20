@@ -701,9 +701,16 @@ pub fn split(
         StakeStateV2::Stake(meta, mut stake, stake_flags) => {
             meta.authorized.check(signers, StakeAuthorize::Staker)?;
             let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
-            let clock = invoke_context.get_sysvar_cache().get_clock()?;
-            let status = get_stake_status(invoke_context, &stake, &clock)?;
-            let is_active = status.effective > 0;
+            let is_active = if invoke_context
+                .feature_set
+                .is_active(&feature_set::require_rent_exempt_split_destination::id())
+            {
+                let clock = invoke_context.get_sysvar_cache().get_clock()?;
+                let status = get_stake_status(invoke_context, &stake, &clock)?;
+                status.effective > 0
+            } else {
+                false
+            };
             let validated_split_info = validate_split_amount(
                 invoke_context,
                 transaction_context,
