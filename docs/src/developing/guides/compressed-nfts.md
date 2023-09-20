@@ -161,7 +161,7 @@ actually create them following the same process of creating an
 
 - create a new token "mint"
 - create a associated token account (`ata`) for our token mint
-- actually mint a single single token
+- actually mint a single token
 - store the collection's metadata in an Account on-chain
 
 Since NFT Collections having nothing special to do with
