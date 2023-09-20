@@ -1150,7 +1150,10 @@ fn main() {
         .long("accounts-hash-cache-path")
         .value_name("PATH")
         .takes_value(true)
-        .help("Use PATH as accounts hash cache location");
+        .help("Use PATH as accounts hash cache location")
+        .long_help(
+            "Use PATH as accounts hash cache location [default: <LEDGER>/accounts_hash_cache]",
+        );
     let accounts_index_path_arg = Arg::with_name("accounts_index_path")
         .long("accounts-index-path")
         .value_name("PATH")
