@@ -283,7 +283,7 @@ pub(crate) union SingleElementOrMultipleSlots<T: Clone + Copy> {
     /// the slot list contains a single element. No need for an entry in the data file.
     /// The element itself is stored in place in the index entry
     pub(crate) single_element: T,
-    /// the slot list ocntains more than one element. This contains the reference to the data file.
+    /// the slot list contains more than one element. This contains the reference to the data file.
     pub(crate) multiple_slots: MultipleSlots,
 }
 
@@ -313,7 +313,7 @@ pub(crate) enum OccupiedEnum<'a, T> {
     MultipleSlots(&'a MultipleSlots) = OccupiedEnumTag::MultipleSlots as u8,
 }
 
-/// Pack the storage offset and capacity-when-crated-pow2 fields into a single u64
+/// Pack the storage offset and capacity-when-created-pow2 fields into a single u64
 #[bitfield(bits = 64)]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
