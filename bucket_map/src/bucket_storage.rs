@@ -142,14 +142,8 @@ impl<O: BucketOccupied> BucketStorage<O> {
         stats: Arc<BucketStats>,
         count: Arc<AtomicU64>,
     ) -> (Self, u128) {
-        let offset = O::offset_to_first_data();
-        let size_of_u64 = std::mem::size_of::<u64>();
-        assert_eq!(
-            offset / size_of_u64 * size_of_u64,
-            offset,
-            "header size must be a multiple of u64"
-        );
-        let cell_size = elem_size * num_elems + offset as u64;
+        let offset = Self::get_offset_to_first_data();
+        let cell_size = elem_size * num_elems + offset;
         let bytes = Self::allocate_to_fill_page(&mut capacity, cell_size);
         let (mmap, path, file_name) = Self::new_map(&drives, bytes, &stats);
         (
@@ -211,6 +205,17 @@ impl<O: BucketOccupied> BucketStorage<O> {
             stats,
             count,
         )
+    }
+
+    fn get_offset_to_first_data() -> u64 {
+        let offset = O::offset_to_first_data() as u64;
+        let size_of_u64 = std::mem::size_of::<u64>() as u64;
+        assert_eq!(
+            offset / size_of_u64 * size_of_u64,
+            offset,
+            "header size must be a multiple of u64"
+        );
+        offset
     }
 
     pub(crate) fn copying_entry(&mut self, ix_new: u64, other: &Self, ix_old: u64) {
