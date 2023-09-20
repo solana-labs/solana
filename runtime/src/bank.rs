@@ -8260,29 +8260,15 @@ impl Bank {
                     .unwrap()
                     .remove_programs([*dst_address].into_iter());
             } else {
-                warn!("Unable to find source program {}", src_address);
-                datapoint_warn!(
-                    datapoint_name,
-                    ("slot", self.slot(), i64),
-                    ("source program pubkey", src_address.to_string(), String),
-                    (
-                        "destination program pubkey",
-                        dst_address.to_string(),
-                        String
-                    ),
+                warn!(
+                    "Unable to find source program {}. Destination: {}",
+                    src_address, dst_address
                 );
+                datapoint_warn!(datapoint_name, ("slot", self.slot(), i64),);
             }
         } else {
             warn!("Unable to find destination program {}", dst_address);
-            datapoint_warn!(
-                datapoint_name,
-                ("slot", self.slot(), i64),
-                (
-                    "destination program pubkey",
-                    dst_address.to_string(),
-                    String
-                ),
-            );
+            datapoint_warn!(datapoint_name, ("slot", self.slot(), i64),);
         }
     }
 
@@ -8357,75 +8343,30 @@ impl Bank {
                                 .fetch_sub(change_in_capitalization, Relaxed);
                         }
                     } else {
-                        error!("Unable to serialize program account state");
-                        datapoint_error!(
-                            datapoint_name,
-                            ("slot", self.slot(), i64),
-                            ("source program pubkey", src_address.to_string(), String),
-                            (
-                                "source data account pubkey",
-                                src_data_address.to_string(),
-                                String
-                            ),
-                            (
-                                "destination program pubkey",
-                                dst_address.to_string(),
-                                String
-                            ),
-                            (
-                                "destination data account pubkey",
-                                dst_data_address.to_string(),
-                                String
-                            ),
-                            (
-                                "destination data account pubkey",
-                                format!(
-                                    "UpgradeableLoaderState::Program with data address {}",
-                                    dst_data_address
-                                ),
-                                String
-                            ),
+                        error!(
+                            "Unable to serialize program account state. \
+                            Source program: {} Source data account: {} \
+                            Destination program: {} Destination data account: {}",
+                            src_address, src_data_address, dst_address, dst_data_address,
                         );
+                        datapoint_error!(datapoint_name, ("slot", self.slot(), i64),);
                     }
                 }
             } else {
                 warn!(
-                    "Unable to find data account for source program {}",
-                    src_address
+                    "Unable to find data account for source program. \
+                    Source program: {} Source data account: {} \
+                    Destination program: {} Destination data account: {}",
+                    src_address, src_data_address, dst_address, dst_data_address,
                 );
-                datapoint_warn!(
-                    datapoint_name,
-                    ("slot", self.slot(), i64),
-                    ("source program pubkey", src_address.to_string(), String),
-                    (
-                        "source data account pubkey",
-                        src_data_address.to_string(),
-                        String
-                    ),
-                    (
-                        "destination program pubkey",
-                        dst_address.to_string(),
-                        String
-                    ),
-                    (
-                        "destination data account pubkey",
-                        dst_data_address.to_string(),
-                        String
-                    ),
-                );
+                datapoint_warn!(datapoint_name, ("slot", self.slot(), i64),);
             }
         } else {
-            warn!("Unable to find source program {}", src_address);
-            datapoint_warn!(
-                datapoint_name,
-                ("slot", self.slot(), i64),
-                ("source program pubkey", src_address.to_string(), String),
-                (
-                    "destination program pubkey",
-                    dst_address.to_string(),
-                    String
-                ),
+            warn!(
+                "Unable to find source program {}. Destination: {}",
+                src_address, dst_address
             );
+            datapoint_warn!(datapoint_name, ("slot", self.slot(), i64),);
         }
     }
 
