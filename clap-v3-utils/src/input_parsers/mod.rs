@@ -29,8 +29,9 @@ where
     T: std::str::FromStr,
     <T as std::str::FromStr>::Err: std::fmt::Debug,
 {
-    matches.value_of(name)
-        .map(|value| value.parse::<T>().ok())
+    matches
+        .value_of(name)
+        .and_then(|value| value.parse::<T>().ok())
 }
 
 pub fn unix_timestamp_from_rfc3339_datetime(
@@ -67,7 +68,7 @@ pub fn parse_url(arg: &str) -> Result<String, String> {
         .map_err(|err| err.to_string())
         .and_then(|url| {
             url.has_host()
-                .then_some(|| arg.to_string())
+                .then_some(arg.to_string())
                 .ok_or("no host provided".to_string())
         })
 }
@@ -90,11 +91,9 @@ pub fn parse_percentage(arg: &str) -> Result<u8, String> {
     arg.parse::<u8>()
         .map_err(|e| format!("Unable to parse input percentage, provided: {arg}, err: {e}"))
         .and_then(|v| {
-            (v <= 100)
-                .then_some(v)
-                .ok_or(format!(
-                    "Percentage must be in range of 0 to 100, provided: {v}"
-                ))
+            (v <= 100).then_some(v).ok_or(format!(
+                "Percentage must be in range of 0 to 100, provided: {v}"
+            ))
         })
 }
 
@@ -107,18 +106,15 @@ impl UiTokenAmount {
     pub fn parse_amount(arg: &str) -> Result<UiTokenAmount, String> {
         arg.parse::<f64>()
             .map(UiTokenAmount::Amount)
-            .map_err(|_| {
-                format!("Unable to parse input amount, provided: {arg}")
-            })
+            .map_err(|_| format!("Unable to parse input amount, provided: {arg}"))
     }
 
     pub fn parse_amount_or_all(arg: &str) -> Result<UiTokenAmount, String> {
         if arg == "ALL" {
             Ok(UiTokenAmount::All)
         } else {
-            parse_amount(arg).map_err(|_| {
-                format!(
-                    "Unable to parse input amount as float or 'ALL' keyword, provided: {arg}"
+            Self::parse_amount(arg).map_err(|_| {
+                format!("Unable to parse input amount as float or 'ALL' keyword, provided: {arg}")
             })
         }
     }
@@ -213,7 +209,7 @@ pub fn parse_structured_seed(arg: &str) -> Result<String, String> {
 pub fn parse_derived_address_seed(arg: &str) -> Result<String, String> {
     (arg.len() <= MAX_SEED_LEN)
         .then_some(arg.to_string())
-        .ok_or(|| format!(
+        .ok_or(format!(
             "Address seed must not be longer than {MAX_SEED_LEN} bytes"
         ))
 }
