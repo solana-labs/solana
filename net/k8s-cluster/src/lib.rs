@@ -11,6 +11,8 @@ use {
         io::{self, BufReader, Cursor, Read},
         path::{Path, PathBuf},
         time::Duration,
+        process::Command,
+        error::Error,
     },
     tar::Archive,
     url::Url,
@@ -32,6 +34,7 @@ pub mod docker;
 pub mod genesis;
 pub mod kubernetes;
 pub mod release;
+pub mod ledger_helper;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ValidatorType {
@@ -154,5 +157,23 @@ pub fn cat_file(path: &PathBuf) -> io::Result<()> {
 
     info!("{}", contents);
 
+    Ok(())
+}
+
+pub fn create_snapshot(warp_slot: u64) -> Result<(), Box<dyn Error>> {
+    let ledger_dir = SOLANA_ROOT.join("config-k8s/bootstrap-validator");
+    let output = Command::new("solana-ledger-tool")
+        .arg("-l")
+        .arg(ledger_dir.clone())
+        .arg("create-snapshot")
+        .arg("0")
+        .arg(ledger_dir)
+        .arg(warp_slot.to_string())
+        .output()
+        .expect("Failed to execute create-snapshot command");
+
+    if !output.status.success() {
+        return Err(boxed_error!("Failed to execute create-snapshot! Bad news"));
+    }
     Ok(())
 }

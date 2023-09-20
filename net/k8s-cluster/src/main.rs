@@ -7,6 +7,7 @@ use {
         initialize_globals,
         kubernetes::{Kubernetes, RuntimeConfig},
         release::{BuildConfig, Deploy},
+        ledger_helper::LedgerHelper,
     },
     solana_sdk::genesis_config::ClusterType,
     std::{thread, time::Duration},
@@ -265,6 +266,19 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("skip-require-tower")
                 .help("Skips require tower"),
         )
+        .arg(
+            Arg::with_name("wait_for_supermajority")
+                .long("wait-for-supermajority")
+                .takes_value(true)
+                .help("Slot number"),
+        )
+        .arg(
+            Arg::with_name("warp_slot")
+                .long("warp-slot")
+                .takes_value(true)
+                .help("Boot from a snapshot that has warped ahead to WARP_SLOT rather than a slot 0 genesis"),
+        )
+
         .get_matches()
 }
 
@@ -359,7 +373,7 @@ async fn main() {
         },
     };
 
-    let runtime_config = RuntimeConfig {
+    let mut runtime_config = RuntimeConfig {
         enable_udp: matches.is_present("tpu_enable_udp"),
         disable_quic: matches.is_present("tpu_disable_quic"),
         gpu_mode: matches.value_of("gpu_mode").unwrap(),
@@ -387,12 +401,38 @@ async fn main() {
         no_snapshot_fetch: matches.is_present("no_snapshot_fetch"),
         accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
         skip_require_tower: matches.is_present("skip_require_tower"),
+        wait_for_supermajority: match matches.value_of("wait_for_supermajority") {
+            Some(value_str) => Some(
+                value_str
+                    .parse()
+                    .expect("Invalid value for wait_for_supermajority"),
+            ),
+            None => None,
+        },
+        warp_slot: match matches.value_of("warp_slot") {
+            Some(value_str) => Some(
+                value_str
+                    .parse()
+                    .expect("Invalid value for warp_slot"),
+            ),
+            None => None,
+        },
+        shred_version: None, // set after genesis created
     };
+
+    if ! match (runtime_config.wait_for_supermajority, runtime_config.warp_slot) {
+        (Some(slot1), Some(slot2)) => slot1 == slot2,
+        (None, None) => true, // Both are None, consider them equal
+        _ => true,
+    } {
+        panic!("Error: When specifying both --wait-for-supermajority and --warp-slot, \
+        they must use the same slot. ({:?} != {:?})", runtime_config.wait_for_supermajority, runtime_config.warp_slot);
+    }
 
     info!("Runtime Config: {}", runtime_config);
 
     // Check if namespace exists
-    let mut kub_controller = Kubernetes::new(setup_config.namespace, &runtime_config).await;
+    let mut kub_controller = Kubernetes::new(setup_config.namespace, &mut runtime_config).await;
     match kub_controller.namespace_exists().await {
         Ok(res) => {
             if !res {
@@ -513,17 +553,7 @@ async fn main() {
         }
     }
 
-    // let base64_genesis_string = match genesis.load_genesis_to_base64_from_file() {
-    //     Ok(genesis_string) => genesis_string,
-    //     Err(err) => {
-    //         error!("Failed to load genesis from file! {}", err);
-    //         return;
-    //     }
-    // };
-
-    // let loaded_config =
-    //     GenesisConfig::load_from_base64_string(base64_genesis_string.as_str()).expect("load");
-    // info!("loaded_config_hash: {}", loaded_config.hash());
+    kub_controller.set_shred_version(LedgerHelper::get_shred_version());
 
     let config_map = match kub_controller.create_genesis_config_map().await {
         Ok(config_map) => {

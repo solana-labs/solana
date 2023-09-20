@@ -34,6 +34,9 @@ pub struct RuntimeConfig<'a> {
     pub no_snapshot_fetch: bool,
     pub accounts_db_skip_shrink: bool,
     pub skip_require_tower: bool,
+    pub wait_for_supermajority: Option<u64>,
+    pub warp_slot: Option<u64>,
+    pub shred_version: Option<u16>,
 }
 
 impl<'a> std::fmt::Display for RuntimeConfig<'a> {
@@ -52,7 +55,10 @@ impl<'a> std::fmt::Display for RuntimeConfig<'a> {
              tmpfs_accounts: {}\n\
              no_snapshot_fetch: {}\n\
              accounts_db_skip_shrink: {}\n\
-             skip_require_tower: {}",
+             skip_require_tower: {}\n\
+             wait_for_supermajority: {:?}\n\
+             warp_slot: {:?}\n\
+             shred_version: {:?}",
             self.enable_udp,
             self.disable_quic,
             self.gpu_mode,
@@ -65,6 +71,9 @@ impl<'a> std::fmt::Display for RuntimeConfig<'a> {
             self.no_snapshot_fetch,
             self.accounts_db_skip_shrink,
             self.skip_require_tower,
+            self.wait_for_supermajority,
+            self.warp_slot,
+            self.shred_version,
         )
     }
 }
@@ -72,16 +81,20 @@ impl<'a> std::fmt::Display for RuntimeConfig<'a> {
 pub struct Kubernetes<'a> {
     client: Client,
     namespace: &'a str,
-    runtime_config: &'a RuntimeConfig<'a>,
+    runtime_config: &'a mut RuntimeConfig<'a>,
 }
 
 impl<'a> Kubernetes<'a> {
-    pub async fn new(namespace: &'a str, runtime_config: &'a RuntimeConfig<'a>) -> Kubernetes<'a> {
+    pub async fn new(namespace: &'a str, runtime_config: &'a mut RuntimeConfig<'a>) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
             namespace,
             runtime_config,
         }
+    }
+
+    pub fn set_shred_version(&mut self, shred_version: u16) {
+        self.runtime_config.shred_version = Some(shred_version);
     }
 
     fn generate_command_flags(&mut self) -> Vec<String> {
@@ -95,6 +108,14 @@ impl<'a> Kubernetes<'a> {
         flags.extend(vec!["--init-complete-file".to_string(), "logs/init-complete-node.log".to_string()]);
         match self.runtime_config.limit_ledger_size {
             Some(size) => flags.extend(vec!["--limit-ledger-size".to_string(), size.to_string()]),
+            None => (),
+        }
+        match self.runtime_config.wait_for_supermajority {
+            Some(slot) => flags.extend(vec!["--wait-for-supermajority".to_string(), slot.to_string()]),
+            None => (),
+        }
+        match self.runtime_config.warp_slot {
+            Some(slot) => flags.extend(vec!["--warp-slot".to_string(), slot.to_string()]),
             None => (),
         }
         if self.runtime_config.full_rpc {
@@ -114,7 +135,7 @@ impl<'a> Kubernetes<'a> {
             flags.push("--accounts-db-skip-shrink".to_string());
         }
         if self.runtime_config.skip_require_tower {
-            flags.push("--skip_require_tower".to_string());
+            flags.push("--skip-require-tower".to_string());
         }
         flags
     }
@@ -125,10 +146,13 @@ impl<'a> Kubernetes<'a> {
 
     fn generate_validator_command_flags(&mut self) -> Vec<String> {
         let mut flags = self.generate_command_flags();
-        flags.push("--internal-node-stake-sol".to_string());
-        flags.push(self.runtime_config.internal_node_stake_sol.to_string());
-        flags.push("--internal-node-sol".to_string());
-        flags.push(self.runtime_config.internal_node_sol.to_string());
+        flags.extend(vec!["--internal-node-stake-sol".to_string(), self.runtime_config.internal_node_stake_sol.to_string()]);
+        flags.extend(vec!["--internal-node-sol".to_string(), self.runtime_config.internal_node_sol.to_string()]);
+
+        match self.runtime_config.shred_version {
+            Some(shred_version) => flags.extend(vec!["--expected-shred-version".to_string(), shred_version.to_string()]),
+            None => (),
+        } 
         flags
     }
 
