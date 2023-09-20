@@ -281,7 +281,7 @@ mod tests {
 
     fn gen_bytes(num: usize) -> Vec<Vec<u8>> {
         (0..num).map(|_| {
-            let num_bytes = thread_rng().gen_range(1..1024);
+            let num_bytes = thread_rng().gen_range(1..1025);
             (0..num_bytes).map(|_| thread_rng().gen()).collect::<Vec<u8>>()
         }).collect()
     }
@@ -289,7 +289,7 @@ mod tests {
     #[test]
     fn fuzz_merkle_root() {
         solana_logger::setup();
-        for num_data in 1..1024 {
+        for num_data in 1..1025 {
             let data = gen_bytes(num_data);
 
             let hash1 = MerkleTree::merkle_root(&data).unwrap();
