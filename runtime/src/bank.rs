@@ -8056,7 +8056,7 @@ impl Bank {
             self.apply_updated_hashes_per_tick(DEFAULT_HASHES_PER_TICK);
         }
 
-        if new_feature_activations.contains(&feature_set::feature_gate_program::id()) {
+        if new_feature_activations.contains(&feature_set::programify_feature_gate_program::id()) {
             self.replace_empty_account_with_upgradeable_program(
                 &feature::id(),
                 &inline_feature_gate_program::noop_program::id(),
