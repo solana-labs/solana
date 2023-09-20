@@ -79,6 +79,8 @@ pub struct BucketStorage<O: BucketOccupied> {
     pub stats: Arc<BucketStats>,
     pub max_search: MaxSearch,
     pub contents: O,
+    /// true if when this bucket is dropped, the file should be deleted
+    pub delete_file_on_drop: bool,
 }
 
 #[derive(Debug)]
@@ -88,7 +90,9 @@ pub enum BucketStorageError {
 
 impl<O: BucketOccupied> Drop for BucketStorage<O> {
     fn drop(&mut self) {
-        self.delete();
+        if self.delete_file_on_drop {
+            self.delete();
+        }
     }
 }
 
@@ -157,6 +161,8 @@ impl<O: BucketOccupied> BucketStorage<O> {
                 stats,
                 max_search,
                 contents: O::new(capacity),
+                // by default, newly created files will get deleted when dropped
+                delete_file_on_drop: true,
             },
             file_name,
         )
