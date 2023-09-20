@@ -11,8 +11,6 @@ use {
         io::{self, BufReader, Cursor, Read},
         path::{Path, PathBuf},
         time::Duration,
-        process::Command,
-        error::Error,
     },
     tar::Archive,
     url::Url,
@@ -21,6 +19,9 @@ use {
 lazy_static! {
     #[derive(Debug)]
     static ref SOLANA_ROOT: PathBuf = get_solana_root();
+
+    #[derive(Debug)]
+    pub static ref LEDGER_DIR: PathBuf = SOLANA_ROOT.join("config-k8s/bootstrap-validator");
     // #[derive(Debug)]
     // static ref RUST_FLAGS: &'static str = get_rust_flags();
 }
@@ -60,17 +61,6 @@ macro_rules! boxed_error {
 pub fn load_env_variable_by_name(name: &str) -> Result<String, env::VarError> {
     env::var(name)
 }
-
-// pub fn get_rust_flags() -> &'static str {
-//     // env::var("RUSTFLAGS").ok().unwrap_or_default())
-//     match env::var("RUSTFLAGS").ok() {
-//         Some(value) => {
-//             info!("env var rust flags: {}", value);
-//             Box::leak(value.into_boxed_str())
-//         }
-//         None => "",
-//     }
-// }
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
 static PACKAGE: Emoji = Emoji("📦 ", "");
@@ -157,23 +147,5 @@ pub fn cat_file(path: &PathBuf) -> io::Result<()> {
 
     info!("{}", contents);
 
-    Ok(())
-}
-
-pub fn create_snapshot(warp_slot: u64) -> Result<(), Box<dyn Error>> {
-    let ledger_dir = SOLANA_ROOT.join("config-k8s/bootstrap-validator");
-    let output = Command::new("solana-ledger-tool")
-        .arg("-l")
-        .arg(ledger_dir.clone())
-        .arg("create-snapshot")
-        .arg("0")
-        .arg(ledger_dir)
-        .arg(warp_slot.to_string())
-        .output()
-        .expect("Failed to execute create-snapshot command");
-
-    if !output.status.success() {
-        return Err(boxed_error!("Failed to execute create-snapshot! Bad news"));
-    }
     Ok(())
 }

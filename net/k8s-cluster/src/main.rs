@@ -1,3 +1,5 @@
+use k8s_openapi::apimachinery::pkg::runtime;
+
 use {
     clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     log::*,
@@ -420,6 +422,7 @@ async fn main() {
         shred_version: None, // set after genesis created
     };
 
+    let warp_slot: Option<u64> = runtime_config.warp_slot.clone();
     if ! match (runtime_config.wait_for_supermajority, runtime_config.warp_slot) {
         (Some(slot1), Some(slot2)) => slot1 == slot2,
         (None, None) => true, // Both are None, consider them equal
@@ -554,6 +557,19 @@ async fn main() {
     }
 
     kub_controller.set_shred_version(LedgerHelper::get_shred_version());
+    match warp_slot {
+        Some(slot) => {
+            //TODO: this needs to be mounted as a file in the bootstrap pod
+            match LedgerHelper::create_snapshot(slot) {
+                Ok(_) => (),
+                Err(err) => {
+                    error!("Failed to create snapshot: {}", err);
+                    return;
+                }
+            }
+        }
+        None => (),
+    }
 
     let config_map = match kub_controller.create_genesis_config_map().await {
         Ok(config_map) => {
