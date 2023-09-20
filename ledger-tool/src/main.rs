@@ -1245,7 +1245,6 @@ fn main() {
     let use_snapshot_archives_at_startup =
         Arg::with_name(use_snapshot_archives_at_startup::cli::NAME)
             .long(use_snapshot_archives_at_startup::cli::LONG_ARG)
-            .hidden(hidden_unless_forced())
             .takes_value(true)
             .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
             .default_value(use_snapshot_archives_at_startup::cli::default_value())
