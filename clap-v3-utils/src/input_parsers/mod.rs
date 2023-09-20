@@ -73,16 +73,7 @@ pub fn parse_url(arg: &str) -> Result<String, String> {
 }
 
 pub fn parse_url_or_moniker(arg: &str) -> Result<String, String> {
-    match url::Url::parse(&normalize_to_url_if_moniker(arg)) {
-        Ok(url) => {
-            if url.has_host() {
-                Ok(arg.to_string())
-            } else {
-                Err("no host provided".to_string())
-            }
-        }
-        Err(err) => Err(format!("{err}")),
-    }
+    parse_url(&normalize_to_url_if_moniker(arg))
 }
 
 pub fn parse_pow2(arg: &str) -> Result<usize, String> {
