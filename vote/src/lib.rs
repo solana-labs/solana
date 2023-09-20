@@ -1,5 +1,5 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 pub mod vote_account;
 pub mod vote_parser;

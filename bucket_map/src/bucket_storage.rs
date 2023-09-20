@@ -181,7 +181,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
 
     /// delete the backing file on disk
     fn delete(&self) {
-         _ = remove_file(&self.path);
+        _ = remove_file(&self.path);
     }
 
     pub fn max_search(&self) -> u64 {
