@@ -38,7 +38,7 @@ struct DataBucketRefCountOccupiedHeader {
 
 #[derive(Debug, PartialEq)]
 pub enum OccupyIfMatches {
-    /// this entry is occupied and contains a pubkey with a different value, so this entry could not be updated
+    /// this entry is occupied and contains the same pubkey but with a different value, so this entry could not be updated
     FoundDuplicate,
     /// this entry was free and contains this pubkey and either value matched or the value was written to match
     SuccessfulInit,
