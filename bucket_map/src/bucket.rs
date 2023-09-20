@@ -756,7 +756,7 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, tempfile::tempdir};
+    use {super::*, crate::index_entry::OccupyIfMatches, tempfile::tempdir};
 
     #[test]
     fn test_index_entries() {
@@ -948,6 +948,116 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_occupy_if_matches() {
+        let random = 1;
+        let k = Pubkey::from([1u8; 32]);
+        let k2 = Pubkey::from([2u8; 32]);
+        let v = 12u64;
+        let v2 = 13u64;
+        let raw = vec![(k, v)];
+        let hashed = Bucket::index_entries(&raw, random);
+        let hashed_raw = hashed.clone();
+
+        let mut index = create_test_index(None);
+
+        let single_hashed_raw_inserted = hashed_raw.last().unwrap();
+        let elem = IndexEntryPlaceInBucket::new(single_hashed_raw_inserted.0 % index.capacity());
+
+        assert_eq!(elem.get_slot_count_enum(&index), OccupiedEnum::Free);
+        elem.init(&mut index, &k);
+        elem.set_slot_count_enum_value(&mut index, OccupiedEnum::OneSlotInIndex(&v));
+        assert_eq!(
+            elem.get_slot_count_enum(&index),
+            OccupiedEnum::OneSlotInIndex(&v)
+        );
+        // clear it
+        elem.set_slot_count_enum_value(&mut index, OccupiedEnum::Free);
+        assert_eq!(elem.get_slot_count_enum(&index), OccupiedEnum::Free);
+
+        assert_eq!(
+            elem.occupy_if_matches(&mut index, &v, &k),
+            OccupyIfMatches::SuccessfulInit
+        );
+        assert_eq!(
+            elem.get_slot_count_enum(&index),
+            OccupiedEnum::OneSlotInIndex(&v)
+        );
+        // clear it
+        elem.set_slot_count_enum_value(&mut index, OccupiedEnum::Free);
+        assert_eq!(elem.get_slot_count_enum(&index), OccupiedEnum::Free);
+
+        // v2 but will still write it
+        assert_eq!(
+            elem.occupy_if_matches(&mut index, &v2, &k),
+            OccupyIfMatches::SuccessfulInit
+        );
+        assert_eq!(
+            elem.get_slot_count_enum(&index),
+            OccupiedEnum::OneSlotInIndex(&v2)
+        );
+
+        // already a different occupied value for this pubkey in the index, so found duplicate
+        assert_eq!(
+            elem.occupy_if_matches(&mut index, &v, &k),
+            OccupyIfMatches::FoundDuplicate
+        );
+        assert_eq!(
+            elem.get_slot_count_enum(&index),
+            OccupiedEnum::OneSlotInIndex(&v2)
+        );
+
+        // k2 is pubkey mismatch
+        assert_eq!(
+            elem.occupy_if_matches(&mut index, &v, &k2),
+            OccupyIfMatches::PubkeyMismatch
+        );
+
+        // clear it
+        elem.set_slot_count_enum_value(&mut index, OccupiedEnum::Free);
+        assert_eq!(elem.get_slot_count_enum(&index), OccupiedEnum::Free);
+
+        // k2 is pubkey mismatch
+        assert_eq!(
+            elem.occupy_if_matches(&mut index, &v, &k2),
+            OccupyIfMatches::PubkeyMismatch
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "index asked to insert the same data twice")]
+    fn test_occupy_if_matches_panic() {
+        solana_logger::setup();
+        let random = 1;
+        let k = Pubkey::from([1u8; 32]);
+        let v = 12u64;
+        let raw = vec![(k, v)];
+        let hashed = Bucket::index_entries(&raw, random);
+        let hashed_raw = hashed.clone();
+
+        let mut index = create_test_index(None);
+
+        let single_hashed_raw_inserted = hashed_raw.last().unwrap();
+        let elem = IndexEntryPlaceInBucket::new(single_hashed_raw_inserted.0 % index.capacity());
+
+        assert_eq!(elem.get_slot_count_enum(&index), OccupiedEnum::Free);
+        elem.init(&mut index, &k);
+        elem.set_slot_count_enum_value(&mut index, OccupiedEnum::OneSlotInIndex(&v));
+        assert_eq!(
+            elem.get_slot_count_enum(&index),
+            OccupiedEnum::OneSlotInIndex(&v)
+        );
+
+        assert_eq!(
+            elem.occupy_if_matches(&mut index, &v, &k),
+            OccupyIfMatches::SuccessfulInit
+        );
+        assert_eq!(
+            elem.get_slot_count_enum(&index),
+            OccupiedEnum::OneSlotInIndex(&v)
+        );
     }
 
     #[should_panic(expected = "batch insertion can only occur prior to any deletes")]
