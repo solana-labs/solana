@@ -1374,6 +1374,25 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .possible_values(BlockProductionMethod::cli_names())
                 .help(BlockProductionMethod::cli_message())
         )
+        .arg(
+            Arg::with_name("wen_restart")
+                .long("wen-restart")
+                .value_name("DIR")
+                .takes_value(true)
+                .required(false)
+                .default_value(&default_args.wen_restart_path)
+                .conflicts_with("wait_for_supermajority")
+                .help(
+                    "When specified, make validator enter Wen Restart, where it doesn't
+                    vote, create new blocks, or transmit new blocks. The only thing it
+                    does is Gossip last vote information with other validators in Wen
+                    Restart and figure out whether consensus can be reached to proceed
+                    into a cluster restart.
+                    The progress will be saved in the file location provided. When all is
+                    done, exit the validator and use the progress and snapshot generated
+                    previously to enter wait_for_supermajority mode automatically.
+                ")
+        )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
         .subcommand(
@@ -1923,6 +1942,8 @@ pub struct DefaultArgs {
     pub wait_for_restart_window_max_delinquent_stake: String,
 
     pub banking_trace_dir_byte_limit: String,
+
+    pub wen_restart_path: String,
 }
 
 impl DefaultArgs {
@@ -2001,6 +2022,7 @@ impl DefaultArgs {
             wait_for_restart_window_min_idle_time: "10".to_string(),
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
             banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
+            wen_restart_path: "wen_restart_progress.proto".to_string(),
         }
     }
 }
