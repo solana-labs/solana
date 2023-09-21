@@ -5,8 +5,11 @@ use {crate::block_cost_limits, solana_sdk::pubkey::Pubkey};
 /// Resources required to process a regular transaction often include
 /// an array of variables, such as execution cost, loaded bytes, write
 /// lock and read lock etc.
-/// SimpleVote has a simpler and pre-determined format, it's cost structure
-/// can be simpler, calculation quicker.
+/// SimpleVote has a simpler and pre-determined format: it has 1 or 2 signatures,
+/// 2 write locks, a vote instruction and less than 32k (page size) accounts to load.
+/// It's cost therefore can be static #33269.
+const SIMPLE_VOTE_USAGE_COST: u64 = 3428;
+
 #[derive(Debug)]
 pub enum TransactionCost {
     SimpleVote { writable_accounts: Vec<Pubkey> },
@@ -16,17 +19,7 @@ pub enum TransactionCost {
 impl TransactionCost {
     pub fn sum(&self) -> u64 {
         match self {
-            Self::SimpleVote { writable_accounts } => {
-                let num_of_signatures = writable_accounts.len() as u64;
-
-                solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS
-                    .saturating_add(
-                        block_cost_limits::SIGNATURE_COST.saturating_mul(num_of_signatures),
-                    )
-                    .saturating_add(
-                        block_cost_limits::WRITE_LOCK_UNITS.saturating_mul(num_of_signatures),
-                    )
-            }
+            Self::SimpleVote { .. } => SIMPLE_VOTE_USAGE_COST,
             Self::Transaction(usage_cost) => usage_cost.sum(),
         }
     }
@@ -61,25 +54,22 @@ impl TransactionCost {
 
     pub fn loaded_accounts_data_size_cost(&self) -> u64 {
         match self {
-            Self::SimpleVote { .. } => 0,
+            Self::SimpleVote { .. } => 8, // simple-vote loads less than 32K account data,
+            // the cost round up to be one page (32K) cost: 8CU
             Self::Transaction(usage_cost) => usage_cost.loaded_accounts_data_size_cost,
         }
     }
 
     pub fn signature_cost(&self) -> u64 {
         match self {
-            Self::SimpleVote { writable_accounts } => {
-                block_cost_limits::SIGNATURE_COST.saturating_mul(writable_accounts.len() as u64)
-            }
+            Self::SimpleVote { .. } => block_cost_limits::SIGNATURE_COST,
             Self::Transaction(usage_cost) => usage_cost.signature_cost,
         }
     }
 
     pub fn write_lock_cost(&self) -> u64 {
         match self {
-            Self::SimpleVote { writable_accounts } => {
-                block_cost_limits::WRITE_LOCK_UNITS.saturating_mul(writable_accounts.len() as u64)
-            }
+            Self::SimpleVote { .. } => block_cost_limits::WRITE_LOCK_UNITS.saturating_mul(2),
             Self::Transaction(usage_cost) => usage_cost.write_lock_cost,
         }
     }
