@@ -39,6 +39,7 @@ RUN set -x \
  && sudo apt-get install nodejs -y \
  && node --version \
  && npm --version \
+ # rust
  && rustup component add rustfmt \
  && rustup component add clippy \
  && rustup target add wasm32-unknown-unknown \
