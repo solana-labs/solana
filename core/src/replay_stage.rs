@@ -3524,6 +3524,13 @@ impl ReplayStage {
         };
 
         if let Some((bank, switch_fork_decision)) = selected_fork {
+            let check_slot = if switch_fork_decision.can_vote() {
+                bank.slot()
+            } else {
+                // If we can't vote make the checks on the slot we wanted to vote on
+                // This is purely for logging/metrics, since we can't vote anyway
+                heaviest_bank.slot()
+            };
             let (
                 is_locked_out,
                 vote_threshold,
@@ -3533,8 +3540,8 @@ impl ReplayStage {
                 total_threshold_stake,
                 total_epoch_stake,
             ) = {
-                let fork_stats = progress.get_fork_stats(bank.slot()).unwrap();
-                let propagated_stats = &progress.get_propagated_stats(bank.slot()).unwrap();
+                let fork_stats = progress.get_fork_stats(check_slot).unwrap();
+                let propagated_stats = &progress.get_propagated_stats(check_slot).unwrap();
                 (
                     fork_stats.is_locked_out,
                     fork_stats.vote_threshold,
@@ -3548,22 +3555,22 @@ impl ReplayStage {
 
             let propagation_confirmed = is_leader_slot
                 || progress
-                    .get_leader_propagation_slot_must_exist(bank.slot())
+                    .get_leader_propagation_slot_must_exist(check_slot)
                     .0;
 
             if is_locked_out {
-                failure_reasons.push(HeaviestForkFailures::LockedOut(bank.slot()));
+                failure_reasons.push(HeaviestForkFailures::LockedOut(check_slot));
             }
             if let ThresholdDecision::FailedThreshold(fork_stake) = vote_threshold {
                 failure_reasons.push(HeaviestForkFailures::FailedThreshold(
-                    bank.slot(),
+                    check_slot,
                     fork_stake,
                     total_threshold_stake,
                 ));
             }
             if !propagation_confirmed {
                 failure_reasons.push(HeaviestForkFailures::NoPropagatedConfirmation(
-                    bank.slot(),
+                    check_slot,
                     propagated_stake,
                     total_epoch_stake,
                 ));
@@ -3574,6 +3581,7 @@ impl ReplayStage {
                 && propagation_confirmed
                 && switch_fork_decision.can_vote()
             {
+                assert_eq!(check_slot, bank.slot());
                 info!("voting: {} {}", bank.slot(), fork_weight);
                 SelectVoteAndResetForkResult {
                     vote_bank: Some((bank.clone(), switch_fork_decision)),
