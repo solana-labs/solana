@@ -54,9 +54,9 @@ pub fn wait_for_wen_restart(
     // Todo(wen): add the following back in after Gossip code is checked in.
     //    cluster_info.push_last_voted_fork_slots(&last_voted_fork, last_vote.hash());
     // The rest of the protocol will be in another PR.
-    let cur_progress = wen_restart_proto::WenRestartProgress {
-        state: wen_restart_proto::wen_restart_progress::State::Init.into(),
-        init_record: Some(wen_restart_proto::wen_restart_progress::InitRecord {
+    let current_progress = WenRestartProgress {
+        state: RestartState::Init.into(),
+        init_record: Some(InitRecord {
             last_vote_slot,
             last_vote_bankhash: last_vote.hash().to_string(),
             shred_version: cluster_info.my_shred_version() as u32,
