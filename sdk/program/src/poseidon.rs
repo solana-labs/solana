@@ -4,6 +4,9 @@
 
 use thiserror::Error;
 
+/// BN254 base field bytes.
+pub const BN254_FIELD_BYTES: usize = 32;
+
 /// Length of Poseidon hash result.
 pub const HASH_BYTES: usize = 32;
 
@@ -231,6 +234,10 @@ pub fn hashv(
                     } => PoseidonSyscallError::InvalidWidthCircom,
                 }
             }
+        }
+
+        if vals.iter().any(|val| val.len() > BN254_FIELD_BYTES) {
+            return Err(PoseidonSyscallError::InputLargerThanModulus);
         }
 
         let mut hasher =
