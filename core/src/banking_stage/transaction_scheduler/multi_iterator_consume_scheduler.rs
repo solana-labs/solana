@@ -413,7 +413,7 @@ mod tests {
             ),
         >,
     ) -> TransactionStateContainer {
-        let mut container = TransactionStateContainer::with_capacity(1024);
+        let mut container = TransactionStateContainer::with_capacity(10 * 1024);
         for (index, (from_keypair, to_pubkeys, lamports, priority)) in
             tx_infos.into_iter().enumerate()
         {
@@ -447,6 +447,18 @@ mod tests {
                 (work, ids)
             })
             .unzip()
+    }
+
+    #[test]
+    fn test_schedule_disconnected_channel() {
+        let (mut scheduler, work_receivers) = create_test_frame(1);
+        let mut container = create_container([(&Keypair::new(), &[Pubkey::new_unique()], 1, 1)]);
+
+        drop(work_receivers); // explicitly drop receivers
+        assert_matches!(
+            scheduler.schedule(&mut container),
+            Err(SchedulerError::DisconnectedSendChannel(_))
+        );
     }
 
     #[test]
@@ -588,5 +600,18 @@ mod tests {
             collect_work(&work_receivers[1]).1,
             [txids!([2]), txids!([3])]
         );
+    }
+
+    #[test]
+    fn test_schedule_queued_limit() {
+        let (mut scheduler, _work_receivers) = create_test_frame(1);
+        let mut container = create_container(
+            (0..QUEUED_TRANSACTION_LIMIT + 4 * TARGET_NUM_TRANSACTIONS_PER_BATCH)
+                .map(|i| (Keypair::new(), [Pubkey::new_unique()], 1, i as u64)),
+        );
+
+        // Even though no transactions conflict, we will only schedule up the queue limit
+        let num_scheduled = scheduler.schedule(&mut container).unwrap();
+        assert_eq!(num_scheduled, QUEUED_TRANSACTION_LIMIT);
     }
 }
