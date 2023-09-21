@@ -43,5 +43,6 @@ spl() {
     # after we know programs have been built
     cargo build
     cargo test
+    cargo test-sbf
   )
 }
