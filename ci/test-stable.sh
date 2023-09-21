@@ -135,26 +135,6 @@ test-stable-perf)
   _ cargo test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
   _ cargo run --manifest-path poh-bench/Cargo.toml ${V:+--verbose} -- --hashes-per-tick 10
   ;;
-test-local-cluster)
-  _ cargo build --release --bins ${V:+--verbose}
-  _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --nocapture --test-threads=1
-  exit 0
-  ;;
-test-local-cluster-flakey)
-  _ cargo build --release --bins ${V:+--verbose}
-  _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --nocapture --test-threads=1
-  exit 0
-  ;;
-test-local-cluster-slow-1)
-  _ cargo build --release --bins ${V:+--verbose}
-  _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --nocapture --test-threads=1
-  exit 0
-  ;;
-test-local-cluster-slow-2)
-  _ cargo build --release --bins ${V:+--verbose}
-  _ ci/intercept.sh cargo test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --nocapture --test-threads=1
-  exit 0
-  ;;
 test-wasm)
   _ node --version
   _ npm --version
